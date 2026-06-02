@@ -10,7 +10,7 @@
         "buffer": "#ffe100",
         "bg": "#000000",
         "panel": "#000000",
-        "map": "light",
+        "map": "dark",
         "casing": "on"
       }
     },
@@ -47,10 +47,10 @@
     "tariffHour": 1500,
     "tariffDay": 500,
     "tariffNight": 1500,
-    "costKm": 0,
-    "costHour": 0,
-    "costDay": 0,
-    "costNight": 0
+    "costKm": 12,
+    "costHour": 750,
+    "costDay": 500,
+    "costNight": 1500
   },
   "defaultTheme": {
     "accent": "#ffe100",
