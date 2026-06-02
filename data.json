@@ -53,13 +53,7 @@
     "bg": "#1e1e1e",
     "panel": "#1e1e1e"
   },
-  "customFields": [
-    {
-      "id": "cf2",
-      "name": "Последнее посещение",
-      "type": "date"
-    }
-  ],
+  "customFields": [],
   "savedRoutes": [],
   "points": [
     {
