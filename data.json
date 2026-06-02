@@ -2,8 +2,32 @@
   "users": [
     {
       "login": "admin",
-      "pin": "7b565fe5",
+      "pin": "80a41e54",
       "role": "admin",
+      "theme": {
+        "accent": "#ff8f1f",
+        "route": "#ff8f1f",
+        "buffer": "#27d3c4",
+        "bg": "#16181d",
+        "panel": "#1d2027"
+      }
+    },
+    {
+      "login": "manager",
+      "pin": "7dd1705a",
+      "role": "logist",
+      "theme": {
+        "accent": "#ff8f1f",
+        "route": "#ff8f1f",
+        "buffer": "#27d3c4",
+        "bg": "#16181d",
+        "panel": "#1d2027"
+      }
+    },
+    {
+      "login": "driver",
+      "pin": "8e94ef15",
+      "role": "driver",
       "theme": {
         "accent": "#ff8f1f",
         "route": "#ff8f1f",
@@ -15,12 +39,12 @@
   ],
   "econ": {
     "shift": 8,
-    "dev": 10,
+    "dev": 20,
     "currency": "грн",
-    "tariffKm": 0,
-    "tariffHour": 0,
-    "tariffDay": 0,
-    "tariffNight": 0
+    "tariffKm": 20,
+    "tariffHour": 1500,
+    "tariffDay": 500,
+    "tariffNight": 1500
   },
   "customFields": [
     {
@@ -43,6 +67,17 @@
       "lat": 49.1079754,
       "lng": 33.4153648,
       "custom": {}
+    },
+    {
+      "id": "p53",
+      "name": "DL 80 Z",
+      "desc": "",
+      "lat": 49.7852778,
+      "lng": 33.7213889,
+      "custom": {
+        "cf2": "",
+        "cf3": ""
+      }
     }
   ],
   "routeStops": [],
