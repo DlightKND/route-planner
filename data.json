@@ -6,8 +6,8 @@
       "role": "admin",
       "theme": {
         "accent": "#ffe100",
-        "route": "#ffbe00",
-        "buffer": "#ffbe00",
+        "route": "#ffe100",
+        "buffer": "#ffe100",
         "bg": "#1e1e1e",
         "panel": "#1e1e1e"
       }
@@ -48,8 +48,8 @@
   },
   "defaultTheme": {
     "accent": "#ffe100",
-    "route": "#ffbe00",
-    "buffer": "#ffbe00",
+    "route": "#ffe100",
+    "buffer": "#ffe100",
     "bg": "#1e1e1e",
     "panel": "#1e1e1e"
   },
@@ -190,6 +190,10 @@
       }
     }
   ],
-  "routeStops": [],
-  "workHours": []
+  "routeStops": [
+    "p1"
+  ],
+  "workHours": [
+    0
+  ]
 }
