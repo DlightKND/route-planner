@@ -5,9 +5,9 @@
       "pin": "80a41e54",
       "role": "admin",
       "theme": {
-        "accent": "#ffd700",
-        "route": "#ffd700",
-        "buffer": "#ffc800",
+        "accent": "#ffe100",
+        "route": "#ffbe00",
+        "buffer": "#ffbe00",
         "bg": "#0a0a0a",
         "panel": "#1e1e1e"
       }
@@ -45,6 +45,13 @@
     "tariffHour": 1500,
     "tariffDay": 500,
     "tariffNight": 1500
+  },
+  "defaultTheme": {
+    "accent": "#ff8f1f",
+    "route": "#ff8f1f",
+    "buffer": "#27d3c4",
+    "bg": "#16181d",
+    "panel": "#1d2027"
   },
   "customFields": [
     {
