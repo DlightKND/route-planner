@@ -80,6 +80,14 @@
       }
     }
   ],
-  "routeStops": [],
-  "workHours": []
+  "routeStops": [
+    "p1",
+    "p53",
+    "p1"
+  ],
+  "workHours": [
+    0,
+    24,
+    0
+  ]
 }
