@@ -1,0 +1,93 @@
+{
+  "users": [
+    {
+      "login": "admin",
+      "pin": "80a41e54",
+      "role": "admin",
+      "theme": {
+        "accent": "#ffee00",
+        "route": "#1fff6d",
+        "buffer": "#a6ff00",
+        "bg": "#0a0a0a",
+        "panel": "#1e1e1e"
+      }
+    },
+    {
+      "login": "manager",
+      "pin": "7dd1705a",
+      "role": "logist",
+      "theme": {
+        "accent": "#ff8f1f",
+        "route": "#ff8f1f",
+        "buffer": "#27d3c4",
+        "bg": "#16181d",
+        "panel": "#1d2027"
+      }
+    },
+    {
+      "login": "driver",
+      "pin": "8e94ef15",
+      "role": "driver",
+      "theme": {
+        "accent": "#ff8f1f",
+        "route": "#ff8f1f",
+        "buffer": "#27d3c4",
+        "bg": "#16181d",
+        "panel": "#1d2027"
+      }
+    }
+  ],
+  "econ": {
+    "shift": 8,
+    "dev": 20,
+    "currency": "грн",
+    "tariffKm": 20,
+    "tariffHour": 1500,
+    "tariffDay": 500,
+    "tariffNight": 1500
+  },
+  "customFields": [
+    {
+      "id": "cf2",
+      "name": "Последнее посещение",
+      "type": "date"
+    },
+    {
+      "id": "cf3",
+      "name": "Серійний номер",
+      "type": "number"
+    }
+  ],
+  "savedRoutes": [],
+  "points": [
+    {
+      "id": "p1",
+      "name": "Виробництво ТОВ \"Д ЛАЙТ\"",
+      "desc": "",
+      "lat": 49.1079754,
+      "lng": 33.4153648,
+      "custom": {}
+    },
+    {
+      "id": "p53",
+      "name": "DL 80 Z",
+      "desc": "",
+      "lat": 49.7852778,
+      "lng": 33.7213889,
+      "custom": {
+        "cf2": "",
+        "cf3": ""
+      }
+    }
+  ],
+  "routeStops": [
+    "p1",
+    "p53",
+    "p1"
+  ],
+  "workHours": [
+    0,
+    24,
+    0
+  ]
+}
