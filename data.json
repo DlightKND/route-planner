@@ -11,6 +11,30 @@
         "bg": "#1e1e1e",
         "panel": "#1e1e1e"
       }
+    },
+    {
+      "login": "manager",
+      "pin": "7dd1705a",
+      "role": "logist",
+      "theme": {
+        "accent": "#ffe100",
+        "route": "#ffbe00",
+        "buffer": "#ffbe00",
+        "bg": "#1e1e1e",
+        "panel": "#1e1e1e"
+      }
+    },
+    {
+      "login": "driver",
+      "pin": "8e94ef15",
+      "role": "driver",
+      "theme": {
+        "accent": "#ffe100",
+        "route": "#ffbe00",
+        "buffer": "#ffbe00",
+        "bg": "#1e1e1e",
+        "panel": "#1e1e1e"
+      }
     }
   ],
   "econ": {
@@ -63,14 +87,6 @@
       }
     }
   ],
-  "routeStops": [
-    "p1",
-    "p53",
-    "p1"
-  ],
-  "workHours": [
-    0,
-    24,
-    0
-  ]
+  "routeStops": [],
+  "workHours": []
 }
