@@ -5,9 +5,9 @@
       "pin": "80a41e54",
       "role": "admin",
       "theme": {
-        "accent": "#fff000",
-        "route": "#fff000",
-        "buffer": "#fff000",
+        "accent": "#ffd700",
+        "route": "#ffd700",
+        "buffer": "#ffc800",
         "bg": "#0a0a0a",
         "panel": "#1e1e1e"
       }
