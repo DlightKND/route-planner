@@ -9,8 +9,8 @@
         "route": "#ffe100",
         "buffer": "#ffe100",
         "bg": "#000000",
-        "panel": "#1e1e1e",
-        "map": "dark",
+        "panel": "#000000",
+        "map": "light",
         "casing": "on"
       }
     },
@@ -57,7 +57,7 @@
     "route": "#ffe100",
     "buffer": "#ffe100",
     "bg": "#000000",
-    "panel": "#1e1e1e"
+    "panel": "#000000"
   },
   "customFields": [
     {
@@ -196,6 +196,12 @@
       }
     }
   ],
-  "routeStops": [],
-  "workHours": []
+  "routeStops": [
+    "p1",
+    "p62"
+  ],
+  "workHours": [
+    0,
+    0
+  ]
 }
