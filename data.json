@@ -44,14 +44,20 @@
     "tariffKm": 20,
     "tariffHour": 1500,
     "tariffDay": 500,
-    "tariffNight": 1500
+    "tariffNight": 1500,
+    "costKm": 0,
+    "costHour": 0,
+    "costDay": 0,
+    "costNight": 0
   },
   "defaultTheme": {
     "accent": "#ffe100",
     "route": "#ffe100",
     "buffer": "#ffe100",
     "bg": "#1e1e1e",
-    "panel": "#1e1e1e"
+    "panel": "#1e1e1e",
+    "map": "light",
+    "casing": "on"
   },
   "customFields": [
     {
