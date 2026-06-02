@@ -18,8 +18,8 @@
       "role": "logist",
       "theme": {
         "accent": "#ffe100",
-        "route": "#ffbe00",
-        "buffer": "#ffbe00",
+        "route": "#ffe100",
+        "buffer": "#ffe100",
         "bg": "#1e1e1e",
         "panel": "#1e1e1e"
       }
@@ -160,6 +160,32 @@
         "cf57": "https://bitrix24.dlight.com.ua/crm/company/details/7474/",
         "cf58": "Олег Заіка (директор)",
         "cf59": "380982721443",
+        "cf61": ""
+      }
+    },
+    {
+      "id": "p67",
+      "name": "Hiab X-CL 19 B-2",
+      "desc": "Військова частина Т0200",
+      "lat": 48.9035037,
+      "lng": 37.025111,
+      "custom": {
+        "cf57": "https://bitrix24.dlight.com.ua/crm/company/details/54857/",
+        "cf58": "Дмитро Маркозія (гл.механик-энергетик)",
+        "cf59": "380633604040",
+        "cf61": ""
+      }
+    },
+    {
+      "id": "p68",
+      "name": "Effer 230C B-4",
+      "desc": "Военная часть Т0200",
+      "lat": 51.872562,
+      "lng": 32.595619,
+      "custom": {
+        "cf57": "https://bitrix24.dlight.com.ua/crm/company/details/54857/",
+        "cf58": "Дмитро Маркозія (гл. механик-энергетик)",
+        "cf59": "380633604040",
         "cf61": ""
       }
     }
