@@ -190,18 +190,6 @@
       }
     }
   ],
-  "routeStops": [
-    "p1",
-    "p62",
-    "p1",
-    "p62",
-    "p1"
-  ],
-  "workHours": [
-    0,
-    2,
-    0,
-    16,
-    0
-  ]
+  "routeStops": [],
+  "workHours": []
 }
