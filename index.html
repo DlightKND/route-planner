@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DL Service | Планировщик</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#16181d;--panel:#1d2027;--panel-2:#23272f;--line:#2e333d;--ink:#e7e9ee;--ink-dim:#9aa1ad;--ink-faint:#646b78;
+    --amber:#ff8f1f;--cyan:#27d3c4;--red:#ff5d5d;--green:#4ec97a;--blue:#5b9dff;--violet:#b08bff;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--sans);background:var(--bg);color:var(--ink);overflow:hidden}
+  .topbar{height:50px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:stretch;padding-left:18px}
+  .brand{display:flex;align-items:center;gap:9px;padding-right:24px}
+  .brand h1{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+  .brand h1 b{color:var(--amber)} .brand img{height:30px;display:none}
+  .tabs{display:flex}
+  .tab{display:flex;align-items:center;gap:7px;padding:0 18px;font-family:var(--mono);font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-dim);cursor:pointer;border-bottom:2px solid transparent;transition:.12s}
+  .tab:hover{color:var(--ink)} .tab.active{color:var(--amber);border-bottom-color:var(--amber)} .tab.hidden{display:none}
+  .tab .n{font-size:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:1px 7px;color:var(--ink)}
+  .rolebar{margin-left:auto;display:flex;align-items:center;gap:10px;padding:0 18px;font-family:var(--mono);font-size:10px;letter-spacing:.6px;color:var(--ink-dim)}
+  .rolebar .who{color:var(--violet);text-transform:uppercase} .rolebar .who.admin{color:var(--amber)} .rolebar .who.logist{color:var(--cyan)} .rolebar .who.driver{color:var(--blue)}
+  .views{height:calc(100vh - 50px);position:relative}
+  .view{position:absolute;inset:0;display:none} .view.active{display:flex}
+  .side{width:380px;min-width:380px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;height:100%}
+  .scroll{overflow-y:auto;flex:1}
+  .scroll::-webkit-scrollbar,.tablewrap::-webkit-scrollbar{width:8px;height:8px}
+  .scroll::-webkit-scrollbar-thumb,.tablewrap::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+  .block{border-bottom:1px solid var(--line);padding:14px 18px} .block.hidden{display:none}
+  .block h2{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+  .block h2 .cnt{color:var(--amber)}
+  label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.5px;color:var(--ink-dim);text-transform:uppercase;margin:8px 0 4px}
+  input[type=text],input[type=number],input[type=date],input[type=password],textarea,select,input[type=search]{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;color:var(--ink);font-family:var(--sans);font-size:13px;padding:8px 10px;outline:none}
+  input[type=color]{width:100%;height:36px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:3px;cursor:pointer}
+  input:focus,textarea:focus,select:focus{border-color:var(--amber)} textarea{resize:vertical;min-height:42px}
+  .btn{font-family:var(--mono);font-size:11px;letter-spacing:.5px;text-transform:uppercase;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);padding:8px 12px;border-radius:6px;cursor:pointer;transition:.12s}
+  .btn:hover{border-color:var(--ink-dim)}
+  .btn.amber{background:var(--amber);color:#1a1206;border-color:var(--amber);font-weight:600}
+  .btn.cyan{background:var(--cyan);color:#06201d;border-color:var(--cyan);font-weight:600}
+  .btn.blue{background:var(--blue);color:#04122e;border-color:var(--blue);font-weight:600}
+  .btn.ghost{background:transparent} .btn.sm{padding:4px 8px;font-size:10px} .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.active{background:var(--amber);color:#1a1206;border-color:var(--amber)}
+  .row{display:flex;gap:8px} .row.wrap{flex-wrap:wrap} .grow{flex:1}
+  .pt{background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:9px 11px;margin-bottom:7px;transition:.12s}
+  .pt:hover{border-color:var(--ink-dim)} .pt.in-route{border-color:var(--amber)} .pt.in-buffer{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan) inset}
+  .pt .nm{font-weight:600;font-size:13px;display:flex;align-items:center;gap:7px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--ink-faint);flex:none}
+  .pt.in-route .dot{background:var(--amber)} .pt.in-buffer .dot{background:var(--cyan)}
+  .pt .acts{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+  .badge{font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:4px;letter-spacing:.5px}
+  .badge.r{background:rgba(255,143,31,.16);color:var(--amber)} .badge.b{background:rgba(39,211,196,.16);color:var(--cyan)}
+  .variant{background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:8px 11px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+  .variant:hover{border-color:var(--ink-dim)} .variant.sel{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset}
+  .variant .lbl{font-weight:600;font-size:12px} .variant .met{font-family:var(--mono);font-size:10px;color:var(--ink-dim)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:10px}
+  .seg button{flex:1;background:var(--panel-2);border:none;color:var(--ink-dim);font-family:var(--mono);font-size:10px;letter-spacing:.5px;text-transform:uppercase;padding:7px;cursor:pointer}
+  .seg button.on{background:var(--cyan);color:#06201d;font-weight:600}
+  .slider-row{display:flex;align-items:center;gap:12px} input[type=range]{flex:1;accent-color:var(--cyan)}
+  .bigval{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--cyan);min-width:62px;text-align:right}
+  .hint{font-size:11px;color:var(--ink-faint);line-height:1.4;margin-top:6px}
+  .err{color:var(--red);font-family:var(--mono);font-size:10.5px;margin-top:6px;line-height:1.4} .ok{color:var(--green)}
+  .cf{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .cf .nm{flex:1;font-size:12px;font-family:var(--mono)} .cf .ty{font-size:10px;color:var(--ink-faint);font-family:var(--mono)}
+  .x{cursor:pointer;color:var(--ink-faint);font-family:var(--mono);font-size:14px;line-height:1;padding:2px 4px} .x:hover{color:var(--red)}
+  .map-wrap{flex:1;position:relative} #map{position:absolute;inset:0;background:#0e0f12}
+  .mode-tag{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:600;font-family:var(--mono);font-size:11px;letter-spacing:.5px;background:var(--amber);color:#1a1206;padding:6px 14px;border-radius:20px;font-weight:600;display:none;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  .mode-tag.on{display:block}
+  .leaflet-popup-content-wrapper{background:var(--panel);color:var(--ink);border-radius:8px;border:1px solid var(--line)}
+  .leaflet-popup-tip{background:var(--panel);border:1px solid var(--line)}
+  .leaflet-popup-content{font-family:var(--sans);font-size:12px;margin:11px 13px}
+  .leaflet-popup-content b{font-family:var(--mono);font-size:10px;color:var(--amber);letter-spacing:.5px}
+  .footnote{padding:12px 18px;font-family:var(--mono);font-size:9px;color:var(--ink-faint);line-height:1.6;letter-spacing:.3px}
+  details summary{cursor:pointer;font-family:var(--mono);font-size:10px;color:var(--ink-dim);letter-spacing:.5px;text-transform:uppercase;outline:none}
+  details[open] summary{color:var(--amber)}
+  .pane{flex:1;display:flex;flex-direction:column;padding:22px 26px;overflow:hidden} .pane.narrow{max-width:720px} .settings-pane{display:block;overflow-y:auto}
+  .pane-head{display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap} .pane-head h2{font-family:var(--mono);font-size:13px;letter-spacing:1px;text-transform:uppercase;color:var(--amber)}
+  .searchbox{position:relative;flex:1;max-width:420px} .searchbox input{padding-left:32px}
+  .searchbox::before{content:'\2315';position:absolute;left:11px;top:7px;color:var(--ink-faint);font-size:15px}
+  .tablewrap{flex:1;overflow:auto;border:1px solid var(--line);border-radius:9px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{position:sticky;top:0;background:var(--panel);text-align:left;font-family:var(--mono);font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-faint);padding:10px 12px;border-bottom:1px solid var(--line);z-index:2}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:hover td{background:var(--panel)} tr.is-route td:first-child{box-shadow:inset 3px 0 0 var(--amber)}
+  .tname{font-weight:600} .tacts{display:flex;gap:5px;flex-wrap:wrap}
+  .empty{padding:40px;text-align:center;color:var(--ink-faint);font-family:var(--mono);font-size:12px}
+  .rcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:12px}
+  .rcard h3{font-size:15px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .rcard .stat{font-family:var(--mono);font-size:10px;color:var(--ink-faint);letter-spacing:.5px;margin-bottom:10px}
+  .rcard .stops{font-size:12px;color:var(--ink-dim);line-height:1.5;margin-bottom:12px} .rcard .acts{display:flex;gap:8px;flex-wrap:wrap}
+  .pill{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink-dim);letter-spacing:.5px}
+  .setcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px}
+  .setcard h3{font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--amber);margin-bottom:4px}
+  .setcard .sub{font-size:11px;color:var(--ink-faint);margin-bottom:14px;line-height:1.5}
+  .warnbox{background:rgba(255,93,93,.08);border:1px solid rgba(255,93,93,.35);border-radius:9px;padding:12px 14px;margin-bottom:16px;font-size:12px;line-height:1.5;color:#ffb3b3} .warnbox b{color:var(--red)}
+  .urow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .urow .ul{font-weight:600;font-size:13px} .urow .ur{font-family:var(--mono);font-size:10px;color:var(--ink-dim);text-transform:uppercase}
+  .overlay{position:fixed;inset:0;background:rgba(8,9,11,.78);z-index:2000;display:none;align-items:center;justify-content:center} .overlay.on{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:420px;max-width:92vw;max-height:88vh;overflow:auto;padding:22px 24px}
+  .modal h3{font-family:var(--mono);font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--amber);margin-bottom:14px}
+  .gmlink{word-break:break-all;font-family:var(--mono);font-size:11px;color:var(--cyan);background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:10px;margin:10px 0;line-height:1.5}
+  .ccell label{margin-top:0}
+  .econ-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .kpi{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .kpi .k{color:var(--ink-dim)} .kpi .v{font-family:var(--mono);font-weight:600}
+  .kpi.total{border-bottom:none;border-top:2px solid var(--amber);margin-top:6px;padding-top:12px;font-size:16px} .kpi.total .v{color:var(--amber)}
+  .stoprow{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .stoprow .sn{flex:1;font-size:13px} .stoprow input{width:90px}
+  @media(max-width:760px){
+    .topbar{padding-left:8px}
+    .brand{padding-right:8px} .brand img{height:24px} .brand h1{font-size:11px}
+    .tabs{flex:1;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch} .tabs::-webkit-scrollbar{display:none}
+    .tab{padding:0 12px;white-space:nowrap}
+    .rolebar{padding:0 6px;gap:6px} .rolebar .who{display:none} #themeBtn{padding:4px 6px}
+    .views{height:calc(100dvh - 50px)}
+    .view-planner.active{flex-direction:column}
+    .side{width:100%;min-width:0;height:auto;flex:1;border-right:none;border-top:1px solid var(--line)}
+    .map-wrap{flex:none;height:44vh;order:-1}
+    .pane{padding:14px 16px} .pane.narrow{max-width:none}
+    .econ-grid{grid-template-columns:1fr}
+    .modal{width:94vw;padding:18px}
+    .searchbox{max-width:none}
+    .pane-head{gap:10px}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><img id="logoImg" alt=""><h1 id="wordmark">ROUTE<b>·</b>BUFFER</h1></div>
+  <div class="tabs">
+    <div class="tab active" data-tab="planner">Планировщик</div>
+    <div class="tab" data-tab="points">Точки <span class="n" id="tabPtN">0</span></div>
+    <div class="tab" data-tab="routes">Маршруты <span class="n" id="tabRtN">0</span></div>
+    <div class="tab" data-tab="econ" data-perm="economics" id="tabEcon">₴ Экономика</div>
+    <div class="tab" data-tab="settings" id="tabSettings">⚙ Настройки</div>
+  </div>
+  <div class="rolebar"><button class="btn sm ghost" id="themeBtn">🎨 Вид</button><span class="who" id="roleLabel">—</span><button class="btn sm ghost" id="logoutBtn">Выйти</button></div>
+</div>
+
+<div class="views">
+
+  <!-- PLANNER -->
+  <div class="view view-planner active">
+    <aside class="side"><div class="scroll">
+      <div class="block" data-perm="pointCreate">
+        <h2>Точка <span class="cnt" id="ptCount">0</span></h2>
+        <button class="btn amber" id="addMode" style="width:100%">+ Поставить точку на карте</button>
+        <div class="hint" id="addHint" style="display:none">Кликни по карте, затем заполни поля.</div>
+        <div class="row" style="margin-top:8px"><input type="text" id="geoQuery" placeholder="…или найти по адресу" class="grow"><button class="btn" id="geoBtn">Найти</button></div>
+        <div id="geoResults"></div>
+        <div id="ptForm" style="margin-top:10px">
+          <label>Название</label><input type="text" id="fName" placeholder="Напр. Склад №3">
+          <label>Описание</label><textarea id="fDesc" placeholder="Любой текст…"></textarea><div id="customFieldInputs"></div>
+          <label>Цвет на карте</label><input type="color" id="fColor" value="#9aa1ad">
+          <div class="row" style="margin-top:10px"><button class="btn amber grow" id="savePt">Сохранить точку</button><button class="btn ghost" id="cancelPt">Отмена</button></div>
+          <div class="err" id="ptErr"></div>
+        </div>
+      </div>
+      <div class="block" data-perm="fields">
+        <details><summary>Кастомные поля</summary><div style="margin-top:10px"><div id="cfList"></div>
+          <div class="row" style="margin-top:8px"><input type="text" id="cfName" placeholder="имя поля" class="grow">
+            <select id="cfType" style="width:110px"><option value="text">текст</option><option value="number">число</option><option value="date">дата</option></select>
+            <button class="btn sm" id="cfAdd">+</button></div></div></details>
+      </div>
+      <div class="block">
+        <h2>Маршрут <span class="cnt" id="routeCount">0</span></h2>
+        <label>Профиль</label>
+        <select id="profile"><option value="driving-car">Авто</option><option value="driving-hgv">Грузовик</option><option value="cycling-regular">Велосипед</option><option value="foot-walking">Пешком</option></select>
+        <label>Режим</label>
+        <select id="preference"><option value="recommended">Рекомендуемый</option><option value="fastest">Самый быстрый</option><option value="shortest">Самый короткий</option></select>
+        <div class="row" style="margin-top:10px"><button class="btn amber grow" id="buildRoute">Построить</button><button class="btn ghost" id="clearRoute">Сброс</button></div>
+        <div class="row" style="margin-top:8px"><button class="btn blue grow" id="saveRoute" data-perm="routeSave">⤓ Сохранить маршрут</button><button class="btn" id="gmapNow" title="Открыть в Google Maps">⌖ GMaps</button></div>
+        <div id="routeVariants" style="margin-top:10px"></div>
+        <div id="routeStops" style="margin-top:10px"></div>
+        <div class="err" id="routeErr"></div>
+      </div>
+      <div class="block">
+        <h2>Буфер вдоль маршрута <span class="cnt" id="bufCount">0</span></h2>
+        <div class="seg"><button id="modeDist" class="on">по расстоянию</button><button id="modeTime">по времени езды</button></div>
+        <div id="distCtl"><div class="slider-row"><input type="range" id="bufRange" min="0" max="50" step="0.5" value="0"><span class="bigval" id="bufVal">0 км</span></div></div>
+        <div id="timeCtl" style="display:none">
+          <div class="slider-row"><input type="range" id="timeRange" min="5" max="60" step="5" value="15"><span class="bigval" id="timeVal">15 мин</span></div>
+          <button class="btn cyan" id="buildIso" style="width:100%;margin-top:8px">Построить изохрону (ORS)</button>
+          <div class="hint" id="isoHint">Изохрона по дорогам (нужен ключ ORS). Лимиты публичного ORS: авто/грузовик — до 1 ч, вело — до 5 ч, пешком — до 20 ч.</div>
+        </div>
+        <div class="hint">Бирюзовым — точки в коридоре, но ещё не в маршруте.</div>
+        <button class="btn cyan" id="addBuffered" style="width:100%;margin-top:10px" disabled>↳ Добавить из буфера в маршрут</button>
+      </div>
+      <div class="block"><h2>Поиск точки</h2><input type="search" id="planSearch" placeholder="искать по названию…"><div id="planList" style="margin-top:10px"></div></div>
+      <div class="block" data-perm="data">
+        <h2>Данные</h2>
+        <div class="row wrap"><button class="btn sm" id="expBtn">Сохранить data.json</button><button class="btn sm" id="pullBtn">⟳ Из репозитория</button><button class="btn sm" id="impBtn">Импорт</button><button class="btn sm ghost" id="demoBtn">Демо</button><button class="btn sm ghost" id="wipeBtn">Очистить</button></div>
+        <div class="hint" id="syncStatus">Автосохранение в браузер включено.</div>
+        <input type="file" id="impFile" accept="application/json" style="display:none">
+      </div>
+      <div class="footnote">Leaflet · Turf.js · openrouteservice<br>Автосейв в браузер + автокоммит data.json.</div>
+    </div></aside>
+    <div class="map-wrap"><div class="mode-tag" id="modeTag">● Режим добавления — кликни по карте</div><div id="map"></div></div>
+  </div>
+
+  <!-- POINTS -->
+  <div class="view view-points"><div class="pane">
+    <div class="pane-head"><h2>Точки</h2>
+      <select id="ptField" style="width:170px"><option value="__any">Любое поле</option><option value="__name">Название</option><option value="__desc">Описание</option></select>
+      <div class="searchbox"><input type="search" id="ptSearch" placeholder="Поиск / фильтр…"></div>
+      <button class="btn sm" id="ptAddTab" data-perm="pointCreate">+ Новая точка</button><span class="hint" id="ptSearchInfo" style="margin:0"></span></div>
+    <div class="tablewrap"><table id="ptTable"><thead></thead><tbody></tbody></table></div>
+  </div></div>
+
+  <!-- ROUTES -->
+  <div class="view view-routes"><div class="pane">
+    <div class="pane-head"><h2>Сохранённые маршруты</h2><div class="searchbox"><input type="search" id="rtSearch" placeholder="Поиск маршрута…"></div></div>
+    <div class="tablewrap" style="border:none;padding:2px"><div id="rtList"></div></div>
+  </div></div>
+
+  <!-- ECON -->
+  <div class="view view-econ"><div class="pane narrow settings-pane">
+    <div class="pane-head"><h2>Экономика выезда</h2><button class="btn sm" id="econRefresh">⟳ Обновить из маршрута</button></div>
+    <div id="econBody"></div>
+  </div></div>
+
+  <!-- SETTINGS -->
+  <div class="view view-settings"><div class="pane narrow settings-pane">
+    <div class="pane-head"><h2>Настройки · только администратор</h2></div>
+    <div class="warnbox"><b>Про безопасность.</b> Это статичное приложение в браузере; на публичном GitHub Pages исходник и data.json открыты всем. Логины и 6-значные PIN разграничивают роли и спасают от случайных правок, но <b>не являются защитой</b>: хэши PIN видны в репозитории, а 6 цифр перебираются мгновенно. Ключ ORS и токен GitHub хранятся только в этом браузере. Для настоящего контроля нужен закрытый бэкенд.</div>
+
+    <div class="setcard"><h3>Параметры выезда и тарифы</h3>
+      <div class="sub">Используются во вкладке «Экономика». Хранятся в data.json и синхронизируются автокоммитом — едины для всех.</div>
+      <div class="row"><div class="grow"><label>Длина смены, ч</label><input type="number" id="ecShift" step="0.5"></div>
+        <div class="grow"><label>Допуск, %</label><input type="number" id="ecDev" step="1"></div>
+        <div class="grow"><label>Валюта</label><input type="text" id="ecCur" placeholder="грн"></div></div>
+      <div class="row"><div class="grow"><label>Тариф за км</label><input type="number" id="ecKm" step="0.01"></div>
+        <div class="grow"><label>Тариф за час работы</label><input type="number" id="ecHour" step="0.01"></div></div>
+      <div class="row"><div class="grow"><label>За день командировки</label><input type="number" id="ecDay" step="0.01"></div>
+        <div class="grow"><label>За ночь проживания</label><input type="number" id="ecNight" step="0.01"></div></div>
+      <div class="sub" style="margin:14px 0 6px;color:var(--ink-dim)">Себестоимость (для оценки рентабельности во вкладке «Экономика»):</div>
+      <div class="row"><div class="grow"><label>Себест. за км</label><input type="number" id="ecCKm" step="0.01"></div>
+        <div class="grow"><label>Себест. за час работы</label><input type="number" id="ecCHour" step="0.01"></div></div>
+      <div class="row"><div class="grow"><label>Себест. за день</label><input type="number" id="ecCDay" step="0.01"></div>
+        <div class="grow"><label>Себест. за ночь</label><input type="number" id="ecCNight" step="0.01"></div></div>
+      <button class="btn sm amber" id="ecSave" style="margin-top:12px">Сохранить параметры</button><span class="hint" id="ecStatus" style="margin-left:10px"></span>
+    </div>
+
+    <div class="setcard"><h3>Тема по умолчанию для новых пользователей</h3>
+      <div class="sub">Цвета, которые получит каждый новый пользователь при создании. Существующие могут менять свой вид сами через «🎨 Вид». Хранится в data.json.</div>
+      <div class="row"><div class="grow ccell"><label>Акцент</label><input type="color" id="dtAccent"></div><div class="grow ccell"><label>Маршрут</label><input type="color" id="dtRoute"></div><div class="grow ccell"><label>Буфер</label><input type="color" id="dtBuffer"></div></div>
+      <div class="row"><div class="grow ccell"><label>Фон</label><input type="color" id="dtBg"></div><div class="grow ccell"><label>Панель</label><input type="color" id="dtPanel"></div></div>
+      <div class="row" style="margin-top:12px"><button class="btn sm amber" id="dtSave">Сохранить тему по умолчанию</button><button class="btn sm ghost" id="dtApplyMe">Применить ко мне</button><span class="hint" id="dtStatus" style="margin-left:6px"></span></div>
+    </div>
+
+    <div class="setcard"><h3>Пользователи</h3>
+      <div class="sub">Логин + 6-значный PIN + роль. Первый вход по умолчанию: admin / 000000 — сразу смени PIN.</div>
+      <div id="userList"></div>
+      <div class="row" style="margin-top:12px"><input type="text" id="nuLogin" placeholder="логин" class="grow"><input type="text" id="nuPin" placeholder="PIN 6 цифр" maxlength="6" style="width:110px"><select id="nuRole" style="width:120px"><option value="driver">водитель</option><option value="logist">логист</option><option value="admin">админ</option></select><button class="btn sm amber" id="nuAdd">+</button></div>
+      <div class="hint" id="userStatus"></div>
+    </div>
+
+    <div class="setcard"><h3>Ключ openrouteservice</h3>
+      <div class="sub">Для маршрутов по дорогам, альтернатив и изохрон. Без ключа маршрут — прямыми, и экономику по времени не посчитать.</div>
+      <label>API-ключ ORS</label><input type="password" id="setOrsKey" placeholder="вставь ключ">
+      <button class="btn sm amber" id="saveOrsKey" style="margin-top:10px">Сохранить ключ</button><span class="hint" id="orsKeyStatus" style="margin-left:10px"></span>
+    </div>
+
+    <div class="setcard"><h3>Автокоммит в GitHub</h3>
+      <div class="sub">Коммитит data.json в репозиторий через GitHub API. Fine-grained PAT с правом Contents: Read and write. Токен — только в этом браузере.</div>
+      <div class="row"><div class="grow"><label>Owner</label><input type="text" id="ghOwner" placeholder="username"></div><div class="grow"><label>Репозиторий</label><input type="text" id="ghRepo" placeholder="route-planner"></div></div>
+      <div class="row"><div class="grow"><label>Ветка</label><input type="text" id="ghBranch" placeholder="main"></div><div class="grow"><label>Путь к файлу</label><input type="text" id="ghPath" placeholder="data.json"></div></div>
+      <label>Personal Access Token</label><input type="password" id="ghToken" placeholder="github_pat_...">
+      <div class="row" style="margin-top:10px;align-items:center"><label style="margin:0;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:var(--ink)"><input type="checkbox" id="ghAuto" style="width:auto"> Автокоммит после изменений</label></div>
+      <div class="row" style="margin-top:12px"><button class="btn sm amber" id="ghSaveCfg">Сохранить</button><button class="btn sm blue" id="ghCommitNow">Закоммитить сейчас</button><button class="btn sm ghost" id="ghTest">Проверить доступ</button></div>
+      <div class="hint" id="ghStatus" style="margin-top:8px"></div>
+    </div>
+  </div></div>
+</div>
+
+<div class="overlay" id="loginOverlay"><div class="modal">
+  <h3>Вход</h3><label>Логин</label><input type="text" id="loginUser" autocomplete="username">
+  <label>PIN (6 цифр)</label><input type="password" id="loginPin" inputmode="numeric" maxlength="6" autocomplete="current-password">
+  <div class="err" id="loginErr"></div><button class="btn amber" id="loginBtn" style="width:100%;margin-top:12px">Войти</button><div class="hint" id="loginHint"></div>
+</div></div>
+
+<div class="overlay" id="themeOverlay"><div class="modal">
+  <h3>Внешний вид (для текущего пользователя)</h3>
+  <div class="row"><div class="grow ccell"><label>Акцент</label><input type="color" id="cAccent"></div><div class="grow ccell"><label>Маршрут</label><input type="color" id="cRoute"></div></div>
+  <div class="row"><div class="grow ccell"><label>Буфер</label><input type="color" id="cBuffer"></div></div>
+  <div class="row"><div class="grow ccell"><label>Фон</label><input type="color" id="cBg"></div><div class="grow ccell"><label>Панель</label><input type="color" id="cPanel"></div></div>
+  <div class="row"><div class="grow ccell"><label>Карта</label><select id="cMap"><option value="light">Светлая</option><option value="dark">Тёмная</option></select></div>
+    <div class="grow ccell"><label>Обводка линий</label><select id="cCasing"><option value="on">Вкл (контраст)</option><option value="off">Выкл</option></select></div></div>
+  <div class="row" style="margin-top:14px"><button class="btn amber grow" id="themeSave">Сохранить</button><button class="btn ghost" id="themeReset">Сброс</button><button class="btn ghost" id="themeClose">Закрыть</button></div>
+</div></div>
+
+<div class="overlay" id="editOverlay"><div class="modal">
+  <h3>Редактирование точки</h3>
+  <label>Название</label><input type="text" id="eName"><label>Описание</label><textarea id="eDesc"></textarea><div id="eCustom"></div>
+  <div class="row"><div class="grow"><label>Широта</label><input type="number" id="eLat" step="0.000001"></div><div class="grow"><label>Долгота</label><input type="number" id="eLng" step="0.000001"></div><div class="ccell" style="width:80px"><label>Цвет</label><input type="color" id="eColor"></div></div>
+  <div class="row" style="margin-top:14px"><button class="btn amber grow" id="eSave">Сохранить</button><button class="btn ghost" id="eCancel">Отмена</button></div>
+</div></div>
+
+<div class="overlay" id="gmOverlay"><div class="modal">
+  <h3>Ссылка для водителя · Google Maps</h3><div id="gmWarn"></div><div class="gmlink" id="gmUrl"></div>
+  <div class="row"><button class="btn blue grow" id="gmOpen">Открыть</button><button class="btn" id="gmCopy">Копировать</button><button class="btn ghost" id="gmClose">Закрыть</button></div>
+</div></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+<script>
+// ---------- state ----------
+let points=[], customFields=[], savedRoutes=[], users=[];
+let routeStops=[], workHours=[];        // routeStops: массив id точек (повторы можно, не подряд)
+let routeFeatures=[], selectedRoute=0, routeLine=null;
+let pendingLatLng=null, addModeOn=false, nextId=1, editId=null;
+let bufferMode='dist', bufferKm=0, bufferMin=15, timePoly=null;
+let role='', currentUser=null;
+let settings={orsKey:'',gh:{owner:'',repo:'',branch:'main',path:'data.json',token:'',auto:false}};
+let econ=defaultEcon();
+const DEFAULT_THEME={accent:'#ff8f1f',route:'#ff8f1f',buffer:'#27d3c4',bg:'#16181d',panel:'#1d2027',map:'light',casing:'on'};
+let theme=Object.assign({},DEFAULT_THEME);
+let defaultTheme=Object.assign({},DEFAULT_THEME);
+const $=id=>document.getElementById(id);
+const byId=id=>points.find(p=>p.id==id);
+function defaultEcon(){ return {shift:8,dev:10,currency:'грн',tariffKm:0,tariffHour:0,tariffDay:0,tariffNight:0,costKm:0,costHour:0,costDay:0,costNight:0}; }
+function hash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(16); }
+function num(n){ return (parseFloat(n)||0).toLocaleString('ru-RU',{maximumFractionDigits:2}); }
+// HSL helpers for line casing
+function hexToHsl(hex){ let r=parseInt(hex.slice(1,3),16)/255,g=parseInt(hex.slice(3,5),16)/255,b=parseInt(hex.slice(5,7),16)/255;
+  const mx=Math.max(r,g,b),mn=Math.min(r,g,b); let h,s,l=(mx+mn)/2; if(mx===mn){h=s=0;} else { const d=mx-mn; s=l>.5?d/(2-mx-mn):d/(mx+mn);
+    switch(mx){case r:h=(g-b)/d+(g<b?6:0);break;case g:h=(b-r)/d+2;break;default:h=(r-g)/d+4;} h/=6; } return [h*360,s*100,l*100]; }
+function hslToHex(h,s,l){ h/=360;s/=100;l/=100; let r,g,b; if(s===0){r=g=b=l;} else { const hue=(p,q,t)=>{ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; };
+  const q=l<.5?l*(1+s):l+s-l*s, p=2*l-q; r=hue(p,q,h+1/3);g=hue(p,q,h);b=hue(p,q,h-1/3); }
+  const to=v=>('0'+Math.round(v*255).toString(16)).slice(-2); return '#'+to(r)+to(g)+to(b); }
+function shiftL(hex,dl){ const [h,s,l]=hexToHsl(hex); return hslToHex(h,s,Math.max(0,Math.min(100,l+dl))); }
+function casingColor(lineColor){ return theme.map==='dark' ? shiftL(lineColor,-22) : shiftL(lineColor,-45); }
+
+const PERMS={
+  admin:['settings','fields','pointCreate','pointEdit','pointDelete','routeBuild','routeSave','routeDelete','gmaps','buffer','data','users','economics'],
+  logist:['pointCreate','pointEdit','routeBuild','routeSave','routeDelete','gmaps','buffer','economics'],
+  driver:['routeBuild','gmaps','buffer']
+};
+function can(p){ return (PERMS[role]||[]).includes(p); }
+
+// ---------- route model ----------
+function routeObjs(){ return routeStops.map(id=>byId(id)).filter(Boolean); }
+function isInRoute(id){ return routeStops.includes(id); }
+function routeCountOf(id){ return routeStops.filter(x=>x===id).length; }
+function addStop(id){ if(routeStops.length && routeStops[routeStops.length-1]===id){ alert('Нельзя ставить одну и ту же точку подряд. Между двумя визитами должна быть другая точка.'); return false; } routeStops.push(id); workHours.push(0); return true; }
+function removeStopAt(i){ routeStops.splice(i,1); workHours.splice(i,1); }
+function removeStopsByPoint(id){ for(let i=routeStops.length-1;i>=0;i--){ if(routeStops[i]===id){ routeStops.splice(i,1); workHours.splice(i,1); } } }
+function reorderStop(i,dir){ const j=i+dir; if(j<0||j>=routeStops.length) return;
+  const ns=routeStops.slice(), nw=workHours.slice(); [ns[i],ns[j]]=[ns[j],ns[i]]; [nw[i],nw[j]]=[nw[j],nw[i]];
+  for(let k=1;k<ns.length;k++){ if(ns[k]===ns[k-1]){ alert('После перестановки две одинаковые точки оказались бы подряд.'); return; } }
+  routeStops=ns; workHours=nw; renderAll(); }
+
+// ---------- map ----------
+const map=L.map('map',{zoomControl:true});
+map.fitBounds([[44.0,22.0],[52.4,40.3]]);
+const baseLayers={
+  light:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}),
+  dark:L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd',attribution:'© OpenStreetMap © CARTO'})
+};
+let currentBase=null;
+function setBaseLayer(kind){ const next=baseLayers[kind]||baseLayers.light; if(currentBase===next) return; if(currentBase) map.removeLayer(currentBase); map.addLayer(next); currentBase=next; if(next.bringToBack) next.bringToBack(); }
+setBaseLayer('light');
+let markersLayer=L.layerGroup().addTo(map), routeLayer=L.layerGroup().addTo(map), bufferLayer=L.layerGroup().addTo(map);
+let pendingMarker=null;
+map.on('click',e=>{ if(!addModeOn) return; pendingLatLng=e.latlng; toggleAddMode(false); $('fName').focus(); flashPending(); });
+function flashPending(){ if(pendingMarker) map.removeLayer(pendingMarker); if(!pendingLatLng) return;
+  pendingMarker=L.circleMarker(pendingLatLng,{radius:9,color:theme.accent,fillColor:theme.accent,fillOpacity:.5,weight:2}).addTo(map); }
+
+// ---------- theme ----------
+function applyTheme(t){ theme=Object.assign({},DEFAULT_THEME,t||{}); const r=document.documentElement.style;
+  r.setProperty('--amber',theme.accent); r.setProperty('--cyan',theme.buffer); r.setProperty('--bg',theme.bg); r.setProperty('--panel',theme.panel);
+  setBaseLayer(theme.map); drawRoutes(); recompute(); }
+$('themeBtn').onclick=()=>{ if(!currentUser) return; const t=Object.assign({},DEFAULT_THEME,currentUser.theme||{});
+  $('cAccent').value=t.accent; $('cRoute').value=t.route; $('cBuffer').value=t.buffer; $('cBg').value=t.bg; $('cPanel').value=t.panel; $('cMap').value=t.map; $('cCasing').value=t.casing; $('themeOverlay').classList.add('on'); };
+$('themeClose').onclick=()=>$('themeOverlay').classList.remove('on');
+$('themeReset').onclick=()=>{ $('cAccent').value=DEFAULT_THEME.accent;$('cRoute').value=DEFAULT_THEME.route;$('cBuffer').value=DEFAULT_THEME.buffer;$('cBg').value=DEFAULT_THEME.bg;$('cPanel').value=DEFAULT_THEME.panel;$('cMap').value=DEFAULT_THEME.map;$('cCasing').value=DEFAULT_THEME.casing; };
+$('themeSave').onclick=()=>{ const t={accent:$('cAccent').value,route:$('cRoute').value,buffer:$('cBuffer').value,bg:$('cBg').value,panel:$('cPanel').value,map:$('cMap').value,casing:$('cCasing').value}; currentUser.theme=t; applyTheme(t); persist(); $('themeOverlay').classList.remove('on'); };
+
+// ---------- logo ----------
+(function(){ const lg=$('logoImg'); lg.onload=()=>{ lg.style.display='block'; $('wordmark').style.display='none'; }; lg.onerror=()=>{ lg.style.display='none'; $('wordmark').style.display=''; }; lg.src='./logo.png'; })();
+
+// ---------- auth ----------
+function ensureUsers(){ if(!users.length) users.push({login:'admin',pin:hash('000000'),role:'admin',theme:Object.assign({},DEFAULT_THEME)}); }
+function showLogin(){ $('loginOverlay').classList.add('on'); $('loginErr').textContent='';
+  $('loginHint').innerHTML=users.length===1&&users[0].login==='admin'?'Первый вход: <b>admin</b> / <b>000000</b>':''; $('loginUser').focus(); }
+function doLogin(){ const l=$('loginUser').value.trim(), p=$('loginPin').value.trim(); const u=users.find(x=>x.login.toLowerCase()===l.toLowerCase());
+  if(!u||u.pin!==hash(p)){ $('loginErr').textContent='Неверный логин или PIN.'; return; }
+  currentUser=u; try{localStorage.setItem('rb_session',u.login);}catch(e){} $('loginOverlay').classList.remove('on'); $('loginPin').value=''; applyUser(); }
+$('loginBtn').onclick=doLogin; $('loginPin').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+$('logoutBtn').onclick=()=>{ currentUser=null; role=''; try{localStorage.removeItem('rb_session');}catch(e){} applyRole(); showLogin(); };
+function applyUser(){ role=currentUser.role; $('roleLabel').textContent=currentUser.login+' · '+role; $('roleLabel').className='who '+role; applyTheme(currentUser.theme); applyRole(); }
+function applyRole(){ $('tabSettings').classList.toggle('hidden',!can('settings'));
+  document.querySelectorAll('[data-perm]').forEach(el=>{ const ok=can(el.dataset.perm); el.classList.toggle('hidden',!ok); if(el.tagName==='BUTTON') el.style.display=ok?'':'none'; });
+  const active=document.querySelector('.view.active'); if(active){ const v=active.className.match(/view-(\w+)/); if(v){ const map2={econ:'economics',settings:'settings'}; if(map2[v[1]]&&!can(map2[v[1]])) switchTab('planner'); } }
+  renderAll(); }
+
+// ---------- users mgmt ----------
+function renderUsers(){ const box=$('userList'); box.innerHTML='';
+  users.forEach(u=>{ const d=document.createElement('div'); d.className='urow';
+    d.innerHTML=`<span class="ul grow">${u.login}</span><span class="ur">${u.role}</span>
+      <select class="urole" data-l="${u.login}" style="width:110px"><option value="driver">водитель</option><option value="logist">логист</option><option value="admin">админ</option></select>
+      <button class="btn sm ghost" data-rpin="${u.login}">сброс PIN</button><button class="btn sm ghost" data-udel="${u.login}">×</button>`;
+    box.appendChild(d); d.querySelector('.urole').value=u.role; });
+  box.querySelectorAll('.urole').forEach(s=>s.onchange=()=>{ const u=users.find(x=>x.login==s.dataset.l); u.role=s.value; if(currentUser&&currentUser.login===u.login){ role=u.role; applyUser(); } renderAll(); renderUsers(); });
+  box.querySelectorAll('[data-rpin]').forEach(b=>b.onclick=()=>{ const u=users.find(x=>x.login==b.dataset.rpin); const np=prompt('Новый PIN (6 цифр) для '+u.login+':'); if(np&&/^[0-9]{6}$/.test(np)){ u.pin=hash(np); renderAll(); $('userStatus').innerHTML='<span class="ok">PIN обновлён.</span>'; } else if(np!==null){ alert('PIN — 6 цифр.'); } });
+  box.querySelectorAll('[data-udel]').forEach(b=>b.onclick=()=>{ const login=b.dataset.udel; if(users.filter(x=>x.role==='admin').length<=1 && users.find(x=>x.login==login).role==='admin'){ alert('Нельзя удалить последнего администратора.'); return; } if(confirm('Удалить '+login+'?')){ users=users.filter(x=>x.login!=login); renderAll(); renderUsers(); } }); }
+$('nuAdd').onclick=()=>{ const l=$('nuLogin').value.trim(), p=$('nuPin').value.trim(), r=$('nuRole').value;
+  if(!l){ $('userStatus').innerHTML='<span class="err">Укажи логин.</span>'; return; }
+  if(users.some(x=>x.login.toLowerCase()===l.toLowerCase())){ $('userStatus').innerHTML='<span class="err">Логин занят.</span>'; return; }
+  if(!/^[0-9]{6}$/.test(p)){ $('userStatus').innerHTML='<span class="err">PIN — ровно 6 цифр.</span>'; return; }
+  users.push({login:l,pin:hash(p),role:r,theme:Object.assign({},defaultTheme)}); $('nuLogin').value='';$('nuPin').value=''; renderUsers(); renderAll(); $('userStatus').innerHTML='<span class="ok">Добавлен.</span>'; };
+
+// ---------- tabs ----------
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
+function switchTab(name){ if(name==='settings'&&!can('settings')) return; if(name==='econ'&&!can('economics')) return;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelector('.view-'+name).classList.add('active');
+  if(name==='planner') setTimeout(()=>map.invalidateSize(),50);
+  if(name==='points') renderPointsTab(); if(name==='routes') renderRoutesTab(); if(name==='econ') renderEcon(); if(name==='settings'){ fillSettings(); renderUsers(); } }
+
+// ---------- custom fields ----------
+function renderCF(){ const box=$('cfList'); box.innerHTML='';
+  customFields.forEach(f=>{ const d=document.createElement('div'); d.className='cf'; d.innerHTML=`<span class="nm">${f.name}</span><span class="ty">${f.type}</span><span class="x" data-id="${f.id}">×</span>`; box.appendChild(d); });
+  box.querySelectorAll('.x').forEach(x=>x.onclick=()=>{ customFields=customFields.filter(c=>c.id!=x.dataset.id); renderCF(); renderCustomInputs(); renderAll(); });
+  if(document.getElementById('ptField')) populatePtField(); }
+$('cfAdd').onclick=()=>{ const n=$('cfName').value.trim(); if(!n) return; customFields.push({id:'cf'+(nextId++),name:n,type:$('cfType').value}); $('cfName').value=''; renderCF(); renderCustomInputs(); renderAll(); };
+function renderCustomInputs(){ const box=$('customFieldInputs'); box.innerHTML=''; customFields.forEach(f=>{ const lab=document.createElement('label'); lab.textContent=f.name+' ('+f.type+')'; const inp=document.createElement('input'); inp.type=f.type==='number'?'number':f.type==='date'?'date':'text'; inp.id='cfin_'+f.id; box.appendChild(lab); box.appendChild(inp); }); }
+
+// ---------- add/save point + geocode ----------
+$('savePt').onclick=()=>{ const name=$('fName').value.trim(); if(!name){ $('ptErr').textContent='Введите название.'; return; } if(!pendingLatLng){ $('ptErr').textContent='Сначала задайте координаты.'; return; }
+  const custom={}; customFields.forEach(f=>custom[f.id]=$('cfin_'+f.id).value);
+  points.push({id:'p'+(nextId++),name,desc:$('fDesc').value.trim(),lat:pendingLatLng.lat,lng:pendingLatLng.lng,custom,color:$('fColor').value}); resetForm(); renderAll(); };
+$('cancelPt').onclick=resetForm;
+function resetForm(){ $('fName').value=''; $('fDesc').value=''; $('fColor').value='#9aa1ad'; $('ptErr').textContent=''; $('geoQuery').value=''; $('geoResults').innerHTML=''; pendingLatLng=null; if(pendingMarker){map.removeLayer(pendingMarker);pendingMarker=null;} renderCustomInputs(); }
+$('addMode').onclick=()=>toggleAddMode(!addModeOn);
+function toggleAddMode(on){ addModeOn=on; $('addMode').classList.toggle('active',on); $('modeTag').classList.toggle('on',on); $('addHint').style.display=on?'block':'none'; map.getContainer().style.cursor=on?'crosshair':''; }
+$('geoBtn').onclick=geocode; $('geoQuery').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); geocode(); } });
+async function geocode(){ const q=$('geoQuery').value.trim(); const box=$('geoResults'); if(!q){ box.innerHTML=''; return; } box.innerHTML='<div class="hint">Ищу…</div>';
+  try{ const res=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=uk,ru,en&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}});
+    if(!res.ok) throw new Error('HTTP '+res.status); const data=await res.json(); if(!data.length){ box.innerHTML='<div class="hint">Ничего не найдено.</div>'; return; } box.innerHTML='';
+    data.forEach(r=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML=`<div class="nm" style="font-size:12px;font-weight:500">${r.display_name}</div>`;
+      d.onclick=()=>{ pendingLatLng={lat:parseFloat(r.lat),lng:parseFloat(r.lon)}; flashPending(); map.flyTo([pendingLatLng.lat,pendingLatLng.lng],14); if(!$('fName').value.trim()) $('fName').value=r.display_name.split(',')[0]; box.innerHTML='<div class="hint ok">Координаты заданы: '+pendingLatLng.lat.toFixed(5)+', '+pendingLatLng.lng.toFixed(5)+'.</div>'; $('fName').focus(); };
+      box.appendChild(d); });
+  }catch(err){ box.innerHTML='<div class="err">Ошибка геокодера: '+err.message+'</div>'; } }
+
+// ---------- markers + lists ----------
+function renderMarkers(){ markersLayer.clearLayers(); const buffered=bufferedSet();
+  points.forEach(p=>{ const inR=isInRoute(p.id), inB=buffered.has(p.id)&&!inR; const fill=p.color||'#9aa1ad';
+    const ring=inR?theme.route:(inB?theme.buffer:shiftL(fill, theme.map==='dark'?25:-30));
+    const m=L.circleMarker([p.lat,p.lng],{radius:inR?9:8,color:ring,fillColor:fill,fillOpacity:.9,weight:inR||inB?3:1.5});
+    let html=`<b>${inR?'В МАРШРУТЕ':inB?'В БУФЕРЕ':'ТОЧКА'}</b><br><strong style="font-size:13px">${p.name}</strong>`;
+    if(p.desc) html+=`<br>${p.desc}`; customFields.forEach(f=>{ if(p.custom[f.id]) html+=`<br><span style="color:var(--ink-dim)">${f.name}:</span> ${p.custom[f.id]}`; });
+    m.bindPopup(html); markersLayer.addLayer(m); }); }
+function renderPlannerRoute(){ $('routeCount').textContent=routeStops.length; const box=$('routeStops');
+  box.innerHTML=routeStops.length?'':'<div class="hint">Маршрут пуст. Добавляй точки поиском ниже (одну точку можно повторять, но не подряд).</div>';
+  routeStops.forEach((id,i)=>{ const p=byId(id); if(!p) return; const d=document.createElement('div'); d.className='pt in-route';
+    d.innerHTML=`<div class="nm"><span class="dot"></span>${i+1}. ${p.name}</div><div class="acts"><button class="btn sm" data-up="${i}">↑</button><button class="btn sm" data-down="${i}">↓</button><button class="btn sm ghost" data-outidx="${i}">убрать</button></div>`;
+    box.appendChild(d); }); bindActs(box); }
+function renderPlanSearch(){ const q=$('planSearch').value.trim().toLowerCase(); const box=$('planList'); const buffered=bufferedSet();
+  const res=points.filter(p=>!q||p.name.toLowerCase().includes(q));
+  box.innerHTML=res.length?'':'<div class="hint">Ничего не найдено.</div>';
+  res.slice(0,30).forEach(p=>{ const cnt=routeCountOf(p.id); const inBuf=buffered.has(p.id)&&!cnt; const d=document.createElement('div'); d.className='pt'+(cnt?' in-route':'')+(inBuf?' in-buffer':'');
+    d.innerHTML=`<div class="nm"><span class="dot"></span>${p.name}${cnt?`<span class="badge r">в маршруте ×${cnt}</span>`:''}${inBuf?'<span class="badge b">в буфере</span>':''}</div>
+      <div class="acts"><button class="btn sm" data-in="${p.id}">+ в маршрут</button><button class="btn sm ghost" data-fly="${p.id}">⊙ на карте</button></div>`;
+    box.appendChild(d); }); bindActs(box); }
+$('planSearch').oninput=renderPlanSearch;
+function bindActs(scope){
+  scope.querySelectorAll('[data-in]').forEach(b=>b.onclick=()=>{ if(addStop(b.dataset.in)) renderAll(); });
+  scope.querySelectorAll('[data-outidx]').forEach(b=>b.onclick=()=>{ removeStopAt(parseInt(b.dataset.outidx)); renderAll(); });
+  scope.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ if(!can('pointDelete')){alert('Недостаточно прав.');return;} if(confirm('Удалить точку? Она исчезнет и из маршрута.')){ points=points.filter(p=>p.id!=b.dataset.del); removeStopsByPoint(b.dataset.del); renderAll(); }});
+  scope.querySelectorAll('[data-fly]').forEach(b=>b.onclick=()=>{const p=byId(b.dataset.fly);switchTab('planner');map.flyTo([p.lat,p.lng],14);});
+  scope.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{ if(!can('pointEdit')){alert('Недостаточно прав.');return;} openEdit(b.dataset.edit);});
+  scope.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>reorderStop(parseInt(b.dataset.up),-1));
+  scope.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>reorderStop(parseInt(b.dataset.down),1)); }
+
+// ---------- points tab ----------
+$('ptSearch').oninput=renderPointsTab; $('ptField').onchange=renderPointsTab; $('ptAddTab').onclick=()=>{ switchTab('planner'); toggleAddMode(true); };
+function populatePtField(){ const sel=$('ptField'); const cur=sel.value;
+  sel.innerHTML='<option value="__any">Любое поле</option><option value="__name">Название</option><option value="__desc">Описание</option>'+customFields.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur)) sel.value=cur; }
+function matchField(p,field,q){ if(!q) return true;
+  if(field==='__name') return p.name.toLowerCase().includes(q);
+  if(field==='__desc') return (p.desc||'').toLowerCase().includes(q);
+  if(field==='__any') return p.name.toLowerCase().includes(q)||(p.desc||'').toLowerCase().includes(q)||customFields.some(f=>String(p.custom[f.id]||'').toLowerCase().includes(q));
+  return String(p.custom[field]||'').toLowerCase().includes(q); }
+function renderPointsTab(){ const q=$('ptSearch').value.trim().toLowerCase(); const field=$('ptField').value; const thead=$('ptTable').querySelector('thead'), tbody=$('ptTable').querySelector('tbody');
+  thead.innerHTML='<tr><th>Название</th><th>Описание</th>'+customFields.map(f=>`<th>${f.name}</th>`).join('')+'<th>Координаты</th><th></th></tr>';
+  const res=points.filter(p=>matchField(p,field,q));
+  $('ptSearchInfo').textContent=q?`найдено ${res.length} из ${points.length}`:`всего ${points.length}`;
+  if(!res.length){ tbody.innerHTML=`<tr><td colspan="${customFields.length+4}"><div class="empty">Нет точек.</div></td></tr>`; return; } tbody.innerHTML='';
+  res.forEach(p=>{ const cnt=routeCountOf(p.id); const tr=document.createElement('tr'); if(cnt) tr.className='is-route';
+    let c=`<td class="tname"><span class="dot" style="display:inline-block;background:${p.color||'#9aa1ad'}"></span> ${p.name}${cnt?` <span class="badge r">маршрут ×${cnt}</span>`:''}</td><td>${p.desc||''}</td>`;
+    customFields.forEach(f=>c+=`<td>${p.custom[f.id]||''}</td>`);
+    c+=`<td style="font-family:var(--mono);font-size:10px;color:var(--ink-faint)">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</td>`;
+    c+=`<td><div class="tacts">${can('pointEdit')?`<button class="btn sm" data-edit="${p.id}">ред.</button>`:''}<button class="btn sm" data-in="${p.id}">+маршрут</button><button class="btn sm ghost" data-fly="${p.id}">⊙</button>${can('pointDelete')?`<button class="btn sm ghost" data-del="${p.id}">×</button>`:''}</div></td>`;
+    tr.innerHTML=c; tbody.appendChild(tr); }); bindActs(tbody); }
+function openEdit(id){ const p=byId(id); if(!p) return; editId=id; $('eName').value=p.name; $('eDesc').value=p.desc||''; $('eLat').value=p.lat; $('eLng').value=p.lng; $('eColor').value=p.color||'#9aa1ad';
+  const box=$('eCustom'); box.innerHTML=''; customFields.forEach(f=>{ const lab=document.createElement('label'); lab.textContent=f.name+' ('+f.type+')'; const inp=document.createElement('input'); inp.type=f.type==='number'?'number':f.type==='date'?'date':'text'; inp.id='ein_'+f.id; inp.value=p.custom[f.id]||''; box.appendChild(lab); box.appendChild(inp); }); $('editOverlay').classList.add('on'); }
+$('eCancel').onclick=()=>$('editOverlay').classList.remove('on');
+$('eSave').onclick=()=>{ const p=byId(editId); if(!p) return; p.name=$('eName').value.trim()||p.name; p.desc=$('eDesc').value.trim(); p.lat=parseFloat($('eLat').value); p.lng=parseFloat($('eLng').value); p.color=$('eColor').value; customFields.forEach(f=>p.custom[f.id]=$('ein_'+f.id).value); $('editOverlay').classList.remove('on'); renderAll(); };
+
+// ---------- route build + alternatives ----------
+$('buildRoute').onclick=buildRoute; $('clearRoute').onclick=()=>{routeStops=[];workHours=[];routeFeatures=[];routeLine=null;timePoly=null;routeLayer.clearLayers();$('routeErr').textContent='';renderVariants();renderAll();};
+async function buildRoute(){ $('routeErr').textContent=''; const objs=routeObjs();
+  if(objs.length<2){ $('routeErr').textContent='Нужно минимум 2 остановки.'; return; }
+  const coords=objs.map(p=>[p.lng,p.lat]); const key=settings.orsKey;
+  if(!key){ routeFeatures=[{type:'Feature',geometry:{type:'LineString',coordinates:coords},properties:{}}]; selectedRoute=0; setSelectedLine(); drawRoutes(); renderVariants(); $('routeErr').innerHTML='<span class="ok">Маршрут по прямым (нет ключа ORS). Для экономики нужен ключ.</span>'; recompute(); return; }
+  $('buildRoute').disabled=true; $('buildRoute').textContent='…';
+  try{ const body={coordinates:coords,preference:$('preference').value}; if(coords.length===2) body.alternative_routes={target_count:3,weight_factor:1.6,share_factor:0.6};
+    const res=await fetch(`https://api.openrouteservice.org/v2/directions/${$('profile').value}/geojson`,{method:'POST',headers:{'Authorization':key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!res.ok) throw new Error(res.status+' '+(await res.text()).slice(0,120));
+    const gj=await res.json(); routeFeatures=gj.features||[]; selectedRoute=0; setSelectedLine(); drawRoutes(); renderVariants();
+    const n=routeFeatures.length; $('routeErr').innerHTML=`<span class="ok">${n>1?n+' варианта маршрута':'Маршрут построен'}.</span>`; recompute(); if(document.querySelector('.view-econ').classList.contains('active')) renderEcon();
+  }catch(err){ $('routeErr').textContent='Ошибка ORS: '+err.message; }
+  finally{ $('buildRoute').disabled=false; $('buildRoute').textContent='Построить'; } }
+function setSelectedLine(){ const f=routeFeatures[selectedRoute]; routeLine=f?{type:'Feature',geometry:f.geometry,properties:{}}:null; }
+function drawRoutes(){ routeLayer.clearLayers(); const cas=theme.casing!=='off';
+  routeFeatures.forEach((f,i)=>{ const sel=i===selectedRoute; const ll=f.geometry.coordinates.map(c=>[c[1],c[0]]); const col=sel?theme.route:'#7d8590';
+    if(cas&&sel) L.polyline(ll,{color:casingColor(col),weight:9,opacity:.9,lineCap:'round',lineJoin:'round'}).addTo(routeLayer);
+    const pl=L.polyline(ll,{color:col,weight:sel?5:3,opacity:sel?.95:.55,dashArray:sel?null:'6 8'}); pl.on('click',()=>selectRoute(i)); pl.addTo(routeLayer); if(sel) pl.bringToFront(); }); }
+function selectRoute(i){ selectedRoute=i; setSelectedLine(); timePoly=null; drawRoutes(); renderVariants(); recompute(); if(document.querySelector('.view-econ').classList.contains('active')) renderEcon(); }
+function renderVariants(){ const box=$('routeVariants'); if(routeFeatures.length<2){ box.innerHTML=''; return; }
+  box.innerHTML='<div class="hint" style="margin:0 0 6px">Варианты маршрута (как в Google Maps) — выбери:</div>';
+  routeFeatures.forEach((f,i)=>{ const s=f.properties&&f.properties.summary; const km=s?(s.distance/1000).toFixed(1)+' км':'—'; const mn=s?Math.round(s.duration/60)+' мин':'—';
+    const d=document.createElement('div'); d.className='variant'+(i===selectedRoute?' sel':''); d.innerHTML=`<span class="lbl">Вариант ${i+1}${i===selectedRoute?' ✓':''}</span><span class="met">${km} · ${mn}</span>`; d.onclick=()=>selectRoute(i); box.appendChild(d); }); }
+
+// ---------- buffer ----------
+$('modeDist').onclick=()=>setBufMode('dist'); $('modeTime').onclick=()=>setBufMode('time');
+function setBufMode(m){ bufferMode=m; $('modeDist').classList.toggle('on',m==='dist'); $('modeTime').classList.toggle('on',m==='time'); $('distCtl').style.display=m==='dist'?'block':'none'; $('timeCtl').style.display=m==='time'?'block':'none'; if(m==='time') updateTimeMax(); recompute(); }
+function formatMin(m){ if(m<60) return m+' мин'; const h=Math.floor(m/60), mm=m%60; return mm?h+' ч '+mm+' м':h+' ч'; }
+function updateTimeMax(){ const p=$('profile').value; const max=p==='foot-walking'?1200:(p==='cycling-regular'?300:60); const r=$('timeRange'); r.max=max; if(parseFloat(r.value)>max) r.value=max; bufferMin=parseFloat(r.value); $('timeVal').textContent=formatMin(bufferMin); }
+$('profile').onchange=()=>{ if(bufferMode==='time') updateTimeMax(); };
+$('bufRange').oninput=e=>{bufferKm=parseFloat(e.target.value);$('bufVal').textContent=bufferKm+' км';recompute();};
+$('timeRange').oninput=e=>{bufferMin=parseFloat(e.target.value);$('timeVal').textContent=formatMin(bufferMin);};
+$('buildIso').onclick=computeTimeBuffer;
+async function computeTimeBuffer(){ if(!settings.orsKey){ $('isoHint').innerHTML='<span class="err">Нет ключа ORS (Настройки).</span>'; return; } if(!routeLine){ $('isoHint').innerHTML='<span class="err">Сначала построй маршрут.</span>'; return; }
+  $('buildIso').disabled=true; $('buildIso').textContent='Считаю изохрону…';
+  try{ const len=turf.length(routeLine,{units:'kilometers'}); const n=Math.min(20,Math.max(2,Math.round(len/2))); const samples=[];
+    for(let i=0;i<=n;i++) samples.push(turf.along(routeLine,len*i/n,{units:'kilometers'}).geometry.coordinates);
+    const profile=$('profile').value; let union=null;
+    for(let i=0;i<samples.length;i+=5){ const chunk=samples.slice(i,i+5);
+      const res=await fetch(`https://api.openrouteservice.org/v2/isochrones/${profile}`,{method:'POST',headers:{'Authorization':settings.orsKey,'Content-Type':'application/json'},body:JSON.stringify({locations:chunk,range:[bufferMin*60],range_type:'time'})});
+      if(!res.ok) throw new Error(res.status+' '+(await res.text()).slice(0,120)); const gj=await res.json(); gj.features.forEach(f=>{ union=union?turf.union(union,f):f; }); }
+    timePoly=union; $('isoHint').innerHTML=`<span class="ok">Изохрона ${formatMin(bufferMin)} построена.</span>`; recompute();
+  }catch(err){ $('isoHint').innerHTML='<span class="err">Ошибка изохроны: '+err.message+'</span>'; }
+  finally{ $('buildIso').disabled=false; $('buildIso').textContent='Построить изохрону (ORS)'; } }
+function currentBufferPolygon(){ if(bufferMode==='dist'){ if(routeLine&&bufferKm>0){ try{return turf.buffer(routeLine,bufferKm,{units:'kilometers'});}catch(e){return null;} } return null; } return timePoly; }
+function drawBuffer(){ bufferLayer.clearLayers(); const poly=currentBufferPolygon(); if(!poly) return; const cas=theme.casing!=='off';
+  if(cas) L.geoJSON(poly,{style:{color:casingColor(theme.buffer),weight:3.5,opacity:.85,fill:false}}).addTo(bufferLayer);
+  L.geoJSON(poly,{style:{color:theme.buffer,weight:1.5,fillColor:theme.buffer,fillOpacity:.10,dashArray:'4 6'}}).addTo(bufferLayer); }
+function bufferedSet(){ const s=new Set(); const poly=currentBufferPolygon(); if(!poly||!points.length) return s; points.forEach(p=>{ try{ if(turf.booleanPointInPolygon(turf.point([p.lng,p.lat]),poly)) s.add(p.id); }catch(e){} }); return s; }
+function recompute(){ drawBuffer(); const buffered=bufferedSet(); const newOnes=[...buffered].filter(id=>!isInRoute(id)); $('bufCount').textContent=newOnes.length; $('addBuffered').disabled=newOnes.length===0; renderMarkers(); renderPlannerRoute(); renderPlanSearch(); }
+$('addBuffered').onclick=()=>{ const buffered=bufferedSet(); buffered.forEach(id=>{ if(!isInRoute(id)){ if(routeStops.length===0||routeStops[routeStops.length-1]!==id){ routeStops.push(id); workHours.push(0); } } }); renderAll(); };
+
+// ---------- saved routes ----------
+$('saveRoute').onclick=()=>{ if(routeObjs().length<2){ alert('Нужно минимум 2 остановки.'); return; } const name=prompt('Название маршрута:','Маршрут '+(savedRoutes.length+1)); if(!name) return;
+  savedRoutes.push({id:'r'+(nextId++),name,stopIds:routeStops.slice(),workHours:workHours.slice(),bufferKm:bufferMode==='dist'?bufferKm:0,bufferMin:bufferMode==='time'?bufferMin:0,bufferMode,profile:$('profile').value,createdAt:new Date().toISOString()}); renderAll(); alert('Сохранено. Вкладка «Маршруты».'); };
+$('rtSearch').oninput=renderRoutesTab;
+function renderRoutesTab(){ const q=$('rtSearch').value.trim().toLowerCase(); const box=$('rtList'); const res=savedRoutes.filter(r=>!q||r.name.toLowerCase().includes(q));
+  if(!res.length){ box.innerHTML='<div class="empty">Нет сохранённых маршрутов.</div>'; return; } box.innerHTML='';
+  res.forEach(r=>{ const names=r.stopIds.map(id=>{const p=byId(id);return p?p.name:'(удалена)';}); const profLabel={'driving-car':'авто','driving-hgv':'грузовик','cycling-regular':'вело','foot-walking':'пешком'}[r.profile]||r.profile;
+    const bufLabel=r.bufferMode==='time'?`буфер ${formatMin(r.bufferMin)}`:`буфер ${r.bufferKm} км`;
+    const d=document.createElement('div'); d.className='rcard';
+    d.innerHTML=`<h3>${r.name} <span class="pill">${profLabel}</span> <span class="pill">${names.length} остановок</span> <span class="pill">${bufLabel}</span></h3>
+      <div class="stat">${new Date(r.createdAt).toLocaleString('ru-RU')}</div><div class="stops">${names.map((n,i)=>`${i+1}. ${n}`).join('  →  ')}</div>
+      <div class="acts"><button class="btn blue" data-gm="${r.id}">⌖ Ссылка для водителя</button><button class="btn" data-load="${r.id}">Загрузить в планировщик</button>${can('routeDelete')?`<button class="btn ghost" data-rename="${r.id}">Переименовать</button><button class="btn ghost" data-rdel="${r.id}">Удалить</button>`:''}</div>`;
+    box.appendChild(d); });
+  box.querySelectorAll('[data-load]').forEach(b=>b.onclick=()=>loadRoute(b.dataset.load));
+  box.querySelectorAll('[data-rdel]').forEach(b=>b.onclick=()=>{ if(confirm('Удалить маршрут?')){ savedRoutes=savedRoutes.filter(r=>r.id!=b.dataset.rdel); renderAll(); } });
+  box.querySelectorAll('[data-rename]').forEach(b=>b.onclick=()=>{ const r=savedRoutes.find(x=>x.id==b.dataset.rename); const n=prompt('Новое название:',r.name); if(n){r.name=n;renderAll();} });
+  box.querySelectorAll('[data-gm]').forEach(b=>b.onclick=()=>{ const r=savedRoutes.find(x=>x.id==b.dataset.gm); showGmaps(r.stopIds.map(id=>byId(id)).filter(Boolean),r.profile); }); }
+function loadRoute(id){ const r=savedRoutes.find(x=>x.id==id); if(!r) return; routeStops=r.stopIds.slice(); workHours=(r.workHours&&r.workHours.length===r.stopIds.length)?r.workHours.slice():r.stopIds.map(()=>0); $('profile').value=r.profile; timePoly=null;
+  if(r.bufferMode==='time'){ setBufMode('time'); bufferMin=r.bufferMin||15; $('timeRange').value=bufferMin; $('timeVal').textContent=formatMin(bufferMin); } else { setBufMode('dist'); bufferKm=r.bufferKm||0; $('bufRange').value=bufferKm; $('bufVal').textContent=bufferKm+' км'; }
+  switchTab('planner'); renderAll(); buildRoute(); }
+
+// ---------- google maps ----------
+function gmapsUrl(stops,profile){ const tm=profile==='foot-walking'?'walking':profile==='cycling-regular'?'bicycling':'driving'; const pts=stops.map(p=>`${p.lat.toFixed(6)},${p.lng.toFixed(6)}`); const origin=pts[0],dest=pts[pts.length-1],way=pts.slice(1,-1).join('|'); let u=`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=${tm}`; if(way) u+=`&waypoints=${encodeURIComponent(way)}`; return u; }
+function showGmaps(stops,profile){ if(stops.length<2){ alert('Нужно минимум 2 точки.'); return; } const url=gmapsUrl(stops,profile); $('gmUrl').textContent=url; $('gmWarn').innerHTML=stops.length>10?'<div class="err">Внимание: Google Maps в ссылке надёжно держит ~10 точек, сейчас '+stops.length+'.</div>':''; $('gmOpen').onclick=()=>window.open(url,'_blank'); $('gmCopy').onclick=()=>{ navigator.clipboard&&navigator.clipboard.writeText(url); $('gmCopy').textContent='Скопировано'; setTimeout(()=>$('gmCopy').textContent='Копировать',1200); }; $('gmOverlay').classList.add('on'); }
+$('gmClose').onclick=()=>$('gmOverlay').classList.remove('on'); $('gmapNow').onclick=()=>showGmaps(routeObjs(),$('profile').value);
+
+// ---------- economics ----------
+$('econRefresh').onclick=renderEcon;
+function renderEcon(){ const box=$('econBody'); const objs=routeObjs(); const feat=routeFeatures[selectedRoute]; const summary=feat&&feat.properties&&feat.properties.summary;
+  if(objs.length<2){ box.innerHTML='<div class="empty">Построй маршрут (минимум 2 остановки) на вкладке «Планировщик».</div>'; return; }
+  if(!summary){ box.innerHTML='<div class="warnbox">Для экономики нужны км и время из ORS. Добавь ключ ORS в «Настройках» и построй маршрут (сейчас он по прямым).</div>'; return; }
+  const km=summary.distance/1000, driveH=summary.duration/3600;
+  while(workHours.length<routeStops.length) workHours.push(0); while(workHours.length>routeStops.length) workHours.pop();
+  const workH=workHours.reduce((a,b)=>a+(parseFloat(b)||0),0);
+  const totalH=driveH+workH; const eff=econ.shift*(1+(econ.dev||0)/100); const days=Math.max(1,Math.ceil(totalH/eff)); const nights=Math.max(0,days-1);
+  const cKm=km*econ.tariffKm, cWork=workH*econ.tariffHour, cDay=days*econ.tariffDay, cNight=nights*econ.tariffNight; const total=cKm+cWork+cDay+cNight; const cur=econ.currency||'';
+  const costTotal=km*(econ.costKm||0)+workH*(econ.costHour||0)+days*(econ.costDay||0)+nights*(econ.costNight||0);
+  const profit=total-costTotal; const margin=total>0?(profit/total*100):0; const hasCost=(econ.costKm||econ.costHour||econ.costDay||econ.costNight)>0;
+  let stopsHtml=''; routeStops.forEach((id,i)=>{ const p=byId(id); stopsHtml+=`<div class="stoprow"><span class="sn">${i+1}. ${p?p.name:'(удалена)'}</span><input type="number" step="0.5" min="0" id="wh_${i}" value="${workHours[i]||0}"> <span class="hint" style="margin:0">ч работы</span></div>`; });
+  box.innerHTML=`<div class="econ-grid">
+    <div class="setcard"><h3>Маршрут</h3>
+      <div class="kpi"><span class="k">Остановок</span><span class="v">${routeStops.length}</span></div>
+      <div class="kpi"><span class="k">Расстояние (ORS)</span><span class="v">${num(km)} км</span></div>
+      <div class="kpi"><span class="k">Время в пути (ORS)</span><span class="v">${num(driveH)} ч</span></div>
+      <div class="kpi"><span class="k">Время работы</span><span class="v">${num(workH)} ч</span></div>
+      <div class="kpi"><span class="k">Всего часов</span><span class="v">${num(totalH)} ч</span></div>
+      <div class="kpi"><span class="k">Смена × допуск</span><span class="v">${num(econ.shift)} ч × +${num(econ.dev)}% = ${num(eff)} ч</span></div>
+      <div class="kpi"><span class="k">Дней выезда</span><span class="v">${days}</span></div>
+      <div class="kpi"><span class="k">Ночей</span><span class="v">${nights}</span></div>
+    </div>
+    <div class="setcard"><h3>Экономика</h3>
+      <div class="kpi"><span class="k">${num(km)} км × ${num(econ.tariffKm)}</span><span class="v">${num(cKm)} ${cur}</span></div>
+      <div class="kpi"><span class="k">${num(workH)} ч × ${num(econ.tariffHour)}</span><span class="v">${num(cWork)} ${cur}</span></div>
+      <div class="kpi"><span class="k">${days} дн × ${num(econ.tariffDay)}</span><span class="v">${num(cDay)} ${cur}</span></div>
+      <div class="kpi"><span class="k">${nights} ноч × ${num(econ.tariffNight)}</span><span class="v">${num(cNight)} ${cur}</span></div>
+      <div class="kpi total"><span class="k">ВЫРУЧКА</span><span class="v">${num(total)} ${cur}</span></div>
+      ${hasCost?`<div class="kpi"><span class="k">Себестоимость</span><span class="v">${num(costTotal)} ${cur}</span></div>
+      <div class="kpi total"><span class="k" style="color:${profit>=0?'var(--green)':'var(--red)'}">ПРИБЫЛЬ</span><span class="v" style="color:${profit>=0?'var(--green)':'var(--red)'}">${num(profit)} ${cur}</span></div>
+      <div class="kpi"><span class="k">Рентабельность</span><span class="v" style="color:${profit>=0?'var(--green)':'var(--red)'}">${num(margin)} %</span></div>`:'<div class="hint">Задай себестоимость в «Настройках», чтобы увидеть прибыль и рентабельность.</div>'}
+    </div></div>
+    <div class="setcard"><h3>Время работы по остановкам</h3><div class="sub">Введи часы работы на каждой остановке (дорога считается отдельно по тарифу за км).</div>${stopsHtml}</div>`;
+  routeStops.forEach((id,i)=>{ const inp=$('wh_'+i); if(inp) inp.oninput=()=>{ workHours[i]=parseFloat(inp.value)||0; persist(); renderEconNumbersOnly(); }; });
+}
+function renderEconNumbersOnly(){ // лёгкий пересчёт без перерисовки полей ввода
+  const objs=routeObjs(); const feat=routeFeatures[selectedRoute]; const summary=feat&&feat.properties&&feat.properties.summary; if(objs.length<2||!summary) return;
+  renderEconCachedScroll=$('econBody').scrollTop; renderEcon(); $('econBody').scrollTop=renderEconCachedScroll; }
+let renderEconCachedScroll=0;
+
+// ---------- settings: econ + ORS + GitHub ----------
+function fillSettings(){ $('ecShift').value=econ.shift;$('ecDev').value=econ.dev;$('ecCur').value=econ.currency;$('ecKm').value=econ.tariffKm;$('ecHour').value=econ.tariffHour;$('ecDay').value=econ.tariffDay;$('ecNight').value=econ.tariffNight;
+  $('ecCKm').value=econ.costKm||0;$('ecCHour').value=econ.costHour||0;$('ecCDay').value=econ.costDay||0;$('ecCNight').value=econ.costNight||0;
+  $('dtAccent').value=defaultTheme.accent;$('dtRoute').value=defaultTheme.route;$('dtBuffer').value=defaultTheme.buffer;$('dtBg').value=defaultTheme.bg;$('dtPanel').value=defaultTheme.panel;
+  $('setOrsKey').value=settings.orsKey||''; $('ghOwner').value=settings.gh.owner||''; $('ghRepo').value=settings.gh.repo||''; $('ghBranch').value=settings.gh.branch||'main'; $('ghPath').value=settings.gh.path||'data.json'; $('ghToken').value=settings.gh.token||''; $('ghAuto').checked=!!settings.gh.auto; }
+function readDefaultTheme(){ return {accent:$('dtAccent').value,route:$('dtRoute').value,buffer:$('dtBuffer').value,bg:$('dtBg').value,panel:$('dtPanel').value}; }
+$('dtSave').onclick=()=>{ defaultTheme=readDefaultTheme(); renderAll(); $('dtStatus').innerHTML='<span class="ok">Сохранено для новых пользователей.</span>'; };
+$('dtApplyMe').onclick=()=>{ const t=readDefaultTheme(); currentUser.theme=t; applyTheme(t); drawRoutes(); persist(); $('dtStatus').innerHTML='<span class="ok">Применено к тебе.</span>'; };
+$('ecSave').onclick=()=>{ econ={shift:parseFloat($('ecShift').value)||8,dev:parseFloat($('ecDev').value)||0,currency:$('ecCur').value.trim()||'грн',tariffKm:parseFloat($('ecKm').value)||0,tariffHour:parseFloat($('ecHour').value)||0,tariffDay:parseFloat($('ecDay').value)||0,tariffNight:parseFloat($('ecNight').value)||0,costKm:parseFloat($('ecCKm').value)||0,costHour:parseFloat($('ecCHour').value)||0,costDay:parseFloat($('ecCDay').value)||0,costNight:parseFloat($('ecCNight').value)||0}; renderAll(); $('ecStatus').innerHTML='<span class="ok">Сохранено</span>'; };
+$('saveOrsKey').onclick=()=>{ settings.orsKey=$('setOrsKey').value.trim(); saveSettings(); $('orsKeyStatus').innerHTML='<span class="ok">Сохранено</span>'; };
+$('ghSaveCfg').onclick=()=>{ settings.gh={owner:$('ghOwner').value.trim(),repo:$('ghRepo').value.trim(),branch:$('ghBranch').value.trim()||'main',path:$('ghPath').value.trim()||'data.json',token:$('ghToken').value.trim(),auto:$('ghAuto').checked}; saveSettings(); $('ghStatus').innerHTML='<span class="ok">Настройки сохранены.</span>'; };
+$('ghTest').onclick=async ()=>{ $('ghSaveCfg').onclick(); $('ghStatus').textContent='Проверяю…'; try{ const {owner,repo,branch,path,token}=settings.gh; const r=await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`,{headers:ghHeaders(token)}); $('ghStatus').innerHTML=r.ok?'<span class="ok">Доступ есть, файл найден.</span>':(r.status===404?'<span class="ok">Доступ есть, файла нет — создастся при коммите.</span>':'<span class="err">Ошибка '+r.status+'</span>'); }catch(e){ $('ghStatus').innerHTML='<span class="err">'+e.message+'</span>'; } };
+$('ghCommitNow').onclick=()=>{ $('ghSaveCfg').onclick(); ghCommit(true); };
+function ghHeaders(token){ return {Authorization:'Bearer '+token,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}; }
+function dataPayload(){ return JSON.stringify({users,econ,defaultTheme,customFields,savedRoutes,points,routeStops,workHours},null,2); }
+async function ghCommit(manual){ const {owner,repo,branch,path,token}=settings.gh; if(!owner||!repo||!token){ if(manual) $('ghStatus').innerHTML='<span class="err">Заполни owner/repo/token.</span>'; return; } if(manual) $('ghStatus').textContent='Коммичу…';
+  try{ const api=`https://api.github.com/repos/${owner}/${repo}/contents/${path}`; let sha; const g=await fetch(`${api}?ref=${branch}`,{headers:ghHeaders(token)}); if(g.ok) sha=(await g.json()).sha;
+    const content=btoa(unescape(encodeURIComponent(dataPayload()))); const body={message:'update data.json '+new Date().toISOString(),content,branch}; if(sha) body.sha=sha;
+    const r=await fetch(api,{method:'PUT',headers:ghHeaders(token),body:JSON.stringify(body)}); if(!r.ok) throw new Error((await r.json()).message||('HTTP '+r.status));
+    const t=new Date().toLocaleTimeString('ru-RU'); if(manual) $('ghStatus').innerHTML='<span class="ok">Закоммичено в '+t+'.</span>'; else $('syncStatus').innerHTML='<span class="ok">Автокоммит в GitHub '+t+'.</span>';
+  }catch(err){ const m='Ошибка GitHub: '+err.message; if(manual) $('ghStatus').innerHTML='<span class="err">'+m+'</span>'; else $('syncStatus').innerHTML='<span class="err">'+m+'</span>'; } }
+let autoTimer=null; function scheduleAuto(){ if(!settings.gh.auto||!settings.gh.token||!can('data')) return; clearTimeout(autoTimer); autoTimer=setTimeout(()=>ghCommit(false),4000); }
+
+// ---------- persistence ----------
+const LS_DATA='routeBufferData_v1', LS_SET='rb_settings_v1';
+function persist(){ try{ localStorage.setItem(LS_DATA,JSON.stringify({users,econ,defaultTheme,points,customFields,savedRoutes,routeStops,workHours})); }catch(e){} scheduleAuto(); }
+function saveSettings(){ try{ localStorage.setItem(LS_SET,JSON.stringify(settings)); }catch(e){} }
+function loadLS(k){ try{ const r=localStorage.getItem(k); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function applyData(d){ users=d.users||[]; econ=Object.assign(defaultEcon(),d.econ||{}); defaultTheme=Object.assign({},DEFAULT_THEME,d.defaultTheme||{}); customFields=d.customFields||[]; savedRoutes=d.savedRoutes||[]; points=d.points||[];
+  if(d.routeStops){ routeStops=d.routeStops.slice(); } else { routeStops=points.filter(p=>p.inRoute).sort((a,b)=>(a.order||0)-(b.order||0)).map(p=>p.id); }
+  workHours=(d.workHours&&d.workHours.length===routeStops.length)?d.workHours.slice():routeStops.map(()=>0);
+  points.forEach(p=>{ delete p.inRoute; delete p.order; }); nextId=points.length+customFields.length+savedRoutes.length+50; }
+async function loadRepo(){ try{ const res=await fetch('./data.json?_='+Date.now()); if(!res.ok) return false; applyData(await res.json()); ensureUsers(); renderCF(); renderCustomInputs(); renderAll(); if(points.length) map.fitBounds(points.map(p=>[p.lat,p.lng]),{padding:[40,40]}); return true; }catch(e){ return false; } }
+
+// ---------- data io ----------
+$('expBtn').onclick=()=>{ const blob=new Blob([dataPayload()],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='data.json'; a.click(); $('syncStatus').innerHTML='<span class="ok">Скачан data.json.</span>'; };
+$('pullBtn').onclick=async ()=>{ if(!confirm('Загрузить data.json из репозитория и заменить данные?')) return; const ok=await loadRepo(); $('syncStatus').innerHTML=ok?'<span class="ok">Подтянуто из репозитория.</span>':'<span class="err">data.json не найден.</span>'; };
+$('impBtn').onclick=()=>$('impFile').click();
+$('impFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ applyData(JSON.parse(r.result)); ensureUsers(); renderCF(); renderCustomInputs(); renderAll(); if(points.length) map.fitBounds(points.map(p=>[p.lat,p.lng]),{padding:[40,40]}); }catch(err){ alert('Не удалось прочитать JSON'); } }; r.readAsText(f); };
+$('wipeBtn').onclick=()=>{ if(confirm('Удалить все точки и маршруты? (пользователи и тарифы останутся)')){ points=[];savedRoutes=[];routeStops=[];workHours=[];routeFeatures=[];routeLine=null;timePoly=null;routeLayer.clearLayers();renderVariants();renderAll(); } };
+$('demoBtn').onclick=()=>{ customFields=[{id:'cfP',name:'Приоритет',type:'text'},{id:'cfT',name:'Тоннаж',type:'number'}];
+  const base=[['Київ-хаб',50.4501,30.5234,'Стартова база','A','12'],['Бровари',50.5110,30.7909,'Вікно 9–11','B','3'],['Бориспіль',50.3527,30.9550,'До 14:00','A','5'],['Васильків',50.1854,30.3149,'Поряд із маршрутом','C','2'],['Фастів',50.0757,29.9087,'Опціонально','C','4'],['Біла Церква',49.7950,30.1310,'Можна додати','B','6']];
+  points=base.map((b,i)=>({id:'p'+(100+i),name:b[0],lat:b[1],lng:b[2],desc:b[3],custom:{cfP:b[4],cfT:b[5]}})); routeStops=['p100','p101']; workHours=[0,0]; savedRoutes=[]; nextId=200; renderCF(); renderCustomInputs(); renderAll(); map.fitBounds(points.map(p=>[p.lat,p.lng]),{padding:[50,50]}); };
+
+// ---------- render all ----------
+function updateCounts(){ $('ptCount').textContent=points.length; $('tabPtN').textContent=points.length; $('tabRtN').textContent=savedRoutes.length; }
+function renderAll(){ updateCounts(); recompute();
+  if(document.querySelector('.view-points').classList.contains('active')) renderPointsTab();
+  if(document.querySelector('.view-routes').classList.contains('active')) renderRoutesTab();
+  if(document.querySelector('.view-econ').classList.contains('active')) renderEcon(); persist(); }
+
+// ---------- boot ----------
+(async function boot(){ const st=loadLS(LS_SET); if(st){ settings=Object.assign(settings,st); settings.gh=Object.assign({owner:'',repo:'',branch:'main',path:'data.json',token:'',auto:false},st.gh||{}); }
+  renderCF(); renderCustomInputs();
+  const ls=loadLS(LS_DATA);
+  if(ls && ((ls.points||[]).length||(ls.savedRoutes||[]).length||(ls.users||[]).length)){ applyData(ls); ensureUsers(); renderCF(); renderCustomInputs(); if(points.length) map.fitBounds(points.map(p=>[p.lat,p.lng]),{padding:[40,40]}); }
+  else { await loadRepo(); ensureUsers(); }
+  applyRole();
+  const sess=loadLS('rb_session')||localStorage.getItem('rb_session'); const su=sess&&users.find(u=>u.login===sess);
+  if(su){ currentUser=su; applyUser(); } else { showLogin(); }
+})();
+</script>
+</body>
+</html>
