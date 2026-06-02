@@ -8,8 +8,10 @@
         "accent": "#ffe100",
         "route": "#ffe100",
         "buffer": "#ffe100",
-        "bg": "#1e1e1e",
-        "panel": "#1e1e1e"
+        "bg": "#000000",
+        "panel": "#1e1e1e",
+        "map": "dark",
+        "casing": "on"
       }
     },
     {
@@ -54,10 +56,8 @@
     "accent": "#ffe100",
     "route": "#ffe100",
     "buffer": "#ffe100",
-    "bg": "#1e1e1e",
-    "panel": "#1e1e1e",
-    "map": "light",
-    "casing": "on"
+    "bg": "#000000",
+    "panel": "#1e1e1e"
   },
   "customFields": [
     {
