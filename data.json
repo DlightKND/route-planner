@@ -1,5 +1,16 @@
 {
   "customFields": [],
   "savedRoutes": [],
-  "points": []
+  "points": [
+    {
+      "id": "p1",
+      "name": "Виробництво ТОВ \"Д ЛАЙТ\"",
+      "desc": "",
+      "lat": 49.1079754,
+      "lng": 33.4153648,
+      "custom": {},
+      "inRoute": false,
+      "order": 0
+    }
+  ]
 }
