@@ -1,5 +1,16 @@
 {
-  "customFields": [],
+  "customFields": [
+    {
+      "id": "cf2",
+      "name": "Последнее посещение",
+      "type": "date"
+    },
+    {
+      "id": "cf3",
+      "name": "Серійний номер",
+      "type": "number"
+    }
+  ],
   "savedRoutes": [],
   "points": [
     {
