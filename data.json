@@ -8,8 +8,8 @@
         "accent": "#ffe100",
         "route": "#ffe100",
         "buffer": "#ffe100",
-        "bg": "#000000",
-        "panel": "#000000",
+        "bg": "#0a0a0a",
+        "panel": "#0a0a0a",
         "map": "dark",
         "casing": "on"
       }
@@ -56,8 +56,8 @@
     "accent": "#ffe100",
     "route": "#ffe100",
     "buffer": "#ffe100",
-    "bg": "#000000",
-    "panel": "#000000",
+    "bg": "#0a0a0a",
+    "panel": "#0a0a0a",
     "map": "light",
     "casing": "on"
   },
