@@ -79,7 +79,7 @@
   .ph h3 { font-family: var(--mono); font-size: 15px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-ink); margin-bottom: 10px; }
   .ph p { color: var(--ink-dim); font-size: 14px; line-height: 1.6; }
   
-  .views { height: calc(100vh - 56px); position: relative; }
+  .views { height: calc(100vh - 56px); height: calc(100dvh - 56px); position: relative; }
   .view { position: absolute; inset: 0; display: none; } 
   .view.active { display: flex; }
   
@@ -89,6 +89,10 @@
     box-shadow: 2px 0 8px rgba(0,0,0,0.05);
   }
   .scroll { overflow-y: auto; flex: 1; padding-bottom: 20px; }
+  .side-handle { display: none; align-items: center; justify-content: center; gap: 8px; height: 46px; flex: none; cursor: pointer; user-select: none; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim); position: relative; border-bottom: 1px solid var(--line); }
+  .side-handle::before { content: ''; position: absolute; top: 7px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
+  .side-handle .sh-chev { transition: transform .2s; }
+  .side.sheet-collapsed .side-handle .sh-chev { transform: rotate(180deg); }
   .scroll, .pane.scrollp { overflow-wrap: anywhere; }
   .scroll::-webkit-scrollbar { width: 6px; } 
   .scroll::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: 4px; }
@@ -262,8 +266,11 @@
   .map-summary b { color: var(--accent-ink); font-size: 14px; }
   @media(max-width: 760px) { 
     .view.active { flex-direction: column; } 
-    .side { width: 100%; min-width: 0; height: auto; flex: 1; order: 2; border-right: none; box-shadow: none; } 
-    .map-wrap { flex: none; height: 45vh; order: 1; } 
+    .map-wrap { flex: 1; height: auto; min-height: 0; order: 1; } 
+    .side { width: 100%; min-width: 0; height: auto; flex: none; order: 2; border-right: none; border-top: 1px solid var(--line); box-shadow: 0 -2px 14px rgba(0,0,0,0.2); max-height: 58vh; min-height: 0; } 
+    .side-handle { display: flex; } 
+    .side.sheet-collapsed { max-height: 46px; } 
+    .side.sheet-collapsed .scroll { display: none; } 
     .pane { padding: 16px; } 
     .modal { padding: 20px; max-height: 95vh; width: 100%; border-radius: 12px; } 
     .pop { right: 8px; left: 8px; width: auto; } 
@@ -314,6 +321,7 @@
   </div></div>
   <div class="view view-map active">
     <aside class="side">
+      <div class="side-handle" id="sideHandle"><span class="sh-chev">▾</span><span>Панель</span></div>
       <div class="scroll">
       <div class="block collapsible" id="addBlock">
         <h2 class="ch">Добавить точку<span class="chev"></span></h2>
@@ -678,6 +686,7 @@ function canWrite(){ return role==='admin'||role==='logist'; }
 // ---------- tabs ----------
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
 document.querySelectorAll('.block.collapsible > h2.ch').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('collapsed'));
+if($('sideHandle')) $('sideHandle').onclick=()=>{ const sd=document.querySelector('.side'); if(sd) sd.classList.toggle('sheet-collapsed'); setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} },220); };
 function tabAllowed(name){ if(name==='catalog'||name==='dash') return canWrite(); if(name==='settings') return role==='admin'; return true; }
 function applyTabs(){ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('hidden',!tabAllowed(t.dataset.tab))); }
 function switchTab(name){ if(!tabAllowed(name)) return;
