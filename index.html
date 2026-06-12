@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DLIGHT — Сервис</title>
+<title>DL Сервис</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -699,7 +699,7 @@ let catCur='works';
 function catSub(name){ catCur=name; document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.classList.toggle('active',t.dataset.csub===name)); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; if(name==='works') renderCatalog(); else renderEqModels(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
 let plannerCur='jobs';
-function plannerSub(name){ if(name==='trips' && !canWrite()) name='jobs'; plannerCur=name; document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name)); $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='jobs') renderJobs(); else renderTrips(); }
+function plannerSub(name){ plannerCur=name; document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name)); $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='jobs') renderJobs(); else renderTrips(); }
 document.querySelectorAll('.view-planner .subtab').forEach(t=>t.onclick=()=>plannerSub(t.dataset.sub));
 
 // ---------- connection ----------
@@ -726,7 +726,7 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   $('authOverlay').classList.remove('on');
   $('whoLabel').innerHTML=esc(session.user.email)+' · <b>'+esc(role)+'</b>';
   $('logoutBtn').style.display=''; $('appRoot').style.display='block'; document.querySelector('.view-map').classList.add('active');
-  $('addBlock').style.display=canWrite()?'':'none'; $('routeBlock').style.display=canWrite()?'':'none'; if($('subTrips')) $('subTrips').classList.toggle('hidden',!canWrite()); if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; applyTabs();
+  $('addBlock').style.display=canWrite()?'':'none'; $('routeBlock').style.display=canWrite()?'':'none'; if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; applyTabs();
   setTimeout(()=>{ map.invalidateSize(); fitUkraine(); },80);
   await loadAll(); await loadPlaces(); await loadVehicles(); await loadEqModels(); }
 
@@ -1069,12 +1069,17 @@ async function renderTrips(){ await ensureRefs();
   const box=$('tripList'); if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
   trips=data||[]; const q=$('tripSearch').value.trim().toLowerCase(); const tsf=$('tripStatusFilter')?$('tripStatusFilter').value:'';
   const res=trips.filter(t=>(!tsf||t.status===tsf)&&(!q||((t.vehicle_label||'')+' '+(t.date_from||'')+' '+(t.date_to||'')).toLowerCase().includes(q)));
-  box.innerHTML=res.length?'':'<div class="hint">Выездов нет. Собери первый из заявок.</div>';
+  box.innerHTML=res.length?'':'<div class="hint">'+(canWrite()?'Выездов нет. Собери первый из заявок.':'На тебя пока не назначены выезды.')+'</div>';
   res.forEach(t=>{ const e=t.econ_snapshot||{}; const eng=profilesList.find(p=>p.id===t.lead_engineer); const share=e.totalHours?Math.round((e.warrantyHours/e.totalHours)*100):0;
     const d=document.createElement('div'); d.className='card';
-    d.innerHTML='<h3>'+esc((t.date_from||'?')+' → '+(t.date_to||'?'))+' <span class="pill">'+esc(ST_TRIP[t.status]||t.status)+'</span>'+(t.vehicle_label?'<span class="pill">'+esc(t.vehicle_label)+'</span>':'')+'</h3>'+
-      '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок · выручка '+(e.revenue||0)+(e.profit!=null?(' · прибыль '+Math.round(e.profit)):'')+' · гарантия '+share+'%'+(eng?' · '+esc(eng.full_name||'инженер'):'')+'</div>'+
-      '<div class="acts"><button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tecon="'+t.id+'">₴ эконом</button><button class="btn sm" data-tmap="'+t.id+'">на карте</button><button class="btn sm" data-tgm="'+t.id+'">⌖ GMaps</button>'+(canWrite()?'<button class="btn sm ghost" data-tdel="'+t.id+'">×</button>':'')+'</div>';
+    const head='<h3>'+esc((t.date_from||'?')+' → '+(t.date_to||'?'))+' <span class="pill">'+esc(ST_TRIP[t.status]||t.status)+'</span>'+(t.vehicle_label?'<span class="pill">'+esc(t.vehicle_label)+'</span>':'')+'</h3>';
+    const meta=canWrite()
+      ? '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок · выручка '+(e.revenue||0)+(e.profit!=null?(' · прибыль '+Math.round(e.profit)):'')+' · гарантия '+share+'%'+(eng?' · '+esc(eng.full_name||'инженер'):'')+'</div>'
+      : '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок'+(e.km!=null?(' · '+(+e.km).toFixed(0)+' км'):'')+(e.driveH!=null?(' · '+(+e.driveH).toFixed(1)+' ч в пути'):'')+'</div>';
+    const acts=canWrite()
+      ? '<div class="acts"><button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tecon="'+t.id+'">₴ эконом</button><button class="btn sm" data-tmap="'+t.id+'">на карте</button><button class="btn sm" data-tgm="'+t.id+'">⌖ GMaps</button><button class="btn sm ghost" data-tdel="'+t.id+'">×</button></div>'
+      : '<div class="acts"><button class="btn sm" data-tmap="'+t.id+'">на карте</button><button class="btn sm" data-tgm="'+t.id+'">⌖ GMaps</button></div>';
+    d.innerHTML=head+meta+acts;
     box.appendChild(d); });
   box.querySelectorAll('[data-tedit]').forEach(b=>b.onclick=()=>openTrip(b.dataset.tedit));
   box.querySelectorAll('[data-tecon]').forEach(b=>b.onclick=()=>showTripEcon(b.dataset.tecon));
