@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DLight Service — Планировщик</title>
+<title>DLIGHT · Сервис</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -263,6 +263,19 @@
   .stat-s { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
   .map-summary { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 650; display: none; gap: 16px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 18px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim); box-shadow: var(--shadow-lg); }
   .map-summary.on { display: flex; }
+  .veh-btn { position: absolute; top: 16px; right: 16px; z-index: 650; cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: .5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-dim); border-radius: 8px; padding: 7px 11px; box-shadow: var(--shadow-lg); }
+  .veh-btn.on { color: var(--accent-ink); border-color: var(--accent); }
+  .veh-mk { position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+  .veh-ico { font-size: 24px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.55)); }
+  .veh-mk.stale .veh-ico { filter: grayscale(1) drop-shadow(0 2px 4px rgba(0,0,0,.55)); opacity: .55; }
+  .veh-lbl { margin-top: 1px; font-family: var(--mono); font-size: 9px; letter-spacing: .3px; white-space: nowrap; padding: 1px 5px; border-radius: 4px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+  .veh-lbl.moving { border-color: #22c55e; color: #22c55e; }
+  .veh-lbl.idle { border-color: #f59e0b; color: #f59e0b; }
+  .veh-lbl.stale { border-color: #64748b; color: #94a3b8; }
+  .veh-rot { position: absolute; left: 50%; top: 12px; width: 0; height: 0; }
+  .veh-dir { position: absolute; left: -5px; top: -25px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid #22c55e; filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+  .veh-kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 0; }
+  .veh-kv span:first-child { color: var(--ink-dim); }
   .map-summary b { color: var(--accent-ink); font-size: 14px; }
   @media(max-width: 760px) { 
     .view.active { flex-direction: column; } 
@@ -294,6 +307,8 @@
   }
   /* --- UX доработки --- */
   .toast.err { border-color: var(--red); color: var(--red); }
+  .toast.undo { display: flex; align-items: center; gap: 12px; }
+  .toast.undo.on { pointer-events: auto; }
   .toast.warn { border-color: var(--accent); }
   .btn.red { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
   .btn.red:hover:not(:disabled) { filter: brightness(1.08); box-shadow: var(--shadow-sm); }
@@ -321,8 +336,43 @@
   .kcard .meta { font-size: 11.5px; color: var(--ink-dim); margin: 2px 0; }
   .kcard .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
   .kcard select.kmove { font-size: 11px; padding: 3px 6px; border-radius: 7px; }
+  .kcard[draggable="true"] { cursor: grab; }
+  .kcard.dragging { opacity: .45; }
+  .kcol.over { border-color: var(--accent); background: var(--panel); }
   .trip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
   @media (max-width: 760px) { .trip-grid { grid-template-columns: 1fr; } }
+  .settings-layout { display: grid; grid-template-columns: 230px 1fr; gap: 18px; align-items: start; }
+  .settings-nav { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; }
+  .son { text-align: left; background: transparent; border: 1px solid transparent; color: var(--ink-dim); border-radius: 9px; padding: 10px 13px; cursor: pointer; font-size: 13px; font-family: inherit; transition: background .12s ease, color .12s ease, border-color .12s ease; }
+  .son:hover { background: var(--panel-2); color: var(--ink); }
+  .son.on { background: var(--panel-2); border-color: var(--line); color: var(--ink); font-weight: 600; }
+  .settings-body > .card:first-child { margin-top: 0; }
+  .settings-body > .card > h3 { cursor: pointer; user-select: none; position: relative; padding-right: 22px; }
+  .settings-body > .card > h3::after { content: '▾'; position: absolute; right: 2px; top: 1px; color: var(--ink-faint); font-size: 12px; transition: transform .15s ease; }
+  .settings-body > .card.collapsed > h3::after { transform: rotate(-90deg); }
+  .settings-body > .card.collapsed > :not(h3) { display: none !important; }
+  .emtree-manu { border: 1px solid var(--line); border-radius: 10px; margin-top: 8px; overflow: hidden; }
+  .emtree-h { padding: 9px 12px; font-weight: 600; cursor: pointer; background: var(--panel-2); font-size: 13px; user-select: none; }
+  .emtree-body { padding: 4px 8px 8px; }
+  .emtree-kind { margin-top: 6px; }
+  .emtree-kh { font-family: var(--mono); font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); padding: 4px 4px 2px; }
+  .emrow { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 8px; }
+  .emrow:hover { background: var(--panel-2); }
+  .emname { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .emmeta { font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
+  .gantt-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .gantt-head { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+  .gantt-day { flex: none; text-align: center; font-size: 10px; color: var(--ink-faint); font-family: var(--mono); padding: 4px 0; border-left: 1px solid var(--line); }
+  .gantt-day.today { color: var(--accent-ink); background: rgba(255,225,0,0.10); font-weight: 700; }
+  .gantt-eng { position: sticky; left: 0; font-size: 11px; font-weight: 600; color: var(--ink-dim); padding: 10px 6px 3px; background: var(--bg); width: max-content; z-index: 2; }
+  .gantt-row { position: relative; height: 30px; margin-bottom: 4px; }
+  .gantt-bar { position: absolute; top: 2px; height: 24px; border-radius: 6px; font-size: 11px; line-height: 24px; padding: 0 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; color: #111; box-shadow: var(--shadow-sm); }
+  .gantt-bar.st-planned { background: #9aa1ad; }
+  .gantt-bar.st-assigned { background: #5eb3f6; }
+  .gantt-bar.st-in_progress { background: var(--accent); }
+  .gantt-bar.st-done { background: #16a34a; color: #fff; }
+  .gantt-bar.st-cancelled { background: #6b7280; color: #fff; opacity: .55; }
+  @media (max-width: 760px) { .settings-layout { grid-template-columns: 1fr; } .settings-nav { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; } .son { white-space: nowrap; flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; } }
 </style>
 </head>
 <body>
@@ -363,23 +413,10 @@
           <div class="hint" style="margin-top:6px">В карточке: ⊙ — показать на карте, «+ марш.» — добавить в маршрут.</div>
           <div id="profitTools"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:8px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="profitMode" style="width:auto">💰 подсветить прибыльных клиентов</label>
           <div class="hint" id="profitLegend" style="display:none;margin-top:4px"><span style="color:#16a34a">●</span> высокая · <span style="color:#84cc16">●</span> средняя · <span style="color:#eab308">●</span> низкая · <span style="color:#6b7280">●</span> нет прибыли</div></div>
+          <div id="pointTools"><button class="btn amber" id="pointCreate" style="width:100%;margin-top:10px">+ Создать точку</button>
+          <button class="btn sm ghost" id="avoidMode" style="width:100%;margin-top:6px">🚫 Ставить объезды (плохие дороги)</button>
+          <div class="hint" id="avoidHint" style="display:none;margin-top:4px">Кликай по карте, где объезжать — появится «кирпич». Радиус меняется в его попапе. Маршрут строится в обход. Быстрее — правый клик по карте → «Объезд здесь».</div></div>
           <div id="list" style="margin-top:10px"></div>
-        </div>
-      </div>
-      <div class="block collapsible collapsed" id="addBlock">
-        <h2 class="ch">Добавить точку<span class="chev"></span></h2>
-        <div class="block-body">
-        <button class="btn amber" id="addMode" style="width:100%">+ Поставить на карте</button>
-        <div class="hint" id="addHint" style="display:none">Кликни по карте, затем заполни поля.</div>
-        <div class="row" style="margin-top:8px"><input type="text" id="geoQuery" placeholder="…или найти по адресу" class="grow"><button class="btn" id="geoBtn">Найти</button></div>
-        <div id="geoResults"></div>
-        <div id="form" style="margin-top:10px">
-          <label>Название</label><input type="text" id="fName" placeholder="Напр. ООО Ромашка">
-          <label>Описание</label><textarea id="fDesc"></textarea>
-          <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет на карте</label><input type="color" id="fColor" value="#9aa1ad"></div><label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding-bottom:8px;white-space:nowrap"><input type="checkbox" id="fBase" style="width:auto">депо</label></div>
-          <div class="row" style="margin-top:10px"><button class="btn amber grow" id="saveBtn">Сохранить</button><button class="btn ghost" id="cancelBtn">Отмена</button></div>
-          <div class="err" id="formErr"></div>
-        </div>
         </div>
       </div>
       <div class="block collapsible collapsed" id="routeBlock">
@@ -409,7 +446,7 @@
       <div class="block"><div class="hint" id="dataStatus">—</div></div>
       </div>
     </aside>
-    <div class="map-wrap"><div class="mode-tag" id="modeTag">● Кликни по карте</div><div class="map-summary" id="mapSummary"></div><div id="map"></div></div>
+    <div class="map-wrap"><button class="veh-btn on" id="vehBtn" title="Показать машины службы">🚚 Машины</button><div class="mode-tag" id="modeTag">● Кликни по карте</div><div class="map-summary" id="mapSummary"></div><div id="map"></div></div>
   </div>
 
   <!-- CATALOG -->
@@ -430,10 +467,11 @@
       <div class="pane-head"><h2>Модели техники</h2>
         <div class="searchbox"><input type="search" id="emSearch" placeholder="поиск модели…"></div>
         <button class="btn sm amber" id="emShowAdd">+ Модель</button></div>
-      <div class="meta">Производитель/модель с гарантией и сервисным интервалом по умолчанию — для привязки к технике клиентов.</div>
+      <div class="meta">Производитель → тип → модель. Гарантия и сервисный интервал по умолчанию — для привязки к технике клиентов и к работам.</div>
       <div id="emList" style="margin-top:10px"></div>
+      <datalist id="emManuList"></datalist><datalist id="emKindList"></datalist>
       <div class="card" id="emForm" style="margin-top:10px;padding:14px;display:none"><h3 id="emFormTitle" style="font-family:var(--mono);font-size:11px;color:var(--accent-ink)">Добавить модель</h3>
-        <div class="row"><div class="grow"><label>Производитель</label><input type="text" id="emManu"></div><div class="grow"><label>Модель</label><input type="text" id="emModel"></div></div>
+        <div class="row"><div class="grow"><label>Производитель</label><input type="text" id="emManu" list="emManuList" placeholder="Bosch"></div><div class="grow"><label>Тип техники</label><input type="text" id="emKind" list="emKindList" placeholder="холодильник"></div><div class="grow"><label>Модель</label><input type="text" id="emModel" placeholder="KGN39…"></div></div>
         <div class="row"><div class="grow"><label>Гарантия, мес</label><input type="number" id="emWarr"></div><div class="grow"><label>Сервисный интервал, моточасов</label><input type="number" id="emInt"></div></div>
         <label>Заметки</label><input type="text" id="emNotes">
         <div class="row" style="margin-top:10px"><button class="btn amber grow" id="emSave">Сохранить модель</button><button class="btn ghost" id="emCancel">Отмена</button></div>
@@ -445,8 +483,13 @@
     <!-- JOBS -->
   <div class="view view-planner"><div class="pane scrollp">
     <div class="subtabs">
+      <div class="subtab" data-sub="mine">Мой день</div>
       <div class="subtab active" data-sub="jobs">Заявки</div>
       <div class="subtab" data-sub="trips" id="subTrips">Выезды</div>
+    </div>
+    <div id="plMine" style="display:none">
+      <div class="pane-head"><h2>Мой день</h2><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="mineDone" style="width:auto">показать завершённые</label></div>
+      <div id="mineList"></div>
     </div>
     <div id="plJobs">
       <div class="pane-head"><h2>Заявки</h2>
@@ -457,34 +500,55 @@
       <div id="jobList"></div>
     </div>
     <div id="plTrips" style="display:none">
-      <div class="pane-head"><h2>Выезды</h2><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
-      <div class="chips" id="tripStatusChips" style="margin:0 0 12px"></div>
-      <div id="tripList"></div>
+      <div class="pane-head"><h2>Выезды</h2><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
+      <div id="tripsKanban">
+        <div class="chips" id="tripStatusChips" style="margin:0 0 12px"></div>
+        <div id="tripList"></div>
+      </div>
+      <div id="tripsGantt" style="display:none">
+        <div id="gantt"></div>
+        <div class="meta" style="margin-top:10px"><span style="color:#9aa1ad">■</span> план · <span style="color:#5eb3f6">■</span> назначен · <span style="color:#111;background:var(--accent);padding:0 3px;border-radius:2px">■</span> в работе · <span style="color:#16a34a">■</span> завершён</div>
+      </div>
     </div>
   </div></div>
 
   <!-- SETTINGS -->
   <div class="view view-settings"><div class="pane scrollp">
     <div class="pane-head"><h2>Настройки</h2></div>
-    <div class="card"><h3>Параметры и тарифы</h3>
-      <div class="row"><div class="grow"><label>Смена, ч</label><input type="number" id="stShift" step="0.5"></div><div class="grow"><label>Допуск, %</label><input type="number" id="stDev" step="1"></div><div class="grow"><label>Валюта</label><input type="text" id="stCur"></div></div>
-      <div class="meta" style="margin-top:12px">Тарифы (выручка):</div>
-      <div class="row"><div class="grow"><label>за км</label><input type="number" id="trKm" step="0.01"></div><div class="grow"><label>за час</label><input type="number" id="trHour" step="0.01"></div><div class="grow"><label>за день</label><input type="number" id="trDay" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="trNight" step="0.01"></div></div>
-      <div class="meta" style="margin-top:12px">Себестоимость:</div>
+    <div class="settings-layout">
+      <div class="settings-nav" id="settingsNav">
+        <button class="son on" data-sec="tariffs">Тарифы и параметры</button>
+        <button class="son" data-sec="docs">Реквизиты и документы</button>
+        <button class="son" data-sec="fleet">Автопарк</button>
+        <button class="son" data-sec="users">Пользователи и роли</button>
+        <button class="son" data-sec="theme">Оформление</button>
+      </div>
+      <div class="settings-body">
+    <div class="card" data-sec-panel="tariffs"><h3>Общие параметры</h3>
+      <div class="row"><div class="grow"><label>Валюта</label><input type="text" id="stCur"></div><div class="grow"><label>Смена, ч</label><input type="number" id="stShift" step="0.5"></div><div class="grow"><label>Допуск, %</label><input type="number" id="stDev" step="1"></div></div>
+      <div class="meta" style="margin-top:12px">Себестоимость по умолчанию (за км / час / день / ночь). Профиль тарифа может переопределить своими значениями:</div>
       <div class="row"><div class="grow"><label>за км</label><input type="number" id="csKm" step="0.01"></div><div class="grow"><label>за час</label><input type="number" id="csHour" step="0.01"></div><div class="grow"><label>за день</label><input type="number" id="csDay" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="csNight" step="0.01"></div></div>
-      <label style="margin-top:12px">Ключ openrouteservice (маршруты)</label><input type="text" id="orsKey" placeholder="ключ ORS">
+      <label style="margin-top:12px">Адрес прокси ORS (безопасный режим)</label><input type="text" id="orsProxy" placeholder="https://<проект>.supabase.co/functions/v1/ors">
+      <div class="hint" style="margin-top:4px">Если задан — ключ хранится в функции на сервере и не виден пользователям. Поле ключа ниже тогда можно очистить.</div>
+      <label style="margin-top:12px">Ключ openrouteservice (прямой режим)</label><input type="text" id="orsKey" placeholder="ключ ORS">
+      <div class="hint" style="margin-top:4px">Внимание: ключ из этого поля доступен любому, кто вошёл в систему. Для рабочей эксплуатации лучше прокси.</div>
       <label style="margin-top:12px">Гарантия на ремонт по умолчанию, дней</label><input type="number" id="stWarrDays" placeholder="90">
       <label style="margin-top:12px">Период регулярного контакта, дней (0 — выкл)</label><input type="number" id="stContact" placeholder="0">
       <button class="btn sm amber" id="stSave" style="margin-top:14px">Сохранить</button><span class="hint" id="stStatus" style="margin-left:8px"></span>
     </div>
-    <div class="card"><h3>Реквизиты организации</h3>
+    <div class="card" data-sec-panel="tariffs"><h3>Профили тарифов (плательщики)</h3>
+      <div class="meta">Профиль = плательщик со своими ставками. Две ветки: платно и гарантия — на строку работ в заявке подставляется по признаку платно/гарантия. Флажки «по умолчанию» задают, какой профиль ставить автоматически. Дорожные ставки понадобятся в расчёте выезда.</div>
+      <div id="tpList" style="margin-top:10px"></div>
+      <button class="btn sm amber" id="profCreate" style="margin-top:12px">+ Создать профиль</button>
+    </div>
+    <div class="card" data-sec-panel="docs" style="display:none"><h3>Реквизиты организации</h3>
       <div class="meta">Подставляются в акт выполненных работ как «Исполнитель».</div>
       <label>Название организации</label><input type="text" id="coName" placeholder="ООО «…» / ФОП …">
       <label style="margin-top:10px">Реквизиты (адрес, ЕДРПОУ/ИНН, телефон, банк — свободным текстом)</label><textarea id="coDetails" placeholder="г. …, ул. …&#10;ЕДРПОУ/ИНН …&#10;тел. …"></textarea>
       <label style="margin-top:10px">Подписант (ФИО, должность)</label><input type="text" id="coSigner" placeholder="Директор Иванов И. И.">
       <button class="btn sm amber" id="coSave" style="margin-top:12px">Сохранить реквизиты</button><span class="hint" id="coStatus" style="margin-left:8px"></span>
     </div>
-    <div class="card"><h3>Шаблон акта выполненных работ</h3>
+    <div class="card" data-sec-panel="docs" style="display:none"><h3>Шаблон акта выполненных работ</h3>
       <div class="meta">Тексты и подписи в печатной форме акта. Пустые поля берут значения по умолчанию. Суммы/строки работ считаются автоматически.</div>
       <label>Заголовок</label><input type="text" id="atTitle" placeholder="Акт выполненных работ">
       <label style="margin-top:10px">Вступительный текст (необязательно, печатается под датой)</label><textarea id="atIntro" placeholder="Напр.: Настоящий акт составлен о том, что исполнителем выполнены, а заказчиком приняты следующие работы:"></textarea>
@@ -495,22 +559,36 @@
       <label style="margin-top:10px">Доп. примечание внизу (необязательно)</label><textarea id="atNote" placeholder="Напр.: Претензий по объёму, качеству и срокам стороны не имеют."></textarea>
       <label style="margin-top:10px">Линия подписи заказчика</label><input type="text" id="atCustSign" placeholder="подпись / ФИО">
       <button class="btn sm amber" id="atSave" style="margin-top:12px">Сохранить шаблон</button><span class="hint" id="atStatus" style="margin-left:8px"></span>
+      <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
+        <div class="meta">Или загрузи свой <b>Excel-шаблон (.xlsx)</b> с плейсхолдерами — тогда акт будет генерироваться по нему, точь-в-точь твой дизайн (стили, лого, вёрстка). Пусто — печатается встроенный HTML-акт.</div>
+        <div id="axInfo" class="hint" style="margin:8px 0"></div>
+        <div class="row" style="align-items:center"><input type="file" id="axFile" accept=".xlsx" style="font-size:12px"><button class="btn sm ghost" id="axDownload">скачать</button><button class="btn sm ghost" id="axRemove">убрать</button></div>
+        <div class="hint" style="margin-top:8px">Встроенные плейсхолдеры: {{number}} {{date}} {{exec_name}} {{exec_details}} {{exec_signer}} {{client}} {{client_details}} {{client_signer}} {{payer}} {{payer_details}} {{total}} {{total_words}} {{note}}. Строка таблицы работ: {{w_no}} {{w_name}} {{w_hours}} {{w_price}} {{w_sum}}. Свои — в карточке ниже.</div>
+      </div>
     </div>
-    <div class="card"><h3>Тема по умолчанию для новых пользователей</h3>
+    <div class="card" data-sec-panel="docs" style="display:none"><h3>Свои плейсхолдеры</h3>
+      <div class="meta">Придумай любые плейсхолдеры и задай им значения — потом расставь их в Excel-шаблоне там, где нужно. В значении можно ссылаться на встроенные, напр. «Акт № {{number}} от {{date}}».</div>
+      <div id="avList" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:10px"><button class="btn sm" id="avAdd">+ Добавить</button><button class="btn sm amber" id="avSave">Сохранить</button><span class="hint" id="avStatus" style="margin-left:4px"></span></div>
+    </div>
+    <div class="card" data-sec-panel="theme" style="display:none"><h3>Тема по умолчанию для новых пользователей</h3>
       <div class="row"><div class="grow"><label>Режим</label><select id="dtMode"><option value="dark">Тёмная</option><option value="light">Светлая</option></select></div></div>
       <button class="btn sm amber" id="dtSave" style="margin-top:10px">Сохранить тему по умолчанию</button><span class="hint" id="dtStatus" style="margin-left:8px"></span>
     </div>
-    <div class="card"><h3>Автопарк</h3>
+    <div class="card" data-sec-panel="fleet" style="display:none"><h3>Автопарк</h3>
       <div class="meta">Машины для выбора в выездах. Пробег растёт при завершении выезда; трекинг ТО по интервалу.</div>
       <div id="vehList" style="margin-top:10px"></div>
       <div class="row" style="margin-top:10px"><input type="text" id="vhName" placeholder="название (Газель)" class="grow"><input type="text" id="vhPlate" placeholder="госномер" class="grow"></div>
       <div class="row" style="margin-top:6px"><div class="grow"><label>Пробег, км</label><input type="number" id="vhOdo"></div><div class="grow"><label>Интервал ТО, км</label><input type="number" id="vhInt"></div></div>
+      <div class="row" style="margin-top:6px"><div class="grow"><label>ID объекта в Wialon</label><input type="text" id="vhWialon" placeholder="напр. 28307408"><div class="hint" style="margin-top:4px">Пусто — машина без датчика, на карте её не будет.</div></div></div>
       <div class="row" style="margin-top:8px"><button class="btn sm amber grow" id="vhAdd">Добавить машину</button><button class="btn sm ghost" id="vhCancel" style="display:none">Отмена</button></div>
       <div class="err" id="vhErr"></div>
     </div>
-    <div class="card"><h3>Пользователи и роли</h3>
+    <div class="card" data-sec-panel="users" style="display:none"><h3>Пользователи и роли</h3>
       <div class="meta">Пользователи создаются регистрацией. Здесь меняешь имя и роль.</div>
       <div id="usersList" style="margin-top:8px"></div>
+    </div>
+      </div>
     </div>
   </div></div>
 </div>
@@ -534,6 +612,12 @@
 </div></div>
 
 <!-- economics breakdown -->
+<div class="overlay" id="vehOverlay"><div class="modal" style="width:380px">
+  <h3 id="vehTitle">Машина</h3>
+  <div id="vehBody"></div>
+  <div class="row" style="margin-top:14px"><button class="btn sm grow" id="vehCenter">Центрировать</button><button class="btn ghost grow" id="vehClose">Закрыть</button></div>
+</div></div>
+
 <div class="overlay" id="econOverlay"><div class="modal" style="width:460px">
   <h3>Экономика выезда</h3>
   <div id="econBody"></div>
@@ -571,6 +655,7 @@
       <label>Заметка</label><input type="text" id="tpNotes">
       <div class="card" style="padding:12px;margin-top:12px"><h3 style="font-family:var(--mono);font-size:11px;color:var(--accent-ink)">Оверрайд сумм</h3>
         <div class="row"><div class="grow"><label>Выручка, ₴</label><input type="number" id="tpOvRev" placeholder="авто"></div><div class="grow"><label>Затраты, ₴</label><input type="number" id="tpOvCost" placeholder="авто"></div></div>
+        <div id="tpRoadGroups"></div>
         <div class="hint">Пусто — считается из тарифов и себестоимости. Заполнено — фиксированная сумма.</div></div>
     </div>
     <div>
@@ -625,10 +710,49 @@
 </div></div>
 
 <!-- edit client -->
+<div class="overlay" id="profOverlay"><div class="modal" style="width:460px">
+  <h3 id="tpFormTitle">Новый профиль</h3>
+  <label>Название</label><input type="text" id="tpfName" placeholder="Производство / Клиент / Отдел продаж">
+  <div class="meta" style="margin-top:10px">Ставки за час работ (выручка). Себестоимость — общая, задаётся в «Общих параметрах».</div>
+  <div class="row"><div class="grow"><label>платно, за час</label><input type="number" id="tpfPaidRate" step="0.01"></div><div class="grow"><label>гарантия, за час (обычно 0)</label><input type="number" id="tpfWarrRate" step="0.01"></div></div>
+  <div class="meta" style="margin-top:10px">Дорога и суточные — выручка этого плательщика:</div>
+  <div class="row"><div class="grow"><label>за км</label><input type="number" id="tpfKmRate" step="0.01"></div><div class="grow"><label>за сутки</label><input type="number" id="tpfDayRate" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="tpfNightRate" step="0.01"></div></div>
+  <label style="margin-top:10px">Реквизиты плательщика (в акт)</label><textarea id="tpfReq" placeholder="Название, адрес, ЕДРПОУ/ИНН, банк…"></textarea>
+  <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:10px;font-size:13px"><input type="checkbox" id="tpfDefWarr" style="width:auto">профиль по умолчанию для гарантийных работ</label>
+  <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:6px;font-size:13px"><input type="checkbox" id="tpfDefPaid" style="width:auto">профиль по умолчанию для платных работ</label>
+  <div class="row" style="margin-top:14px"><button class="btn amber grow" id="tpfSave">Добавить профиль</button><button class="btn ghost" id="tpfCancel">Отмена</button></div>
+  <div class="err" id="tpfErr"></div>
+</div></div>
+
+<div class="overlay" id="actXlsxOverlay"><div class="modal" style="width:min(920px,96vw)">
+  <h3>Акт выполненных работ</h3>
+  <div class="meta">Превью приблизительное (веб не повторяет Excel 1:1). Точный документ — по кнопке «Скачать .xlsx».</div>
+  <div id="axPreview" style="max-height:60vh;overflow:auto;margin-top:10px;padding:12px;background:#fff;border-radius:8px"></div>
+  <div class="row" style="margin-top:12px"><button class="btn amber grow" id="axDlBtn">Скачать .xlsx</button><button class="btn ghost" id="axClose">Закрыть</button></div>
+</div></div>
+
+<div class="overlay" id="pointOverlay"><div class="modal" style="width:440px">
+  <h3>Новая точка</h3>
+  <button class="btn amber" id="addMode" style="width:100%">📍 Указать на карте</button>
+  <div class="hint" id="addHint" style="display:none">Кликните по карте — координаты подставятся сюда.</div>
+  <div class="row" style="margin-top:8px"><input type="text" id="geoQuery" placeholder="…или найти по адресу" class="grow"><button class="btn" id="geoBtn">Найти</button></div>
+  <div id="geoResults"></div>
+  <div class="hint" id="pointCoords" style="margin-top:8px"></div>
+  <div id="form" style="margin-top:10px">
+    <label>Название</label><input type="text" id="fName" placeholder="Напр. ООО Ромашка">
+    <label>Описание</label><textarea id="fDesc"></textarea>
+    <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет на карте</label><input type="color" id="fColor" value="#9aa1ad"></div><label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding-bottom:8px;white-space:nowrap"><input type="checkbox" id="fBase" style="width:auto">депо</label></div>
+    <div class="row" style="margin-top:12px"><button class="btn amber grow" id="saveBtn">Сохранить</button><button class="btn ghost" id="cancelBtn">Отмена</button></div>
+    <div class="err" id="formErr"></div>
+  </div>
+</div></div>
+
 <div class="overlay" id="editOverlay"><div class="modal">
   <h3>Редактирование точки</h3>
   <label>Название</label><input type="text" id="eName"><label>Описание</label><textarea id="eDesc"></textarea>
   <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет</label><input type="color" id="eColor"></div><label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding-bottom:8px;white-space:nowrap"><input type="checkbox" id="eBase" style="width:auto">депо</label></div>
+  <label style="margin-top:10px">Профиль тарифа по умолчанию (для платных работ этого клиента)</label><select id="eProfile"></select>
+  <label style="margin-top:10px">Подписант заказчика (в акт, {{client_signer}})</label><input type="text" id="eSigner" placeholder="Директор Петров П.П.">
   <div class="row"><div class="grow"><label>Широта</label><input type="text" id="eLat"></div><div class="grow"><label>Долгота</label><input type="text" id="eLng"></div></div>
   <div class="row" style="margin-top:14px"><button class="btn amber grow" id="eSave">Сохранить</button><button class="btn ghost" id="eCancel">Отмена</button></div>
 </div></div>
@@ -661,7 +785,10 @@
   <div class="row"><div class="grow"><label>Норма, ч</label><input type="number" id="cwHours" step="0.25"></div><div class="grow"><label>Цена вручную (оверрайд)</label><input type="number" id="cwPrice" step="0.01" placeholder="иначе часы×тариф"></div></div>
   <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:var(--ink)"><input type="checkbox" id="cwWarranty" style="width:auto"> Может быть гарантийной</label>
   <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:var(--ink)"><input type="checkbox" id="cwMaint" style="width:auto"> Это ТО / сервис (фиксирует «последнее ТО»)</label>
-  <label>Применима к типам техники (через запятую)</label><input type="text" id="cwKinds" placeholder="напр. насос, компрессор">
+  <label>Применимость</label>
+  <div class="seg" id="cwScope"><button data-cs="all" class="on">Общий набор</button><button data-cs="kinds">По типам</button><button data-cs="models">По моделям</button></div>
+  <div id="cwKindsBox" style="display:none;margin-top:8px"><input type="text" id="cwKinds" placeholder="типы через запятую: насос, компрессор"></div>
+  <div id="cwModelsBox" style="display:none;margin-top:8px"><div class="hint" style="margin:0 0 6px">Отметь модели, к которым применима работа:</div><div id="cwModelsTree" style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px"></div></div>
   <label>Материалы (по строке: название;кол-во;ед.)</label><textarea id="cwMaterials" placeholder="фильтр;1;шт"></textarea>
   <label>Порядок проведения</label><textarea id="cwProc"></textarea>
   <label>Мануалы (по строке: название|ссылка)</label><textarea id="cwManuals" placeholder="Инструкция|https://..."></textarea>
@@ -671,6 +798,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <div class="toast" id="toast"></div>
+<div class="toast undo" id="undoToast"><span id="undoMsg"></span><button class="btn sm amber" id="undoBtn">Отменить</button></div>
 <div class="ctxmenu" id="ctxMenu"></div>
 <div class="pop" id="themePop">
   <h4>Тема</h4>
@@ -679,6 +807,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -716,6 +845,9 @@ function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
 async function saveTheme(){ if(!sb||!session) return; try{ await sb.from('profiles').update({theme}).eq('id',session.user.id); }catch(e){} }
 let toastT=null; function showToast(msg){ const t=$('toast'); if(!t) return; t.textContent=msg; t.classList.remove('err','warn'); t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),2500); }
 function notify(msg,kind){ const t=$('toast'); if(!t) return; t.textContent=msg; t.classList.remove('err','warn'); if(kind==='err'||kind==='warn') t.classList.add(kind); t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>{ t.classList.remove('on','err','warn'); }, kind==='err'?4200:2800); }
+let undoT=null, undoFn=null;
+function undoToast(msg,fn){ undoFn=fn; const t=$('undoToast'); if(!t){ showToast(msg); return; } $('undoMsg').textContent=msg; t.classList.add('on'); clearTimeout(undoT); undoT=setTimeout(()=>{ t.classList.remove('on'); undoFn=null; },9000); }
+if($('undoBtn')) $('undoBtn').onclick=async ()=>{ const f=undoFn; undoFn=null; $('undoToast').classList.remove('on'); clearTimeout(undoT); if(!f) return; try{ await f(); }catch(e){ notify('Не удалось отменить: '+(e.message||e),'err'); } };
 // модальные confirm/prompt (замена нативных диалогов)
 let _cdRes=null;
 function confirmDialog(msg,opts){ opts=opts||{}; return new Promise(res=>{ _cdRes=res; $('confirmTitle').textContent=opts.title||'Подтверждение'; $('confirmMsg').textContent=msg||''; const y=$('confirmYes'); y.textContent=opts.okText||'Подтвердить'; y.classList.toggle('red',!!opts.danger); y.classList.toggle('amber',!opts.danger); $('confirmNo').textContent=opts.cancelText||'Отмена'; $('confirmOverlay').classList.add('on'); setTimeout(()=>{ try{ y.focus(); }catch(e){} },30); }); }
@@ -729,8 +861,8 @@ $('promptYes').onclick=()=>_pdDone(true); $('promptNo').onclick=()=>_pdDone(fals
 $('promptOverlay').addEventListener('click',e=>{ if(e.target===$('promptOverlay')) _pdDone(false); });
 document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; if($('confirmOverlay').classList.contains('on')) _cdDone(false); if($('promptOverlay').classList.contains('on')) _pdDone(false); });
 window.gotoSettings=()=>{ try{ switchTab('settings'); }catch(e){} };
-function orsKeyMissing(){ return !appSettings.ors_key; }
-function orsMissing(el){ if(el) el.innerHTML='Нет ключа маршрутизации. <span class="lnk" onclick="gotoSettings()">Указать ключ ORS в настройках</span>'; }
+function orsKeyMissing(){ return !((appSettings.ors_proxy||'').trim()||appSettings.ors_key); }
+function orsMissing(el){ if(el) el.innerHTML='Маршрутизация не настроена. <span class="lnk" onclick="gotoSettings()">Указать ключ ORS или адрес прокси в настройках</span>'; }
 $('themeBtn').onclick=e=>{ e.stopPropagation(); $('themePop').classList.toggle('on'); };
 document.addEventListener('click',e=>{ const p=$('themePop'); if(p.classList.contains('on') && !p.contains(e.target) && e.target!==$('themeBtn')) p.classList.remove('on'); });
 $('modeDark').onclick=()=>{ theme.mode='dark'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); $('themePop').classList.remove('on'); };
@@ -754,19 +886,23 @@ setBaseLayer('dark');
 map.setView([48.4,31.2],6);
 function fitUkraine(){ map.fitBounds(UA_BOUNDS); }
 let markers=L.layerGroup().addTo(map), eqMarkers=L.layerGroup().addTo(map), tripLayer=L.layerGroup().addTo(map), routeLayer=L.layerGroup().addTo(map), bufferLayer=L.layerGroup().addTo(map), pendingMarker=null, revealedClient=null, wpModeOn=false, markerById={};
-let clientStats={}, profitMode=false;
-map.on('click',e=>{ if(addModeOn){ pendingLatLng=e.latlng; toggleAdd(false); $('fName').focus(); flashPending(); return; } if(wpModeOn){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:e.latlng.lat,lng:e.latlng.lng}); renderRoutePanel(); resetBuilt(); } });
+let clientStats={}, profitMode=false, avoidModeOn=false, avoidLayer=L.layerGroup().addTo(map);
+let vehLayer=L.layerGroup().addTo(map), vehShow=true, vehState=[], vehMk={}, vehChan=null, vehTick=null, vehModalId=null;
+function updatePointCoords(){ const el=$('pointCoords'); if(!el) return; if(pendingLatLng){ el.innerHTML='<span class="ok">📍 координаты заданы: '+(+pendingLatLng.lat).toFixed(5)+', '+(+pendingLatLng.lng).toFixed(5)+'</span>'; } else { el.textContent='Место не задано — «Указать на карте» или найдите по адресу.'; } }
+function openPointModal(){ updatePointCoords(); $('pointOverlay').classList.add('on'); setTimeout(()=>{ try{ $('fName').focus(); }catch(e){} },40); }
+map.on('click',e=>{ if(avoidModeOn){ addAvoidZone(e.latlng); return; } if(addModeOn){ pendingLatLng=e.latlng; toggleAdd(false); flashPending(); openPointModal(); return; } if(wpModeOn){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:e.latlng.lat,lng:e.latlng.lng}); renderRoutePanel(); resetBuilt(); } });
 function flashPending(){ if(pendingMarker) map.removeLayer(pendingMarker); if(!pendingLatLng) return; pendingMarker=L.circleMarker(pendingLatLng,{radius:9,color:ringColor(),fillColor:theme.accent,fillOpacity:.6,weight:2.5}).addTo(map); }
 function hlMarker(id,on){ const m=markerById[id]; if(!m||!m.getElement) return; const el=m.getElement(); if(!el) return; const b=el.querySelector('.cbub'); if(b) b.classList.toggle('hl',on); }
 function hlCard(id,on){ const c=document.querySelector('#list .pt[data-cid="'+id+'"]'); if(c) c.classList.toggle('hl',on); }
 let ctxLatLng=null;
 function showCtxMenu(e){ ctxLatLng=e.latlng; const m=$('ctxMenu'); let h='';
-  if(canWrite()){ h+='<button data-cx="add">📍 Добавить точку здесь</button><button data-cx="wp">↳ В маршрут: промежуточная</button><button data-cx="start">▶ Сделать стартом маршрута</button>'; }
+  if(canWrite()){ h+='<button data-cx="add">📍 Добавить точку здесь</button><button data-cx="wp">↳ В маршрут: промежуточная</button><button data-cx="start">▶ Сделать стартом маршрута</button><button data-cx="avoid">🚫 Объезд здесь (плохая дорога)</button>'; }
   h+='<button data-cx="copy">⧉ Копировать координаты</button>'; m.innerHTML=h;
   const x=e.originalEvent.clientX, y=e.originalEvent.clientY; m.style.left=Math.min(x,window.innerWidth-230)+'px'; m.style.top=Math.min(y,window.innerHeight-180)+'px'; m.classList.add('on');
   m.querySelectorAll('[data-cx]').forEach(b=>b.onclick=()=>{ ctxAction(b.dataset.cx); m.classList.remove('on'); }); }
 function ctxAction(a){ if(!ctxLatLng) return; const ll=ctxLatLng;
-  if(a==='add'){ if(addModeOn) toggleAdd(false); pendingLatLng={lat:ll.lat,lng:ll.lng}; flashPending(); const b=$('addBlock'); if(b) b.classList.remove('collapsed'); $('fName').focus(); }
+  if(a==='add'){ if(addModeOn) toggleAdd(false); $('fName').value=''; $('fDesc').value=''; $('formErr').textContent=''; pendingLatLng={lat:ll.lat,lng:ll.lng}; flashPending(); openPointModal(); }
+  else if(a==='avoid'){ addAvoidZone(ll); }
   else if(a==='wp'){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:ll.lat,lng:ll.lng}); const b=$('routeBlock'); if(b) b.classList.remove('collapsed'); renderRoutePanel(); resetBuilt(); }
   else if(a==='start'){ rStart={name:'Старт',lat:ll.lat,lng:ll.lng}; const b=$('routeBlock'); if(b) b.classList.remove('collapsed'); renderRoutePanel(); resetBuilt(); }
   else if(a==='copy'){ const t=ll.lat.toFixed(6)+', '+ll.lng.toFixed(6); try{ navigator.clipboard.writeText(t); }catch(e){} showToast('Координаты: '+t); } }
@@ -792,7 +928,11 @@ let catCur='works';
 function catSub(name){ catCur=name; document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.classList.toggle('active',t.dataset.csub===name)); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; if(name==='works') renderCatalog(); else renderEqModels(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
 let plannerCur='jobs';
-function plannerSub(name){ plannerCur=name; document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name)); $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='jobs') renderJobs(); else renderTrips(); }
+let tripsView='kanban';
+function renderTripsView(){ const kb=(tripsView==='kanban'); if($('tripsKanban')) $('tripsKanban').style.display=kb?'':'none'; if($('tripsGantt')) $('tripsGantt').style.display=kb?'none':''; if(kb) renderTrips(); else renderGantt(); }
+function setTripsView(v){ tripsView=v; document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.classList.toggle('on',b.dataset.tv===v)); renderTripsView(); }
+function plannerSub(name){ plannerCur=name; document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name)); if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView(); }
+document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.onclick=()=>setTripsView(b.dataset.tv));
 document.querySelectorAll('.view-planner .subtab').forEach(t=>t.onclick=()=>plannerSub(t.dataset.sub));
 
 // ---------- connection ----------
@@ -819,20 +959,22 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   $('authOverlay').classList.remove('on');
   $('whoLabel').innerHTML=esc(session.user.email)+' · <b>'+esc(role)+'</b>';
   $('logoutBtn').style.display=''; $('appRoot').style.display='block'; document.querySelector('.view-map').classList.add('active');
-  $('addBlock').style.display=canWrite()?'':'none'; $('routeBlock').style.display=canWrite()?'':'none'; if($('profitTools')) $('profitTools').style.display=canWrite()?'':'none'; if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; applyTabs();
+  if($('pointTools')) $('pointTools').style.display=canWrite()?'':'none'; $('routeBlock').style.display=canWrite()?'':'none'; if($('profitTools')) $('profitTools').style.display=canWrite()?'':'none'; if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
   setTimeout(()=>{ map.invalidateSize(); fitUkraine(); },80);
-  await loadAll(); await loadPlaces(); await loadVehicles(); await loadEqModels(); }
+  await loadAll(); await loadPlaces(); await loadVehicles(); await loadEqModels();
+  await loadVehState(); subscribeVeh(); }
 
 // ---------- data load ----------
 async function loadAll(){ $('dataStatus').textContent='Загрузка…';
-  const [cRes,eRes]=await Promise.all([ sb.from('clients').select('*').order('created_at'), sb.from('equipment').select('*').order('created_at') ]);
+  const [cRes,eRes]=await Promise.all([ sb.from('clients').select('*').is('deleted_at',null).order('created_at'), sb.from('equipment').select('*').is('deleted_at',null).order('created_at') ]);
   if(cRes.error){ $('dataStatus').innerHTML='<span class="err">'+esc(cRes.error.message)+'</span>'; return; }
   clients=cRes.data||[]; eqByClient={}; (eRes.data||[]).forEach(e=>{ (eqByClient[e.client_id]=eqByClient[e.client_id]||[]).push(e); });
   $('dataStatus').innerHTML='<span class="ok">Точек: '+clients.length+'</span>';
-  await loadClientStats();
+  await loadReadings(); await loadClientStats();
   render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),{padding:[40,40]}); else fitUkraine(); }
+async function refreshStats(){ if(!canWrite()) return; await loadClientStats(); renderMarkers(); }
 async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
-  try{ const {data}=await sb.from('jobs').select('client_id,status,job_works(hours,billable,revenue)');
+  try{ const {data}=await sb.from('jobs').select('client_id,status,job_works(hours,billable,revenue,tariff_profile)').is('deleted_at',null);
     const ch=+((appSettings.costs&&appSettings.costs.hour))||0;
     (data||[]).forEach(j=>{ if(!j.client_id) return; const s=clientStats[j.client_id]||(clientStats[j.client_id]={rev:0,hours:0,warrH:0,cost:0,jobs:0,done:0});
       s.jobs++; if(j.status==='done') s.done++;
@@ -840,7 +982,7 @@ async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
     Object.values(clientStats).forEach(s=>{ s.profit=s.rev-s.cost; s.warrShare=s.hours>0?Math.round(s.warrH/s.hours*100):0; });
   }catch(e){ clientStats={}; } }
 
-function render(){ $('cliCount').textContent=clients.length; places=clients.filter(c=>c.is_base); renderMarkers(); renderList(); }
+function render(){ $('cliCount').textContent=clients.length; places=clients.filter(c=>c.is_base); renderMarkers(); renderAvoidZones(); renderList(); }
 if($('profitMode')) $('profitMode').onchange=()=>{ profitMode=$('profitMode').checked; if($('profitLegend')) $('profitLegend').style.display=profitMode?'':'none'; renderMarkers(); };
 function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); revealedClient=null; markerById={};
   let maxProfit=0; if(profitMode){ Object.values(clientStats).forEach(s=>{ if(s.profit>maxProfit) maxProfit=s.profit; }); }
@@ -868,10 +1010,31 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
     m.on('click',()=>{ revealedClient=(revealedClient===c.id)?null:c.id; renderEqMarkers(); });
     markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); }); }
 function businessDays(from,to){ if(!from) return 0; const a=new Date(from), b=new Date(to); if(isNaN(a)||isNaN(b)||b<=a) return 0; let n=0; const d=new Date(a); d.setDate(d.getDate()+1); while(d<=b){ const wd=d.getDay(); if(wd!==0&&wd!==6) n++; d.setDate(d.getDate()+1); } return n; }
-function eqAlert(e){ const r={contact:false,service:false,any:false,reasons:[]}; const today=new Date().toISOString().slice(0,10);
+let readingsByEq={};
+async function loadReadings(){ readingsByEq={}; try{ const {data}=await sb.from('equipment_readings').select('*').order('taken_on');
+  (data||[]).forEach(r=>{ (readingsByEq[r.equipment_id]=readingsByEq[r.equipment_id]||[]).push(r); }); }catch(e){ readingsByEq={}; } }
+function rateFrom(rs){ if(!rs||rs.length<2) return 0; const use=rs.slice(-3); const a=use[0], b=use[use.length-1];
+  const d=(new Date(b.taken_on)-new Date(a.taken_on))/86400000; if(!(d>0)) return 0; const r=(+b.moto_hours-+a.moto_hours)/d; return r>0?r:0; }
+function eqRate(e){ const own=rateFrom(readingsByEq[e.id]); if(own>0) return {rate:own,src:'unit'};
+  let sum=0,n=0; (eqByClient[e.client_id]||[]).forEach(x=>{ const r=rateFrom(readingsByEq[x.id]); if(r>0){ sum+=r; n++; } });
+  if(n) return {rate:sum/n,src:'client'}; return {rate:0,src:'none'}; }
+function eqService(e){ const m=e.model_id?eqModels.find(x=>x.id==e.model_id):null; const sih=m?(+m.service_interval_hours||0):0; if(sih<=0) return null;
+  const rs=readingsByEq[e.id]||[]; const last=rs.length?rs[rs.length-1]:null; const rr=eqRate(e); const today=new Date().toISOString().slice(0,10);
+  if(!last||rr.rate<=0){ const sh=+appSettings.shift_hours||0; const anchor=e.last_service||e.installed_on||null; if(!anchor||sh<=0) return null;
+    const since=businessDays(anchor,today)*sh; return {since,interval:sih,rate:0,src:'estimate',daysLeft:null}; }
+  const lastSvc=[...rs].reverse().find(r=>r.kind==='service');
+  const daysSince=Math.max(0,(Date.now()-new Date(last.taken_on+'T00:00:00').getTime())/86400000);
+  const nowMh=(+last.moto_hours)+rr.rate*daysSince;
+  const baseMh=lastSvc?(+lastSvc.moto_hours):(+rs[0].moto_hours);
+  const since=Math.max(0,nowMh-baseMh); const daysLeft=Math.round((sih-since)/rr.rate);
+  return {since,interval:sih,rate:rr.rate,src:rr.src,daysLeft,nowMh}; }
+function eqAlert(e){ const r={contact:false,service:false,any:false,reasons:[]};
   const cp=+appSettings.contact_period_days||0; if(cp>0){ const ref=e.last_visit||e.installed_on||null; if(ref){ const days=Math.floor((Date.now()-new Date(ref).getTime())/86400000); if(days>cp){ r.contact=true; r.reasons.push('Контакт '+days+' дн назад (норма '+cp+')'); } } }
-  const m=e.model_id?eqModels.find(x=>x.id==e.model_id):null; const sih=m?(+m.service_interval_hours||0):0; const sh=+appSettings.shift_hours||0;
-  if(sih>0&&sh>0){ const anchor=e.last_service||e.installed_on||null; if(anchor){ const est=businessDays(anchor,today)*sh; if(est>=sih){ r.service=true; r.reasons.push('Наработка ~'+Math.round(est)+' моточасов (ТО каждые '+Math.round(sih)+')'); } } }
+  const sv=eqService(e);
+  if(sv&&sv.since>=sv.interval){ r.service=true;
+    r.reasons.push(sv.rate>0 ? ('Наработка ~'+Math.round(sv.since)+' мч при интервале '+Math.round(sv.interval)+' (темп '+sv.rate.toFixed(1)+' мч/сут'+(sv.src==='client'?', по клиенту':'')+')')
+                             : ('Наработка ~'+Math.round(sv.since)+' моточасов (ТО каждые '+Math.round(sv.interval)+', грубая оценка)')); }
+  else if(sv&&sv.rate>0&&sv.daysLeft!=null&&sv.daysLeft<=14){ r.service=true; r.reasons.push('ТО через ~'+sv.daysLeft+' дн (темп '+sv.rate.toFixed(1)+' мч/сут)'); }
   r.any=r.contact||r.service; return r; }
 function renderEqMarkers(){ eqMarkers.clearLayers(); if(!revealedClient) return; const c=clients.find(x=>x.id===revealedClient); if(!c) return; const col=c.color||'#9aa1ad';
   (eqByClient[c.id]||[]).forEach(e=>{ if(e.lat==null||e.lng==null) return;
@@ -907,19 +1070,32 @@ if($('ptAlert')) $('ptAlert').onchange=renderList;
 $('search').oninput=renderList;
 
 // ---------- client add/edit ----------
-$('addMode').onclick=()=>toggleAdd(!addModeOn);
+$('addMode').onclick=()=>{ $('pointOverlay').classList.remove('on'); toggleAdd(true); };
+if($('pointCreate')) $('pointCreate').onclick=()=>{ resetForm(); openPointModal(); };
 function toggleAdd(on){ addModeOn=on; $('addMode').classList.toggle('active',on); $('modeTag').classList.toggle('on',on); $('addHint').style.display=on?'block':'none'; map.getContainer().style.cursor=on?'crosshair':''; }
-$('cancelBtn').onclick=resetForm;
+function avoidBtnStyle(){ return 'cursor:pointer;font-family:var(--mono);font-size:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:5px;padding:4px 8px'; }
+function renderAvoidZones(){ if(!avoidLayer) return; avoidLayer.clearLayers(); (appSettings.avoid_zones||[]).forEach(z=>{ const circ=L.circle([z.lat,z.lng],{radius:z.r||150,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.12,weight:2,dashArray:'5 5'}); const bs=avoidBtnStyle(); let html='<strong>🚫 Объезд</strong> <span style="color:var(--ink-dim)">· '+(z.r||150)+' м</span>'; if(canWrite()) html+='<br><span style="display:inline-flex;gap:6px;margin-top:6px"><button onclick="avoidRadius(\''+z.id+'\',-50)" style="'+bs+'">– радиус</button><button onclick="avoidRadius(\''+z.id+'\',50)" style="'+bs+'">+ радиус</button><button onclick="avoidDel(\''+z.id+'\')" style="'+bs+'">удалить</button></span>'; circ.bindPopup(html); avoidLayer.addLayer(circ); }); }
+async function saveAvoidZones(){ try{ const {error}=await sb.from('settings').update({avoid_zones:appSettings.avoid_zones||[]}).eq('id',true); if(error) notify('Не удалось сохранить объезды: '+error.message,'err'); }catch(e){ notify('Не удалось сохранить объезды','err'); } }
+function addAvoidZone(ll){ if(!canWrite()) return; appSettings.avoid_zones=appSettings.avoid_zones||[]; appSettings.avoid_zones.push({id:'az'+Date.now().toString(36),lat:ll.lat,lng:ll.lng,r:150}); saveAvoidZones(); renderAvoidZones(); if(avoidAreaKm2()>180) notify('Объездов много (суммарно ~'+avoidAreaKm2().toFixed(0)+' км²). Сервер ORS может отклонить запрос — уменьши радиусы.','warn'); else showToast('Объезд добавлен'); }
+window.avoidRadius=function(id,delta){ if(!canWrite()) return; const z=(appSettings.avoid_zones||[]).find(x=>x.id===id); if(!z) return; z.r=Math.max(50,Math.min(3000,(z.r||150)+delta)); saveAvoidZones(); renderAvoidZones(); };
+window.avoidDel=function(id){ if(!canWrite()) return; appSettings.avoid_zones=(appSettings.avoid_zones||[]).filter(x=>x.id!==id); saveAvoidZones(); renderAvoidZones(); map.closePopup(); };
+function avoidPolygons(){ const zs=appSettings.avoid_zones||[]; if(!zs.length||typeof turf==='undefined') return null; const coords=[]; zs.forEach(z=>{ try{ const c=turf.circle([z.lng,z.lat],(z.r||150)/1000,{units:'kilometers',steps:20}); if(c&&c.geometry) coords.push(c.geometry.coordinates); }catch(e){} }); return coords.length?{type:'MultiPolygon',coordinates:coords}:null; }
+function toggleAvoid(on){ avoidModeOn=on; const b=$('avoidMode'); if(b) b.classList.toggle('active',on); const h=$('avoidHint'); if(h) h.style.display=on?'block':'none'; if(on&&addModeOn) toggleAdd(false); if(on&&wpModeOn){ wpModeOn=false; const w=$('rWpMode'); if(w) w.classList.remove('active'); } map.getContainer().style.cursor=on?'crosshair':''; }
+if($('avoidMode')) $('avoidMode').onclick=()=>toggleAvoid(!avoidModeOn);
+$('cancelBtn').onclick=()=>{ resetForm(); toggleAdd(false); $('pointOverlay').classList.remove('on'); };
 function resetForm(){ $('fName').value='';$('fDesc').value='';$('fColor').value='#9aa1ad';$('fBase').checked=false;$('geoQuery').value='';$('geoResults').innerHTML='';$('formErr').textContent=''; pendingLatLng=null; if(pendingMarker){map.removeLayer(pendingMarker);pendingMarker=null;} }
 $('saveBtn').onclick=async ()=>{ const name=$('fName').value.trim(); if(!name){ $('formErr').textContent='Введи название.'; return; } if(!pendingLatLng){ $('formErr').textContent='Задай точку на карте или по адресу.'; return; }
   $('saveBtn').disabled=true; const { error }=await sb.from('clients').insert({name,description:$('fDesc').value.trim(),color:$('fColor').value,lat:pendingLatLng.lat,lng:pendingLatLng.lng,is_base:$('fBase').checked}); $('saveBtn').disabled=false;
-  if(error){ $('formErr').textContent='Ошибка: '+error.message; return; } resetForm(); await loadAll(); showToast($('fBase')&&$('fBase').checked?'Депо сохранено':'Точка сохранена'); };
+  if(error){ $('formErr').textContent='Ошибка: '+error.message; return; } const wasBase=$('fBase').checked; resetForm(); $('pointOverlay').classList.remove('on'); await loadAll(); showToast(wasBase?'Депо сохранено':'Точка сохранена'); };
 window.editClient=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWrite()) return; editId=id; map.closePopup();
-  $('eName').value=c.name; $('eDesc').value=c.description||''; $('eColor').value=c.color||'#9aa1ad'; $('eBase').checked=!!c.is_base; $('eLat').value=c.lat; $('eLng').value=c.lng; $('editOverlay').classList.add('on'); };
+  $('eName').value=c.name; $('eDesc').value=c.description||''; $('eColor').value=c.color||'#9aa1ad'; $('eBase').checked=!!c.is_base; $('eLat').value=c.lat; $('eLng').value=c.lng; $('eProfile').innerHTML='<option value="">— не задан (по умолчанию платный) —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join(''); $('eProfile').value=c.default_profile||''; $('eSigner').value=c.signer||''; $('editOverlay').classList.add('on'); };
 $('eCancel').onclick=()=>$('editOverlay').classList.remove('on');
-$('eSave').onclick=async ()=>{ const { error }=await sb.from('clients').update({name:$('eName').value.trim(),description:$('eDesc').value.trim(),color:$('eColor').value,is_base:$('eBase').checked,lat:parseFloat($('eLat').value),lng:parseFloat($('eLng').value)}).eq('id',editId);
+$('eSave').onclick=async ()=>{ const { error }=await sb.from('clients').update({name:$('eName').value.trim(),description:$('eDesc').value.trim(),color:$('eColor').value,is_base:$('eBase').checked,default_profile:($('eProfile').value||null),signer:($('eSigner').value.trim()||null),lat:parseFloat($('eLat').value),lng:parseFloat($('eLng').value)}).eq('id',editId);
   if(error){ notify('Ошибка: '+error.message,'err'); return; } $('editOverlay').classList.remove('on'); await loadAll(); showToast('Изменения сохранены'); };
-async function delClient(id){ if(!await confirmDialog('Удалить точку, всю её технику и связанную историю? Действие необратимо.',{danger:true,okText:'Удалить'})) return; const { error }=await sb.from('clients').delete().eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } await loadAll(); }
+async function delClient(id){ if(!await confirmDialog('Удалить точку вместе с её техникой и заявками? Их можно вернуть кнопкой «Отменить».',{danger:true,okText:'Удалить'})) return;
+  const { data, error }=await sb.rpc('soft_delete_client',{p_id:id}); if(error){ notify('Ошибка: '+error.message,'err'); return; }
+  await loadAll();
+  undoToast('Точка удалена (с техникой и заявками)', async ()=>{ const {error:e2}=await sb.rpc('restore_deleted',{p_ts:data}); if(e2){ notify(e2.message,'err'); return; } await loadAll(); showToast('Восстановлено'); }); }
 
 // ---------- equipment ----------
 window.openEquip=function(clientId){ eqClientId=clientId; eqEditId=null; const c=clients.find(x=>x.id==clientId); map.closePopup();
@@ -928,13 +1104,39 @@ $('eqClose').onclick=()=>$('eqOverlay').classList.remove('on');
 function fmtDate(d){ return d?d:''; }
 function warrantyBadge(e){ if(!e.factory_warranty_until) return ''; const today=new Date().toISOString().slice(0,10);
   return e.factory_warranty_until>=today?'<span class="pill good">гар. до '+esc(e.factory_warranty_until)+'</span>':'<span class="pill warn">гар. истекла '+esc(e.factory_warranty_until)+'</span>'; }
+function mhLine(e){ const rs=readingsByEq[e.id]||[]; const sv=eqService(e);
+  if(!rs.length&&!sv) return '<div class="m" style="color:var(--ink-faint)">моточасы не заведены — «+ замер»</div>';
+  const bits=[]; const last=rs.length?rs[rs.length-1]:null;
+  if(last) bits.push('счётчик '+Math.round(+last.moto_hours)+' мч ('+last.taken_on+')');
+  if(sv&&sv.rate>0){ bits.push('темп '+sv.rate.toFixed(1)+' мч/сут'+(sv.src==='client'?' (по клиенту)':''));
+    if(sv.daysLeft!=null){ const late=sv.daysLeft<=0; bits.push('<span style="color:'+(late?'var(--red)':(sv.daysLeft<=14?'var(--accent-ink)':'inherit'))+'">'+(late?('ТО просрочено на ~'+Math.abs(sv.daysLeft)+' дн'):('до ТО ~'+sv.daysLeft+' дн'))+'</span>'); } }
+  else if(sv) bits.push('темп не измерен (нужно 2 замера) — грубая оценка');
+  else if(rs.length<2) bits.push('нужен ещё замер для темпа');
+  return '<div class="m">'+bits.join(' · ')+'</div>'; }
+async function addReading(eqId,kind){ const e=(eqByClient[eqClientId]||[]).find(x=>x.id===eqId); if(!e) return;
+  const rs=readingsByEq[eqId]||[]; const last=rs.length?rs[rs.length-1]:null;
+  const r=await promptDialog(kind==='service'?'Плановое ТО — показания счётчика':'Замер моточасов',[
+    {key:'mh',label:'Моточасы по счётчику'+(last?(' (прошлый замер: '+Math.round(+last.moto_hours)+' мч от '+last.taken_on+')'):''),value:''},
+    {key:'d',label:'Дата',value:new Date().toISOString().slice(0,10)}]);
+  if(!r) return; const mh=parseFloat(String(r.mh).replace(',','.')); if(isNaN(mh)||mh<0){ notify('Введи моточасы числом.','err'); return; }
+  if(last&&mh<(+last.moto_hours)&&!(await confirmDialog('Показание '+Math.round(mh)+' мч меньше прошлого ('+Math.round(+last.moto_hours)+' мч). Счётчик меняли или это опечатка?',{okText:'Всё верно'}))) return;
+  const rec={equipment_id:eqId,taken_on:(r.d||new Date().toISOString().slice(0,10)),moto_hours:mh,kind:kind};
+  const {error}=await sb.from('equipment_readings').upsert(rec,{onConflict:'equipment_id,taken_on'});
+  if(error){ notify('Ошибка: '+error.message,'err'); return; }
+  if(kind==='service'){ await sb.from('equipment').update({last_service:rec.taken_on,last_visit:rec.taken_on}).eq('id',eqId); }
+  await loadReadings(); await reloadEquip(); const sv=eqService(e);
+  showToast(kind==='service'?('ТО отмечено'+(sv&&sv.daysLeft!=null?(' · следующее через ~'+sv.daysLeft+' дн'):'')):'Замер записан'); }
 function renderEqList(){ const box=$('eqList'); const list=eqByClient[eqClientId]||[];
   box.innerHTML=list.length?'':'<div class="hint">Техники пока нет.</div>';
   list.forEach(e=>{ const d=document.createElement('div'); d.className='eqitem';
     d.innerHTML='<div class="t">'+esc(e.model)+' '+warrantyBadge(e)+'</div><div class="m">'+[e.kind,e.serial?'S/N '+esc(e.serial):'',e.installed_on?'уст. '+esc(e.installed_on):''].filter(Boolean).join(' · ')+'</div>'+
       (e.notes?'<div class="m">'+esc(e.notes)+'</div>':'')+
-      (canWrite()?'<div class="acts" style="margin-top:6px;display:flex;gap:6px"><button class="btn sm" data-eqedit="'+e.id+'">ред.</button><button class="btn sm ghost" data-eqdel="'+e.id+'">×</button></div>':'');
+      mhLine(e)+
+      '<div class="acts" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-mhr="'+e.id+'">+ замер</button><button class="btn sm amber" data-mhs="'+e.id+'">✔ плановое ТО</button>'+
+      (canWrite()?'<button class="btn sm" data-eqedit="'+e.id+'">ред.</button><button class="btn sm ghost" data-eqdel="'+e.id+'" title="Удалить">×</button>':'')+'</div>';
     box.appendChild(d); });
+  box.querySelectorAll('[data-mhr]').forEach(b=>b.onclick=()=>addReading(b.dataset.mhr,'reading'));
+  box.querySelectorAll('[data-mhs]').forEach(b=>b.onclick=()=>addReading(b.dataset.mhs,'service'));
   box.querySelectorAll('[data-eqedit]').forEach(b=>b.onclick=()=>startEqEdit(b.dataset.eqedit));
   box.querySelectorAll('[data-eqdel]').forEach(b=>b.onclick=()=>delEq(b.dataset.eqdel)); }
 function clearEqForm(){ eqEditId=null; $('eqModel').value='';$('eqKind').value='';$('eqSerial').value='';$('eqInstalled').value='';$('eqWarranty').value='';$('eqNotes').value='';$('eqLat').value='';$('eqLng').value='';$('eqGeo').value='';$('eqGeoRes').innerHTML='';$('eqErr').textContent=''; if($('eqModelId')) $('eqModelId').value=''; $('eqFormTitle').textContent='Добавить технику'; $('eqFormCancel').style.display='none'; }
@@ -950,26 +1152,37 @@ $('eqSave').onclick=async ()=>{ const model=$('eqModel').value.trim(); if(!model
   const rec={client_id:eqClientId,model,kind:$('eqKind').value.trim(),serial:$('eqSerial').value.trim(),installed_on:$('eqInstalled').value||null,factory_warranty_until:$('eqWarranty').value||null,notes:$('eqNotes').value.trim(),model_id:$('eqModelId').value||null,lat:parseFloat($('eqLat').value)||null,lng:parseFloat($('eqLng').value)||null};
   $('eqSave').disabled=true; let error; if(eqEditId){ ({error}=await sb.from('equipment').update(rec).eq('id',eqEditId)); } else { ({error}=await sb.from('equipment').insert(rec)); } $('eqSave').disabled=false;
   if(error){ $('eqErr').textContent='Ошибка: '+error.message; return; } await reloadEquip(); clearEqForm(); };
-async function delEq(id){ if(!await confirmDialog('Удалить технику?',{danger:true,okText:'Удалить'})) return; const { error }=await sb.from('equipment').delete().eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } await reloadEquip(); }
-async function reloadEquip(){ const { data }=await sb.from('equipment').select('*').order('created_at'); eqByClient={}; (data||[]).forEach(e=>{ (eqByClient[e.client_id]=eqByClient[e.client_id]||[]).push(e); }); renderEqList(); render(); }
+async function delEq(id){ if(!await confirmDialog('Удалить технику?',{danger:true,okText:'Удалить'})) return; const { error }=await sb.from('equipment').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } await reloadEquip();
+  undoToast('Техника удалена', async ()=>{ const {error:e2}=await sb.from('equipment').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await reloadEquip(); showToast('Восстановлено'); }); }
+async function reloadEquip(){ const { data }=await sb.from('equipment').select('*').is('deleted_at',null).order('created_at'); eqByClient={}; (data||[]).forEach(e=>{ (eqByClient[e.client_id]=eqByClient[e.client_id]||[]).push(e); }); await loadReadings(); renderEqList(); render(); }
 
 async function loadEqModels(){ try{ const {data}=await sb.from('equipment_models').select('*').order('manufacturer'); eqModels=data||[]; populateEqModelSelect(); }catch(e){} }
 function emLabel(m){ return ((m.manufacturer?m.manufacturer+' ':'')+m.model).trim(); }
 function populateEqModelSelect(){ const sel=$('eqModelId'); if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="">— без модели из каталога —</option>'+eqModels.map(m=>'<option value="'+m.id+'">'+esc(emLabel(m))+'</option>').join(''); sel.value=cur; }
-function renderEqModels(){ const box=$('emList'); if(!box) return; const q=$('emSearch')?$('emSearch').value.trim().toLowerCase():''; const list=eqModels.filter(m=>!q||emLabel(m).toLowerCase().includes(q)); box.innerHTML=list.length?'':'<div class="hint">'+(eqModels.length?'Ничего не найдено.':'Моделей нет. Добавь по кнопке «+ Модель».')+'</div>';
-  list.forEach(m=>{ const d=document.createElement('div'); d.className='card';
-    d.innerHTML='<h3>'+esc(emLabel(m))+'</h3><div class="meta">'+(m.warranty_months?('гарантия '+m.warranty_months+' мес'):'без гарантии')+((+m.service_interval_hours>0)?(' · ТО каждые '+Math.round(m.service_interval_hours)+' моточасов'):'')+(m.notes?' · '+esc(m.notes):'')+'</div>'+
-      '<div class="acts"><button class="btn sm" data-emedit="'+m.id+'">ред.</button><button class="btn sm ghost" data-emdel="'+m.id+'">×</button></div>';
-    box.appendChild(d); });
+function renderEqModels(){ const box=$('emList'); if(!box) return; const q=$('emSearch')?$('emSearch').value.trim().toLowerCase():'';
+  const manus=[...new Set(eqModels.map(m=>m.manufacturer).filter(Boolean))].sort();
+  const kinds=[...new Set(eqModels.map(m=>m.kind).filter(Boolean))].sort();
+  if($('emManuList')) $('emManuList').innerHTML=manus.map(x=>'<option value="'+esc(x)+'">').join('');
+  if($('emKindList')) $('emKindList').innerHTML=kinds.map(x=>'<option value="'+esc(x)+'">').join('');
+  const list=eqModels.filter(m=>!q||emLabel(m).toLowerCase().includes(q)||(m.kind||'').toLowerCase().includes(q));
+  if(!list.length){ box.innerHTML='<div class="hint">'+(eqModels.length?'Ничего не найдено.':'Моделей нет. Добавь по кнопке «+ Модель».')+'</div>'; return; }
+  const tree={}; list.forEach(m=>{ const mn=m.manufacturer||'Без производителя'; const kn=m.kind||'Без типа'; tree[mn]=tree[mn]||{}; tree[mn][kn]=tree[mn][kn]||[]; tree[mn][kn].push(m); });
+  let h=''; Object.keys(tree).sort().forEach(mn=>{ h+='<div class="emtree-manu"><div class="emtree-h" data-emg="'+esc(mn)+'">▾ '+esc(mn)+'</div><div class="emtree-body">';
+    Object.keys(tree[mn]).sort().forEach(kn=>{ h+='<div class="emtree-kind"><div class="emtree-kh">'+esc(kn)+'</div>';
+      tree[mn][kn].sort((a,b)=>(a.model||'').localeCompare(b.model||'')).forEach(m=>{ h+='<div class="emrow"><span class="emname">'+esc(m.model)+'</span><span class="emmeta">'+(m.warranty_months?(m.warranty_months+' мес'):'—')+((+m.service_interval_hours>0)?(' · '+Math.round(m.service_interval_hours)+' мч'):'')+'</span><button class="btn sm" data-emedit="'+m.id+'">ред.</button><button class="btn sm ghost" data-emdel="'+m.id+'" title="Удалить">×</button></div>'; });
+      h+='</div>'; });
+    h+='</div></div>'; });
+  box.innerHTML=h;
+  box.querySelectorAll('[data-emg]').forEach(hd=>hd.onclick=()=>{ const b=hd.nextElementSibling; const open=b.style.display!=='none'; b.style.display=open?'none':''; hd.textContent=(open?'▸ ':'▾ ')+hd.dataset.emg; });
   box.querySelectorAll('[data-emedit]').forEach(b=>b.onclick=()=>editEqModel(b.dataset.emedit));
   box.querySelectorAll('[data-emdel]').forEach(b=>b.onclick=()=>delEqModel(b.dataset.emdel)); }
-function emReset(){ emEditId=null; $('emManu').value='';$('emModel').value='';$('emWarr').value='';$('emInt').value='';$('emNotes').value='';$('emErr').textContent=''; $('emFormTitle').textContent='Добавить модель'; }
+function emReset(){ emEditId=null; $('emManu').value='';$('emKind').value='';$('emModel').value='';$('emWarr').value='';$('emInt').value='';$('emNotes').value='';$('emErr').textContent=''; $('emFormTitle').textContent='Добавить модель'; }
 $('emShowAdd').onclick=()=>{ emReset(); $('emForm').style.display=''; $('emManu').focus(); };
-$('emSave').onclick=async ()=>{ const model=$('emModel').value.trim(); if(!model){ $('emErr').textContent='Введи модель.'; return; } const rec={manufacturer:$('emManu').value.trim(),model,warranty_months:parseInt($('emWarr').value)||0,service_interval_hours:+$('emInt').value||0,notes:$('emNotes').value.trim()};
+$('emSave').onclick=async ()=>{ const model=$('emModel').value.trim(); if(!model){ $('emErr').textContent='Введи модель.'; return; } const rec={manufacturer:$('emManu').value.trim(),kind:$('emKind').value.trim(),model,warranty_months:parseInt($('emWarr').value)||0,service_interval_hours:+$('emInt').value||0,notes:$('emNotes').value.trim()};
   let error; if(emEditId){ ({error}=await sb.from('equipment_models').update(rec).eq('id',emEditId)); } else { ({error}=await sb.from('equipment_models').insert(rec)); }
   if(error){ $('emErr').textContent=error.message; return; } emReset(); $('emForm').style.display='none'; await loadEqModels(); renderEqModels(); showToast('Модель сохранена'); };
 $('emCancel').onclick=()=>{ emReset(); $('emForm').style.display='none'; }; if($('emSearch')) $('emSearch').oninput=renderEqModels;
-function editEqModel(id){ const m=eqModels.find(x=>x.id==id); if(!m) return; emEditId=id; $('emManu').value=m.manufacturer||'';$('emModel').value=m.model||'';$('emWarr').value=m.warranty_months||'';$('emInt').value=m.service_interval_hours||'';$('emNotes').value=m.notes||''; $('emFormTitle').textContent='Правка модели'; $('emForm').style.display=''; }
+function editEqModel(id){ const m=eqModels.find(x=>x.id==id); if(!m) return; emEditId=id; $('emManu').value=m.manufacturer||'';$('emKind').value=m.kind||'';$('emModel').value=m.model||'';$('emWarr').value=m.warranty_months||'';$('emInt').value=m.service_interval_hours||'';$('emNotes').value=m.notes||''; $('emFormTitle').textContent='Правка модели'; $('emForm').style.display=''; }
 async function delEqModel(id){ if(!await confirmDialog('Удалить модель из каталога?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('equipment_models').delete().eq('id',id); if(error){ notify(error.message,'err'); return; } await loadEqModels(); renderEqModels(); }
 function applyEqModel(){ const m=eqModels.find(x=>x.id==$('eqModelId').value); if(!m) return; if(!$('eqModel').value.trim()) $('eqModel').value=emLabel(m); const inst=$('eqInstalled').value; if(inst && (+m.warranty_months>0) && !$('eqWarranty').value){ const d=new Date(inst); d.setMonth(d.getMonth()+(+m.warranty_months)); if(!isNaN(d)) $('eqWarranty').value=d.toISOString().slice(0,10); } }
 // ---------- catalog ----------
@@ -979,18 +1192,29 @@ function parseManuals(txt){ return txt.split('\n').map(l=>l.trim()).filter(Boole
 function fmtManuals(arr){ return (arr||[]).map(m=>[m.name,m.url].join('|')).join('\n'); }
 async function loadCatalog(){ const { data, error }=await sb.from('work_catalog').select('*').order('name'); if(!error) catalog=data||[]; }
 $('catSearch').oninput=renderCatalog; if($('catFilter')) $('catFilter').onchange=renderCatalog;
-async function renderCatalog(){ if(!catalog.length) await loadCatalog(); const q=$('catSearch').value.trim().toLowerCase(); const fil=$('catFilter')?$('catFilter').value:''; const box=$('catList');
-  const res=catalog.filter(w=>{ if(q&&!w.name.toLowerCase().includes(q)) return false; if(fil==='warranty'&&!w.warranty_eligible) return false; if(fil==='paid'&&w.warranty_eligible) return false; if(fil==='maint'&&!w.is_maintenance) return false; return true; });
-  box.innerHTML=res.length?'':'<div class="hint">Каталог пуст. Добавь работу.</div>';
-  res.forEach(w=>{ const d=document.createElement('div'); d.className='card';
-    const estR=((+w.norm_hours||0)*((appSettings.tariffs&&appSettings.tariffs.hour)||0));
-    d.innerHTML='<h3>'+esc(w.name)+' <span class="pill">'+(+w.norm_hours||0)+' ч</span>'+(w.price?('<span class="pill">оверрайд '+(+w.price)+'</span>'):('<span class="pill">≈ '+estR.toFixed(0)+'</span>'))+(w.warranty_eligible?'<span class="pill good">гар. возможна</span>':'<span class="pill warn">только платно</span>')+'</h3>'+
-      ((w.applicable_kinds&&w.applicable_kinds.length)?'<div class="meta">типы: '+esc(w.applicable_kinds.join(', '))+'</div>':'')+
-      (w.procedure?'<div class="ds" style="font-size:12px;color:var(--ink-dim);white-space:pre-wrap;margin-bottom:8px">'+esc(w.procedure)+'</div>':'')+
-      ((w.materials&&w.materials.length)?'<div class="meta">материалы: '+esc(w.materials.map(m=>m.name+' '+m.qty+m.unit).join(', '))+'</div>':'')+
-      ((w.manuals&&w.manuals.length)?'<div class="meta">мануалы: '+w.manuals.map(m=>'<a href="'+esc(m.url)+'" target="_blank" style="color:var(--cyan)">'+esc(m.name)+'</a>').join(', ')+'</div>':'')+
-      '<div class="acts" style="margin-top:8px"><button class="btn sm" data-cwedit="'+w.id+'">ред.</button><button class="btn sm ghost" data-cwdel="'+w.id+'">×</button></div>';
-    box.appendChild(d); });
+let cwScope='all', cwModelSel=new Set();
+function workModelNames(w){ return ((w&&w.model_ids)||[]).map(id=>{ const m=eqModels.find(x=>x.id===id); return m?emLabel(m):null; }).filter(Boolean); }
+function setCwScope(s){ cwScope=s; document.querySelectorAll('#cwScope [data-cs]').forEach(b=>b.classList.toggle('on',b.dataset.cs===s)); $('cwKindsBox').style.display=(s==='kinds')?'':'none'; $('cwModelsBox').style.display=(s==='models')?'':'none'; if(s==='models') renderCwModelsTree(); }
+function renderCwModelsTree(){ const box=$('cwModelsTree'); if(!box) return; if(!eqModels.length){ box.innerHTML='<div class="hint">Сначала заведи модели в каталоге моделей.</div>'; return; }
+  const tree={}; eqModels.forEach(m=>{ const mn=m.manufacturer||'Без производителя'; const kn=m.kind||'Без типа'; tree[mn]=tree[mn]||{}; tree[mn][kn]=tree[mn][kn]||[]; tree[mn][kn].push(m); });
+  let h=''; Object.keys(tree).sort().forEach(mn=>{ h+='<div style="font-weight:600;font-size:12px;margin-top:6px">'+esc(mn)+'</div>'; Object.keys(tree[mn]).sort().forEach(kn=>{ h+='<div style="font-family:var(--mono);font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);margin:4px 0 2px 8px">'+esc(kn)+'</div>'; tree[mn][kn].forEach(m=>{ h+='<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;padding:2px 0 2px 16px"><input type="checkbox" data-cwm="'+m.id+'" '+(cwModelSel.has(m.id)?'checked':'')+' style="width:auto">'+esc(m.model)+'</label>'; }); }); });
+  box.innerHTML=h; box.querySelectorAll('[data-cwm]').forEach(c=>c.onchange=()=>{ if(c.checked) cwModelSel.add(c.dataset.cwm); else cwModelSel.delete(c.dataset.cwm); }); }
+document.querySelectorAll('#cwScope [data-cs]').forEach(b=>b.onclick=()=>setCwScope(b.dataset.cs));
+function catGrp(title,inner){ return '<div class="emtree-manu"><div class="emtree-h" data-emg="'+esc(title)+'">▾ '+esc(title)+'</div><div class="emtree-body">'+inner+'</div></div>'; }
+function workRow(w){ const estR=((+w.norm_hours||0)*((appSettings.tariffs&&appSettings.tariffs.hour)||0)); return '<div class="emrow"><span class="emname">'+esc(w.name)+' · '+(+w.norm_hours||0)+'ч'+(w.warranty_eligible?'':' · платно')+'</span><span class="emmeta">'+(w.price?('оверр. '+(+w.price)):('≈'+estR.toFixed(0)))+'</span><button class="btn sm" data-cwedit="'+w.id+'">ред.</button><button class="btn sm ghost" data-cwdel="'+w.id+'" title="Удалить">×</button></div>'; }
+async function renderCatalog(){ if(!catalog.length) await loadCatalog(); if(!eqModels.length) await loadEqModels(); const q=$('catSearch').value.trim().toLowerCase(); const fil=$('catFilter')?$('catFilter').value:''; const box=$('catList');
+  const res=catalog.filter(w=>{ const mn=workModelNames(w); const hay=(w.name+' '+((w.applicable_kinds||[]).join(' '))+' '+mn.join(' ')).toLowerCase(); if(q&&!hay.includes(q)) return false; if(fil==='warranty'&&!w.warranty_eligible) return false; if(fil==='paid'&&w.warranty_eligible) return false; if(fil==='maint'&&!w.is_maintenance) return false; return true; });
+  if(!res.length){ box.innerHTML='<div class="hint">'+(catalog.length?'Ничего не найдено.':'Каталог пуст. Добавь работу.')+'</div>'; return; }
+  const general=res.filter(w=>!(w.model_ids&&w.model_ids.length)&&!(w.applicable_kinds&&w.applicable_kinds.length));
+  const byKind=res.filter(w=>!(w.model_ids&&w.model_ids.length)&&(w.applicable_kinds&&w.applicable_kinds.length));
+  const byModel=res.filter(w=>w.model_ids&&w.model_ids.length);
+  let h='';
+  if(general.length) h+=catGrp('Общий набор ('+general.length+')', general.map(workRow).join(''));
+  if(byKind.length){ const kinds={}; byKind.forEach(w=>(w.applicable_kinds||[]).forEach(k=>{ (kinds[k]=kinds[k]||[]).push(w); })); let inner=''; Object.keys(kinds).sort().forEach(k=>{ inner+='<div class="emtree-kind"><div class="emtree-kh">'+esc(k)+'</div>'+kinds[k].map(workRow).join('')+'</div>'; }); h+=catGrp('По типам', inner); }
+  if(byModel.length){ const tree={}; byModel.forEach(w=>(w.model_ids||[]).forEach(id=>{ const m=eqModels.find(x=>x.id===id); if(!m) return; const mn=m.manufacturer||'Без производителя', kn=m.kind||'Без типа', ml=m.model||'—'; tree[mn]=tree[mn]||{}; tree[mn][kn]=tree[mn][kn]||{}; (tree[mn][kn][ml]=tree[mn][kn][ml]||[]).push(w); }));
+    let inner=''; Object.keys(tree).sort().forEach(mn=>{ inner+='<div style="font-weight:600;font-size:12px;margin-top:8px">'+esc(mn)+'</div>'; Object.keys(tree[mn]).sort().forEach(kn=>{ inner+='<div class="emtree-kh">'+esc(kn)+'</div>'; Object.keys(tree[mn][kn]).sort().forEach(ml=>{ inner+='<div style="font-size:11px;color:var(--ink-dim);margin:3px 0 1px 8px">'+esc(ml)+'</div>'+tree[mn][kn][ml].map(workRow).join(''); }); }); }); h+=catGrp('По моделям', inner); }
+  box.innerHTML=h;
+  box.querySelectorAll('[data-emg]').forEach(hd=>hd.onclick=()=>{ const b=hd.nextElementSibling; const open=b.style.display!=='none'; b.style.display=open?'none':''; hd.textContent=(open?'▸ ':'▾ ')+hd.dataset.emg; });
   box.querySelectorAll('[data-cwedit]').forEach(b=>b.onclick=()=>openCw(b.dataset.cwedit));
   box.querySelectorAll('[data-cwdel]').forEach(b=>b.onclick=()=>delCw(b.dataset.cwdel)); }
 $('catAdd').onclick=()=>openCw(null);
@@ -998,11 +1222,12 @@ function openCw(id){ cwEditId=id; const w=id?catalog.find(x=>x.id==id):null;
   $('catFormTitle').textContent=id?'Правка работы':'Новая работа';
   $('cwName').value=w?w.name:''; $('cwHours').value=w?w.norm_hours:''; $('cwPrice').value=w?w.price:''; $('cwWarranty').checked=w?!!w.warranty_eligible:true; $('cwMaint').checked=w?!!w.is_maintenance:false;
   $('cwKinds').value=w&&w.applicable_kinds?w.applicable_kinds.join(', '):''; $('cwMaterials').value=w?fmtMaterials(w.materials):''; $('cwProc').value=w?w.procedure||'':''; $('cwManuals').value=w?fmtManuals(w.manuals):''; $('cwErr').textContent='';
+  cwModelSel=new Set((w&&w.model_ids)?w.model_ids:[]); setCwScope((w&&w.model_ids&&w.model_ids.length)?'models':((w&&w.applicable_kinds&&w.applicable_kinds.length)?'kinds':'all'));
   $('catOverlay').classList.add('on'); }
 $('cwCancel').onclick=()=>$('catOverlay').classList.remove('on');
 $('cwSave').onclick=async ()=>{ const name=$('cwName').value.trim(); if(!name){ $('cwErr').textContent='Введи название.'; return; }
   const rec={name,norm_hours:parseFloat($('cwHours').value)||0,price:parseFloat($('cwPrice').value)||0,warranty_eligible:$('cwWarranty').checked,is_maintenance:$('cwMaint').checked,
-    applicable_kinds:$('cwKinds').value.split(',').map(s=>s.trim()).filter(Boolean),materials:parseMaterials($('cwMaterials').value),procedure:$('cwProc').value.trim(),manuals:parseManuals($('cwManuals').value)};
+    applicable_kinds:(cwScope==='kinds'?$('cwKinds').value.split(',').map(s=>s.trim()).filter(Boolean):[]),model_ids:(cwScope==='models'?[...cwModelSel]:[]),materials:parseMaterials($('cwMaterials').value),procedure:$('cwProc').value.trim(),manuals:parseManuals($('cwManuals').value)};
   $('cwSave').disabled=true; let error; if(cwEditId){ ({error}=await sb.from('work_catalog').update(rec).eq('id',cwEditId)); } else { ({error}=await sb.from('work_catalog').insert(rec)); } $('cwSave').disabled=false;
   if(error){ $('cwErr').textContent='Ошибка: '+error.message; return; } $('catOverlay').classList.remove('on'); catalog=[]; await renderCatalog(); };
 async function delCw(id){ if(!await confirmDialog('Удалить работу из каталога?',{danger:true,okText:'Удалить'})) return; const { error }=await sb.from('work_catalog').delete().eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } catalog=[]; await renderCatalog(); }
@@ -1013,7 +1238,7 @@ async function geocode(){ const q=$('geoQuery').value.trim(); const box=$('geoRe
   try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=uk,ru,en&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}}); const data=await r.json();
     if(!data.length){ box.innerHTML='<div class="hint">Ничего не найдено.</div>'; return; } box.innerHTML='';
     data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size:12px;font-weight:500">'+esc(it.display_name)+'</div>';
-      d.onclick=()=>{ pendingLatLng={lat:parseFloat(it.lat),lng:parseFloat(it.lon)}; flashPending(); map.flyTo([pendingLatLng.lat,pendingLatLng.lng],14); if(!$('fName').value.trim()) $('fName').value=it.display_name.split(',')[0]; box.innerHTML='<div class="hint ok">Координаты заданы.</div>'; $('fName').focus(); }; box.appendChild(d); });
+      d.onclick=()=>{ pendingLatLng={lat:parseFloat(it.lat),lng:parseFloat(it.lon)}; flashPending(); map.flyTo([pendingLatLng.lat,pendingLatLng.lng],14); if(!$('fName').value.trim()) $('fName').value=it.display_name.split(',')[0]; box.innerHTML=''; updatePointCoords(); $('fName').focus(); }; box.appendChild(d); });
   }catch(err){ box.innerHTML='<div class="err">Ошибка геокодера.</div>'; } }
 
 // ---------- jobs ----------
@@ -1033,7 +1258,7 @@ function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.
   const eb=(j.assigned_engineer===session.user.id&&(j.status==='open'||j.status==='planned'))?'<button class="btn sm amber" data-jst="'+j.id+'|in_progress">В работу</button>':'';
   const eb2=(j.assigned_engineer===session.user.id&&j.status==='in_progress')?'<button class="btn sm amber" data-jst="'+j.id+'|done">Завершить</button>':'';
   const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+((canWrite()&&j.status==='done')?'<button class="btn sm" data-jact="'+j.id+'" title="Акт">📄</button>':'')+(canWrite()?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
-  return '<div class="kcard">'+head+(tags?'<div style="margin:3px 0">'+tags+'</div>':'')+meta+acts+'</div>'; }
+  return '<div class="kcard" data-kid="'+j.id+'">'+head+(tags?'<div style="margin:3px 0">'+tags+'</div>':'')+meta+acts+'</div>'; }
 function wireJobCards(box){
   box.querySelectorAll('[data-jedit]').forEach(b=>b.onclick=()=>openJob(b.dataset.jedit));
   box.querySelectorAll('[data-jst]').forEach(b=>b.onclick=()=>{ const a=b.dataset.jst.split('|'); jobSetStatus(a[0],a[1]); });
@@ -1041,7 +1266,7 @@ function wireJobCards(box){
   box.querySelectorAll('[data-jact]').forEach(b=>b.onclick=()=>openAct(b.dataset.jact));
   box.querySelectorAll('[data-jstat]').forEach(sel=>sel.onchange=()=>jobSetStatus(sel.dataset.jstat, sel.value)); }
 async function renderJobs(){ await ensureRefs(); renderJobChips();
-  const { data, error }=await sb.from('jobs').select('*, clients(name), equipment(model,kind), job_works(*)').order('created_at',{ascending:false});
+  const { data, error }=await sb.from('jobs').select('*, clients(name), equipment(model,kind), job_works(*)').is('deleted_at',null).order('created_at',{ascending:false});
   const box=$('jobList'); if(error){ box.className=''; box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
   jobs=data||[]; const q=$('jobSearch').value.trim().toLowerCase();
   if($('jobEngFilter') && $('jobEngFilter').dataset.filled!=='1'){ $('jobEngFilter').innerHTML='<option value="">все инженеры</option>'+profilesList.filter(p=>p.role==='engineer').map(p=>'<option value="'+p.id+'">'+esc(p.full_name||'инженер')+'</option>').join(''); $('jobEngFilter').dataset.filled='1'; }
@@ -1055,16 +1280,16 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
   box.className='kanban';
   box.innerHTML=cols.map(s=>{ const items=pool.filter(j=>j.status===s);
     const cards=items.map(j=>jobCard(j)).join('')||'<div class="hint" style="padding:4px 2px">—</div>';
-    return '<div class="kcol"><div class="kcol-h"><span>'+esc(ST[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
-  wireJobCards(box); }
+    return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
+  wireJobCards(box); wireKanbanDrag(box,dropJob); }
 $('jobSearch').oninput=renderJobs; if($('jobEngFilter')) $('jobEngFilter').onchange=renderJobs; if($('mineDone')) $('mineDone').onchange=renderMine; $('jobAdd').onclick=()=>{ if(canWrite()) openJob(null); };
 async function renderDashboard(){ const box=$('dashBody'); if(!box) return; box.innerHTML='<div class="hint">Считаю…</div>';
   try{
     const cl=clients.filter(c=>!c.is_base).length, dp=clients.filter(c=>c.is_base).length;
-    const {data:js}=await sb.from('jobs').select('status, job_works(hours,billable)'); const jb=js||[];
+    const {data:js}=await sb.from('jobs').select('status, job_works(hours,billable)').is('deleted_at',null); const jb=js||[];
     const byst={open:0,planned:0,in_progress:0,done:0,cancelled:0}; let wh=0,totH=0;
     jb.forEach(j=>{ byst[j.status]=(byst[j.status]||0)+1; (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; totH+=h; if(!w.billable) wh+=h; }); });
-    const {data:tr}=await sb.from('trips').select('econ_snapshot'); const trips=tr||[];
+    const {data:tr}=await sb.from('trips').select('econ_snapshot,date_from').is('deleted_at',null); const trips=tr||[];
     let rev=0,cost=0,profit=0; trips.forEach(t=>{ const e=t.econ_snapshot||{}; rev+=+e.revenue||0; cost+=+e.cost||0; profit+=+e.profit||0; });
     const margin=rev>0?(profit/rev*100):0, warrShare=totH?Math.round(wh/totH*100):0, cur=appSettings.currency||'';
     const overdue=vehicles.filter(v=>{ const iv=+v.service_interval||0; return iv>0 && ((+v.odometer||0)-(+v.last_service||0))>=iv; }).length;
@@ -1084,13 +1309,19 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return; box.
     h+='<div class="card" style="margin-top:16px"><h3>Заявки по статусам</h3>';
     [['open','Открытые'],['planned','Запланированные'],['in_progress','В работе'],['done','Закрытые'],['cancelled','Отменённые']].forEach(p=>{ h+='<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--line)"><span class="hint" style="margin:0">'+p[1]+'</span><b>'+(byst[p[0]]||0)+'</b></div>'; });
     h+='</div>';
+    const months=[]; const now=new Date(); for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),label:d.toLocaleDateString('ru-RU',{month:'short'}),rev:0,profit:0,cnt:0}); }
+    trips.forEach(t=>{ if(!t.date_from) return; const m=months.find(x=>x.key===String(t.date_from).slice(0,7)); if(m){ const e=t.econ_snapshot||{}; m.rev+=+e.revenue||0; m.profit+=+e.profit||0; m.cnt++; } });
+    const maxRev=Math.max(1,...months.map(m=>m.rev));
+    h+='<div class="card" style="margin-top:16px"><h3>Динамика по месяцам</h3><div style="display:flex;align-items:flex-end;gap:10px;height:140px;margin-top:10px">';
+    months.forEach(m=>{ const hR=Math.round(m.rev/maxRev*100), hP=Math.round(Math.max(0,m.profit)/maxRev*100); h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="font-size:10px;line-height:1.3;margin-bottom:4px"><span style="color:var(--accent-ink)">'+(m.rev?Math.round(m.rev):'')+'</span>'+(m.profit?'<br><span style="color:#16a34a">'+Math.round(m.profit)+'</span>':'')+'</div><div style="width:100%;display:flex;align-items:flex-end;justify-content:center;gap:3px;height:100px"><div title="выручка" style="width:40%;background:var(--accent);border-radius:4px 4px 0 0;height:'+hR+'%"></div><div title="прибыль" style="width:40%;background:#16a34a;border-radius:4px 4px 0 0;height:'+hP+'%"></div></div><div style="font-size:11px;color:var(--ink-dim);margin-top:6px">'+esc(m.label)+(m.cnt?(' · '+m.cnt):'')+'</div></div>'; });
+    h+='</div><div class="meta" style="margin-top:8px"><span style="color:var(--accent)">■</span> выручка · <span style="color:#16a34a">■</span> прибыль · число под месяцем — выездов</div></div>';
     box.innerHTML=h;
     box.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>dashNav(el.dataset.nav));
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; } }
 function dashNav(k){ if(k==='points'){ switchTab('map'); return; } if(k==='trips'){ switchTab('planner'); plannerSub('trips'); return; } if(k==='vehicles'){ switchTab('settings'); return; } switchTab('planner'); plannerSub('jobs'); if(k==='jobs-done'){ jobVisible={open:false,planned:false,in_progress:false,done:true,cancelled:false}; } else { jobVisible={open:true,planned:true,in_progress:true,done:false,cancelled:false}; } renderJobs(); }
 async function renderMine(){ const box=$('mineList'); if(!box) return; box.innerHTML='<div class="hint">Загрузка…</div>';
   const showDone=$('mineDone')&&$('mineDone').checked;
-  const { data, error }=await sb.from('jobs').select('*, clients(name,lat,lng), equipment(model)').eq('assigned_engineer',session.user.id).order('scheduled_date',{ascending:true});
+  const { data, error }=await sb.from('jobs').select('*, clients(name,lat,lng), equipment(model)').is('deleted_at',null).eq('assigned_engineer',session.user.id).order('scheduled_date',{ascending:true});
   if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
   let list=data||[]; if(!showDone) list=list.filter(j=>j.status!=='done'&&j.status!=='cancelled');
   const ord={in_progress:0,planned:1,open:2,done:3,cancelled:4};
@@ -1101,13 +1332,15 @@ async function renderMine(){ const box=$('mineList'); if(!box) return; box.inner
     if(j.status==='in_progress') acts+='<button class="btn sm amber" data-mst="'+j.id+'|done">Завершить</button>';
     acts+='<button class="btn sm" data-mopen="'+j.id+'">открыть</button>';
     if(j.clients) acts+='<button class="btn sm ghost" data-mfly="'+j.id+'">на карте</button>';
+    if(j.status==='done') acts+='<button class="btn sm" data-mact="'+j.id+'" title="Акт выполненных работ">📄 Акт</button>';
     d.innerHTML='<h3>'+esc(j.clients?j.clients.name:'—')+' <span class="pill">'+esc(ST[j.status]||j.status)+'</span>'+(j.equipment?'<span class="pill">'+esc(j.equipment.model)+'</span>':'')+'</h3>'+
       '<div class="meta">'+(j.scheduled_date?'визит '+esc(j.scheduled_date)+' ':'')+(j.time_window?'· '+esc(j.time_window)+' ':'')+(j.due_date?'· SLA '+esc(j.due_date):'')+'</div>'+
       (j.notes?'<div class="ds">'+esc(j.notes)+'</div>':'')+'<div class="acts">'+acts+'</div>';
     box.appendChild(d); });
   box.querySelectorAll('[data-mst]').forEach(b=>b.onclick=()=>{ const a=b.dataset.mst.split('|'); jobSetStatus(a[0],a[1]); });
   box.querySelectorAll('[data-mopen]').forEach(b=>b.onclick=()=>openJob(b.dataset.mopen));
-  box.querySelectorAll('[data-mfly]').forEach(b=>b.onclick=()=>{ const j=list.find(x=>x.id==b.dataset.mfly); if(j&&j.clients){ switchTab('map'); map.flyTo([j.clients.lat,j.clients.lng],14); } }); }
+  box.querySelectorAll('[data-mfly]').forEach(b=>b.onclick=()=>{ const j=list.find(x=>x.id==b.dataset.mfly); if(j&&j.clients){ switchTab('map'); map.flyTo([j.clients.lat,j.clients.lng],14); } });
+  box.querySelectorAll('[data-mact]').forEach(b=>b.onclick=()=>openAct(b.dataset.mact)); }
 async function jobSetStatus(id,st){ const {error}=await sb.from('jobs').update({status:st}).eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } if(st==='done'){ try{ await sb.rpc('register_equipment_visit',{p_job:id}); await reloadEquip(); }catch(e){} } showToast('Статус: '+(ST[st]||st)); renderJobs(); }
 function populateEquip(){ const list=eqByClient[$('jbClient').value]||[]; $('jbEquip').innerHTML='<option value="">— без привязки —</option>'+list.map(e=>'<option value="'+e.id+'">'+esc(e.model+(e.serial?' · '+e.serial:''))+'</option>').join(''); }
 $('jbClient').onchange=populateEquip;
@@ -1119,18 +1352,25 @@ async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEdit
   $('jbClient').value=j?j.client_id:(presetClient||(clients[0]?clients[0].id:'')); populateEquip();
   $('jbStatus').value=j?j.status:'open'; $('jbEng').value=j&&j.assigned_engineer?j.assigned_engineer:''; $('jbDate').value=j?(j.scheduled_date||''):''; $('jbWindow').value=j?(j.time_window||''):''; $('jbDue').value=j?(j.due_date||''):''; $('jbNotes').value=j?(j.notes||''):''; if($('jbWarrDays')) $('jbWarrDays').value=(appSettings.repair_warranty_days==null?90:appSettings.repair_warranty_days);
   if(presetEquip) $('jbEquip').value=presetEquip; else if(j) $('jbEquip').value=j.equipment_id||'';
-  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {work_id:w.work_id||null,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',custom:!w.work_id}; });
+  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {work_id:w.work_id||null,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id}; });
   renderJobWorks();
   const ro=!canWrite() && !(j&&j.assigned_engineer===session.user.id);
   ['jbClient','jbEquip','jbEng','jbDate','jbWindow','jbDue','jbNotes','jbWorkPick','jbWorkAdd','jbCustomAdd','jobSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
   $('jobErr').textContent=''; $('jobOverlay').classList.add('on'); }
 window.newJobForClient=function(cid){ if(!canWrite()) return; map.closePopup(); openJob(null,cid); };
 window.newJobForEquip=function(cid,eid){ if(!canWrite()) return; map.closePopup(); openJob(null,cid,eid); };
+function defaultProfileId(billable){ const list=appSettings.tariff_profiles||[];
+  if(billable){ const cid=$('jbClient')?$('jbClient').value:''; const cl=cid?clients.find(c=>c.id==cid):null; if(cl&&cl.default_profile&&list.some(p=>p.id===cl.default_profile)) return cl.default_profile; const dp=list.find(p=>p.def_paid); return dp?dp.id:''; }
+  const dw=list.find(p=>p.def_warranty); return dw?dw.id:''; }
 $('jbWorkAdd').onclick=async ()=>{ const wid=$('jbWorkPick').value; if(!wid) return; const cw=catalog.find(c=>c.id===wid); if(!cw) return;
   let sug={billable:true,reasons:[]}; try{ const {data}=await sb.rpc('suggest_warranty',{p_equipment:$('jbEquip').value||null,p_work:wid,p_date:$('jbDate').value||null}); if(data) sug=data; }catch(e){}
-  curWorks.push({work_id:wid,name:cw.name,hours:+cw.norm_hours||0,override:((+cw.price>0)?String(cw.price):''),billable:sug.billable!==false,reasons:sug.reasons||[],billable_reason:'',custom:false}); $('jbWorkPick').value=''; renderJobWorks(); };
-$('jbCustomAdd').onclick=()=>{ curWorks.push({work_id:null,name:'',hours:0,override:'',billable:true,reasons:[],billable_reason:'',custom:true}); renderJobWorks(); };
-function workRevenue(w){ if(!w.billable) return 0; if(w.override!==''&&w.override!=null) return +w.override||0; return (+w.hours||0)*((appSettings.tariffs&&appSettings.tariffs.hour)||0); }
+  const bill=sug.billable!==false; curWorks.push({work_id:wid,name:cw.name,hours:+cw.norm_hours||0,override:((+cw.price>0)?String(cw.price):''),billable:bill,reasons:sug.reasons||[],billable_reason:'',profile:defaultProfileId(bill),custom:false}); $('jbWorkPick').value=''; renderJobWorks(); };
+$('jbCustomAdd').onclick=()=>{ curWorks.push({work_id:null,name:'',hours:0,override:'',billable:true,reasons:[],billable_reason:'',profile:defaultProfileId(true),custom:true}); renderJobWorks(); };
+function profileById(id){ return id?((appSettings.tariff_profiles||[]).find(p=>p.id===id)||null):null; }
+function workRevenue(w){ if(w.override!==''&&w.override!=null) return +w.override||0; const p=profileById(w.profile||w.tariff_profile);
+  if(w.billable){ const r=p?(+((p.work_paid||{}).rate)||0):0; return (+w.hours||0)*(r>0?r:((appSettings.tariffs&&appSettings.tariffs.hour)||0)); }
+  const wr=p?(+((p.work_warr||{}).rate)||0):0; return (+w.hours||0)*wr; }
+function workCost(w){ return (+w.hours||0)*((appSettings.costs&&appSettings.costs.hour)||0); }
 function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   curWorks.forEach((w,i)=>{ const d=document.createElement('div'); d.className='eqitem';
     const head=w.custom?('<input type="text" placeholder="название работы" value="'+esc(w.name)+'" data-wn="'+i+'" style="width:100%">'):('<div class="t">'+esc(w.name)+'</div>');
@@ -1138,8 +1378,9 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
     d.innerHTML=head+'<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">'+
       '<input type="number" step="0.25" value="'+w.hours+'" data-wh="'+i+'" style="width:74px" title="часы"><span class="hint" style="margin:0">ч</span>'+
       '<button class="btn sm '+(w.billable?'amber':'ghost')+'" data-wb="'+i+'">'+(w.billable?'платно':'гарантия')+'</button>'+
+      '<select data-wp="'+i+'" style="max-width:120px;font-size:11px" title="профиль тарифа (плательщик)"><option value="">— профиль —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'"'+(w.profile===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select>'+
       '<input type="number" step="0.01" value="'+esc(w.override)+'" data-wo="'+i+'" placeholder="авто" style="width:84px" title="цена вручную (оверрайд)">'+
-      '<span class="hint" style="margin:0">= '+(w.billable?rev.toFixed(0):'0')+'</span>'+
+      '<span class="hint" style="margin:0">= '+rev.toFixed(0)+'</span>'+
       '<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left:auto">×</button></div>'+
       ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top:4px">'+esc(w.reasons.join(' · '))+'</div>':'')+
       (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top:4px;font-size:12px">'):'');
@@ -1148,10 +1389,11 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   box.querySelectorAll('[data-wo]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wo].override=inp.value; jobTotals(); });
   box.querySelectorAll('[data-wh]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wh].hours=parseFloat(inp.value)||0; jobTotals(); });
   box.querySelectorAll('[data-wrsn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wrsn].billable_reason=inp.value; });
-  box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; renderJobWorks(); });
+  box.querySelectorAll('[data-wp]').forEach(sel=>sel.onchange=()=>{ curWorks[sel.dataset.wp].profile=sel.value; });
+  box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; w.profile=defaultProfileId(w.billable); renderJobWorks(); });
   box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); });
   jobTotals(); }
-function jobTotals(){ const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0); const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' (по умолчанию часы×тариф; цена — оверрайд)'; }
+function jobTotals(){ const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0); const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0); $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · маржа '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)'; }
 $('jobCancel').onclick=()=>$('jobOverlay').classList.remove('on');
 $('jobSave').onclick=async ()=>{ const client_id=$('jbClient').value; if(!client_id){ $('jobErr').textContent='Выбери клиента.'; return; } if(curWorks.some(w=>w.custom&&!w.name.trim())){ $('jobErr').textContent='У своей работы укажи название.'; return; }
   const rec={client_id,equipment_id:$('jbEquip').value||null,status:$('jbStatus').value,scheduled_date:$('jbDate').value||null,time_window:$('jbWindow').value.trim(),due_date:$('jbDue').value||null,assigned_engineer:$('jbEng').value||null,notes:$('jbNotes').value.trim()};
@@ -1160,18 +1402,19 @@ $('jobSave').onclick=async ()=>{ const client_id=$('jbClient').value; if(!client
     if(jobEditId){ const {error}=await sb.from('jobs').update(rec).eq('id',jobEditId); if(error) throw error; }
     else { rec.created_by=session.user.id; const {data,error}=await sb.from('jobs').insert(rec).select('id').single(); if(error) throw error; jobId=data.id; }
     await sb.from('job_works').delete().eq('job_id',jobId);
-    if(curWorks.length){ const rows=curWorks.map(w=>({job_id:jobId,work_id:w.work_id||null,title:w.name||'',hours:w.hours,billable:w.billable,billable_reason:w.billable_reason||'',revenue:workRevenue(w),revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)})); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
+    if(curWorks.length){ const rows=curWorks.map(w=>({job_id:jobId,work_id:w.work_id||null,title:w.name||'',hours:w.hours,billable:w.billable,billable_reason:w.billable_reason||'',tariff_profile:(w.profile||null),revenue:workRevenue(w),revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)})); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
     if(canWrite() && rec.status==='done' && rec.equipment_id && curWorks.some(w=>w.billable)){ const days=parseInt($('jbWarrDays').value)||0; if(days>0){ try{ const {data:ex}=await sb.from('repair_warranties').select('id').eq('origin_job_id',jobId).limit(1); if(!ex||!ex.length){ const until=new Date(Date.now()+days*86400000).toISOString().slice(0,10); const covers=curWorks.filter(w=>w.billable).map(w=>w.name).filter(Boolean).join(', ').slice(0,300); const {error:rwErr}=await sb.from('repair_warranties').insert({equipment_id:rec.equipment_id,origin_job_id:jobId,covers,until}); if(!rwErr) showToast('Гарантия на ремонт до '+until); } }catch(e2){} } }
     if(rec.status==='done' && rec.equipment_id){ try{ await sb.rpc('register_equipment_visit',{p_job:jobId}); await reloadEquip(); }catch(e3){} }
-    $('jobOverlay').classList.remove('on'); await renderJobs(); showToast('Заявка сохранена');
+    $('jobOverlay').classList.remove('on'); await renderJobs(); await refreshStats(); showToast('Заявка сохранена');
   }catch(err){ $('jobErr').textContent='Ошибка: '+(err.message||err); } finally{ $('jobSave').disabled=false; } };
-async function delJob(id){ if(!await confirmDialog('Удалить заявку?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('jobs').delete().eq('id',id); if(error){ notify(error.message,'err'); return; } await renderJobs(); }
+async function delJob(id){ if(!await confirmDialog('Удалить заявку?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('jobs').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderJobs(); await refreshStats();
+  undoToast('Заявка удалена', async ()=>{ const {error:e2}=await sb.from('jobs').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Восстановлено'); }); }
 
 // ---------- trips ----------
 let trips=[], tripJobsAll=[], curTripJobs=new Set(), tripEditId=null, tripRouteKeys=new Set();
 const ST_TRIP={planned:'план',assigned:'назначен',in_progress:'в работе',done:'завершён',cancelled:'отменён'};
-let tripRoute={km:0,driveH:0,geometry:null}, tripRouteStops=[], tripVariants=[], tripVarSel=0, tripStart=null, tripOverrides={revenue:'',cost:''};
-async function loadTripJobs(){ const {data}=await sb.from('jobs').select('id,status,scheduled_date,equipment_id, clients(name,lat,lng), equipment(model,lat,lng), job_works(hours,billable,revenue)').order('created_at',{ascending:false}); tripJobsAll=data||[]; }
+let tripRoute={km:0,driveH:0,geometry:null}, tripRouteStops=[], tripVariants=[], tripVarSel=0, tripStart=null, tripOverrides={revenue:'',cost:'',road:{}};
+async function loadTripJobs(){ const {data}=await sb.from('jobs').select('id,status,scheduled_date,equipment_id, clients(name,lat,lng), equipment(model,lat,lng), job_works(hours,billable,revenue,tariff_profile)').is('deleted_at',null).order('created_at',{ascending:false}); tripJobsAll=data||[]; }
 function tripStops(){ const stops=[]; const seen=new Set(); tripJobsAll.filter(j=>curTripJobs.has(j.id)).forEach(j=>{ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); if(lat==null) return; const nm=(eq&&eq.lat!=null)?((j.clients?j.clients.name:'')+' · '+(eq.model||'')):(j.clients?j.clients.name:''); const key=(+lat).toFixed(5)+','+(+lng).toFixed(5); if(seen.has(key)) return; seen.add(key); stops.push({name:nm,lat,lng}); }); return stops; }
 const keyOf=s=>(+s.lat).toFixed(5)+','+(+s.lng).toFixed(5);
 function syncRouteStops(){ const jobStops=tripStops(); const desired=new Set(jobStops.map(keyOf));
@@ -1192,6 +1435,65 @@ function renderRouteStops(){ const box=$('tpRouteStops'); const hasAny=tripStart
   box.querySelectorAll('[data-wprm]').forEach(b=>b.onclick=()=>{ tripRouteStops.splice(+b.dataset.wprm,1); resetTripRoute(); renderRouteStops(); }); }
 function moveStop(i,dir){ const j=i+dir; if(j<0||j>=tripRouteStops.length) return; const a=tripRouteStops; const t=a[i]; a[i]=a[j]; a[j]=t; resetTripRoute(); renderRouteStops(); }
 function routeAll(){ return (tripStart?[{type:'start',name:tripStart.name,lat:tripStart.lat,lng:tripStart.lng}]:[]).concat(tripRouteStops); }
+let ganttTrips=[], gDayW=36;
+function wireGantt(box){
+  box.querySelectorAll('[data-gt]').forEach(bar=>{
+    if(!canWrite()){ bar.onclick=()=>showTripOnMap(bar.dataset.gt); return; }
+    bar.style.cursor='grab'; bar.title=(bar.title||'')+' · тяни, чтобы перенести даты';
+    let sx=0, dx=0, orig=0, on=false;
+    const move=ev=>{ if(!on) return; const p=ev.touches?ev.touches[0]:ev; dx=p.clientX-sx; if(ev.cancelable) ev.preventDefault(); bar.style.left=(orig+dx)+'px'; };
+    const up=async ()=>{ if(!on) return; on=false; bar.style.cursor='grab'; bar.style.opacity=''; bar.style.zIndex='';
+      document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up);
+      document.removeEventListener('touchmove',move); document.removeEventListener('touchend',up);
+      if(Math.abs(dx)<4){ bar.style.left=orig+'px'; openTrip(bar.dataset.gt); return; }
+      const days=Math.round(dx/gDayW); if(!days){ bar.style.left=orig+'px'; return; }
+      await shiftTrip(bar.dataset.gt,days); };
+    const down=ev=>{ const p=ev.touches?ev.touches[0]:ev; sx=p.clientX; dx=0; on=true; orig=parseFloat(bar.style.left)||0;
+      bar.style.cursor='grabbing'; bar.style.opacity='.75'; bar.style.zIndex='5';
+      document.addEventListener('mousemove',move); document.addEventListener('mouseup',up);
+      document.addEventListener('touchmove',move,{passive:false}); document.addEventListener('touchend',up); };
+    bar.addEventListener('mousedown',down); bar.addEventListener('touchstart',down,{passive:true}); }); }
+async function shiftTrip(id,days){ const t=ganttTrips.find(x=>x.id==id); if(!t||!t.date_from){ renderGantt(); return; }
+  const mv=ds=>{ if(!ds) return null; const d=new Date(ds+'T00:00:00'); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); };
+  const oldFrom=t.date_from, oldTo=t.date_to; const from=mv(t.date_from), to=t.date_to?mv(t.date_to):null;
+  const {error}=await sb.from('trips').update({date_from:from,date_to:to}).eq('id',id);
+  if(error){ notify('Не удалось перенести: '+error.message,'err'); await renderGantt(); return; }
+  await renderGantt();
+  undoToast('Выезд перенесён на '+from+(to&&to!==from?(' → '+to):''), async ()=>{ const {error:e2}=await sb.from('trips').update({date_from:oldFrom,date_to:oldTo}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderGantt(); showToast('Даты возвращены'); }); }
+async function renderGantt(){ await ensureRefs(); const box=$('gantt'); if(!box) return;
+  const {data,error}=await sb.from('trips').select('*').is('deleted_at',null).order('date_from'); if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
+  let src=(data||[]).filter(t=>t.date_from); if(role==='engineer') src=src.filter(t=>t.lead_engineer===session.user.id); ganttTrips=src;
+  if(!src.length){ box.innerHTML='<div class="hint">Выездов с датами нет.</div>'; return; }
+  let min=null,max=null; src.forEach(t=>{ const a=t.date_from,b=t.date_to||t.date_from; if(!min||a<min)min=a; if(!max||b>max)max=b; });
+  const today=new Date().toISOString().slice(0,10); if(today<min)min=today; if(today>max)max=today;
+  const dayMs=86400000, d0=new Date(min+'T00:00:00'), d1=new Date(max+'T00:00:00'), dayW=36; const N=Math.min(160,Math.round((d1-d0)/dayMs)+1); gDayW=dayW;
+  const off=ds=>Math.round((new Date(ds+'T00:00:00')-d0)/dayMs);
+  const groups={}; src.forEach(t=>{ const eng=t.lead_engineer||'__none'; (groups[eng]=groups[eng]||[]).push(t); });
+  let head='<div class="gantt-head" style="width:'+(N*dayW)+'px">'; for(let i=0;i<N;i++){ const d=new Date(d0.getTime()+i*dayMs); const iso=d.toISOString().slice(0,10); head+='<div class="gantt-day'+(iso===today?' today':'')+'" style="width:'+dayW+'px">'+d.getDate()+'</div>'; } head+='</div>';
+  let rows=''; Object.keys(groups).forEach(eng=>{ const p=profilesList.find(x=>x.id===eng); const nm=p?(p.full_name||'инженер'):(eng==='__none'?'Без инженера':'—');
+    rows+='<div class="gantt-eng">'+esc(nm)+'</div><div class="gantt-row" style="width:'+(N*dayW)+'px">';
+    groups[eng].forEach(t=>{ const s=off(t.date_from); if(s>=N||s<0&&off(t.date_to||t.date_from)<0) return; const s2=Math.max(0,s); const span=Math.max(1,off(t.date_to||t.date_from)-s2+1); const w=Math.max(1,Math.min(N-s2,span))*dayW-4; const pts=(t.route_stops||[]).filter(x=>x&&x.name&&x.type!=='start'&&x.type!=='place'&&x.type!=='wp').map(x=>String(x.name).split(' · ')[0]); const label=pts[0]||t.vehicle_label||'выезд'; rows+='<div class="gantt-bar st-'+esc(t.status)+'" style="left:'+(s2*dayW)+'px;width:'+w+'px" data-gt="'+t.id+'" title="'+esc((t.date_from||'')+' → '+(t.date_to||'')+(pts.length?(' · '+pts.join(', ')):''))+'">'+esc(label)+'</div>'; });
+    rows+='</div>'; });
+  box.innerHTML='<div class="gantt-wrap">'+head+rows+'</div>';
+  wireGantt(box); }
+function wireKanbanDrag(box,onDrop){ if(!canWrite()) return;
+  box.querySelectorAll('.kcard').forEach(card=>{ card.setAttribute('draggable','true');
+    card.addEventListener('dragstart',e=>{ card.classList.add('dragging'); try{ e.dataTransfer.setData('text/plain',card.dataset.kid); e.dataTransfer.effectAllowed='move'; }catch(err){} });
+    card.addEventListener('dragend',()=>{ card.classList.remove('dragging'); box.querySelectorAll('.kcol').forEach(c=>c.classList.remove('over')); }); });
+  box.querySelectorAll('.kcol').forEach(col=>{
+    col.addEventListener('dragover',e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(err){} col.classList.add('over'); });
+    col.addEventListener('dragleave',()=>col.classList.remove('over'));
+    col.addEventListener('drop',async e=>{ e.preventDefault(); col.classList.remove('over');
+      let id=''; try{ id=e.dataTransfer.getData('text/plain'); }catch(err){}
+      const st=col.dataset.kst; if(id&&st) await onDrop(id,st); }); }); }
+async function dropJob(id,st){ const j=jobs.find(x=>x.id==id); if(!j||j.status===st) return; const old=j.status;
+  const {error}=await sb.from('jobs').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); return; }
+  j.status=st; await renderJobs(); await refreshStats();
+  undoToast('Заявка → «'+(ST[st]||st)+'»', async ()=>{ const {error:e2}=await sb.from('jobs').update({status:old}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Статус возвращён'); }); }
+async function dropTrip(id,st){ const t=trips.find(x=>x.id==id); if(!t||t.status===st) return; const old=t.status;
+  const {error}=await sb.from('trips').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); return; }
+  t.status=st; await renderTrips();
+  undoToast('Выезд → «'+(ST_TRIP[st]||st)+'»', async ()=>{ const {error:e2}=await sb.from('trips').update({status:old}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Статус возвращён'); }); }
 const TRIP_STATUS_ORDER=['planned','assigned','in_progress','done','cancelled'];
 let tripVisible={planned:true,assigned:true,in_progress:true,done:false,cancelled:false};
 function renderTripChips(){ const box=$('tripStatusChips'); if(!box) return; box.innerHTML=TRIP_STATUS_ORDER.map(s=>'<span class="chip'+(tripVisible[s]?' on':'')+'" data-ts="'+s+'">'+esc(ST_TRIP[s])+'</span>').join('');
@@ -1209,7 +1511,7 @@ function tripCard(t){ const e=t.econ_snapshot||{}; const eng=profilesList.find(p
   const acts=canWrite()
     ? '<div class="acts">'+mv+'<button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tecon="'+t.id+'" title="Экономика">₴</button><button class="btn sm" data-tmap="'+t.id+'" title="На карте">карта</button><button class="btn sm" data-tgm="'+t.id+'" title="Google Maps">⌖</button><button class="btn sm ghost" data-tdel="'+t.id+'" title="Удалить выезд">×</button></div>'
     : '<div class="acts"><button class="btn sm" data-tmap="'+t.id+'">карта</button><button class="btn sm" data-tgm="'+t.id+'">⌖ GMaps</button></div>';
-  return '<div class="kcard">'+head+meta+acts+'</div>'; }
+  return '<div class="kcard" data-kid="'+t.id+'">'+head+meta+acts+'</div>'; }
 function wireTripCards(box){
   box.querySelectorAll('[data-tedit]').forEach(b=>b.onclick=()=>openTrip(b.dataset.tedit));
   box.querySelectorAll('[data-tecon]').forEach(b=>b.onclick=()=>showTripEcon(b.dataset.tecon));
@@ -1218,7 +1520,7 @@ function wireTripCards(box){
   box.querySelectorAll('[data-tdel]').forEach(b=>b.onclick=()=>delTrip(b.dataset.tdel));
   box.querySelectorAll('[data-tstat]').forEach(sel=>sel.onchange=async()=>{ const id=sel.dataset.tstat, st=sel.value; const {error}=await sb.from('trips').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); return; } const t=trips.find(x=>x.id==id); if(t) t.status=st; showToast('Статус: '+(ST_TRIP[st]||st)); renderTrips(); }); }
 async function renderTrips(){ await ensureRefs(); renderTripChips();
-  const {data,error}=await sb.from('trips').select('*, trip_jobs(job_id)').order('created_at',{ascending:false});
+  const {data,error}=await sb.from('trips').select('*, trip_jobs(job_id)').is('deleted_at',null).order('created_at',{ascending:false});
   const box=$('tripList'); if(error){ box.className=''; box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
   trips=data||[]; const q=$('tripSearch').value.trim().toLowerCase();
   const match=t=>(!q||((t.vehicle_label||'')+' '+(t.date_from||'')+' '+(t.date_to||'')).toLowerCase().includes(q));
@@ -1228,8 +1530,8 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
   box.className='kanban';
   box.innerHTML=cols.map(s=>{ const items=trips.filter(t=>t.status===s&&match(t));
     const cards=items.map(t=>tripCard(t)).join('')||'<div class="hint" style="padding:4px 2px">—</div>';
-    return '<div class="kcol"><div class="kcol-h"><span>'+esc(ST_TRIP[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
-  wireTripCards(box); }
+    return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST_TRIP[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
+  wireTripCards(box); wireKanbanDrag(box,dropTrip); }
 $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) openTrip(null); };
 async function openTrip(id){ await ensureRefs(); await loadTripJobs(); tripEditId=id; const t=id?trips.find(x=>x.id==id):null;
   $('tpFrom').value=t?(t.date_from||''):''; $('tpTo').value=t?(t.date_to||''):''; $('tpVeh').innerHTML='<option value="">— авто —</option>'+vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.name+(v.plate?(' · '+v.plate):''))+'</option>').join(''); $('tpVeh').value=t&&t.vehicle_id?t.vehicle_id:''; updateVehInfo(); $('tpVeh').onchange=updateVehInfo; $('tpNotes').value=t?(t.notes||''):'';
@@ -1238,7 +1540,7 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs(); tripEditI
   curTripJobs=new Set(); if(t){ const {data}=await sb.from('trip_jobs').select('job_id').eq('trip_id',id); (data||[]).forEach(r=>curTripJobs.add(r.job_id)); }
   const ro=!canWrite(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
   const es=(t&&t.econ_snapshot)||{}; tripRoute={km:es.km||0,driveH:es.driveH||0,geometry:(t&&t.route_geometry)||null}; tripVariants=[]; if($('tpVariants')) $('tpVariants').innerHTML='';
-  const ovs=(t&&t.overrides)||{}; tripOverrides={revenue:(ovs.revenue!=null?String(ovs.revenue):''),cost:(ovs.cost!=null?String(ovs.cost):'')}; $('tpOvRev').value=tripOverrides.revenue; $('tpOvCost').value=tripOverrides.cost;
+  const ovs=(t&&t.overrides)||{}; tripOverrides={revenue:(ovs.revenue!=null?String(ovs.revenue):''),cost:(ovs.cost!=null?String(ovs.cost):''),road:(ovs.road||{})}; $('tpOvRev').value=tripOverrides.revenue; $('tpOvCost').value=tripOverrides.cost;
   const saved=(t&&t.route_stops)?t.route_stops:[]; const st=saved.find(x=>x.type==='start'); tripStart=st?{name:st.name,lat:st.lat,lng:st.lng}:null;
   tripRouteKeys=new Set(saved.filter(s=>s.lat!=null&&s.lng!=null).map(s=>(+s.lat).toFixed(5)+','+(+s.lng).toFixed(5))); if($('tpJobsRoute')) $('tpJobsRoute').checked=true;
   tripRouteStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'job',name:x.name,lat:x.lat,lng:x.lng})); syncRouteStops(); renderRouteStops();
@@ -1258,8 +1560,15 @@ function renderTripJobs(){ const box=$('tpJobs');
   if(useFilter&&hidden>0){ const h=document.createElement('div'); h.className='hint'; h.style.marginTop='6px'; h.textContent='Скрыто '+hidden+' заявок вне маршрута.'; box.appendChild(h); }
   box.querySelectorAll('[data-tj]').forEach(c=>c.onchange=()=>{ if(c.checked) curTripJobs.add(c.dataset.tj); else curTripJobs.delete(c.dataset.tj); const before=tripRouteStops.map(keyOf).join('|'); syncRouteStops(); const after=tripRouteStops.map(keyOf).join('|'); renderRouteStops(); if(before!==after) resetTripRoute(); else tripEcon(); }); }
 function tripT(){ return {shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency}; }
-function tripCalc(){ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); return econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides); }
-function tripEcon(){ const e=tripCalc(); const cur=e.cur; $('tpEcon').innerHTML='Заявок: '+e.jobCount+' · работа '+e.workH.toFixed(1)+'ч · в пути '+e.driveH.toFixed(1)+'ч · '+e.km.toFixed(0)+'км · дней '+e.days+' · выручка '+e.rev.toFixed(0)+' '+cur+' · затраты '+e.cost.toFixed(0)+' · прибыль '+e.profit.toFixed(0)+' · гар '+e.share+'%'; }
+function tripCalc(){ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); return econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value}); }
+function tripEcon(){ const e=tripCalc(); const cur=e.cur; $('tpEcon').innerHTML='Заявок: '+e.jobCount+' · работа '+e.workH.toFixed(1)+'ч · в пути '+e.driveH.toFixed(1)+'ч · '+e.km.toFixed(0)+'км · дней '+e.days+' · выручка '+e.rev.toFixed(0)+' '+cur+' · затраты '+e.cost.toFixed(0)+' · прибыль '+e.profit.toFixed(0)+' · гар '+e.share+'%'; renderTpRoadGroups(); }
+function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const rb=(tripStart&&(appSettings.tariff_profiles||[]).length)?roadByPayer(tripStart,jobs):null;
+  if(!rb||!rb.groups.length){ box.innerHTML=''; return; }
+  if(!tripOverrides.road) tripOverrides.road={}; const rd=tripOverrides.road;
+  let h='<div class="meta" style="margin-top:10px">Дорога по плательщикам (оверрайд выручки, пусто = авто):</div>';
+  rb.groups.forEach(g=>{ h+='<div class="row" style="align-items:center;margin-top:4px"><span class="grow" style="font-size:12px">'+esc(g.name)+' · '+g.km.toFixed(0)+' км × '+g.rate+' = '+g.rev.toFixed(0)+'</span><input type="number" data-rgov="'+esc(g.payer)+'" value="'+(rd[g.payer]!=null?rd[g.payer]:'')+'" placeholder="'+g.rev.toFixed(0)+'" style="max-width:110px"></div>'; });
+  box.innerHTML=h;
+  box.querySelectorAll('[data-rgov]').forEach(inp=>inp.onchange=()=>{ const k=inp.dataset.rgov; if(inp.value==='') delete tripOverrides.road[k]; else tripOverrides.road[k]=inp.value; tripEcon(); }); }
 function showTripOnMap(id){ loadTripIntoPlanner(id); }
 $('tpEditMap').onclick=()=>{ if(tripEditId){ $('tripOverlay').classList.remove('on'); showTripOnMap(tripEditId); } else { notify('Сначала сохрани выезд — потом правь маршрут на карте.','warn'); } };
 function loadTripIntoPlanner(id){ const t=trips.find(x=>x.id==id); if(!t) return; switchTab('map'); tripLayer.clearLayers(); plannerTripId=id;
@@ -1272,7 +1581,7 @@ function loadTripIntoPlanner(id){ const t=trips.find(x=>x.id==id); if(!t) return
 $('tripCancel').onclick=()=>$('tripOverlay').classList.remove('on');
 $('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
 $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const e=tripCalc(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
-  const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null)};
+  const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};
   const rec={date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:tripRoute.geometry||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:jobIds.length},tariffs_snapshot:tripT()};
   $('tpSave').disabled=true;
   try{ let tid=tripEditId;
@@ -1283,44 +1592,92 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
     if(veh && e.km>0 && rec.status==='done'){ const prior=(trips.find(x=>x.id==tid)||{}).mileage_logged||0; const km=Math.round(e.km); const delta=km-prior; if(delta>0){ try{ await sb.from('vehicles').update({odometer:(+veh.odometer||0)+delta}).eq('id',veh.id); await sb.from('trips').update({mileage_logged:km}).eq('id',tid); await loadVehicles(); }catch(e2){} } }
     $('tripOverlay').classList.remove('on'); await renderTrips(); showToast('Выезд сохранён');
   }catch(err){ $('tripErr').textContent='Ошибка: '+(err.message||err); } finally{ $('tpSave').disabled=false; } };
-async function delTrip(id){ if(!await confirmDialog('Удалить выезд?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('trips').delete().eq('id',id); if(error){ notify(error.message,'err'); return; } await renderTrips(); }
+async function delTrip(id){ if(!await confirmDialog('Удалить выезд?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('trips').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderTrips();
+  undoToast('Выезд удалён', async ()=>{ const {error:e2}=await sb.from('trips').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Восстановлено'); }); }
 function tripGmaps(id){ const t=trips.find(x=>x.id==id); const stops=(t&&t.route_stops)||[]; if(stops.length<2){ notify('Нужно минимум 2 точки в выезде (по клиентам заявок).','warn'); return; }
   const pts=stops.map(s=>(+s.lat).toFixed(6)+','+(+s.lng).toFixed(6)); const url='https://www.google.com/maps/dir/?api=1&origin='+pts[0]+'&destination='+pts[pts.length-1]+(pts.length>2?'&waypoints='+encodeURIComponent(pts.slice(1,-1).join('|')):'')+'&travelmode=driving'; window.open(url,'_blank'); }
 
 // ---------- settings ----------
-let appSettings={shift_hours:8,deviation_pct:10,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},ors_key:'',repair_warranty_days:90,contact_period_days:0,company:{},act_template:{}};
+let appSettings={shift_hours:8,deviation_pct:10,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},ors_key:'',repair_warranty_days:90,contact_period_days:0,company:{},act_template:{},avoid_zones:[],tariff_profiles:[],act_xlsx:{},ors_proxy:''};
 let vehicles=[], vhEditId=null;
 async function loadVehicles(){ try{ const {data}=await sb.from('vehicles').select('*').order('name'); vehicles=data||[]; renderVehicles(); }catch(e){} }
 function renderVehicles(){ const box=$('vehList'); if(!box) return; box.innerHTML=vehicles.length?'':'<div class="hint">Машин нет. Добавь ниже.</div>';
   vehicles.forEach(v=>{ const since=(+v.odometer||0)-(+v.last_service||0); const interval=(+v.service_interval||0); const left=interval>0?(interval-since):null; const overdue=left!=null&&left<=0;
     const d=document.createElement('div'); d.className='pt';
-    d.innerHTML='<div class="nm">'+esc(v.name)+(v.plate?' <span class="pill">'+esc(v.plate)+'</span>':'')+'</div>'+
+    d.innerHTML='<div class="nm">'+esc(v.name)+(v.plate?' <span class="pill">'+esc(v.plate)+'</span>':'')+(v.wialon_id?' <span class="pill">GPS</span>':'')+'</div>'+
       '<div class="meta">пробег '+Math.round(+v.odometer||0)+' км'+(left!=null?(' · до ТО '+(overdue?'<span style="color:var(--red)">просрочено</span>':Math.round(left)+' км')):'')+'</div>'+
       '<div class="acts"><button class="btn sm" data-vhedit="'+v.id+'">ред.</button><button class="btn sm" data-vhto="'+v.id+'">отметить ТО</button><button class="btn sm ghost" data-vhdel="'+v.id+'">×</button></div>';
     box.appendChild(d); });
   box.querySelectorAll('[data-vhedit]').forEach(b=>b.onclick=()=>editVehicle(b.dataset.vhedit));
   box.querySelectorAll('[data-vhto]').forEach(b=>b.onclick=()=>markService(b.dataset.vhto));
   box.querySelectorAll('[data-vhdel]').forEach(b=>b.onclick=()=>delVehicle(b.dataset.vhdel)); }
-function vhReset(){ vhEditId=null; $('vhCancel').style.display='none'; $('vhAdd').textContent='Добавить машину'; $('vhName').value='';$('vhPlate').value='';$('vhOdo').value='';$('vhInt').value='';$('vhErr').textContent=''; }
-$('vhAdd').onclick=async ()=>{ const name=$('vhName').value.trim(); if(!name){ $('vhErr').textContent='Введи название.'; return; } const odo=+$('vhOdo').value||0, intv=+$('vhInt').value||0; const rec={name,plate:$('vhPlate').value.trim(),odometer:odo,service_interval:intv};
+function vhReset(){ vhEditId=null; $('vhCancel').style.display='none'; $('vhAdd').textContent='Добавить машину'; $('vhName').value='';$('vhPlate').value='';$('vhOdo').value='';$('vhInt').value='';$('vhWialon').value='';$('vhErr').textContent=''; }
+$('vhAdd').onclick=async ()=>{ const name=$('vhName').value.trim(); if(!name){ $('vhErr').textContent='Введи название.'; return; } const odo=+$('vhOdo').value||0, intv=+$('vhInt').value||0; const rec={name,plate:$('vhPlate').value.trim(),odometer:odo,service_interval:intv,wialon_id:($('vhWialon').value.trim()||null)};
   let error; if(vhEditId){ ({error}=await sb.from('vehicles').update(rec).eq('id',vhEditId)); } else { rec.last_service=odo; ({error}=await sb.from('vehicles').insert(rec)); }
   if(error){ $('vhErr').textContent=error.message; return; } vhReset(); await loadVehicles(); showToast('Автопарк обновлён'); };
 $('vhCancel').onclick=vhReset;
-function editVehicle(id){ const v=vehicles.find(x=>x.id==id); if(!v) return; vhEditId=id; $('vhName').value=v.name;$('vhPlate').value=v.plate||'';$('vhOdo').value=v.odometer||0;$('vhInt').value=v.service_interval||0; $('vhAdd').textContent='Сохранить'; $('vhCancel').style.display=''; }
+function editVehicle(id){ const v=vehicles.find(x=>x.id==id); if(!v) return; vhEditId=id; $('vhName').value=v.name;$('vhPlate').value=v.plate||'';$('vhOdo').value=v.odometer||0;$('vhInt').value=v.service_interval||0;$('vhWialon').value=v.wialon_id||''; $('vhAdd').textContent='Сохранить'; $('vhCancel').style.display=''; }
 async function delVehicle(id){ if(!await confirmDialog('Удалить машину?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('vehicles').delete().eq('id',id); if(error){ notify(error.message,'err'); return; } await loadVehicles(); }
 async function markService(id){ const v=vehicles.find(x=>x.id==id); if(!v) return; if(!await confirmDialog('Отметить ТО при пробеге '+Math.round(+v.odometer||0)+' км?',{okText:'Отметить ТО'})) return; const {error}=await sb.from('vehicles').update({last_service:+v.odometer||0}).eq('id',id); if(error){ notify(error.message,'err'); return; } await loadVehicles(); showToast('ТО отмечено'); }
 function updateVehInfo(){ const el=$('tpVehInfo'); if(!el) return; const v=vehicles.find(x=>x.id==$('tpVeh').value); if(!v){ el.textContent=''; return; } const since=(+v.odometer||0)-(+v.last_service||0); const interval=(+v.service_interval||0); const left=interval>0?(interval-since):null; let t='Пробег '+Math.round(+v.odometer||0)+' км'+(left!=null?(' · до ТО '+(left>0?Math.round(left)+' км':'просрочено')):''); el.textContent=t; }
-async function loadSettings(){ try{ const {data}=await sb.from('settings').select('*').eq('id',true).single(); if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},ors_key:data.ors_key||'',repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),company:(data.company||{}),act_template:(data.act_template||{})}; } }catch(e){} }
+async function loadSettings(){ try{ const {data}=await sb.from('settings').select('*').eq('id',true).single(); if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},ors_key:data.ors_key||'',repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),company:(data.company||{}),act_template:(data.act_template||{}),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),act_xlsx:(data.act_xlsx||{}),ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); } }catch(e){} }
 function renderSettings(){ const s=appSettings; $('stShift').value=s.shift_hours; $('stDev').value=s.deviation_pct; $('stCur').value=s.currency||'';
-  const t=s.tariffs||{},c=s.costs||{}; $('trKm').value=t.km||0;$('trHour').value=t.hour||0;$('trDay').value=t.day||0;$('trNight').value=t.night||0; $('csKm').value=c.km||0;$('csHour').value=c.hour||0;$('csDay').value=c.day||0;$('csNight').value=c.night||0;
-  const dt=s.default_theme||{}; $('dtMode').value=dt.mode||'dark'; $('orsKey').value=s.ors_key||''; $('stWarrDays').value=(s.repair_warranty_days==null?90:s.repair_warranty_days); $('stContact').value=s.contact_period_days||0; const co=s.company||{}; $('coName').value=co.name||''; $('coDetails').value=co.details||''; $('coSigner').value=co.signer||'';
-  const at=s.act_template||{}; $('atTitle').value=at.title||''; $('atIntro').value=at.intro||''; $('atExecRole').value=at.execRole||''; $('atCustRole').value=at.custRole||''; $('atWorksCol').value=at.worksCol||''; $('atTotalWords').value=at.totalWords||''; $('atWarrNote').value=at.warrNote||''; $('atNote').value=at.note||''; $('atCustSign').value=at.custSign||'';
-  renderVehicles(); renderUsersAdmin(); }
-$('stSave').onclick=async ()=>{ const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,currency:$('stCur').value.trim()||'грн',tariffs:{km:+$('trKm').value||0,hour:+$('trHour').value||0,day:+$('trDay').value||0,night:+$('trNight').value||0},costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_key:$('orsKey').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,updated_at:new Date().toISOString()};
+  const c=s.costs||{}; $('csKm').value=c.km||0;$('csHour').value=c.hour||0;$('csDay').value=c.day||0;$('csNight').value=c.night||0;
+  const dt=s.default_theme||{}; $('dtMode').value=dt.mode||'dark'; $('orsKey').value=s.ors_key||''; $('orsProxy').value=s.ors_proxy||''; $('stWarrDays').value=(s.repair_warranty_days==null?90:s.repair_warranty_days); $('stContact').value=s.contact_period_days||0; const co=s.company||{}; $('coName').value=co.name||''; $('coDetails').value=co.details||''; $('coSigner').value=co.signer||'';
+  const at=s.act_template||{}; $('atTitle').value=at.title||''; $('atIntro').value=at.intro||''; $('atExecRole').value=at.execRole||''; $('atCustRole').value=at.custRole||''; $('atWorksCol').value=at.worksCol||''; $('atTotalWords').value=at.totalWords||''; $('atWarrNote').value=at.warrNote||''; $('atNote').value=at.note||''; $('atCustSign').value=at.custSign||''; actVarsCur=(at.vars||[]).map(v=>({k:v.k,v:v.v})); renderActVars(); updateAxInfo();
+  renderProfiles(); renderVehicles(); renderUsersAdmin(); }
+let profEditId=null;
+function tpProfiles(){ return appSettings.tariff_profiles||[]; }
+function renderProfiles(){ const box=$('tpList'); if(!box) return; const list=tpProfiles();
+  if(!list.length){ box.innerHTML='<div class="hint">Профилей нет. Добавь первый — например «Производство» (флажок гарантии) и «Клиент» (флажок платного).</div>'; return; }
+  box.innerHTML=list.map(p=>{ const wp=p.work_paid||{}, ww=p.work_warr||{}, rd=p.road||{}; const badges=(p.def_warranty?'<span class="pill warn">гарантия по умолч.</span>':'')+(p.def_paid?'<span class="pill good">платно по умолч.</span>':'');
+    return '<div class="card" style="padding:10px;margin-top:8px"><h3 style="font-size:13px">'+esc(p.name||'—')+' '+badges+'</h3>'+
+      '<div class="meta">платно '+(+wp.rate||0)+'/ч · гарантия '+(+ww.rate||0)+'/ч · км '+(+rd.km_rate||0)+' · сутки '+(+rd.day_rate||0)+' · ночь '+(+rd.night_rate||0)+'</div>'+
+      '<div class="acts"><button class="btn sm" data-pedit="'+p.id+'">ред.</button><button class="btn sm ghost" data-pdel="'+p.id+'" title="Удалить">×</button></div></div>'; }).join('');
+  box.querySelectorAll('[data-pedit]').forEach(b=>b.onclick=()=>profileEdit(b.dataset.pedit));
+  box.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=()=>profileDel(b.dataset.pdel)); }
+function profileResetForm(){ profEditId=null; if($('tpFormTitle')) $('tpFormTitle').textContent='Новый профиль'; if($('tpfSave')) $('tpfSave').textContent='Добавить профиль'; if($('tpfCancel')) $('tpfCancel').style.display='';
+  ['tpfName','tpfPaidRate','tpfWarrRate','tpfKmRate','tpfDayRate','tpfNightRate','tpfReq'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
+  if($('tpfDefWarr')) $('tpfDefWarr').checked=false; if($('tpfDefPaid')) $('tpfDefPaid').checked=false; if($('tpfErr')) $('tpfErr').textContent=''; }
+function profileEdit(id){ const p=tpProfiles().find(x=>x.id===id); if(!p) return; profEditId=id; $('tpFormTitle').textContent='Профиль: '+(p.name||''); $('tpfSave').textContent='Сохранить'; $('tpfCancel').style.display='';
+  const wp=p.work_paid||{}, ww=p.work_warr||{}, rd=p.road||{}; const sv=(id,v)=>{ $(id).value=(v==null?'':v); };
+  sv('tpfName',p.name); sv('tpfPaidRate',wp.rate); sv('tpfWarrRate',ww.rate);
+  sv('tpfKmRate',rd.km_rate); sv('tpfDayRate',rd.day_rate); sv('tpfNightRate',rd.night_rate);
+  sv('tpfReq',p.requisites); $('tpfDefWarr').checked=!!p.def_warranty; $('tpfDefPaid').checked=!!p.def_paid; $('profOverlay').classList.add('on'); setTimeout(()=>{ try{ $('tpfName').focus(); }catch(e){} },40); }
+async function profileSave(){ const name=$('tpfName').value.trim(); if(!name){ $('tpfErr').textContent='Укажи название.'; return; }
+  const num=id=>{ const v=parseFloat($(id).value); return isNaN(v)?0:v; };
+  const prof={ id:profEditId||('tp'+Date.now().toString(36)), name, work_paid:{rate:num('tpfPaidRate')}, work_warr:{rate:num('tpfWarrRate')}, road:{km_rate:num('tpfKmRate'),day_rate:num('tpfDayRate'),night_rate:num('tpfNightRate')}, requisites:$('tpfReq').value.trim(), def_warranty:$('tpfDefWarr').checked, def_paid:$('tpfDefPaid').checked };
+  let list=tpProfiles().slice();
+  if(prof.def_warranty) list.forEach(x=>{ if(x.id!==prof.id) x.def_warranty=false; });
+  if(prof.def_paid) list.forEach(x=>{ if(x.id!==prof.id) x.def_paid=false; });
+  const i=list.findIndex(x=>x.id===prof.id); if(i>=0) list[i]=prof; else list.push(prof);
+  const {error}=await sb.from('settings').update({tariff_profiles:list}).eq('id',true); if(error){ $('tpfErr').textContent=error.message; return; }
+  appSettings.tariff_profiles=list; renderProfiles(); profileResetForm(); $('profOverlay').classList.remove('on'); showToast('Профиль сохранён'); }
+async function profileDel(id){ if(!await confirmDialog('Удалить профиль тарифа?',{danger:true,okText:'Удалить'})) return; const list=tpProfiles().filter(x=>x.id!==id); const {error}=await sb.from('settings').update({tariff_profiles:list}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.tariff_profiles=list; renderProfiles(); if(profEditId===id) profileResetForm(); }
+if($('tpfSave')) $('tpfSave').onclick=profileSave; if($('tpfCancel')) $('tpfCancel').onclick=()=>{ profileResetForm(); $('profOverlay').classList.remove('on'); };
+if($('profCreate')) $('profCreate').onclick=()=>{ profileResetForm(); $('profOverlay').classList.add('on'); setTimeout(()=>{ try{ $('tpfName').focus(); }catch(e){} },40); };
+function settingsNav(sec){ document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
+document.querySelectorAll('#settingsNav .son').forEach(b=>b.onclick=()=>settingsNav(b.dataset.sec));
+document.querySelectorAll('.settings-body > .card > h3').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('collapsed'));
+$('stSave').onclick=async ()=>{ const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_key:$('orsKey').value.trim(),ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,updated_at:new Date().toISOString()};
   const {error}=await sb.from('settings').update(rec).eq('id',true); if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings=Object.assign(appSettings,rec); $('stStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 $('dtSave').onclick=async ()=>{ const dt={mode:$('dtMode').value,accent:'#ffe100'}; const {error}=await sb.from('settings').update({default_theme:dt}).eq('id',true); if(error){ $('dtStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.default_theme=dt; $('dtStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 $('coSave').onclick=async ()=>{ const company={name:$('coName').value.trim(),details:$('coDetails').value.trim(),signer:$('coSigner').value.trim()}; const {error}=await sb.from('settings').update({company}).eq('id',true); if(error){ $('coStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.company=company; $('coStatus').innerHTML='<span class="ok">Сохранено</span>'; };
-$('atSave').onclick=async ()=>{ const act_template={title:$('atTitle').value.trim(),intro:$('atIntro').value.trim(),execRole:$('atExecRole').value.trim(),custRole:$('atCustRole').value.trim(),worksCol:$('atWorksCol').value.trim(),totalWords:$('atTotalWords').value.trim(),warrNote:$('atWarrNote').value.trim(),note:$('atNote').value.trim(),custSign:$('atCustSign').value.trim()}; const {error}=await sb.from('settings').update({act_template}).eq('id',true); if(error){ $('atStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.act_template=act_template; $('atStatus').innerHTML='<span class="ok">Сохранено</span>'; };
+let actVarsCur=[];
+function actVars(){ return (appSettings.act_template&&appSettings.act_template.vars)||[]; }
+function renderActVars(){ const box=$('avList'); if(!box) return;
+  if(!actVarsCur.length){ box.innerHTML='<div class="hint">Пока нет. «+ Добавить» — и укажи имя и значение.</div>'; return; }
+  box.innerHTML=actVarsCur.map((v,i)=>'<div class="row" style="align-items:center;margin-top:6px"><span class="hint" style="margin:0;font-family:var(--mono);white-space:nowrap">{{</span><input type="text" data-avk="'+i+'" value="'+esc(v.k||'')+'" placeholder="имя" style="max-width:150px"><span class="hint" style="margin:0;font-family:var(--mono);white-space:nowrap">}}</span><input type="text" data-avv="'+i+'" value="'+esc(v.v||'')+'" placeholder="значение" class="grow"><button class="btn sm ghost" data-avrm="'+i+'" title="Удалить">×</button></div>').join('');
+  box.querySelectorAll('[data-avk]').forEach(inp=>inp.oninput=()=>{ actVarsCur[inp.dataset.avk].k=inp.value.trim(); });
+  box.querySelectorAll('[data-avv]').forEach(inp=>inp.oninput=()=>{ actVarsCur[inp.dataset.avv].v=inp.value; });
+  box.querySelectorAll('[data-avrm]').forEach(b=>b.onclick=()=>{ actVarsCur.splice(b.dataset.avrm,1); renderActVars(); }); }
+if($('avAdd')) $('avAdd').onclick=()=>{ actVarsCur.push({k:'',v:''}); renderActVars(); };
+if($('avSave')) $('avSave').onclick=async ()=>{ const bad=actVarsCur.find(v=>v.k&&!/^[A-Za-zА-Яа-яЁё0-9_]+$/.test(v.k));
+  if(bad){ $('avStatus').innerHTML='<span class="err">Имя «'+esc(bad.k)+'»: только буквы, цифры и _</span>'; return; }
+  const vars=actVarsCur.filter(v=>v.k); const act_template=Object.assign({},appSettings.act_template||{},{vars});
+  const {error}=await sb.from('settings').update({act_template}).eq('id',true); if(error){ $('avStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; }
+  appSettings.act_template=act_template; actVarsCur=vars.map(v=>({k:v.k,v:v.v})); renderActVars(); $('avStatus').innerHTML='<span class="ok">Сохранено</span>'; };
+$('atSave').onclick=async ()=>{ const act_template={title:$('atTitle').value.trim(),intro:$('atIntro').value.trim(),execRole:$('atExecRole').value.trim(),custRole:$('atCustRole').value.trim(),worksCol:$('atWorksCol').value.trim(),totalWords:$('atTotalWords').value.trim(),warrNote:$('atWarrNote').value.trim(),note:$('atNote').value.trim(),custSign:$('atCustSign').value.trim(),vars:actVars()}; const {error}=await sb.from('settings').update({act_template}).eq('id',true); if(error){ $('atStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.act_template=act_template; $('atStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 async function renderUsersAdmin(){ const {data,error}=await sb.from('profiles').select('id,full_name,role'); const box=$('usersList'); if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
   profilesList=data||[]; box.innerHTML='';
   profilesList.forEach(p=>{ const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap:8px;align-items:center';
@@ -1330,6 +1687,150 @@ async function renderUsersAdmin(){ const {data,error}=await sb.from('profiles').
     box.appendChild(d); d.querySelector('[data-ur]').value=p.role; });
   box.querySelectorAll('[data-us]').forEach(b=>b.onclick=async ()=>{ const id=b.dataset.us; const name=box.querySelector('[data-un="'+id+'"]').value.trim(); const r=box.querySelector('[data-ur="'+id+'"]').value;
     const {error}=await sb.from('profiles').update({full_name:name,role:r}).eq('id',id); if(error){ notify(error.message,'err'); return; } b.textContent='ок'; setTimeout(()=>b.textContent='сохранить',1200); if(id===session.user.id){ role=r; applyTabs(); } }); }
+
+// ---------- машины на карте (трекинг Wialon) ----------
+// vehicle_state — одна строка на машину. Realtime-подписка на неё дешёвая:
+// строк ровно столько, сколько машин. Историю (vehicle_positions) карта
+// не читает вообще.
+const VEH_STALE_MIN = 12;   // старше — считаем данные протухшими
+
+function vehAgeMin(r){ if(!r || !r.ts) return 1e9; return (Date.now() - new Date(r.ts).getTime())/60000; }
+
+// Курса Wialon не отдаёт ни одним тегом — считаем по двум последним точкам.
+function vehBearing(a,b){ if(!a||!b) return null;
+  const d2r=Math.PI/180, y=Math.sin((b.lng-a.lng)*d2r)*Math.cos(b.lat*d2r);
+  const x=Math.cos(a.lat*d2r)*Math.sin(b.lat*d2r)-Math.sin(a.lat*d2r)*Math.cos(b.lat*d2r)*Math.cos((b.lng-a.lng)*d2r);
+  return (Math.atan2(y,x)*180/Math.PI+360)%360; }
+
+function vehAgeText(m){ if(m<1) return 'только что'; if(m<60) return Math.round(m)+' мин назад';
+  const h=Math.floor(m/60); return h+' ч '+Math.round(m-h*60)+' мин назад'; }
+
+function vehClass(r){ const age=vehAgeMin(r);
+  if(r.lost_since || age>VEH_STALE_MIN) return 'stale';
+  return (r.status==='idle') ? 'idle' : 'moving'; }
+
+function vehTitle(r){
+  // Порядок важен: сначала связь, потом занятие. «Молчит» перебивает всё
+  // остальное, потому что всё остальное в этот момент — уже догадка.
+  if(r.lost_since) return 'связь потеряна · последние данные '+vehAgeText(vehAgeMin(r));
+  const age=vehAgeMin(r);
+  if(age>VEH_STALE_MIN) return 'данных нет '+vehAgeText(age);
+  if(r.status==='idle') return 'стоит на месте';
+  return 'в движении · '+Math.round(+r.speed||0)+' км/ч';
+}
+
+async function loadVehState(){
+  try{
+    const {data,error}=await sb.from('vehicle_state')
+      .select('vehicle_id,ts,lat,lng,speed,status,lost_since,trip_id,mileage');
+    if(error) throw error;
+    const prev={}; vehState.forEach(r=>prev[r.vehicle_id]={lat:r.lat,lng:r.lng});
+    vehState=(data||[]).map(r=>{ const o=prev[r.vehicle_id];
+      const bear=(o && (o.lat!==r.lat || o.lng!==r.lng)) ? vehBearing(o,r) : (vehMk[r.vehicle_id]||{}).__bear;
+      return Object.assign({},r,{__bear:bear}); });
+    renderVehState();
+    // Открытая модалка должна ехать вместе с картой, а не застывать на
+    // цифрах момента открытия — иначе она врёт тем убедительнее, чем дольше висит.
+    if(vehModalId && $('vehOverlay') && $('vehOverlay').classList.contains('on')) showVehModal(vehModalId);
+  }catch(e){ /* нет патча/прав — просто не рисуем машины */ }
+}
+
+function vehLabel(v){ return v.plate || v.name || '—'; }
+
+function renderVehState(){
+  if(!vehLayer) return;
+  vehLayer.clearLayers(); vehMk={};
+  if(!vehShow) return;
+  vehState.forEach(r=>{
+    if(r.lat==null || r.lng==null) return;
+    const v=vehicles.find(x=>x.id===r.vehicle_id); if(!v) return;
+    const cls=vehClass(r);
+    const bear=(cls==='moving' && r.__bear!=null) ? r.__bear : null;
+    const rot = bear!=null
+      ? '<div class="veh-rot" style="transform:rotate('+bear.toFixed(0)+'deg)"><div class="veh-dir"></div></div>' : '';
+    const icon=L.divIcon({className:'', iconSize:[70,44], iconAnchor:[35,14],
+      html:'<div class="veh-mk '+cls+'">'+rot+'<div class="veh-ico">🚚</div><div class="veh-lbl '+cls+'">'+esc(vehLabel(v))+'</div></div>'});
+    const m=L.marker([r.lat,r.lng],{icon,zIndexOffset:800});
+    m.__bear=bear;
+    m.on('click',()=>showVehModal(r.vehicle_id));
+    vehMk[r.vehicle_id]=m; vehLayer.addLayer(m);
+  });
+}
+
+function vehRow(k,val){ return '<div class="veh-kv"><span>'+k+'</span><span>'+val+'</span></div>'; }
+
+function showVehModal(vid){
+  const r=vehState.find(x=>x.vehicle_id===vid); const v=vehicles.find(x=>x.id===vid);
+  if(!r||!v) return;
+  vehModalId=vid;
+  const cls=vehClass(r), age=vehAgeMin(r);
+  const col = cls==='moving'?'#22c55e' : cls==='idle'?'#f59e0b' : '#94a3b8';
+  const when=new Date(r.ts);
+  const pad=n=>String(n).padStart(2,'0');
+  const hhmm=pad(when.getHours())+':'+pad(when.getMinutes());
+
+  $('vehTitle').textContent=v.name+(v.plate?(' · '+v.plate):'');
+  let h='<div style="font-size:15px;font-weight:600;color:'+col+';margin-bottom:8px">'+esc(vehTitle(r))+'</div>';
+
+  h+=vehRow('Данные получены', hhmm+' <span class="hint" style="margin:0">('+vehAgeText(age)+')</span>');
+  if(cls!=='idle') h+=vehRow('Скорость', Math.round(+r.speed||0)+' км/ч');
+  if(r.mileage!=null) h+=vehRow('Пробег по Wialon', Math.round(+r.mileage)+' км');
+
+  // Связь и занятие — разные строки. Машина у клиента с заглушенным мотором
+  // стоит И молчит одновременно; склеив это в одну строку, соврём про оба.
+  h+=vehRow('Связь', r.lost_since
+      ? '<span style="color:var(--red)">потеряна с '+pad(new Date(r.lost_since).getHours())+':'+pad(new Date(r.lost_since).getMinutes())+'</span>'
+      : (age>VEH_STALE_MIN ? '<span style="color:var(--ink-dim)">сообщений нет</span>' : '<span style="color:var(--green)">есть</span>'));
+
+  const trip=r.trip_id?(trips||[]).find(t=>t.id===r.trip_id):null;
+  h+='<div class="meta" style="margin:10px 0 2px">Выезд</div>';
+  if(trip){
+    h+=vehRow('Дата', esc(trip.date_from||'—')+(trip.date_to&&trip.date_to!==trip.date_from?(' — '+esc(trip.date_to)):''));
+    h+=vehRow('Статус', esc(trip.status||'—'));
+    h+='<div class="hint" style="margin-top:4px">Трек пишется в историю.</div>';
+  } else {
+    // Не молчим об этом: без активного выезда история не пишется, и это
+    // штатно. Иначе потом ищешь трек, которого никогда не было.
+    h+='<div class="hint" style="margin-top:2px">Активного выезда нет — трек в историю не пишется. Поставь выезду статус «в работе».</div>';
+  }
+
+  h+='<div class="meta" style="margin:10px 0 2px">Координаты</div>';
+  h+='<div class="veh-kv"><span style="font-family:var(--mono);font-size:11px">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
+     '<span><button class="btn sm ghost" id="vehCopy">копировать</button></span></div>';
+
+  $('vehBody').innerHTML=h;
+  const cp=$('vehCopy'); if(cp) cp.onclick=()=>{ const t=(+r.lat).toFixed(6)+', '+(+r.lng).toFixed(6);
+    try{ navigator.clipboard.writeText(t); }catch(e){} showToast('Координаты: '+t); };
+  $('vehOverlay').classList.add('on');
+}
+
+if($('vehClose')) $('vehClose').onclick=()=>$('vehOverlay').classList.remove('on');
+if($('vehCenter')) $('vehCenter').onclick=()=>{
+  const r=vehState.find(x=>x.vehicle_id===vehModalId); if(!r) return;
+  $('vehOverlay').classList.remove('on');
+  switchTab('map'); setTimeout(()=>{ map.invalidateSize(); map.setView([r.lat,r.lng], Math.max(map.getZoom(),14)); },60);
+};
+
+function subscribeVeh(){
+  // Realtime по возможности, опрос как страховка. Сокет умеет тихо умирать
+  // (сон вкладки, прокси, обрыв) — без опроса машина замерзала бы на карте
+  // навсегда, и это выглядело бы как «стоит», а не как «мы её потеряли».
+  try{ if(vehChan) sb.removeChannel(vehChan); }catch(e){}
+  try{
+    vehChan=sb.channel('veh-state')
+      .on('postgres_changes',{event:'*',schema:'public',table:'vehicle_state'},()=>loadVehState())
+      .subscribe();
+  }catch(e){}
+  if(vehTick) clearInterval(vehTick);
+  vehTick=setInterval(()=>{ if(!document.hidden) loadVehState(); }, 30000);
+}
+
+if($('vehBtn')) $('vehBtn').onclick=()=>{
+  vehShow=!vehShow;
+  $('vehBtn').classList.toggle('on',vehShow);
+  renderVehState();
+  if(vehShow) loadVehState();
+};
 
 // ---------- map route planner ----------
 let rStops=[], rStart=null, rRoute={km:0,driveH:0,geometry:null}, rVariants=[], rVarSel=0, bufferKm=0, isoMin=0, places=[], plannerTripId=null, pendingLinkClient=null, baseMode='start', baseAfter=null, endDeclined=false;
@@ -1343,7 +1844,7 @@ window.addBaseStop=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canW
 window.addClientToRoute=function(cid){ const c=clients.find(x=>x.id==cid); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); pushClientStop(c); const b=$('routeBlock'); if(b) b.classList.remove('collapsed'); renderRoutePanel(); resetBuilt(); maybePromptJob(cid); };
 window.addEquipToRoute=function(cid,eid){ const c=clients.find(x=>x.id==cid); const e=(eqByClient[cid]||[]).find(x=>x.id==eid); if(!c||!e||!canWrite()) return; map.closePopup(); switchTab('map');
   const lat=(e.lat!=null)?e.lat:c.lat, lng=(e.lng!=null)?e.lng:c.lng; rStops.push({type:'equip',name:c.name+' · '+(e.model||''),lat,lng,clientId:c.id,equipId:e.id}); const b=$('routeBlock'); if(b) b.classList.remove('collapsed'); renderRoutePanel(); resetBuilt(); maybePromptJob(c.id); };
-async function maybePromptJob(cid){ try{ const {data}=await sb.from('jobs').select('id').eq('client_id',cid).not('status','in','(done,cancelled)'); if(data&&data.length) return; }catch(e){ return; } pendingLinkClient=cid; const c=clients.find(x=>x.id==cid); $('linkText').textContent='У клиента «'+(c?c.name:'')+'» нет открытых заявок. Создать заявку как основание выезда?'; $('linkOverlay').classList.add('on'); }
+async function maybePromptJob(cid){ try{ const {data}=await sb.from('jobs').select('id').is('deleted_at',null).eq('client_id',cid).not('status','in','(done,cancelled)'); if(data&&data.length) return; }catch(e){ return; } pendingLinkClient=cid; const c=clients.find(x=>x.id==cid); $('linkText').textContent='У клиента «'+(c?c.name:'')+'» нет открытых заявок. Создать заявку как основание выезда?'; $('linkOverlay').classList.add('on'); }
 function ringColor(){ return theme.mode==='light'?'rgba(0,0,0,0.6)':'rgba(255,255,255,0.85)'; }
 function drawRouteLine(layer,geometry){ if(!geometry||!geometry.coordinates) return; const ll=geometry.coordinates.map(c=>[c[1],c[0]]); L.polyline(ll,{color:ringColor(),weight:5,opacity:1,lineJoin:'round',lineCap:'round'}).addTo(layer); }
 function drawStops(){ routeLayer.clearLayers(); const stops=routeStopsAll();
@@ -1390,7 +1891,30 @@ $('baseNewAdd').onclick=async ()=>{ const q=$('baseNew').value.trim(); if(!q){ $
   }catch(e){ $('baseNewRes').innerHTML='<div class="err">Ошибка: '+esc(e.message||e)+'</div>'; } finally{ $('baseNewAdd').disabled=false; } };
 $('rBuild').onclick=()=>{ const stops=routeStopsAll(); if(stops.length<2){ $('rStatus').textContent='Нужно минимум 2 точки.'; return; } if(orsKeyMissing()){ orsMissing($('rStatus')); return; } doBuildRoute(); };
 $('rOpt').onclick=optimizeOrder;
-async function optimizeOrder(){ if(orsKeyMissing()){ orsMissing($('rStatus')); return; }
+async function avoidMatrix(pts,onProg){ const n=pts.length, ap=avoidPolygons(), pref=$('rPref').value;
+  const M=Array.from({length:n},()=>new Array(n).fill(0)); let done=0, total=n*(n-1)/2;
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
+    let d=0;
+    try{ const gj=await orsPost(ORS_DIR,{coordinates:[[pts[i].lng,pts[i].lat],[pts[j].lng,pts[j].lat]],preference:pref,options:{avoid_polygons:ap}});
+      const f=(gj.features||[])[0]; d=+(((f&&f.properties&&f.properties.summary)||{}).distance)||0; }
+    catch(e){ if(!isAvoidLimit(e.raw)) throw e;
+      const gj=await orsPost(ORS_DIR,{coordinates:[[pts[i].lng,pts[i].lat],[pts[j].lng,pts[j].lat]],preference:pref});
+      d=+(((((gj.features||[])[0])||{}).properties||{}).summary||{}).distance||0; }
+    M[i][j]=M[j][i]=d; done++; if(onProg) onProg(done,total); }
+  return M; }
+function tspOrder(M,endIdx){ const n=M.length; const rest=[]; for(let i=1;i<n;i++) if(i!==endIdx) rest.push(i);
+  let order=[0], cur=0, left=rest.slice();
+  while(left.length){ let bi=0,bd=Infinity; left.forEach((k,idx)=>{ if(M[cur][k]<bd){ bd=M[cur][k]; bi=idx; } }); cur=left[bi]; order.push(cur); left.splice(bi,1); }
+  if(endIdx!=null) order.push(endIdx);
+  const len=o=>{ let s=0; for(let i=0;i<o.length-1;i++) s+=M[o[i]][o[i+1]]; return s; };
+  const lastFixed=(endIdx!=null)?order.length-1:null;
+  let improved=true, best=order.slice(), bestLen=len(best), guard=0;
+  while(improved&&guard++<50){ improved=false;
+    for(let i=1;i<best.length-1;i++){ for(let j=i+1;j<best.length-(lastFixed!=null?1:0);j++){
+      const cand=best.slice(0,i).concat(best.slice(i,j+1).reverse(),best.slice(j+1));
+      const L=len(cand); if(L<bestLen-0.5){ best=cand; bestLen=L; improved=true; } } } }
+  return {order:best,len:bestLen}; }
+async function optimizeOrder(){ if(rBusy) return; if(orsKeyMissing()){ orsMissing($('rStatus')); return; }
   const visits=[]; rStops.forEach((s,i)=>{ if(s.type!=='place') visits.push({i,lng:s.lng,lat:s.lat}); });
   if(visits.length<2){ $('rStatus').textContent='Нужно минимум 2 точки выезда для оптимизации.'; return; }
   let startCoord, fixedStartIdx=null, jobsSrc=visits.slice();
@@ -1400,21 +1924,108 @@ async function optimizeOrder(){ if(orsKeyMissing()){ orsMissing($('rStatus')); r
   const endCoord=endBase?[endBase.lng,endBase.lat]:(rStart?[rStart.lng,rStart.lat]:null);
   const veh={id:1,profile:'driving-car',start:startCoord}; if(endCoord) veh.end=endCoord;
   const body={jobs:jobsSrc.map(o=>({id:o.i,location:[o.lng,o.lat]})),vehicles:[veh]};
-  $('rStatus').textContent='Оптимизирую порядок…'; $('rOpt').disabled=true;
-  try{ const r=await fetch('https://api.openrouteservice.org/optimization',{method:'POST',headers:{'Authorization':appSettings.ors_key,'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(!r.ok) throw new Error(r.status+' '+(await r.text()).slice(0,120)); const data=await r.json(); const route=data.routes&&data.routes[0]; if(!route) throw new Error('нет решения');
+  const ap=avoidPolygons();
+  if(ap){ const pts=[{lat:startCoord[1],lng:startCoord[0]}].concat(jobsSrc.map(o=>({lat:o.lat,lng:o.lng})));
+    let endIdx=null; if(endBase){ pts.push({lat:endBase.lat,lng:endBase.lng}); endIdx=pts.length-1; }
+    const pairs=pts.length*(pts.length-1)/2;
+    if(pairs>28){ $('rStatus').innerHTML='<span class="err">Точек многовато ('+pts.length+') для оптимизации с объездами: понадобилось бы '+pairs+' запросов к ORS. Убери часть точек или оптимизируй без объездов.</span>'; return; }
+    rBusy=true; $('rOpt').disabled=true; $('rBuild').disabled=true;
+    try{ $('rStatus').textContent='Считаю расстояния с учётом объездов…';
+      const M=await avoidMatrix(pts,(d,t)=>{ $('rStatus').textContent='Считаю расстояния с учётом объездов… '+d+'/'+t; });
+      const res=tspOrder(M,endIdx);
+      const orderedVisit=res.order.slice(1).filter(i=>i!==endIdx).map(i=>rStops[jobsSrc[i-1].i]).filter(Boolean);
+      const fixedStart=(fixedStartIdx!=null)?rStops[fixedStartIdx]:null;
+      rStops=[].concat(fixedStart?[fixedStart]:[], orderedVisit, placeStops); renderRoutePanel(); resetBuilt();
+      $('rStatus').textContent='Порядок оптимизирован с учётом объездов (~'+(res.len/1000).toFixed(0)+' км), строю маршрут…';
+      rBusy=false; $('rOpt').disabled=false; $('rBuild').disabled=false; await doBuildRoute(); return;
+    }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка оптимизации: '+esc(e.message||e)+'</span>'; return; }
+    finally{ rBusy=false; $('rOpt').disabled=false; $('rBuild').disabled=false; } }
+  $('rStatus').textContent='Оптимизирую порядок…'; rBusy=true; $('rOpt').disabled=true; $('rBuild').disabled=true;
+  try{ const data=await orsPost('https://api.openrouteservice.org/optimization',body); const route=data.routes&&data.routes[0]; if(!route) throw new Error('оптимизатор не нашёл решения');
     const orderIds=route.steps.filter(st=>st.type==='job').map(st=>st.job); const orderedVisit=orderIds.map(id=>rStops[id]).filter(Boolean); const fixedStart=(fixedStartIdx!=null)?rStops[fixedStartIdx]:null;
-    rStops=[].concat(fixedStart?[fixedStart]:[], orderedVisit, placeStops); renderRoutePanel(); resetBuilt(); $('rStatus').textContent='Порядок оптимизирован, строю маршрут…'; $('rOpt').disabled=false; await doBuildRoute(); return;
-  }catch(e){ $('rStatus').textContent='Ошибка оптимизации: '+(e.message||e); } finally{ $('rOpt').disabled=false; } }
-async function doBuildRoute(){ const stops=routeStopsAll(); if(stops.length<2) return; if(orsKeyMissing()){ orsMissing($('rStatus')); return; }
-  $('rBuild').disabled=true; $('rStatus').textContent='Считаю…';
-  try{ const body={coordinates:stops.map(s=>[s.lng,s.lat]),preference:$('rPref').value}; if(stops.length===2) body.alternative_routes={target_count:3,weight_factor:1.6,share_factor:0.6};
-    const r=await fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson',{method:'POST',headers:{'Authorization':appSettings.ors_key,'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(!r.ok) throw new Error(r.status+' '+(await r.text()).slice(0,100)); const gj=await r.json(); rVariants=gj.features||[]; rVarSel=0; applyRVariant(); renderRVariants();
-  }catch(e){ $('rStatus').textContent='Ошибка ORS: '+(e.message||e); } finally{ $('rBuild').disabled=false; } }
-function applyRVariant(){ const f=rVariants[rVarSel]; if(!f) return; const sum=f.properties.summary; rRoute={km:sum.distance/1000,driveH:sum.duration/3600,geometry:f.geometry}; $('rStatus').innerHTML='<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'; drawStops(); rBuildBuffer(); }
+    rStops=[].concat(fixedStart?[fixedStart]:[], orderedVisit, placeStops); renderRoutePanel(); resetBuilt(); $('rStatus').textContent='Порядок оптимизирован, строю маршрут…';
+    rBusy=false; $('rOpt').disabled=false; $('rBuild').disabled=false; await doBuildRoute(); return;
+  }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка оптимизации: '+esc(e.message||e)+'</span>'; } finally{ rBusy=false; $('rOpt').disabled=false; $('rBuild').disabled=false; } }
+let rBusy=false;
+function dedupeStops(stops){ const out=[]; stops.forEach(s=>{ const p=out[out.length-1]; if(p&&Math.abs(p.lat-s.lat)<1e-6&&Math.abs(p.lng-s.lng)<1e-6) return; out.push(s); }); return out; }
+function avoidHits(stops){ const zs=appSettings.avoid_zones||[]; if(!zs.length||typeof turf==='undefined') return []; const out=[];
+  stops.forEach(s=>{ zs.forEach(z=>{ try{ if(turf.distance([z.lng,z.lat],[s.lng,s.lat],{units:'kilometers'})*1000<=(z.r||150)) out.push(s.name||'точка'); }catch(e){} }); }); return [...new Set(out)]; }
+function avoidAreaKm2(){ return (appSettings.avoid_zones||[]).reduce((a,z)=>a+Math.PI*Math.pow((z.r||150)/1000,2),0); }
+function orsErrMsg(status,t){ let msg=t; try{ const j=JSON.parse(t); if(j&&j.error) msg=(typeof j.error==='string')?j.error:(j.error.message||JSON.stringify(j.error)); }catch(e){}
+  msg=String(msg||'').slice(0,180);
+  if(status===429) return 'превышен лимит запросов ORS (на бесплатном ключе ~40 в минуту). Подожди минуту и повтори.';
+  if(status===401||status===403) return 'ключ ORS не принят ('+status+'). Проверь ключ в настройках.';
+  if(isAvoidLimit(t)) return 'ORS не применяет объезды к маршрутам длиннее 150 км (лимит бесплатного сервера).';
+  if(/routable|could not be found|not found/i.test(msg)) return 'ORS не смог привязать точку к дороге. Обычно причина — точка далеко от дорог или попала в зону объезда. ('+msg+')';
+  if(/no route|route could not/i.test(msg)) return 'маршрут не найден — возможно, зоны объезда перекрыли единственную дорогу. ('+msg+')';
+  if(/polygon|avoid/i.test(msg)) return 'сервер отклонил зоны объезда: '+msg;
+  return 'ORS '+status+': '+msg; }
+function isAvoidLimit(raw){ const s=String(raw||''); return /avoid areas/i.test(s)&&/must not be greater/i.test(s); }
+async function orsPost(url,body){ const px=(appSettings.ors_proxy||'').trim(); let r;
+  if(px){ const path=url.replace('https://api.openrouteservice.org/',''); const tok=(session&&session.access_token)||'';
+    r=await fetch(px,{method:'POST',headers:{'Authorization':'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify({path,body})}); }
+  else r=await fetch(url,{method:'POST',headers:{'Authorization':appSettings.ors_key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r.ok) return await r.json(); let t=''; try{ t=await r.text(); }catch(e){} const err=new Error(orsErrMsg(r.status,t)); err.raw=t; err.status=r.status; throw err; }
+const ORS_DIR='https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+function mergeFeatures(fs){ let line=[],dist=0,dur=0;
+  fs.forEach((f,i)=>{ const sm=(f.properties&&f.properties.summary)||{}; dist+=(+sm.distance||0); dur+=(+sm.duration||0); const c=(f.geometry&&f.geometry.coordinates)||[]; line=line.concat(i?c.slice(1):c); });
+  return {type:'Feature',properties:{summary:{distance:dist,duration:dur}},geometry:{type:'LineString',coordinates:line}}; }
+// Расставляем промежуточные точки по РЕАЛЬНОЙ линии дороги через каждые chunkKm.
+// Точку, попавшую внутрь зоны объезда, пропускаем и идём дальше по линии —
+// иначе ORS не сможет к ней подъехать.
+function sampleVias(line,chunkKm){ const vias=[]; let acc=0;
+  for(let i=1;i<line.length;i++){
+    acc+=kmBetween({lng:line[i-1][0],lat:line[i-1][1]},{lng:line[i][0],lat:line[i][1]});
+    if(acc>=chunkKm){ const p={lat:line[i][1],lng:line[i][0],name:'отрезок'};
+      if(!avoidHits([p]).length){ vias.push(p); acc=0; } } }
+  // если последняя точка вплотную к финишу — она бесполезна
+  if(vias.length){ const last=vias[vias.length-1], end={lat:line[line.length-1][1],lng:line[line.length-1][0]};
+    if(kmBetween(last,end)<15) vias.pop(); }
+  return vias; }
+async function legWithAvoid(a,b,pref,ap,prog){ const pair=[[a.lng,a.lat],[b.lng,b.lat]];
+  try{ const gj=await orsPost(ORS_DIR,{coordinates:pair,preference:pref,options:{avoid_polygons:ap}});
+    const f=(gj.features||[])[0]; if(!f) throw new Error('ORS вернул пустой участок.'); return {feature:f}; }
+  catch(e){ if(!isAvoidLimit(e.raw)) throw e; }
+  // плечо длиннее 150 км: берём геометрию дороги и дробим её на отрезки
+  if(prog) prog('Плечо «'+(a.name||'?')+' → '+(b.name||'?')+'» длиннее 150 км — дроблю на отрезки…');
+  const plain=await orsPost(ORS_DIR,{coordinates:pair,preference:pref});
+  const pf=(plain.features||[])[0]; const line=(pf&&pf.geometry&&pf.geometry.coordinates)||[];
+  const vias=sampleVias(line,100);
+  if(!vias.length) return {feature:pf,noAvoid:true};
+  const pts=[a].concat(vias,[b]); const parts=[]; let noAvoid=false;
+  for(let i=0;i<pts.length-1;i++){ const p=[[pts[i].lng,pts[i].lat],[pts[i+1].lng,pts[i+1].lat]];
+    let f=null;
+    try{ const gj=await orsPost(ORS_DIR,{coordinates:p,preference:pref,options:{avoid_polygons:ap}}); f=(gj.features||[])[0]; }
+    catch(e){ if(!isAvoidLimit(e.raw)) throw e; const gj=await orsPost(ORS_DIR,{coordinates:p,preference:pref}); f=(gj.features||[])[0]; noAvoid=true; }
+    if(!f||!f.geometry) throw new Error('ORS вернул пустой отрезок.'); parts.push(f); if(prog) prog('Дроблю плечо на отрезки… '+(i+1)+'/'+(pts.length-1)); }
+  return {feature:mergeFeatures(parts),noAvoid,split:pts.length-1}; }
+async function doBuildRoute(){ if(rBusy) return; const stops=dedupeStops(routeStopsAll());
+  if(stops.length<2){ $('rStatus').textContent='Нужно минимум 2 разные точки (совпадающие подряд пропускаются).'; return; }
+  if(orsKeyMissing()){ orsMissing($('rStatus')); return; }
+  const hits=avoidHits(stops); if(hits.length){ $('rStatus').innerHTML='<span class="err">В зоне объезда: '+esc(hits.join(', '))+'. ORS не построит маршрут к точке внутри «кирпича» — уменьши радиус или убери зону.</span>'; return; }
+  rBusy=true; $('rBuild').disabled=true; if($('rOpt')) $('rOpt').disabled=true; $('rStatus').textContent='Считаю…';
+  const pref=$('rPref').value; const coords=stops.map(s=>[s.lng,s.lat]); const ap=avoidPolygons();
+  try{
+    if(!ap){ const body={coordinates:coords,preference:pref}; if(stops.length===2) body.alternative_routes={target_count:3,weight_factor:1.6,share_factor:0.6};
+      const gj=await orsPost(ORS_DIR,body); rVariants=(gj.features||[]).filter(f=>f&&f.geometry); rVarSel=0;
+      if(!rVariants.length) throw new Error('ORS вернул пустой маршрут.'); applyRVariant(); renderRVariants(); return; }
+    try{ const gj=await orsPost(ORS_DIR,{coordinates:coords,preference:pref,options:{avoid_polygons:ap}});
+      rVariants=(gj.features||[]).filter(f=>f&&f.geometry); rVarSel=0;
+      if(!rVariants.length) throw new Error('ORS вернул пустой маршрут.'); applyRVariant(); renderRVariants(); return;
+    }catch(e){ if(!isAvoidLimit(e.raw)) throw e; }
+    $('rStatus').textContent='Маршрут длиннее 150 км — строю по участкам, чтобы объезды работали…';
+    const legs=[], skipped=[]; let splits=0;
+    for(let i=0;i<stops.length-1;i++){
+      const res=await legWithAvoid(stops[i],stops[i+1],pref,ap,m=>{ $('rStatus').textContent=m; });
+      legs.push(res.feature); if(res.split) splits+=res.split;
+      if(res.noAvoid) skipped.push((stops[i].name||'?')+' → '+(stops[i+1].name||'?')); }
+    rVariants=[mergeFeatures(legs)]; rVarSel=0; applyRVariant(); renderRVariants();
+    if(skipped.length) $('rStatus').innerHTML+='<div class="hint" style="color:var(--red);margin-top:4px">Объезды не применены: '+esc(skipped.join(' · '))+'</div>';
+    else $('rStatus').innerHTML+='<span class="hint" style="margin:0"> · по участкам</span>';
+  }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка: '+esc(e.message||e)+'</span>'; } finally{ rBusy=false; $('rBuild').disabled=false; if($('rOpt')) $('rOpt').disabled=false; } }
+function applyRVariant(){ const f=rVariants[rVarSel]; if(!f) return; const sum=(f.properties&&f.properties.summary)||{}; rRoute={km:(+sum.distance||0)/1000,driveH:(+sum.duration||0)/3600,geometry:f.geometry}; $('rStatus').innerHTML='<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'+((appSettings.avoid_zones||[]).length?('<span class="hint" style="margin:0"> · объезды: '+appSettings.avoid_zones.length+'</span>'):''); drawStops(); rBuildBuffer(); }
 function renderRVariants(){ const box=$('rVariants'); if(rVariants.length<2){ box.innerHTML=''; return; } box.innerHTML='';
-  rVariants.forEach((f,i)=>{ const sum=f.properties.summary; const b=document.createElement('button'); b.className='btn sm'+(i===rVarSel?' amber':''); b.style.cssText='margin:0 6px 6px 0'; b.textContent='№'+(i+1)+' · '+(sum.distance/1000).toFixed(1)+'км · '+Math.round(sum.duration/60)+'мин'; b.onclick=()=>{ rVarSel=i; applyRVariant(); renderRVariants(); }; box.appendChild(b); }); }
+  rVariants.forEach((f,i)=>{ const sum=(f.properties&&f.properties.summary)||{}; const b=document.createElement('button'); b.className='btn sm'+(i===rVarSel?' amber':''); b.style.cssText='margin:0 6px 6px 0'; b.textContent='№'+(i+1)+' · '+((+sum.distance||0)/1000).toFixed(1)+'км · '+Math.round((+sum.duration||0)/60)+'мин'; b.onclick=()=>{ rVarSel=i; applyRVariant(); renderRVariants(); }; box.appendChild(b); }); }
 $('corDist').onclick=()=>{ $('corDist').classList.add('on'); $('corTime').classList.remove('on'); $('corDistBox').style.display=''; $('corTimeBox').style.display='none'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; rBuildBuffer(); };
 $('corTime').onclick=()=>{ $('corTime').classList.add('on'); $('corDist').classList.remove('on'); $('corTimeBox').style.display=''; $('corDistBox').style.display='none'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; };
 $('rBuf').oninput=e=>{ bufferKm=+e.target.value; $('rBufVal').textContent=bufferKm+' км'; rBuildBuffer(); };
@@ -1426,9 +2037,9 @@ function rBuildBuffer(){ if(!rRoute.geometry||bufferKm<=0){ bufferLayer.clearLay
 async function buildIsochrone(){ if(!rRoute.geometry){ $('rCorridor').innerHTML='<div class="hint">Сначала построй маршрут.</div>'; return; } if(isoMin<=0){ bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; return; } if(orsKeyMissing()){ orsMissing($('rCorridor')); return; }
   const coords=rRoute.geometry.coordinates||[]; const n=coords.length; if(n<2) return; const k=Math.min(5,n); const locs=[]; for(let i=0;i<k;i++){ locs.push(coords[Math.round(i*(n-1)/(k-1||1))]); }
   $('rCorridor').innerHTML='<div class="hint">Строю изохрону…</div>';
-  try{ const r=await fetch('https://api.openrouteservice.org/v2/isochrones/driving-car',{method:'POST',headers:{'Authorization':appSettings.ors_key,'Content-Type':'application/json'},body:JSON.stringify({locations:locs,range:[isoMin*60],range_type:'time'})});
-    if(!r.ok) throw new Error(r.status+' '+(await r.text()).slice(0,100)); const gj=await r.json(); const polys=(gj.features||[]); if(!polys.length){ $('rCorridor').innerHTML='<div class="hint">Изохрона пуста.</div>'; return; } applyCorridor(polys);
-  }catch(e){ $('rCorridor').innerHTML='<div class="err">Ошибка ORS: '+esc(e.message||e)+'</div>'; } }
+  try{ const gj=await orsPost('https://api.openrouteservice.org/v2/isochrones/driving-car',{locations:locs,range:[isoMin*60],range_type:'time'});
+    const polys=(gj.features||[]); if(!polys.length){ $('rCorridor').innerHTML='<div class="hint">Изохрона пуста.</div>'; return; } applyCorridor(polys);
+  }catch(e){ $('rCorridor').innerHTML='<div class="err">Ошибка: '+esc(e.message||e)+'</div>'; } }
 function applyCorridor(polys){ bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; if(!polys||!polys.length) return;
   polys.forEach(p=>{ try{ L.geoJSON(p,{style:{color:theme.accent,weight:1.5,fillColor:theme.accent,fillOpacity:.08,dashArray:'4 6'}}).addTo(bufferLayer); }catch(e){} });
   const inside=(lng,lat)=>polys.some(p=>{ try{ return turf.booleanPointInPolygon(turf.point([lng,lat]),p); }catch(e){ return false; } });
@@ -1446,11 +2057,11 @@ function applyCorridor(polys){ bufferLayer.clearLayers(); $('rCorridor').innerHT
   const aa=$('rAddAllC'); if(aa) aa.onclick=()=>{ inClients.forEach(c=>pushClientStop(c)); renderRoutePanel(); resetBuilt(); }; }
 $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<2){ notify('Нужно минимум 2 точки.','warn'); return; }
   const clientIds=[...new Set(rStops.filter(s=>s.clientId).map(s=>s.clientId))];
-  let linked=[]; if(clientIds.length){ try{ const {data}=await sb.from('jobs').select('id, job_works(hours,billable,revenue)').in('client_id',clientIds).not('status','in','(done,cancelled)'); linked=data||[]; }catch(e){} }
+  let linked=[]; if(clientIds.length){ try{ const {data}=await sb.from('jobs').select('id, client_id, clients(name,lat,lng), equipment(lat,lng), job_works(hours,billable,revenue,tariff_profile)').is('deleted_at',null).in('client_id',clientIds).not('status','in','(done,cancelled)'); linked=data||[]; }catch(e){} }
   const exist=plannerTripId?(trips.find(x=>x.id==plannerTripId)||{}):{};
   const ov=exist.overrides||{};
   const T={shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency};
-  const e=econCompute(linked,rRoute.km,rRoute.driveH,T,ov);
+  const e=econCompute(linked,rRoute.km,rRoute.driveH,T,ov,{start:rStart});
   const rec={route_stops:stops.map(s=>({type:s.type,name:s.name,lat:s.lat,lng:s.lng,clientId:s.clientId||null,equipId:s.equipId||null,description:s.description||''})),route_geometry:rRoute.geometry||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:linked.length},tariffs_snapshot:T};
   let tid=plannerTripId;
   try{ if(plannerTripId){ const {error}=await sb.from('trips').update(rec).eq('id',plannerTripId); if(error) throw error; }
@@ -1469,20 +2080,31 @@ $('linkSkip').onclick=()=>{ $('linkOverlay').classList.remove('on'); pendingLink
 $('linkCreate').onclick=()=>{ $('linkOverlay').classList.remove('on'); const cid=pendingLinkClient; pendingLinkClient=null; if(cid) openJob(null,cid); };
 // ---------- economics breakdown ----------
 function econRow(k,v){ return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span class="hint" style="margin:0">'+esc(k)+'</span><span>'+esc(v)+'</span></div>'; }
-function econCompute(jobs,routeKm,driveH,T,ov){ ov=ov||{}; let rWork=0,wh=0,workH=0; const perJob=[];
-  (jobs||[]).forEach(j=>{ let jr=0,jh=0; (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; workH+=h; jh+=h; if(w.billable){ rWork+=(+w.revenue||0); jr+=(+w.revenue||0); } else wh+=h; }); perJob.push({name:(j.clients&&j.clients.name)||'заявка',revenue:jr,hours:jh}); });
+function jobPoint(j){ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); return (lat!=null&&lng!=null)?{lat:+lat,lng:+lng}:null; }
+function jobRoadPayer(j){ const works=j.job_works||[]; const warr=works.find(w=>w.billable===false&&(w.tariff_profile||w.profile)); if(warr) return warr.tariff_profile||warr.profile; const paid=works.find(w=>w.billable!==false&&(w.tariff_profile||w.profile)); if(paid) return paid.tariff_profile||paid.profile; const any=works.find(w=>w.tariff_profile||w.profile); return any?(any.tariff_profile||any.profile):null; }
+function kmBetween(a,b){ try{ return turf.distance([a.lng,a.lat],[b.lng,b.lat],{units:'kilometers'}); }catch(e){ return 0; } }
+function circuitKm(start,pts){ if(!pts||!pts.length) return 0; if(pts.length===1) return 2*kmBetween(start,pts[0]); let rem=pts.slice(),cur=start,total=0; while(rem.length){ let bi=0,bd=Infinity; rem.forEach((p,i)=>{ const d=kmBetween(cur,p); if(d<bd){bd=d;bi=i;} }); total+=bd; cur=rem[bi]; rem.splice(bi,1); } total+=kmBetween(cur,start); return total; }
+function roadByPayer(start,jobs){ if(!start||typeof turf==='undefined') return null; const groups={}; (jobs||[]).forEach(j=>{ const pt=jobPoint(j); if(!pt) return; const pid=jobRoadPayer(j)||'__none'; (groups[pid]=groups[pid]||{payer:pid,points:[]}).points.push(pt); }); const keys=Object.keys(groups); if(!keys.length) return null; const gKm=(appSettings.tariffs&&appSettings.tariffs.km)||0; let kmRev=0,maxKm=-1,dom=null; const out=[]; keys.forEach(pid=>{ const g=groups[pid]; const km=circuitKm(start,g.points); const p=profileById(pid==='__none'?null:pid); const rate=p?(+((p.road||{}).km_rate)||0):gKm; const rev=km*rate; kmRev+=rev; if(km>maxKm){ maxKm=km; dom=p; } out.push({payer:pid,name:p?p.name:'без профиля',km,rate,rev,count:g.points.length}); }); return {kmRev,dom,groups:out}; }
+function econCompute(jobs,routeKm,driveH,T,ov,ctx){ ov=ov||{}; ctx=ctx||{}; let rWork=0,wh=0,workH=0,cLabor=0; const perJob=[];
+  (jobs||[]).forEach(j=>{ let jr=0,jh=0; (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; workH+=h; jh+=h; cLabor+=workCost(w); if(w.billable){ rWork+=(+w.revenue||0); jr+=(+w.revenue||0); } else wh+=h; }); perJob.push({name:(j.clients&&j.clients.name)||'заявка',revenue:jr,hours:jh}); });
   const t=(T.tariffs)||{}, c=(T.costs)||{};
   const km=routeKm||0; const dH=driveH||0; const totalH=workH+dH; const eff=(T.shift_hours||8)*(1+((T.deviation_pct||0)/100));
-  const days=totalH>0?Math.max(1,Math.ceil(totalH/eff)):0; const nights=Math.max(0,days-1);
-  const rTravel=km*(t.km||0), rPerDiem=days*(t.day||0)+nights*(t.night||0); const cRev=rWork+rTravel+rPerDiem;
-  const cLabor=workH*(c.hour||0), cKm=km*(c.km||0), cDay=days*(c.day||0), cNight=nights*(c.night||0); const cCost=cLabor+cKm+cDay+cNight;
+  const days=(function(){ if(ctx.dateFrom){ const a=new Date(ctx.dateFrom+'T00:00:00'), b=new Date((ctx.dateTo||ctx.dateFrom)+'T00:00:00'); const n=Math.round((b-a)/86400000)+1; if(isFinite(n)&&n>0) return n; } return totalH>0?Math.max(1,Math.ceil(totalH/eff)):0; })();
+  const daysByCal=!!(ctx.dateFrom&&days>0); const nights=Math.max(0,days-1);
+  const rb=(ctx.start&&(appSettings.tariff_profiles||[]).length)?roadByPayer(ctx.start,jobs):null;
+  let rTravel,rPerDiem,roadGroups=null;
+  if(rb){ const rd=ov.road||{}; let sum=0; roadGroups=rb.groups.map(g=>{ const has=(rd[g.payer]!=null&&rd[g.payer]!==''); const rev=has?(+rd[g.payer]||0):g.rev; sum+=rev; return {payer:g.payer,name:g.name,km:g.km,rate:g.rate,rev,ov:has,count:g.count}; }); rTravel=sum; const dr=(rb.dom&&rb.dom.road)?rb.dom.road:null; rPerDiem=dr?(days*(+dr.day_rate||0)+nights*(+dr.night_rate||0)):(days*(t.day||0)+nights*(t.night||0)); }
+  else { rTravel=km*(t.km||0); rPerDiem=days*(t.day||0)+nights*(t.night||0); }
+  const cRev=rWork+rTravel+rPerDiem;
+  const cKm=km*(c.km||0), cDay=days*(c.day||0), cNight=nights*(c.night||0); const cCost=cLabor+cKm+cDay+cNight;
   const revOv=(ov.revenue!=null&&ov.revenue!==''), costOv=(ov.cost!=null&&ov.cost!=='');
   const rev=revOv?(+ov.revenue||0):cRev; const cost=costOv?(+ov.cost||0):cCost; const profit=rev-cost; const margin=rev>0?profit/rev*100:0; const share=workH?Math.round(wh/workH*100):0;
-  return {rWork,rTravel,rPerDiem,revComputed:cRev,rev,revOv,perJob,workH,driveH:dH,totalH,days,nights,km,cLabor,cKm,cDay,cNight,costComputed:cCost,cost,costOv,profit,margin,wh,share,cur:T.currency||'',jobCount:(jobs||[]).length}; }
+  return {rWork,rTravel,rPerDiem,revComputed:cRev,rev,revOv,perJob,workH,driveH:dH,totalH,days,daysByCal,nights,km,cLabor,cKm,cDay,cNight,costComputed:cCost,cost,costOv,profit,margin,wh,share,cur:T.currency||'',jobCount:(jobs||[]).length,roadGroups}; }
 function showEconModal(d){ const cur=d.cur; let h='<div class="meta" style="margin-bottom:4px">Выручка по заявкам</div>';
   if(d.perJob.length) d.perJob.forEach(p=>{ h+='<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>'+esc(p.name)+' <span class="hint" style="margin:0">'+p.hours.toFixed(1)+' ч</span></span><b>'+p.revenue.toFixed(0)+'</b></div>'; });
   else h+='<div class="hint">Заявок нет — выручка 0.</div>';
-  h+=econRow('Километраж ('+d.km.toFixed(0)+' км × тариф)',d.rTravel.toFixed(0))+econRow('Командировочные (сутки/ночлег × тариф)',d.rPerDiem.toFixed(0));
+  if(d.roadGroups&&d.roadGroups.length){ h+='<div class="meta" style="margin:8px 0 2px">Дорога по плательщикам (реальный пробег '+d.km.toFixed(0)+' км, себестоимость по нему):</div>'; d.roadGroups.forEach(g=>{ h+=econRow(esc(g.name)+' · '+g.count+' точ. · '+g.km.toFixed(0)+' км × '+g.rate+(g.ov?' (оверрайд)':''),g.rev.toFixed(0)); }); h+=econRow('Командировочные · '+d.days+' дн / '+d.nights+' ноч '+(d.daysByCal?'(по датам выезда)':'(оценка по нагрузке — задай даты выезда)'),d.rPerDiem.toFixed(0)); }
+  else { h+=econRow('Километраж ('+d.km.toFixed(0)+' км × тариф)',d.rTravel.toFixed(0))+econRow('Командировочные · '+d.days+' дн / '+d.nights+' ноч '+(d.daysByCal?'(по датам выезда)':'(оценка по нагрузке — задай даты выезда)'),d.rPerDiem.toFixed(0)); }
   h+='<div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:6px;padding-top:6px"><span>Итого выручка'+(d.revOv?' <span class="hint" style="margin:0">(оверрайд, расчёт '+d.revComputed.toFixed(0)+')</span>':'')+'</span><b>'+d.rev.toFixed(0)+' '+esc(cur)+'</b></div>';
   h+='<div class="meta" style="margin:12px 0 4px">Время</div>'+econRow('Работа',d.workH.toFixed(1)+' ч')+econRow('В пути',d.driveH.toFixed(1)+' ч')+econRow('Всего',d.totalH.toFixed(1)+' ч')+econRow('Дней / ночей',d.days+' / '+d.nights);
   h+='<div class="meta" style="margin:12px 0 4px">Затраты</div>'+econRow('Труд ('+d.workH.toFixed(1)+' ч)',d.cLabor.toFixed(0))+econRow('Километраж ('+d.km.toFixed(0)+' км)',d.cKm.toFixed(0))+econRow('Сутки ('+d.days+')',d.cDay.toFixed(0))+econRow('Ночлег ('+d.nights+')',d.cNight.toFixed(0));
@@ -1492,11 +2114,12 @@ function showEconModal(d){ const cur=d.cur; let h='<div class="meta" style="marg
   h+='<div style="display:flex;justify-content:space-between;border-top:2px solid var(--line);margin-top:10px;padding-top:8px;font-size:15px"><span><b>Прибыль</b></span><b style="color:'+pc+'">'+d.profit.toFixed(0)+' '+esc(cur)+' · '+d.margin.toFixed(0)+'%</b></div>';
   $('econBody').innerHTML=h; $('econOverlay').classList.add('on'); }
 $('econClose').onclick=()=>$('econOverlay').classList.remove('on');
-$('tpEconBtn').onclick=()=>{ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); showEconModal(econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides)); };
+$('tpEconBtn').onclick=()=>{ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); showEconModal(econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value})); };
 if($('tpJobsRoute')) $('tpJobsRoute').onchange=renderTripJobs;
 async function showTripEcon(id){ const t=trips.find(x=>x.id==id); if(!t) return; const es=t.econ_snapshot||{}; const ts=t.tariffs_snapshot||{shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency};
-  let jobs=[]; try{ const {data}=await sb.from('trip_jobs').select('jobs(id, clients(name), job_works(hours,billable,revenue))').eq('trip_id',id); jobs=(data||[]).map(r=>r.jobs).filter(Boolean); }catch(e){}
-  showEconModal(econCompute(jobs,es.km||0,es.driveH||0,ts,t.overrides||{})); }
+  let jobs=[]; try{ const {data}=await sb.from('trip_jobs').select('jobs(id, client_id, clients(name,lat,lng), equipment(lat,lng), job_works(hours,billable,revenue,tariff_profile))').is('jobs.deleted_at',null).eq('trip_id',id); jobs=(data||[]).map(r=>r.jobs).filter(Boolean); }catch(e){}
+  const stStop=(t.route_stops||[]).find(x=>x.type==='start'); const start=stStop?{lat:stStop.lat,lng:stStop.lng,name:stStop.name}:null;
+  showEconModal(econCompute(jobs,es.km||0,es.driveH||0,ts,t.overrides||{},{start,dateFrom:t.date_from,dateTo:t.date_to})); }
 
 // ---------- акт выполненных работ ----------
 function printDoc(html){ const f=document.createElement('iframe'); f.setAttribute('aria-hidden','true'); f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
@@ -1542,11 +2165,44 @@ function buildActHtml(job){ const co=appSettings.company||{}; const tpl=appSetti
     (tpl.note?('<div class="note">'+esc(tpl.note)+'</div>'):'')+
     '<div class="sign"><div><div class="role">'+esc(execRole)+'</div><div class="line">'+esc(co.signer||' ')+'</div></div>'+
     '<div><div class="role">'+esc(custRole)+'</div><div class="line">'+esc(tpl.custSign||'подпись / ФИО')+'</div></div></div></body></html>'; }
-async function openAct(id){ if(!canWrite()) return; let job=null;
+// ---------- xlsx act ----------
+function colNum(s){ let n=0; for(let i=0;i<s.length;i++) n=n*26+(s.charCodeAt(i)-64); return n; }
+function colLetter(n){ let s=''; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=(n-m-1)/26; } return s; }
+function cellRC(a1){ const m=a1.match(/([A-Z]+)(\d+)/); return {c:colNum(m[1]),r:+m[2]}; }
+function actSubSimple(str,d){ let s=str; for(let pass=0;pass<2;pass++){ if(s.indexOf('{{')<0) break; s=s.replace(/\{\{\s*([A-Za-zА-Яа-яЁё0-9_]+)\s*\}\}/g,(m,k)=>(d[k]!=null?String(d[k]):m)); } return s; }
+function actSubWork(str,w,i){ return str.replace(/\{\{w_(no|name|hours|price|sum)\}\}/g,(_,k)=>{ if(k==='no') return String(i+1); return (w[k]!=null?String(w[k]):''); }); }
+function actFillSheet(ws,data){ let tplRow=null; ws.eachRow({includeEmpty:true},(row,rn)=>{ if(tplRow) return; row.eachCell({includeEmpty:true},cell=>{ if(typeof cell.value==='string'&&/\{\{w_/.test(cell.value)) tplRow=rn; }); });
+  if(tplRow){ const works=data.works||[]; const n=works.length; if(n>1) ws.duplicateRow(tplRow,n-1,true); if(n===0){ ws.spliceRows(tplRow,1); } else { for(let i=0;i<n;i++){ const row=ws.getRow(tplRow+i); row.eachCell({includeEmpty:true},cell=>{ if(typeof cell.value==='string') cell.value=actSubWork(cell.value,works[i],i); }); } } }
+  ws.eachRow({includeEmpty:true},row=>{ row.eachCell({includeEmpty:true},cell=>{ if(typeof cell.value==='string'&&cell.value.indexOf('{{')>=0) cell.value=actSubSimple(cell.value,data); }); }); }
+function jobActPayer(job){ const works=job.job_works||[]; const paid=works.find(w=>w.billable!==false&&w.tariff_profile); if(paid) return profileById(paid.tariff_profile); const any=works.find(w=>w.tariff_profile); return any?profileById(any.tariff_profile):null; }
+function buildActData(job){ const co=appSettings.company||{}; const tpl=appSettings.act_template||{}; const cur=appSettings.currency||'грн'; const cl=job.clients||{}; const works=job.job_works||[]; let total=0;
+  const wr=works.map(w=>{ const h=+w.hours||0; const bill=w.billable!==false; const sum=bill?(+w.revenue||0):0; total+=sum; return {name:workName(w)+(bill?'':' (гарантия)'),hours:h?h.toLocaleString('ru-RU'):'—',price:bill?(h>0?money(sum/h):money(sum)):'—',sum:money(sum)}; });
+  const pay=jobActPayer(job); const tw=(tpl.totalWords||'Всего оказано услуг на сумму {sum}.').replace('{sum}',money(total)+' '+cur);
+  const d={ number:actNo(job), date:actDate(job), exec_name:co.name||'', exec_details:co.details||'', exec_signer:co.signer||'', client:cl.name||'', client_details:cl.description||'', client_signer:cl.signer||'', payer:pay?pay.name:'', payer_details:pay?(pay.requisites||''):'', total:money(total)+' '+cur, total_words:tw, note:tpl.note||'', works:wr };
+  (tpl.vars||[]).forEach(v=>{ if(v.k&&d[v.k]===undefined) d[v.k]=(v.v!=null?v.v:''); });
+  return d; }
+function wsToHtml(ws){ const skip={}, span={}; (ws.model.merges||[]).forEach(m=>{ const [a,b]=m.split(':'); const s=cellRC(a),e=cellRC(b); span[a]={cs:e.c-s.c+1,rs:e.r-s.r+1}; for(let r=s.r;r<=e.r;r++)for(let c=s.c;c<=e.c;c++){ if(r===s.r&&c===s.c) continue; skip[colLetter(c)+r]=1; } });
+  let maxCol=1; ws.eachRow({includeEmpty:true},row=>{ if(row.cellCount>maxCol) maxCol=row.cellCount; });
+  let h='<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#000">';
+  for(let r=1;r<=ws.rowCount;r++){ const row=ws.getRow(r); h+='<tr>'; for(let c=1;c<=maxCol;c++){ const ref=colLetter(c)+r; if(skip[ref]) continue; const cell=row.getCell(c); const st=cell.style||{}; const f=st.font||{}; let css='border:1px solid #e2e2e2;padding:3px 7px;vertical-align:top;'; if(f.bold)css+='font-weight:bold;'; if(f.italic)css+='font-style:italic;'; if(f.size)css+='font-size:'+f.size+'px;'; if(f.color&&f.color.argb)css+='color:#'+f.color.argb.slice(-6)+';'; if(st.fill&&st.fill.fgColor&&st.fill.fgColor.argb)css+='background:#'+st.fill.fgColor.argb.slice(-6)+';'; const al=st.alignment||{}; if(al.horizontal)css+='text-align:'+al.horizontal+';'; const sp=span[ref]?(' colspan="'+span[ref].cs+'" rowspan="'+span[ref].rs+'"'):''; let v=cell.value; if(v&&typeof v==='object') v=v.richText?v.richText.map(t=>t.text).join(''):(v.text!=null?v.text:(v.result!=null?v.result:'')); h+='<td'+sp+' style="'+css+'">'+esc(v==null?'':String(v))+'</td>'; } h+='</tr>'; } return h+'</table>'; }
+async function genActXlsx(job){ const ax=appSettings.act_xlsx||{}; if(!ax.data||typeof ExcelJS==='undefined') return false;
+  try{ const bin=atob(ax.data); const buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); const wb=new ExcelJS.Workbook(); await wb.xlsx.load(buf.buffer); const ws=wb.worksheets[0]; const data=buildActData(job); actFillSheet(ws,data);
+    const out=await wb.xlsx.writeBuffer(); const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    $('axPreview').innerHTML=wsToHtml(ws);
+    $('axDlBtn').onclick=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Акт '+data.number+'.xlsx'; document.body.appendChild(a); a.click(); a.remove(); };
+    $('actXlsxOverlay').classList.add('on'); return true;
+  }catch(e){ notify('Ошибка генерации акта по шаблону: '+(e.message||e),'err'); return false; } }
+if($('axClose')) $('axClose').onclick=()=>$('actXlsxOverlay').classList.remove('on');
+function updateAxInfo(){ const ax=appSettings.act_xlsx||{}; if($('axInfo')) $('axInfo').innerHTML=ax.data?('<span class="ok">Шаблон загружен: '+esc(ax.name||'act.xlsx')+'</span>'):'Шаблон не загружен — используется встроенный HTML-акт.'; }
+if($('axFile')) $('axFile').onchange=e=>{ const file=e.target.files[0]; if(!file) return; if(file.size>3000000){ notify('Файл великоват (>3 МБ).','err'); return; } const rd=new FileReader(); rd.onload=async()=>{ const b64=String(rd.result).split(',')[1]; const ax={name:file.name,data:b64}; const {error}=await sb.from('settings').update({act_xlsx:ax}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.act_xlsx=ax; updateAxInfo(); showToast('Шаблон акта загружен'); $('axFile').value=''; }; rd.readAsDataURL(file); };
+if($('axDownload')) $('axDownload').onclick=()=>{ const ax=appSettings.act_xlsx||{}; if(!ax.data){ notify('Шаблон не загружен.','warn'); return; } const bin=atob(ax.data); const buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download=ax.name||'act-template.xlsx'; document.body.appendChild(a); a.click(); a.remove(); };
+if($('axRemove')) $('axRemove').onclick=async()=>{ if(!await confirmDialog('Убрать Excel-шаблон акта? Вернётся встроенный HTML-акт.',{danger:true,okText:'Убрать'})) return; const {error}=await sb.from('settings').update({act_xlsx:{}}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.act_xlsx={}; updateAxInfo(); };
+async function openAct(id){ let job=null;
   try{ const {data,error}=await sb.from('jobs').select('*, clients(*), equipment(*), job_works(*)').eq('id',id).single(); if(error) throw error; job=data; }
   catch(e){ notify('Не удалось загрузить заявку: '+(e.message||e),'err'); return; }
   if(!catalog.length){ try{ await loadCatalog(); }catch(e){} }
   if(!(appSettings.company&&appSettings.company.name)) showToast('Заполни реквизиты организации в Настройках — в акте будут пустые поля «Исполнителя»');
+  if((appSettings.act_xlsx||{}).data){ if(await genActXlsx(job)) return; }
   printDoc(buildActHtml(job)); }
 
 // ---------- boot ----------
