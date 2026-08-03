@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DLIGHT — каркас</title>
+</head>
+<body>
+  <!--
+    Это временный вход для сборки. Полное приложение (боевой index.html)
+    переносится в модули постепенно, см. MODULES.md. Пока здесь только
+    проверка, что вынесенное ядро импортируется и работает.
+  -->
+  <pre id="out">Проверка ядра…</pre>
+  <script type="module">
+    import { circuitKm } from './src/core/geo.js';
+    import { money, businessDays } from './src/core/format.js';
+    import { jobRoadPayer } from './src/core/tariff.js';
+
+    // turf в реальном приложении подключается отдельно; для проверки — гаверсинус
+    const turf = { distance([lng1,lat1],[lng2,lat2]){ const R=6371,r=Math.PI/180,
+      dLat=(lat2-lat1)*r,dLng=(lng2-lng1)*r,
+      h=Math.sin(dLat/2)**2+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLng/2)**2;
+      return 2*R*Math.asin(Math.sqrt(h)); } };
+
+    const lines = [
+      'Ядро загрузилось. Проверка функций:',
+      '  money(1234.5)        = ' + money(1234.5),
+      '  businessDays пн→пт   = ' + businessDays('2026-07-13','2026-07-17'),
+      '  circuitKm 1 точка    = ' + circuitKm({lat:49,lng:33}, [{lat:50,lng:30}], turf).toFixed(1) + ' км',
+      '  jobRoadPayer         = ' + jobRoadPayer({ job_works:[{billable:false,tariff_profile:"warranty"}] }),
+      '',
+      'Если видишь это — сборка и модули работают.',
+      'Дальше переносим приложение по MODULES.md.'
+    ];
+    document.getElementById('out').textContent = lines.join('\n');
+  </script>
+</body>
+</html>
