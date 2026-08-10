@@ -12,8 +12,8 @@ self.addEventListener('push', (event) => {
   const options = {
     body: payload.body || '',
     tag: payload.tag || undefined,   // один tag на выезд — без дублей на экране
-    icon: './logo.png',
-    badge: './logo.png',
+    icon: './favicon.png',
+    badge: './favicon.png',
     data: { url: './' }
   };
   event.waitUntil(self.registration.showNotification(title, options));
