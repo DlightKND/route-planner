@@ -4,7 +4,31 @@
 // поэтому мост на window не нужен. Дальше извлекаем по модулю, см. MODULES.md.
 
 import * as core from './core/index.js';
-const { money, hhmm, businessDays, colNum, colLetter, cellRC, jobRoadPayer, rateFrom, dedupeStops, tspOrder } = core;
+
+// ── Аварийный перехватчик ────────────────────────────────────────────────────
+// Если что-то падает при старте, модуль обрывается и остаётся серый экран
+// без объяснений. Этот обработчик ловит такие падения и показывает причину
+// прямо на странице (и в консоли), чтобы не гадать вслепую.
+window.addEventListener('error', (ev) => {
+  const box = document.getElementById('bootErr') || (() => {
+    const d = document.createElement('div');
+    d.id = 'bootErr';
+    d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;'
+      + 'background:#b00020;color:#fff;font:13px/1.4 monospace;padding:10px 14px;'
+      + 'white-space:pre-wrap;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+    document.body && document.body.appendChild(d);
+    return d;
+  })();
+  if (box) box.textContent = 'Ошибка запуска: ' + (ev.message || ev.error)
+    + (ev.filename ? '\n' + ev.filename + ':' + ev.lineno + ':' + ev.colno : '');
+  console.error('[boot]', ev.error || ev.message);
+});
+window.addEventListener('unhandledrejection', (ev) => {
+  console.error('[boot promise]', ev.reason);
+});
+
+const { money, hhmm, businessDays, colNum, colLetter, cellRC, jobRoadPayer, rateFrom, dedupeStops, tspOrder,
+        econCompute, roadByPayer, jobPoint } = core;
 
 
 const $=id=>document.getElementById(id);
@@ -792,7 +816,7 @@ function workRevenue(w){ if(w.override!==''&&w.override!=null) return +w.overrid
     return (+w.hours||0)*(r>0?r:((appSettings.tariffs&&appSettings.tariffs.hour)||0));
   }
   const wr=p?(+((p.work_warr||{}).rate)||0):0; return (+w.hours||0)*wr; }
-function workCost(w){ return (+w.hours||0)*((appSettings.costs&&appSettings.costs.hour)||0); }
+
 function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   curWorks.forEach((w,i)=>{ const d=document.createElement('div'); d.className='eqitem';
     const head=w.custom?('<input type="text" placeholder="название работы" value="'+esc(w.name)+'" data-wn="'+i+'" style="width:100%">'):('<div class="t">'+esc(w.name)+'</div>');
@@ -815,6 +839,7 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; w.profile=defaultProfileId(w.billable); renderJobWorks(); });
   box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); });
   jobTotals(); }
+function workCost(w){ return (+w.hours||0)*((appSettings.costs&&appSettings.costs.hour)||0); }
 function jobTotals(){ const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0); const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0); $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · маржа '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)'; }
 $('jobCancel').onclick=()=>$('jobOverlay').classList.remove('on');
 $('jobSave').onclick=async ()=>{ const client_id=$('jbClient').value; if(!client_id){ $('jobErr').textContent='Выбери клиента.'; return; } if(curWorks.some(w=>w.custom&&!w.name.trim())){ $('jobErr').textContent='У своей работы укажи название.'; return; }
@@ -1920,7 +1945,7 @@ $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<
   const exist=plannerTripId?(trips.find(x=>x.id==plannerTripId)||{}):{};
   const ov=exist.overrides||{};
   const T={shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency};
-  const e=econCompute(linked,rRoute.km,rRoute.driveH,T,ov,{start:rStart});
+  const e=econCompute(linked,rRoute.km,rRoute.driveH,T,ov,{start:rStart},appSettings.tariff_profiles,window.turf);
   const rec={route_stops:stops.map(s=>({type:s.type,name:s.name,lat:s.lat,lng:s.lng,clientId:s.clientId||null,equipId:s.equipId||null,description:s.description||''})),route_geometry:rRoute.geometry||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:linked.length},tariffs_snapshot:T};
   let tid=plannerTripId;
   try{ if(plannerTripId){ const {error}=await sb.from('trips').update(rec).eq('id',plannerTripId); if(error) throw error; }
@@ -1939,44 +1964,12 @@ $('linkSkip').onclick=()=>{ $('linkOverlay').classList.remove('on'); pendingLink
 $('linkCreate').onclick=()=>{ $('linkOverlay').classList.remove('on'); const cid=pendingLinkClient; pendingLinkClient=null; if(cid) openJob(null,cid); };
 // ---------- economics breakdown ----------
 function econRow(k,v){ return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span class="hint" style="margin:0">'+esc(k)+'</span><span>'+esc(v)+'</span></div>'; }
-function jobPoint(j){ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); return (lat!=null&&lng!=null)?{lat:+lat,lng:+lng}:null; }
+
 
 function kmBetween(a,b){ try{ return turf.distance([a.lng,a.lat],[b.lng,b.lat],{units:'kilometers'}); }catch(e){ return 0; } }
 function circuitKm(start,pts){ if(!pts||!pts.length) return 0; if(pts.length===1) return 2*kmBetween(start,pts[0]); let rem=pts.slice(),cur=start,total=0; while(rem.length){ let bi=0,bd=Infinity; rem.forEach((p,i)=>{ const d=kmBetween(cur,p); if(d<bd){bd=d;bi=i;} }); total+=bd; cur=rem[bi]; rem.splice(bi,1); } total+=kmBetween(cur,start); return total; }
-function roadByPayer(start,jobs,profs){ if(!start||typeof turf==='undefined') return null; const P=profs||appSettings.tariff_profiles||[]; const groups={}; (jobs||[]).forEach(j=>{ const pt=jobPoint(j); if(!pt) return; const pid=jobRoadPayer(j)||'__none'; (groups[pid]=groups[pid]||{payer:pid,points:[]}).points.push(pt); }); const keys=Object.keys(groups); if(!keys.length) return null; const gKm=(appSettings.tariffs&&appSettings.tariffs.km)||0; let kmRev=0,maxKm=-1,dom=null; const out=[]; keys.forEach(pid=>{ const g=groups[pid]; const km=circuitKm(start,g.points); const p=(pid==='__none')?null:(P.find(x=>x.id===pid)||null); const rate=p?(+((p.road||{}).km_rate)||0):gKm; const rev=km*rate; kmRev+=rev; if(km>maxKm){ maxKm=km; dom=p; } out.push({payer:pid,name:p?p.name:'без профиля',km,rate,rev,count:g.points.length}); }); return {kmRev,dom,groups:out}; }
-function econCompute(jobs,routeKm,driveH,T,ov,ctx){ ov=ov||{}; ctx=ctx||{}; let rWork=0,wh=0,workH=0,cLabor=0; const perJob=[];
-  (jobs||[]).forEach(j=>{ let jr=0,jh=0; (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; workH+=h; jh+=h; cLabor+=workCost(w); if(w.billable){ rWork+=(+w.revenue||0); jr+=(+w.revenue||0); } else wh+=h; }); perJob.push({name:(j.clients&&j.clients.name)||'заявка',revenue:jr,hours:jh}); });
-  const t=(T.tariffs)||{}, c=(T.costs)||{};
-  const km=routeKm||0; const dH=driveH||0; const totalH=workH+dH; const eff=(T.shift_hours||8)*(1+((T.deviation_pct||0)/100));
-  // Выручка — по плану, себестоимость — по факту.
-  // Выручка по маршруту согласована с плательщиком заранее и от того, что
-  // водитель заплутал, расти не должна. А затраты объективны: бензин сожжён
-  // ровно на те километры, которые машина реально проехала. Поэтому km
-  // остаётся плановым везде, кроме cKm.
-  const factKm=(ctx.factKm!=null&&ctx.factKm>0)?(+ctx.factKm):null;
-  const costKm=(factKm!=null)?factKm:km;
-  // То же и с трудом: выручка считается по нормочасам из job_works (их ставит
-  // человек и они уходят в акт), а себестоимость — по утверждённым часам
-  // стоянок. Инженер провозился 8 часов вместо нормативных 6 — клиент платит
-  // за 6, но наша маржа должна знать про 8.
-  const factWorkH=(ctx.factWorkH!=null&&ctx.factWorkH>0)?(+ctx.factWorkH):null;
-  const costWorkH=(factWorkH!=null)?factWorkH:workH;
-  const days=(function(){ if(ctx.dateFrom){ const a=new Date(ctx.dateFrom+'T00:00:00'), b=new Date((ctx.dateTo||ctx.dateFrom)+'T00:00:00'); const n=Math.round((b-a)/86400000)+1; if(isFinite(n)&&n>0) return n; } return totalH>0?Math.max(1,Math.ceil(totalH/eff)):0; })();
-  const daysByCal=!!(ctx.dateFrom&&days>0); const nights=Math.max(0,days-1);
-  // Профили — из снапшота выезда, если он их содержит. У выездов, сохранённых
-  // до этой правки, их нет, поэтому падаем на текущие: поведение таких
-  // выездов не меняется.
-  const P=(T.tariff_profiles&&T.tariff_profiles.length)?T.tariff_profiles:(appSettings.tariff_profiles||[]);
-  const rb=(ctx.start&&P.length)?roadByPayer(ctx.start,jobs,P):null;
-  let rTravel,rPerDiem,roadGroups=null;
-  if(rb){ const rd=ov.road||{}; let sum=0; roadGroups=rb.groups.map(g=>{ const has=(rd[g.payer]!=null&&rd[g.payer]!==''); const rev=has?(+rd[g.payer]||0):g.rev; sum+=rev; return {payer:g.payer,name:g.name,km:g.km,rate:g.rate,rev,ov:has,count:g.count}; }); rTravel=sum; const dr=(rb.dom&&rb.dom.road)?rb.dom.road:null; rPerDiem=dr?(days*(+dr.day_rate||0)+nights*(+dr.night_rate||0)):(days*(t.day||0)+nights*(t.night||0)); }
-  else { rTravel=km*(t.km||0); rPerDiem=days*(t.day||0)+nights*(t.night||0); }
-  const cRev=rWork+rTravel+rPerDiem;
-  const cKm=costKm*(c.km||0), cDay=days*(c.day||0), cNight=nights*(c.night||0);
-  if(factWorkH!=null) cLabor=costWorkH*(c.hour||0); const cCost=cLabor+cKm+cDay+cNight;
-  const revOv=(ov.revenue!=null&&ov.revenue!==''), costOv=(ov.cost!=null&&ov.cost!=='');
-  const rev=revOv?(+ov.revenue||0):cRev; const cost=costOv?(+ov.cost||0):cCost; const profit=rev-cost; const margin=rev>0?profit/rev*100:0; const share=workH?Math.round(wh/workH*100):0;
-  return {rWork,rTravel,rPerDiem,revComputed:cRev,rev,revOv,perJob,workH,driveH:dH,totalH,days,daysByCal,nights,km,factKm,costKm,factWorkH,costWorkH,cLabor,cKm,cDay,cNight,costComputed:cCost,cost,costOv,profit,margin,wh,share,cur:T.currency||'',jobCount:(jobs||[]).length,roadGroups}; }
+
+
 function showEconModal(d){ const cur=d.cur; let h='<div class="meta" style="margin-bottom:4px">Выручка по заявкам</div>';
   if(d.perJob.length) d.perJob.forEach(p=>{ h+='<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>'+esc(p.name)+' <span class="hint" style="margin:0">'+p.hours.toFixed(1)+' ч</span></span><b>'+p.revenue.toFixed(0)+'</b></div>'; });
   else h+='<div class="hint">Заявок нет — выручка 0.</div>';
@@ -1991,12 +1984,12 @@ function showEconModal(d){ const cur=d.cur; let h='<div class="meta" style="marg
   h+='<div style="display:flex;justify-content:space-between;border-top:2px solid var(--line);margin-top:10px;padding-top:8px;font-size:15px"><span><b>Прибыль</b></span><b style="color:'+pc+'">'+d.profit.toFixed(0)+' '+esc(cur)+' · '+d.margin.toFixed(0)+'%</b></div>';
   $('econBody').innerHTML=h; $('econOverlay').classList.add('on'); }
 $('econClose').onclick=()=>$('econOverlay').classList.remove('on');
-$('tpEconBtn').onclick=()=>{ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); showEconModal(econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value})); };
+$('tpEconBtn').onclick=()=>{ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); showEconModal(econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value},appSettings.tariff_profiles,window.turf)); };
 if($('tpJobsRoute')) $('tpJobsRoute').onchange=renderTripJobs;
 async function showTripEcon(id){ const t=trips.find(x=>x.id==id); if(!t) return; const es=t.econ_snapshot||{}; const ts=t.tariffs_snapshot||{shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency,tariff_profiles:appSettings.tariff_profiles||[]};
   let jobs=[]; try{ const {data}=await sb.from('trip_jobs').select('jobs(id, client_id, clients(name,lat,lng), equipment(lat,lng), job_works(hours,billable,revenue,tariff_profile))').is('jobs.deleted_at',null).eq('trip_id',id); jobs=(data||[]).map(r=>r.jobs).filter(Boolean); }catch(e){}
   const stStop=(t.route_stops||[]).find(x=>x.type==='start'); const start=stStop?{lat:stStop.lat,lng:stStop.lng,name:stStop.name}:null;
-  showEconModal(econCompute(jobs,es.km||0,es.driveH||0,ts,t.overrides||{},{start,dateFrom:t.date_from,dateTo:t.date_to,factKm:t.fact_km,factWorkH:factHByTrip[t.id]})); }
+  showEconModal(econCompute(jobs,es.km||0,es.driveH||0,ts,t.overrides||{},{start,dateFrom:t.date_from,dateTo:t.date_to,factKm:t.fact_km,factWorkH:factHByTrip[t.id]},appSettings.tariff_profiles,window.turf)); }
 
 // ---------- акт выполненных работ ----------
 function printDoc(html){ const f=document.createElement('iframe'); f.setAttribute('aria-hidden','true'); f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
