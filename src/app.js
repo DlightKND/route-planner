@@ -29,7 +29,8 @@ window.addEventListener('unhandledrejection', (ev) => {
 
 const { money, hhmm, businessDays, colNum, colLetter, cellRC, jobRoadPayer, rateFrom, dedupeStops, tspOrder,
         econCompute, roadByPayer, jobPoint,
-        vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel } = core;
+        vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
+        jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank } = core;
 
 
 const $=id=>document.getElementById(id);
@@ -563,7 +564,64 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
   wireJobCards(box); wireKanbanDrag(box,dropJob); }
 $('jobSearch').oninput=renderJobs; if($('jobEngFilter')) $('jobEngFilter').onchange=renderJobs; if($('mineDone')) $('mineDone').onchange=renderMine; $('jobAdd').onclick=()=>{ if(canWrite()) openJob(null); };
-async function renderDashboard(){ const box=$('dashBody'); if(!box) return; box.innerHTML='<div class="hint">Считаю…</div>';
+async function renderAttention(){
+  const box=$('attnBody'); if(!box) return;
+  box.innerHTML='<div class="hint">Считаю…</div>';
+  try{
+    // Заявки со сроком, клиентом, техникой и работами — всё, что нужно ленте.
+    const { data, error }=await sb.from('jobs')
+      .select('id,status,due_date,created_at,assigned_engineer,at_depot, clients(name), equipment(model), job_works(hours,billable)')
+      .is('deleted_at',null);
+    if(error) throw error;
+    let list=data||[];
+
+    // Инженер видит только свои заявки — как в канбане (см. renderJobs).
+    if(role==='engineer') list=list.filter(j=>j.assigned_engineer===session.user.id);
+
+    const { dated, cold }=attentionBuckets(list, new Date());
+
+    const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.name||p.email||''):''; };
+    const COLOR={overdue:'red',acute:'amber',calm:'green'};
+    const dueBadge=u=>{
+      if(u.level==='overdue') return '<span class="abadge red">просрочено '+(-u.left)+' дн</span>';
+      if(u.level==='acute')   return '<span class="abadge amber">'+u.left+' дн до срока</span>';
+      return '<span class="abadge green">'+u.left+' дн</span>';
+    };
+    const hours=j=>(j.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
+
+    let h='';
+    if(!dated.length && !cold.length){
+      h='<div class="aempty">На сегодня заявок нет.</div>';
+    } else {
+      dated.forEach(({job,u})=>{
+        const noeng=!job.assigned_engineer?'<span class="abadge noeng">без инженера</span>':'';
+        const eng=job.assigned_engineer?' · '+esc(engName(job.assigned_engineer)):'';
+        const sub=esc((job.equipment&&job.equipment.model)||job.clients&&job.clients.name||'')+' · '+hours(job)+' ч'+eng;
+        h+='<div class="arow '+COLOR[u.level]+'" data-ajob="'+job.id+'">'
+          +'<span class="astripe"></span>'
+          +'<div class="amain"><div class="aname">'+esc((job.clients&&job.clients.name)||'—')+'</div>'
+          +'<div class="asub">'+sub+'</div></div>'
+          +noeng+dueBadge(u)+'</div>';
+      });
+      if(cold.length){
+        let ch='';
+        cold.forEach(j=>{
+          ch+='<div class="arow gray" data-ajob="'+j.id+'"><span class="astripe"></span>'
+            +'<div class="amain"><div class="aname">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
+            +'<div class="asub">'+esc((j.equipment&&j.equipment.model)||'')+'</div></div>'
+            +'<span class="abadge gray">без срока</span></div>';
+        });
+        h+='<details class="acold"><summary><span class="achev">▸</span>'
+          +'Холодные потребности <span class="acount">'+cold.length+'</span></summary>'
+          +'<div>'+ch+'</div></details>';
+      }
+    }
+    box.innerHTML=h;
+    box.querySelectorAll('[data-ajob]').forEach(el=>el.onclick=()=>openJob(el.dataset.ajob));
+  }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; }
+}
+
+async function renderDashboard(){ const box=$('dashBody'); if(!box) return; renderAttention(); box.innerHTML='<div class="hint">Считаю…</div>';
   try{
     const cl=clients.filter(c=>!c.is_base).length, dp=clients.filter(c=>c.is_base).length;
     const {data:js}=await sb.from('jobs').select('status,at_depot, job_works(hours,billable,revenue)').is('deleted_at',null); const jb=js||[];
