@@ -6,7 +6,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="favicon.png">
-<title>DLight — Сервис</title>
+<title>DLIGHT · Сервис</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" referrerpolicy="no-referrer"/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -376,6 +376,34 @@
   .gantt-bar.st-done { background: #16a34a; color: #fff; }
   .gantt-bar.st-cancelled { background: #6b7280; color: #fff; opacity: .55; }
   @media (max-width: 760px) { .settings-layout { grid-template-columns: 1fr; } .settings-nav { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; } .son { white-space: nowrap; flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; } }
+
+/* Лента внимания на дашборде */
+.dash-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
+@media(max-width:900px){.dash-grid{grid-template-columns:1fr}}
+.dash-attn .acaps{text-transform:uppercase;letter-spacing:.12em;font-size:12px;margin:0 0 8px}
+.arow{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;position:relative;cursor:pointer;background:var(--panel);border:1px solid var(--line);margin-bottom:6px}
+.arow:hover{background:var(--panel-2)}
+.astripe{position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:3px}
+.arow.red .astripe{background:var(--red)}
+.arow.amber .astripe{background:#f5b23d}
+.arow.green .astripe{background:var(--green)}
+.arow.gray .astripe{background:var(--ink-faint)}
+.amain{flex:1;min-width:0;padding-left:8px}
+.aname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.asub{font-size:12px;color:var(--ink-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.abadge{font-size:11px;padding:3px 8px;border-radius:20px;white-space:nowrap;border:1px solid transparent}
+.abadge.red{color:var(--red);border-color:#5a2b2b;background:#2a1717}
+.abadge.amber{color:#f5b23d;border-color:#5a4620;background:#2a2213}
+.abadge.green{color:var(--green);border-color:#2b5a3b;background:#152a1d}
+.abadge.gray{color:var(--ink-dim);border-color:var(--line);background:var(--panel-2)}
+.abadge.noeng{color:var(--cyan);border-color:#1f5551;background:#12302e}
+.acold{margin-top:4px}
+.acold summary{list-style:none;cursor:pointer;padding:8px 10px;display:flex;align-items:center;gap:8px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-dim)}
+.acold summary::-webkit-details-marker{display:none}
+.acold summary .acount{margin-left:auto;color:var(--ink-dim)}
+.achev{color:var(--ink-faint);transition:transform .15s}
+.acold[open] .achev{transform:rotate(90deg)}
+.aempty{padding:24px;text-align:center;color:var(--ink-faint)}
 </style>
 </head>
 <body>
@@ -401,7 +429,7 @@
   <!-- MAP / CLIENTS -->
   <div class="view view-dash"><div class="pane scrollp">
     <div class="pane-head"><h2>Сводка</h2></div>
-    <div id="dashBody"></div>
+    <div class="dash-grid"><div class="dash-attn"><h3 class="acaps">Требует внимания</h3><div id="attnBody"></div></div><div id="dashBody"></div></div>
   </div></div>
   <div class="view view-map active">
     <aside class="side">
