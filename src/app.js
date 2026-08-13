@@ -28,7 +28,8 @@ window.addEventListener('unhandledrejection', (ev) => {
 });
 
 const { money, hhmm, businessDays, colNum, colLetter, cellRC, jobRoadPayer, rateFrom, dedupeStops, tspOrder,
-        econCompute, roadByPayer, jobPoint } = core;
+        econCompute, roadByPayer, jobPoint,
+        vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel } = core;
 
 
 const $=id=>document.getElementById(id);
@@ -1585,30 +1586,16 @@ async function showTripOnMap(tid){
 // не читает вообще.
 const VEH_STALE_MIN = 12;   // старше — считаем данные протухшими
 
-function vehAgeMin(r){ if(!r || !r.ts) return 1e9; return (Date.now() - new Date(r.ts).getTime())/60000; }
+
 
 // Курса Wialon не отдаёт ни одним тегом — считаем по двум последним точкам.
-function vehBearing(a,b){ if(!a||!b) return null;
-  const d2r=Math.PI/180, y=Math.sin((b.lng-a.lng)*d2r)*Math.cos(b.lat*d2r);
-  const x=Math.cos(a.lat*d2r)*Math.sin(b.lat*d2r)-Math.sin(a.lat*d2r)*Math.cos(b.lat*d2r)*Math.cos((b.lng-a.lng)*d2r);
-  return (Math.atan2(y,x)*180/Math.PI+360)%360; }
 
-function vehAgeText(m){ if(m<1) return 'только что'; if(m<60) return Math.round(m)+' мин назад';
-  const h=Math.floor(m/60); return h+' ч '+Math.round(m-h*60)+' мин назад'; }
 
-function vehClass(r){ const age=vehAgeMin(r);
-  if(r.lost_since || age>VEH_STALE_MIN) return 'stale';
-  return (r.status==='idle') ? 'idle' : 'moving'; }
 
-function vehTitle(r){
-  // Порядок важен: сначала связь, потом занятие. «Молчит» перебивает всё
-  // остальное, потому что всё остальное в этот момент — уже догадка.
-  if(r.lost_since) return 'связь потеряна · последние данные '+vehAgeText(vehAgeMin(r));
-  const age=vehAgeMin(r);
-  if(age>VEH_STALE_MIN) return 'данных нет '+vehAgeText(age);
-  if(r.status==='idle') return 'стоит на месте';
-  return 'в движении · '+Math.round(+r.speed||0)+' км/ч';
-}
+
+
+
+
 
 async function loadVehState(){
   try{
@@ -1626,7 +1613,7 @@ async function loadVehState(){
   }catch(e){ /* нет патча/прав — просто не рисуем машины */ }
 }
 
-function vehLabel(v){ return v.plate || v.name || '—'; }
+
 
 function renderVehState(){
   if(!vehLayer) return;
