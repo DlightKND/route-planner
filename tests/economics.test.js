@@ -93,3 +93,31 @@ describe('roadByPayer — разбивка по плательщикам', () =>
     expect(roadByPayer(start, jobs, profs, 20, null)).toBe(null);
   });
 });
+
+describe('econCompute — гарантийная работа даёт выручку (управленческий учёт)', () => {
+  // Схема: сервис — отдельная бизнес-единица, выставляет счёт всегда.
+  // Гарантийная работа оплачивается внутренним плательщиком по своему тарифу,
+  // её revenue уже посчитан (workRevenue по work_warr) и лежит в w.revenue.
+  const warrJob = { clients:{name:'Клиент'},
+    job_works:[{ hours:8, billable:false, revenue:6000 }] };  // 750×8 гарантийный тариф
+
+  it('гарантийная работа попадает в выручку, а не в ноль', () => {
+    const e = econCompute([warrJob], 100, 2, T, {}, {}, [], turf);
+    expect(e.rWork).toBe(6000);   // раньше было бы 0
+  });
+  it('часы гарантийной всё равно считаются гарантийными (для доли)', () => {
+    const e = econCompute([warrJob], 100, 2, T, {}, {}, [], turf);
+    expect(e.wh).toBe(8);         // гарантийные часы
+    expect(e.share).toBe(100);   // доля гарантии 100% по этой заявке
+  });
+  it('смешанная заявка: платная + гарантийная — обе в выручке', () => {
+    const mix = { clients:{name:'Микс'}, job_works:[
+      { hours:6, billable:true,  revenue:9000 },   // платная
+      { hours:8, billable:false, revenue:6000 },   // гарантийная
+    ]};
+    const e = econCompute([mix], 100, 2, T, {}, {}, [], turf);
+    expect(e.rWork).toBe(15000);  // 9000 + 6000
+    expect(e.wh).toBe(8);         // гарантийные только 8 ч из 14
+    expect(e.share).toBe(Math.round(8/14*100));
+  });
+});
