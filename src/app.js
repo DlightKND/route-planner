@@ -666,18 +666,25 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
       : '';
 
     let h=moneyCard;
-    h+='<div class="stats mini">';
-    h+=tile('Клиенты', cl+dp, 'из них депо '+dp, '', 'points');
-    h+=tile('Заявки в работе', (byst.open+byst.planned+byst.in_progress), 'в процессе '+byst.in_progress, '', 'jobs');
-    h+=tile('Выполнено', byst.done, '', '', 'jobs-done');
-    h+=tile('Выезды', trips.length, '', '', 'trips');
-    h+=tile('Машины', vehicles.length, 'ТО пора: '+overdue, overdue>0?'var(--red)':'', 'vehicles');
-    h+='</div>';
-    h+='<div class="card" style="margin-top:16px"><h3>Заявки по статусам</h3>';
-    [['open','Открыта'],['planned','Запланирована'],['in_progress','В работе'],['done','Готова'],['cancelled','Отменена']].forEach(([k,lbl])=>{
-      const n=byst[k]||0; h+='<div class="meta" style="justify-content:space-between;padding:4px 0"><span>'+lbl+'</span><b>'+n+'</b></div>';
+    // Заявки по статусам — компактная стек-полоса + легенда (как в мокапе),
+    // вместо списка с нулями. Открыта — синий, в работе — янтарь,
+    // готова — зелёный, отменена — серый.
+    const stTotal=Math.max(1,(byst.open||0)+(byst.planned||0)+(byst.in_progress||0)+(byst.done||0)+(byst.cancelled||0));
+    const seg=[
+      ['open','Открыта','var(--cyan)',byst.open||0],
+      ['planned','Запланирована','#5b9bd5',byst.planned||0],
+      ['in_progress','В работе','#f5b23d',byst.in_progress||0],
+      ['done','Готова','var(--green)',byst.done||0],
+      ['cancelled','Отменена','var(--ink-faint)',byst.cancelled||0],
+    ].filter(x=>x[3]>0);
+    let bar='', leg='';
+    seg.forEach(([k,lbl,col,n])=>{
+      bar+='<i style="width:'+(n/stTotal*100)+'%;background:'+col+'"></i>';
+      leg+='<span><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</span>';
     });
-    h+='</div>';
+    h+='<div class="card statuscard"><h3>Заявки по статусам</h3>'
+      +'<div class="statbar">'+(bar||'<i style="width:100%;background:var(--line)"></i>')+'</div>'
+      +'<div class="statleg">'+(leg||'<span class="dim">Заявок нет</span>')+'</div></div>';
     const months=[]; const now=new Date(); for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:d.toISOString().slice(0,7),rev:0,profit:0}); }
     trips.forEach(t=>{ if(!t.date_from) return; const m=months.find(x=>x.key===String(t.date_from).slice(0,7)); if(m){ const e=t.econ_snapshot||{}; m.rev+=+e.revenue||0; m.profit+=+e.profit||0; } });
     if(canWrite()){
