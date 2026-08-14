@@ -381,7 +381,8 @@
 .dash-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
 @media(max-width:900px){.dash-grid{grid-template-columns:1fr}}
 .dash-attn .acaps{text-transform:uppercase;letter-spacing:.12em;font-size:12px;margin:0 0 8px}
-.arow{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;position:relative;cursor:pointer;background:var(--panel);border:1px solid var(--line);margin-bottom:6px}
+.arow{display:flex;align-items:center;gap:10px;padding:11px 12px;position:relative;cursor:pointer;border-bottom:1px solid var(--line)}
+.arow:last-child{border-bottom:0}
 .arow:hover{background:var(--panel-2)}
 .astripe{position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:3px}
 .arow.red .astripe{background:var(--red)}
@@ -403,6 +404,14 @@
 .acold summary .acount{margin-left:auto;color:var(--ink-dim)}
 .achev{color:var(--ink-faint);transition:transform .15s}
 .acold[open] .achev{transform:rotate(90deg)}
+#attnBody{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+#attnBody:empty{display:none}
+.dash-attn>.acaps{padding:0}
+.asubhead{font-size:10px;color:var(--ink-faint);letter-spacing:.14em;text-transform:uppercase;padding:12px 12px 4px;border-bottom:1px solid var(--line)}
+/* холодный блок внутри той же тарелки, не отдельной плашкой */
+.acold{border-top:1px solid var(--line)}
+.acold summary{padding:11px 12px}
+.acold>div .arow:last-child{border-bottom:0}
 .aempty{padding:24px;text-align:center;color:var(--ink-faint)}
 </style>
 </head>
