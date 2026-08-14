@@ -621,7 +621,22 @@ async function renderAttention(){
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; }
 }
 
-async function renderDashboard(){ const box=$('dashBody'); if(!box) return; renderAttention(); box.innerHTML='<div class="hint">Считаю…</div>';
+async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
+  renderAttention();
+  // Ролевая раскладка. Инженер видит только «Мой день» — ленту на всю ширину,
+  // без денег и без правой колонки. Менеджер и админ — двухколоночно.
+  const grid=document.querySelector('.dash-grid');
+  const attnCaps=document.querySelector('.dash-attn .acaps');
+  if(role==='engineer'){
+    if(grid) grid.style.gridTemplateColumns='1fr';
+    if(box) box.style.display='none';
+    if(attnCaps) attnCaps.textContent='Мой день';
+    return;   // правую колонку инженеру не строим вовсе
+  }
+  if(grid) grid.style.gridTemplateColumns='1.4fr 1fr';
+  if(box) box.style.display='';
+  if(attnCaps) attnCaps.textContent='Требует внимания';
+  box.innerHTML='<div class="hint">Считаю…</div>';
   try{
     const cl=clients.filter(c=>!c.is_base).length, dp=clients.filter(c=>c.is_base).length;
     const {data:js}=await sb.from('jobs').select('status,at_depot, job_works(hours,billable,revenue)').is('deleted_at',null); const jb=js||[];
@@ -643,26 +658,34 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return; rend
     const overdue=vehicles.filter(v=>{ const iv=+v.service_interval||0; return iv>0 && ((+v.odometer||0)-(+v.last_service||0))>=iv; }).length;
     const pc=profit>=0?'var(--green)':'var(--red)';
     const tile=(l,v,sub,col,nav)=>'<div class="stat'+(nav?' nav':'')+'"'+(nav?(' data-nav="'+nav+'"'):'')+'><div class="stat-v"'+(col?(' style="color:'+col+'"'):'')+'>'+v+'</div><div class="stat-l">'+esc(l)+'</div>'+(sub?'<div class="stat-s">'+esc(sub)+'</div>':'')+(nav?'<div class="stat-go">Открыть →</div>':'')+'</div>';
-    let h='<div class="stats">';
-    h+=tile('Точки', cl+dp, 'клиентов '+cl+' · депо '+dp, '', 'points');
-    h+=tile('Активные заявки', (byst.open+byst.planned+byst.in_progress), 'в работе '+byst.in_progress, '', 'jobs');
-    h+=tile('Закрыто заявок', byst.done, '', '', 'jobs-done');
-    h+=tile('Выезды', trips.length, 'сохранённых', '', 'trips');
-    h+=tile('Выручка', Math.round(rev)+' '+cur, 'по выездам');
-    h+=tile('Затраты', Math.round(cost)+' '+cur, '');
-    h+=tile('Прибыль', Math.round(profit)+' '+cur, 'маржа '+margin.toFixed(0)+'%', pc);
-    h+=tile('Доля гарантии', warrShare+'%', 'по часам работ');
-    h+=tile('Автопарк', vehicles.length, 'ТО просрочено: '+overdue, overdue>0?'var(--red)':'', 'vehicles');
+    const moneyCard = canWrite()
+      ? '<div class="card money-card"><div class="mc-big">'+Math.round(rev).toLocaleString('ru-RU')+' <span class="mc-cur">'+cur+'</span></div>'
+        +'<div class="mc-row"><span class="mc-k">Прибыль</span><span class="mc-v" style="color:'+pc+'">'+Math.round(profit).toLocaleString('ru-RU')+' '+cur+'</span></div>'
+        +'<div class="mc-row"><span class="mc-k">Маржа</span><span class="mc-v">'+margin.toFixed(0)+'%</span></div>'
+        +'<div class="mc-row"><span class="mc-k">Доля гарантии</span><span class="mc-v">'+warrShare+'%</span></div></div>'
+      : '';
+
+    let h=moneyCard;
+    h+='<div class="stats mini">';
+    h+=tile('Клиенты', cl+dp, 'из них депо '+dp, '', 'points');
+    h+=tile('Заявки в работе', (byst.open+byst.planned+byst.in_progress), 'в процессе '+byst.in_progress, '', 'jobs');
+    h+=tile('Выполнено', byst.done, '', '', 'jobs-done');
+    h+=tile('Выезды', trips.length, '', '', 'trips');
+    h+=tile('Машины', vehicles.length, 'ТО пора: '+overdue, overdue>0?'var(--red)':'', 'vehicles');
     h+='</div>';
     h+='<div class="card" style="margin-top:16px"><h3>Заявки по статусам</h3>';
-    [['open','Открытые'],['planned','Запланированные'],['in_progress','В работе'],['done','Закрытые'],['cancelled','Отменённые']].forEach(p=>{ h+='<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid var(--line)"><span class="hint" style="margin:0">'+p[1]+'</span><b>'+(byst[p[0]]||0)+'</b></div>'; });
+    [['open','Открыта'],['planned','Запланирована'],['in_progress','В работе'],['done','Готова'],['cancelled','Отменена']].forEach(([k,lbl])=>{
+      const n=byst[k]||0; h+='<div class="meta" style="justify-content:space-between;padding:4px 0"><span>'+lbl+'</span><b>'+n+'</b></div>';
+    });
     h+='</div>';
-    const months=[]; const now=new Date(); for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),label:d.toLocaleDateString('ru-RU',{month:'short'}),rev:0,profit:0,cnt:0}); }
-    trips.forEach(t=>{ if(!t.date_from) return; const m=months.find(x=>x.key===String(t.date_from).slice(0,7)); if(m){ const e=t.econ_snapshot||{}; m.rev+=+e.revenue||0; m.profit+=+e.profit||0; m.cnt++; } });
-    const maxRev=Math.max(1,...months.map(m=>m.rev));
-    h+='<div class="card" style="margin-top:16px"><h3>Динамика по месяцам</h3><div style="display:flex;align-items:flex-end;gap:10px;height:140px;margin-top:10px">';
-    months.forEach(m=>{ const hR=Math.round(m.rev/maxRev*100), hP=Math.round(Math.max(0,m.profit)/maxRev*100); h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="font-size:10px;line-height:1.3;margin-bottom:4px"><span style="color:var(--accent-ink)">'+(m.rev?Math.round(m.rev):'')+'</span>'+(m.profit?'<br><span style="color:#16a34a">'+Math.round(m.profit)+'</span>':'')+'</div><div style="width:100%;display:flex;align-items:flex-end;justify-content:center;gap:3px;height:100px"><div title="выручка" style="width:40%;background:var(--accent);border-radius:4px 4px 0 0;height:'+hR+'%"></div><div title="прибыль" style="width:40%;background:#16a34a;border-radius:4px 4px 0 0;height:'+hP+'%"></div></div><div style="font-size:11px;color:var(--ink-dim);margin-top:6px">'+esc(m.label)+(m.cnt?(' · '+m.cnt):'')+'</div></div>'; });
-    h+='</div><div class="meta" style="margin-top:8px"><span style="color:var(--accent)">■</span> выручка · <span style="color:#16a34a">■</span> прибыль · число под месяцем — выездов</div></div>';
+    const months=[]; const now=new Date(); for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:d.toISOString().slice(0,7),rev:0,profit:0}); }
+    trips.forEach(t=>{ if(!t.date_from) return; const m=months.find(x=>x.key===String(t.date_from).slice(0,7)); if(m){ const e=t.econ_snapshot||{}; m.rev+=+e.revenue||0; m.profit+=+e.profit||0; } });
+    if(canWrite()){
+      const maxRev=Math.max(1,...months.map(m=>m.rev));
+      h+='<div class="card" style="margin-top:16px"><h3>Выручка по месяцам</h3><div style="display:flex;align-items:flex-end;gap:10px;height:90px;margin-top:10px">';
+      months.forEach(m=>{ const hR=Math.round(m.rev/maxRev*100); h+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="background:var(--accent);border-radius:3px 3px 0 0;height:'+hR+'%"></div><div class="meta" style="text-align:center;margin-top:4px;font-size:10px">'+m.key.slice(5)+'</div></div>'; });
+      h+='</div></div>';
+    }
     box.innerHTML=h;
     box.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>dashNav(el.dataset.nav));
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; } }
