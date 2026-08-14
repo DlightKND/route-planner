@@ -62,8 +62,16 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
     (j.job_works || []).forEach(w => {
       const h = +w.hours || 0; workH += h; jh += h;
       cLabor += h * ((c.hour) || 0);            // было workCost(w)
-      if (w.billable) { rWork += (+w.revenue || 0); jr += (+w.revenue || 0); }
-      else wh += h;
+      // Выручка есть ВСЕГДА — и у платной, и у гарантийной работы. Разница
+      // только в тарифе: платная по work_paid, гарантийная по work_warr.
+      // Обе ставки уже применены в workRevenue и лежат в w.revenue. Сервис —
+      // отдельная бизнес-единица и выставляет счёт всегда: клиенту или
+      // внутреннему подразделению по гарантийному тарифу. Поэтому суммируем
+      // revenue независимо от billable.
+      rWork += (+w.revenue || 0); jr += (+w.revenue || 0);
+      // Гарантийные часы копим отдельно — для показателя «доля гарантии».
+      // Это уже не «бесплатно», а «оплачено по гарантийному тарифу».
+      if (!w.billable) wh += h;
     });
     perJob.push({ name: (j.clients && j.clients.name) || 'заявка', revenue: jr, hours: jh });
   });
