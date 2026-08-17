@@ -260,7 +260,7 @@ async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
     const ch=+((appSettings.costs&&appSettings.costs.hour))||0;
     (data||[]).forEach(j=>{ if(!j.client_id) return; const s=clientStats[j.client_id]||(clientStats[j.client_id]={rev:0,hours:0,warrH:0,cost:0,jobs:0,done:0});
       s.jobs++; if(j.status==='done') s.done++;
-      (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; s.hours+=h; s.cost+=h*ch; if(w.billable===false) s.warrH+=h; else s.rev+=(+w.revenue||0); }); });
+      (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; s.hours+=h; s.cost+=h*ch; if(w.billable===false) s.warrH+=h; s.rev+=(+w.revenue||0); }); });   // выручка и с гарантийных: тариф свой, но счёт есть всегда
     Object.values(clientStats).forEach(s=>{ s.profit=s.rev-s.cost; s.warrShare=s.hours>0?Math.round(s.warrH/s.hours*100):0; });
   }catch(e){ clientStats={}; } }
 
@@ -530,7 +530,7 @@ const JOB_STATUS_ORDER=['open','planned','in_progress','done','cancelled'];
 let jobVisible={open:true,planned:true,in_progress:true,done:false,cancelled:false};
 function renderJobChips(){ const box=$('jobStatusChips'); if(!box) return; box.innerHTML=JOB_STATUS_ORDER.map(s=>'<span class="chip'+(jobVisible[s]?' on':'')+'" data-js="'+s+'">'+esc(ST[s])+'</span>').join('');
   box.querySelectorAll('[data-js]').forEach(c=>c.onclick=()=>{ jobVisible[c.dataset.js]=!jobVisible[c.dataset.js]; renderJobChips(); renderJobs(); }); }
-function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.hours||0),0); const rev=w.filter(x=>x.billable).reduce((a,x)=>a+(+x.revenue||0),0);
+function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.hours||0),0); const rev=w.reduce((a,x)=>a+(+x.revenue||0),0);   // и платные, и гарантийные
   const warr=w.some(x=>!x.billable), paid=w.some(x=>x.billable); const eng=profilesList.find(p=>p.id===j.assigned_engineer);
   const head='<h4>'+esc(j.clients?j.clients.name:'—')+'</h4>'+(j.equipment?'<div class="meta">'+esc(j.equipment.model||'')+'</div>':'');
   const tags=(warr?'<span class="pill warn">гар.</span>':'')+(paid?'<span class="pill good">платно</span>':'');
@@ -1104,7 +1104,7 @@ function renderTripJobs(){ const box=$('tpJobs');
   let list=tripJobsAll; if(useFilter) list=tripJobsAll.filter(j=>curTripJobs.has(j.id)||tripRouteKeys.has(jobKey(j)));
   const hidden=tripJobsAll.length-list.length;
   box.innerHTML=list.length?'':'<div class="hint">'+(useFilter?'Нет заявок по точкам этого маршрута. Снимите галочку, чтобы показать все.':'Заявок нет.')+'</div>';
-  list.forEach(j=>{ const w=j.job_works||[]; const rev=w.filter(x=>x.billable).reduce((a,x)=>a+(+x.revenue||0),0); const d=document.createElement('label'); d.className='eqitem'; d.style.cssText='display:flex;gap:8px;align-items:center';
+  list.forEach(j=>{ const w=j.job_works||[]; const rev=w.reduce((a,x)=>a+(+x.revenue||0),0);   // и платные, и гарантийные const d=document.createElement('label'); d.className='eqitem'; d.style.cssText='display:flex;gap:8px;align-items:center';
     d.innerHTML='<input type="checkbox" data-tj="'+j.id+'" '+(curTripJobs.has(j.id)?'checked':'')+' style="width:auto">'+
       '<span class="grow">'+esc(j.clients?j.clients.name:'—')+' · '+esc(ST[j.status]||j.status)+(j.scheduled_date?' · '+esc(j.scheduled_date):'')+'</span>'+
       '<span class="hint" style="margin:0">'+(rev?('выручка '+rev):'гар.')+'</span>';
