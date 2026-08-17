@@ -58,7 +58,7 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
   let rWork = 0, wh = 0, workH = 0, cLabor = 0; const perJob = [];
   const c = (T.costs) || {};
   (jobs || []).forEach(j => {
-    let jr = 0, jh = 0;
+    let jr = 0, jh = 0, jwh = 0;
     (j.job_works || []).forEach(w => {
       const h = +w.hours || 0; workH += h; jh += h;
       cLabor += h * ((c.hour) || 0);            // было workCost(w)
@@ -71,9 +71,29 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
       rWork += (+w.revenue || 0); jr += (+w.revenue || 0);
       // Гарантийные часы копим отдельно — для показателя «доля гарантии».
       // Это уже не «бесплатно», а «оплачено по гарантийному тарифу».
-      if (!w.billable) wh += h;
+      if (!w.billable) { wh += h; jwh += h; }
     });
-    perJob.push({ name: (j.clients && j.clients.name) || 'заявка', revenue: jr, hours: jh });
+    // Разложение по заявке — ТОЛЬКО работы. Транспортные расходы (дорога,
+    // сутки, ночлег) на заявки не раскладываются: они уже распределены по
+    // плательщикам через roadByPayer, и дробить их ещё и по заявкам значило
+    // бы делить одно и то же дважды по разным основаниям.
+    //
+    // Факт часов по заявке приходит снаружи (ctx.factHoursByJob) — это сумма
+    // утверждённых стоянок, привязанных именно к этой заявке. Если факта нет,
+    // fact* остаются null, и потребитель показывает только план.
+    const fh = (ctx.factHoursByJob && j.id != null) ? ctx.factHoursByJob[j.id] : null;
+    const factHours = (fh != null && fh > 0) ? +fh : null;
+    const costPlan = jh * ((c.hour) || 0);
+    const costFact = (factHours != null) ? factHours * ((c.hour) || 0) : null;
+    perJob.push({
+      id: j.id ?? null,
+      name: (j.clients && j.clients.name) || 'заявка',
+      revenue: jr, hours: jh, warrantyHours: jwh,
+      factHours,                                  // null = факта нет
+      costPlan, costFact,
+      cost: (costFact != null) ? costFact : costPlan,
+      profit: jr - ((costFact != null) ? costFact : costPlan)
+    });
   });
   const t = (T.tariffs) || {};
   const km = routeKm || 0; const dH = driveH || 0; const totalH = workH + dH;
