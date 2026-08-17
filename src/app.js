@@ -2045,26 +2045,119 @@ function kmBetween(a,b){ try{ return turf.distance([a.lng,a.lat],[b.lng,b.lat],{
 function circuitKm(start,pts){ if(!pts||!pts.length) return 0; if(pts.length===1) return 2*kmBetween(start,pts[0]); let rem=pts.slice(),cur=start,total=0; while(rem.length){ let bi=0,bd=Infinity; rem.forEach((p,i)=>{ const d=kmBetween(cur,p); if(d<bd){bd=d;bi=i;} }); total+=bd; cur=rem[bi]; rem.splice(bi,1); } total+=kmBetween(cur,start); return total; }
 
 
-function showEconModal(d){ const cur=d.cur; let h='<div class="meta" style="margin-bottom:4px">Выручка по заявкам</div>';
-  if(d.perJob.length) d.perJob.forEach(p=>{ h+='<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>'+esc(p.name)+' <span class="hint" style="margin:0">'+p.hours.toFixed(1)+' ч</span></span><b>'+p.revenue.toFixed(0)+'</b></div>'; });
-  else h+='<div class="hint">Заявок нет — выручка 0.</div>';
-  if(d.roadGroups&&d.roadGroups.length){ h+='<div class="meta" style="margin:8px 0 2px">Дорога по плательщикам (реальный пробег '+d.km.toFixed(0)+' км, себестоимость по нему):</div>'; d.roadGroups.forEach(g=>{ h+=econRow(esc(g.name)+' · '+g.count+' точ. · '+g.km.toFixed(0)+' км × '+g.rate+(g.ov?' (оверрайд)':''),g.rev.toFixed(0)); }); h+=econRow('Командировочные · '+d.days+' дн / '+d.nights+' ноч '+(d.daysByCal?'(по датам выезда)':'(оценка по нагрузке — задай даты выезда)'),d.rPerDiem.toFixed(0)); }
-  else { h+=econRow('Километраж ('+d.km.toFixed(0)+' км × тариф)',d.rTravel.toFixed(0))+econRow('Командировочные · '+d.days+' дн / '+d.nights+' ноч '+(d.daysByCal?'(по датам выезда)':'(оценка по нагрузке — задай даты выезда)'),d.rPerDiem.toFixed(0)); }
-  h+='<div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:6px;padding-top:6px"><span>Итого выручка'+(d.revOv?' <span class="hint" style="margin:0">(оверрайд, расчёт '+d.revComputed.toFixed(0)+')</span>':'')+'</span><b>'+d.rev.toFixed(0)+' '+esc(cur)+'</b></div>';
-  h+='<div class="meta" style="margin:12px 0 4px">Время</div>'+econRow('Работа',d.workH.toFixed(1)+' ч')+econRow('В пути',d.driveH.toFixed(1)+' ч')+econRow('Всего',d.totalH.toFixed(1)+' ч')+econRow('Дней / ночей',d.days+' / '+d.nights);
-  h+='<div class="meta" style="margin:12px 0 4px">Затраты</div>'+econRow('Труд ('+(d.factWorkH!=null?('факт '+d.factWorkH.toFixed(1)+' ч, норма '+d.workH.toFixed(1)):(d.workH.toFixed(1)+' ч'))+')',d.cLabor.toFixed(0))+econRow('Километраж ('+(d.factKm!=null?('факт '+d.factKm.toFixed(0)+' км, план '+d.km.toFixed(0)):(d.km.toFixed(0)+' км'))+')',d.cKm.toFixed(0))+econRow('Сутки ('+d.days+')',d.cDay.toFixed(0))+econRow('Ночлег ('+d.nights+')',d.cNight.toFixed(0));
-  h+='<div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:6px;padding-top:6px"><span>Итого затраты'+(d.costOv?' <span class="hint" style="margin:0">(оверрайд, расчёт '+d.costComputed.toFixed(0)+')</span>':'')+'</span><b>'+d.cost.toFixed(0)+' '+esc(cur)+'</b></div>';
-  h+='<div class="meta" style="margin:12px 0 4px">Гарантия</div>'+econRow('Гарантийные часы',d.wh.toFixed(1)+' ч')+econRow('Доля гарантии',d.share+'%');
+function showEconModal(d){
+  const cur=d.cur||'';
+  const money0=n=>Math.round(+n||0).toLocaleString('ru-RU');
+  const row=(k,v,cls)=>'<div class="erow'+(cls?' '+cls:'')+'"><span class="ek">'+k+'</span><span class="ev">'+v+'</span></div>';
+  const head=t=>'<div class="ehead">'+t+'</div>';
+  let h='';
+
+  // ── Заявки: только работы. Транспорт на заявки не раскладывается —
+  //    он уже распределён по плательщикам ниже.
+  h+=head('Заявки · работы');
+  if(d.perJob&&d.perJob.length){
+    d.perJob.forEach(p=>{
+      const hasFact=(p.factHours!=null);
+      const costTxt=hasFact
+        ? money0(p.costFact)+' <span class="edim">(факт '+p.factHours.toFixed(1)+' ч)</span>'
+        : money0(p.costPlan)+' <span class="edim">(план '+p.hours.toFixed(1)+' ч)</span>';
+      const pc=p.profit>=0?'var(--green)':'var(--red)';
+      h+='<div class="ejob">'
+        +'<div class="ejob-t"><b>'+esc(p.name)+'</b>'
+        +(p.warrantyHours>0?' <span class="ewarr">гар. '+p.warrantyHours.toFixed(1)+' ч</span>':'')+'</div>'
+        +row('Выручка', money0(p.revenue)+' '+cur)
+        +row('Себестоимость труда', costTxt+' '+cur)
+        +row('Прибыль', '<b style="color:'+pc+'">'+money0(p.profit)+' '+cur+'</b>')
+        +'</div>';
+    });
+  } else h+='<div class="ehint">Заявок нет — выручка по работам 0.</div>';
+
+  // ── Транспорт: по плательщикам (или плоско)
+  h+=head('Транспорт'+(d.factKm!=null?' · факт '+Math.round(d.factKm)+' км':''));
+  if(d.roadGroups&&d.roadGroups.length){
+    d.roadGroups.forEach(g=>{
+      h+=row(esc(g.name)+' <span class="edim">'+g.count+' точ. · '+g.km.toFixed(0)+' км × '+g.rate+'</span>',
+             money0(g.rev)+' '+cur+(g.ov?' <span class="edim">(вручную)</span>':''));
+    });
+  } else {
+    h+=row('Дорога <span class="edim">'+d.km.toFixed(0)+' км</span>', money0(d.rTravel)+' '+cur);
+  }
+  h+=row('Командировочные <span class="edim">'+d.days+' дн / '+d.nights+' ноч</span>', money0(d.rPerDiem)+' '+cur);
+
+  // ── Итоги
+  h+=head('Итого');
+  h+=row('Выручка', '<b>'+money0(d.rev)+' '+cur+'</b>'+(d.revOv?' <span class="edim">(вручную)</span>':''));
+  const kmTxt=(d.factKm!=null)?('факт '+Math.round(d.costKm)+' км, план '+Math.round(d.km)+' км'):(Math.round(d.km)+' км');
+  const laborTxt=(d.factWorkH!=null)?('факт '+d.factWorkH.toFixed(1)+' ч, норма '+d.workH.toFixed(1)):(d.workH.toFixed(1)+' ч');
+  h+=row('Затраты <span class="edim">труд '+laborTxt+' · '+kmTxt+'</span>',
+         '<b>'+money0(d.cost)+' '+cur+'</b>'+(d.costOv?' <span class="edim">(вручную)</span>':''));
   const pc=d.profit>=0?'var(--green)':'var(--red)';
-  h+='<div style="display:flex;justify-content:space-between;border-top:2px solid var(--line);margin-top:10px;padding-top:8px;font-size:15px"><span><b>Прибыль</b></span><b style="color:'+pc+'">'+d.profit.toFixed(0)+' '+esc(cur)+' · '+d.margin.toFixed(0)+'%</b></div>';
-  $('econBody').innerHTML=h; $('econOverlay').classList.add('on'); }
+  h+='<div class="etotal"><span>Прибыль</span><span style="color:'+pc+'"><b>'+money0(d.profit)+' '+cur+'</b> · '+d.margin.toFixed(0)+'%</span></div>';
+  if(d.wh>0) h+='<div class="ehint">Гарантийные часы '+d.wh.toFixed(1)+' ч · доля '+d.share+'%</div>';
+
+  // ── Мини-карта план/факт (рисуется после вставки html)
+  h+='<div id="econMapWrap" style="display:none"><div class="ehead">Маршрут</div>'
+    +'<div id="econMap" class="emap"></div>'
+    +'<div class="eleg"><span><i class="edash"></i>план</span><span><i class="esolid"></i>факт</span></div></div>';
+
+  $('econBody').innerHTML=h;
+  $('econOverlay').classList.add('on');
+  drawEconMap(d);
+}
+
+// Мини-карта: плановый маршрут пунктиром, реально пройденный — сплошной.
+// Данные кладёт showTripEcon в d.geoPlan / d.geoFact; если их нет, блок скрыт.
+function drawEconMap(d){
+  const wrap=$('econMapWrap'); if(!wrap) return;
+  const hasPlan=d.geoPlan&&d.geoPlan.length, hasFact=d.geoFact&&d.geoFact.length;
+  if(!hasPlan&&!hasFact) return;
+  wrap.style.display='';
+  try{
+    if(window._econMap){ window._econMap.remove(); window._econMap=null; }
+    const m=L.map('econMap',{zoomControl:false,attributionControl:false});
+    window._econMap=m;
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(m);
+    const layers=[];
+    if(hasPlan) layers.push(L.polyline(d.geoPlan,{color:'#9aa1ad',weight:3,dashArray:'6,6',opacity:.9}).addTo(m));
+    if(hasFact) layers.push(L.polyline(d.geoFact,{color:'#ffe100',weight:3,opacity:.95}).addTo(m));
+    const g=L.featureGroup(layers); m.fitBounds(g.getBounds(),{padding:[16,16]});
+    setTimeout(()=>{ try{ m.invalidateSize(); }catch(e){} },60);
+  }catch(e){ wrap.style.display='none'; }
+}
 $('econClose').onclick=()=>$('econOverlay').classList.remove('on');
 $('tpEconBtn').onclick=()=>{ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); showEconModal(econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value},appSettings.tariff_profiles,window.turf)); };
 if($('tpJobsRoute')) $('tpJobsRoute').onchange=renderTripJobs;
 async function showTripEcon(id){ const t=trips.find(x=>x.id==id); if(!t) return; const es=t.econ_snapshot||{}; const ts=t.tariffs_snapshot||{shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency,tariff_profiles:appSettings.tariff_profiles||[]};
   let jobs=[]; try{ const {data}=await sb.from('trip_jobs').select('jobs(id, client_id, clients(name,lat,lng), equipment(lat,lng), job_works(hours,billable,revenue,tariff_profile))').is('jobs.deleted_at',null).eq('trip_id',id); jobs=(data||[]).map(r=>r.jobs).filter(Boolean); }catch(e){}
   const stStop=(t.route_stops||[]).find(x=>x.type==='start'); const start=stStop?{lat:stStop.lat,lng:stStop.lng,name:stStop.name}:null;
-  showEconModal(econCompute(jobs,es.km||0,es.driveH||0,ts,t.overrides||{},{start,dateFrom:t.date_from,dateTo:t.date_to,factKm:t.fact_km,factWorkH:factHByTrip[t.id]},appSettings.tariff_profiles,window.turf)); }
+
+  // Факт часов по КАЖДОЙ заявке — для разложения «план/факт» в модалке.
+  // Считает trip_fact_hours_by_job: утверждённые стоянки, привязанные к заявке.
+  let factHoursByJob={};
+  try{
+    const { data:fh }=await sb.rpc('trip_fact_hours_by_job',{p_trip:id});
+    (fh||[]).forEach(r=>{ factHoursByJob[r.job_id]=+r.hours||0; });
+  }catch(e){ /* факта нет — модалка покажет только план */ }
+
+  // Геометрия для мини-карты: план — построенный маршрут, факт — трек машины.
+  let geoPlan=[], geoFact=[];
+  try{
+    const g=t.route_geometry;
+    const coords=(g&&g.coordinates)?g.coordinates:(Array.isArray(g)?g:null);
+    if(coords) geoPlan=coords.map(c=>[c[1],c[0]]);   // GeoJSON [lng,lat] → [lat,lng]
+  }catch(e){}
+  try{
+    const { data:pts }=await sb.from('vehicle_positions')
+      .select('lat,lng,ts').eq('trip_id',id).order('ts',{ascending:true}).limit(3000);
+    geoFact=(pts||[]).map(p=>[+p.lat,+p.lng]);
+  }catch(e){}
+
+  const d=econCompute(jobs,es.km||0,es.driveH||0,ts,t.overrides||{},
+    {start,dateFrom:t.date_from,dateTo:t.date_to,factKm:t.fact_km,
+     factWorkH:factHByTrip[t.id],factHoursByJob},
+    appSettings.tariff_profiles,window.turf);
+  d.geoPlan=geoPlan; d.geoFact=geoFact;
+  showEconModal(d); }
 
 // ---------- акт выполненных работ ----------
 function printDoc(html){ const f=document.createElement('iframe'); f.setAttribute('aria-hidden','true'); f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
