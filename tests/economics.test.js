@@ -121,3 +121,39 @@ describe('econCompute — гарантийная работа даёт выру�
     expect(e.share).toBe(Math.round(8/14*100));
   });
 });
+
+describe('perJob — разложение по заявке: только работы, план и факт', () => {
+  const jobs=[
+    { id:'j1', clients:{name:'Клиент А'}, job_works:[{hours:4,billable:true, revenue:3000}] },
+    { id:'j2', clients:{name:'Клиент Б'}, job_works:[{hours:8,billable:false,revenue:6000}] },
+  ];
+  it('без факта — себестоимость по плану, factHours null', () => {
+    const e=econCompute(jobs,382,6,T,{},{},[],turf);
+    const a=e.perJob.find(p=>p.id==='j1');
+    expect(a.factHours).toBe(null);
+    expect(a.costPlan).toBe(4*750);       // 4 ч × 750
+    expect(a.cost).toBe(a.costPlan);
+    expect(a.profit).toBe(3000-3000);
+  });
+  it('с фактом — себестоимость по фактическим часам', () => {
+    const e=econCompute(jobs,382,6,T,{},{factHoursByJob:{j1:3.6}},[],turf);
+    const a=e.perJob.find(p=>p.id==='j1');
+    expect(a.factHours).toBe(3.6);
+    expect(a.costFact).toBeCloseTo(3.6*750,6);
+    expect(a.cost).toBeCloseTo(3.6*750,6);
+    expect(a.profit).toBeCloseTo(3000-3.6*750,6);
+  });
+  it('гарантийные часы видны по заявке', () => {
+    const e=econCompute(jobs,382,6,T,{},{},[],turf);
+    const b=e.perJob.find(p=>p.id==='j2');
+    expect(b.warrantyHours).toBe(8);
+    expect(b.revenue).toBe(6000);          // гарантия тоже выручка
+  });
+  it('транспорт в разложение по заявке НЕ попадает', () => {
+    const e=econCompute(jobs,382,6,T,{},{},[],turf);
+    e.perJob.forEach(p=>{
+      // себестоимость заявки — только труд, дорога/сутки сюда не входят
+      expect(p.cost).toBeLessThanOrEqual(p.hours*750 + 0.001);
+    });
+  });
+});
