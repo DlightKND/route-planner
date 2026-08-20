@@ -30,7 +30,8 @@ window.addEventListener('unhandledrejection', (ev) => {
 const { money, hhmm, businessDays, colNum, colLetter, cellRC, jobRoadPayer, rateFrom, dedupeStops, tspOrder,
         econCompute, roadByPayer, jobPoint,
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
-        jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank } = core;
+        jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
+        simplifyLine } = core;
 
 
 const $=id=>document.getElementById(id);
@@ -970,6 +971,22 @@ function renderRouteStops(){ const box=$('tpRouteStops'); const hasAny=tripStart
   box.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>moveStop(+b.dataset.down,1));
   box.querySelectorAll('[data-wprm]').forEach(b=>b.onclick=()=>{ tripRouteStops.splice(+b.dataset.wprm,1); resetTripRoute(); renderRouteStops(); }); }
 function moveStop(i,dir){ const j=i+dir; if(j<0||j>=tripRouteStops.length) return; const a=tripRouteStops; const t=a[i]; a[i]=a[j]; a[j]=t; resetTripRoute(); renderRouteStops(); }
+// Геометрия маршрута перед сохранением прореживается: ORS отдаёт точку каждые
+// 20–50 м, и на маршруте в 1700 км это до 2 МБ JSON — такой запрос база
+// отклоняет. Для карты подробность не нужна, форма линии сохраняется.
+function slimGeometry(g){
+  if(!g) return null;
+  try{
+    const coords=(g.geometry&&g.geometry.coordinates)||g.coordinates;
+    if(!Array.isArray(coords)||coords.length<3) return g;
+    const before=coords.length;
+    const slim=simplifyLine(coords,0.0001);   // ~11 м
+    if(slim.length===before) return g;
+    console.info('Геометрия маршрута: '+before+' → '+slim.length+' точек');
+    if(g.geometry) return {...g,geometry:{...g.geometry,coordinates:slim}};
+    return {...g,coordinates:slim};
+  }catch(e){ return g; }
+}
 function routeAll(){ return (tripStart?[{type:'start',name:tripStart.name,lat:tripStart.lat,lng:tripStart.lng}]:[]).concat(tripRouteStops); }
 let ganttTrips=[], gDayW=36;
 function wireGantt(box){
@@ -1140,7 +1157,7 @@ $('tripCancel').onclick=()=>$('tripOverlay').classList.remove('on');
 $('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
 $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const e=tripCalc(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
   const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};
-  const rec={date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:tripRoute.geometry||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:jobIds.length},tariffs_snapshot:tripT()};
+  const rec={date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:jobIds.length},tariffs_snapshot:tripT()};
   $('tpSave').disabled=true;
   try{ let tid=tripEditId;
     if(tripEditId){ const {error}=await sb.from('trips').update(rec).eq('id',tripEditId); if(error) throw error; }
@@ -1153,7 +1170,7 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
     // Заодно чинится дыра: инженер закрывает выезд через RPC, saveTrip не
     // вызывается вовсе, и пробег молча переставал бы обновляться.
     $('tripOverlay').classList.remove('on'); await renderTrips(); showToast('Выезд сохранён');
-  }catch(err){ $('tripErr').textContent='Ошибка: '+(err.message||err); } finally{ $('tpSave').disabled=false; } };
+  }catch(err){ console.error('Сохранение выезда не прошло:', err, '| детали:', err&&(err.details||err.hint||err.code)); $('tripErr').textContent='Ошибка: '+(err.message||err); } finally{ $('tpSave').disabled=false; } };
 async function delTrip(id){ if(!await confirmDialog('Удалить выезд?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('trips').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderTrips();
   undoToast('Выезд удалён', async ()=>{ const {error:e2}=await sb.from('trips').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Восстановлено'); }); }
 function tripGmaps(id){ const t=trips.find(x=>x.id==id); const stops=(t&&t.route_stops)||[]; if(stops.length<2){ notify('Нужно минимум 2 точки в выезде (по клиентам заявок).','warn'); return; }
@@ -2030,7 +2047,7 @@ $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<
   const ov=exist.overrides||{};
   const T={shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency};
   const e=econCompute(linked,rRoute.km,rRoute.driveH,T,ov,{start:rStart},appSettings.tariff_profiles,window.turf);
-  const rec={route_stops:stops.map(s=>({type:s.type,name:s.name,lat:s.lat,lng:s.lng,clientId:s.clientId||null,equipId:s.equipId||null,description:s.description||''})),route_geometry:rRoute.geometry||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:linked.length},tariffs_snapshot:T};
+  const rec={route_stops:stops.map(s=>({type:s.type,name:s.name,lat:s.lat,lng:s.lng,clientId:s.clientId||null,equipId:s.equipId||null,description:s.description||''})),route_geometry:slimGeometry(rRoute.geometry)||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:linked.length},tariffs_snapshot:T};
   let tid=plannerTripId;
   try{ if(plannerTripId){ const {error}=await sb.from('trips').update(rec).eq('id',plannerTripId); if(error) throw error; }
     else { rec.status='planned'; rec.created_by=session.user.id; const {data,error}=await sb.from('trips').insert(rec).select('id').single(); if(error) throw error; tid=data.id; plannerTripId=tid; }
