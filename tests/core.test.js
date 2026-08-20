@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { kmBetween, circuitKm, tspOrder, dedupeStops } from '../src/core/geo.js';
+import { kmBetween, circuitKm, tspOrder, dedupeStops, simplifyLine } from '../src/core/geo.js';
 import { money, hhmm, businessDays, colNum, colLetter, cellRC } from '../src/core/format.js';
 import { jobRoadPayer, rateFrom } from '../src/core/tariff.js';
 
@@ -91,5 +91,33 @@ describe('tariff', () => {
       { taken_on: '2026-01-03', moto_hours: 20 }
     ]);
     expect(r).toBe(0);
+  });
+});
+
+describe('simplifyLine — прореживание маршрута', () => {
+  it('короткую линию не трогает', () => {
+    const l=[[33,49],[34,50]];
+    expect(simplifyLine(l)).toHaveLength(2);
+  });
+  it('точки на прямой выбрасываются, концы остаются', () => {
+    const l=[[0,0],[1,1],[2,2],[3,3],[4,4]];   // строго прямая
+    const r=simplifyLine(l,0.0001);
+    expect(r[0]).toEqual([0,0]);
+    expect(r[r.length-1]).toEqual([4,4]);
+    expect(r.length).toBeLessThan(l.length);
+  });
+  it('излом сохраняется', () => {
+    const l=[[0,0],[1,0],[2,0],[2,1],[2,2]];   // поворот на [2,0]
+    const r=simplifyLine(l,0.0001);
+    expect(r).toContainEqual([2,0]);
+  });
+  it('длинная линия сокращается многократно', () => {
+    const l=[]; for(let i=0;i<5000;i++) l.push([33+i*0.00002, 49+i*0.00002]);
+    const r=simplifyLine(l,0.0001);
+    expect(r.length).toBeLessThan(l.length/10);
+  });
+  it('не падает на пустом и на одной точке', () => {
+    expect(simplifyLine([])).toEqual([]);
+    expect(simplifyLine([[1,1]])).toHaveLength(1);
   });
 });
