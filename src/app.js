@@ -1116,7 +1116,7 @@ function renderTripJobs(){ const box=$('tpJobs');
 // поэтому правка ставки задним числом переписывала экономику уже закрытых
 // выездов. Снапшот на то и снапшот.
 function tripT(){ return {shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency,tariff_profiles:appSettings.tariff_profiles||[]}; }
-function tripCalc(){ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const cur=tripEditId?trips.find(x=>x.id==tripEditId):null; return econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value,factKm:cur?cur.fact_km:null,factWorkH:tripEditId?factHByTrip[tripEditId]:null}); }
+function tripCalc(){ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const cur=tripEditId?trips.find(x=>x.id==tripEditId):null; return econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{roadKm:(cur&&cur.road_km_by_payer)||null,start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value,factKm:cur?cur.fact_km:null,factWorkH:tripEditId?factHByTrip[tripEditId]:null}); }
 function tripEcon(){ const e=tripCalc(); const cur=e.cur; $('tpEcon').innerHTML='Заявок: '+e.jobCount+' · работа '+e.workH.toFixed(1)+'ч · в пути '+e.driveH.toFixed(1)+'ч · '+e.km.toFixed(0)+'км · дней '+e.days+' · выручка '+e.rev.toFixed(0)+' '+cur+' · затраты '+e.cost.toFixed(0)+' · прибыль '+e.profit.toFixed(0)+' · гар '+e.share+'%'; renderTpRoadGroups(); }
 function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const rb=(tripStart&&(appSettings.tariff_profiles||[]).length)?roadByPayer(tripStart,jobs):null;
   if(!rb||!rb.groups.length){ box.innerHTML=''; return; }
@@ -1924,7 +1924,16 @@ async function orsPost(url,body){ const px=(appSettings.ors_proxy||'').trim(); l
   if(!px) throw new Error('Маршрутизация не настроена: не задан адрес прокси ORS в настройках.');
   if(px){ const path=url.replace('https://api.openrouteservice.org/',''); const tok=(session&&session.access_token)||'';
     r=await fetch(px,{method:'POST',headers:{'Authorization':'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify({path,body})}); }
-  if(r.ok) return await r.json(); let t=''; try{ t=await r.text(); }catch(e){} const err=new Error(orsErrMsg(r.status,t)); err.raw=t; err.status=r.status; throw err; }
+  if(r.ok) return await r.json();
+  let t=''; try{ t=await r.text(); }catch(e){}
+  // Причина отказа ORS лежит в теле ответа. Без вывода в консоль виден только
+  // голый «400», а понять, что именно не так (лимит координат, слишком сложные
+  // зоны объезда, точка вне дорожной сети), невозможно.
+  console.error('ORS '+r.status+' на '+url.replace('https://api.openrouteservice.org/','')
+    +' · координат: '+((body&&body.coordinates&&body.coordinates.length)||0)
+    +' · зоны объезда: '+((body&&body.options&&body.options.avoid_polygons)?'да':'нет')
+    +'\n'+t.slice(0,600));
+  const err=new Error(orsErrMsg(r.status,t)); err.raw=t; err.status=r.status; throw err; }
 const ORS_DIR='https://api.openrouteservice.org/v2/directions/driving-car/geojson';
 function mergeFeatures(fs){ let line=[],dist=0,dur=0;
   fs.forEach((f,i)=>{ const sm=(f.properties&&f.properties.summary)||{}; dist+=(+sm.distance||0); dur+=(+sm.duration||0); const c=(f.geometry&&f.geometry.coordinates)||[]; line=line.concat(i?c.slice(1):c); });
@@ -2154,7 +2163,8 @@ async function showTripEcon(id){ const t=trips.find(x=>x.id==id); if(!t) return;
 
   const d=econCompute(jobs,es.km||0,es.driveH||0,ts,t.overrides||{},
     {start,dateFrom:t.date_from,dateTo:t.date_to,factKm:t.fact_km,
-     factWorkH:factHByTrip[t.id],factHoursByJob},
+     factWorkH:factHByTrip[t.id],factHoursByJob,
+     roadKm:t.road_km_by_payer||null},   // готовые км по реальным маршрутам
     appSettings.tariff_profiles,window.turf);
   d.geoPlan=geoPlan; d.geoFact=geoFact;
   showEconModal(d); }
