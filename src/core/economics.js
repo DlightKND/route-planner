@@ -23,30 +23,58 @@ export function jobPoint(j) {
   return (lat != null && lng != null) ? { lat: +lat, lng: +lng } : null;
 }
 
-// Разбивка дороги по плательщикам. turf передаётся аргументом (нужен circuitKm),
-// profs — список тарифных профилей, gKm — плоская ставка км из tariffs.
-export function roadByPayer(start, jobs, profs, gKm, turf) {
-  if (!start || !turf) return null;
+// Разбивка дороги по плательщикам.
+//
+// Километры берутся из ДВУХ источников, в порядке предпочтения:
+//   1. precomputed — готовые километры по реальным маршрутам ORS, посчитанные
+//      при построении маршрута и сохранённые в trips.road_km_by_payer.
+//      Это верные цифры: по дорогам, а не по прямым.
+//   2. circuitKm по прямым линиям — прежний способ. Занижает на 30–45%,
+//      остаётся только как запасной для выездов, где готовых километров нет
+//      (старые выезды, ORS был недоступен, маршрут ещё не строили).
+//
+// turf нужен только для запасного способа.
+export function roadByPayer(start, jobs, profs, gKm, turf, precomputed) {
   const P = profs || [];
+  const pre = (precomputed && precomputed.payers) ? precomputed.payers : null;
+  if (!start && !pre) return null;
+  if (!pre && !turf) return null;
+
   const groups = {};
   (jobs || []).forEach(j => {
-    const pt = jobPoint(j); if (!pt) return;
+    const pt = jobPoint(j); if (!pt && !pre) return;
     const pid = jobRoadPayer(j) || '__none';
-    (groups[pid] = groups[pid] || { payer: pid, points: [] }).points.push(pt);
+    const g = (groups[pid] = groups[pid] || { payer: pid, points: [] });
+    if (pt) g.points.push(pt);
   });
   const keys = Object.keys(groups);
   if (!keys.length) return null;
+
   let kmRev = 0, maxKm = -1, dom = null; const out = [];
   keys.forEach(pid => {
     const g = groups[pid];
-    const km = circuitKm(start, g.points, turf);
+    // Готовые километры, если есть; иначе прежний расчёт по прямым.
+    const hit = pre ? pre[pid] : null;
+    const km = hit ? (+hit.km || 0) : circuitKm(start, g.points, turf);
+    const kind = hit ? (hit.kind || null) : null;   // base | detour | null
     const p = (pid === '__none') ? null : (P.find(x => x.id === pid) || null);
     const rate = p ? (+((p.road || {}).km_rate) || 0) : (gKm || 0);
     const rev = km * rate; kmRev += rev;
     if (km > maxKm) { maxKm = km; dom = p; }
-    out.push({ payer: pid, name: p ? p.name : 'без профиля', km, rate, rev, count: g.points.length });
+    out.push({
+      payer: pid, name: p ? p.name : 'без профиля',
+      km, rate, rev, count: g.points.length,
+      kind,                                   // для подписи «база» / «крюк»
+      exact: !!hit                            // false = посчитано по прямым
+    });
   });
-  return { kmRev, dom, groups: out };
+  return {
+    kmRev, dom, groups: out,
+    exact: !!pre,
+    baseKm: pre ? (+precomputed.base_km || null) : null,
+    totalRouteKm: pre ? (+precomputed.total_route_km || null) : null,
+    mode: pre ? (precomputed.mode || null) : null
+  };
 }
 
 // Экономика выезда. Сигнатура как в приложении плюс два явных аргумента в конце:
@@ -123,7 +151,11 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
 
   // Профили — из снапшота выезда, если он их содержит; иначе запасные.
   const P = (T.tariff_profiles && T.tariff_profiles.length) ? T.tariff_profiles : (fallbackProfiles || []);
-  const rb = (ctx.start && P.length) ? roadByPayer(ctx.start, jobs, P, (t.km || 0), turf) : null;
+  // ctx.roadKm — готовые километры по реальным маршрутам (trips.road_km_by_payer).
+  // Если их нет, roadByPayer посчитает по прямым, как раньше.
+  const rb = ((ctx.start || ctx.roadKm) && P.length)
+    ? roadByPayer(ctx.start, jobs, P, (t.km || 0), turf, ctx.roadKm)
+    : null;
 
   let rTravel, rPerDiem, roadGroups = null;
   if (rb) {
@@ -132,7 +164,8 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
       const has = (rd[g.payer] != null && rd[g.payer] !== '');
       const rev = has ? (+rd[g.payer] || 0) : g.rev;
       sum += rev;
-      return { payer: g.payer, name: g.name, km: g.km, rate: g.rate, rev, ov: has, count: g.count };
+      return { payer: g.payer, name: g.name, km: g.km, rate: g.rate, rev, ov: has, count: g.count,
+               kind: g.kind, exact: g.exact };   // kind: base|detour, exact: по дорогам или по прямым
     });
     rTravel = sum;
     const dr = (rb.dom && rb.dom.road) ? rb.dom.road : null;
@@ -160,6 +193,11 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
     factKm, costKm, factWorkH, costWorkH,
     cLabor, cKm, cDay, cNight, costComputed: cCost, cost, costOv,
     profit, margin, wh, share, cur: T.currency || '',
-    jobCount: (jobs || []).length, roadGroups
+    jobCount: (jobs || []).length, roadGroups,
+    // Сводка по способу расчёта дороги — для подписей в модалке.
+    roadExact: rb ? !!rb.exact : false,
+    roadMode: rb ? rb.mode : null,
+    roadBaseKm: rb ? rb.baseKm : null,
+    roadTotalKm: rb ? rb.totalRouteKm : null
   };
 }
