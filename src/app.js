@@ -1899,7 +1899,10 @@ async function avoidMatrix(pts,onProg){ const n=pts.length, ap=avoidPolygons(), 
   const M=Array.from({length:n},()=>new Array(n).fill(0)); let done=0, total=n*(n-1)/2;
   for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
     let d=0;
-    try{ const gj=await orsPost(ORS_DIR,{coordinates:[[pts[i].lng,pts[i].lat],[pts[j].lng,pts[j].lat]],preference:pref,options:{avoid_polygons:ap}});
+    // Без зон объезда options не отправляем — с avoid_polygons:null
+    // ORS отвечает внутренней ошибкой 2099.
+    const pr=[[pts[i].lng,pts[i].lat],[pts[j].lng,pts[j].lat]];
+    try{ const gj=await orsPost(ORS_DIR, ap?{coordinates:pr,preference:pref,options:{avoid_polygons:ap}}:{coordinates:pr,preference:pref});
       const f=(gj.features||[])[0]; d=+(((f&&f.properties&&f.properties.summary)||{}).distance)||0; }
     catch(e){ if(!isAvoidLimit(e.raw)) throw e;
       const gj=await orsPost(ORS_DIR,{coordinates:[[pts[i].lng,pts[i].lat],[pts[j].lng,pts[j].lat]],preference:pref});
@@ -1986,7 +1989,13 @@ function sampleVias(line,chunkKm){ const vias=[]; let acc=0;
     if(kmBetween(last,end)<15) vias.pop(); }
   return vias; }
 async function legWithAvoid(a,b,pref,ap,prog){ const pair=[[a.lng,a.lat],[b.lng,b.lat]];
-  try{ const gj=await orsPost(ORS_DIR,{coordinates:pair,preference:pref,options:{avoid_polygons:ap}});
+  // Зон объезда нет → options вообще не отправляем. Раньше уходило
+  // options:{avoid_polygons:null}, и ORS падал с внутренней ошибкой 2099:
+  // параметр обхода присутствует, а значения нет. Так же строит маршрут
+  // и doBuildRoute — там тело собирается без options, когда ap пустой.
+  const bodyOf=coords=>ap?{coordinates:coords,preference:pref,options:{avoid_polygons:ap}}
+                        :{coordinates:coords,preference:pref};
+  try{ const gj=await orsPost(ORS_DIR,bodyOf(pair));
     const f=(gj.features||[])[0]; if(!f) throw new Error('ORS вернул пустой участок.'); return {feature:f}; }
   catch(e){ if(!isAvoidLimit(e.raw)) throw e; }
   // плечо длиннее 150 км: берём геометрию дороги и дробим её на отрезки
@@ -1998,7 +2007,7 @@ async function legWithAvoid(a,b,pref,ap,prog){ const pair=[[a.lng,a.lat],[b.lng,
   const pts=[a].concat(vias,[b]); const parts=[]; let noAvoid=false;
   for(let i=0;i<pts.length-1;i++){ const p=[[pts[i].lng,pts[i].lat],[pts[i+1].lng,pts[i+1].lat]];
     let f=null;
-    try{ const gj=await orsPost(ORS_DIR,{coordinates:p,preference:pref,options:{avoid_polygons:ap}}); f=(gj.features||[])[0]; }
+    try{ const gj=await orsPost(ORS_DIR,bodyOf(p)); f=(gj.features||[])[0]; }
     catch(e){ if(!isAvoidLimit(e.raw)) throw e; const gj=await orsPost(ORS_DIR,{coordinates:p,preference:pref}); f=(gj.features||[])[0]; noAvoid=true; }
     if(!f||!f.geometry) throw new Error('ORS вернул пустой отрезок.'); parts.push(f); if(prog) prog('Дроблю плечо на отрезки… '+(i+1)+'/'+(pts.length-1)); }
   return {feature:mergeFeatures(parts),noAvoid,split:pts.length-1}; }
@@ -2018,13 +2027,46 @@ async function legWithAvoid(a,b,pref,ap,prog){ const pair=[[a.lng,a.lat],[b.lng,
 // в геометрию каждого круга — они обслуживают всю поездку.
 
 // Длина маршрута через последовательность точек, в километрах.
-async function routeKmThrough(pts, pref, ap, prog){
+//
+// Устойчивость важнее точности: ORS иногда отдаёт 500 (код 2099 — внутренняя
+// ошибка сервера) на вполне корректном участке. Раньше один такой участок
+// ронял весь расчёт километража. Теперь сбойный участок заменяется прямой
+// линией, а результат помечается приблизительным — лучше слегка заниженная
+// цифра по одному плечу, чем отсутствие цифры вовсе.
+async function routeKmThrough(pts, pref, ap, prog, stat){
   if(!pts || pts.length<2) return 0;
+  const valid=p=>p && isFinite(+p.lat) && isFinite(+p.lng)
+    && Math.abs(+p.lat)<=90 && Math.abs(+p.lng)<=180 && !(+p.lat===0 && +p.lng===0);
   let m=0;
   for(let i=0;i<pts.length-1;i++){
-    const r=await legWithAvoid(pts[i],pts[i+1],pref,ap,prog);
-    const sm=(r.feature&&r.feature.properties&&r.feature.properties.summary)||{};
-    m+=(+sm.distance||0);
+    const a=pts[i], b=pts[i+1];
+    if(!valid(a)||!valid(b)){ console.warn('Километраж: пропущен участок с некорректной точкой',a,b); continue; }
+    // Нулевое плечо (точка совпадает со следующей) ORS не переваривает.
+    const straight=kmBetween(a,b,window.turf);
+    if(straight<0.03){ continue; }
+    try{
+      // Код 2099 у ORS — внутренняя ошибка сервера, часто временная.
+      // Пробуем ещё раз с паузой, прежде чем сдаваться на прямую.
+      let r=null;
+      for(let att=0; att<3; att++){
+        try{ r=await legWithAvoid(a,b,pref,ap,prog); break; }
+        catch(err){
+          const transient=(err&&(err.status>=500||/2099/.test(String(err.raw||''))));
+          if(!transient || att===2) throw err;
+          if(prog) prog('ORS не ответил, повтор '+(att+2)+'/3…');
+          await new Promise(res=>setTimeout(res,700*(att+1)));
+        }
+      }
+      const sm=(r.feature&&r.feature.properties&&r.feature.properties.summary)||{};
+      m+=(+sm.distance||0);
+    }catch(e){
+      // Один участок не построился — берём прямую и идём дальше.
+      console.warn('Километраж: участок '+(a.name||'?')+' → '+(b.name||'?')
+        +' не построен ('+((e&&e.message)||e)+'), взята прямая '+straight.toFixed(1)+' км',
+        {from:[a.lat,a.lng],to:[b.lat,b.lng]});
+      m+=straight*1000;
+      if(stat) stat.approx=true;
+    }
   }
   return m/1000;
 }
@@ -2054,9 +2096,23 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
   const payers=Object.keys(groups);
   if(!payers.length) return null;
 
+  const stat={approx:false};
   const out={ mode:'circuit', main_job:null, base_km:null, total_route_km:null,
-              payers:{}, computed_at:new Date().toISOString(), stale:false };
+              payers:{}, computed_at:new Date().toISOString(), stale:false, approx:false };
   try{
+    // ── Один плательщик: весь маршрут и есть его круг ─────────────────────
+    // Километраж уже посчитан при построении маршрута (rRoute.km / tripRoute.km),
+    // причём по реальным дорогам. Гонять ORS повторно незачем — это лишние
+    // запросы и лишний риск нарваться на сбой сервиса.
+    const builtKm=(rRoute&&rRoute.km)||(tripRoute&&tripRoute.km)||0;
+    if(payers.length===1 && builtKm>0){
+      const only=payers[0];
+      out.payers[only]={km:Math.round(builtKm*10)/10,kind:'circuit'};
+      out.total_route_km=Math.round(builtKm*10)/10;
+      out.mode='circuit';
+      return out;
+    }
+
     const mainJob=mainJobId?(linkedJobs||[]).find(j=>j.id===mainJobId):null;
     const mainPid=mainJob?jobRoadPayer(mainJob):null;
     const mainPt=mainJob?jobPoint(mainJob):null;
@@ -2065,14 +2121,14 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
       // ── маржинальная схема ────────────────────────────────────────────────
       out.mode='marginal'; out.main_job=mainJobId;
       const A={...mainPt,name:'основная'};
-      const base=await routeKmThrough([start,...vias,A,start],pref,ap,prog);
+      const base=await routeKmThrough([start,...vias,A,start],pref,ap,prog,stat);
       out.base_km=Math.round(base*10)/10;
       out.payers[mainPid]={km:out.base_km,kind:'base'};
 
       for(const pid of payers){
         if(pid===mainPid) continue;
         // Крюк ради этого плательщика: через все его точки, потом к основной.
-        const withX=await routeKmThrough([start,...vias,...groups[pid],A,start],pref,ap,prog);
+        const withX=await routeKmThrough([start,...vias,...groups[pid],A,start],pref,ap,prog,stat);
         // Отсечка нулём: если точка была по пути, скидки за это не бывает.
         const detour=Math.max(0,withX-base);
         out.payers[pid]={km:Math.round(detour*10)/10,kind:'detour'};
@@ -2081,11 +2137,13 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
     } else {
       // ── каждому свой круг ─────────────────────────────────────────────────
       for(const pid of payers){
-        const km=await routeKmThrough([start,...vias,...groups[pid],start],pref,ap,prog);
+        const km=await routeKmThrough([start,...vias,...groups[pid],start],pref,ap,prog,stat);
         out.payers[pid]={km:Math.round(km*10)/10,kind:'circuit'};
       }
       out.total_route_km=(rRoute&&rRoute.km)?Math.round(rRoute.km*10)/10:null;
     }
+    out.approx=stat.approx;
+    if(stat.approx) notify('Часть плеч ORS не построил — километраж приблизительный.','warn');
     return out;
   }catch(e){
     // ORS недоступен — не обнуляем, помечаем. Экономика продолжит работать
