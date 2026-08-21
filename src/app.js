@@ -1102,7 +1102,7 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST_TRIP[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
   wireTripCards(box); wireKanbanDrag(box,dropTrip); }
 $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) openTrip(null); };
-async function openTrip(id){ await ensureRefs(); await loadTripJobs(); tripEditId=id; const t=id?getTrip(id):null;
+async function openTrip(id){ await ensureRefs(); await loadTripJobs(); tripEditId=id; const t=id?getTrip(id):null; tripMainJobId=(t&&t.main_job_id)||null;
   $('tpFrom').value=t?(t.date_from||''):''; $('tpTo').value=t?(t.date_to||''):''; $('tpVeh').innerHTML='<option value="">— авто —</option>'+vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.name+(v.plate?(' · '+v.plate):''))+'</option>').join(''); $('tpVeh').value=t&&t.vehicle_id?t.vehicle_id:''; updateVehInfo(); $('tpVeh').onchange=updateVehInfo; $('tpNotes').value=t?(t.notes||''):'';
   $('tpEng').innerHTML='<option value="">— инженер —</option>'+profilesList.map(p=>'<option value="'+p.id+'">'+esc((p.full_name||'без имени')+' ('+p.role+')')+'</option>').join('');
   $('tpEng').value=t&&t.lead_engineer?t.lead_engineer:''; $('tpStatus').value=t?t.status:'planned';
@@ -1116,17 +1116,27 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs(); tripEditI
   $('tpRouteStatus').innerHTML=tripRoute.km?('<span class="ok">'+tripRoute.km.toFixed(1)+' км · '+tripRoute.driveH.toFixed(1)+' ч</span>'):'';
   renderTripJobs(); tripEcon(); $('tripTitle').textContent=id?'Выезд':'Новый выезд'; $('tripErr').textContent=''; $('tripOverlay').classList.add('on'); }
 function jobKey(j){ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); if(lat==null) return null; return (+lat).toFixed(5)+','+(+lng).toFixed(5); }
+let tripMainJobId=null;   // основная заявка выезда (для маржинального километража)
 function renderTripJobs(){ const box=$('tpJobs');
   const routeOnly=$('tpJobsRoute')?$('tpJobsRoute').checked:false; const useFilter=routeOnly&&tripRouteKeys.size>0;
   let list=tripJobsAll; if(useFilter) list=tripJobsAll.filter(j=>curTripJobs.has(j.id)||tripRouteKeys.has(jobKey(j)));
   const hidden=tripJobsAll.length-list.length;
   box.innerHTML=list.length?'':'<div class="hint">'+(useFilter?'Нет заявок по точкам этого маршрута. Снимите галочку, чтобы показать все.':'Заявок нет.')+'</div>';
   list.forEach(j=>{ const w=j.job_works||[]; const rev=w.reduce((a,x)=>a+(+x.revenue||0),0); const d=document.createElement('label'); d.className='eqitem'; d.style.cssText='display:flex;gap:8px;align-items:center';   // выручка: и платные, и гарантийные
-    d.innerHTML='<input type="checkbox" data-tj="'+j.id+'" '+(curTripJobs.has(j.id)?'checked':'')+' style="width:auto">'+
+    // Радио «основная»: её плательщик несёт базовый пробег, остальные — крюк.
+    // Осмысленна только для заявок, включённых в выезд.
+    const isMain=(tripMainJobId===j.id);
+    const mainRadio=curTripJobs.has(j.id)
+      ? '<input type="radio" name="tpMain" data-tjmain="'+j.id+'" '+(isMain?'checked':'')
+        +' title="основная заявка выезда" style="width:auto;margin-left:4px">'
+      : '<span style="width:13px;display:inline-block"></span>';
+    d.innerHTML='<input type="checkbox" data-tj="'+j.id+'" '+(curTripJobs.has(j.id)?'checked':'')+' style="width:auto">'+mainRadio+
       '<span class="grow">'+esc(j.clients?j.clients.name:'—')+' · '+esc(ST[j.status]||j.status)+(j.scheduled_date?' · '+esc(j.scheduled_date):'')+'</span>'+
       '<span class="hint" style="margin:0">'+(rev?('выручка '+rev):'гар.')+'</span>';
     box.appendChild(d); });
   if(useFilter&&hidden>0){ const h=document.createElement('div'); h.className='hint'; h.style.marginTop='6px'; h.textContent='Скрыто '+hidden+' заявок вне маршрута.'; box.appendChild(h); }
+  box.querySelectorAll('[data-tjmain]').forEach(r=>r.onchange=()=>{
+    tripMainJobId=r.checked?r.dataset.tjmain:null; renderTripJobs(); });
   box.querySelectorAll('[data-tj]').forEach(c=>c.onchange=()=>{ if(c.checked) curTripJobs.add(c.dataset.tj); else curTripJobs.delete(c.dataset.tj); const before=tripRouteStops.map(keyOf).join('|'); syncRouteStops(); const after=tripRouteStops.map(keyOf).join('|'); renderRouteStops(); if(before!==after) resetTripRoute(); else tripEcon(); }); }
 // tariff_profiles попадают в снапшот наравне с тарифами и себестоимостями
 // (аудит, В10). Раньше их там не было, и roadByPayer читал текущие профили —
@@ -1157,7 +1167,7 @@ $('tripCancel').onclick=()=>$('tripOverlay').classList.remove('on');
 $('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
 $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const e=tripCalc(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
   const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};
-  const rec={date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:jobIds.length},tariffs_snapshot:tripT()};
+  const rec={main_job_id:tripMainJobId||null,date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:jobIds.length},tariffs_snapshot:tripT()};
   $('tpSave').disabled=true;
   try{ let tid=tripEditId;
     if(tripEditId){ const {error}=await sb.from('trips').update(rec).eq('id',tripEditId); if(error) throw error; }
@@ -1984,6 +1994,97 @@ async function legWithAvoid(a,b,pref,ap,prog){ const pair=[[a.lng,a.lat],[b.lng,
     catch(e){ if(!isAvoidLimit(e.raw)) throw e; const gj=await orsPost(ORS_DIR,{coordinates:p,preference:pref}); f=(gj.features||[])[0]; noAvoid=true; }
     if(!f||!f.geometry) throw new Error('ORS вернул пустой отрезок.'); parts.push(f); if(prog) prog('Дроблю плечо на отрезки… '+(i+1)+'/'+(pts.length-1)); }
   return {feature:mergeFeatures(parts),noAvoid,split:pts.length-1}; }
+
+// ── Километраж по плательщикам по РЕАЛЬНЫМ маршрутам ────────────────────────
+// Считается один раз при построении/сохранении маршрута и кладётся в
+// trips.road_km_by_payer. Экономика потом читает готовое, поэтому расчёт
+// денег остаётся мгновенным и не ходит в сеть.
+//
+// Две схемы (SPEC-road-km.md):
+//   circuit  — основная заявка не отмечена: каждому плательщику свой круг
+//              Депо → его точки → Депо по дорогам.
+//   marginal — основная отмечена: её плательщик несёт базу Депо→A→Депо,
+//              остальные платят только крюк Депо→X→A→Депо минус база.
+//
+// Промежуточные точки (place/wp) экономической строки не имеют, но входят
+// в геометрию каждого круга — они обслуживают всю поездку.
+
+// Длина маршрута через последовательность точек, в километрах.
+async function routeKmThrough(pts, pref, ap, prog){
+  if(!pts || pts.length<2) return 0;
+  let m=0;
+  for(let i=0;i<pts.length-1;i++){
+    const r=await legWithAvoid(pts[i],pts[i+1],pref,ap,prog);
+    const sm=(r.feature&&r.feature.properties&&r.feature.properties.summary)||{};
+    m+=(+sm.distance||0);
+  }
+  return m/1000;
+}
+
+// Промежуточные точки маршрута (не заявки) — их проезжают в любом случае.
+function viaStopsOnly(){
+  return (rStops||[]).filter(s=>s.type==='place'||s.type==='wp');
+}
+
+async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
+  const start=rStart||tripStart;
+  if(!start) return null;
+  const pref=($('rPref')&&$('rPref').value)||'recommended';
+  const ap=avoidPolygons();
+  const vias=viaStopsOnly();
+
+  // Группируем заявки по плательщику; заявки без профиля в экономику не идут.
+  const groups={};
+  (linkedJobs||[]).forEach(j=>{
+    const pid=jobRoadPayer(j); if(!pid) return;      // без плательщика — мимо
+    const pt=jobPoint(j); if(!pt) return;
+    (groups[pid]=groups[pid]||[]).push({...pt,name:(j.clients&&j.clients.name)||'точка',job:j});
+  });
+  const payers=Object.keys(groups);
+  if(!payers.length) return null;
+
+  const out={ mode:'circuit', main_job:null, base_km:null, total_route_km:null,
+              payers:{}, computed_at:new Date().toISOString(), stale:false };
+  try{
+    const mainJob=mainJobId?(linkedJobs||[]).find(j=>j.id===mainJobId):null;
+    const mainPid=mainJob?jobRoadPayer(mainJob):null;
+    const mainPt=mainJob?jobPoint(mainJob):null;
+
+    if(mainJob && mainPid && mainPt){
+      // ── маржинальная схема ────────────────────────────────────────────────
+      out.mode='marginal'; out.main_job=mainJobId;
+      const A={...mainPt,name:'основная'};
+      const base=await routeKmThrough([start,...vias,A,start],pref,ap,prog);
+      out.base_km=Math.round(base*10)/10;
+      out.payers[mainPid]={km:out.base_km,kind:'base'};
+
+      for(const pid of payers){
+        if(pid===mainPid) continue;
+        // Крюк ради этого плательщика: через все его точки, потом к основной.
+        const withX=await routeKmThrough([start,...vias,...groups[pid],A,start],pref,ap,prog);
+        // Отсечка нулём: если точка была по пути, скидки за это не бывает.
+        const detour=Math.max(0,withX-base);
+        out.payers[pid]={km:Math.round(detour*10)/10,kind:'detour'};
+      }
+      out.total_route_km=Math.round(base*10)/10;
+    } else {
+      // ── каждому свой круг ─────────────────────────────────────────────────
+      for(const pid of payers){
+        const km=await routeKmThrough([start,...vias,...groups[pid],start],pref,ap,prog);
+        out.payers[pid]={km:Math.round(km*10)/10,kind:'circuit'};
+      }
+      out.total_route_km=(rRoute&&rRoute.km)?Math.round(rRoute.km*10)/10:null;
+    }
+    return out;
+  }catch(e){
+    // ORS недоступен — не обнуляем, помечаем. Экономика продолжит работать
+    // на прежних числах, а не покажет нули.
+    console.error('Километраж по плательщикам не пересчитан:',e&&(e.message||e));
+    notify('Километраж по плательщикам не пересчитан — оставлен прежний.','warn');
+    return null;
+  }
+}
+
 async function doBuildRoute(){ if(rBusy) return; const stops=dedupeStops(routeStopsAll());
   if(stops.length<2){ $('rStatus').textContent='Нужно минимум 2 разные точки (совпадающие подряд пропускаются).'; return; }
   if(orsKeyMissing()){ orsMissing($('rStatus')); return; }
@@ -2047,7 +2148,14 @@ $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<
   const ov=exist.overrides||{};
   const T={shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency};
   const e=econCompute(linked,rRoute.km,rRoute.driveH,T,ov,{start:rStart},appSettings.tariff_profiles,window.turf);
-  const rec={route_stops:stops.map(s=>({type:s.type,name:s.name,lat:s.lat,lng:s.lng,clientId:s.clientId||null,equipId:s.equipId||null,description:s.description||''})),route_geometry:slimGeometry(rRoute.geometry)||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:linked.length},tariffs_snapshot:T};
+  // Километраж по плательщикам — по реальным дорогам, один раз здесь.
+  // Если не посчитался (ORS молчит), оставляем прежний из выезда.
+  $('rStatus').textContent='Считаю километраж по плательщикам…';
+  const roadKm=await computeRoadKmByPayer(linked, exist.main_job_id||null,
+    m=>{ $('rStatus').textContent=m; }) || exist.road_km_by_payer || null;
+  $('rStatus').textContent='';
+
+  const rec={route_stops:stops.map(s=>({type:s.type,name:s.name,lat:s.lat,lng:s.lng,clientId:s.clientId||null,equipId:s.equipId||null,description:s.description||''})),route_geometry:slimGeometry(rRoute.geometry)||null,road_km_by_payer:roadKm,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:linked.length},tariffs_snapshot:T};
   let tid=plannerTripId;
   try{ if(plannerTripId){ const {error}=await sb.from('trips').update(rec).eq('id',plannerTripId); if(error) throw error; }
     else { rec.status='planned'; rec.created_by=session.user.id; const {data,error}=await sb.from('trips').insert(rec).select('id').single(); if(error) throw error; tid=data.id; plannerTripId=tid; }
