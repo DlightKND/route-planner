@@ -12,6 +12,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - run: npm ci
+      - run: npm run lint      # ловит необъявленные переменные до прода
       - run: npm test          # тесты обязаны пройти, иначе выката нет
       - run: npm run build
       - run: node tests/smoke.cjs dist/index.html   # и смоук-стенд
