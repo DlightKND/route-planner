@@ -1121,7 +1121,7 @@ function renderTripJobs(){ const box=$('tpJobs');
   let list=tripJobsAll; if(useFilter) list=tripJobsAll.filter(j=>curTripJobs.has(j.id)||tripRouteKeys.has(jobKey(j)));
   const hidden=tripJobsAll.length-list.length;
   box.innerHTML=list.length?'':'<div class="hint">'+(useFilter?'Нет заявок по точкам этого маршрута. Снимите галочку, чтобы показать все.':'Заявок нет.')+'</div>';
-  list.forEach(j=>{ const w=j.job_works||[]; const rev=w.reduce((a,x)=>a+(+x.revenue||0),0);   // и платные, и гарантийные const d=document.createElement('label'); d.className='eqitem'; d.style.cssText='display:flex;gap:8px;align-items:center';
+  list.forEach(j=>{ const w=j.job_works||[]; const rev=w.reduce((a,x)=>a+(+x.revenue||0),0); const d=document.createElement('label'); d.className='eqitem'; d.style.cssText='display:flex;gap:8px;align-items:center';   // выручка: и платные, и гарантийные
     d.innerHTML='<input type="checkbox" data-tj="'+j.id+'" '+(curTripJobs.has(j.id)?'checked':'')+' style="width:auto">'+
       '<span class="grow">'+esc(j.clients?j.clients.name:'—')+' · '+esc(ST[j.status]||j.status)+(j.scheduled_date?' · '+esc(j.scheduled_date):'')+'</span>'+
       '<span class="hint" style="margin:0">'+(rev?('выручка '+rev):'гар.')+'</span>';
@@ -1133,7 +1133,7 @@ function renderTripJobs(){ const box=$('tpJobs');
 // поэтому правка ставки задним числом переписывала экономику уже закрытых
 // выездов. Снапшот на то и снапшот.
 function tripT(){ return {shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency,tariff_profiles:appSettings.tariff_profiles||[]}; }
-function tripCalc(){ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const cur=tripEditId?trips.find(x=>x.id==tripEditId):null; return econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{roadKm:(cur&&cur.road_km_by_payer)||null,start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value,factKm:cur?cur.fact_km:null,factWorkH:tripEditId?factHByTrip[tripEditId]:null}); }
+function tripCalc(){ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const cur=tripEditId?trips.find(x=>x.id==tripEditId):null; return econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{roadKm:(cur&&cur.road_km_by_payer)||null,start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value,factKm:cur?cur.fact_km:null,factWorkH:tripEditId?factHByTrip[tripEditId]:null},appSettings.tariff_profiles,window.turf); }
 function tripEcon(){ const e=tripCalc(); const cur=e.cur; $('tpEcon').innerHTML='Заявок: '+e.jobCount+' · работа '+e.workH.toFixed(1)+'ч · в пути '+e.driveH.toFixed(1)+'ч · '+e.km.toFixed(0)+'км · дней '+e.days+' · выручка '+e.rev.toFixed(0)+' '+cur+' · затраты '+e.cost.toFixed(0)+' · прибыль '+e.profit.toFixed(0)+' · гар '+e.share+'%'; renderTpRoadGroups(); }
 function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const rb=(tripStart&&(appSettings.tariff_profiles||[]).length)?roadByPayer(tripStart,jobs):null;
   if(!rb||!rb.groups.length){ box.innerHTML=''; return; }
@@ -2059,7 +2059,7 @@ $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<
       if(linked.length){ const rows=linked.map((j,i)=>({trip_id:tid,job_id:j.id,ord:i})); const {error}=await sb.from('trip_jobs').insert(rows); if(error) throw error; }
     }
     await renderTrips(); await openTrip(tid); showToast('Выезд сохранён');
-  }catch(e){ notify('Ошибка сохранения: '+(e.message||e),'err'); } };
+  }catch(e){ console.error('Сохранение маршрута не прошло:', e, '\nСТЕК:', e&&e.stack, '\nдетали БД:', e&&(e.details||e.hint||e.code)); notify('Ошибка сохранения: '+(e.message||e),'err'); } };
 
 $('linkSkip').onclick=()=>{ $('linkOverlay').classList.remove('on'); pendingLinkClient=null; };
 $('linkCreate').onclick=()=>{ $('linkOverlay').classList.remove('on'); const cid=pendingLinkClient; pendingLinkClient=null; if(cid) openJob(null,cid); };
