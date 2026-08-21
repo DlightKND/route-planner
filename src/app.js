@@ -2097,6 +2097,14 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
   if(!payers.length) return null;
 
   const stat={approx:false};
+  console.info('Километраж: старт',{
+    заявок:(linkedJobs||[]).length,
+    плательщиков:'считаю…',
+    основная:mainJobId||'нет',
+    км_маршрута_планировщик:(rRoute&&rRoute.km)||0,
+    км_маршрута_выезд:(tripRoute&&tripRoute.km)||0,
+    старт_точка:start?[start.lat,start.lng]:null
+  });
   const out={ mode:'circuit', main_job:null, base_km:null, total_route_km:null,
               payers:{}, computed_at:new Date().toISOString(), stale:false, approx:false };
   try{
@@ -2110,6 +2118,7 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
       out.payers[only]={km:Math.round(builtKm*10)/10,kind:'circuit'};
       out.total_route_km=Math.round(builtKm*10)/10;
       out.mode='circuit';
+      console.info('Километраж: один плательщик, взят готовый маршрут',out.payers);
       return out;
     }
 
@@ -2142,6 +2151,7 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
       }
       out.total_route_km=(rRoute&&rRoute.km)?Math.round(rRoute.km*10)/10:null;
     }
+    console.info('Километраж: посчитано',{режим:out.mode,база:out.base_km,плательщики:out.payers,приблизительно:stat.approx});
     out.approx=stat.approx;
     if(stat.approx) notify('Часть плеч ORS не построил — километраж приблизительный.','warn');
     return out;
