@@ -1167,7 +1167,15 @@ $('tripCancel').onclick=()=>$('tripOverlay').classList.remove('on');
 $('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
 $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const e=tripCalc(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
   const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};
-  const rec={main_job_id:tripMainJobId||null,date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:jobIds.length},tariffs_snapshot:tripT()};
+  // Километраж по плательщикам — по реальным дорогам. Считаем и здесь:
+  // выезд можно сохранить из карточки, минуя планировщик.
+  const curTrip=tripEditId?trips.find(x=>x.id==tripEditId):null;
+  const linkedForKm=tripJobsAll.filter(j=>curTripJobs.has(j.id));
+  const roadKmTrip=await computeRoadKmByPayer(linkedForKm, tripMainJobId||null,
+    m=>{ $('tripErr').textContent=m; }) || (curTrip&&curTrip.road_km_by_payer) || null;
+  $('tripErr').textContent='';
+
+  const rec={main_job_id:tripMainJobId||null,road_km_by_payer:roadKmTrip,date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:jobIds.length},tariffs_snapshot:tripT()};
   $('tpSave').disabled=true;
   try{ let tid=tripEditId;
     if(tripEditId){ const {error}=await sb.from('trips').update(rec).eq('id',tripEditId); if(error) throw error; }
@@ -2027,8 +2035,11 @@ function viaStopsOnly(){
 }
 
 async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
+  // Стартовая точка: из планировщика (rStart) либо из открытого выезда
+  // (tripStart). Без неё считать не от чего.
   const start=rStart||tripStart;
-  if(!start) return null;
+  if(!start){ console.warn('Километраж: нет стартовой точки (депо) — пропускаю'); return null; }
+  if(orsKeyMissing()){ console.warn('Километраж: маршрутизация не настроена — пропускаю'); return null; }
   const pref=($('rPref')&&$('rPref').value)||'recommended';
   const ap=avoidPolygons();
   const vias=viaStopsOnly();
@@ -2079,8 +2090,9 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
   }catch(e){
     // ORS недоступен — не обнуляем, помечаем. Экономика продолжит работать
     // на прежних числах, а не покажет нули.
-    console.error('Километраж по плательщикам не пересчитан:',e&&(e.message||e));
-    notify('Километраж по плательщикам не пересчитан — оставлен прежний.','warn');
+    const why=(e&&(e.message||e.raw||e))+'';
+    console.error('Километраж по плательщикам не пересчитан:',e,'\nСТЕК:',e&&e.stack);
+    notify('Километраж не пересчитан: '+why.slice(0,140),'warn');
     return null;
   }
 }
