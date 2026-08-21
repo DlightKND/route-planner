@@ -2366,11 +2366,15 @@ async function showTripEcon(id){ const t=trips.find(x=>x.id==id); if(!t) return;
     geoFact=(pts||[]).map(p=>[+p.lat,+p.lng]);
   }catch(e){}
 
+  console.info('Экономика выезда: готовые км из базы =', t.road_km_by_payer,
+    '| плательщики заявок =', (jobs||[]).map(j=>jobRoadPayer(j)));
   const d=econCompute(jobs,es.km||0,es.driveH||0,ts,t.overrides||{},
     {start,dateFrom:t.date_from,dateTo:t.date_to,factKm:t.fact_km,
      factWorkH:factHByTrip[t.id],factHoursByJob,
      roadKm:t.road_km_by_payer||null},   // готовые км по реальным маршрутам
     appSettings.tariff_profiles,window.turf);
+  console.info('Экономика выезда: км по дорогам применены =', d.roadExact,
+    '| группы =', d.roadGroups);
   d.geoPlan=geoPlan; d.geoFact=geoFact;
   showEconModal(d); }
 
