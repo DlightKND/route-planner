@@ -7,10 +7,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "smoke": "node tests/smoke.cjs dist/index.html"
+    "smoke": "node tests/smoke-bundle.cjs",
+    "lint": "eslint src"
   },
   "devDependencies": {
     "vite": "^5.4.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "eslint": "^9.0.0"
   }
 }
