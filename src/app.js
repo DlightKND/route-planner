@@ -472,9 +472,9 @@ function startEqEdit(id){ const e=(eqByClient[eqClientId]||[]).find(x=>x.id==id)
   $('eqFormTitle').textContent='Правка техники'; $('eqFormCancel').style.display=''; }
 $('eqFormCancel').onclick=clearEqForm; if($('eqModelId')) $('eqModelId').onchange=applyEqModel;
 $('eqGeoBtn').onclick=async ()=>{ const q=$('eqGeo').value.trim(); const box=$('eqGeoRes'); if(!q){ box.innerHTML=''; return; } box.innerHTML='<div class="hint">Ищу…</div>';
-  try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=uk,ru,en&q='+encodeURIComponent(q)); const data=await r.json(); if(!data.length){ box.innerHTML='<div class="hint">Не найдено.</div>'; return; } box.innerHTML='';
+  try{ const data=await geoSearch(q,5); if(!data.length){ box.innerHTML='<div class="hint">Не найдено.</div>'; return; } box.innerHTML='';
     data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size:12px;font-weight:500">'+esc(it.display_name)+'</div>';
-      d.onclick=()=>{ $('eqLat').value=(+it.lat).toFixed(6); $('eqLng').value=(+it.lon).toFixed(6); box.innerHTML='<div class="hint ok">Координаты заданы.</div>'; }; box.appendChild(d); }); }catch(e){ box.innerHTML='<div class="err">Ошибка геокодера.</div>'; } };
+      d.onclick=()=>{ $('eqLat').value=(+it.lat).toFixed(6); $('eqLng').value=(+it.lon).toFixed(6); box.innerHTML='<div class="hint ok">Координаты заданы.</div>'; }; box.appendChild(d); }); }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||'Ошибка геокодера.')+'</div>'; } };
 $('eqSave').onclick=async ()=>{ const model=$('eqModel').value.trim(); if(!model){ $('eqErr').textContent='Введи модель.'; return; }
   const rec={client_id:eqClientId,model,kind:$('eqKind').value.trim(),serial:$('eqSerial').value.trim(),installed_on:$('eqInstalled').value||null,factory_warranty_until:$('eqWarranty').value||null,notes:$('eqNotes').value.trim(),model_id:$('eqModelId').value||null,lat:parseFloat($('eqLat').value)||null,lng:parseFloat($('eqLng').value)||null};
   $('eqSave').disabled=true; let error; if(eqEditId){ ({error}=await sb.from('equipment').update(rec).eq('id',eqEditId)); } else { ({error}=await sb.from('equipment').insert(rec)); } $('eqSave').disabled=false;
@@ -560,13 +560,39 @@ $('cwSave').onclick=async ()=>{ const name=$('cwName').value.trim(); if(!name){ 
 async function delCw(id){ if(!await confirmDialog('Удалить работу из каталога?',{danger:true,okText:'Удалить'})) return; const { error }=await sb.from('work_catalog').delete().eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } catalog=[]; await renderCatalog(); }
 
 // ---------- geocode ----------
+// Nominatim просит не чаще одного запроса в секунду и не любит очередей.
+// Четыре места в приложении ходили туда каждое само по себе, без пауз и
+// без проверки r.ok: при отказе r.json() падал, и любая причина — от опечатки
+// до бана по IP — выглядела одинаковым «Ошибка геокодера».
+//
+// Здесь одна очередь на всё приложение: запросы идут по одному, с паузой,
+// и отказы получают внятный текст.
+const NOMINATIM_GAP_MS = 1100;
+let _geoChain = Promise.resolve(), _geoLast = 0;
+function geoSearch(q, limit){
+  const run = async () => {
+    const wait = NOMINATIM_GAP_MS - (Date.now() - _geoLast);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    _geoLast = Date.now();
+    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=' + (limit || 5)
+      + '&accept-language=uk,ru,en&q=' + encodeURIComponent(q);
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (r.status === 429) throw new Error('Геокодер временно ограничил доступ (слишком часто). Подожди минуту.');
+    if (!r.ok) throw new Error('Геокодер ответил ошибкой ' + r.status + '.');
+    const data = await r.json();
+    return Array.isArray(data) ? data : [];
+  };
+  // Цепочка, а не параллель: две подсказки одновременно — уже нарушение.
+  _geoChain = _geoChain.then(run, run);
+  return _geoChain;
+}
 $('geoBtn').onclick=geocode; $('geoQuery').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); geocode(); } });
 async function geocode(){ const q=$('geoQuery').value.trim(); const box=$('geoResults'); if(!q){ box.innerHTML=''; return; } box.innerHTML='<div class="hint">Ищу…</div>';
-  try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=uk,ru,en&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}}); const data=await r.json();
+  try{ const data=await geoSearch(q,6);
     if(!data.length){ box.innerHTML='<div class="hint">Ничего не найдено.</div>'; return; } box.innerHTML='';
     data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size:12px;font-weight:500">'+esc(it.display_name)+'</div>';
       d.onclick=()=>{ pendingLatLng={lat:parseFloat(it.lat),lng:parseFloat(it.lon)}; flashPending(); map.flyTo([pendingLatLng.lat,pendingLatLng.lng],14); if(!$('fName').value.trim()) $('fName').value=it.display_name.split(',')[0]; box.innerHTML=''; updatePointCoords(); $('fName').focus(); }; box.appendChild(d); });
-  }catch(err){ box.innerHTML='<div class="err">Ошибка геокодера.</div>'; } }
+  }catch(err){ box.innerHTML='<div class="err">'+esc(err.message||'Ошибка геокодера.')+'</div>'; } }
 
 // ---------- jobs ----------
 let jobs=[], profilesList=[], curWorks=[], jobEditId=null;
@@ -1290,7 +1316,7 @@ function tripGmaps(id){ const t=trips.find(x=>x.id==id); const stops=(t&&t.route
   const pts=stops.map(s=>(+s.lat).toFixed(6)+','+(+s.lng).toFixed(6)); const url='https://www.google.com/maps/dir/?api=1&origin='+pts[0]+'&destination='+pts[pts.length-1]+(pts.length>2?'&waypoints='+encodeURIComponent(pts.slice(1,-1).join('|')):'')+'&travelmode=driving'; window.open(url,'_blank'); }
 
 // ---------- settings ----------
-let appSettings={shift_hours:8,deviation_pct:10,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,company:{},act_template:{},avoid_zones:[],tariff_profiles:[],act_xlsx:{},ors_proxy:''};
+let appSettings={shift_hours:8,deviation_pct:10,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,company:{},act_template:{},avoid_zones:[],tariff_profiles:[],act_xlsx:{name:null,data:null},ors_proxy:''};
 let vehicles=[], vhEditId=null;
 async function loadVehicles(){ try{ const {data}=await sb.from('vehicles').select('*').order('name'); vehicles=data||[]; renderVehicles(); }catch(e){ loadFail('список машин',e); } }
 function renderVehicles(){ const box=$('vehList'); if(!box) return; box.innerHTML=vehicles.length?'':'<div class="hint">Машин нет. Добавь ниже.</div>';
@@ -1318,9 +1344,20 @@ async function loadSettings(){ try{
   // поэтому для него берём settings_public — там валюта, тема, зоны объезда,
   // адрес прокси и пороги стоянок. Недостающие поля остаются нулями, а всё,
   // что их использует (экономика, акты), инженеру и так не показывается.
-  let {data}=await sb.from('settings').select('*').eq('id',true).single();
+  // Столбцы перечислены поимённо, а не '*', ради act_xlsx: там лежит
+  // xlsx-шаблон акта, закодированный base64 (файл до 3 МБ превращается
+  // примерно в 4 МБ текста). При select('*') этот блоб приезжал КАЖДЫЙ раз,
+  // когда открываются настройки, — а нужен он только при выгрузке акта.
+  // Вместо содержимого берём одно имя файла: по нему видно, загружен ли
+  // шаблон, и этого хватает всему, кроме самой выгрузки.
+  const SETTINGS_COLS='id,shift_hours,deviation_pct,currency,tariffs,costs,'
+    +'default_theme,repair_warranty_days,contact_period_days,company,act_template,'
+    +'avoid_zones,tariff_profiles,ors_proxy,stay_radius_m,stay_min_minutes,'
+    +'act_xlsx_name:act_xlsx->>name';
+  let {data}=await sb.from('settings').select(SETTINGS_COLS).eq('id',true).single();
   if(!data){ const pub=await sb.from('settings_public').select('*').eq('id',true).single(); data=pub.data||null; }
-  if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),stay_radius_m:(data.stay_radius_m==null?300:data.stay_radius_m),stay_min_minutes:(data.stay_min_minutes==null?10:data.stay_min_minutes),company:(data.company||{}),act_template:(data.act_template||{}),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),act_xlsx:(data.act_xlsx||{}),ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); }
+  // Инженеру settings_public шаблон не отдаёт вовсе — там его и нет.
+  if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),stay_radius_m:(data.stay_radius_m==null?300:data.stay_radius_m),stay_min_minutes:(data.stay_min_minutes==null?10:data.stay_min_minutes),company:(data.company||{}),act_template:(data.act_template||{}),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),act_xlsx:{name:(data.act_xlsx_name||null),data:null},ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); }
   // Пустой результат по обоим источникам — это не «настроек нет», это сбой
   // связи или прав. Без сообщения приложение молча открывалось бы без темы,
   // без зон объезда и без маршрутизации, и искать причину пришлось бы наугад.
@@ -1982,8 +2019,8 @@ function rMove(i,dir){ const j=i+dir; if(j<0||j>=rStops.length) return; const t=
 $('rWpMode').onclick=()=>{ wpModeOn=!wpModeOn; $('rWpMode').classList.toggle('active',wpModeOn); $('rWpHint').style.display=wpModeOn?'block':'none'; if(wpModeOn&&addModeOn) toggleAdd(false); map.getContainer().style.cursor=wpModeOn?'crosshair':''; };
 $('corToggle').onclick=()=>{ const closed=$('corBody').style.display==='none'; $('corBody').style.display=closed?'':'none'; $('corToggle').textContent=(closed?'▾':'▸')+' Коридор: найти попутных клиентов'; };
 $('rWpAdd').onclick=async ()=>{ const q=$('rWp').value.trim(); const box=$('rWpRes'); if(!q) return; box.innerHTML='<div class="hint">Ищу…</div>';
-  try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=uk,ru,en&q='+encodeURIComponent(q)); const data=await r.json(); if(!data.length){ box.innerHTML='<div class="hint">Не найдено.</div>'; return; } box.innerHTML='';
-    data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size:12px;font-weight:500">'+esc(it.display_name)+'</div>'; d.onclick=()=>{ rStops.push({type:'wp',name:it.display_name.split(',')[0],lat:+it.lat,lng:+it.lon}); $('rWp').value=''; box.innerHTML=''; renderRoutePanel(); resetBuilt(); }; box.appendChild(d); }); }catch(e){ box.innerHTML='<div class="err">Ошибка геокодера.</div>'; } };
+  try{ const data=await geoSearch(q,5); if(!data.length){ box.innerHTML='<div class="hint">Не найдено.</div>'; return; } box.innerHTML='';
+    data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size:12px;font-weight:500">'+esc(it.display_name)+'</div>'; d.onclick=()=>{ rStops.push({type:'wp',name:it.display_name.split(',')[0],lat:+it.lat,lng:+it.lon}); $('rWp').value=''; box.innerHTML=''; renderRoutePanel(); resetBuilt(); }; box.appendChild(d); }); }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||'Ошибка геокодера.')+'</div>'; } };
 $('rClear').onclick=()=>{ rStops=[]; rStart=null; plannerTripId=null; endDeclined=false; $('rBuf').value=0; bufferKm=0; $('rBufVal').textContent='0 км'; $('rIso').value=0; isoMin=0; $('rIsoVal').textContent='0 мин'; tripLayer.clearLayers(); renderRoutePanel(); resetBuilt(); };
 function openBasePicker(mode,after){ baseMode=mode; baseAfter=after||null; $('baseTitle').textContent=(mode==='start'?'Старт — депо':'Финиш — депо'); $('baseSub').textContent=(mode==='start'?'Выбери депо старта или создай новое. «Не нужно» — стартом станет первая точка маршрута.':'Выбери депо для финиша или откажись.'); renderBaseList(); $('baseNew').value=''; $('baseNewRes').innerHTML=''; $('baseOverlay').classList.add('on'); }
 function renderBaseList(){ const box=$('baseList'); box.innerHTML=places.length?'':'<div class="hint">Депо пока нет. Создай новое ниже.</div>';
@@ -1993,7 +2030,7 @@ function renderBaseList(){ const box=$('baseList'); box.innerHTML=places.length?
 function chooseBase(p){ const o={name:p.name,lat:p.lat,lng:p.lng,placeId:p.id,description:p.description||''}; if(baseMode==='start'){ rStart=o; } else { rStops.push(Object.assign({type:'place'},o)); } $('baseOverlay').classList.remove('on'); renderRoutePanel(); resetBuilt(); const a=baseAfter; baseAfter=null; if(typeof a==='function') a(true); }
 $('baseSkip').onclick=()=>{ if(baseMode==='end') endDeclined=true; $('baseOverlay').classList.remove('on'); const a=baseAfter; baseAfter=null; if(typeof a==='function') a(false); };
 $('baseNewAdd').onclick=async ()=>{ const q=$('baseNew').value.trim(); if(!q){ $('baseNewRes').innerHTML='<div class="hint">Укажи адрес для поиска координат.</div>'; return; } $('baseNewAdd').disabled=true; $('baseNewRes').innerHTML='<div class="hint">Ищу…</div>';
-  try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=uk,ru,en&q='+encodeURIComponent(q)); const data=await r.json(); if(!data.length){ $('baseNewRes').innerHTML='<div class="hint">Адрес не найден.</div>'; return; } const it=data[0];
+  try{ const data=await geoSearch(q,1); if(!data.length){ $('baseNewRes').innerHTML='<div class="hint">Адрес не найден.</div>'; return; } const it=data[0];
     const nm=$('baseNewName').value.trim()||it.display_name.split(',')[0]; const ds=$('baseNewDesc').value.trim();
     const ins=await sb.from('clients').insert({name:nm,description:ds,lat:+it.lat,lng:+it.lon,is_base:true,color:'#27d3c4'}).select().single(); if(ins.error){ $('baseNewRes').innerHTML='<div class="err">'+esc(ins.error.message)+'</div>'; return; }
     $('baseNew').value='';$('baseNewName').value='';$('baseNewDesc').value=''; await loadAll(); chooseBase(ins.data);
@@ -2067,7 +2104,27 @@ function orsErrMsg(status,t){ let msg=t; try{ const j=JSON.parse(t); if(j&&j.err
   if(/polygon|avoid/i.test(msg)) return 'сервер отклонил зоны объезда: '+msg;
   return 'ORS '+status+': '+msg; }
 function isAvoidLimit(raw){ const s=String(raw||''); return /avoid areas/i.test(s)&&/must not be greater/i.test(s); }
+// Лимит бесплатного ключа ORS — около 40 запросов в минуту. Матрица объездов
+// и километраж по плательщикам легко дают несколько десятков подряд, и раньше
+// это упиралось в 429 на середине: сообщение показывалось, а посчитанное
+// терялось целиком. Теперь запросы сами притормаживают, не доходя до отказа.
+const ORS_MAX_PER_MIN=35;            // с запасом от 40
+let orsReqCount=0;                   // счётчик для показа прогресса
+let orsProgress=null;                // куда писать «ждём» во время долгих операций
+const _orsCalls=[];
+async function orsThrottle(){
+  for(;;){
+    const t=Date.now();
+    while(_orsCalls.length && t-_orsCalls[0]>60000) _orsCalls.shift();
+    if(_orsCalls.length<ORS_MAX_PER_MIN){ _orsCalls.push(t); return; }
+    const wait=Math.max(250, 60000-(t-_orsCalls[0])+50);
+    if(orsProgress) orsProgress('Пауза '+Math.ceil(wait/1000)+' с — бережём лимит ORS…');
+    await new Promise(r=>setTimeout(r,Math.min(wait,5000)));
+  }
+}
+
 async function orsPost(url,body){ const px=(appSettings.ors_proxy||'').trim(); let r;
+  await orsThrottle(); orsReqCount++;
   // Прямой режим убран: ключ ORS живёт только в секрете Edge Function.
   if(!px) throw new Error('Маршрутизация не настроена: не задан адрес прокси ORS в настройках.');
   if(px){ const path=url.replace('https://api.openrouteservice.org/',''); const tok=(session&&session.access_token)||'';
@@ -2208,6 +2265,11 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
   if(!payers.length) return null;
 
   const stat={approx:false};
+  // Счётчик запросов виден человеку: расчёт может занять десятки обращений
+  // к ORS, и без цифры это выглядит как зависшая кнопка.
+  const startedAt=orsReqCount;
+  const say=m=>{ if(prog) prog(m+' (запросов к ORS: '+(orsReqCount-startedAt)+')'); };
+  const prevProgress=orsProgress; orsProgress=m=>{ if(prog) prog(m); };
   console.info('Километраж: старт',{
     заявок:(linkedJobs||[]).length,
     плательщиков:'считаю…',
@@ -2248,6 +2310,7 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
       for(const pid of payers){
         if(pid===mainPid) continue;
         // Крюк ради этого плательщика: через все его точки, потом к основной.
+        say('Считаю крюк плательщика');
         const withX=await routeKmThrough([start,...vias,...groups[pid],A,start],pref,ap,prog,stat);
         // Отсечка нулём: если точка была по пути, скидки за это не бывает.
         const detour=Math.max(0,withX-base);
@@ -2257,12 +2320,14 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
     } else {
       // ── каждому свой круг ─────────────────────────────────────────────────
       for(const pid of payers){
+        say('Считаю круг плательщика');
         const km=await routeKmThrough([start,...vias,...groups[pid],start],pref,ap,prog,stat);
         out.payers[pid]={km:Math.round(km*10)/10,kind:'circuit'};
       }
       out.total_route_km=(rRoute&&rRoute.km)?Math.round(rRoute.km*10)/10:null;
     }
-    console.info('Километраж: посчитано',{режим:out.mode,база:out.base_km,плательщики:out.payers,приблизительно:stat.approx});
+    console.info('Километраж: посчитано',{режим:out.mode,база:out.base_km,плательщики:out.payers,
+      приблизительно:stat.approx,запросов_к_ORS:orsReqCount-startedAt});
     out.approx=stat.approx;
     if(stat.approx) notify('Часть плеч ORS не построил — километраж приблизительный.','warn');
     return out;
@@ -2273,7 +2338,7 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
     console.error('Километраж по плательщикам не пересчитан:',e,'\nСТЕК:',e&&e.stack);
     notify('Километраж не пересчитан: '+why.slice(0,140),'warn');
     return null;
-  }
+  } finally { orsProgress=prevProgress; }
 }
 
 async function doBuildRoute(){ if(rBusy) return; const stops=dedupeStops(routeStopsAll());
@@ -2600,22 +2665,41 @@ function wsToHtml(ws){ const skip={}, span={}; (ws.model.merges||[]).forEach(m=>
   let maxCol=1; ws.eachRow({includeEmpty:true},row=>{ if(row.cellCount>maxCol) maxCol=row.cellCount; });
   let h='<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#000">';
   for(let r=1;r<=ws.rowCount;r++){ const row=ws.getRow(r); h+='<tr>'; for(let c=1;c<=maxCol;c++){ const ref=colLetter(c)+r; if(skip[ref]) continue; const cell=row.getCell(c); const st=cell.style||{}; const f=st.font||{}; let css='border:1px solid #e2e2e2;padding:3px 7px;vertical-align:top;'; if(f.bold)css+='font-weight:bold;'; if(f.italic)css+='font-style:italic;'; if(f.size)css+='font-size:'+f.size+'px;'; if(f.color&&f.color.argb)css+='color:#'+f.color.argb.slice(-6)+';'; if(st.fill&&st.fill.fgColor&&st.fill.fgColor.argb)css+='background:#'+st.fill.fgColor.argb.slice(-6)+';'; const al=st.alignment||{}; if(al.horizontal)css+='text-align:'+al.horizontal+';'; const sp=span[ref]?(' colspan="'+span[ref].cs+'" rowspan="'+span[ref].rs+'"'):''; let v=cell.value; if(v&&typeof v==='object') v=v.richText?v.richText.map(t=>t.text).join(''):(v.text!=null?v.text:(v.result!=null?v.result:'')); h+='<td'+sp+' style="'+css+'">'+esc(v==null?'':String(v))+'</td>'; } h+='</tr>'; } return h+'</table>'; }
-async function genActXlsx(job){ const ax=appSettings.act_xlsx||{}; if(!ax.data) return false;
+// Содержимое шаблона догружается только тогда, когда оно действительно
+// нужно: при выгрузке акта или при скачивании самого шаблона.
+async function ensureActXlsxData(){
+  const ax=appSettings.act_xlsx||{};
+  if(ax.data) return ax.data;
+  if(!ax.name) return null;                  // шаблон не загружен вовсе
+  const {data,error}=await sb.from('settings').select('act_xlsx').eq('id',true).single();
+  if(error||!data||!data.act_xlsx||!data.act_xlsx.data){
+    notify('Не удалось получить шаблон акта'+(error?(': '+error.message):''),'err');
+    return null;
+  }
+  appSettings.act_xlsx={name:data.act_xlsx.name||ax.name,data:data.act_xlsx.data};
+  return appSettings.act_xlsx.data;
+}
+
+async function genActXlsx(job){
+  const ax=appSettings.act_xlsx||{}; if(!ax.name) return false;
+  const b64=await ensureActXlsxData(); if(!b64) return false;
   // exceljs грузится только здесь — а сюда попадают, лишь когда загружен
   // шаблон xlsx и человек открыл акт. У большинства открытий приложения
   // этих 900 КБ теперь просто нет.
   try{ await ensureExcel(); }catch(e){ notify(e.message,'err'); return false; }
-  try{ const bin=atob(ax.data); const buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); const wb=new ExcelJS.Workbook(); await wb.xlsx.load(buf.buffer); const ws=wb.worksheets[0]; const data=buildActData(job); actFillSheet(ws,data);
+  try{ const bin=atob(b64); const buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); const wb=new ExcelJS.Workbook(); await wb.xlsx.load(buf.buffer); const ws=wb.worksheets[0]; const data=buildActData(job); actFillSheet(ws,data);
     const out=await wb.xlsx.writeBuffer(); const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     $('axPreview').innerHTML=wsToHtml(ws);
-    $('axDlBtn').onclick=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Акт '+data.number+'.xlsx'; document.body.appendChild(a); a.click(); a.remove(); };
+    // URL освобождаем сразу после клика: без revoke каждый скачанный акт
+    // держал свой буфер в памяти до перезагрузки вкладки.
+    $('axDlBtn').onclick=()=>{ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='Акт '+data.number+'.xlsx'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1000); };
     $('actXlsxOverlay').classList.add('on'); return true;
   }catch(e){ notify('Ошибка генерации акта по шаблону: '+(e.message||e),'err'); return false; } }
 if($('axClose')) $('axClose').onclick=()=>$('actXlsxOverlay').classList.remove('on');
-function updateAxInfo(){ const ax=appSettings.act_xlsx||{}; if($('axInfo')) $('axInfo').innerHTML=ax.data?('<span class="ok">Шаблон загружен: '+esc(ax.name||'act.xlsx')+'</span>'):'Шаблон не загружен — используется встроенный HTML-акт.'; }
+function updateAxInfo(){ const ax=appSettings.act_xlsx||{}; if($('axInfo')) $('axInfo').innerHTML=ax.name?('<span class="ok">Шаблон загружен: '+esc(ax.name||'act.xlsx')+'</span>'):'Шаблон не загружен — используется встроенный HTML-акт.'; }
 if($('axFile')) $('axFile').onchange=e=>{ const file=e.target.files[0]; if(!file) return; if(file.size>3000000){ notify('Файл великоват (>3 МБ).','err'); return; } const rd=new FileReader(); rd.onload=async()=>{ const b64=String(rd.result).split(',')[1]; const ax={name:file.name,data:b64}; const {error}=await sb.from('settings').update({act_xlsx:ax}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.act_xlsx=ax; updateAxInfo(); showToast('Шаблон акта загружен'); $('axFile').value=''; }; rd.readAsDataURL(file); };
-if($('axDownload')) $('axDownload').onclick=()=>{ const ax=appSettings.act_xlsx||{}; if(!ax.data){ notify('Шаблон не загружен.','warn'); return; } const bin=atob(ax.data); const buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download=ax.name||'act-template.xlsx'; document.body.appendChild(a); a.click(); a.remove(); };
-if($('axRemove')) $('axRemove').onclick=async()=>{ if(!await confirmDialog('Убрать Excel-шаблон акта? Вернётся встроенный HTML-акт.',{danger:true,okText:'Убрать'})) return; const {error}=await sb.from('settings').update({act_xlsx:{}}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.act_xlsx={}; updateAxInfo(); };
+if($('axDownload')) $('axDownload').onclick=async()=>{ const ax=appSettings.act_xlsx||{}; if(!ax.name){ notify('Шаблон не загружен.','warn'); return; } const b64=await ensureActXlsxData(); if(!b64) return; const bin=atob(b64); const buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); const u=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); const a=document.createElement('a'); a.href=u; a.download=ax.name||'act-template.xlsx'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1000); };
+if($('axRemove')) $('axRemove').onclick=async()=>{ if(!await confirmDialog('Убрать Excel-шаблон акта? Вернётся встроенный HTML-акт.',{danger:true,okText:'Убрать'})) return; const {error}=await sb.from('settings').update({act_xlsx:{}}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.act_xlsx={name:null,data:null}; updateAxInfo(); };
 async function openAct(id){ let job=null;
   try{ const {data,error}=await sb.from('jobs').select('*, clients(*), equipment(*), job_works(*)').eq('id',id).single(); if(error) throw error; job=data; }
   catch(e){ notify('Не удалось загрузить заявку: '+(e.message||e),'err'); return; }
@@ -2623,7 +2707,7 @@ async function openAct(id){ let job=null;
   // Проверка ДО обеих веток (HTML и Excel) — точка входа одна.
   const stop=actBlocker(job); if(stop){ notify(stop,'err'); return; }
   if(!(appSettings.company&&appSettings.company.name)) showToast('Заполни реквизиты организации в Настройках — в акте будут пустые поля «Исполнителя»');
-  if((appSettings.act_xlsx||{}).data){ if(await genActXlsx(job)) return; }
+  if((appSettings.act_xlsx||{}).name){ if(await genActXlsx(job)) return; }
   printDoc(buildActHtml(job)); }
 
 // ---------- boot ----------
