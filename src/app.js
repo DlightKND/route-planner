@@ -1192,6 +1192,42 @@ function renderTripJobs(){ const box=$('tpJobs');
 // поэтому правка ставки задним числом переписывала экономику уже закрытых
 // выездов. Снапшот на то и снапшот.
 function tripT(){ return {shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency,tariff_profiles:appSettings.tariff_profiles||[]}; }
+// Снимок экономики для econ_snapshot. Единственное место, где он собирается.
+//
+// Считаем ДВАЖДЫ — по плану и по факту — и храним обе себестоимости.
+// Раньше в поле cost лежало то одно, то другое: карточка выезда передавала
+// в econCompute факт, планировщик — нет. Дашборд складывает econ_snapshot.cost
+// по всем выездам, то есть суммировал разные величины, и общая себестоимость
+// компании менялась от того, каким экраном выезд сохранили последним.
+//
+// Выручка на факт не смотрит по замыслу формулы: она согласована
+// с плательщиком заранее (обоснование — в src/core/economics.js).
+// Поэтому раздваиваем только себестоимость, прибыль и маржу.
+function econSnapshot(jobs, km, driveH, T, ov, ctx, jobCount){
+  const profs=appSettings.tariff_profiles;
+  const plan=econCompute(jobs,km,driveH,T,ov,
+    Object.assign({},ctx,{factKm:null,factWorkH:null}),profs,window.turf);
+  const hasFact=(ctx.factKm!=null&&+ctx.factKm>0)||(ctx.factWorkH!=null&&+ctx.factWorkH>0);
+  const fact=hasFact?econCompute(jobs,km,driveH,T,ov,ctx,profs,window.turf):null;
+  const best=fact||plan;
+  return {
+    revenue:plan.rev, rWork:plan.rWork, rTravel:plan.rTravel, rPerDiem:plan.rPerDiem,
+    warrantyHours:plan.wh, workH:plan.workH, km:plan.km, driveH:plan.driveH,
+    totalHours:plan.totalH, days:plan.days, nights:plan.nights,
+    cLabor:best.cLabor, cKm:best.cKm, cDay:best.cDay, cNight:best.cNight,
+    // cost/profit/margin — лучшее известное: факт, если он есть, иначе план.
+    // Оба пути записи дают теперь одно и то же, поэтому дашборд складывает
+    // сопоставимые величины.
+    cost:best.cost, profit:best.profit, margin:best.margin,
+    cost_basis:fact?'fact':'plan',   // чем посчитан cost — чтобы больше не гадать
+    cost_plan:plan.cost, profit_plan:plan.profit, margin_plan:plan.margin,
+    cost_fact:fact?fact.cost:null,
+    profit_fact:fact?fact.profit:null,
+    margin_fact:fact?fact.margin:null,
+    factKm:fact?fact.factKm:null, factWorkH:fact?fact.factWorkH:null,
+    jobCount:jobCount
+  };
+}
 function tripCalc(){ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const cur=tripEditId?trips.find(x=>x.id==tripEditId):null; return econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{roadKm:(cur&&cur.road_km_by_payer)||null,start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value,factKm:cur?cur.fact_km:null,factWorkH:tripEditId?factHByTrip[tripEditId]:null},appSettings.tariff_profiles,window.turf); }
 function tripEcon(){ const e=tripCalc(); const cur=e.cur; $('tpEcon').innerHTML='Заявок: '+e.jobCount+' · работа '+e.workH.toFixed(1)+'ч · в пути '+e.driveH.toFixed(1)+'ч · '+e.km.toFixed(0)+'км · дней '+e.days+' · выручка '+e.rev.toFixed(0)+' '+cur+' · затраты '+e.cost.toFixed(0)+' · прибыль '+e.profit.toFixed(0)+' · гар '+e.share+'%'; renderTpRoadGroups(); }
 function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const rb=(tripStart&&(appSettings.tariff_profiles||[]).length)?roadByPayer(tripStart,jobs):null;
@@ -1214,7 +1250,7 @@ function loadTripIntoPlanner(id){ const t=trips.find(x=>x.id==id); if(!t) return
 }
 $('tripCancel').onclick=()=>$('tripOverlay').classList.remove('on');
 $('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
-$('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const e=tripCalc(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
+$('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
   const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};
   // Километраж по плательщикам — по реальным дорогам. Считаем и здесь:
   // выезд можно сохранить из карточки, минуя планировщик.
@@ -1224,7 +1260,17 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
     m=>{ $('tripErr').textContent=m; }) || (curTrip&&curTrip.road_km_by_payer) || null;
   $('tripErr').textContent='';
 
-  const rec={main_job_id:tripMainJobId||null,road_km_by_payer:roadKmTrip,date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:jobIds.length},tariffs_snapshot:tripT()};
+  // Снимок считаем ПОСЛЕ километража. Раньше tripCalc() отрабатывал первой
+  // строкой обработчика и брал ещё СТАРЫЙ road_km_by_payer — выручка по
+  // дороге в снапшоте отставала ровно на одно сохранение.
+  const e=econSnapshot(linkedForKm,tripRoute.km,tripRoute.driveH,tripT(),ov,{
+    roadKm:roadKmTrip, start:tripStart,
+    dateFrom:$('tpFrom').value, dateTo:$('tpTo').value,
+    factKm:curTrip?curTrip.fact_km:null,
+    factWorkH:tripEditId?factHByTrip[tripEditId]:null
+  },jobIds.length);
+
+  const rec={main_job_id:tripMainJobId||null,road_km_by_payer:roadKmTrip,date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:e,tariffs_snapshot:tripT()};
   $('tpSave').disabled=true;
   try{ let tid=tripEditId;
     if(tripEditId){ const {error}=await sb.from('trips').update(rec).eq('id',tripEditId); if(error) throw error; }
@@ -2296,8 +2342,6 @@ $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<
   let linked=[]; if(clientIds.length){ try{ const {data}=await sb.from('jobs').select('id, client_id, clients(name,lat,lng), equipment(lat,lng), job_works(hours,billable,revenue,tariff_profile)').is('deleted_at',null).in('client_id',clientIds).not('status','in','(done,cancelled)'); linked=data||[]; }catch(e){} }
   const exist=plannerTripId?(trips.find(x=>x.id==plannerTripId)||{}):{};
   const ov=exist.overrides||{};
-  const T={shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency};
-  const e=econCompute(linked,rRoute.km,rRoute.driveH,T,ov,{start:rStart},appSettings.tariff_profiles,window.turf);
   // Километраж по плательщикам — по реальным дорогам, один раз здесь.
   // Если не посчитался (ORS молчит), оставляем прежний из выезда.
   $('rStatus').textContent='Считаю километраж по плательщикам…';
@@ -2305,7 +2349,26 @@ $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<
     m=>{ $('rStatus').textContent=m; }) || exist.road_km_by_payer || null;
   $('rStatus').textContent='';
 
-  const rec={route_stops:stops.map(s=>({type:s.type,name:s.name,lat:s.lat,lng:s.lng,clientId:s.clientId||null,equipId:s.equipId||null,description:s.description||''})),route_geometry:slimGeometry(rRoute.geometry)||null,road_km_by_payer:roadKm,overrides:ov,econ_snapshot:{revenue:e.rev,rWork:e.rWork,rTravel:e.rTravel,rPerDiem:e.rPerDiem,warrantyHours:e.wh,workH:e.workH,km:e.km,driveH:e.driveH,totalHours:e.totalH,days:e.days,nights:e.nights,cLabor:e.cLabor,cKm:e.cKm,cDay:e.cDay,cNight:e.cNight,cost:e.cost,profit:e.profit,margin:e.margin,jobCount:linked.length},tariffs_snapshot:T};
+  // Снимок собирается ТЕМ ЖЕ сборщиком и с ТЕМ ЖЕ контекстом, что и в
+  // карточке выезда. Раньше здесь было четыре тихих отличия, и каждое
+  // меняло цифры:
+  //   • econCompute звался ДО расчёта километража → выручка по дороге
+  //     считалась по прямым линиям (занижение на 30–45%, см. economics.js);
+  //   • tariffs_snapshot собирался без tariff_profiles → ставки выезда
+  //     не фиксировались, и правка тарифа задним числом переписывала
+  //     экономику уже сохранённых выездов;
+  //   • не передавались даты → дни считались из часов, а не по календарю;
+  //   • не передавался факт → cost означал план, тогда как из карточки
+  //     в то же поле уезжал факт.
+  const T=tripT();
+  const e=econSnapshot(linked,rRoute.km,rRoute.driveH,T,ov,{
+    roadKm:roadKm, start:rStart,
+    dateFrom:exist.date_from||null, dateTo:exist.date_to||null,
+    factKm:exist.fact_km!=null?exist.fact_km:null,
+    factWorkH:plannerTripId?(factHByTrip[plannerTripId]!=null?factHByTrip[plannerTripId]:null):null
+  },linked.length);
+
+  const rec={route_stops:stops.map(s=>({type:s.type,name:s.name,lat:s.lat,lng:s.lng,clientId:s.clientId||null,equipId:s.equipId||null,description:s.description||''})),route_geometry:slimGeometry(rRoute.geometry)||null,road_km_by_payer:roadKm,overrides:ov,econ_snapshot:e,tariffs_snapshot:T};
   let tid=plannerTripId;
   try{ if(plannerTripId){ const {error}=await sb.from('trips').update(rec).eq('id',plannerTripId); if(error) throw error; }
     else { rec.status='planned'; rec.created_by=session.user.id; const {data,error}=await sb.from('trips').insert(rec).select('id').single(); if(error) throw error; tid=data.id; plannerTripId=tid; }
