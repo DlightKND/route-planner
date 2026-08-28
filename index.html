@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="favicon.png">
@@ -553,12 +553,47 @@
   .veh-kv { display: flex; justify-content: space-between; gap: var(--sp-4); font-size: var(--fs-4); padding: var(--sp-2) 0; }
   .veh-kv span:first-child { color: var(--ink-dim); }
   .map-summary b { color: var(--accent-ink); font-size: var(--fs-5); }
+  /* ── Палец, а не курсор ───────────────────────────────────────────────
+     Замер на 390 px показал: почти всё интерактивное было ниже 44 px —
+     кнопки 31, чипы 24, подвкладки 33, селект статуса в карточке 20,
+     кружок подсказки 17, шапка списка 11. По WCAG 2.5.8 нижняя граница —
+     24 px, по рекомендациям Material и Apple — 44–48. Поднимаем на
+     сенсорных указателях, десктопную плотность не трогаем.
+
+     Отдельная история — поля ввода: Safari на iOS насильно зумит страницу,
+     когда фокус приходит в поле с кеглем меньше 16 px. У нас было 14, и
+     приложение стоит у инженеров как PWA — то есть зумило каждый раз. */
+  @media (pointer: coarse) {
+    :root { --fs-1: 11px; --fs-2: 12px; }
+    input[type=text], input[type=email], input[type=password], input[type=search],
+    input[type=date], input[type=month], input[type=number], select, textarea {
+      font-size: 16px; min-height: 44px; }
+    .btn, .btn.sm, .icobtn, .veh-btn { min-height: 44px; min-width: 44px; }
+    .seg button, .subtab, .son, .side-tabs .stab, .tab { min-height: 44px; }
+    .perseg button { min-height: 44px; }
+    .chip { min-height: 32px; display: inline-flex; align-items: center; }
+    .kmove { min-height: 44px; font-size: 16px; }
+    .qm { width: 32px; height: 32px; font-size: var(--fs-3); }
+    .listhead { min-height: 44px; }
+    .arow2, .wf-row, .pt, .emrow, .ctxmenu button { min-height: 44px; }
+    .crumb { padding: var(--sp-2) 0; min-height: 32px; display: inline-flex; align-items: center; }
+    /* Вырез и домашняя полоса. Рельс уже просил safe-area — теперь она есть. */
+    .pane { padding-left: max(var(--sp-5), env(safe-area-inset-left));
+            padding-right: max(var(--sp-5), env(safe-area-inset-right)); }
+  }
+
   @media(max-width: 760px) { 
     .view.active { flex-direction: column; } 
     .map-wrap { flex: 1; height: auto; min-height: 0; order: 1; } 
+    /* max-height от плавающей карточки (почти вся высота) перебивал
+       мобильные 58vh: селектор .view-map .side специфичнее, чем .side,
+       и шторка забирала весь экран — карты на вкладке карты не было видно.
+       Половина экрана шторке, половина карте. */
     .view-map .side { position: static; left: auto; top: auto; bottom: auto;
-      width: 100%; border: none; border-top: 1px solid var(--line); border-radius: 0;
-      background: var(--panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
+      width: 100%; max-height: 52vh; border: none; border-top: 1px solid var(--line);
+      border-radius: 0; background: var(--panel);
+      backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .listbox { max-height: 30vh; }
     .view-map .map-wrap { position: relative; inset: auto; flex: 1; }
     .view-map .leaflet-top.leaflet-left { margin-left: 0; }
     .side { width: 100%; min-width: 0; height: auto; flex: none; order: 2; border-right: none; border-top: 1px solid var(--line); box-shadow: 0 -2px 14px rgba(0,0,0,0.2); max-height: 58vh; min-height: 0; } 
@@ -568,7 +603,7 @@
     .pane { padding: var(--sp-5); } 
     .modal { padding: var(--sp-5); max-height: 95vh; width: 100%; border-radius: var(--r-md); } 
     .pop { right: 8px; left: 8px; width: auto; } 
-    .btn, input[type=text], input[type=number], input[type=email], input[type=password], select { padding: var(--sp-4) var(--sp-5); font-size: var(--fs-5); }
+    .btn, input[type=text], input[type=number], input[type=email], input[type=password], select { padding: var(--sp-4) var(--sp-5); }
     .btn.sm { padding: var(--sp-3) var(--sp-4); }
     /* Рельс слева на телефоне — ошибка: приложение стоит как PWA,
        инженер держит его одной рукой, левый край недосягаем большим
@@ -595,7 +630,23 @@
     .icobtn { width: 34px; height: 34px; flex: none; font-size: var(--fs-5); }
     .row { flex-wrap: wrap; }
     .row > .grow { flex: 1 1 140px; }
+    /* В одной строке шапки помещались заголовок, селект, поиск и кнопка —
+       поиск сжимался до 34 px и переставал быть полем. Разводим по строкам:
+       заголовок с кнопкой, ниже фильтры, ниже поиск во всю ширину. */
+    /* Канбан в три колонки на 390 px — это горизонтальная прокрутка, в
+       которой видна одна колонка, а две соседние обрезаны краем. Стопкой:
+       статус за статусом, листается вертикально, как всё остальное. */
+    .kanban { flex-direction: column; overflow-x: visible; }
+    .kcol { max-width: none; min-width: 0; width: 100%; }
+    /* Мелкая кнопка не должна получать паддинг обычной: три действия
+       в карточке переставали помещаться в строку, и «×» уезжал вниз. */
+    .btn.sm { padding: var(--sp-3) var(--sp-4); }
     .pane-head { gap: var(--sp-3); }
+    .pane-head h2 { flex: 1 1 auto; }
+    .pane-head > .btn { flex: none; order: 2; }
+    .pane-head .seg { order: 6; flex: 1 0 100%; }
+    .pane-head select { order: 7; flex: 1 1 140px; width: auto; }
+    .pane-head .searchbox { order: 8; flex: 1 0 100%; max-width: none; }
     .block { padding: var(--sp-4) var(--sp-5); }
     .toast { max-width: calc(100vw - 24px); }
     .map-summary { max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; gap: var(--sp-3) var(--sp-4); padding: var(--sp-3) var(--sp-4); }
@@ -640,6 +691,7 @@
   .kcard .ktags { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
   .kcard .acts { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-3); align-items: center; }
   .kcard select.kmove { font-size: var(--fs-2); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-sm); }
+  @media (pointer: coarse) { .kcard select.kmove { font-size: 16px; padding: var(--sp-3); } }
   .kcard[draggable="true"] { cursor: grab; }
   .kcard.dragging { opacity: .45; }
   .kcol.over { border-color: var(--accent); background: var(--panel); }
@@ -761,9 +813,9 @@
 .a-sub{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-faint);margin-top: var(--sp-1)}
 .a-h{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
 @media(max-width:600px){
-  .afeed{padding-left:80px}
-  .afeed-line{left:54px}
-  .a-ax{left:-80px;width:46px}
+  .afeed{padding-left:88px}
+  .afeed-line{left:62px}
+  .a-ax{left:-88px;width:54px}
   .agrp-h{flex-wrap:wrap;gap: var(--sp-3) var(--sp-3)}
   .agrp-track{flex:1 0 100%;order:3}
 }
