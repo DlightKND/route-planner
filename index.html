@@ -32,6 +32,42 @@
   /* Тени только для текста на картой (в JS через theme) */
   .btn.amber { text-shadow: none; }
 
+  /* ── Навигация рельсом ────────────────────────────────────────────────
+     Топбар занимал 56 px по высоте на каждом экране. Рельс берёт 76 px
+     по ширине, и сам по себе это размен, а не выигрыш. Окупается тем,
+     что на карте вместе с ним ушла колонка на 380 px: карта получает
+     +316 px ширины и +56 высоты.
+     На узком экране рельс уезжает ВНИЗ: левый край — худшая зона для
+     большого пальца, а приложение стоит у инженеров как PWA. */
+  .app { display: flex; height: 100%; min-height: 0; }
+  .rail {
+    width: 76px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; align-items: center; padding: 12px 0 10px;
+    z-index: 100; overflow: hidden;
+  }
+  .rail-brand { font-family: var(--mono); font-size: 12px; font-weight: 600;
+    letter-spacing: .5px; color: var(--accent-line); margin-bottom: 14px; display: flex;
+    flex-direction: column; align-items: center; gap: 4px; }
+  .rail-brand img { height: 20px; display: none; }
+  .rail-items { display: flex; flex-direction: column; gap: 2px; width: 100%; align-items: center; }
+  .rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px;
+    width: 100%; align-items: center; padding-top: 10px; }
+  .nav-i {
+    width: 62px; padding: 9px 2px; border: none; background: transparent; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer;
+    font-family: var(--mono); font-size: 9px; letter-spacing: .2px; color: var(--ink-faint);
+    text-transform: uppercase; transition: background .15s ease, color .15s ease;
+  }
+  .nav-i svg { width: 20px; height: 20px; flex: none; }
+  .nav-i span { line-height: 1.15; text-align: center; }
+  .nav-i:hover { color: var(--ink); background: var(--panel-2); }
+  .nav-i.active { background: var(--panel-2); color: var(--ink); font-weight: 600; }
+  .nav-i.active svg { color: var(--accent-line); }
+  .nav-i.hidden { display: none; }
+  .rail .who { font-family: var(--mono); font-size: 8.5px; color: var(--ink-faint);
+    text-align: center; line-height: 1.3; margin-top: 8px; padding: 0 4px; word-break: break-all; }
+  .rail .who b { display: block; color: var(--ink-dim); text-transform: uppercase; }
+
   .topbar { 
     height: 56px; background: var(--panel); border-bottom: 1px solid var(--line); 
     display: flex; align-items: center; padding: 0 16px; gap: 12px;
@@ -360,6 +396,21 @@
     .pop { right: 8px; left: 8px; width: auto; } 
     .btn, input[type=text], input[type=number], input[type=email], input[type=password], select { padding: 12px 16px; font-size: 14px; }
     .btn.sm { padding: 10px 14px; }
+    /* Рельс слева на телефоне — ошибка: приложение стоит как PWA,
+       инженер держит его одной рукой, левый край недосягаем большим
+       пальцем. Уводим навигацию вниз. */
+    .app { flex-direction: column; }
+    .rail { width: 100%; height: auto; flex-direction: row; order: 2;
+      border-right: none; border-top: 1px solid var(--line);
+      padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); overflow-x: auto; }
+    .rail-brand { display: none; }
+    .rail-items { flex-direction: row; width: auto; gap: 0; flex: 1; }
+    .rail-foot { margin-top: 0; flex-direction: row; width: auto; padding-top: 0;
+      border-left: 1px solid var(--line); padding-left: 4px; }
+    .nav-i { width: auto; min-width: 58px; padding: 7px 6px; font-size: 8.5px; }
+    .nav-i svg { width: 18px; height: 18px; }
+    .rail .who { display: none; }
+    .views { order: 1; flex: 1; min-height: 0; }
     .topbar { padding: 0 8px; gap: 6px; }
     .brand { flex: none; }
     .brand h1 { font-size: 13px; }
@@ -509,6 +560,12 @@
 .map-pop .lay-t{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin:2px 0 7px}
 .map-pop .seg{margin:0}
 .map-pop .hint{line-height:1.7}
+.wf-h{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin:14px 0 8px;display:flex;align-items:center;gap:7px}
+.wf-h:first-child{margin-top:4px}
+.wf-row{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:7px;cursor:pointer;transition:border-color .15s ease}
+.wf-row:hover{border-color:var(--ink-dim)}
+.wf-t{font-size:13.5px;font-weight:600;line-height:1.3}
+.wf-s{font-size:11.5px;color:var(--ink-faint);margin-top:2px;font-family:var(--mono)}
 .kempty{font-size:12.5px;color:var(--ink-faint);padding:14px 6px;text-align:center;line-height:1.5}
 .vm-stale{font-size:11.5px;color:var(--ink-faint);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:6px 9px;margin:8px 0 4px;line-height:1.45}
 .mc-per{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
@@ -547,21 +604,25 @@
 </head>
 <body>
 
-<div class="topbar">
-  <div class="brand"><img id="logoImg" alt=""><h1 id="wordmark">DLIGHT<b>·</b>СЕРВИС</h1></div>
-  <div class="tabs">
-    <div class="tab" data-tab="dash">Сводка</div>
-    <div class="tab active" data-tab="map">Карта</div>
-    <div class="tab" data-tab="planner">Планировщик</div>
-    <div class="tab" data-tab="catalog">Каталог</div>
-    <div class="tab" data-tab="settings">Настройки</div>
+<div class="app" id="appShell">
+<nav class="rail" id="nav">
+  <div class="rail-brand"><img id="logoImg" alt=""><span id="wordmark">DL</span></div>
+  <div class="rail-items">
+    <button class="nav-i" data-tab="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 9h8V3h-8z"/></svg><span>Сводка</span></button>
+    <button class="nav-i" data-tab="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3z"/><path d="M9 3v15M15 6v15"/></svg><span>Карта</span></button>
+    <button class="nav-i" data-tab="planner" data-sub="mine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><span>Мой день</span></button>
+    <button class="nav-i" data-tab="planner" data-sub="jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg><span>Заявки</span></button>
+    <button class="nav-i" data-tab="planner" data-sub="trips"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h2l2-8h9l3 8h2"/><circle cx="7.5" cy="18.5" r="1.8"/><circle cx="17" cy="18.5" r="1.8"/></svg><span>Выезды</span></button>
+    <button class="nav-i" data-tab="catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><circle cx="10" cy="18" r="1.5" fill="currentColor"/></svg><span>Каталог</span></button>
   </div>
-  <div class="spacer"></div>
-  <button class="icobtn" id="themeBtn" title="Внешний вид">🎨</button>
-  <span class="who" id="whoLabel"></span>
-  <button class="icobtn" id="cfgBtn" title="Подключение">⚙</button>
-  <button class="btn sm ghost" id="logoutBtn" style="display:none">Выйти</button>
-</div>
+  <div class="rail-foot">
+    <button class="nav-i" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>Настройки</span></button>
+    <button class="nav-i" id="themeBtn" title="Внешний вид"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg><span>Вид</span></button>
+    <button class="nav-i" id="cfgBtn" title="Подключение"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 7h14M5 17h14"/></svg><span>Связь</span></button>
+    <button class="nav-i" id="logoutBtn" style="display:none" title="Выйти"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h10"/></svg><span>Выйти</span></button>
+    <span class="who" id="whoLabel"></span>
+  </div>
+</nav>
 
 <div class="views" id="appRoot" style="display:none">
 
@@ -575,17 +636,25 @@
       <div class="side-handle" id="sideHandle"><span class="sh-chev">▾</span><span>Панель</span></div>
       <div class="scroll">
       <div class="block collapsible" id="pointsBlock">
-        <h2 class="ch">Точки <span class="cnt" id="cliCount">0</span><span class="chev"></span></h2>
+        <h2 class="ch"><span id="sideTitle">В работе</span> <span class="cnt" id="cliCount">0</span><span class="chev"></span></h2>
         <div class="block-body">
+          <!-- Карта по умолчанию показывает не адресную книгу, а то, чем
+               сейчас занимаются: точки с живыми заявками, депо и машины.
+               Весь справочник — вторым режимом. Из 24 точек в работе обычно
+               единицы, и остальные два десятка мешают их найти. -->
+          <div class="seg" id="mapScope"><button class="on" data-ms="work">в работе</button><button data-ms="all">весь справочник</button></div>
+          <div id="workFeed"></div>
           <!-- Панель похудела с 22 органов управления до восьми.
                Режимы просмотра (подсветка прибыльных, расстановка объездов)
                переехали в меню слоёв на самой карте: это режимы, а не
                действия, и им не место в столбце над списком.
                Подсказки убраны — действия в карточке теперь подписаны
                словами, объяснять их отдельным абзацем не нужно. -->
+          <div id="sideTools">
           <input type="search" id="search" placeholder="искать по названию…">
           <div class="seg" id="typeFilter" style="margin-top:8px"><button class="on" data-tf="all">все</button><button data-tf="client">клиенты</button><button data-tf="base">депо</button></div>
           <div id="pointTools"><button class="btn amber" id="pointCreate" style="width:100%;margin-top:10px">+ Создать точку</button></div>
+          </div>
           <div id="list" style="margin-top:10px"></div>
         </div>
       </div>
@@ -669,9 +738,12 @@
     <!-- JOBS -->
   <div class="view view-planner"><div class="pane scrollp">
     <div class="subtabs">
-      <div class="subtab" data-sub="mine">Мой день</div>
-      <div class="subtab active" data-sub="jobs">Заявки</div>
-      <div class="subtab" data-sub="trips" id="subTrips">Выезды</div>
+      <!-- Подвкладки переехали в рельс: «Мой день», «Заявки» и «Выезды»
+           теперь пункты первого уровня. Разметка оставлена скрытой,
+           потому что plannerSub() красит .subtab по data-sub. -->
+      <div class="subtab" data-sub="mine" style="display:none">Мой день</div>
+      <div class="subtab active" data-sub="jobs" style="display:none">Заявки</div>
+      <div class="subtab" data-sub="trips" id="subTrips" style="display:none">Выезды</div>
     </div>
     <div id="plMine" style="display:none">
       <div class="pane-head"><h2>Мой день</h2><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="mineDone" style="width:auto">показать завершённые</label></div>
@@ -790,6 +862,7 @@
     </div>
   </div></div>
 </div>
+</div><!-- /.app -->
 
 <!-- job editor -->
 <div class="overlay" id="jobOverlay"><div class="modal">
