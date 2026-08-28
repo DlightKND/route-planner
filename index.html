@@ -233,8 +233,18 @@
   
   .pt { 
     background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); 
-    padding: var(--sp-4) var(--sp-4); margin-bottom: var(--sp-3); transition: border 0.2s ease;
+    transition: border 0.2s ease;
   }
+  /* Две ленты на карте — «в работе» и «весь справочник» — жили по разным
+     меркам: карточка 81 px против строки 49. Это один и тот же список точек
+     в двух режимах, дышать по-разному он не может. Общая анатомия: те же
+     поля, тот же кегль заголовка, те же две строки под имя, та же мета. */
+  .pt, .wf-row { padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); }
+  .pt .nm-t, .wf-t { font-size: var(--fs-4); font-weight: 600; line-height: 1.3; min-height: 2.6em;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    overflow-wrap: break-word; word-break: normal; }
+  .pt .meta, .wf-s { font-size: var(--fs-2); margin-top: var(--sp-2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pt:hover { border-color: var(--ink-dim); }
   .pt .nm { font-weight: 600; font-size: var(--fs-5); display: flex; align-items: flex-start; gap: var(--sp-3); }
   .pt .nm .dot { margin-top: var(--sp-2); flex: none; }
@@ -243,15 +253,13 @@
      ритм делали РАЗНЫЕ высоты: 62 px у короткого имени против 84 у длинного
      с описанием. Фиксированная высота имени и описание, убранное в строку
      меты, дают одну высоту на все карточки. */
-  .pt .nm-t { flex: 1; min-width: 0; line-height: 1.3; min-height: 2.6em;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pt .nm-t { flex: 1; min-width: 0; }
   .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
   .pt .ds { font-size: var(--fs-4); color: var(--ink-dim); margin-top: var(--sp-2); line-height: 1.4; } 
   /* Мета — ровно одна строка. Длинное описание («Заїзд через КПП, дзвонити
      за годину») переносило её на вторую, карточка становилась на 12 px выше
      соседних, и ритм снова ломался. Полный текст остаётся в подсказке. */
-  .pt .meta { font-family: var(--mono); font-size: var(--fs-1); color: var(--ink-faint); margin-top: var(--sp-3);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pt .meta { font-family: var(--mono); color: var(--ink-faint); }
   /* Действия только у выбранной точки. Четыре кнопки под каждой из
      восьмидесяти строк — это и была «духота» в панели. */
   .pt .acts { display: none; gap: var(--sp-3); margin-top: var(--sp-3); flex-wrap: wrap; }
@@ -319,7 +327,10 @@
   /* Шапка раздела и фильтры уезжают вверх при прокрутке длинного списка,
      и «+ Заявка» вместе с чипами статусов приходится искать, вернувшись
      наверх. Прилипают к верху области прокрутки — ей и является .pane. */
-  .stickyhead { position: sticky; top: 0; z-index: 6; background: var(--bg); }
+  /* Отступ снизу должен быть у самой шапки, а не у чипов: margin-bottom
+     последнего ребёнка схлопывается наружу, и черта ложилась вплотную. */
+  .stickyhead { position: sticky; top: 0; z-index: 6; background: var(--bg);
+    padding-bottom: var(--sp-4); }
   /* Липкая шапка встаёт не в самый верх, а под верхний отступ .pane —
      и в этой полоске карточки продолжали проезжать поверх. Закрываем её
      фоном, вытянутым вверх; за край панели он не вылезет, её overflow режет. */
@@ -329,7 +340,7 @@
     height: 1px; background: var(--line); opacity: 0; transition: opacity .15s ease; }
   .stickyhead.stuck::after { opacity: 1; }
   .stickyhead .pane-head { margin-bottom: var(--sp-4); }
-  .stickyhead .chips { margin: 0 0 var(--sp-4); }
+  .stickyhead .chips { margin: 0; }
   .pane-head h2 { font-family: var(--mono); font-size: var(--fs-6); letter-spacing: 1px; text-transform: uppercase; color: var(--ink); font-weight: 600; }
   .searchbox { flex: 1; max-width: 420px; }
   
@@ -804,10 +815,10 @@
 .map-pop .hint{line-height:1.7}
 .wf-h{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-4) 0 var(--sp-3);display:flex;align-items:center;gap: var(--sp-3)}
 .wf-h:first-child{margin-top: var(--sp-2)}
-.wf-row{display:flex;align-items:center;gap: var(--sp-3);background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--line);border-radius: var(--r-sm);padding: var(--sp-3) var(--sp-4);margin-bottom: var(--sp-3);cursor:pointer;transition:border-color .15s ease}
+.wf-row{display:flex;align-items:center;gap: var(--sp-3);background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--line);border-radius: var(--r-sm);cursor:pointer;transition:border-color .15s ease}
 .wf-row:hover{border-color:var(--ink-dim)}
-.wf-t{font-size: var(--fs-4);font-weight:600;line-height:1.3}
-.wf-s{font-size: var(--fs-2);color:var(--ink-faint);margin-top: var(--sp-1);font-family:var(--mono)}
+.wf-t{min-width:0}
+.wf-s{color:var(--ink-faint);font-family:var(--mono)}
 .kempty{font-size: var(--fs-3);color:var(--ink-faint);padding: var(--sp-4) var(--sp-3);text-align:center;line-height:1.5}
 .vm-stale{font-size: var(--fs-2);color:var(--ink-faint);background:var(--panel-2);border:1px solid var(--line);border-radius: var(--r-sm);padding: var(--sp-3) var(--sp-3);margin: var(--sp-3) 0 var(--sp-2);line-height:1.45}
 .mc-per{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin-bottom: var(--sp-3)}
