@@ -315,11 +315,23 @@ async function loadAll(){ $('dataStatus').textContent='Загрузка…';
   render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),{padding:[40,40]}); else fitUkraine(); }
 async function refreshStats(){ if(!canWrite()) return; await loadClientStats(); renderMarkers(); }
 async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
-  try{ const {data,error}=await sb.from('jobs').select('client_id,status,job_works(hours,billable,revenue,tariff_profile)').is('deleted_at',null);
+  // due_date и created_at добавлены к тому же запросу: по ним считается
+  // срочность клиента для раскраски точек на карте. Отдельного похода
+  // в базу это не стоит, а карта из справочника координат превращается
+  // в картину дня.
+  try{ const {data,error}=await sb.from('jobs').select('client_id,status,due_date,created_at,job_works(hours,billable,revenue,tariff_profile)').is('deleted_at',null);
     if(error) throw error;
     const ch=+((appSettings.costs&&appSettings.costs.hour))||0;
-    (data||[]).forEach(j=>{ if(!j.client_id) return; const s=clientStats[j.client_id]||(clientStats[j.client_id]={rev:0,hours:0,warrH:0,cost:0,jobs:0,done:0});
+    const now=new Date();
+    (data||[]).forEach(j=>{ if(!j.client_id) return; const s=clientStats[j.client_id]||(clientStats[j.client_id]={rev:0,hours:0,warrH:0,cost:0,jobs:0,done:0,urg:null,open:0});
       s.jobs++; if(j.status==='done') s.done++;
+      // Острота — по самой горящей ЖИВОЙ заявке клиента. Закрытые
+      // и отменённые на цвет точки не влияют: работа по ним кончилась.
+      if(j.status!=='done'&&j.status!=='cancelled'){
+        s.open++;
+        const lvl=jobUrgency(j,now).level;
+        if(s.urg==null||urgencyRank(lvl)<urgencyRank(s.urg)) s.urg=lvl;
+      }
       (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; s.hours+=h; s.cost+=h*ch; if(w.billable===false) s.warrH+=h; s.rev+=(+w.revenue||0); }); });   // выручка и с гарантийных: тариф свой, но счёт есть всегда
     Object.values(clientStats).forEach(s=>{ s.profit=s.rev-s.cost; s.warrShare=s.hours>0?Math.round(s.warrH/s.hours*100):0; });
   }catch(e){ clientStats={}; loadFail('статистику по клиентам',e); } }
@@ -336,11 +348,57 @@ function recomputeAlerts(){
 }
 function alertOnly(){ return !!($('ptAlert')&&$('ptAlert').checked); }
 
-function render(){ $('cliCount').textContent=clients.length; places=clients.filter(c=>c.is_base); recomputeAlerts(); renderMarkers(); renderAvoidZones(); renderList(); }
-if($('profitMode')) $('profitMode').onchange=()=>{ profitMode=$('profitMode').checked; if($('profitLegend')) $('profitLegend').style.display=profitMode?'':'none'; renderMarkers(); };
+function render(){ $('cliCount').textContent=clients.length; places=clients.filter(c=>c.is_base); recomputeAlerts(); renderColorLegend(); renderMarkers(); renderAvoidZones(); renderList(); }
+// Раскраска точек — ОДИН выбор из трёх, а не набор независимых флажков.
+//
+// Раньше цвет по умолчанию брался из поля клиента color, то есть означал
+// то, что когда-то выбрал человек в форме. Самый заметный визуальный канал
+// на главном экране тратился на произвольную пометку, а состояния, нужные
+// диспетчеру, не кодировались никак.
+//
+// Теперь по умолчанию цвет = срочность. Прибыльность и «свой цвет»
+// остаются как отдельные взгляды на те же точки.
+let colorMode='urgency';
+const URG_COL={overdue:'#dc2626',acute:'#f59e0b',calm:'#16a34a',cold:'#0ea5e9'};
+const URG_TXT={overdue:'просрочено',acute:'горит',calm:'спокойно',cold:'без срока'};
+function markerColor(c){
+  if(c.is_base) return c.color||'#27d3c4';
+  if(colorMode==='own') return c.color||'#9aa1ad';
+  if(colorMode==='profit'){
+    const s=clientStats[c.id]; if(!s) return '#6b7280';
+    return profitColorOf(s.profit);
+  }
+  const s=clientStats[c.id];
+  if(!s||!s.open) return '#94a3b8';            // живых заявок нет — серый
+  return URG_COL[s.urg]||'#94a3b8';
+}
+function renderColorLegend(){
+  const el=$('profitLegend'); if(!el) return;
+  const dot=(c,t)=>'<span style="color:'+c+'">●</span> '+t;
+  if(colorMode==='profit'){
+    el.innerHTML=[dot('#16a34a','высокая'),dot('#84cc16','средняя'),
+      dot('#eab308','низкая'),dot('#6b7280','нет прибыли')].join(' · ');
+  } else if(colorMode==='urgency'){
+    el.innerHTML=[dot(URG_COL.overdue,URG_TXT.overdue),dot(URG_COL.acute,URG_TXT.acute),
+      dot(URG_COL.calm,URG_TXT.calm),dot(URG_COL.cold,URG_TXT.cold),
+      dot('#94a3b8','нет заявок')].join(' · ');
+  } else {
+    el.innerHTML='Цвет задаётся в карточке точки.';
+  }
+  el.style.display='';
+}
+document.querySelectorAll('#colorMode button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#colorMode button').forEach(x=>x.classList.toggle('on',x===b));
+  colorMode=b.dataset.cm; profitMode=(colorMode==='profit');
+  renderColorLegend(); renderMarkers(); });
+// Шкала прибыльности вынесена из renderMarkers: ею пользуется markerColor(),
+// а он вызывается и до отрисовки — например, из списка точек.
+let _maxProfit=0;
+function profitColorOf(p){ if(!(p>0)) return '#6b7280';
+  const r=_maxProfit>0?(p/_maxProfit):0; return r>=0.6?'#16a34a':(r>=0.3?'#84cc16':'#eab308'); }
+
 function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); revealedClient=null; markerById={};
-  let maxProfit=0; if(profitMode){ Object.values(clientStats).forEach(s=>{ if(s.profit>maxProfit) maxProfit=s.profit; }); }
-  const profitColor=p=>{ if(!(p>0)) return '#6b7280'; const r=maxProfit>0?(p/maxProfit):0; return r>=0.6?'#16a34a':(r>=0.3?'#84cc16':'#eab308'); };
+  _maxProfit=0; Object.values(clientStats).forEach(s=>{ if(s.profit>_maxProfit) _maxProfit=s.profit; });
   const ab='cursor:pointer;font-family:var(--mono);font-size:10px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);border-radius:5px;padding:4px 8px';
   const lb='cursor:pointer;font-family:var(--mono);font-size:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:5px;padding:4px 8px';
   // Фильтр «требующие внимания» гасит остальные точки НА КАРТЕ. Раньше он
@@ -348,7 +406,7 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
   // не смотришь, работая с картой, и флажок казался мёртвым.
   // Депо не гасим никогда: без них не построить маршрут.
   const dimOthers=alertOnly();
-  clients.forEach(c=>{ const col=c.color||'#9aa1ad';
+  clients.forEach(c=>{ const col=markerColor(c);
     const dim=dimOthers && !c.is_base && !(alertCount[c.id]>0);
     if(c.is_base){
       const icon=L.divIcon({className:'',html:'<div class="cbub" style="background:'+col+';width:30px;height:30px;border:2.5px solid '+ringColor()+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></div>',iconSize:[30,30],iconAnchor:[15,15]});
@@ -358,11 +416,18 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
       m.bindPopup(html); markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); return;
     }
     const list=eqByClient[c.id]||[]; const count=list.length; const withCoords=list.filter(e=>e.lat!=null&&e.lng!=null).length; const d=Math.min(46,20+count*4);
-    const dcol=(profitMode&&clientStats[c.id])?profitColor(clientStats[c.id].profit):col;
+    const dcol=col;
     const icon=L.divIcon({className:'',html:'<div class="cbub" style="background:'+dcol+';border:2.5px solid '+ringColor()+'">'+(count||'')+'</div>',iconSize:[d,d],iconAnchor:[d/2,d/2]});
     const m=L.marker([c.lat,c.lng],{icon});
     let html='<strong style="font-size:13px">'+esc(c.name)+'</strong>'; if(c.description) html+='<br>'+esc(c.description);
     html+='<br><span style="color:var(--ink-dim)">техники: '+count+(withCoords?(' · своих точек: '+withCoords):'')+'</span>';
+    // Что означает цвет этой точки — прямо в попапе, чтобы не сверяться
+    // с легендой в меню слоёв.
+    const us=clientStats[c.id];
+    if(colorMode==='urgency'&&us&&us.open){
+      html+='<br><span style="color:'+(URG_COL[us.urg]||'#94a3b8')+';font-size:11px">● '
+        +esc(URG_TXT[us.urg]||'')+' · живых заявок '+us.open+'</span>';
+    }
     const s=clientStats[c.id]; if(s){ const cur=appSettings.currency||'грн'; html+='<br><span style="display:block;margin-top:5px;font-size:11px;color:var(--ink-dim);line-height:1.6">выручка <b style="color:var(--ink)">'+Math.round(s.rev)+' '+esc(cur)+'</b> · прибыль <b style="color:'+(s.profit>=0?'var(--green)':'var(--red)')+'">'+Math.round(s.profit)+'</b><br>гарантия '+s.warrShare+'% · заявок '+s.jobs+(s.done?(' · закрыто '+s.done):'')+'</span>'; }
     html+='<br><span style="display:inline-flex;gap:6px;margin-top:6px"><button onclick="openEquip(\''+c.id+'\')" style="'+lb+'">техника</button>';
     if(canWrite()){ html+='<button onclick="addClientToRoute(\''+c.id+'\')" style="'+ab+'">+ маршрут</button><button onclick="newJobForClient(\''+c.id+'\')" style="'+lb+'">+ заявка</button><button onclick="editClient(\''+c.id+'\')" style="'+lb+'">ред.</button>'; }
@@ -435,7 +500,8 @@ function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('li
     return x.name.localeCompare(y.name,'uk');
   });
 
-  box.innerHTML=res.length?'':'<div class="hint">Ничего не найдено.</div>';
+  box.innerHTML=res.length?'':'<div class="kempty">'
+    +(clients.length?'По запросу ничего не нашлось.':'Точек пока нет. Создай первую кнопкой выше.')+'</div>';
   res.slice(0,80).forEach(c=>{ const eqn=(eqByClient[c.id]||[]).length; const aln=alerts[c.id]||0; const d=document.createElement('div'); d.className='pt'; d.dataset.cid=c.id; d.onmouseenter=()=>hlMarker(c.id,true); d.onmouseleave=()=>hlMarker(c.id,false);
     const tag=c.is_base?'<span class="pill">депо</span>':'<span class="pill">клиент</span>';
     // Координаты уехали в подсказку: диспетчер по ним не работает, а строку
@@ -564,7 +630,11 @@ function renderEqModels(){ const box=$('emList'); if(!box) return; const q=$('em
   if($('emManuList')) $('emManuList').innerHTML=manus.map(x=>'<option value="'+esc(x)+'">').join('');
   if($('emKindList')) $('emKindList').innerHTML=kinds.map(x=>'<option value="'+esc(x)+'">').join('');
   const list=eqModels.filter(m=>!q||emLabel(m).toLowerCase().includes(q)||(m.kind||'').toLowerCase().includes(q));
-  if(!list.length){ box.innerHTML='<div class="hint">'+(eqModels.length?'Ничего не найдено.':'Моделей нет. Добавь по кнопке «+ Модель».')+'</div>'; return; }
+  if(!list.length){
+    box.innerHTML=eqModels.length
+      ? '<div class="kempty">По запросу ничего не нашлось.</div>'
+      : '<div class="kempty">Моделей нет.<br>Модель задаёт срок гарантии и интервал ТО — по ним техника попадает в «требующие внимания».<br><br>Начни с кнопки «+ Модель».</div>';
+    return; }
   const tree={}; list.forEach(m=>{ const mn=m.manufacturer||'Без производителя'; const kn=m.kind||'Без типа'; tree[mn]=tree[mn]||{}; tree[mn][kn]=tree[mn][kn]||[]; tree[mn][kn].push(m); });
   let h=''; Object.keys(tree).sort().forEach(mn=>{ h+='<div class="emtree-manu"><div class="emtree-h" data-emg="'+esc(mn)+'">▾ '+esc(mn)+'</div><div class="emtree-body">';
     Object.keys(tree[mn]).sort().forEach(kn=>{ h+='<div class="emtree-kind"><div class="emtree-kh">'+esc(kn)+'</div>';
@@ -603,7 +673,14 @@ function catGrp(title,inner){ return '<div class="emtree-manu"><div class="emtre
 function workRow(w){ const estR=((+w.norm_hours||0)*((appSettings.tariffs&&appSettings.tariffs.hour)||0)); return '<div class="emrow"><span class="emname">'+esc(w.name)+' · '+(+w.norm_hours||0)+'ч'+(w.warranty_eligible?'':' · платно')+'</span><span class="emmeta">'+(w.price?('оверр. '+(+w.price)):('≈'+estR.toFixed(0)))+'</span><button class="btn sm" data-cwedit="'+w.id+'">ред.</button><button class="btn sm ghost" data-cwdel="'+w.id+'" title="Удалить">×</button></div>'; }
 async function renderCatalog(){ if(!catalog.length) await loadCatalog(); if(!eqModels.length) await loadEqModels(); const q=$('catSearch').value.trim().toLowerCase(); const fil=$('catFilter')?$('catFilter').value:''; const box=$('catList');
   const res=catalog.filter(w=>{ const mn=workModelNames(w); const hay=(w.name+' '+((w.applicable_kinds||[]).join(' '))+' '+mn.join(' ')).toLowerCase(); if(q&&!hay.includes(q)) return false; if(fil==='warranty'&&!w.warranty_eligible) return false; if(fil==='paid'&&w.warranty_eligible) return false; if(fil==='maint'&&!w.is_maintenance) return false; return true; });
-  if(!res.length){ box.innerHTML='<div class="hint">'+(catalog.length?'Ничего не найдено.':'Каталог пуст. Добавь работу.')+'</div>'; return; }
+  if(!res.length){
+    // Пустое состояние объясняет, зачем раздел нужен, а не просто сообщает
+    // об отсутствии строк. Нормированная работа — это то, из чего потом
+    // собирается заявка и считается выручка.
+    box.innerHTML=catalog.length
+      ? '<div class="kempty">По запросу ничего не нашлось.<br>Измени фильтр или строку поиска.</div>'
+      : '<div class="kempty">Каталог пуст.<br>Нормированная работа задаёт часы и цену — из них собирается заявка и считается выручка.<br><br>Начни с кнопки «+ Работа» вверху.</div>';
+    return; }
   const general=res.filter(w=>!(w.model_ids&&w.model_ids.length)&&!(w.applicable_kinds&&w.applicable_kinds.length));
   const byKind=res.filter(w=>!(w.model_ids&&w.model_ids.length)&&(w.applicable_kinds&&w.applicable_kinds.length));
   const byModel=res.filter(w=>w.model_ids&&w.model_ids.length);
@@ -2677,10 +2754,22 @@ function showEconModal(d){
   // ── Транспорт: по плательщикам (или плоско)
   h+=head('Транспорт'+(d.factKm!=null?' · факт '+Math.round(d.factKm)+' км':''));
   if(d.roadGroups&&d.roadGroups.length){
+    let sumKm=0;
     d.roadGroups.forEach(g=>{
+      sumKm+=+g.km||0;
       h+=row(esc(g.name)+' <span class="edim">'+g.count+' точ. · '+g.km.toFixed(0)+' км × '+g.rate+'</span>',
              money0(g.rev)+' '+cur+(g.ov?' <span class="edim">(вручную)</span>':''));
     });
+    // Сумма километров по плательщикам БОЛЬШЕ длины маршрута — и это верно.
+    // У каждого плательщика свой круг «Депо → его точки → Депо», круги
+    // накладываются друг на друга, поэтому в сумме дают больше, чем один
+    // общий проезд. Без этой строки цифры выглядят как ошибка вдвое:
+    // 3994 км по плательщикам при маршруте в 1734.
+    if(d.roadGroups.length>1&&d.km>0&&sumKm>d.km*1.05){
+      h+='<div class="ehint">Сумма '+Math.round(sumKm)+' км больше маршрута ('
+        +Math.round(d.km)+' км) не по ошибке: у каждого плательщика свой круг '
+        +'«Депо → его точки → Депо», и круги накладываются.</div>';
+    }
   } else {
     h+=row('Дорога <span class="edim">'+d.km.toFixed(0)+' км</span>', money0(d.rTravel)+' '+cur);
   }
@@ -2689,10 +2778,24 @@ function showEconModal(d){
   // ── Итоги
   h+=head('Итого');
   h+=row('Выручка', '<b>'+money0(d.rev)+' '+cur+'</b>'+(d.revOv?' <span class="edim">(вручную)</span>':''));
+  // При ручной сумме разбивка выше перестаёт объяснять итог, но продолжает
+  // стоять над ним. Показываем расчётное значение и разницу, иначе читатель
+  // складывает строки, не сходится и не понимает почему.
+  if(d.revOv&&d.revComputed!=null){
+    const dl=d.rev-d.revComputed;
+    h+='<div class="ehint">По расчёту вышло '+money0(d.revComputed)+' '+cur
+      +' — строки выше складываются в него. Ручная сумма отличается на '
+      +(dl>=0?'+':'')+money0(dl)+' '+cur+'.</div>';
+  }
   const kmTxt=(d.factKm!=null)?('факт '+Math.round(d.costKm)+' км, план '+Math.round(d.km)+' км'):(Math.round(d.km)+' км');
   const laborTxt=(d.factWorkH!=null)?('факт '+d.factWorkH.toFixed(1)+' ч, норма '+d.workH.toFixed(1)):(d.workH.toFixed(1)+' ч');
   h+=row('Затраты <span class="edim">труд '+laborTxt+' · '+kmTxt+'</span>',
          '<b>'+money0(d.cost)+' '+cur+'</b>'+(d.costOv?' <span class="edim">(вручную)</span>':''));
+  if(d.costOv&&d.costComputed!=null){
+    const dl=d.cost-d.costComputed;
+    h+='<div class="ehint">По расчёту вышло '+money0(d.costComputed)+' '+cur
+      +'. Ручная сумма отличается на '+(dl>=0?'+':'')+money0(dl)+' '+cur+'.</div>';
+  }
   const pc=d.profit>=0?'var(--green)':'var(--red)';
   h+='<div class="etotal"><span>Прибыль</span><span style="color:'+pc+'"><b>'+money0(d.profit)+' '+cur+'</b> · '+d.margin.toFixed(0)+'%</span></div>';
   if(d.wh>0) h+='<div class="ehint">Гарантийные часы '+d.wh.toFixed(1)+' ч · доля '+d.share+'%</div>';
