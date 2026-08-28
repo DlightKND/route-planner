@@ -602,7 +602,7 @@
 .a-todaytxt{padding-top:5px;font-size:13px;color:var(--ink-dim)}
 .a-break{position:relative;height:30px;display:flex;align-items:center}
 .a-break span{font-family:var(--mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint)}
-.a-break::before{content:'';position:absolute;left:-26px;top:8px;width:14px;height:14px;background:var(--panel)}
+.a-break::before{content:'';position:absolute;left:-26px;top:8px;width:14px;height:14px;background:var(--bg)}
 .agrp{position:relative;margin-bottom:20px}
 .agrp:last-child{margin-bottom:0}
 .agrp-card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line);
@@ -640,7 +640,9 @@
 .el-n{grid-area:n;font-size:13.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .el-v{grid-area:v;font-family:var(--mono);font-size:11.5px;font-weight:600;white-space:nowrap}
 .el-t{grid-area:t;height:8px;border-radius:4px;background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
+.el-t{display:flex}
 .el-t i{display:block;height:100%;border-radius:4px}
+.el-t .el-drive{opacity:.4;margin-left:1px}
 .el-s{grid-area:s;font-family:var(--mono);font-size:10px;color:var(--ink-faint)}
 .elrow.none .el-n{color:var(--red)}
 .el-tail{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-top:10px;
@@ -689,13 +691,18 @@
 .acold summary .acount{margin-left:auto;color:var(--ink-dim)}
 .achev{color:var(--ink-faint);transition:transform .15s}
 .acold[open] .achev{transform:rotate(90deg)}
-#attnBody{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+/* Раньше внутри лежал плоский список: строки касались краёв тарелки, и это
+   было правильно. Группы ленты — сами карточки, и внешняя рамка сходилась
+   с внутренней вплотную, контур в контур. Тарелку убираем: карточки стоят
+   прямо на фоне страницы, как и в правой колонке. */
+#attnBody{background:transparent;border:0;border-radius:0}
 #attnBody:empty{display:none}
 .dash-attn>.acaps{padding:0}
 .asubhead{font-size:10px;color:var(--ink-faint);letter-spacing:.14em;text-transform:uppercase;padding:12px 12px 4px;border-bottom:1px solid var(--line)}
 /* холодный блок внутри той же тарелки, не отдельной плашкой */
-.acold{border-top:1px solid var(--line)}
-.acold summary{padding:11px 12px}
+.acold{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow-sm);overflow:hidden;margin-top:14px}
+.acold summary{padding:12px 14px}
 .acold>div .arow:last-child{border-bottom:0}
 /* Правая колонка дашборда: деньги крупно + компактные счётчики */
 .money-card{padding:16px 18px}
