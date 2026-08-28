@@ -35,6 +35,49 @@ const { money, hhmm, businessDays, colNum, colLetter, cellRC, jobRoadPayer, rate
 
 
 const $=id=>document.getElementById(id);
+
+// ── Ленивая загрузка тяжёлых библиотек ──────────────────────────────────────
+// turf (~500 КБ) и exceljs (~900 КБ) висели тегами <script> в index.html и
+// выполнялись ДО первой строки app.js — то есть приложение не начинало
+// работать, пока не приедут оба. При этом turf нужен только для маршрутов
+// и экономики, а exceljs — только для выгрузки акта по шаблону xlsx.
+// Инженеру в поле со слабой связью это полтора мегабайта ожидания ни за что.
+//
+// Хэши integrity перенесены из index.html дословно: проверка целостности
+// осталась ровно та же, изменился только момент загрузки.
+const LIBS={
+  turf:{ src:'https://unpkg.com/@turf/turf@6.5.0/turf.min.js',
+         integrity:'sha384-82q0nm29xZzIo5BMtDYnh2/NxeO6FoaK1S/0nF84w3cEsqbBfun3JdMyDVYWfVY5',
+         global:'turf', label:'библиотеку геометрии (turf)' },
+  excel:{ src:'https://unpkg.com/exceljs@4.4.0/dist/exceljs.min.js',
+          integrity:'sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz',
+          global:'ExcelJS', label:'библиотеку Excel (exceljs)' }
+};
+const _libP={};
+function loadLib(key){
+  const c=LIBS[key];
+  if(window[c.global]) return Promise.resolve(window[c.global]);
+  if(_libP[key]) return _libP[key];
+  _libP[key]=new Promise((resolve,reject)=>{
+    const el=document.createElement('script');
+    el.src=c.src; el.integrity=c.integrity;
+    el.crossOrigin='anonymous'; el.referrerPolicy='no-referrer';
+    el.onload=()=>{ if(window[c.global]) resolve(window[c.global]);
+      else { _libP[key]=null; reject(new Error(c.label+': файл получен, но объект не появился')); } };
+    // Обнуляем обещание, чтобы следующая попытка началась заново, а не
+    // получила навсегда отвергнутое. Иначе один провал сети выключал бы
+    // маршрутизацию до перезагрузки страницы.
+    el.onerror=()=>{ _libP[key]=null; reject(new Error('Не удалось загрузить '+c.label+'. Проверь соединение и повтори.')); };
+    document.head.appendChild(el);
+  });
+  return _libP[key];
+}
+const ensureTurf=()=>loadLib('turf');
+const ensureExcel=()=>loadLib('excel');
+// Прогрев: не блокирует запуск, но к моменту, когда человек дойдёт до карты,
+// turf обычно уже на месте. Места, где от него зависит ПРАВИЛЬНОСТЬ цифр,
+// всё равно ждут его явно через await — на прогрев там не полагаемся.
+ensureTurf().catch(()=>{});
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 // ── Подключение к проекту ───────────────────────────────────────────────────
 // Значения встроены в сборку. anon-ключ публичен по назначению: он уходит
@@ -124,7 +167,7 @@ map.setView([48.4,31.2],6);
 function fitUkraine(){ map.fitBounds(UA_BOUNDS); }
 let markers=L.layerGroup().addTo(map), eqMarkers=L.layerGroup().addTo(map), tripLayer=L.layerGroup().addTo(map), routeLayer=L.layerGroup().addTo(map), bufferLayer=L.layerGroup().addTo(map), pendingMarker=null, revealedClient=null, wpModeOn=false, markerById={};
 let clientStats={}, profitMode=false, avoidModeOn=false, avoidLayer=L.layerGroup().addTo(map);
-let vehLayer=L.layerGroup().addTo(map), vehShow=true, vehState=[], vehMk={}, vehChan=null, vehTick=null, vehModalId=null;
+let vehLayer=L.layerGroup().addTo(map), vehShow=true, vehState=[], vehMk={}, vehTick=null, vehVisWired=false, vehModalId=null;
 function updatePointCoords(){ const el=$('pointCoords'); if(!el) return; if(pendingLatLng){ el.innerHTML='<span class="ok">📍 координаты заданы: '+(+pendingLatLng.lat).toFixed(5)+', '+(+pendingLatLng.lng).toFixed(5)+'</span>'; } else { el.textContent='Место не задано — «Указать на карте» или найдите по адресу.'; } }
 function openPointModal(){ updatePointCoords(); $('pointOverlay').classList.add('on'); setTimeout(()=>{ try{ $('fName').focus(); }catch(e){} },40); }
 map.on('click',e=>{ if(avoidModeOn){ addAvoidZone(e.latlng); return; } if(addModeOn){ pendingLatLng=e.latlng; toggleAdd(false); flashPending(); openPointModal(); return; } if(wpModeOn){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:e.latlng.lat,lng:e.latlng.lng}); renderRoutePanel(); resetBuilt(); } });
@@ -1104,7 +1147,11 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST_TRIP[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
   wireTripCards(box); wireKanbanDrag(box,dropTrip); }
 $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) openTrip(null); };
-async function openTrip(id){ await ensureRefs(); await loadTripJobs(); tripEditId=id; const t=id?getTrip(id):null; tripMainJobId=(t&&t.main_job_id)||null;
+async function openTrip(id){ await ensureRefs(); await loadTripJobs();
+  // econCompute считает дорогу по плательщикам через turf, когда готовых
+  // километров в выезде нет. Без turf он молча уйдёт в плоскую ветку и
+  // покажет другую цифру — поэтому ждём здесь, до первого tripCalc().
+  await ensureTurf().catch(()=>{}); tripEditId=id; const t=id?getTrip(id):null; tripMainJobId=(t&&t.main_job_id)||null;
   $('tpFrom').value=t?(t.date_from||''):''; $('tpTo').value=t?(t.date_to||''):''; $('tpVeh').innerHTML='<option value="">— авто —</option>'+vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.name+(v.plate?(' · '+v.plate):''))+'</option>').join(''); $('tpVeh').value=t&&t.vehicle_id?t.vehicle_id:''; updateVehInfo(); $('tpVeh').onchange=updateVehInfo; $('tpNotes').value=t?(t.notes||''):'';
   $('tpEng').innerHTML='<option value="">— инженер —</option>'+profilesList.map(p=>'<option value="'+p.id+'">'+esc((p.full_name||'без имени')+' ('+p.role+')')+'</option>').join('');
   $('tpEng').value=t&&t.lead_engineer?t.lead_engineer:''; $('tpStatus').value=t?t.status:'planned';
@@ -1708,9 +1755,20 @@ async function showTripOnMap(tid){
 }
 
 // ---------- машины на карте (трекинг Wialon) ----------
-// vehicle_state — одна строка на машину. Realtime-подписка на неё дешёвая:
-// строк ровно столько, сколько машин. Историю (vehicle_positions) карта
+// vehicle_state — одна строка на машину. Историю (vehicle_positions) карта
 // не читает вообще.
+//
+// Обновление — опросом раз в 30 секунд, без realtime. Подписка тут была,
+// и по строкам она действительно дешёвая, но платили мы не за строки:
+// декодер WAL на стороне Supabase стоил 460 тысяч вызовов и 38 минут
+// процессорного времени базы — больше, чем все прикладные запросы вместе.
+// Опрос при этом всё равно оставался: сокет умирает молча, и без опроса
+// машина замерзала бы на карте навсегда. То есть настоящим источником
+// правды был именно он, а realtime лишь сокращал задержку с 30 секунд
+// до одной. Для одной машины такая сделка не окупалась.
+//
+// Если снова понадобится живая точка: вернуть sb.channel('veh-state')
+// сюда И вернуть таблицу в публикацию (см. sql/09-realtime-off.sql).
 const VEH_STALE_MIN = 12;   // старше — считаем данные протухшими
 
 
@@ -1816,21 +1874,18 @@ if($('vehCenter')) $('vehCenter').onclick=()=>{
   switchTab('map'); setTimeout(()=>{ map.invalidateSize(); map.setView([r.lat,r.lng], Math.max(map.getZoom(),14)); },60);
 };
 
+const VEH_POLL_MS = 30000;
+
 function subscribeVeh(){
-  // Realtime по возможности, опрос как страховка. Сокет умеет тихо умирать
-  // (сон вкладки, прокси, обрыв) — без опроса машина замерзала бы на карте
-  // навсегда, и это выглядело бы как «стоит», а не как «мы её потеряли».
-  try{ if(vehChan) sb.removeChannel(vehChan); }catch(e){}
-  try{
-    vehChan=sb.channel('veh-state')
-      .on('postgres_changes',{event:'*',schema:'public',table:'vehicle_state'},()=>loadVehState())
-      // Без этого подписка гасла молча: позиция на карте просто переставала
-      // обновляться, и выглядело это как «трекинг пропал».
-      .subscribe((st)=>{ if(st==='CHANNEL_ERROR'||st==='TIMED_OUT')
-        notify('Живое обновление позиции машины отключилось. Обнови страницу.','err'); });
-  }catch(e){ notify('Не удалось подписаться на позицию машины: '+(e.message||e),'err'); }
+  // Скрытую вкладку не опрашиваем: телефон инженера в кармане не должен
+  // ходить в сеть каждые полминуты. При возврате на вкладку обновляемся
+  // сразу, иначе первые 30 секунд на карте висела бы устаревшая точка.
   if(vehTick) clearInterval(vehTick);
-  vehTick=setInterval(()=>{ if(!document.hidden) loadVehState(); }, 30000);
+  vehTick=setInterval(()=>{ if(!document.hidden) loadVehState(); }, VEH_POLL_MS);
+  if(!vehVisWired){
+    document.addEventListener('visibilitychange',()=>{ if(!document.hidden) loadVehState(); });
+    vehVisWired=true;
+  }
 }
 
 if($('vehBtn')) $('vehBtn').onclick=()=>{
@@ -1899,7 +1954,8 @@ $('baseNewAdd').onclick=async ()=>{ const q=$('baseNew').value.trim(); if(!q){ $
   }catch(e){ $('baseNewRes').innerHTML='<div class="err">Ошибка: '+esc(e.message||e)+'</div>'; } finally{ $('baseNewAdd').disabled=false; } };
 $('rBuild').onclick=()=>{ const stops=routeStopsAll(); if(stops.length<2){ $('rStatus').textContent='Нужно минимум 2 точки.'; return; } if(orsKeyMissing()){ orsMissing($('rStatus')); return; } doBuildRoute(); };
 $('rOpt').onclick=optimizeOrder;
-async function avoidMatrix(pts,onProg){ const n=pts.length, ap=avoidPolygons(), pref=$('rPref').value;
+async function avoidMatrix(pts,onProg){ await ensureTurf();
+  const n=pts.length, ap=avoidPolygons(), pref=$('rPref').value;
   const M=Array.from({length:n},()=>new Array(n).fill(0)); let done=0, total=n*(n-1)/2;
   for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
     let d=0;
@@ -1915,6 +1971,7 @@ async function avoidMatrix(pts,onProg){ const n=pts.length, ap=avoidPolygons(), 
   return M; }
 
 async function optimizeOrder(){ if(rBusy) return; if(orsKeyMissing()){ orsMissing($('rStatus')); return; }
+  try{ await ensureTurf(); }catch(e){ $('rStatus').innerHTML='<span class="err">'+esc(e.message)+'</span>'; return; }
   const visits=[]; rStops.forEach((s,i)=>{ if(s.type!=='place') visits.push({i,lng:s.lng,lat:s.lat}); });
   if(visits.length<2){ $('rStatus').textContent='Нужно минимум 2 точки выезда для оптимизации.'; return; }
   let startCoord, fixedStartIdx=null, jobsSrc=visits.slice();
@@ -2088,6 +2145,7 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
   // (tripStart). Без неё считать не от чего.
   const start=rStart||tripStart;
   if(!start){ console.warn('Километраж: нет стартовой точки (депо) — пропускаю'); return null; }
+  try{ await ensureTurf(); }catch(e){ console.warn('Километраж: turf не загрузился — пропускаю',e); return null; }
   if(orsKeyMissing()){ console.warn('Километраж: маршрутизация не настроена — пропускаю'); return null; }
   const pref=($('rPref')&&$('rPref').value)||'recommended';
   const ap=avoidPolygons();
@@ -2175,6 +2233,9 @@ async function computeRoadKmByPayer(linkedJobs, mainJobId, prog){
 async function doBuildRoute(){ if(rBusy) return; const stops=dedupeStops(routeStopsAll());
   if(stops.length<2){ $('rStatus').textContent='Нужно минимум 2 разные точки (совпадающие подряд пропускаются).'; return; }
   if(orsKeyMissing()){ orsMissing($('rStatus')); return; }
+  // Без turf avoidPolygons вернёт null, и маршрут построится БЕЗ зон объезда,
+  // ничего об этом не сказав. Поэтому ждём явно, а не надеемся на прогрев.
+  try{ await ensureTurf(); }catch(e){ $('rStatus').innerHTML='<span class="err">'+esc(e.message)+'</span>'; return; }
   const hits=avoidHits(stops); if(hits.length){ $('rStatus').innerHTML='<span class="err">В зоне объезда: '+esc(hits.join(', '))+'. ORS не построит маршрут к точке внутри «кирпича» — уменьши радиус или убери зону.</span>'; return; }
   rBusy=true; $('rBuild').disabled=true; if($('rOpt')) $('rOpt').disabled=true; $('rStatus').textContent='Считаю…';
   const pref=$('rPref').value; const coords=stops.map(s=>[s.lng,s.lat]); const ap=avoidPolygons();
@@ -2204,12 +2265,14 @@ $('corTime').onclick=()=>{ $('corTime').classList.add('on'); $('corDist').classL
 $('rBuf').oninput=e=>{ bufferKm=+e.target.value; $('rBufVal').textContent=bufferKm+' км'; rBuildBuffer(); };
 $('rIso').oninput=e=>{ isoMin=+e.target.value; $('rIsoVal').textContent=isoMin+' мин'; };
 $('rIsoBuild').onclick=buildIsochrone;
-function rBuildBuffer(){ if(!rRoute.geometry||bufferKm<=0){ bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; return; }
+async function rBuildBuffer(){ if(!rRoute.geometry||bufferKm<=0){ bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; return; }
+  try{ await ensureTurf(); }catch(e){ $('rCorridor').innerHTML='<div class="err">'+esc(e.message)+'</div>'; return; }
   let poly; try{ poly=turf.buffer(turf.feature(rRoute.geometry),bufferKm,{units:'kilometers'}); }catch(e){ return; }
   applyCorridor([poly]); }
 async function buildIsochrone(){ if(!rRoute.geometry){ $('rCorridor').innerHTML='<div class="hint">Сначала построй маршрут.</div>'; return; } if(isoMin<=0){ bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; return; } if(orsKeyMissing()){ orsMissing($('rCorridor')); return; }
   const coords=rRoute.geometry.coordinates||[]; const n=coords.length; if(n<2) return; const k=Math.min(5,n); const locs=[]; for(let i=0;i<k;i++){ locs.push(coords[Math.round(i*(n-1)/(k-1||1))]); }
   $('rCorridor').innerHTML='<div class="hint">Строю изохрону…</div>';
+  try{ await ensureTurf(); }catch(e){ $('rCorridor').innerHTML='<div class="err">'+esc(e.message)+'</div>'; return; }
   try{ const gj=await orsPost('https://api.openrouteservice.org/v2/isochrones/driving-car',{locations:locs,range:[isoMin*60],range_type:'time'});
     const polys=(gj.features||[]); if(!polys.length){ $('rCorridor').innerHTML='<div class="hint">Изохрона пуста.</div>'; return; } applyCorridor(polys);
   }catch(e){ $('rCorridor').innerHTML='<div class="err">Ошибка: '+esc(e.message||e)+'</div>'; } }
@@ -2349,9 +2412,10 @@ function drawEconMap(d){
   }catch(e){ wrap.style.display='none'; }
 }
 $('econClose').onclick=()=>$('econOverlay').classList.remove('on');
-$('tpEconBtn').onclick=()=>{ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); showEconModal(econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value},appSettings.tariff_profiles,window.turf)); };
+$('tpEconBtn').onclick=async ()=>{ await ensureTurf().catch(()=>{}); const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); showEconModal(econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value},appSettings.tariff_profiles,window.turf)); };
 if($('tpJobsRoute')) $('tpJobsRoute').onchange=renderTripJobs;
-async function showTripEcon(id){ const t=trips.find(x=>x.id==id); if(!t) return; const es=t.econ_snapshot||{}; const ts=t.tariffs_snapshot||{shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency,tariff_profiles:appSettings.tariff_profiles||[]};
+async function showTripEcon(id){ const t=trips.find(x=>x.id==id); if(!t) return;
+  await ensureTurf().catch(()=>{}); const es=t.econ_snapshot||{}; const ts=t.tariffs_snapshot||{shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency,tariff_profiles:appSettings.tariff_profiles||[]};
   let jobs=[]; try{ const {data}=await sb.from('trip_jobs').select('jobs(id, client_id, clients(name,lat,lng), equipment(lat,lng), job_works(hours,billable,revenue,tariff_profile))').is('jobs.deleted_at',null).eq('trip_id',id); jobs=(data||[]).map(r=>r.jobs).filter(Boolean); }catch(e){}
   const stStop=(t.route_stops||[]).find(x=>x.type==='start'); const start=stStop?{lat:stStop.lat,lng:stStop.lng,name:stStop.name}:null;
 
@@ -2473,7 +2537,11 @@ function wsToHtml(ws){ const skip={}, span={}; (ws.model.merges||[]).forEach(m=>
   let maxCol=1; ws.eachRow({includeEmpty:true},row=>{ if(row.cellCount>maxCol) maxCol=row.cellCount; });
   let h='<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#000">';
   for(let r=1;r<=ws.rowCount;r++){ const row=ws.getRow(r); h+='<tr>'; for(let c=1;c<=maxCol;c++){ const ref=colLetter(c)+r; if(skip[ref]) continue; const cell=row.getCell(c); const st=cell.style||{}; const f=st.font||{}; let css='border:1px solid #e2e2e2;padding:3px 7px;vertical-align:top;'; if(f.bold)css+='font-weight:bold;'; if(f.italic)css+='font-style:italic;'; if(f.size)css+='font-size:'+f.size+'px;'; if(f.color&&f.color.argb)css+='color:#'+f.color.argb.slice(-6)+';'; if(st.fill&&st.fill.fgColor&&st.fill.fgColor.argb)css+='background:#'+st.fill.fgColor.argb.slice(-6)+';'; const al=st.alignment||{}; if(al.horizontal)css+='text-align:'+al.horizontal+';'; const sp=span[ref]?(' colspan="'+span[ref].cs+'" rowspan="'+span[ref].rs+'"'):''; let v=cell.value; if(v&&typeof v==='object') v=v.richText?v.richText.map(t=>t.text).join(''):(v.text!=null?v.text:(v.result!=null?v.result:'')); h+='<td'+sp+' style="'+css+'">'+esc(v==null?'':String(v))+'</td>'; } h+='</tr>'; } return h+'</table>'; }
-async function genActXlsx(job){ const ax=appSettings.act_xlsx||{}; if(!ax.data||typeof ExcelJS==='undefined') return false;
+async function genActXlsx(job){ const ax=appSettings.act_xlsx||{}; if(!ax.data) return false;
+  // exceljs грузится только здесь — а сюда попадают, лишь когда загружен
+  // шаблон xlsx и человек открыл акт. У большинства открытий приложения
+  // этих 900 КБ теперь просто нет.
+  try{ await ensureExcel(); }catch(e){ notify(e.message,'err'); return false; }
   try{ const bin=atob(ax.data); const buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); const wb=new ExcelJS.Workbook(); await wb.xlsx.load(buf.buffer); const ws=wb.worksheets[0]; const data=buildActData(job); actFillSheet(ws,data);
     const out=await wb.xlsx.writeBuffer(); const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     $('axPreview').innerHTML=wsToHtml(ws);
