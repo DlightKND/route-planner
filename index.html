@@ -634,6 +634,10 @@
   .kcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-3); }
   .kcard h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-4); }
   .kcard .meta { font-size: var(--fs-2); color: var(--ink-dim); margin: var(--sp-1) 0; }
+  /* Чипы стояли строкой с margin 2px сверху и снизу, и при схлопывании
+     с такой же метой между ними оставалось два пикселя — пилюля упиралась
+     в текст. Своя строка со своим воздухом. */
+  .kcard .ktags { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
   .kcard .acts { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-3); align-items: center; }
   .kcard select.kmove { font-size: var(--fs-2); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-sm); }
   .kcard[draggable="true"] { cursor: grab; }
@@ -783,8 +787,17 @@
 .stat-closed{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint);margin-top: var(--sp-3)}
 /* Переключатель периода живёт в заголовке карточки, а не отдельной строкой */
 .cardhead{display:flex;align-items:center;gap: var(--sp-3);flex-wrap:wrap}
-.revseg{margin-left: auto;display:inline-flex}
-.revseg button{padding: var(--sp-2) var(--sp-3);font-size: var(--fs-1)}
+/* Переключатель периода живёт в шапке карточки, окно с датами — строкой под
+   ним: order + flex-basis 100% переносят его на свою строку внутри той же
+   шапки, без отдельного контейнера и без position:absolute. */
+.perseg{margin-left: auto;display:inline-flex;flex:none}
+.perseg button{padding: var(--sp-2) var(--sp-3);font-size: var(--fs-1)}
+.perpop{display:none;order:9;flex:1 0 100%;align-items:center;gap: var(--sp-2);
+  margin-top: var(--sp-3);padding: var(--sp-3);background:var(--panel-2);
+  border:var(--bd);border-radius: var(--r-sm)}
+.perpop.on{display:flex}
+.perpop input{width:auto;flex:1 1 120px;min-width:0;padding: var(--sp-2) var(--sp-3);font-size: var(--fs-4)}
+.perdash{color:var(--ink-faint);flex:none}
 /* План отделён от заработанного и подписан планом */
 .mc-plan .mc-k,.mc-plan .mc-v{color:var(--ink-faint)}
 .mc-note{font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-faint)}
