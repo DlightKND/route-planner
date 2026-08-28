@@ -171,6 +171,21 @@ map.setView([48.4,31.2],6);
 function fitUkraine(){ map.fitBounds(UA_BOUNDS); }
 let markers=L.layerGroup().addTo(map), eqMarkers=L.layerGroup().addTo(map), tripLayer=L.layerGroup().addTo(map), routeLayer=L.layerGroup().addTo(map), bufferLayer=L.layerGroup().addTo(map), pendingMarker=null, revealedClient=null, wpModeOn=false, markerById={};
 let clientStats={}, profitMode=false, avoidModeOn=false, avoidLayer=L.layerGroup().addTo(map);
+// Живые заявки для ленты на карте (см. loadClientStats).
+let jobsLite=[];
+// Что карта показывает по умолчанию.
+//
+// 'work' — только то, с чем сейчас идёт работа: точки с живыми заявками,
+//          все депо и машины. Остальной справочник скрыт.
+// 'all'  — весь справочник, как было раньше.
+//
+// Смысл в том, что во вторник утром диспетчер смотрит не на адресную книгу,
+// а на то, что движется и что горит. Из 24 точек в работе обычно единицы,
+// и остальные два десятка только мешают их найти.
+//
+// Фильтр по ЖИВЫМ заявкам, а не по числу дней до срока: сроки у заявок
+// разной длины, и порог в днях легко даёт пустую карту.
+let mapScope='work';
 let vehLayer=L.layerGroup().addTo(map), vehShow=true, vehState=[], vehMk={}, vehTick=null, vehVisWired=false, vehModalId=null;
 // Кнопка «Сохранить» в карточке точки не должна нажиматься, пока сохранять
 // нечего. Состояние и так известно — подсказка «Место не задано» выводится
@@ -212,13 +227,34 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.t
 document.querySelectorAll('.block.collapsible > h2.ch').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('collapsed'));
 if($('sideHandle')) $('sideHandle').onclick=()=>{ const sd=document.querySelector('.side'); if(sd) sd.classList.toggle('sheet-collapsed'); setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} },220); };
 function tabAllowed(name){ if(name==='catalog'||name==='dash') return canWrite(); if(name==='settings') return role==='admin'; return true; }
-function applyTabs(){ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('hidden',!tabAllowed(t.dataset.tab))); }
-function switchTab(name){ if(!tabAllowed(name)) return;
+// Пункт «Мой день» нужен инженеру; менеджеру он дублирует сводку.
+function navAllowed(el){
+  if(!tabAllowed(el.dataset.tab)) return false;
+  if(el.dataset.sub==='mine' && canWrite()) return false;
+  return true;
+}
+function applyTabs(){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('hidden',!tabAllowed(t.dataset.tab)));
+  document.querySelectorAll('.nav-i[data-tab]').forEach(t=>t.classList.toggle('hidden',!navAllowed(t)));
+}
+// В рельсе «Мой день», «Заявки» и «Выезды» — пункты первого уровня,
+// но ведут все три в один и тот же view-planner. Поэтому у них есть
+// data-sub, и подсветка идёт по паре (tab, sub), а не по одному tab.
+function switchTab(name, sub){ if(!tabAllowed(name)) return;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.querySelectorAll('.nav-i[data-tab]').forEach(t=>{
+    const hit = t.dataset.tab===name && (!t.dataset.sub || t.dataset.sub===(sub||plannerCur));
+    t.classList.toggle('active',hit);
+  });
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelector('.view-'+name).classList.add('active');
   if(name==='map'){ setTimeout(()=>map.invalidateSize(),60); }
-  if(name==='catalog') catSub(catCur); if(name==='planner') plannerSub(plannerCur); if(name==='dash') renderDashboard(); if(name==='settings') renderSettings(); }
+  if(name==='catalog') catSub(catCur);
+  if(name==='planner') plannerSub(sub||plannerCur);
+  if(name==='dash') renderDashboard(); if(name==='settings') renderSettings(); }
+document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
+  el.onclick=()=>switchTab(el.dataset.tab, el.dataset.sub||null);
+});
 let catCur='works';
 function catSub(name){ catCur=name; document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.classList.toggle('active',t.dataset.csub===name)); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; if(name==='works') renderCatalog(); else renderEqModels(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
@@ -226,7 +262,9 @@ let plannerCur='jobs';
 let tripsView='kanban';
 function renderTripsView(){ const kb=(tripsView==='kanban'); if($('tripsKanban')) $('tripsKanban').style.display=kb?'':'none'; if($('tripsGantt')) $('tripsGantt').style.display=kb?'none':''; if(kb) renderTrips(); else renderGantt(); }
 function setTripsView(v){ tripsView=v; document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.classList.toggle('on',b.dataset.tv===v)); renderTripsView(); }
-function plannerSub(name){ plannerCur=name; document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name)); if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView(); }
+function plannerSub(name){ plannerCur=name;
+  document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
+    t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===name)); document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name)); if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView(); }
 document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.onclick=()=>setTripsView(b.dataset.tv));
 document.querySelectorAll('.view-planner .subtab').forEach(t=>t.onclick=()=>plannerSub(t.dataset.sub));
 
@@ -297,7 +335,10 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   if(p.theme && p.theme.mode) theme=p.theme; else if(appSettings.default_theme && appSettings.default_theme.mode) theme=appSettings.default_theme;
   applyTheme(theme);
   $('authOverlay').classList.remove('on');
-  $('whoLabel').innerHTML=esc(session.user.email)+' · <b>'+esc(role)+'</b>';
+  // В рельсе 76 px: полный адрес не влезает, показываем имя до @ и роль.
+  const em=String(session.user.email||''); const short=em.split('@')[0];
+  $('whoLabel').innerHTML=esc(short)+'<b>'+esc(role)+'</b>';
+  $('whoLabel').title=em+' · '+role;
   $('logoutBtn').style.display=''; $('appRoot').style.display='block'; document.querySelector('.view-map').classList.add('active');
   if($('pointTools')) $('pointTools').style.display=canWrite()?'':'none'; $('routeBlock').style.display=canWrite()?'':'none'; if($('profitTools')) $('profitTools').style.display=canWrite()?'':'none'; if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
   setTimeout(()=>{ map.invalidateSize(); fitUkraine(); },80);
@@ -319,10 +360,13 @@ async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
   // срочность клиента для раскраски точек на карте. Отдельного похода
   // в базу это не стоит, а карта из справочника координат превращается
   // в картину дня.
-  try{ const {data,error}=await sb.from('jobs').select('client_id,status,due_date,created_at,job_works(hours,billable,revenue,tariff_profile)').is('deleted_at',null);
+  try{ const {data,error}=await sb.from('jobs').select('id,client_id,status,due_date,created_at,clients(name),equipment(model),job_works(hours,billable,revenue,tariff_profile)').is('deleted_at',null);
     if(error) throw error;
     const ch=+((appSettings.costs&&appSettings.costs.hour))||0;
     const now=new Date();
+    // Сырые живые заявки складываем отдельно: из них строится лента «в работе»
+    // на карте. Отдельного запроса это не стоит — данные уже пришли.
+    jobsLite=(data||[]).filter(j=>j.status!=='done'&&j.status!=='cancelled');
     (data||[]).forEach(j=>{ if(!j.client_id) return; const s=clientStats[j.client_id]||(clientStats[j.client_id]={rev:0,hours:0,warrH:0,cost:0,jobs:0,done:0,urg:null,open:0});
       s.jobs++; if(j.status==='done') s.done++;
       // Острота — по самой горящей ЖИВОЙ заявке клиента. Закрытые
@@ -348,7 +392,10 @@ function recomputeAlerts(){
 }
 function alertOnly(){ return !!($('ptAlert')&&$('ptAlert').checked); }
 
-function render(){ $('cliCount').textContent=clients.length; places=clients.filter(c=>c.is_base); recomputeAlerts(); renderColorLegend(); renderMarkers(); renderAvoidZones(); renderList(); }
+function render(){
+  $('cliCount').textContent=(mapScope==='work'
+    ? String(clients.filter(x=>x.is_base||((clientStats[x.id]||{}).open>0)).length)
+    : String(clients.length)); places=clients.filter(c=>c.is_base); recomputeAlerts(); renderColorLegend(); renderMarkers(); renderAvoidZones(); renderSide(); }
 // Раскраска точек — ОДИН выбор из трёх, а не набор независимых флажков.
 //
 // Раньше цвет по умолчанию брался из поля клиента color, то есть означал
@@ -406,7 +453,13 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
   // не смотришь, работая с картой, и флажок казался мёртвым.
   // Депо не гасим никогда: без них не построить маршрут.
   const dimOthers=alertOnly();
-  clients.forEach(c=>{ const col=markerColor(c);
+  // В режиме «в работе» точки без живых заявок на карту не попадают вовсе.
+  // Не приглушаются — именно скрываются: смысл режима в том, чтобы на карте
+  // осталось только то, чем занимаются. Депо остаются всегда, без них
+  // не построить маршрут.
+  const inWork=c=>c.is_base||((clientStats[c.id]||{}).open>0);
+  clients.forEach(c=>{ if(mapScope==='work'&&!inWork(c)) return;
+    const col=markerColor(c);
     const dim=dimOthers && !c.is_base && !(alertCount[c.id]>0);
     if(c.is_base){
       const icon=L.divIcon({className:'',html:'<div class="cbub" style="background:'+col+';width:30px;height:30px;border:2.5px solid '+ringColor()+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></div>',iconSize:[30,30],iconAnchor:[15,15]});
@@ -474,6 +527,69 @@ function renderEqMarkers(){ eqMarkers.clearLayers(); if(!revealedClient) return;
     m.bindPopup(eh); eqMarkers.addLayer(m);
     if(al.any){ const ab=L.divIcon({className:'',html:'<div class="eq-alert">'+(al.service?'🔧':'📞')+'</div>',iconSize:[22,22],iconAnchor:[-4,28]}); L.marker([e.lat,e.lng],{icon:ab,interactive:false,zIndexOffset:1200}).addTo(eqMarkers); } }); }
 let pointFilter='all';
+// Панель слева показывает разное в зависимости от режима карты:
+// в «работе» — что происходит сегодня, в «справочнике» — список точек.
+function renderSide(){
+  const work=(mapScope==='work');
+  const t=$('sideTools'); if(t) t.style.display=work?'none':'';
+  const f=$('workFeed');  if(f) f.style.display=work?'':'none';
+  const l=$('list');      if(l) l.style.display=work?'none':'';
+  if(work) renderWorkFeed(); else renderList();
+}
+
+// Лента «в работе»: машины в пути, затем заявки по остроте.
+// Порядок и разбиение считает attentionBuckets из ядра — та же функция,
+// что и на сводке, так что ленты не разъедутся между экранами.
+function renderWorkFeed(){
+  const box=$('workFeed'); if(!box) return;
+  let h='';
+
+  const moving=(vehState||[]).filter(r=>r&&r.lat!=null);
+  if(moving.length){
+    h+='<div class="wf-h">В пути сейчас</div>';
+    moving.forEach(r=>{
+      const v=(vehicles||[]).find(x=>x.id===r.vehicle_id);
+      const cls=vehClass(r), age=vehAgeMin(r);
+      const col=cls==='moving'?'var(--green)':cls==='idle'?'#f59e0b':'var(--ink-faint)';
+      h+='<div class="wf-row" data-vfly="'+esc(r.vehicle_id)+'">'
+        +'<div style="flex:1"><div class="wf-t">'+esc(v?vehLabel(v):'машина')+'</div>'
+        +'<div class="wf-s">'+esc(vehTitle(r))+'</div></div>'
+        +'<span class="pill" style="color:'+col+';border-color:'+col+'">'+(age>VEH_STALE_MIN?'молчит':'на связи')+'</span></div>';
+    });
+  }
+
+  const buckets=attentionBuckets(jobsLite,new Date());
+  const dated=buckets.dated;
+  if(dated.length){
+    h+='<div class="wf-h">Требует внимания <span class="cnt">'+dated.length+'</span></div>';
+    dated.slice(0,12).forEach(({job,u})=>{
+      const col=u.level==='overdue'?'var(--u-over)':u.level==='acute'?'var(--u-acute)':'var(--u-calm)';
+      const badge=u.level==='overdue'?('просрочено '+(-u.left)+' дн'):(u.left+' дн');
+      h+='<div class="wf-row" data-jfly="'+esc(job.client_id)+'" data-jid="'+esc(job.id)+'" style="border-left-color:'+col+'">'
+        +'<div style="flex:1"><div class="wf-t">'+esc((job.clients&&job.clients.name)||'—')+'</div>'
+        +'<div class="wf-s">'+esc((job.equipment&&job.equipment.model)||'без техники')+'</div></div>'
+        +'<span class="pill" style="color:'+col+';border-color:'+col+'">'+esc(badge)+'</span></div>';
+    });
+  }
+  if(buckets.cold.length){
+    h+='<div class="wf-h" style="margin-top:16px">Без срока <span class="cnt">'+buckets.cold.length+'</span></div>';
+    buckets.cold.slice(0,6).forEach(j=>{
+      h+='<div class="wf-row" data-jfly="'+esc(j.client_id)+'" data-jid="'+esc(j.id)+'">'
+        +'<div style="flex:1"><div class="wf-t">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
+        +'<div class="wf-s">'+esc((j.equipment&&j.equipment.model)||'без техники')+'</div></div></div>';
+    });
+  }
+
+  if(!h) h='<div class="kempty">Живых заявок и машин в пути нет.<br>Переключись на «весь справочник», чтобы увидеть все точки.</div>';
+  box.innerHTML=h;
+
+  const fly=id=>{ const c=clients.find(x=>x.id==id); if(c){ map.flyTo([c.lat,c.lng],11); } };
+  box.querySelectorAll('[data-jfly]').forEach(el=>el.onclick=()=>fly(el.dataset.jfly));
+  box.querySelectorAll('[data-vfly]').forEach(el=>el.onclick=()=>{
+    const r=(vehState||[]).find(x=>x.vehicle_id===el.dataset.vfly);
+    if(r) map.flyTo([r.lat,r.lng],11); });
+}
+
 function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('list');
   const onlyAlert=alertOnly();
   const alerts=alertCount;
@@ -520,8 +636,18 @@ function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('li
   box.querySelectorAll('[data-eq]').forEach(b=>b.onclick=()=>openEquip(b.dataset.eq));
   box.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editClient(b.dataset.edit));
   box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delClient(b.dataset.del)); }
+document.querySelectorAll('#mapScope button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#mapScope button').forEach(x=>x.classList.toggle('on',x===b));
+  mapScope=b.dataset.ms;
+  const t=$('sideTitle'); if(t) t.textContent=(mapScope==='work'?'В работе':'Точки');
+  const c=$('cliCount');
+  if(c) c.textContent=(mapScope==='work'
+    ? String(clients.filter(x=>x.is_base||((clientStats[x.id]||{}).open>0)).length)
+    : String(clients.length));
+  renderMarkers(); renderSide();
+});
 document.querySelectorAll('#typeFilter button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('#typeFilter button').forEach(x=>x.classList.toggle('on',x===b)); pointFilter=b.dataset.tf; renderList(); });
-if($('ptAlert')) $('ptAlert').onchange=()=>{ renderMarkers(); renderList(); };
+if($('ptAlert')) $('ptAlert').onchange=()=>{ renderMarkers(); renderSide(); };
 $('search').oninput=renderList;
 
 // ---------- client add/edit ----------
@@ -2116,6 +2242,9 @@ async function loadVehState(){
 
 
 function renderVehState(){
+  // Лента «в работе» показывает машины, поэтому обновляется вместе с ними.
+  const wf=$('workFeed');
+  if(mapScope==='work'&&wf&&wf.style.display!=='none') renderWorkFeed();
   if(!vehLayer) return;
   vehLayer.clearLayers(); vehMk={};
   if(!vehShow) return;
