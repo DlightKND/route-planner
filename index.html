@@ -39,7 +39,7 @@
      +316 px ширины и +56 высоты.
      На узком экране рельс уезжает ВНИЗ: левый край — худшая зона для
      большого пальца, а приложение стоит у инженеров как PWA. */
-  .app { display: flex; height: 100%; min-height: 0; }
+  .app { display: flex; height: 100%; height: 100dvh; min-height: 0; overflow: hidden; }
   .rail {
     width: 76px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
     display: flex; flex-direction: column; align-items: center; padding: 12px 0 10px;
@@ -124,7 +124,11 @@
   .ph h3 { font-family: var(--mono); font-size: 15px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-ink); margin-bottom: 10px; }
   .ph p { color: var(--ink-dim); font-size: 14px; line-height: 1.6; }
   
-  .views { height: calc(100vh - 56px); height: calc(100dvh - 56px); position: relative; }
+  /* .views — второй ребёнок флекса .app. Без flex-grow он схлопывался
+     до ширины контента (сайдбар 380 px), карта получала 0 и уезжала
+     за край. Высоту больше не считаем от топбара: её даёт stretch
+     по поперечной оси, а на телефоне — flex:1 в колоночном .app. */
+  .views { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; }
   .view { position: absolute; inset: 0; display: none; } 
   .view.active { display: flex; }
   
@@ -346,7 +350,10 @@
   .stat-s { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
   .map-summary { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 650; display: none; gap: 16px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 18px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim); box-shadow: var(--shadow-lg); }
   .map-summary.on { display: flex; }
-  .veh-btn { position: absolute; top: 16px; right: 16px; z-index: 650; cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: .5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-dim); border-radius: 8px; padding: 7px 11px; box-shadow: var(--shadow-lg); }
+  .map-tools { position: absolute; top: 16px; right: 16px; z-index: 650;
+    display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap;
+    justify-content: flex-end; max-width: calc(100% - 32px); }
+  .veh-btn { z-index: 650; cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: .5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-dim); border-radius: 8px; padding: 7px 11px; box-shadow: var(--shadow-lg); }
   .veh-btn.on { color: var(--accent-ink); border-color: var(--accent); }
   /* Ряд фильтров: сегмент типа и чип «внимание» в одну строку —
      раньше это были две строки плюс абзац подсказки между ними. */
@@ -689,11 +696,17 @@
       <div class="block"><div class="hint" id="dataStatus">—</div></div>
       </div>
     </aside>
-    <div class="map-wrap"><button class="veh-btn on" id="vehBtn" title="Показать машины службы">🚚 Машины</button>
+    <div class="map-wrap">
+      <!-- Кнопки карты держит флекс-строка, а не два абсолютных right.
+           Жёсткий right:120px рассчитан под ширину слова «Машины»: длиннее
+           подпись — кнопки наезжают друг на друга. -->
+      <div class="map-tools">
       <!-- Меню слоёв: сюда переехало то, что раньше занимало место в панели.
            Это переключатели способа СМОТРЕТЬ на карту, поэтому живут они
            на карте, а не над списком точек. -->
-      <button class="veh-btn" id="layersBtn" style="right:120px" title="Слои и режимы карты">◍ Слои</button>
+      <button class="veh-btn" id="layersBtn" title="Слои и режимы карты">◍ Слои</button>
+      <button class="veh-btn on" id="vehBtn" title="Показать машины службы">🚚 Машины</button>
+      </div>
       <div class="map-pop" id="layersPop">
         <h4>Слои карты</h4>
         <div class="lay-t">Цвет точек</div>
