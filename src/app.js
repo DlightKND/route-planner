@@ -31,10 +31,11 @@ const { money, hhmm, businessDays, colNum, colLetter, cellRC, jobRoadPayer, rate
         econCompute, roadByPayer, jobPoint,
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
-        simplifyLine, kmBetween } = core;
+        simplifyLine, kmBetween, todayISO, monthKey } = core;
 
 
 const $=id=>document.getElementById(id);
+
 
 // ── Ленивая загрузка тяжёлых библиотек ──────────────────────────────────────
 // turf (~500 КБ) и exceljs (~900 КБ) висели тегами <script> в index.html и
@@ -346,7 +347,7 @@ function eqRate(e){ const own=rateFrom(readingsByEq[e.id]); if(own>0) return {ra
   let sum=0,n=0; (eqByClient[e.client_id]||[]).forEach(x=>{ const r=rateFrom(readingsByEq[x.id]); if(r>0){ sum+=r; n++; } });
   if(n) return {rate:sum/n,src:'client'}; return {rate:0,src:'none'}; }
 function eqService(e){ const m=e.model_id?eqModels.find(x=>x.id==e.model_id):null; const sih=m?(+m.service_interval_hours||0):0; if(sih<=0) return null;
-  const rs=readingsByEq[e.id]||[]; const last=rs.length?rs[rs.length-1]:null; const rr=eqRate(e); const today=new Date().toISOString().slice(0,10);
+  const rs=readingsByEq[e.id]||[]; const last=rs.length?rs[rs.length-1]:null; const rr=eqRate(e); const today=todayISO();
   if(!last||rr.rate<=0){ const sh=+appSettings.shift_hours||0; const anchor=e.last_service||e.installed_on||null; if(!anchor||sh<=0) return null;
     const since=businessDays(anchor,today)*sh; return {since,interval:sih,rate:0,src:'estimate',daysLeft:null}; }
   const lastSvc=[...rs].reverse().find(r=>r.kind==='service');
@@ -429,7 +430,7 @@ window.openEquip=function(clientId){ eqClientId=clientId; eqEditId=null; const c
   $('eqTitle').textContent='Техника · '+(c?c.name:''); populateEqModelSelect(); clearEqForm(); renderEqList(); $('eqOverlay').classList.add('on'); };
 $('eqClose').onclick=()=>$('eqOverlay').classList.remove('on');
 function fmtDate(d){ return d?d:''; }
-function warrantyBadge(e){ if(!e.factory_warranty_until) return ''; const today=new Date().toISOString().slice(0,10);
+function warrantyBadge(e){ if(!e.factory_warranty_until) return ''; const today=todayISO();
   return e.factory_warranty_until>=today?'<span class="pill good">гар. до '+esc(e.factory_warranty_until)+'</span>':'<span class="pill warn">гар. истекла '+esc(e.factory_warranty_until)+'</span>'; }
 function mhLine(e){ const rs=readingsByEq[e.id]||[]; const sv=eqService(e);
   if(!rs.length&&!sv) return '<div class="m" style="color:var(--ink-faint)">моточасы не заведены — «+ замер»</div>';
@@ -444,10 +445,10 @@ async function addReading(eqId,kind){ const e=(eqByClient[eqClientId]||[]).find(
   const rs=readingsByEq[eqId]||[]; const last=rs.length?rs[rs.length-1]:null;
   const r=await promptDialog(kind==='service'?'Плановое ТО — показания счётчика':'Замер моточасов',[
     {key:'mh',label:'Моточасы по счётчику'+(last?(' (прошлый замер: '+Math.round(+last.moto_hours)+' мч от '+last.taken_on+')'):''),value:''},
-    {key:'d',label:'Дата',value:new Date().toISOString().slice(0,10)}]);
+    {key:'d',label:'Дата',value:todayISO()}]);
   if(!r) return; const mh=parseFloat(String(r.mh).replace(',','.')); if(isNaN(mh)||mh<0){ notify('Введи моточасы числом.','err'); return; }
   if(last&&mh<(+last.moto_hours)&&!(await confirmDialog('Показание '+Math.round(mh)+' мч меньше прошлого ('+Math.round(+last.moto_hours)+' мч). Счётчик меняли или это опечатка?',{okText:'Всё верно'}))) return;
-  const rec={equipment_id:eqId,taken_on:(r.d||new Date().toISOString().slice(0,10)),moto_hours:mh,kind:kind};
+  const rec={equipment_id:eqId,taken_on:(r.d||todayISO()),moto_hours:mh,kind:kind};
   const {error}=await sb.from('equipment_readings').upsert(rec,{onConflict:'equipment_id,taken_on'});
   if(error){ notify('Ошибка: '+error.message,'err'); return; }
   if(kind==='service'){ await sb.from('equipment').update({last_service:rec.taken_on,last_visit:rec.taken_on}).eq('id',eqId); }
@@ -652,7 +653,11 @@ async function renderAttention(){
 
     const { dated, cold }=attentionBuckets(list, new Date());
 
-    const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.name||p.email||''):''; };
+    // Поле называется full_name — так его читают все остальные восемь мест
+    // в файле. Здесь стояли p.name и p.email, которых в выборке нет вовсе,
+    // поэтому имя инженера не показывалось никогда, а разделитель ' · '
+    // оставался висеть в конце строки.
+    const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||''):''; };
     const COLOR={overdue:'red',acute:'amber',calm:'green'};
     const dueBadge=u=>{
       if(u.level==='overdue') return '<span class="abadge red">просрочено '+(-u.left)+' дн</span>';
@@ -667,8 +672,17 @@ async function renderAttention(){
     } else {
       dated.forEach(({job,u})=>{
         const noeng=!job.assigned_engineer?'<span class="abadge noeng">без инженера</span>':'';
-        const eng=job.assigned_engineer?' · '+esc(engName(job.assigned_engineer)):'';
-        const sub=esc((job.equipment&&job.equipment.model)||job.clients&&job.clients.name||'')+' · '+hours(job)+' ч'+eng;
+        // Собираем подпись из того, что есть, и склеиваем разделителем один
+        // раз. Раньше подпись падала на имя клиента, когда техники нет, —
+        // и повторяла заголовок строкой выше; а пустое имя инженера
+        // оставляло висячую точку.
+        const parts=[];
+        const model=(job.equipment&&job.equipment.model)||'';
+        if(model) parts.push(esc(model));
+        parts.push(hours(job)+' ч');
+        const en=job.assigned_engineer?engName(job.assigned_engineer):'';
+        if(en) parts.push(esc(en));
+        const sub=parts.join(' · ');
         h+='<div class="arow '+COLOR[u.level]+'" data-ajob="'+job.id+'">'
           +'<span class="astripe"></span>'
           +'<div class="amain"><div class="aname">'+esc((job.clients&&job.clients.name)||'—')+'</div>'
@@ -757,7 +771,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
     h+='<div class="card statuscard"><h3>Заявки по статусам</h3>'
       +'<div class="statbar">'+(bar||'<i style="width:100%;background:var(--line)"></i>')+'</div>'
       +'<div class="statleg">'+(leg||'<span class="dim">Заявок нет</span>')+'</div></div>';
-    const months=[]; const now=new Date(); for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:d.toISOString().slice(0,7),rev:0,profit:0}); }
+    const months=[]; const now=new Date(); for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:monthKey(d),rev:0,profit:0}); }
     trips.forEach(t=>{ if(!t.date_from) return; const m=months.find(x=>x.key===String(t.date_from).slice(0,7)); if(m){ const e=t.econ_snapshot||{}; m.rev+=+e.revenue||0; m.profit+=+e.profit||0; } });
     if(canWrite()){
       const maxRev=Math.max(1,...months.map(m=>m.rev));
@@ -776,7 +790,7 @@ function dashNav(k){ if(k==='points'){ switchTab('map'); return; } if(k==='trips
 // но ещё не спланированная работа просто исчезла бы с глаз.
 
 function tripDayLabel(t){
-  const today=new Date().toISOString().slice(0,10);
+  const today=todayISO();
   if(t.date_from===today) return '<span class="pill" style="border-color:var(--accent);color:var(--accent-ink)">сегодня</span>';
   if(t.date_from<today && (t.date_to||t.date_from)>=today) return '<span class="pill" style="border-color:var(--accent);color:var(--accent-ink)">идёт</span>';
   if(t.date_from<today) return '<span class="pill" style="border-color:var(--red);color:var(--red)">просрочен</span>';
@@ -1001,7 +1015,7 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); });
   jobTotals(); }
 function workCost(w){ return (+w.hours||0)*((appSettings.costs&&appSettings.costs.hour)||0); }
-function jobTotals(){ const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0); const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0); $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · маржа '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)'; }
+function jobTotals(){ const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0); const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0); $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · прибыль '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)'; }
 $('jobCancel').onclick=()=>$('jobOverlay').classList.remove('on');
 $('jobSave').onclick=async ()=>{ const client_id=$('jbClient').value; if(!client_id){ $('jobErr').textContent='Выбери клиента.'; return; } if(curWorks.some(w=>w.custom&&!w.name.trim())){ $('jobErr').textContent='У своей работы укажи название.'; return; }
   const rec={client_id,equipment_id:$('jbEquip').value||null,status:$('jbStatus').value,scheduled_date:$('jbDate').value||null,time_window:$('jbWindow').value.trim(),due_date:$('jbDue').value||null,assigned_engineer:$('jbEng').value||null,notes:$('jbNotes').value.trim(),at_depot:!!jobAtDepot,depot_id:(jobAtDepot?($('jbDepotSel').value||null):null)};
@@ -1089,7 +1103,7 @@ async function renderGantt(){ await ensureRefs(); const box=$('gantt'); if(!box)
   let src=(data||[]).filter(t=>t.date_from); if(role==='engineer') src=src.filter(t=>t.lead_engineer===session.user.id); ganttTrips=src;
   if(!src.length){ box.innerHTML='<div class="hint">Выездов с датами нет.</div>'; return; }
   let min=null,max=null; src.forEach(t=>{ const a=t.date_from,b=t.date_to||t.date_from; if(!min||a<min)min=a; if(!max||b>max)max=b; });
-  const today=new Date().toISOString().slice(0,10); if(today<min)min=today; if(today>max)max=today;
+  const today=todayISO(); if(today<min)min=today; if(today>max)max=today;
   const dayMs=86400000, d0=new Date(min+'T00:00:00'), d1=new Date(max+'T00:00:00'), dayW=36; const N=Math.min(160,Math.round((d1-d0)/dayMs)+1); gDayW=dayW;
   const off=ds=>Math.round((new Date(ds+'T00:00:00')-d0)/dayMs);
   const groups={}; src.forEach(t=>{ const eng=t.lead_engineer||'__none'; (groups[eng]=groups[eng]||[]).push(t); });
@@ -1791,7 +1805,7 @@ let todayShown=false;
 async function checkTodayTrip(){
   if(todayShown) return; 
   try{
-    const today=new Date().toISOString().slice(0,10);
+    const today=todayISO();
     let q=sb.from('trips').select('*, vehicles(name,plate)').is('deleted_at',null)
       .in('status',['planned','assigned']).lte('date_from',today);
     if(!canWrite()) q=q.eq('lead_engineer',session.user.id);
@@ -2529,9 +2543,17 @@ function drawEconMap(d){
   wrap.style.display='';
   try{
     if(window._econMap){ window._econMap.remove(); window._econMap=null; }
-    const m=L.map('econMap',{zoomControl:false,attributionControl:false});
+    const m=L.map('econMap',{zoomControl:false});
     window._econMap=m;
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(m);
+    // Те же тайлы, что и на главной карте. Раньше здесь стоял cartocdn —
+    // единственное место в приложении с другим поставщиком. Он раздаёт
+    // тайлы только по ключу, и без ключа возвращал картинки с надписью
+    // «API KEY» поперёк всей карты, прямо под итоговой прибылью.
+    // Указание авторства OSM обязательно по лицензии, поэтому
+    // attributionControl больше не отключаем.
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {maxZoom:19,attribution:'© OpenStreetMap',
+       className:(theme.mode==='dark'?'dark-tiles':'')}).addTo(m);
     const layers=[];
     if(hasPlan) layers.push(L.polyline(d.geoPlan,{color:'#9aa1ad',weight:3,dashArray:'6,6',opacity:.9}).addTo(m));
     if(hasFact) layers.push(L.polyline(d.geoFact,{color:'#ffe100',weight:3,opacity:.95}).addTo(m));
