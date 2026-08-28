@@ -108,12 +108,15 @@ const THEMES={
     '--bg':'#101114', '--panel':'#1a1c20', '--panel-2':'#24262b', '--line':'#33373e',
     '--ink':'#e7e9ee', '--ink-dim':'#9aa1ad', '--ink-faint':'#6b7280', 
     '--accent':'#ffe100', '--accent-ink':'#ffe100', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)',
+    '--accent-line':'#ffe100',
     '--shadow-sm':'0 4px 12px rgba(0,0,0,0.2)', '--shadow-lg':'0 12px 32px rgba(0,0,0,0.5)'
   },
   light:{
     '--bg':'#f4f5f7', '--panel':'#ffffff', '--panel-2':'#f8f9fa', '--line':'#e2e5e9',
     '--ink':'#1a1d22', '--ink-dim':'#5a626e', '--ink-faint':'#8a929e', 
     '--accent':'#ffe100', '--accent-ink':'#1a1d22', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)', // бренд-жёлтый для заливок/границ, тёмный текст-акцент для читаемости
+    // Линии и указатели: #ffe100 на белом даёт 1.31:1 и почти не виден.
+    '--accent-line':'#b39400',
     '--shadow-sm':'0 2px 8px rgba(0,0,0,0.06)', '--shadow-lg':'0 10px 30px rgba(0,0,0,0.1)'
   }
 };
@@ -701,7 +704,12 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
   if(!pool.length){ box.className=''; box.innerHTML='<div class="hint">Заявок нет. Создай первую.</div>'; return; }
   box.className='kanban';
   box.innerHTML=cols.map(s=>{ const items=pool.filter(j=>j.status===s);
-    const cards=items.map(j=>jobCard(j)).join('')||'<div class="hint" style="padding:4px 2px">—</div>';
+    // Тире — это не пустое состояние, это отсутствие ответа. Строка о том,
+    // что здесь появится, полезнее: она объясняет колонку, а не молчит.
+    const EMPTY={open:'Новые заявки появятся здесь',planned:'Ничего не запланировано',
+      in_progress:'Никто не в работе',done:'Закрытых пока нет',cancelled:'Отменённых нет'};
+    const cards=items.map(j=>jobCard(j)).join('')
+      ||'<div class="kempty">'+esc(EMPTY[s]||'Пусто')+'</div>';
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
   wireJobCards(box); wireKanbanDrag(box,dropJob); }
 $('jobSearch').oninput=renderJobs; if($('jobEngFilter')) $('jobEngFilter').onchange=renderJobs; if($('mineDone')) $('mineDone').onchange=renderMine; $('jobAdd').onclick=()=>{ if(canWrite()) openJob(null); };
@@ -812,14 +820,61 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
     const overdue=vehicles.filter(v=>{ const iv=+v.service_interval||0; return iv>0 && ((+v.odometer||0)-(+v.last_service||0))>=iv; }).length;
     const pc=profit>=0?'var(--green)':'var(--red)';
     const tile=(l,v,sub,col,nav)=>'<div class="stat'+(nav?' nav':'')+'"'+(nav?(' data-nav="'+nav+'"'):'')+'><div class="stat-v"'+(col?(' style="color:'+col+'"'):'')+'>'+v+'</div><div class="stat-l">'+esc(l)+'</div>'+(sub?'<div class="stat-s">'+esc(sub)+'</div>':'')+(nav?'<div class="stat-go">Открыть →</div>':'')+'</div>';
+    // Крупным кеглем — то, что меняется и требует решения.
+    //
+    // Раньше здесь без всякой подписи стояла сумма выручки ЗА ВСЁ ВРЕМЯ.
+    // Такое число только растёт и не говорит ни о хорошем месяце, ни о
+    // плохом; вдобавок график под ним показывал шесть месяцев, то есть
+    // в одной карточке жили два разных периода и ни один не был назван.
+    // Теперь наверху текущий месяц с прошлым для сравнения, а накопленное
+    // за всё время ушло вниз отдельной строкой.
+    const MON=['январь','февраль','март','апрель','май','июнь','июль',
+               'август','сентябрь','октябрь','ноябрь','декабрь'];
+    const now2=new Date();
+    const kNow=monthKey(now2);
+    const kPrev=monthKey(new Date(now2.getFullYear(), now2.getMonth()-1, 1));
+    let mRev=0, mProfit=0, pRev=0;
+    trips.forEach(t=>{ if(!t.date_from) return;
+      const k=String(t.date_from).slice(0,7); const e=t.econ_snapshot||{};
+      if(k===kNow){ mRev+=+e.revenue||0; mProfit+=+e.profit||0; }
+      else if(k===kPrev){ pRev+=+e.revenue||0; } });
+    // Депо-заявки не привязаны к выезду и не имеют даты выезда — они входят
+    // только в накопленный итог, и приписывать их текущему месяцу было бы
+    // враньём.
+    const mMargin=mRev>0?(mProfit/mRev*100):0;
+    const mpc=mProfit>=0?'var(--green)':'var(--red)';
+    const delta=pRev>0?Math.round((mRev-pRev)/pRev*100):null;
+    const deltaTxt=delta==null?'нет данных за прошлый месяц'
+      :((delta>=0?'+':'')+delta+'% к '+MON[(now2.getMonth()+11)%12]);
+
     const moneyCard = canWrite()
-      ? '<div class="card money-card"><div class="mc-big">'+Math.round(rev).toLocaleString('ru-RU')+' <span class="mc-cur">'+cur+'</span></div>'
-        +'<div class="mc-row"><span class="mc-k">Прибыль</span><span class="mc-v" style="color:'+pc+'">'+Math.round(profit).toLocaleString('ru-RU')+' '+cur+'</span></div>'
-        +'<div class="mc-row"><span class="mc-k">Маржа</span><span class="mc-v">'+margin.toFixed(0)+'%</span></div>'
+      ? '<div class="card money-card">'
+        +'<div class="mc-per">Выручка · '+MON[now2.getMonth()]+' '+now2.getFullYear()+'</div>'
+        +'<div class="mc-big">'+Math.round(mRev).toLocaleString('ru-RU')+' <span class="mc-cur">'+cur+'</span></div>'
+        +'<div class="mc-delta'+(delta!=null&&delta<0?' down':'')+'">'+esc(deltaTxt)+'</div>'
+        +'<div class="mc-row"><span class="mc-k">Прибыль за месяц</span><span class="mc-v" style="color:'+mpc+'">'+Math.round(mProfit).toLocaleString('ru-RU')+' '+cur+'</span></div>'
+        +'<div class="mc-row"><span class="mc-k">Маржа за месяц</span><span class="mc-v">'+mMargin.toFixed(0)+'%</span></div>'
+        +'<div class="mc-row mc-all"><span class="mc-k">Всего за всё время</span><span class="mc-v">'+Math.round(rev).toLocaleString('ru-RU')+' '+cur+'</span></div>'
+        +'<div class="mc-row"><span class="mc-k">Прибыль за всё время</span><span class="mc-v" style="color:'+pc+'">'+Math.round(profit).toLocaleString('ru-RU')+' '+cur+'</span></div>'
         +'<div class="mc-row"><span class="mc-k">Доля гарантии</span><span class="mc-v">'+warrShare+'%</span></div></div>'
       : '';
 
-    let h=moneyCard;
+    // Плитки-переходы. Функция tile() была написана, CSS для неё лежал,
+    // dashNav() умел открывать нужные разделы — но вызова не было ни одного,
+    // и сводка перестала быть входом в систему, оставшись витриной.
+    const activeJobs=(byst.open||0)+(byst.planned||0)+(byst.in_progress||0);
+    const navTiles=canWrite()
+      ? '<div class="stats mini" style="margin-top:16px">'
+        + tile('Точки', String(cl+dp), dp?(dp+' депо'):'', null, 'points')
+        + tile('Заявки в работе', String(activeJobs),
+               (byst.done||0)?((byst.done||0)+' закрыто'):'', null, 'jobs')
+        + tile('Выезды', String(trips.length), '', null, 'trips')
+        + tile('Машины', String(vehicles.length),
+               overdue?(overdue+' просрочили ТО'):'', overdue?'var(--red)':null, 'vehicles')
+        + '</div>'
+      : '';
+
+    let h=moneyCard+navTiles;
     // Заявки по статусам — компактная стек-полоса + легенда (как в мокапе),
     // вместо списка с нулями. Открыта — синий, в работе — янтарь,
     // готова — зелёный, отменена — серый.
@@ -841,10 +896,24 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
       +'<div class="statleg">'+(leg||'<span class="dim">Заявок нет</span>')+'</div></div>';
     const months=[]; const now=new Date(); for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:monthKey(d),rev:0,profit:0}); }
     trips.forEach(t=>{ if(!t.date_from) return; const m=months.find(x=>x.key===String(t.date_from).slice(0,7)); if(m){ const e=t.econ_snapshot||{}; m.rev+=+e.revenue||0; m.profit+=+e.profit||0; } });
-    if(canWrite()){
+    // График рисуем, только когда в нём есть что сравнивать.
+    //
+    // Один заполненный месяц из шести — это не тренд, а карточка с одним
+    // столбиком и пятью пустыми местами: занимает экран и не отвечает
+    // ни на один вопрос. «За этот месяц против прошлого» уже сказано
+    // крупным числом выше. Появится второй месяц с выручкой — появится
+    // и график, сам собой.
+    const filled=months.filter(m=>m.rev>0).length;
+    if(canWrite() && filled>=2){
       const maxRev=Math.max(1,...months.map(m=>m.rev));
-      h+='<div class="card" style="margin-top:16px"><h3>Выручка по месяцам</h3><div style="display:flex;align-items:flex-end;gap:10px;height:90px;margin-top:10px">';
-      months.forEach(m=>{ const hR=Math.round(m.rev/maxRev*100); h+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div style="background:var(--accent);border-radius:3px 3px 0 0;height:'+hR+'%"></div><div class="meta" style="text-align:center;margin-top:4px;font-size:10px">'+m.key.slice(5)+'</div></div>'; });
+      const short=v=>v>=1000?Math.round(v/1000)+'к':String(Math.round(v));
+      h+='<div class="card" style="margin-top:16px"><h3>Выручка по месяцам</h3>'
+        +'<div class="revbars">';
+      months.forEach(m=>{ const hR=m.rev>0?Math.max(4,Math.round(m.rev/maxRev*100)):0;
+        h+='<div class="revbar" title="'+m.key+': '+Math.round(m.rev).toLocaleString('ru-RU')+' '+esc(cur)+'">'
+          +'<div class="rb-v">'+(m.rev>0?short(m.rev):'')+'</div>'
+          +'<div class="rb-c"><div class="rb-f" style="height:'+hR+'%"></div></div>'
+          +'<div class="rb-l">'+m.key.slice(5)+'</div></div>'; });
       h+='</div></div>';
     }
     box.innerHTML=h;
@@ -1251,7 +1320,11 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
   if(!trips.length){ box.className=''; box.innerHTML='<div class="hint">'+(canWrite()?'Выездов нет. Собери первый из заявок на карте.':'На тебя пока не назначены выезды.')+'</div>'; return; }
   box.className='kanban';
   box.innerHTML=cols.map(s=>{ const items=trips.filter(t=>t.status===s&&match(t));
-    const cards=items.map(t=>tripCard(t)).join('')||'<div class="hint" style="padding:4px 2px">—</div>';
+    const TEMPTY={planned:'Запланированных выездов нет',assigned:'Назначенных нет',
+      in_progress:'Никто не в пути',finished:'Завершённых нет',done:'Подтверждённых нет',
+      cancelled:'Отменённых нет'};
+    const cards=items.map(t=>tripCard(t)).join('')
+      ||'<div class="kempty">'+esc(TEMPTY[s]||'Пусто')+'</div>';
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST_TRIP[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
   wireTripCards(box); wireKanbanDrag(box,dropTrip); }
 $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) openTrip(null); };
@@ -1995,19 +2068,31 @@ function showVehModal(vid){
   const col = cls==='moving'?'#22c55e' : cls==='idle'?'#f59e0b' : '#94a3b8';
   const when=new Date(r.ts);
   const pad=n=>String(n).padStart(2,'0');
-  const hhmm=pad(when.getHours())+':'+pad(when.getMinutes());
+  // Время старше суток без даты не говорит ничего: «20:06» для события
+  // трёхдневной давности — это какое 20:06?
+  const sameDay=(todayISO(when)===todayISO());
+  const hhmm=(sameDay?'':pad(when.getDate())+'.'+pad(when.getMonth()+1)+' ')
+    +pad(when.getHours())+':'+pad(when.getMinutes());
+  // Связь потеряна — значит всё ниже это ПОСЛЕДНЕЕ ИЗВЕСТНОЕ, а не текущее.
+  // Раньше скорость и пробег набирались так же, как живые данные, и машина
+  // «ехала 4 км/ч», молча третьи сутки.
+  const stale=!!r.lost_since || age>VEH_STALE_MIN;
 
   $('vehTitle').textContent=v.name+(v.plate?(' · '+v.plate):'');
   let h='<div style="font-size:15px;font-weight:600;color:'+col+';margin-bottom:8px">'+esc(vehTitle(r))+'</div>';
 
   h+=vehRow('Данные получены', hhmm+' <span class="hint" style="margin:0">('+vehAgeText(age)+')</span>');
-  if(cls!=='idle') h+=vehRow('Скорость', Math.round(+r.speed||0)+' км/ч');
-  if(r.mileage!=null) h+=vehRow('Пробег по Wialon', Math.round(+r.mileage)+' км');
+  if(stale) h+='<div class="vm-stale">Ниже — на момент последней связи, не текущее состояние.</div>';
+  const dimv=v=>stale?('<span style="color:var(--ink-faint)">'+v+'</span>'):v;
+  if(cls!=='idle') h+=vehRow('Скорость', dimv(Math.round(+r.speed||0)+' км/ч'));
+  if(r.mileage!=null) h+=vehRow('Пробег по Wialon', dimv(Math.round(+r.mileage)+' км'));
 
   // Связь и занятие — разные строки. Машина у клиента с заглушенным мотором
   // стоит И молчит одновременно; склеив это в одну строку, соврём про оба.
   h+=vehRow('Связь', r.lost_since
-      ? '<span style="color:var(--red)">потеряна с '+pad(new Date(r.lost_since).getHours())+':'+pad(new Date(r.lost_since).getMinutes())+'</span>'
+      ? '<span style="color:var(--red)">потеряна с '+(()=>{ const L=new Date(r.lost_since);
+          return (todayISO(L)===todayISO()?'':pad(L.getDate())+'.'+pad(L.getMonth()+1)+' ')
+            +pad(L.getHours())+':'+pad(L.getMinutes()); })()+'</span>'
       : (age>VEH_STALE_MIN ? '<span style="color:var(--ink-dim)">сообщений нет</span>' : '<span style="color:var(--green)">есть</span>'));
 
   const trip=r.trip_id?(trips||[]).find(t=>t.id===r.trip_id):null;
