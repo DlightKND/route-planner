@@ -137,8 +137,29 @@
     border-right: 1px solid var(--line); display: flex; flex-direction: column; height: 100%; z-index: 10;
     box-shadow: 2px 0 8px rgba(0,0,0,0.05);
   }
+  /* ── Карта: панель плавает НАД картой ─────────────────────────────────
+     Пришвартованный столбец резал у карты 380 px и делил экран надвое.
+     Карта — фон всей вкладки, панель лежит на ней карточкой, как в макете.
+     Складывается по клику на шапку: тогда карта остаётся целиком. */
+  .view-map .map-wrap { position: absolute; inset: 0; flex: none; }
+  .view-map .side {
+    position: absolute; left: 16px; top: 16px;
+    width: 360px; min-width: 0; z-index: 500;
+    height: auto; max-height: calc(100% - 32px);
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: var(--shadow-lg); overflow: hidden;
+    background: color-mix(in srgb, var(--panel) 90%, transparent);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+  .view-map .side-handle { display: flex; }
+  .view-map .side > .scroll { flex: 0 1 auto; }
+  .view-map .side.sheet-collapsed .scroll { display: none; }
+  /* Зум Leaflet сидит в том же верхнем левом углу, что и карточка. */
+  .view-map .leaflet-top.leaflet-left { margin-left: 392px; }
+
   .scroll { overflow-y: auto; flex: 1; padding-bottom: 20px; }
   .side-handle { display: none; align-items: center; justify-content: center; gap: 8px; height: 46px; flex: none; cursor: pointer; user-select: none; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim); position: relative; border-bottom: 1px solid var(--line); }
+  .view-map .side-handle::before { content: none; }
   .side-handle::before { content: ''; position: absolute; top: 7px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
   .side-handle .sh-chev { transition: transform .2s; }
   .side.sheet-collapsed .side-handle .sh-chev { transform: rotate(180deg); }
@@ -289,7 +310,14 @@
      пикселей числовое поле для «12,5» обманывает и заставляет глаз бежать
      через весь экран от подписи к значению. Ограничиваем форму по ширине
      чтения, а числовым полям даём размер по содержимому. */
-  .settings-body { max-width: 760px; }
+  /* Колонка в 760 px оставляла на широком мониторе половину экрана пустой.
+     Карточки раскладываются в столько колонок, сколько влезает по 440 px;
+     auto-fit, а не auto-fill — раздел из одной карточки не жмётся в треть
+     ширины, а занимает всю строку. Поля внутри остаются узкими: строку
+     ввода длиной в метр всё равно невозможно читать. */
+  .settings-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr));
+    gap: 16px; align-items: start; }
+  .settings-body > .card { margin-bottom: 0; }
   .settings-body input[type=number],
   .settings-body input[type=date] { max-width: 220px; }
   .settings-body input[type=text]:not(#orsProxy) { max-width: 420px; }
@@ -394,8 +422,13 @@
   @media(max-width: 760px) { 
     .view.active { flex-direction: column; } 
     .map-wrap { flex: 1; height: auto; min-height: 0; order: 1; } 
+    .view-map .side { position: static; left: auto; top: auto; bottom: auto;
+      width: 100%; border: none; border-top: 1px solid var(--line); border-radius: 0;
+      background: var(--panel); backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .view-map .map-wrap { position: relative; inset: auto; flex: 1; }
+    .view-map .leaflet-top.leaflet-left { margin-left: 0; }
     .side { width: 100%; min-width: 0; height: auto; flex: none; order: 2; border-right: none; border-top: 1px solid var(--line); box-shadow: 0 -2px 14px rgba(0,0,0,0.2); max-height: 58vh; min-height: 0; } 
-    .side-handle { display: flex; } 
+    .side-handle { display: flex; } .view-map .side-handle::before { content: ''; } 
     .side.sheet-collapsed { max-height: 46px; } 
     .side.sheet-collapsed .scroll { display: none; } 
     .pane { padding: 16px; } 
@@ -476,7 +509,8 @@
   .kcol.over { border-color: var(--accent); background: var(--panel); }
   .trip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
   @media (max-width: 760px) { .trip-grid { grid-template-columns: 1fr; } }
-  .settings-layout { display: grid; grid-template-columns: 230px 1fr; gap: 18px; align-items: start; }
+  .settings-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr);
+    gap: 18px; align-items: start; max-width: 1640px; }
   .settings-nav { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; }
   .son { text-align: left; background: transparent; border: 1px solid transparent; color: var(--ink-dim); border-radius: 9px; padding: 10px 13px; cursor: pointer; font-size: 13px; font-family: inherit; transition: background .12s ease, color .12s ease, border-color .12s ease; }
   .son:hover { background: var(--panel-2); color: var(--ink); }
