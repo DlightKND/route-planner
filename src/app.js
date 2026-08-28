@@ -1106,53 +1106,83 @@ async function renderAttention(){
 // года: число большое, красивое и ни на что не влияющее. Две рабочие недели
 // вперёд — это тот срок, на который ещё можно что-то переставить.
 // Ёмкость считаем сменой из настроек: 8 ч × 10 рабочих дней.
+//
+// Часы работ — это не весь день инженера. При наших плечах дорога нередко
+// длиннее самой работы: выезд на 21 ч работ легко несёт 20 ч за рулём,
+// и загрузка «26 %» по одним нормочасам — это неправда. Дорогу берём
+// из driveH снимка выезда: она посчитана роутером по настоящим дорогам,
+// выдумывать её не нужно. У заявок, ещё не собранных в выезд, маршрута
+// нет физически — их дорога в счёт не идёт, и об этом сказано в подписи.
 const LOAD_DAYS=14;
-function engineerLoadCard(jobs){
+function engineerLoadCard(jobs, trips){
   if(!canWrite()) return '';
   const shift=(+appSettings.shift_hours)||8;
   const cap=shift*10;
+  const tIso=todayISO();
   const hz=new Date(); hz.setDate(hz.getDate()+LOAD_DAYS); const hIso=todayISO(hz);
   const hours=j=>(j.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
   const alive=j=>['open','planned','in_progress'].includes(j.status);
 
-  const rows=new Map();   // id инженера → {h, n}
-  let later=0, nodue=0;
+  const rows=new Map();   // id инженера → {w, d, n}
+  const row=k=>{ let r=rows.get(k); if(!r){ r={w:0,d:0,n:0}; rows.set(k,r); } return r; };
+  let later=0, nodue=0, planned=0;
+
   (jobs||[]).filter(alive).forEach(j=>{
     const h=hours(j); if(!h) return;
     if(!j.due_date){ nodue+=h; return; }
     if(String(j.due_date)>hIso){ later+=h; return; }
-    const k=j.assigned_engineer||'__none';
-    const r=rows.get(k)||{h:0,n:0}; r.h+=h; r.n++; rows.set(k,r);
+    row(j.assigned_engineer||'__none').w+=h; row(j.assigned_engineer||'__none').n++;
+  });
+
+  // Дорога — по выездам, которые задевают горизонт и ещё не закрыты.
+  (trips||[]).forEach(t=>{
+    if(t.status==='done'||t.status==='cancelled') return;
+    const from=t.date_from||null; if(!from) return;
+    const to=t.date_to||from;
+    if(to<tIso || from>hIso) return;             // выезд не пересекает горизонт
+    const d=+((t.econ_snapshot||{}).driveH)||0; if(!d) return;
+    row(t.lead_engineer||'__none').d+=d;
+    planned+=d;
   });
 
   const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
   const list=[...rows.entries()]
-    .map(([id,r])=>({id,h:r.h,n:r.n,name:id==='__none'?'Без инженера':name(id)}))
-    .sort((a,b)=>b.h-a.h);
+    .map(([id,r])=>({id,w:r.w,d:r.d,n:r.n,t:r.w+r.d,name:id==='__none'?'Без инженера':name(id)}))
+    .filter(r=>r.t>0)
+    .sort((a,b)=>b.t-a.t);
 
+  const num=v=>v.toFixed(v%1?1:0);
   let body='';
   if(!list.length){
     body='<div class="hint">На ближайшие две недели работ не поставлено.</div>';
   } else {
     list.forEach(r=>{
-      const pct=r.h/cap*100;
+      const pct=r.t/cap*100;
       const col=pct>100?'var(--red)':pct>70?'#f59e0b':'var(--green)';
       const none=(r.id==='__none');
+      const wPct=Math.min(100,r.w/cap*100), dPct=Math.min(100-wPct,r.d/cap*100);
+      const parts=[num(r.w)+' ч работ'];
+      if(r.d) parts.push(num(r.d)+' ч дороги');
+      parts.push(r.n+' '+plural(r.n,'заявка','заявки','заявок'));
       body+='<div class="elrow'+(none?' none':'')+'">'
         +'<div class="el-n">'+esc(r.name)+'</div>'
-        +'<div class="el-t"><i style="width:'+Math.min(100,pct).toFixed(0)+'%;background:'+col+'"></i></div>'
-        +'<div class="el-v" style="color:'+col+'">'+r.h.toFixed(r.h%1?1:0)+' / '+cap+' ч</div>'
-        +'<div class="el-s">'+r.n+' '+plural(r.n,'заявка','заявки','заявок')+' · '+Math.round(pct)+'%</div>'
+        +'<div class="el-v" style="color:'+col+'">'+num(r.t)+' / '+cap+' ч · '+Math.round(pct)+'%</div>'
+        +'<div class="el-t"><i style="width:'+wPct.toFixed(0)+'%;background:'+col+'"></i>'
+          +(r.d?('<i class="el-drive" style="width:'+dPct.toFixed(0)+'%;background:'+col+'"></i>'):'')+'</div>'
+        +'<div class="el-s">'+esc(parts.join(' · '))+'</div>'
         +'</div>';
     });
   }
   const tail=[];
-  if(later) tail.push('дальше по срокам '+later.toFixed(later%1?1:0)+' ч');
-  if(nodue) tail.push('без срока '+nodue.toFixed(nodue%1?1:0)+' ч');
+  if(later) tail.push('дальше по срокам '+num(later)+' ч');
+  if(nodue) tail.push('без срока '+num(nodue)+' ч');
+  tail.push(planned
+    ? 'дорога — по спланированным выездам'
+    : 'дорога не в счёт: выездов на этот срок ещё нет');
 
   return '<div class="card elcard"><h3>Загрузка инженеров <span class="el-hz">две недели вперёд</span></h3>'
     +body
-    +(tail.length?('<div class="el-tail">'+esc(tail.join(' · '))+'</div>'):'')
+    +'<div class="el-tail">'+esc(tail.join(' · '))+'</div>'
     +'</div>';
 }
 
@@ -1180,7 +1210,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
     const {data:js}=await sb.from('jobs').select('status,at_depot,due_date,assigned_engineer, job_works(hours,billable,revenue)').is('deleted_at',null); const jb=js||[];
     const byst={open:0,planned:0,in_progress:0,done:0,cancelled:0}; let wh=0,totH=0;
     jb.forEach(j=>{ byst[j.status]=(byst[j.status]||0)+1; (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; totH+=h; if(!w.billable) wh+=h; }); });
-    const {data:tr}=await sb.from('trips').select('econ_snapshot,date_from').is('deleted_at',null); const trips=tr||[];
+    const {data:tr}=await sb.from('trips').select('econ_snapshot,date_from,date_to,lead_engineer,status').is('deleted_at',null); const trips=tr||[];
     let rev=0,cost=0,profit=0; trips.forEach(t=>{ const e=t.econ_snapshot||{}; rev+=+e.revenue||0; cost+=+e.cost||0; profit+=+e.profit||0; });
     // Депо-заявки в выезды не попадают (сервер это запрещает триггером),
     // поэтому в снимках выездов их денег нет вовсе — без этого куска целый
@@ -1290,7 +1320,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
 
     // Порядок правой колонки: деньги, их динамика, кем это делается,
     // и только потом состояние очереди.
-    h += chartCard + engineerLoadCard(jb) + statusCard;
+    h += chartCard + engineerLoadCard(jb, trips) + statusCard;
     box.innerHTML=h;
     box.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>dashNav(el.dataset.nav));
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; } }
