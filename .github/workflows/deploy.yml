@@ -15,7 +15,10 @@ jobs:
       - run: npm run lint      # ловит необъявленные переменные до прода
       - run: npm test          # тесты обязаны пройти, иначе выката нет
       - run: npm run build
-      - run: node tests/smoke.cjs dist/index.html   # и смоук-стенд
+      # Смоук-стенд выполняет СОБРАННЫЙ бандл с заглушками браузерных API.
+      # До правки он искал только инлайн-скрипты и после перехода на Vite
+      # не находил ничего — то есть годами горел зелёным вхолостую.
+      - run: node tests/smoke.cjs dist/index.html
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist }
   deploy:
