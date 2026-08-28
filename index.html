@@ -607,12 +607,11 @@
       <div class="hint" style="margin-bottom:6px">Стоянка засчитывается в работу, только если попала в радиус точки заявки. Обед на трассе и ночёвка не попадут. Идёт только в себестоимость — нормочасы и акт не трогаются.</div>
       <div class="row"><div class="grow"><label>Радиус вокруг точки, м</label><input type="number" id="stStayRad" step="10"></div><div class="grow"><label>Короче этого не считать, мин</label><input type="number" id="stStayMin" step="1"></div></div>
       <label style="margin-top:12px">Адрес прокси ORS (безопасный режим)</label><input type="text" id="orsProxy" placeholder="https://<проект>.supabase.co/functions/v1/ors">
-      <div class="hint" style="margin-top:4px">Если задан — ключ хранится в функции на сервере и не виден пользователям. Поле ключа ниже тогда можно очистить.</div>
+      <div class="hint" style="margin-top:4px">Ключ openrouteservice хранится в секрете этой функции на сервере и наружу не отдаётся. Отдельного поля для ключа в приложении нет.</div>
       <!-- Поле «Ключ openrouteservice (прямой режим)» убрано (аудит, В5).
            Ключ жил в settings.ors_key, а эту строку читал любой сотрудник —
            то есть ключ мог утащить кто угодно и сжечь квоту. Теперь он
            только в секрете Edge Function ors, наружу не отдаётся. -->
-      <div class="hint" style="margin-top:4px">Внимание: ключ из этого поля доступен любому, кто вошёл в систему. Для рабочей эксплуатации лучше прокси.</div>
       <label style="margin-top:12px">Гарантия на ремонт по умолчанию, дней</label><input type="number" id="stWarrDays" placeholder="90">
       <label style="margin-top:12px">Период регулярного контакта, дней (0 — выкл)</label><input type="number" id="stContact" placeholder="0">
       <button class="btn sm amber" id="stSave" style="margin-top:14px">Сохранить</button><span class="hint" id="stStatus" style="margin-left:8px"></span>
