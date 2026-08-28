@@ -14,6 +14,12 @@
     --bg: #141414; --panel: #1e1e1e; --panel-2: #262626; --line: #333333;
     --ink: #e7e9ee; --ink-dim: #9aa1ad; --ink-faint: #6b7280;
     --accent: #ffe100; --accent-ink: #ffe100; --on-accent: #141414; --edge: rgba(0,0,0,0);
+    /* Отдельный токен для линий и указателей. Фирменный #ffe100 на белом
+       даёт контраст 1.31:1 — для заливки кнопки с тёмным текстом это
+       нормально, но подчёркивание активной вкладки, единственный указатель
+       «где я», в светлой теме им почти не рисуется. В тёмной оставляем
+       фирменный, в светлой уводим в охру. */
+    --accent-line: #ffe100;
     --cyan: #27d3c4; --red: #ff5d5d; --green: #4ec97a;
     --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2); --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
@@ -44,7 +50,7 @@
     border-bottom: 2px solid transparent; transition: all 0.2s ease;
   }
   .tab:hover { color: var(--ink); } 
-  .tab.active { color: var(--accent-ink); border-bottom-color: var(--accent); font-weight: 600; } 
+  .tab.active { color: var(--accent-ink); border-bottom-color: var(--accent-line); border-bottom-width: 3px; font-weight: 600; } 
   .tab.hidden { display: none; }
   
   .spacer { flex: 1; }
@@ -167,7 +173,7 @@
     border-bottom: 2px solid transparent; transition: color 0.2s;
   }
   .side-tabs .stab:hover { color: var(--ink); } 
-  .side-tabs .stab.active { color: var(--accent-ink); border-bottom-color: var(--accent); font-weight: 600; background: var(--panel); } 
+  .side-tabs .stab.active { color: var(--accent-ink); border-bottom-color: var(--accent-line); border-bottom-width: 3px; font-weight: 600; background: var(--panel); } 
   
   .cbub { 
     display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; 
@@ -283,7 +289,7 @@
   .subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
   .subtab { padding: 10px 16px; font-family: var(--mono); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-dim); cursor: pointer; border-bottom: 2px solid transparent; }
   .subtab:hover { color: var(--ink); }
-  .subtab.active { color: var(--accent-ink); border-bottom-color: var(--accent); font-weight: 600; }
+  .subtab.active { color: var(--accent-ink); border-bottom-color: var(--accent-line); border-bottom-width: 3px; font-weight: 600; }
   .subtab.hidden { display: none; }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--accent); color: var(--ink); padding: 12px 20px; border-radius: 10px; font-family: var(--mono); font-size: 12px; box-shadow: var(--shadow-lg); z-index: 99999; opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease; }
   .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -386,7 +392,13 @@
   .chip:hover { border-color: var(--ink-dim); }
   .chip.on { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
   .kanban { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 10px; align-items: flex-start; }
-  .kcol { flex: 0 0 300px; min-width: 300px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; max-height: 72vh; }
+  /* Колонки росли жёстко по 300 px и упирались в max-height:72vh: три штуки
+     занимали меньше половины экрана, а единственная заполненная
+     прокручивалась внутри себя, хотя под ней оставался пустой экран.
+     Теперь ширина тянется, а высоту ограничиваем только когда колонок
+     много и они реально длинные. */
+  .kcol { flex: 1 1 300px; min-width: 260px; max-width: 480px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; }
+  .kcol-b { max-height: calc(100vh - 300px); }
   .kcol-h { padding: 10px 12px; font-family: var(--mono); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-dim); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
   .kcol-h .cnt { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--ink); }
   .kcol-b { padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
@@ -449,11 +461,17 @@
 .aname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .asub{font-size:12px;color:var(--ink-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .abadge{font-size:11px;padding:3px 8px;border-radius:20px;white-space:nowrap;border:1px solid transparent}
-.abadge.red{color:var(--red);border-color:#5a2b2b;background:#2a1717}
-.abadge.amber{color:#f5b23d;border-color:#5a4620;background:#2a2213}
-.abadge.green{color:var(--green);border-color:#2b5a3b;background:#152a1d}
+/* Фон и рамка бейджа были прибиты литералами из ТЁМНОЙ палитры, тогда как
+   цвет текста брался из токена. Половина правила подстраивалась под тему,
+   половина — никогда, и в светлой теме на белых карточках получались
+   тёмные пилюли.
+   color-mix убирает нужду во втором наборе значений: подмешиваем немного
+   смыслового цвета в текущий фон панели, и оттенок сам следует за темой. */
+.abadge.red{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,var(--panel));background:color-mix(in srgb,var(--red) 14%,var(--panel))}
+.abadge.amber{color:#c07a12;border-color:color-mix(in srgb,#f5b23d 45%,var(--panel));background:color-mix(in srgb,#f5b23d 16%,var(--panel))}
+.abadge.green{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,var(--panel));background:color-mix(in srgb,var(--green) 14%,var(--panel))}
 .abadge.gray{color:var(--ink-dim);border-color:var(--line);background:var(--panel-2)}
-.abadge.noeng{color:var(--cyan);border-color:#1f5551;background:#12302e}
+.abadge.noeng{color:var(--cyan);border-color:color-mix(in srgb,var(--cyan) 45%,var(--panel));background:color-mix(in srgb,var(--cyan) 14%,var(--panel))}
 .acold{margin-top:4px}
 .acold summary{list-style:none;cursor:pointer;padding:8px 10px;display:flex;align-items:center;gap:8px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-dim)}
 .acold summary::-webkit-details-marker{display:none}
@@ -476,6 +494,18 @@
 .mc-row:first-of-type{margin-top:14px}
 .mc-k{color:var(--ink-faint)} .mc-v{font-weight:600}
 .stats.mini{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+.revbars{display:flex;align-items:flex-end;gap:10px;height:118px;margin-top:12px}
+.revbar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.revbar .rb-v{font-family:var(--mono);font-size:10px;color:var(--ink-faint);text-align:center;margin-bottom:4px;font-variant-numeric:tabular-nums}
+.revbar .rb-c{flex:1;display:flex;align-items:flex-end}
+.revbar .rb-f{width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:0}
+.revbar .rb-l{font-family:var(--mono);font-size:10px;color:var(--ink-faint);text-align:center;margin-top:5px}
+.kempty{font-size:12.5px;color:var(--ink-faint);padding:14px 6px;text-align:center;line-height:1.5}
+.vm-stale{font-size:11.5px;color:var(--ink-faint);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:6px 9px;margin:8px 0 4px;line-height:1.45}
+.mc-per{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
+.mc-delta{font-size:12px;color:var(--green);margin:-2px 0 12px}
+.mc-delta.down{color:var(--red)}
+.mc-row.mc-all{border-top:1px solid var(--line);margin-top:8px;padding-top:10px}
 .stats.mini .stat{padding:10px 12px}
 .stats.mini .stat-v{font-size:18px}
 .stats.mini .stat-l{font-size:11px;margin-top:2px}
