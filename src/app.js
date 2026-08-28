@@ -152,8 +152,8 @@ document.addEventListener('click',e=>{ const p=$('themePop'); if(p.classList.con
 $('modeDark').onclick=()=>{ theme.mode='dark'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); $('themePop').classList.remove('on'); };
 $('modeLight').onclick=()=>{ theme.mode='light'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); $('themePop').classList.remove('on'); };
 // закрытие модалок по фону и Esc
-['jobOverlay','econOverlay','baseOverlay','linkOverlay','tripOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o) o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('on'); }); });
-document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; ['jobOverlay','econOverlay','baseOverlay','linkOverlay','tripOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o&&o.classList.contains('on')) o.classList.remove('on'); }); const tp=$('themePop'); if(tp) tp.classList.remove('on'); });
+['jobOverlay','econOverlay','baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o) o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('on'); }); });
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; ['jobOverlay','econOverlay','baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o&&o.classList.contains('on')) o.classList.remove('on'); }); const tp=$('themePop'); if(tp) tp.classList.remove('on'); });
 
 // ---------- logo ----------
 (function(){ const lg=$('logoImg'); lg.onload=()=>{lg.style.display='block';$('wordmark').style.display='none';}; lg.onerror=()=>{lg.style.display='none';$('wordmark').style.display='';}; lg.src='./logo.png'; })();
@@ -248,6 +248,9 @@ function switchTab(name, sub){ if(!tabAllowed(name)) return;
   });
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelector('.view-'+name).classList.add('active');
+  // У страницы выезда нет своего пункта в рельсе: она — вложенный экран
+  // «Выездов», и подсветка должна остаться на них, иначе непонятно, где ты.
+  if(name==='trip') document.querySelectorAll('.nav-i[data-sub="trips"]').forEach(t=>t.classList.add('active'));
   if(name==='map'){ setTimeout(()=>map.invalidateSize(),60); }
   if(name==='catalog') catSub(catCur);
   if(name==='planner') plannerSub(sub||plannerCur);
@@ -563,11 +566,18 @@ function renderWorkFeed(){
   if(dated.length){
     h+='<div class="wf-h">Требует внимания <span class="cnt">'+dated.length+'</span></div>';
     dated.slice(0,12).forEach(({job,u})=>{
-      const col=u.level==='overdue'?'var(--u-over)':u.level==='acute'?'var(--u-acute)':'var(--u-calm)';
-      const badge=u.level==='overdue'?('просрочено '+(-u.left)+' дн'):(u.left+' дн');
+      const col=urgHue(u);
+      const badge=u.level==='overdue'?('−'+(-u.left)+' дн'):(u.left+' дн');
+      // Подпись «без техники» стояла на пяти строках из семи — это отсутствие
+      // сведений на месте, где могут быть дата и часы. Модель показываем,
+      // когда она есть, и всегда — срок с трудоёмкостью.
+      const hrs=(job.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
+      const sub=[dayLabel(job.due_date)];
+      const mdl=(job.equipment&&job.equipment.model)||''; if(mdl) sub.push(mdl);
+      if(hrs) sub.push(hrs.toFixed(hrs%1?1:0)+' ч');
       h+='<div class="wf-row" data-jfly="'+esc(job.client_id)+'" data-jid="'+esc(job.id)+'" style="border-left-color:'+col+'">'
-        +'<div style="flex:1"><div class="wf-t">'+esc((job.clients&&job.clients.name)||'—')+'</div>'
-        +'<div class="wf-s">'+esc((job.equipment&&job.equipment.model)||'без техники')+'</div></div>'
+        +'<div style="flex:1;min-width:0"><div class="wf-t">'+esc((job.clients&&job.clients.name)||'—')+'</div>'
+        +'<div class="wf-s">'+esc(sub.join(' · '))+'</div></div>'
         +'<span class="pill" style="color:'+col+';border-color:'+col+'">'+esc(badge)+'</span></div>';
     });
   }
@@ -619,19 +629,28 @@ function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('li
   box.innerHTML=res.length?'':'<div class="kempty">'
     +(clients.length?'По запросу ничего не нашлось.':'Точек пока нет. Создай первую кнопкой выше.')+'</div>';
   res.slice(0,80).forEach(c=>{ const eqn=(eqByClient[c.id]||[]).length; const aln=alerts[c.id]||0; const d=document.createElement('div'); d.className='pt'; d.dataset.cid=c.id; d.onmouseenter=()=>hlMarker(c.id,true); d.onmouseleave=()=>hlMarker(c.id,false);
-    const tag=c.is_base?'<span class="pill">депо</span>':'<span class="pill">клиент</span>';
-    // Координаты уехали в подсказку: диспетчер по ним не работает, а строку
-    // занимали. Туда же полное имя — в карточке оно обрезано двумя строками.
+    // Три чипа в строке имени отбирали у него половину ширины, и длинное
+    // украинское название ломалось на слоги. Имя теперь занимает строку
+    // целиком, а «клиент / техники N / ⚠ N» сведены в одну строку меты:
+    // тип точки и без того сказан цветом маркера.
     const tip=esc(c.name)+' · '+(+c.lat).toFixed(5)+', '+(+c.lng).toFixed(5);
-    // Кнопки: было пять, стало три. Показ на карте переехал на само имя —
-    // это естественнее отдельной кнопки «⊙», которую ещё надо объяснять.
-    d.innerHTML='<div class="nm" data-fly="'+c.id+'" title="'+tip+'"><span class="dot" style="background:'+esc(c.color||'#9aa1ad')+'"></span>'+esc(c.name)+' '+tag+(c.is_base?'':' <span class="pill">техники '+eqn+'</span>')+(aln>0?' <span class="pill warn">⚠ '+aln+'</span>':'')+'</div>'+
+    const meta=[];
+    meta.push(c.is_base?'депо':(eqn?(eqn+' '+plural(eqn,'единица','единицы','единиц')+' техники'):'без техники'));
+    if(aln>0) meta.push(aln+' '+plural(aln,'заявка','заявки','заявок'));
+    // Действия показываются только у выбранной точки: четыре кнопки под
+    // каждой из восьмидесяти строк — это и есть та самая «духота».
+    d.innerHTML='<div class="nm" title="'+tip+'"><span class="dot" style="background:'+esc(c.color||'#9aa1ad')+'"></span><span class="nm-t">'+esc(c.name)+'</span></div>'+
+      '<div class="meta">'+esc(meta.join(' · '))+'</div>'+
       (c.description?'<div class="ds">'+esc(c.description)+'</div>':'')+
-      '<div class="acts">'+(canWrite()?'<button class="btn sm" data-rt="'+c.id+'">+ маршрут</button>':'')+(c.is_base?'':'<button class="btn sm" data-eq="'+c.id+'">техника</button>')+
+      '<div class="acts">'+(canWrite()?'<button class="btn sm amber" data-rt="'+c.id+'">+ маршрут</button>':'')+(c.is_base?'':'<button class="btn sm" data-eq="'+c.id+'">техника</button>')+
       (canWrite()?'<button class="btn sm ghost" data-edit="'+c.id+'">ред.</button><button class="btn sm ghost" data-del="'+c.id+'" title="Удалить точку">×</button>':'')+'</div>';
+    // Клик по карточке = выбрать её и показать на карте. Раньше «показать»
+    // висело на самом имени и требовало отдельного объяснения подсказкой.
+    d.onclick=(e)=>{ if(e.target.closest('button')) return;
+      box.querySelectorAll('.pt.sel').forEach(x=>x.classList.remove('sel'));
+      d.classList.add('sel');
+      switchTab('map'); map.flyTo([c.lat,c.lng],14); };
     box.appendChild(d); });
-  box.querySelectorAll('[data-fly]').forEach(b=>{ b.style.cursor='pointer';
-    b.onclick=()=>{ const c=clients.find(x=>x.id==b.dataset.fly); if(c){ switchTab('map'); map.flyTo([c.lat,c.lng],14); } }; });
   box.querySelectorAll('[data-rt]').forEach(b=>b.onclick=()=>{ const c=clients.find(x=>x.id==b.dataset.rt); if(!c) return; if(c.is_base) addBaseStop(c.id); else addClientToRoute(c.id); });
   box.querySelectorAll('[data-eq]').forEach(b=>b.onclick=()=>openEquip(b.dataset.eq));
   box.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editClient(b.dataset.edit));
@@ -916,10 +935,50 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
   wireJobCards(box); wireKanbanDrag(box,dropJob); }
 $('jobSearch').oninput=renderJobs; if($('jobEngFilter')) $('jobEngFilter').onchange=renderJobs; if($('mineDone')) $('mineDone').onchange=renderMine; $('jobAdd').onclick=()=>{ if(canWrite()) openJob(null); };
+// ── Лента внимания ──────────────────────────────────────────────────────────
+// Плоский список одинаковых строк не выглядит отсортированным: цвет полоски
+// у всех один, а приоритет закодирован числом, которое надо читать и
+// сравнивать глазами. Здесь заявки лежат на одной шкале времени, и место
+// на ней — само по себе ответ. Узел ленты — ДАТА, а не заявка: три точки
+// на 18 сентября это один выезд на два дня, а не три отдельных дела.
+
+// Цвет по остроте. Уровни ядра сохраняем как есть — просрочено всегда
+// красное, острое всегда янтарное; плавно остывает только «спокойное»,
+// внутри своего диапазона.
+function mixHex(a,b,t){
+  const p=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+  const A=p(a),B=p(b); t=Math.max(0,Math.min(1,t));
+  return '#'+[0,1,2].map(i=>Math.round(A[i]+(B[i]-A[i])*t).toString(16).padStart(2,'0')).join('');
+}
+const URG_RAMP=[[0,'#e8871e'],[10,'#c8a80f'],[18,'#16a34a'],[35,'#4c9a7a'],[60,'#94a3b8']];
+function rampColor(days){
+  const d=Math.max(0,+days||0);
+  for(let i=0;i<URG_RAMP.length-1;i++){
+    const [d0,c0]=URG_RAMP[i], [d1,c1]=URG_RAMP[i+1];
+    if(d<=d1) return mixHex(c0,c1,(d-d0)/(d1-d0));
+  }
+  return URG_RAMP[URG_RAMP.length-1][1];
+}
+function urgHue(u){
+  if(u.level==='overdue') return '#dc2626';
+  if(u.level==='acute')   return '#f59e0b';
+  return rampColor(u.left);
+}
+const WD_RU=['вс','пн','вт','ср','чт','пт','сб'];
+function dayLabel(iso){
+  const d=new Date(String(iso)+'T00:00:00'); if(isNaN(d)) return String(iso||'');
+  return WD_RU[d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+' '+MON_RU[d.getMonth()];
+}
+function shortDate(iso){
+  const d=new Date(String(iso)+'T00:00:00'); if(isNaN(d)) return String(iso||'');
+  return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0');
+}
+
 async function renderAttention(){
   const box=$('attnBody'); if(!box) return;
   box.innerHTML='<div class="hint">Считаю…</div>';
   try{
+    await ensureRefs();
     // Заявки со сроком, клиентом, техникой и работами — всё, что нужно ленте.
     const { data, error }=await sb.from('jobs')
       .select('id,status,due_date,created_at,assigned_engineer,at_depot, clients(name), equipment(model), job_works(hours,billable)')
@@ -937,53 +996,164 @@ async function renderAttention(){
     // поэтому имя инженера не показывалось никогда, а разделитель ' · '
     // оставался висеть в конце строки.
     const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||''):''; };
-    const COLOR={overdue:'red',acute:'amber',calm:'green'};
-    const dueBadge=u=>{
-      if(u.level==='overdue') return '<span class="abadge red">просрочено '+(-u.left)+' дн</span>';
-      if(u.level==='acute')   return '<span class="abadge amber">'+u.left+' дн до срока</span>';
-      return '<span class="abadge green">'+u.left+' дн</span>';
-    };
     const hours=j=>(j.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
+    const shift=(+appSettings.shift_hours)||8;
 
-    let h='';
     if(!dated.length && !cold.length){
-      h='<div class="aempty">На сегодня заявок нет.</div>';
-    } else {
-      dated.forEach(({job,u})=>{
-        const noeng=!job.assigned_engineer?'<span class="abadge noeng">без инженера</span>':'';
-        // Собираем подпись из того, что есть, и склеиваем разделителем один
-        // раз. Раньше подпись падала на имя клиента, когда техники нет, —
-        // и повторяла заголовок строкой выше; а пустое имя инженера
-        // оставляло висячую точку.
-        const parts=[];
-        const model=(job.equipment&&job.equipment.model)||'';
-        if(model) parts.push(esc(model));
-        parts.push(hours(job)+' ч');
-        const en=job.assigned_engineer?engName(job.assigned_engineer):'';
-        if(en) parts.push(esc(en));
-        const sub=parts.join(' · ');
-        h+='<div class="arow '+COLOR[u.level]+'" data-ajob="'+job.id+'">'
-          +'<span class="astripe"></span>'
-          +'<div class="amain"><div class="aname">'+esc((job.clients&&job.clients.name)||'—')+'</div>'
-          +'<div class="asub">'+sub+'</div></div>'
-          +noeng+dueBadge(u)+'</div>';
-      });
-      if(cold.length){
-        let ch='';
-        cold.forEach(j=>{
-          ch+='<div class="arow gray" data-ajob="'+j.id+'"><span class="astripe"></span>'
-            +'<div class="amain"><div class="aname">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
-            +'<div class="asub">'+esc((j.equipment&&j.equipment.model)||'')+'</div></div>'
-            +'<span class="abadge gray">без срока</span></div>';
-        });
-        h+='<details class="acold"><summary><span class="achev">▸</span>'
-          +'Холодные потребности <span class="acount">'+cold.length+'</span></summary>'
-          +'<div>'+ch+'</div></details>';
-      }
+      box.innerHTML='<div class="aempty">На сегодня заявок нет.</div>';
+      return;
     }
+
+    // ── Группировка по дате срока ────────────────────────────────────────
+    const gmap=new Map();
+    dated.forEach(({job,u})=>{
+      const k=String(job.due_date);
+      if(!gmap.has(k)) gmap.set(k,{date:k,left:u.left,u:u,jobs:[],h:0});
+      const g=gmap.get(k); g.jobs.push(job); g.h+=hours(job);
+      // У группы берём самый острый уровень: если хоть одна заявка горит,
+      // горит вся дата.
+      if(urgencyRank(u.level)<urgencyRank(g.u.level)) g.u=u;
+    });
+    const groups=[...gmap.values()].sort((a,b)=>a.left-b.left);
+
+    // ── Лента: градиент по остроте групп сверху вниз ─────────────────────
+    // Остановки ставим в процентах, а не в пикселях: высота карточек
+    // заранее неизвестна, а долю каждой группы мы знаем всегда.
+    const N=groups.length;
+    const stops=[];
+    stops.push(urgHue(groups[0].u)+' 0%');
+    groups.forEach((g,i)=>stops.push(urgHue(g.u)+' '+((i+0.5)/N*100).toFixed(1)+'%'));
+    stops.push(urgHue(groups[N-1].u)+' 100%');
+
+    let h='<div class="afeed">'
+      +'<div class="afeed-line" style="background:linear-gradient(180deg,'+stops.join(',')+')"></div>';
+
+    // ── Сегодня ──────────────────────────────────────────────────────────
+    const over=groups.filter(g=>g.left<0);
+    const overN=over.reduce((a,g)=>a+g.jobs.length,0);
+    h+='<div class="a-today">'
+      +'<div class="a-ax"><b style="color:var(--red)">'+shortDate(todayISO())+'</b><i>сегодня</i></div>'
+      +'<span class="a-dot" style="width:22px;height:22px;left:-32px;top:5px;background:#dc2626;box-shadow:0 0 0 1px #dc2626"></span>'
+      +'<div class="a-todaytxt">'+(overN
+          ? '<b style="color:var(--red)">Просрочено: '+overN+'</b>'
+          : 'Просроченного нет')+'</div></div>';
+
+    // ── Группы ───────────────────────────────────────────────────────────
+    let prevLeft=0;
+    groups.forEach(g=>{
+      // Разрыв шкалы: пустые недели схлопываем в подпись, иначе ближние
+      // сроки слиплись бы в верхней трети, а дальний уехал бы в одиночестве.
+      const gapW=Math.floor((g.left-prevLeft)/7);
+      if(gapW>=3) h+='<div class="a-break"><span>'+gapW+' '+plural(gapW,'неделя','недели','недель')+' без сроков</span></div>';
+      prevLeft=g.left;
+
+      const col=urgHue(g.u);
+      const n=g.jobs.length;
+      const dia=Math.round(13+Math.min(1,g.h/24)*11);
+      const engs=[...new Set(g.jobs.map(j=>j.assigned_engineer).filter(Boolean))];
+      const engTxt=!engs.length ? '<span class="a-noeng">без инженера</span>'
+        : (engs.length===1 ? esc(engName(engs[0])||'—') : engs.length+' инженера');
+      const shifts=g.h/shift;
+      const load=g.h>shift
+        ? esc(g.h.toFixed(g.h%1?1:0))+' ч · '+Math.ceil(shifts)+' '+plural(Math.ceil(shifts),'смена','смены','смен')
+        : esc(g.h.toFixed(g.h%1?1:0))+' ч';
+      const leftTxt=g.left<0?('−'+(-g.left)+' дн'):(g.left+' дн');
+
+      h+='<div class="agrp">'
+        +'<div class="a-ax"><b>'+shortDate(g.date)+'</b><i>'+leftTxt+'</i></div>'
+        +'<span class="a-dot" style="width:'+dia+'px;height:'+dia+'px;left:'+(-21-dia/2)+'px;top:'+(20-dia/2)+'px;'
+          +'background:'+col+';box-shadow:0 0 0 1px '+col+'">'+(n>1?n:'')+'</span>'
+        +'<span class="a-stem" style="left:'+(-21+dia/2)+'px;width:'+(21-dia/2)+'px"></span>'
+        +'<div class="agrp-card" style="border-left-color:'+col+'">'
+        +'<div class="agrp-h" style="background:color-mix(in srgb,'+col+' 9%,var(--panel))">'
+          +'<span class="agrp-n">'+dayLabel(g.date)+'</span>'
+          +'<span class="agrp-track"><i style="width:'+Math.min(100,g.h/(shift*5)*100).toFixed(0)+'%;background:'+col+'"></i></span>'
+          +'<span class="agrp-hint">'+load+(n>1?(' · '+n+' '+plural(n,'точка','точки','точек')):'')+'</span>'
+          +'<span class="agrp-eng">'+engTxt+'</span>'
+        +'</div>';
+      g.jobs.forEach(j=>{
+        const mdl=(j.equipment&&j.equipment.model)||'';
+        h+='<div class="arow2" data-ajob="'+j.id+'">'
+          +'<div class="a-main"><div class="a-name">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
+          +(mdl?('<div class="a-sub">'+esc(mdl)+'</div>'):'')+'</div>'
+          +'<span class="a-h">'+esc(hours(j).toFixed(hours(j)%1?1:0))+' ч</span></div>';
+      });
+      h+='</div></div>';
+    });
+    h+='</div>';
+
+    // ── Холодные ─────────────────────────────────────────────────────────
+    if(cold.length){
+      let ch='';
+      cold.forEach(j=>{
+        ch+='<div class="arow gray" data-ajob="'+j.id+'"><span class="astripe"></span>'
+          +'<div class="amain"><div class="aname">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
+          +'<div class="asub">'+esc((j.equipment&&j.equipment.model)||'')+'</div></div>'
+          +'<span class="abadge gray">без срока</span></div>';
+      });
+      h+='<details class="acold"><summary><span class="achev">▸</span>'
+        +'Холодные потребности <span class="acount">'+cold.length+'</span></summary>'
+        +'<div>'+ch+'</div></details>';
+    }
+
     box.innerHTML=h;
     box.querySelectorAll('[data-ajob]').forEach(el=>el.onclick=()=>openJob(el.dataset.ajob));
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; }
+}
+
+// ── Загрузка инженеров ──────────────────────────────────────────────────────
+// Горизонт обязателен. Без него «загрузка» — это сумма всех часов до конца
+// года: число большое, красивое и ни на что не влияющее. Две рабочие недели
+// вперёд — это тот срок, на который ещё можно что-то переставить.
+// Ёмкость считаем сменой из настроек: 8 ч × 10 рабочих дней.
+const LOAD_DAYS=14;
+function engineerLoadCard(jobs){
+  if(!canWrite()) return '';
+  const shift=(+appSettings.shift_hours)||8;
+  const cap=shift*10;
+  const hz=new Date(); hz.setDate(hz.getDate()+LOAD_DAYS); const hIso=todayISO(hz);
+  const hours=j=>(j.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
+  const alive=j=>['open','planned','in_progress'].includes(j.status);
+
+  const rows=new Map();   // id инженера → {h, n}
+  let later=0, nodue=0;
+  (jobs||[]).filter(alive).forEach(j=>{
+    const h=hours(j); if(!h) return;
+    if(!j.due_date){ nodue+=h; return; }
+    if(String(j.due_date)>hIso){ later+=h; return; }
+    const k=j.assigned_engineer||'__none';
+    const r=rows.get(k)||{h:0,n:0}; r.h+=h; r.n++; rows.set(k,r);
+  });
+
+  const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
+  const list=[...rows.entries()]
+    .map(([id,r])=>({id,h:r.h,n:r.n,name:id==='__none'?'Без инженера':name(id)}))
+    .sort((a,b)=>b.h-a.h);
+
+  let body='';
+  if(!list.length){
+    body='<div class="hint">На ближайшие две недели работ не поставлено.</div>';
+  } else {
+    list.forEach(r=>{
+      const pct=r.h/cap*100;
+      const col=pct>100?'var(--red)':pct>70?'#f59e0b':'var(--green)';
+      const none=(r.id==='__none');
+      body+='<div class="elrow'+(none?' none':'')+'">'
+        +'<div class="el-n">'+esc(r.name)+'</div>'
+        +'<div class="el-t"><i style="width:'+Math.min(100,pct).toFixed(0)+'%;background:'+col+'"></i></div>'
+        +'<div class="el-v" style="color:'+col+'">'+r.h.toFixed(r.h%1?1:0)+' / '+cap+' ч</div>'
+        +'<div class="el-s">'+r.n+' '+plural(r.n,'заявка','заявки','заявок')+' · '+Math.round(pct)+'%</div>'
+        +'</div>';
+    });
+  }
+  const tail=[];
+  if(later) tail.push('дальше по срокам '+later.toFixed(later%1?1:0)+' ч');
+  if(nodue) tail.push('без срока '+nodue.toFixed(nodue%1?1:0)+' ч');
+
+  return '<div class="card elcard"><h3>Загрузка инженеров <span class="el-hz">две недели вперёд</span></h3>'
+    +body
+    +(tail.length?('<div class="el-tail">'+esc(tail.join(' · '))+'</div>'):'')
+    +'</div>';
 }
 
 async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
@@ -993,18 +1163,21 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   const grid=document.querySelector('.dash-grid');
   const attnCaps=document.querySelector('.dash-attn .acaps');
   if(role==='engineer'){
-    if(grid) grid.style.gridTemplateColumns='1fr';
+    if(grid) grid.classList.add('one-col');
     if(box) box.style.display='none';
     if(attnCaps) attnCaps.textContent='Мой день';
     return;   // правую колонку инженеру не строим вовсе
   }
-  if(grid) grid.style.gridTemplateColumns='1.4fr 1fr';
+  // Через класс, а не инлайном: инлайновый grid-template-columns перебивал
+  // медиазапрос, и на телефоне сводка оставалась в две колонки по 190 px.
+  if(grid) grid.classList.remove('one-col');
   if(box) box.style.display='';
   if(attnCaps) attnCaps.textContent='Требует внимания';
   box.innerHTML='<div class="hint">Считаю…</div>';
   try{
     const cl=clients.filter(c=>!c.is_base).length, dp=clients.filter(c=>c.is_base).length;
-    const {data:js}=await sb.from('jobs').select('status,at_depot, job_works(hours,billable,revenue)').is('deleted_at',null); const jb=js||[];
+    await ensureRefs();
+    const {data:js}=await sb.from('jobs').select('status,at_depot,due_date,assigned_engineer, job_works(hours,billable,revenue)').is('deleted_at',null); const jb=js||[];
     const byst={open:0,planned:0,in_progress:0,done:0,cancelled:0}; let wh=0,totH=0;
     jb.forEach(j=>{ byst[j.status]=(byst[j.status]||0)+1; (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; totH+=h; if(!w.billable) wh+=h; }); });
     const {data:tr}=await sb.from('trips').select('econ_snapshot,date_from').is('deleted_at',null); const trips=tr||[];
@@ -1062,41 +1235,36 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
         +'<div class="mc-row"><span class="mc-k">Доля гарантии</span><span class="mc-v">'+warrShare+'%</span></div></div>'
       : '';
 
-    // Плитки-переходы. Функция tile() была написана, CSS для неё лежал,
-    // dashNav() умел открывать нужные разделы — но вызова не было ни одного,
-    // и сводка перестала быть входом в систему, оставшись витриной.
-    const activeJobs=(byst.open||0)+(byst.planned||0)+(byst.in_progress||0);
-    const navTiles=canWrite()
-      ? '<div class="stats mini" style="margin-top:16px">'
-        + tile('Точки', String(cl+dp), dp?(dp+' депо'):'', null, 'points')
-        + tile('Заявки в работе', String(activeJobs),
-               (byst.done||0)?((byst.done||0)+' закрыто'):'', null, 'jobs')
-        + tile('Выезды', String(trips.length), '', null, 'trips')
-        + tile('Машины', String(vehicles.length),
-               overdue?(overdue+' просрочили ТО'):'', overdue?'var(--red)':null, 'vehicles')
-        + '</div>'
-      : '';
-
-    let h=moneyCard+navTiles;
+    // Четыре плитки-перехода («Точки», «Заявки в работе», «Выезды», «Машины»)
+    // убраны. Числа в них почти не менялись, а решения не требовали ни одно:
+    // переход в раздел уже есть в рельсе слева, и он на два клика короче.
+    // Освободившееся место занимает загрузка инженеров — она меняется каждый
+    // день и прямо говорит, кому уже некуда ставить.
+    let h=moneyCard;
     // Заявки по статусам — компактная стек-полоса + легенда (как в мокапе),
     // вместо списка с нулями. Открыта — синий, в работе — янтарь,
     // готова — зелёный, отменена — серый.
-    const stTotal=Math.max(1,(byst.open||0)+(byst.planned||0)+(byst.in_progress||0)+(byst.done||0)+(byst.cancelled||0));
+    // Полоса показывает только ЖИВЫЕ статусы. Закрытые и отменённые копятся
+    // без конца: через год они займут почти всю ширину, и три активных
+    // сегмента станут неразличимой полоской у края. Сколько всего закрыто —
+    // отдельной строкой под полосой, где это число никому не мешает.
+    const stClosed=(byst.done||0)+(byst.cancelled||0);
+    const stTotal=Math.max(1,(byst.open||0)+(byst.planned||0)+(byst.in_progress||0));
     const seg=[
       ['open','Открыта','var(--cyan)',byst.open||0],
       ['planned','Запланирована','#5b9bd5',byst.planned||0],
       ['in_progress','В работе','#f5b23d',byst.in_progress||0],
-      ['done','Готова','var(--green)',byst.done||0],
-      ['cancelled','Отменена','var(--ink-faint)',byst.cancelled||0],
     ].filter(x=>x[3]>0);
     let bar='', leg='';
     seg.forEach(([k,lbl,col,n])=>{
       bar+='<i style="width:'+(n/stTotal*100)+'%;background:'+col+'"></i>';
       leg+='<span><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</span>';
     });
-    h+='<div class="card statuscard"><h3>Заявки по статусам</h3>'
+    const statusCard='<div class="card statuscard"><h3>Заявки в работе</h3>'
       +'<div class="statbar">'+(bar||'<i style="width:100%;background:var(--line)"></i>')+'</div>'
-      +'<div class="statleg">'+(leg||'<span class="dim">Заявок нет</span>')+'</div></div>';
+      +'<div class="statleg">'+(leg||'<span class="dim">Активных заявок нет</span>')+'</div>'
+      +(stClosed?('<div class="stat-closed">закрыто и отменено за всё время: '+stClosed+'</div>'):'')
+      +'</div>';
     const months=[]; const now=new Date(); for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:monthKey(d),rev:0,profit:0}); }
     trips.forEach(t=>{ if(!t.date_from) return; const m=months.find(x=>x.key===String(t.date_from).slice(0,7)); if(m){ const e=t.econ_snapshot||{}; m.rev+=+e.revenue||0; m.profit+=+e.profit||0; } });
     // График рисуем, только когда в нём есть что сравнивать.
@@ -1107,18 +1275,22 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
     // крупным числом выше. Появится второй месяц с выручкой — появится
     // и график, сам собой.
     const filled=months.filter(m=>m.rev>0).length;
+    let chartCard='';
     if(canWrite() && filled>=2){
       const maxRev=Math.max(1,...months.map(m=>m.rev));
       const short=v=>v>=1000?Math.round(v/1000)+'к':String(Math.round(v));
-      h+='<div class="card" style="margin-top:16px"><h3>Выручка по месяцам</h3>'
-        +'<div class="revbars">';
+      chartCard='<div class="card"><h3>Выручка по месяцам</h3><div class="revbars">';
       months.forEach(m=>{ const hR=m.rev>0?Math.max(4,Math.round(m.rev/maxRev*100)):0;
-        h+='<div class="revbar" title="'+m.key+': '+Math.round(m.rev).toLocaleString('ru-RU')+' '+esc(cur)+'">'
+        chartCard+='<div class="revbar" title="'+m.key+': '+Math.round(m.rev).toLocaleString('ru-RU')+' '+esc(cur)+'">'
           +'<div class="rb-v">'+(m.rev>0?short(m.rev):'')+'</div>'
           +'<div class="rb-c"><div class="rb-f" style="height:'+hR+'%"></div></div>'
           +'<div class="rb-l">'+m.key.slice(5)+'</div></div>'; });
-      h+='</div></div>';
+      chartCard+='</div></div>';
     }
+
+    // Порядок правой колонки: деньги, их динамика, кем это делается,
+    // и только потом состояние очереди.
+    h += chartCard + engineerLoadCard(jb) + statusCard;
     box.innerHTML=h;
     box.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>dashNav(el.dataset.nav));
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; } }
@@ -1536,7 +1708,7 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs();
   // километров в выезде нет. Без turf он молча уйдёт в плоскую ветку и
   // покажет другую цифру — поэтому ждём здесь, до первого tripCalc().
   await ensureTurf().catch(()=>{}); tripEditId=id; const t=id?getTrip(id):null; tripMainJobId=(t&&t.main_job_id)||null;
-  $('tpFrom').value=t?(t.date_from||''):''; $('tpTo').value=t?(t.date_to||''):''; $('tpVeh').innerHTML='<option value="">— авто —</option>'+vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.name+(v.plate?(' · '+v.plate):''))+'</option>').join(''); $('tpVeh').value=t&&t.vehicle_id?t.vehicle_id:''; updateVehInfo(); $('tpVeh').onchange=updateVehInfo; $('tpNotes').value=t?(t.notes||''):'';
+  $('tpFrom').value=t?(t.date_from||''):''; $('tpTo').value=t?(t.date_to||''):''; $('tpVeh').innerHTML='<option value="">— авто —</option>'+vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.name+(v.plate?(' · '+v.plate):''))+'</option>').join(''); $('tpVeh').value=t&&t.vehicle_id?t.vehicle_id:''; updateVehInfo(); $('tpVeh').onchange=()=>{ updateVehInfo(); tripHead(); }; $('tpNotes').value=t?(t.notes||''):'';
   $('tpEng').innerHTML='<option value="">— инженер —</option>'+profilesList.map(p=>'<option value="'+p.id+'">'+esc((p.full_name||'без имени')+' ('+p.role+')')+'</option>').join('');
   $('tpEng').value=t&&t.lead_engineer?t.lead_engineer:''; $('tpStatus').value=t?t.status:'planned';
   curTripJobs=new Set(); if(t){ const {data}=await sb.from('trip_jobs').select('job_id').eq('trip_id',id); (data||[]).forEach(r=>curTripJobs.add(r.job_id)); }
@@ -1547,7 +1719,45 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs();
   tripRouteKeys=new Set(saved.filter(s=>s.lat!=null&&s.lng!=null).map(s=>(+s.lat).toFixed(5)+','+(+s.lng).toFixed(5))); if($('tpJobsRoute')) $('tpJobsRoute').checked=true;
   tripRouteStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'job',name:x.name,lat:x.lat,lng:x.lng})); syncRouteStops(); renderRouteStops();
   $('tpRouteStatus').innerHTML=tripRoute.km?('<span class="ok">'+tripRoute.km.toFixed(1)+' км · '+tripRoute.driveH.toFixed(1)+' ч</span>'):'';
-  renderTripJobs(); tripEcon(); $('tripTitle').textContent=id?'Выезд':'Новый выезд'; $('tripErr').textContent=''; $('tripOverlay').classList.add('on'); }
+  renderTripJobs(); $('tripErr').textContent=''; tripEcon(); switchTab('trip');
+  const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
+// Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
+// было собирать глазами из четырёх мест модалки.
+function tripHead(){
+  const per=tripPeriod($('tpFrom').value,$('tpTo').value);
+  $('tripTitle').textContent=tripEditId?('Выезд '+per):'Новый выезд';
+  $('tripCrumb').textContent=tripEditId?per:'Новый выезд';
+  const veh=vehicles.find(x=>x.id==$('tpVeh').value);
+  const eng=profilesList.find(x=>x.id==$('tpEng').value);
+  const e=tripCalc();
+  const parts=[];
+  if(veh) parts.push(esc(veh.name+(veh.plate?(' · '+veh.plate):'')));
+  if(eng) parts.push(esc(eng.full_name||eng.role));
+  parts.push(e.jobCount+' '+plural(e.jobCount,'заявка','заявки','заявок'));
+  if(e.km>0) parts.push(e.km.toFixed(0)+' км · '+(e.driveH+e.workH).toFixed(1)+' ч');
+  $('tripSub').innerHTML=parts.join(' · ')||'—';
+  const pc=e.profit>=0?'var(--green)':'var(--red)';
+  $('tripHeadEcon').innerHTML='<div class="te-k">Прибыль</div>'
+    +'<div class="te-v" style="color:'+pc+'">'+Math.round(e.profit).toLocaleString('ru-RU')+' '+e.cur+'</div>'
+    +'<div class="te-s">маржа '+e.margin.toFixed(0)+'% · выручка '+Math.round(e.rev).toLocaleString('ru-RU')+'</div>';
+  if($('tpJobsCnt')) $('tpJobsCnt').textContent=e.jobCount+' из '+tripJobsAll.length;
+  if($('tpRouteKm')) $('tpRouteKm').textContent=tripRoute.km?(tripRoute.km.toFixed(0)+' км'):'—';
+}
+function plural(n,a,b,c){ n=Math.abs(n)%100; const n1=n%10;
+  if(n>10&&n<20) return c; if(n1>1&&n1<5) return b; if(n1===1) return a; return c; }
+// «07–11 сентября» вместо «2026-09-07 — 2026-09-11». Внутри одного месяца
+// название пишется один раз, на стыке месяцев — оба.
+const MON_RU=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+function tripPeriod(df,dt){
+  if(!df) return 'даты не заданы';
+  const a=new Date(df+'T00:00:00'); if(isNaN(a)) return df;
+  const b=(dt&&dt!==df)?new Date(dt+'T00:00:00'):null;
+  const dd=x=>String(x.getDate()).padStart(2,'0');
+  if(!b||isNaN(b)) return dd(a)+' '+MON_RU[a.getMonth()];
+  if(a.getMonth()===b.getMonth()&&a.getFullYear()===b.getFullYear())
+    return dd(a)+'\u2013'+dd(b)+' '+MON_RU[b.getMonth()];
+  return dd(a)+' '+MON_RU[a.getMonth()]+'\u2013'+dd(b)+' '+MON_RU[b.getMonth()];
+}
 function jobKey(j){ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); if(lat==null) return null; return (+lat).toFixed(5)+','+(+lng).toFixed(5); }
 let tripMainJobId=null;   // основная заявка выезда (для маржинального километража)
 function renderTripJobs(){ const box=$('tpJobs');
@@ -1613,7 +1823,13 @@ function econSnapshot(jobs, km, driveH, T, ov, ctx, jobCount){
   };
 }
 function tripCalc(){ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const cur=tripEditId?trips.find(x=>x.id==tripEditId):null; return econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{roadKm:(cur&&cur.road_km_by_payer)||null,start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value,factKm:cur?cur.fact_km:null,factWorkH:tripEditId?factHByTrip[tripEditId]:null},appSettings.tariff_profiles,window.turf); }
-function tripEcon(){ const e=tripCalc(); const cur=e.cur; $('tpEcon').innerHTML='Заявок: '+e.jobCount+' · работа '+e.workH.toFixed(1)+'ч · в пути '+e.driveH.toFixed(1)+'ч · '+e.km.toFixed(0)+'км · дней '+e.days+' · выручка '+e.rev.toFixed(0)+' '+cur+' · затраты '+e.cost.toFixed(0)+' · прибыль '+e.profit.toFixed(0)+' · гар '+e.share+'%'; renderTpRoadGroups(); }
+function tripEcon(){ const e=tripCalc();
+  $('tpEcon').innerHTML='Работа '+e.workH.toFixed(1)+' ч · в пути '+e.driveH.toFixed(1)+' ч · '
+    +e.km.toFixed(0)+' км · дней '+e.days+' · гарантийная доля '+e.share+'%';
+  // Разбивка лежит на странице, а не в окне поверх окна: цифры в шапке
+  // и строки, из которых они сложились, должны быть видны одновременно.
+  if($('tpEconBody')) $('tpEconBody').innerHTML=econHTML(e,'tpEconMap');
+  renderTpRoadGroups(); tripHead(); }
 function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const rb=(tripStart&&(appSettings.tariff_profiles||[]).length)?roadByPayer(tripStart,jobs):null;
   if(!rb||!rb.groups.length){ box.innerHTML=''; return; }
   if(!tripOverrides.road) tripOverrides.road={}; const rd=tripOverrides.road;
@@ -1624,7 +1840,7 @@ function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; con
 // [сборка] Удалено мёртвое определение showTripOnMap(id)=>loadTripIntoPlanner:
 // из-за подъёма функций в браузере всегда побеждала вторая версия ниже
 // (показ фактического трека), а эта была недостижима с самого начала.
-$('tpEditMap').onclick=()=>{ if(tripEditId){ $('tripOverlay').classList.remove('on'); showTripOnMap(tripEditId); } else { notify('Сначала сохрани выезд — потом правь маршрут на карте.','warn'); } };
+$('tpEditMap').onclick=()=>{ if(tripEditId){ showTripOnMap(tripEditId); } else { notify('Сначала сохрани выезд — потом правь маршрут на карте.','warn'); } };
 function loadTripIntoPlanner(id){ const t=trips.find(x=>x.id==id); if(!t) return; switchTab('map'); tripLayer.clearLayers(); plannerTripId=id;
   const saved=t.route_stops||[]; const st=saved.find(x=>x.type==='start'); rStart=st?{name:st.name,lat:st.lat,lng:st.lng,description:st.description||''}:null;
   rStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'client',name:x.name,lat:x.lat,lng:x.lng,clientId:x.clientId||null,equipId:x.equipId||null,description:x.description||''}));
@@ -1632,7 +1848,8 @@ function loadTripIntoPlanner(id){ const t=trips.find(x=>x.id==id); if(!t) return
   renderRoutePanel(); $('rStatus').innerHTML=rRoute.km?('<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'):'';
   if(rStops.length) map.fitBounds(routeStopsAll().map(s=>[s.lat,s.lng]),{padding:[60,60]}); return;
 }
-$('tripCancel').onclick=()=>$('tripOverlay').classList.remove('on');
+$('tripCancel').onclick=()=>switchTab('planner','trips');
+['tpFrom','tpTo','tpEng','tpStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',tripEcon); });
 $('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
 $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
   const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};
@@ -1666,7 +1883,7 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
     // Если оставить и эту ветку, пробег задвоится:два источника на одно поле.
     // Заодно чинится дыра: инженер закрывает выезд через RPC, saveTrip не
     // вызывается вовсе, и пробег молча переставал бы обновляться.
-    $('tripOverlay').classList.remove('on'); await renderTrips(); showToast('Выезд сохранён');
+    switchTab('planner','trips'); await renderTrips(); showToast('Выезд сохранён');
   }catch(err){ console.error('Сохранение выезда не прошло:', err, '| детали:', err&&(err.details||err.hint||err.code)); $('tripErr').textContent='Ошибка: '+(err.message||err); } finally{ $('tpSave').disabled=false; } };
 async function delTrip(id){ if(!await confirmDialog('Удалить выезд?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('trips').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderTrips();
   undoToast('Выезд удалён', async ()=>{ const {error:e2}=await sb.from('trips').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Восстановлено'); }); }
@@ -2162,7 +2379,7 @@ async function checkTodayTrip(){
     const veh=t.vehicles?(t.vehicles.name+(t.vehicles.plate?(' · '+t.vehicles.plate):'')):(t.vehicle_label||'машина не назначена');
     const late=t.date_from<today;
     $('todayTitle').textContent=late?'Выезд просрочен':'Сегодня выезд';
-    let h='<div class="meta">'+esc(t.date_from||'')+((t.date_to&&t.date_to!==t.date_from)?(' — '+esc(t.date_to)):'')+' · '+esc(veh)+'</div>';
+    let h='<div class="meta">'+esc(tripPeriod(t.date_from,t.date_to))+' · '+esc(veh)+'</div>';
     if(late) h+='<div class="ds" style="color:var(--red)">Дата выезда уже прошла, а он так и не начат.</div>';
     if(list.length>1) h+='<div class="hint">И ещё '+(list.length-1)+' — остальные в «Моём дне».</div>';
     h+='<div class="row" style="margin-top:12px"><button class="btn amber grow" id="todayStart">▶ Начать выезд</button><button class="btn grow" id="todayResched">📅 Перенести</button></div>';
@@ -2853,7 +3070,10 @@ function econRow(k,v){ return '<div style="display:flex;justify-content:space-be
 // не вызывался вовсе — он нужен только внутри economics.js, где и живёт.
 
 
-function showEconModal(d){
+// Разбивка экономики одной строкой HTML: её показывают и окном (из списка
+// выездов), и врезкой на странице выезда. mapId разводит две мини-карты,
+// чтобы они не подрались за один id.
+function econHTML(d, mapId){
   const cur=d.cur||'';
   const money0=n=>Math.round(+n||0).toLocaleString('ru-RU');
   const row=(k,v,cls)=>'<div class="erow'+(cls?' '+cls:'')+'"><span class="ek">'+k+'</span><span class="ev">'+v+'</span></div>';
@@ -2930,25 +3150,26 @@ function showEconModal(d){
   if(d.wh>0) h+='<div class="ehint">Гарантийные часы '+d.wh.toFixed(1)+' ч · доля '+d.share+'%</div>';
 
   // ── Мини-карта план/факт (рисуется после вставки html)
-  h+='<div id="econMapWrap" style="display:none"><div class="ehead">Маршрут</div>'
-    +'<div id="econMap" class="emap"></div>'
+  h+='<div id="'+mapId+'Wrap" style="display:none"><div class="ehead">Маршрут</div>'
+    +'<div id="'+mapId+'" class="emap"></div>'
     +'<div class="eleg"><span><i class="edash"></i>план</span><span><i class="esolid"></i>факт</span></div></div>';
 
-  $('econBody').innerHTML=h;
-  $('econOverlay').classList.add('on');
-  drawEconMap(d);
+  return h;
 }
+function showEconModal(d){ $('econBody').innerHTML=econHTML(d,'econMap');
+  $('econOverlay').classList.add('on'); drawEconMap(d,'econMap'); }
 
 // Мини-карта: плановый маршрут пунктиром, реально пройденный — сплошной.
 // Данные кладёт showTripEcon в d.geoPlan / d.geoFact; если их нет, блок скрыт.
-function drawEconMap(d){
-  const wrap=$('econMapWrap'); if(!wrap) return;
+function drawEconMap(d, mapId){
+  mapId=mapId||'econMap';
+  const wrap=$(mapId+'Wrap'); if(!wrap) return;
   const hasPlan=d.geoPlan&&d.geoPlan.length, hasFact=d.geoFact&&d.geoFact.length;
   if(!hasPlan&&!hasFact) return;
   wrap.style.display='';
   try{
     if(window._econMap){ window._econMap.remove(); window._econMap=null; }
-    const m=L.map('econMap',{zoomControl:false});
+    const m=L.map(mapId,{zoomControl:false});
     window._econMap=m;
     // Те же тайлы, что и на главной карте. Раньше здесь стоял cartocdn —
     // единственное место в приложении с другим поставщиком. Он раздаёт
@@ -2967,7 +3188,6 @@ function drawEconMap(d){
   }catch(e){ wrap.style.display='none'; }
 }
 $('econClose').onclick=()=>$('econOverlay').classList.remove('on');
-$('tpEconBtn').onclick=async ()=>{ await ensureTurf().catch(()=>{}); const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); showEconModal(econCompute(jobs,tripRoute.km,tripRoute.driveH,tripT(),tripOverrides,{start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value},appSettings.tariff_profiles,window.turf)); };
 if($('tpJobsRoute')) $('tpJobsRoute').onchange=renderTripJobs;
 async function showTripEcon(id){ const t=trips.find(x=>x.id==id); if(!t) return;
   await ensureTurf().catch(()=>{}); const es=t.econ_snapshot||{}; const ts=t.tariffs_snapshot||{shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency,tariff_profiles:appSettings.tariff_profiles||[]};
