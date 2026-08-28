@@ -268,6 +268,30 @@
   .map-summary.on { display: flex; }
   .veh-btn { position: absolute; top: 16px; right: 16px; z-index: 650; cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: .5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-dim); border-radius: 8px; padding: 7px 11px; box-shadow: var(--shadow-lg); }
   .veh-btn.on { color: var(--accent-ink); border-color: var(--accent); }
+  /* Ряд фильтров: сегмент типа и чип «внимание» в одну строку —
+     раньше это были две строки плюс абзац подсказки между ними. */
+  .filter-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .filter-row .seg { flex: 1 1 auto; margin: 0; }
+  .chip-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .4px; color: var(--ink-dim);
+    border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px;
+    padding: 8px 10px; white-space: nowrap; user-select: none; flex: none; }
+  .chip-check:hover { color: var(--ink); }
+  .chip-check input { width: auto; margin: 0; }
+  .chip-check:has(input:checked) { color: var(--accent-ink); border-color: var(--accent); }
+  /* Всплывающее меню слоёв — привязано к карте, а не к окну,
+     чтобы на узком экране не улетало за край. */
+  .map-pop { position: absolute; top: 56px; right: 16px; z-index: 660; display: none;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px; width: 270px; max-width: calc(100% - 32px); box-shadow: var(--shadow-lg); }
+  .map-pop.on { display: block; }
+  .map-pop h4 { font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--ink-faint); margin-bottom: 10px; }
+  .map-pop .lay { display: flex; align-items: center; gap: 8px; cursor: pointer;
+    font-size: 12.5px; color: var(--ink-dim); padding: 6px 0; }
+  .map-pop .lay:hover { color: var(--ink); }
+  .map-pop .lay input { width: auto; margin: 0; }
+  .map-pop .hint { margin: 0 0 6px 24px; }
   .veh-mk { position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
   .veh-ico { font-size: 24px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.55)); }
   .veh-mk.stale .veh-ico { filter: grayscale(1) drop-shadow(0 2px 4px rgba(0,0,0,.55)); opacity: .55; }
@@ -482,15 +506,18 @@
       <div class="block collapsible" id="pointsBlock">
         <h2 class="ch">Точки <span class="cnt" id="cliCount">0</span><span class="chev"></span></h2>
         <div class="block-body">
+          <!-- Панель похудела с 22 органов управления до восьми.
+               Режимы просмотра (подсветка прибыльных, расстановка объездов)
+               переехали в меню слоёв на самой карте: это режимы, а не
+               действия, и им не место в столбце над списком.
+               Подсказки убраны — действия в карточке теперь подписаны
+               словами, объяснять их отдельным абзацем не нужно. -->
           <input type="search" id="search" placeholder="искать по названию…">
-          <div class="seg" id="typeFilter" style="margin-top:8px"><button class="on" data-tf="all">все</button><button data-tf="client">клиенты</button><button data-tf="base">депо</button></div>
-          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:8px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="ptAlert" style="width:auto">только требующие внимания ⚠</label>
-          <div class="hint" style="margin-top:6px">В карточке: ⊙ — показать на карте, «+ марш.» — добавить в маршрут.</div>
-          <div id="profitTools"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:8px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="profitMode" style="width:auto">💰 подсветить прибыльных клиентов</label>
-          <div class="hint" id="profitLegend" style="display:none;margin-top:4px"><span style="color:#16a34a">●</span> высокая · <span style="color:#84cc16">●</span> средняя · <span style="color:#eab308">●</span> низкая · <span style="color:#6b7280">●</span> нет прибыли</div></div>
-          <div id="pointTools"><button class="btn amber" id="pointCreate" style="width:100%;margin-top:10px">+ Создать точку</button>
-          <button class="btn sm ghost" id="avoidMode" style="width:100%;margin-top:6px">🚫 Ставить объезды (плохие дороги)</button>
-          <div class="hint" id="avoidHint" style="display:none;margin-top:4px">Кликай по карте, где объезжать — появится «кирпич». Радиус меняется в его попапе. Маршрут строится в обход. Быстрее — правый клик по карте → «Объезд здесь».</div></div>
+          <div class="filter-row">
+            <div class="seg" id="typeFilter"><button class="on" data-tf="all">все</button><button data-tf="client">клиенты</button><button data-tf="base">депо</button></div>
+            <label class="chip-check" title="Показать только точки, где просрочен контакт или подходит ТО"><input type="checkbox" id="ptAlert"><span>⚠ внимание</span></label>
+          </div>
+          <div id="pointTools"><button class="btn amber" id="pointCreate" style="width:100%;margin-top:10px">+ Создать точку</button></div>
           <div id="list" style="margin-top:10px"></div>
         </div>
       </div>
@@ -521,7 +548,18 @@
       <div class="block"><div class="hint" id="dataStatus">—</div></div>
       </div>
     </aside>
-    <div class="map-wrap"><button class="veh-btn on" id="vehBtn" title="Показать машины службы">🚚 Машины</button><div class="mode-tag" id="modeTag">● Кликни по карте</div><div class="map-summary" id="mapSummary"></div><div id="map"></div></div>
+    <div class="map-wrap"><button class="veh-btn on" id="vehBtn" title="Показать машины службы">🚚 Машины</button>
+      <!-- Меню слоёв: сюда переехало то, что раньше занимало место в панели.
+           Это переключатели способа СМОТРЕТЬ на карту, поэтому живут они
+           на карте, а не над списком точек. -->
+      <button class="veh-btn" id="layersBtn" style="right:120px" title="Слои и режимы карты">◍ Слои</button>
+      <div class="map-pop" id="layersPop">
+        <h4>Слои карты</h4>
+        <label class="lay"><input type="checkbox" id="profitMode"><span>💰 Подсветить прибыльных клиентов</span></label>
+        <div class="hint" id="profitLegend" style="display:none"><span style="color:#16a34a">●</span> высокая · <span style="color:#84cc16">●</span> средняя · <span style="color:#eab308">●</span> низкая · <span style="color:#6b7280">●</span> нет прибыли</div>
+        <label class="lay"><input type="checkbox" id="avoidMode"><span>🚫 Ставить объезды</span></label>
+        <div class="hint" id="avoidHint" style="display:none">Кликай по карте, где объезжать. Радиус меняется в попапе «кирпича». Быстрее — правый клик по карте.</div>
+      </div><div class="mode-tag" id="modeTag">● Кликни по карте</div><div class="map-summary" id="mapSummary"></div><div id="map"></div></div>
   </div>
 
   <!-- CATALOG -->
