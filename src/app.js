@@ -112,8 +112,14 @@ const THEMES={
     '--shadow-sm':'0 4px 12px rgba(0,0,0,0.2)', '--shadow-md':'0 8px 22px rgba(0,0,0,0.35)', '--shadow-lg':'0 12px 32px rgba(0,0,0,0.5)'
   },
   light:{
-    '--bg':'#f4f5f7', '--panel':'#ffffff', '--panel-2':'#f8f9fa', '--line':'#e2e5e9',
-    '--ink':'#1a1d22', '--ink-dim':'#5a626e', '--ink-faint':'#8a929e', 
+    // Светлая тема была вдвое площе тёмной: bg → panel-2 давали контраст
+    // 1.03 при 1.25 в тёмной, panel → panel-2 — 1.05 при 1.13. Три уровня
+    // поверхностей лежали в пределах 4% друг от друга, слои не читались,
+    // и всё сливалось в одну заливку. Шаги подобраны по контрастам тёмной
+    // темы, а нейтраль уведена из синевы в тёплую: холодный серый спорил
+    // с фирменным жёлтым.
+    '--bg':'#e7e6e1', '--panel':'#ffffff', '--panel-2':'#f2f1ee', '--line':'#ddd9d2',
+    '--ink':'#1c1b19', '--ink-dim':'#605f5a', '--ink-faint':'#8a8986', 
     '--accent':'#ffe100', '--accent-ink':'#1a1d22', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)', // бренд-жёлтый для заливок/границ, тёмный текст-акцент для читаемости
     // Линии и указатели: #ffe100 на белом даёт 1.31:1 и почти не виден.
     '--accent-line':'#b39400',
@@ -270,6 +276,26 @@ function plannerSub(name){ plannerCur=name;
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===name)); document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name)); if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView(); }
 document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.onclick=()=>setTripsView(b.dataset.tv));
+// Подсказки по «?». Делегирование, а не обработчик на каждую: часть кружков
+// приезжает из JS вместе с перерисовкой, и вешать их поштучно значило бы
+// терять обработчик при каждом рендере.
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.qm');
+  const open=document.querySelector('.q.on');
+  if(open && (!btn || open!==btn.parentElement)) open.classList.remove('on','flip');
+  if(!btn) return;
+  e.preventDefault(); e.stopPropagation();
+  const q=btn.parentElement; const on=!q.classList.contains('on');
+  q.classList.toggle('on',on);
+  if(on){
+    // Ближе к правому краю окно уезжает за экран — разворачиваем влево.
+    const body=q.querySelector('.qbody');
+    q.classList.remove('flip');
+    if(body && body.getBoundingClientRect().right>window.innerWidth-8) q.classList.add('flip');
+  }
+});
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return;
+  const o=document.querySelector('.q.on'); if(o) o.classList.remove('on','flip'); });
 // Тень под закреплённой шапкой появляется только когда под неё что-то уехало.
 // Постоянная линия на нетронутом списке — это шум, которого нечем объяснить.
 (function(){
@@ -432,14 +458,14 @@ function markerColor(c){
 }
 function renderColorLegend(){
   const el=$('profitLegend'); if(!el) return;
-  const dot=(c,t)=>'<span style="color:'+c+'">●</span> '+t;
+  const dot=(c,t)=>'<span><i style="background:'+c+'"></i>'+t+'</span>';
   if(colorMode==='profit'){
     el.innerHTML=[dot('#16a34a','высокая'),dot('#84cc16','средняя'),
-      dot('#eab308','низкая'),dot('#6b7280','нет прибыли')].join(' · ');
+      dot('#eab308','низкая'),dot('#6b7280','нет прибыли')].join('');
   } else if(colorMode==='urgency'){
     el.innerHTML=[dot(URG_COL.overdue,URG_TXT.overdue),dot(URG_COL.acute,URG_TXT.acute),
       dot(URG_COL.calm,URG_TXT.calm),dot(URG_COL.cold,URG_TXT.cold),
-      dot('#94a3b8','нет заявок')].join(' · ');
+      dot('#94a3b8','нет заявок')].join('');
   } else {
     el.innerHTML='Цвет задаётся в карточке точки.';
   }
@@ -1383,8 +1409,10 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
             +'<div class="rb-l">'+m.key.slice(5)+'</div></div>'; });
         chartCard+='</div>';
       } else {
-        chartCard+='<div class="hint">За выбранный период выручка есть '
-          +(filled?'только в одном месяце':'ни в одном месяце')+' — сравнивать не с чем. Возьмите период шире.</div>';
+        chartCard+='<div class="hint">'+(filled
+          ? 'За выбранный период выручка есть только в одном месяце — сравнивать не с чем.'
+          : 'За выбранный период выручки нет ни в одном месяце.')
+          +' Возьмите период шире.</div>';
       }
       chartCard+='</div>';
     }
@@ -1614,7 +1642,7 @@ function renderDepotUi(){
   const on=!!jobAtDepot;
   if($('jbDepot')) $('jbDepot').checked=on;
   if($('jbDepotWrap')) $('jbDepotWrap').style.display=on?'':'none';
-  if($('jbDepotHint')) $('jbDepotHint').style.display=on?'':'none';
+  if($('jbDepotHint')) $('jbDepotHint').style.display=on?'inline-flex':'none';
 }
 function defaultProfileId(billable){ const list=appSettings.tariff_profiles||[];
   if(billable){ const cid=$('jbClient')?$('jbClient').value:''; const cl=cid?clients.find(c=>c.id==cid):null; if(cl&&cl.default_profile&&list.some(p=>p.id===cl.default_profile)) return cl.default_profile; const dp=list.find(p=>p.def_paid); return dp?dp.id:''; }
