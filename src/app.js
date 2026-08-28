@@ -108,7 +108,12 @@ const THEMES={
     '--bg':'#101114', '--panel':'#1a1c20', '--panel-2':'#24262b', '--line':'#33373e',
     '--ink':'#e7e9ee', '--ink-dim':'#9aa1ad', '--ink-faint':'#6b7280', 
     '--accent':'#ffe100', '--accent-ink':'#ffe100', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)',
-    '--accent-line':'#ffe100',
+    // Указатель «где я» и кольцо фокуса — разные задачи, и в тёмной теме
+    // их закрывает один и тот же жёлтый, а в светлой нет: жёлтая линия
+    // на белом даёт контраст 1.31, а затемнённый жёлтый уходит в горчицу.
+    // Поэтому токена два.
+    '--accent-line':'#ffe100', '--focus':'#ffe100',
+    '--nav-bg':'#24262b', '--nav-ink':'#ffe100',
     '--shadow-sm':'0 4px 12px rgba(0,0,0,0.2)', '--shadow-md':'0 8px 22px rgba(0,0,0,0.35)', '--shadow-lg':'0 12px 32px rgba(0,0,0,0.5)'
   },
   light:{
@@ -118,12 +123,19 @@ const THEMES={
     // и всё сливалось в одну заливку. Шаги подобраны по контрастам тёмной
     // темы, а нейтраль уведена из синевы в тёплую: холодный серый спорил
     // с фирменным жёлтым.
-    '--bg':'#e7e6e1', '--panel':'#ffffff', '--panel-2':'#f2f1ee', '--line':'#ddd9d2',
-    '--ink':'#1c1b19', '--ink-dim':'#605f5a', '--ink-faint':'#8a8986', 
+    '--bg':'#e2e6ec', '--panel':'#ffffff', '--panel-2':'#f2f5f9', '--line':'#ccd4de',
+    '--ink':'#0f141b', '--ink-dim':'#4e5866', '--ink-faint':'#7d8896',
+    // Указатель остаётся фирменным жёлтым — под тёмным текстом он читается.
+    // Фокус и выделение уходят в чернила: их работа — быть заметными,
+    // а не фирменными. Горчица #b39400 давала на белом 2.94 — ниже порога
+    // 3:1 для элементов интерфейса по WCAG 1.4.11, то есть была ещё
+    // и недостаточно контрастной.
+    '--accent-line':'#ffe100', '--focus':'#0f141b',
+    '--nav-bg':'#ffe100', '--nav-ink':'#141414', 
     '--accent':'#ffe100', '--accent-ink':'#1a1d22', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)', // бренд-жёлтый для заливок/границ, тёмный текст-акцент для читаемости
-    // Линии и указатели: #ffe100 на белом даёт 1.31:1 и почти не виден.
-    '--accent-line':'#b39400',
-    '--shadow-sm':'0 2px 8px rgba(0,0,0,0.06)', '--shadow-md':'0 5px 16px rgba(0,0,0,0.08)', '--shadow-lg':'0 10px 30px rgba(0,0,0,0.1)'
+    '--shadow-sm':'0 1px 2px rgba(15,20,27,.07), 0 2px 8px rgba(15,20,27,.07)',
+    '--shadow-md':'0 4px 8px rgba(15,20,27,.07), 0 8px 20px rgba(15,20,27,.09)',
+    '--shadow-lg':'0 8px 16px rgba(15,20,27,.07), 0 18px 40px rgba(15,20,27,.14)'
   }
 };
 function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
@@ -1228,13 +1240,19 @@ function engineerLoadCard(jobs, trips){
   // Ёмкость — рабочие дни периода по длине смены: пять дней из семи.
   const cap=shift*Math.max(1,Math.round(days*5/7));
   const hours=j=>(j.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
-  const alive=j=>['open','planned','in_progress'].includes(j.status);
+  // Считаем всё, что не отменено. Раньше отбирались только open/planned/
+  // in_progress, а у выездов вдобавок отбрасывались done — и это ломало
+  // произвольный период: стоило выбрать прошедший месяц, как закрытые
+  // заявки и завершённые выезды выпадали, дорога исчезала, а по краям
+  // окна оставались дыры. Для окна вперёд это план, для прошедшего —
+  // факт, и в обоих случаях верно: работа в этих днях была.
+  const counts=j=>j.status!=='cancelled';
 
   const rows=new Map();   // id инженера → {w, d, n}
   const row=k=>{ let r=rows.get(k); if(!r){ r={w:0,d:0,n:0}; rows.set(k,r); } return r; };
   let later=0, nodue=0, planned=0;
 
-  (jobs||[]).filter(alive).forEach(j=>{
+  (jobs||[]).filter(counts).forEach(j=>{
     const h=hours(j); if(!h) return;
     if(!j.due_date){ nodue+=h; return; }
     if(String(j.due_date)>hIso||String(j.due_date)<tIso){ later+=h; return; }
@@ -1243,13 +1261,21 @@ function engineerLoadCard(jobs, trips){
 
   // Дорога — по выездам, которые задевают горизонт и ещё не закрыты.
   (trips||[]).forEach(t=>{
-    if(t.status==='done'||t.status==='cancelled') return;
+    if(t.status==='cancelled') return;
     const from=t.date_from||null; if(!from) return;
     const to=t.date_to||from;
     if(to<tIso || from>hIso) return;             // выезд не пересекает горизонт
     const d=+((t.econ_snapshot||{}).driveH)||0; if(!d) return;
-    row(t.lead_engineer||'__none').d+=d;
-    planned+=d;
+    // Дорога делится по дням пересечения, а не отдаётся окну целиком.
+    // Иначе выезд с 4 по 11 сентября приписывал все свои 14.5 ч даже
+    // окну в один день — и загрузка одного дня выходила 596%.
+    const dayMs=86400000, D=x=>new Date(x+'T00:00:00').getTime();
+    const trip=Math.round((D(to)-D(from))/dayMs)+1;
+    const ovFrom=from>tIso?from:tIso, ovTo=to<hIso?to:hIso;
+    const ov=Math.max(0,Math.round((D(ovTo)-D(ovFrom))/dayMs)+1);
+    const share=trip>0?Math.min(1,ov/trip):1;
+    row(t.lead_engineer||'__none').d+=d*share;
+    planned+=d*share;
   });
 
   const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
@@ -1281,11 +1307,11 @@ function engineerLoadCard(jobs, trips){
     });
   }
   const tail=[];
-  if(later) tail.push('дальше по срокам '+num(later)+' ч');
+  if(later) tail.push('вне периода '+num(later)+' ч');
   if(nodue) tail.push('без срока '+num(nodue)+' ч');
   tail.push(planned
-    ? 'дорога — по спланированным выездам'
-    : 'дорога не в счёт: выездов на этот срок ещё нет');
+    ? 'дорога — доля выездов, попавшая в период'
+    : 'дорога не в счёт: выездов в этот период нет');
 
   const hzTxt=loadRange?tripPeriod(loadRange.from,loadRange.to)
     :(loadDays===7?'неделя вперёд':loadDays===14?'две недели вперёд':'месяц вперёд');
