@@ -109,7 +109,7 @@ const THEMES={
     '--ink':'#e7e9ee', '--ink-dim':'#9aa1ad', '--ink-faint':'#6b7280', 
     '--accent':'#ffe100', '--accent-ink':'#ffe100', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)',
     '--accent-line':'#ffe100',
-    '--shadow-sm':'0 4px 12px rgba(0,0,0,0.2)', '--shadow-lg':'0 12px 32px rgba(0,0,0,0.5)'
+    '--shadow-sm':'0 4px 12px rgba(0,0,0,0.2)', '--shadow-md':'0 8px 22px rgba(0,0,0,0.35)', '--shadow-lg':'0 12px 32px rgba(0,0,0,0.5)'
   },
   light:{
     '--bg':'#f4f5f7', '--panel':'#ffffff', '--panel-2':'#f8f9fa', '--line':'#e2e5e9',
@@ -117,7 +117,7 @@ const THEMES={
     '--accent':'#ffe100', '--accent-ink':'#1a1d22', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)', // бренд-жёлтый для заливок/границ, тёмный текст-акцент для читаемости
     // Линии и указатели: #ffe100 на белом даёт 1.31:1 и почти не виден.
     '--accent-line':'#b39400',
-    '--shadow-sm':'0 2px 8px rgba(0,0,0,0.06)', '--shadow-lg':'0 10px 30px rgba(0,0,0,0.1)'
+    '--shadow-sm':'0 2px 8px rgba(0,0,0,0.06)', '--shadow-md':'0 5px 16px rgba(0,0,0,0.08)', '--shadow-lg':'0 10px 30px rgba(0,0,0,0.1)'
   }
 };
 function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
