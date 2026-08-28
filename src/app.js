@@ -950,7 +950,7 @@ function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.
   const eb=(j.assigned_engineer===session.user.id&&(j.status==='open'||j.status==='planned'))?'<button class="btn sm amber" data-jst="'+j.id+'|in_progress">В работу</button>':'';
   const eb2=(j.assigned_engineer===session.user.id&&j.status==='in_progress')?'<button class="btn sm amber" data-jst="'+j.id+'|done">Завершить</button>':'';
   const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+((canWrite()&&j.status==='done')?'<button class="btn sm" data-jact="'+j.id+'" title="Акт">📄</button>':'')+(canWrite()?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
-  return '<div class="kcard" data-kid="'+j.id+'">'+head+(tags?'<div style="margin: var(--sp-1) 0">'+tags+'</div>':'')+meta+acts+'</div>'; }
+  return '<div class="kcard" data-kid="'+j.id+'">'+head+(tags?'<div class="ktags">'+tags+'</div>':'')+meta+acts+'</div>'; }
 function wireJobCards(box){
   box.querySelectorAll('[data-jedit]').forEach(b=>b.onclick=()=>openJob(b.dataset.jedit));
   box.querySelectorAll('[data-jst]').forEach(b=>b.onclick=()=>{ const a=b.dataset.jst.split('|'); jobSetStatus(a[0],a[1]); });
@@ -1171,17 +1171,62 @@ async function renderAttention(){
 // из driveH снимка выезда: она посчитана роутером по настоящим дорогам,
 // выдумывать её не нужно. У заявок, ещё не собранных в выезд, маршрута
 // нет физически — их дорога в счёт не идёт, и об этом сказано в подписи.
-const LOAD_DAYS=14;
-// Глубина графика выручки. Полгода было прибито гвоздём; на молодой базе
-// это пять пустых столбиков, на зрелой — слишком короткая память.
-let revMonths=6;
-const REV_PERIODS=[[6,'6 мес'],[12,'год'],[24,'2 года']];
+// Периоды выбираются, а не прибиты. Готовые ступени закрывают девять
+// случаев из десяти, произвольный диапазон — десятый.
+const LOAD_PERIODS=[[7,'неделя'],[14,'2 недели'],[30,'месяц']];
+const REV_PERIODS_N=[[3,'3 мес'],[6,'6 мес'],[12,'год']];
+let loadDays=14, loadRange=null, loadOpen=false;
+let revMonthsN=6, revRange=null, revOpen=false;
+// Общая отрисовка переключателя: ступени, «свой» и окошко с двумя датами.
+// Карточки перерисовываются целиком, поэтому открытость окна живёт
+// в состоянии, а не в DOM — иначе оно закрывалось бы на каждый пересчёт.
+function periodSeg(kind, presets, cur, range, open, unit){
+  const custom=!!range;
+  let h='<span class="seg perseg" data-pk="'+kind+'">';
+  presets.forEach(([n,l])=>{ h+='<button'+((!custom&&n===cur)?' class="on"':'')+' data-pv="'+n+'">'+l+'</button>'; });
+  h+='<button'+(custom?' class="on"':'')+' data-pv="custom">свой</button></span>';
+  h+='<span class="perpop'+(open?' on':'')+'">'
+    +'<input type="'+unit+'" data-pf="from" value="'+esc(range?range.from:'')+'">'
+    +'<span class="perdash">—</span>'
+    +'<input type="'+unit+'" data-pt="to" value="'+esc(range?range.to:'')+'">'
+    +'<button class="btn sm amber" data-pgo="1">Показать</button>'
+    +(custom?'<button class="btn sm ghost" data-pclr="1">Сбросить</button>':'')
+    +'</span>';
+  return h;
+}
+function wirePeriodSeg(box){
+  box.querySelectorAll('.perseg [data-pv]').forEach(b=>b.onclick=()=>{
+    const kind=b.closest('.perseg').dataset.pk, v=b.dataset.pv;
+    if(kind==='rev'){
+      if(v==='custom') revOpen=!revOpen; else { revMonthsN=+v; revRange=null; revOpen=false; }
+    } else {
+      if(v==='custom') loadOpen=!loadOpen; else { loadDays=+v; loadRange=null; loadOpen=false; }
+    }
+    renderDashboard();
+  });
+  box.querySelectorAll('[data-pgo]').forEach(b=>b.onclick=()=>{
+    const pop=b.parentElement, kind=pop.previousElementSibling.dataset.pk;
+    const f=pop.querySelector('[data-pf]').value, t=pop.querySelector('[data-pt]').value;
+    if(!f||!t||f>t){ notify('Задай начало и конец периода, начало раньше конца.','warn'); return; }
+    if(kind==='rev'){ revRange={from:f,to:t}; revOpen=false; } else { loadRange={from:f,to:t}; loadOpen=false; }
+    renderDashboard();
+  });
+  box.querySelectorAll('[data-pclr]').forEach(b=>b.onclick=()=>{
+    const kind=b.parentElement.previousElementSibling.dataset.pk;
+    if(kind==='rev'){ revRange=null; revOpen=false; } else { loadRange=null; loadOpen=false; }
+    renderDashboard();
+  });
+}
 function engineerLoadCard(jobs, trips){
   if(!canWrite()) return '';
   const shift=(+appSettings.shift_hours)||8;
-  const cap=shift*10;
-  const tIso=todayISO();
-  const hz=new Date(); hz.setDate(hz.getDate()+LOAD_DAYS); const hIso=todayISO(hz);
+  // Горизонт: либо ступень от сегодня, либо заданный руками диапазон.
+  let tIso, hIso, days;
+  if(loadRange){ tIso=loadRange.from; hIso=loadRange.to;
+    days=Math.round((new Date(hIso+'T00:00:00')-new Date(tIso+'T00:00:00'))/86400000)+1; }
+  else { tIso=todayISO(); const hz=new Date(); hz.setDate(hz.getDate()+loadDays-1); hIso=todayISO(hz); days=loadDays; }
+  // Ёмкость — рабочие дни периода по длине смены: пять дней из семи.
+  const cap=shift*Math.max(1,Math.round(days*5/7));
   const hours=j=>(j.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
   const alive=j=>['open','planned','in_progress'].includes(j.status);
 
@@ -1192,7 +1237,7 @@ function engineerLoadCard(jobs, trips){
   (jobs||[]).filter(alive).forEach(j=>{
     const h=hours(j); if(!h) return;
     if(!j.due_date){ nodue+=h; return; }
-    if(String(j.due_date)>hIso){ later+=h; return; }
+    if(String(j.due_date)>hIso||String(j.due_date)<tIso){ later+=h; return; }
     row(j.assigned_engineer||'__none').w+=h; row(j.assigned_engineer||'__none').n++;
   });
 
@@ -1242,7 +1287,10 @@ function engineerLoadCard(jobs, trips){
     ? 'дорога — по спланированным выездам'
     : 'дорога не в счёт: выездов на этот срок ещё нет');
 
-  return '<div class="card elcard"><h3>Загрузка инженеров <span class="el-hz">две недели вперёд</span></h3>'
+  const hzTxt=loadRange?tripPeriod(loadRange.from,loadRange.to)
+    :(loadDays===7?'неделя вперёд':loadDays===14?'две недели вперёд':'месяц вперёд');
+  return '<div class="card elcard"><h3 class="cardhead">Загрузка инженеров <span class="el-hz">'+esc(hzTxt)+'</span>'
+    +periodSeg('load',LOAD_PERIODS,loadDays,loadRange,loadOpen,'date')+'</h3>'
     +body
     +'<div class="el-tail">'+esc(tail.join(' · '))+'</div>'
     +'</div>';
@@ -1384,7 +1432,14 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
       +'</div>';
     // Глубина графика выбирается, а не прибита к шести месяцам.
     const months=[]; const now=new Date();
-    for(let i=revMonths-1;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:monthKey(d),rev:0,profit:0}); }
+    if(revRange){
+      // Произвольный диапазон задаётся месяцами, поэтому шагаем по месяцам.
+      const a=revRange.from.split('-').map(Number), b=revRange.to.split('-').map(Number);
+      let d=new Date(a[0],a[1]-1,1); const end=new Date(b[0],b[1]-1,1);
+      while(d<=end && months.length<48){ months.push({key:monthKey(d),rev:0,profit:0}); d=new Date(d.getFullYear(),d.getMonth()+1,1); }
+    } else {
+      for(let i=revMonthsN-1;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:monthKey(d),rev:0,profit:0}); }
+    }
     // Тот же принцип, что и в итогах: в график идут только состоявшиеся
     // выезды. Иначе столбик будущего месяца стоял бы наравне с прошедшими.
     trips.filter(TRIP_EARNED).forEach(t=>{ if(!t.date_from) return; const m=months.find(x=>x.key===String(t.date_from).slice(0,7)); if(m){ const e=t.econ_snapshot||{}; m.rev+=+e.revenue||0; m.profit+=+e.profit||0; } });
@@ -1394,9 +1449,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
       const maxRev=Math.max(1,...months.map(m=>m.rev));
       const short=v=>v>=1000?Math.round(v/1000)+'к':String(Math.round(v));
       chartCard='<div class="card"><h3 class="cardhead">Выручка по месяцам'
-        +'<span class="seg revseg" id="revPeriod">'
-        +REV_PERIODS.map(([n,l])=>'<button'+(n===revMonths?' class="on"':'')+' data-rm="'+n+'">'+l+'</button>').join('')
-        +'</span></h3>';
+        +periodSeg('rev',REV_PERIODS_N,revMonthsN,revRange,revOpen,'month')+'</h3>';
       // Один заполненный месяц — это не тренд, а столбик среди пустых мест.
       // «Этот месяц против прошлого» уже сказано крупным числом выше;
       // здесь честнее предложить расширить окно, чем рисовать пустоту.
@@ -1421,7 +1474,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
     // и только потом состояние очереди.
     h += chartCard + engineerLoadCard(jb, trips) + statusCard;
     box.innerHTML=h;
-    box.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ revMonths=+b.dataset.rm; renderDashboard(); });
+    wirePeriodSeg(box);
     box.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>dashNav(el.dataset.nav));
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; } }
 function dashNav(k){ if(k==='points'){ switchTab('map'); return; } if(k==='trips'){ switchTab('planner'); plannerSub('trips'); return; } if(k==='vehicles'){ switchTab('settings'); return; } switchTab('planner'); plannerSub('jobs'); if(k==='jobs-done'){ jobVisible={open:false,planned:false,in_progress:false,done:true,cancelled:false}; } else { jobVisible={open:true,planned:true,in_progress:true,done:false,cancelled:false}; } renderJobs(); }
