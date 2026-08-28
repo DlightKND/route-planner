@@ -18,6 +18,25 @@ const ACUTE_FRACTION = 0.2;
 
 const DAY = 86400000;
 
+// Разбор даты в МЕСТНУЮ полночь.
+//
+// Ловушка спецификации: строка без времени ('2026-08-05') разбирается как
+// полночь UTC, а строка со временем ('2026-08-05T00:00:00') — как местная.
+// due_date уже приводился ко второму виду, а created_at брался как придёт.
+// Ниже dayDiff читает МЕСТНЫЕ части даты — и западнее Гринвича дата-строка
+// съезжала на день назад: полный срок заявки оказывался на день длиннее,
+// а вместе с ним и порог остроты. Тест на границе порога это ловил, но
+// только если гонять его в западной зоне, — в Киеве он был зелёным.
+//
+// Приводим оба входа к одному виду: чистая дата — местная полночь,
+// момент времени (created_at это timestamptz) — как есть.
+function parseLocalDate(v) {
+  if (!v) return null;
+  const s = String(v);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T00:00:00') : new Date(s);
+  return isNaN(d) ? null : d;
+}
+
 // Разница в календарных днях между двумя датами (b − a), округлённая.
 // Приведение к полуночи, чтобы часть суток не искажала счёт дней.
 function dayDiff(a, b) {
@@ -32,16 +51,16 @@ function dayDiff(a, b) {
 //     level: 'cold' | 'overdue' | 'acute' | 'calm'
 //     left:  дней до срока (отрицательное — просрочка), null для cold
 export function jobUrgency(job, now = new Date()) {
-  const due = job && job.due_date ? new Date(job.due_date + 'T00:00:00') : null;
-  if (!due || isNaN(due)) return { level: 'cold', left: null, span: null, threshold: null };
+  const due = job ? parseLocalDate(job.due_date) : null;
+  if (!due) return { level: 'cold', left: null, span: null, threshold: null };
 
   const left = dayDiff(now, due);
   if (left < 0) return { level: 'overdue', left, span: null, threshold: null };
 
   // created_at может отсутствовать — тогда процент считать не от чего,
   // откатываемся на абсолютный минимум.
-  const created = job.created_at ? new Date(job.created_at) : null;
-  const span = (created && !isNaN(created)) ? dayDiff(created, due) : null;
+  const created = parseLocalDate(job.created_at);
+  const span = created ? dayDiff(created, due) : null;
 
   if (span == null) {
     return { level: left <= MIN_ACUTE_DAYS ? 'acute' : 'calm', left, span: null, threshold: MIN_ACUTE_DAYS };
