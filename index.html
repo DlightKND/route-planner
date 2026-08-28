@@ -522,12 +522,23 @@
   .kcol.over { border-color: var(--accent); background: var(--panel); }
   /* Страница выезда. Колонок столько, сколько влезает по 380 px:
      на ноутбуке две, на широком мониторе три. Экономика — во всю строку. */
-  /* Потолок 1500 держит ровно три колонки: на четвёртую (4×380 + 3×14 =
-     1562) места уже не хватает. Без потолка карточка «Экономики» во всю
-     строку не даёт пустой четвёртой колонке схлопнуться, и три верхние
-     остаются по 400 px, оставляя дыру справа. */
-  .trip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
-    gap: 14px; align-items: start; max-width: 1500px; }
+  /* Колонок ровно три на любой ширине. auto-fit тут не годится: карточка
+     во всю строку («Экономика», «Работы») не даёт пустой четвёртой колонке
+     схлопнуться, и на широком мониторе три верхние застревали по 400 px
+     с дырой справа. Явные три доли тянутся за окном без потолка. */
+  .trip-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px; align-items: start; }
+  @media (max-width: 1360px) { .trip-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  /* У заявки карточек всего две плюс широкая: в трёх колонках третья ячейка
+     первого ряда оставалась пустой дырой. Две колонки её закрывают.
+     Поля при этом придерживаем: селект клиента во всю ширину карточки
+     в 860 px — это не форма, а транспарант. */
+  .view-job .trip-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 900px) { .view-job .trip-grid { grid-template-columns: 1fr; } }
+  .view-job .trip-grid input[type=text], .view-job .trip-grid input[type=number],
+  .view-job .trip-grid input[type=date], .view-job .trip-grid select { max-width: 420px; }
+  .view-job .trip-grid #jbWorkPick { max-width: none; }
+  @media (max-width: 900px)  { .trip-grid { grid-template-columns: 1fr; } }
   .trip-grid > .card { margin-bottom: 0; }
   .trip-grid > .card.trip-wide { grid-column: 1 / -1; }
   .econ-split { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
@@ -541,7 +552,7 @@
   .crumb:hover { text-decoration: underline; }
   .crumb-sep { color: var(--ink-faint); }
   .trip-head { display: flex; align-items: flex-start; gap: 20px; flex-wrap: wrap;
-    margin-bottom: 16px; max-width: 1500px; }
+    margin-bottom: 16px; }
   .trip-head .th-main { flex: 1 1 260px; min-width: 0; }
   .trip-head h2 { font-family: var(--mono); font-size: 18px; letter-spacing: .5px; color: var(--ink); font-weight: 600; }
   .th-sub { font-size: 12.5px; color: var(--ink-dim); margin-top: 5px; line-height: 1.5; }
@@ -598,8 +609,8 @@
 .a-dot{position:absolute;border-radius:50%;border:3px solid var(--panel);display:flex;align-items:center;
   justify-content:center;font-family:var(--mono);font-size:11px;font-weight:600;color:#fff;box-sizing:border-box}
 .a-stem{position:absolute;top:19px;height:2px;background:var(--line)}
-.a-today{position:relative;height:34px}
-.a-todaytxt{padding-top:5px;font-size:13px;color:var(--ink-dim)}
+/* Шапка без списка под ней — нижняя граница не нужна. */
+.agrp-h-solo{border-bottom:0}
 .a-break{position:relative;height:30px;display:flex;align-items:center}
 .a-break span{font-family:var(--mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint)}
 .a-break::before{content:'';position:absolute;left:-26px;top:8px;width:14px;height:14px;background:var(--bg)}
@@ -872,6 +883,44 @@
   </div>
 
   <!-- CATALOG -->
+  <!-- ── ЗАЯВКА: страница ───────────────────────────────────────────────
+       Раньше выезд был страницей, а заявка — модалкой, хотя в рельсе они
+       соседи одного уровня. Открываются теперь одинаково. -->
+  <div class="view view-job"><div class="pane scrollp">
+    <div class="crumbs"><button class="crumb" id="jobCancel">Заявки</button><span class="crumb-sep">›</span><span id="jobCrumb">Заявка</span></div>
+    <div class="trip-head">
+      <div class="th-main">
+        <h2 id="jobTitle">Заявка</h2>
+        <div class="th-sub" id="jobSub"></div>
+      </div>
+      <div class="th-econ" id="jobHeadEcon"></div>
+      <button class="btn amber" id="jobSave">Сохранить заявку</button>
+    </div>
+    <div class="err" id="jobErr"></div>
+    <div class="trip-grid">
+      <div class="card"><h3>О заявке</h3>
+        <div class="row"><div class="grow"><label>Клиент</label><select id="jbClient"></select></div></div>
+        <div class="row"><div class="grow"><label>Техника</label><select id="jbEquip"></select></div></div>
+        <div class="row" style="margin-top:6px;align-items:center"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin:0"><input type="checkbox" id="jbDepot" style="width:auto">Выполняется в депо</label><div class="grow" id="jbDepotWrap" style="display:none"><select id="jbDepotSel"></select></div></div>
+        <div class="hint" id="jbDepotHint" style="display:none">Технику привозит и забирает клиент. Заявка не попадёт в выезд, дорога и суточные не считаются. Ставка — «в депо» у плательщика.</div>
+        <div class="row"><div class="grow"><label>Статус</label><select id="jbStatus"><option value="open">открыта</option><option value="planned">запланирована</option><option value="in_progress">в работе</option><option value="done">закрыта</option><option value="cancelled">отменена</option></select></div><div class="grow"><label>Инженер</label><select id="jbEng"></select></div></div>
+      </div>
+
+      <div class="card"><h3>Сроки</h3>
+        <div class="row"><div class="grow"><label>Дата визита</label><input type="date" id="jbDate"></div><div class="grow"><label>Окно</label><input type="text" id="jbWindow" placeholder="9:00–11:00"></div></div>
+        <div class="row"><div class="grow"><label>Дедлайн SLA</label><input type="date" id="jbDue"></div><div class="grow"><label>Гарантия на ремонт, дней</label><input type="number" id="jbWarrDays" placeholder="0 — без гарантии"></div></div>
+        <div class="hint">Гарантия оформится при статусе «закрыта», если есть платные работы и привязана техника.</div>
+        <label style="margin-top:10px">Заметка</label><input type="text" id="jbNotes">
+      </div>
+
+      <div class="card trip-wide"><h3>Работы</h3>
+        <div class="row"><select id="jbWorkPick" class="grow"></select><button class="btn sm" id="jbWorkAdd">+ из каталога</button><button class="btn sm" id="jbCustomAdd">+ своя</button></div>
+        <div id="jbWorks" style="margin-top:10px"></div>
+        <div class="hint" id="jbTotals" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div></div>
+
   <!-- ── ВЫЕЗД: страница ────────────────────────────────────────────────
        Открывается из «Выездов», возврат — хлебной крошкой. Экономика
        разложена здесь же: раньше она открывалась окном поверх окна. -->
@@ -907,7 +956,14 @@
       </div>
 
       <div class="card"><h3>Маршрут <span class="cnt" id="tpRouteKm">—</span></h3>
-        <div id="tpRouteStops" style="max-height:260px;overflow:auto"></div>
+        <!-- В макете карта тут была, и не для красоты: список остановок
+             не показывает ни формы круга, ни того, что точка стоит в стороне
+             от него. Пунктир — план, сплошная — где машина прошла на самом деле. -->
+        <div id="tpMapWrap" style="display:none;margin-bottom:10px">
+          <div id="tpMap" class="emap"></div>
+          <div class="eleg"><span><i class="edash"></i>план</span><span><i class="esolid"></i>факт</span></div>
+        </div>
+        <div id="tpRouteStops" style="max-height:220px;overflow:auto"></div>
         <div class="hint" id="tpRouteStatus" style="margin-top:6px"></div>
         <button class="btn sm" id="tpEditMap" style="margin-top:8px;width:100%">Редактировать маршрут на карте</button>
         <div class="hint" style="margin-top:4px">Построение, старт/депо, буфер и изохрона — в планировщике на вкладке «Карта».</div>
@@ -1090,30 +1146,8 @@
 </div><!-- /.app -->
 
 <!-- job editor -->
-<div class="overlay" id="jobOverlay"><div class="modal">
-  <h3 id="jobTitle">Заявка</h3>
-  <div class="fgroup"><span class="fg-t">О заявке</span>
-  <div class="row"><div class="grow"><label>Клиент</label><select id="jbClient"></select></div><div class="grow"><label>Техника</label><select id="jbEquip"></select></div></div>
-  <div class="row" style="margin-top:6px;align-items:center"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin:0"><input type="checkbox" id="jbDepot" style="width:auto">Выполняется в депо</label><div class="grow" id="jbDepotWrap" style="display:none"><select id="jbDepotSel"></select></div></div>
-  <div class="hint" id="jbDepotHint" style="display:none">Технику привозит и забирает клиент. Заявка не попадёт в выезд, дорога и суточные не считаются. Ставка — «в депо» у плательщика.</div>
-  <div class="row"><div class="grow"><label>Статус</label><select id="jbStatus"><option value="open">открыта</option><option value="planned">запланирована</option><option value="in_progress">в работе</option><option value="done">закрыта</option><option value="cancelled">отменена</option></select></div><div class="grow"><label>Инженер</label><select id="jbEng"></select></div></div>
-  </div>
-  <div class="fgroup"><span class="fg-t">Сроки</span>
-  <div class="row"><div class="grow"><label>Дата визита</label><input type="date" id="jbDate"></div><div class="grow"><label>Окно</label><input type="text" id="jbWindow" placeholder="9:00–11:00"></div><div class="grow"><label>Дедлайн SLA</label><input type="date" id="jbDue"></div></div>
-  <div class="row"><div class="grow"><label>Гарантия на ремонт при закрытии, дней</label><input type="number" id="jbWarrDays" placeholder="0 — без гарантии"></div></div>
-  <div class="hint">Оформится при статусе «закрыта», если есть платные работы и привязана техника.</div>
-  <label>Заметка</label><input type="text" id="jbNotes">
-  </div>
-  <div class="fgroup"><span class="fg-t">Работы</span>
-  <div class="card" style="padding:12px;margin-top:0">
-    <div class="row"><select id="jbWorkPick" class="grow"></select><button class="btn sm" id="jbWorkAdd">+ из каталога</button><button class="btn sm" id="jbCustomAdd">+ своя</button></div>
-    <div id="jbWorks" style="margin-top:8px"></div>
-    <div class="hint" id="jbTotals" style="margin-top:6px"></div>
-  </div>
-  </div>
-  <div class="row" style="margin-top:16px"><button class="btn amber grow" id="jobSave">Сохранить заявку</button><button class="btn ghost" id="jobCancel">Отмена</button></div>
-  <div class="err" id="jobErr"></div>
-</div></div>
+<!-- Модалка заявки переехала во вкладку .view-job: заявка и выезд —
+     объекты одного уровня, и открываться должны одинаково. -->
 
 <!-- economics breakdown -->
 <div class="overlay" id="reschedOverlay"><div class="modal s">
@@ -1145,11 +1179,8 @@
   <div class="row" style="margin-top:14px"><button class="btn sm grow" id="vehCenter">Центрировать</button><button class="btn ghost grow" id="vehClose">Закрыть</button></div>
 </div></div>
 
-<div class="overlay" id="econOverlay"><div class="modal">
-  <h3>Экономика выезда</h3>
-  <div id="econBody"></div>
-  <div class="row" style="margin-top:14px"><button class="btn ghost grow" id="econClose">Закрыть</button></div>
-</div></div>
+<!-- Окно экономики выезда убрано: разбивка живёт врезкой на странице
+     выезда, карта план/факт — в карточке маршрута там же. -->
 
 <!-- base/start point picker -->
 <div class="overlay" id="baseOverlay"><div class="modal s">
