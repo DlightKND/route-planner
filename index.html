@@ -128,8 +128,8 @@
   textarea { resize: vertical; min-height: 60px; line-height: 1.5; }
   
   .btn { 
-    font-family: var(--mono); font-size: 12px; letter-spacing: .5px; font-weight: 500;
-    text-transform: uppercase; border: 1px solid var(--line); background: var(--panel-2); 
+    font-family: var(--mono); font-size: 12px; letter-spacing: .3px; font-weight: 500;
+    text-transform: none; border: 1px solid var(--line); background: var(--panel-2); 
     color: var(--ink); padding: 10px 16px; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   }
@@ -262,7 +262,13 @@
     letter-spacing: 1.1px; text-transform: uppercase; color: var(--ink-faint);
     margin-bottom: 10px; display: block; }
   .modal.l { width: min(900px, 94vw); }
-  .modal h3 { font-family: var(--mono); font-size: 15px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-ink); margin-bottom: 10px; }
+  /* Прописные моноширинные раньше были у пяти уровней сразу: раздел,
+     заголовок карточки, подпись поля, текст кнопки, заголовок блока.
+     Когда приёмом набрано всё, он перестаёт означать уровень.
+     Оставляем прописные за РАЗДЕЛАМИ и ПОДПИСЯМИ ПОЛЕЙ; заголовки окон
+     и карточек переводим в обычный регистр — они читаются быстрее,
+     а разделы наконец начинают выделяться. */
+  .modal h3 { font-family: var(--sans); font-size: 19px; font-weight: 600; letter-spacing: -.2px; text-transform: none; color: var(--ink); margin-bottom: 14px; }
   .modal .sub { font-size: 13px; color: var(--ink-dim); line-height: 1.5; margin-bottom: 16px; }
   
   .eqitem { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
@@ -500,6 +506,9 @@
 .revbar .rb-c{flex:1;display:flex;align-items:flex-end}
 .revbar .rb-f{width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:0}
 .revbar .rb-l{font-family:var(--mono);font-size:10px;color:var(--ink-faint);text-align:center;margin-top:5px}
+.map-pop .lay-t{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin:2px 0 7px}
+.map-pop .seg{margin:0}
+.map-pop .hint{line-height:1.7}
 .kempty{font-size:12.5px;color:var(--ink-faint);padding:14px 6px;text-align:center;line-height:1.5}
 .vm-stale{font-size:11.5px;color:var(--ink-faint);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:6px 9px;margin:8px 0 4px;line-height:1.45}
 .mc-per{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
@@ -618,8 +627,9 @@
       <button class="veh-btn" id="layersBtn" style="right:120px" title="Слои и режимы карты">◍ Слои</button>
       <div class="map-pop" id="layersPop">
         <h4>Слои карты</h4>
-        <label class="lay"><input type="checkbox" id="profitMode"><span>💰 Подсветить прибыльных клиентов</span></label>
-        <div class="hint" id="profitLegend" style="display:none"><span style="color:#16a34a">●</span> высокая · <span style="color:#84cc16">●</span> средняя · <span style="color:#eab308">●</span> низкая · <span style="color:#6b7280">●</span> нет прибыли</div>
+        <div class="lay-t">Цвет точек</div>
+        <div class="seg" id="colorMode"><button class="on" data-cm="urgency">срочность</button><button data-cm="profit">прибыль</button><button data-cm="own">свой</button></div>
+        <div class="hint" id="profitLegend" style="margin:8px 0 12px"></div>
         <label class="lay"><input type="checkbox" id="ptAlert"><span>⚠ Только требующие внимания <b id="alertCnt"></b></span></label>
         <div class="hint">Просрочен контакт или подходит ТО. Остальные точки на карте гаснут.</div>
       </div><div class="mode-tag" id="modeTag">● Кликни по карте</div><div class="map-summary" id="mapSummary"></div><div id="map"></div></div>
