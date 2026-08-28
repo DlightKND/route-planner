@@ -296,7 +296,7 @@ async function loadAll(){ $('dataStatus').textContent='Загрузка…';
   const [cRes,eRes]=await Promise.all([ sb.from('clients').select('*').is('deleted_at',null).order('created_at'), sb.from('equipment').select('*').is('deleted_at',null).order('created_at') ]);
   if(cRes.error){ $('dataStatus').innerHTML='<span class="err">'+esc(cRes.error.message)+'</span>'; return; }
   clients=cRes.data||[]; eqByClient={}; (eRes.data||[]).forEach(e=>{ (eqByClient[e.client_id]=eqByClient[e.client_id]||[]).push(e); });
-  $('dataStatus').innerHTML='<span class="ok">Точек: '+clients.length+'</span>';
+  $('dataStatus').innerHTML='<span class="ok">На карте: '+clients.length+'</span>';
   await loadReadings(); await loadClientStats();
   render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),{padding:[40,40]}); else fitUkraine(); }
 async function refreshStats(){ if(!canWrite()) return; await loadClientStats(); renderMarkers(); }
@@ -378,17 +378,50 @@ function renderEqMarkers(){ eqMarkers.clearLayers(); if(!revealedClient) return;
 let pointFilter='all';
 function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('list');
   const onlyAlert=$('ptAlert')&&$('ptAlert').checked;
-  const res=clients.filter(c=>{ if(pointFilter==='client'&&c.is_base) return false; if(pointFilter==='base'&&!c.is_base) return false; if(onlyAlert && !(eqByClient[c.id]||[]).some(e=>eqAlert(e).any)) return false; return !q||c.name.toLowerCase().includes(q); });
+
+  // Тревоги считаем ОДИН раз на отрисовку. Раньше eqAlert() звался дважды
+  // на каждого клиента — в фильтре и в подсчёте, — а внутри он идёт через
+  // eqService и eqRate по всем показаниям соседней техники. На каждое
+  // нажатие клавиши в поиске это давало квадратичную работу.
+  const alerts={}, oldestVisit={};
+  clients.forEach(c=>{
+    const list=eqByClient[c.id]||[];
+    alerts[c.id]=list.filter(e=>eqAlert(e).any).length;
+    // Самый давний визит по технике клиента: нет визита — считаем «никогда»,
+    // такие точки должны идти первыми.
+    let ov=null;
+    list.forEach(e=>{ const v=e.last_visit||null;
+      if(!v){ ov=''; return; }
+      if(ov===null||(ov!==''&&v<ov)) ov=v; });
+    oldestVisit[c.id]=(ov===null?'':ov);
+  });
+
+  const res=clients.filter(c=>{ if(pointFilter==='client'&&c.is_base) return false; if(pointFilter==='base'&&!c.is_base) return false; if(onlyAlert && !alerts[c.id]) return false; return !q||c.name.toLowerCase().includes(q); });
+
+  // Порядок по делу, а не по времени заведения: сперва то, где что-то
+  // требует внимания, потом давно не навещённые, потом по алфавиту.
+  res.sort((x,y)=>{
+    const d=(alerts[y.id]||0)-(alerts[x.id]||0); if(d) return d;
+    const vx=oldestVisit[x.id], vy=oldestVisit[y.id];
+    if(vx!==vy) return vx<vy?-1:1;               // пустая строка = никогда, идёт первой
+    return x.name.localeCompare(y.name,'uk');
+  });
+
   box.innerHTML=res.length?'':'<div class="hint">Ничего не найдено.</div>';
-  res.slice(0,80).forEach(c=>{ const eqn=(eqByClient[c.id]||[]).length; const aln=(eqByClient[c.id]||[]).filter(e=>eqAlert(e).any).length; const d=document.createElement('div'); d.className='pt'; d.dataset.cid=c.id; d.onmouseenter=()=>hlMarker(c.id,true); d.onmouseleave=()=>hlMarker(c.id,false);
+  res.slice(0,80).forEach(c=>{ const eqn=(eqByClient[c.id]||[]).length; const aln=alerts[c.id]||0; const d=document.createElement('div'); d.className='pt'; d.dataset.cid=c.id; d.onmouseenter=()=>hlMarker(c.id,true); d.onmouseleave=()=>hlMarker(c.id,false);
     const tag=c.is_base?'<span class="pill">депо</span>':'<span class="pill">клиент</span>';
-    d.innerHTML='<div class="nm"><span class="dot" style="background:'+esc(c.color||'#9aa1ad')+'"></span>'+esc(c.name)+' '+tag+(c.is_base?'':' <span class="pill">техники '+eqn+'</span>')+(aln>0?' <span class="pill warn">⚠ '+aln+'</span>':'')+'</div>'+
+    // Координаты уехали в подсказку: диспетчер по ним не работает, а строку
+    // занимали. Туда же полное имя — в карточке оно обрезано двумя строками.
+    const tip=esc(c.name)+' · '+(+c.lat).toFixed(5)+', '+(+c.lng).toFixed(5);
+    // Кнопки: было пять, стало три. Показ на карте переехал на само имя —
+    // это естественнее отдельной кнопки «⊙», которую ещё надо объяснять.
+    d.innerHTML='<div class="nm" data-fly="'+c.id+'" title="'+tip+'"><span class="dot" style="background:'+esc(c.color||'#9aa1ad')+'"></span>'+esc(c.name)+' '+tag+(c.is_base?'':' <span class="pill">техники '+eqn+'</span>')+(aln>0?' <span class="pill warn">⚠ '+aln+'</span>':'')+'</div>'+
       (c.description?'<div class="ds">'+esc(c.description)+'</div>':'')+
-      '<div class="meta">'+(+c.lat).toFixed(4)+', '+(+c.lng).toFixed(4)+'</div>'+
-      '<div class="acts"><button class="btn sm ghost" data-fly="'+c.id+'" title="Показать на карте">⊙</button>'+(canWrite()?'<button class="btn sm" data-rt="'+c.id+'">+ марш.</button>':'')+(c.is_base?'':'<button class="btn sm" data-eq="'+c.id+'">техника</button>')+
-      (canWrite()?'<button class="btn sm" data-edit="'+c.id+'">ред.</button><button class="btn sm ghost" data-del="'+c.id+'" title="Удалить точку">×</button>':'')+'</div>';
+      '<div class="acts">'+(canWrite()?'<button class="btn sm" data-rt="'+c.id+'">+ маршрут</button>':'')+(c.is_base?'':'<button class="btn sm" data-eq="'+c.id+'">техника</button>')+
+      (canWrite()?'<button class="btn sm ghost" data-edit="'+c.id+'">ред.</button><button class="btn sm ghost" data-del="'+c.id+'" title="Удалить точку">×</button>':'')+'</div>';
     box.appendChild(d); });
-  box.querySelectorAll('[data-fly]').forEach(b=>b.onclick=()=>{ const c=clients.find(x=>x.id==b.dataset.fly); switchTab('map'); map.flyTo([c.lat,c.lng],14); });
+  box.querySelectorAll('[data-fly]').forEach(b=>{ b.style.cursor='pointer';
+    b.onclick=()=>{ const c=clients.find(x=>x.id==b.dataset.fly); if(c){ switchTab('map'); map.flyTo([c.lat,c.lng],14); } }; });
   box.querySelectorAll('[data-rt]').forEach(b=>b.onclick=()=>{ const c=clients.find(x=>x.id==b.dataset.rt); if(!c) return; if(c.is_base) addBaseStop(c.id); else addClientToRoute(c.id); });
   box.querySelectorAll('[data-eq]').forEach(b=>b.onclick=()=>openEquip(b.dataset.eq));
   box.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editClient(b.dataset.edit));
@@ -408,8 +441,18 @@ function addAvoidZone(ll){ if(!canWrite()) return; appSettings.avoid_zones=appSe
 window.avoidRadius=function(id,delta){ if(!canWrite()) return; const z=(appSettings.avoid_zones||[]).find(x=>x.id===id); if(!z) return; z.r=Math.max(50,Math.min(3000,(z.r||150)+delta)); saveAvoidZones(); renderAvoidZones(); };
 window.avoidDel=function(id){ if(!canWrite()) return; appSettings.avoid_zones=(appSettings.avoid_zones||[]).filter(x=>x.id!==id); saveAvoidZones(); renderAvoidZones(); map.closePopup(); };
 function avoidPolygons(){ const zs=appSettings.avoid_zones||[]; if(!zs.length||typeof turf==='undefined') return null; const coords=[]; zs.forEach(z=>{ try{ const c=turf.circle([z.lng,z.lat],(z.r||150)/1000,{units:'kilometers',steps:20}); if(c&&c.geometry) coords.push(c.geometry.coordinates); }catch(e){} }); return coords.length?{type:'MultiPolygon',coordinates:coords}:null; }
-function toggleAvoid(on){ avoidModeOn=on; const b=$('avoidMode'); if(b) b.classList.toggle('active',on); const h=$('avoidHint'); if(h) h.style.display=on?'block':'none'; if(on&&addModeOn) toggleAdd(false); if(on&&wpModeOn){ wpModeOn=false; const w=$('rWpMode'); if(w) w.classList.remove('active'); } map.getContainer().style.cursor=on?'crosshair':''; }
-if($('avoidMode')) $('avoidMode').onclick=()=>toggleAvoid(!avoidModeOn);
+function toggleAvoid(on){ avoidModeOn=on; const b=$('avoidMode'); if(b) b.checked=on; const h=$('avoidHint'); if(h) h.style.display=on?'block':'none'; if(on&&addModeOn) toggleAdd(false); if(on&&wpModeOn){ wpModeOn=false; const w=$('rWpMode'); if(w) w.classList.remove('active'); } map.getContainer().style.cursor=on?'crosshair':''; }
+// Объезды переехали в меню слоёв и стали флажком: это режим карты,
+// а не однократное действие, и флажок честнее кнопки.
+if($('avoidMode')) $('avoidMode').onchange=()=>toggleAvoid($('avoidMode').checked);
+if($('layersBtn')) $('layersBtn').onclick=(e)=>{ e.stopPropagation();
+  const p=$('layersPop'); if(!p) return; const on=p.classList.toggle('on');
+  $('layersBtn').classList.toggle('on',on); };
+// Клик мимо закрывает меню. По самому меню — нет, иначе флажок внутри
+// закрывал бы его при каждом переключении.
+document.addEventListener('click',(e)=>{ const p=$('layersPop'); if(!p||!p.classList.contains('on')) return;
+  if(p.contains(e.target)||e.target===$('layersBtn')) return;
+  p.classList.remove('on'); const b=$('layersBtn'); if(b) b.classList.remove('on'); });
 $('cancelBtn').onclick=()=>{ resetForm(); toggleAdd(false); $('pointOverlay').classList.remove('on'); };
 function resetForm(){ $('fName').value='';$('fDesc').value='';$('fColor').value='#9aa1ad';$('fBase').checked=false;$('geoQuery').value='';$('geoResults').innerHTML='';$('formErr').textContent=''; pendingLatLng=null; if(pendingMarker){map.removeLayer(pendingMarker);pendingMarker=null;} }
 $('saveBtn').onclick=async ()=>{ const name=$('fName').value.trim(); if(!name){ $('formErr').textContent='Введи название.'; return; } if(!pendingLatLng){ $('formErr').textContent='Задай точку на карте или по адресу.'; return; }
@@ -1993,7 +2036,7 @@ if($('vehBtn')) $('vehBtn').onclick=()=>{
 };
 
 // ---------- map route planner ----------
-let rStops=[], rStart=null, rRoute={km:0,driveH:0,geometry:null}, rVariants=[], rVarSel=0, bufferKm=0, isoMin=0, places=[], plannerTripId=null, pendingLinkClient=null, baseMode='start', baseAfter=null, endDeclined=false;
+let rStops=[], rStart=null, rRoute={km:0,driveH:0,geometry:null}, rVariants=[], rVarSel=0, bufferKm=0, isoMin=0, places=[], plannerTripId=null, pendingLinkClient=null, baseMode='start', baseAfter=null, endDeclined=false, rBusy=false;
 async function loadPlaces(){ places=clients.filter(c=>c.is_base); }
 function routeStopsAll(){ return (rStart?[{type:'start',name:rStart.name,lat:rStart.lat,lng:rStart.lng,description:rStart.description||''}]:[]).concat(rStops); }
 function routeHasClient(cid){ return rStops.some(s=>s.clientId===cid); }
@@ -2007,9 +2050,30 @@ window.addEquipToRoute=function(cid,eid){ const c=clients.find(x=>x.id==cid); co
 async function maybePromptJob(cid){ try{ const {data}=await sb.from('jobs').select('id').is('deleted_at',null).eq('client_id',cid).not('status','in','(done,cancelled)'); if(data&&data.length) return; }catch(e){ return; } pendingLinkClient=cid; const c=clients.find(x=>x.id==cid); $('linkText').textContent='У клиента «'+(c?c.name:'')+'» нет открытых заявок. Создать заявку как основание выезда?'; $('linkOverlay').classList.add('on'); }
 function ringColor(){ return theme.mode==='light'?'rgba(0,0,0,0.6)':'rgba(255,255,255,0.85)'; }
 function drawRouteLine(layer,geometry){ if(!geometry||!geometry.coordinates) return; const ll=geometry.coordinates.map(c=>[c[1],c[0]]); L.polyline(ll,{color:ringColor(),weight:5,opacity:1,lineJoin:'round',lineCap:'round'}).addTo(layer); }
+// Главная кнопка — одна, и та, что уместна сейчас.
+//
+// Раньше «+ Точка на карте», «Построить маршрут» и «Сохранить как выезд»
+// были одинаково жёлтыми, и интерфейс не подсказывал следующий шаг.
+// Хуже: «Сохранить» нажималось при нуле точек и отвечало ошибкой — то есть
+// предлагало действие, заведомо обречённое.
+//
+// Состояний три: точек мало → добавляем; точек хватает, маршрута нет →
+// строим; маршрут построен → сохраняем.
+function updateRouteActions(){
+  if(rBusy) return;                    // во время расчёта кнопками распоряжается doBuildRoute
+  const enough=routeStopsAll().length>=2;
+  const built=!!(rRoute&&rRoute.km>0);
+  const set=(id,amber,disabled)=>{ const b=$(id); if(!b) return;
+    b.classList.toggle('amber',!!amber); b.disabled=!!disabled; };
+  set('rWpMode',   !enough,        false);
+  set('rBuild',    enough&&!built, !enough);
+  set('rOpt',      false,          !enough);
+  set('rSaveTrip', built,          !built);
+}
+
 function drawStops(){ routeLayer.clearLayers(); const stops=routeStopsAll();
   drawRouteLine(routeLayer, rRoute.geometry);
-  stops.forEach((s,i)=>{ const ic=L.divIcon({className:'',html:'<div style="background:var(--accent);color:var(--on-accent);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font:600 11px var(--mono);border:2.5px solid '+ringColor()+';pointer-events:none">'+(i+1)+'</div>',iconSize:[20,20],iconAnchor:[10,10]}); L.marker([s.lat,s.lng],{icon:ic,interactive:false}).addTo(routeLayer); }); updateMapSummary(); }
+  stops.forEach((s,i)=>{ const ic=L.divIcon({className:'',html:'<div style="background:var(--accent);color:var(--on-accent);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font:600 11px var(--mono);border:2.5px solid '+ringColor()+';pointer-events:none">'+(i+1)+'</div>',iconSize:[20,20],iconAnchor:[10,10]}); L.marker([s.lat,s.lng],{icon:ic,interactive:false}).addTo(routeLayer); }); updateMapSummary(); updateRouteActions(); }
 function updateMapSummary(){ const el=$('mapSummary'); if(!el) return; const n=routeStopsAll().length; if(rRoute.km>0 && n){ el.innerHTML='<span><b>'+rRoute.km.toFixed(1)+'</b> км</span><span><b>'+rRoute.driveH.toFixed(1)+'</b> ч</span><span><b>'+n+'</b> точек</span>'; el.classList.add('on'); } else el.classList.remove('on'); }
 function routePtCard(tag,s,idx,num,movable){ const d=document.createElement('div'); d.className='pt';
   d.innerHTML='<div class="nm"><span class="pill">'+num+'</span> '+esc(s.name||'точка')+' <span class="pill">'+tag+'</span></div>'+(s.description?'<div class="ds">'+esc(s.description)+'</div>':'')+'<div class="meta">'+(+s.lat).toFixed(4)+', '+(+s.lng).toFixed(4)+'</div>'+'<div class="acts">'+(movable?('<button class="btn sm ghost" data-rup="'+idx+'">↑</button><button class="btn sm ghost" data-rdn="'+idx+'">↓</button><button class="btn sm ghost" data-rrm="'+idx+'">×</button>'):('<button class="btn sm ghost" data-brm="'+idx+'">×</button>'))+'</div>'; return d; }
@@ -2091,16 +2155,15 @@ async function optimizeOrder(){ if(rBusy) return; if(orsKeyMissing()){ orsMissin
       const fixedStart=(fixedStartIdx!=null)?rStops[fixedStartIdx]:null;
       rStops=[].concat(fixedStart?[fixedStart]:[], orderedVisit, placeStops); renderRoutePanel(); resetBuilt();
       $('rStatus').textContent='Порядок оптимизирован с учётом объездов (~'+(res.len/1000).toFixed(0)+' км), строю маршрут…';
-      rBusy=false; $('rOpt').disabled=false; $('rBuild').disabled=false; await doBuildRoute(); return;
+      rBusy=false; updateRouteActions(); await doBuildRoute(); return;
     }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка оптимизации: '+esc(e.message||e)+'</span>'; return; }
-    finally{ rBusy=false; $('rOpt').disabled=false; $('rBuild').disabled=false; } }
+    finally{ rBusy=false; updateRouteActions(); } }
   $('rStatus').textContent='Оптимизирую порядок…'; rBusy=true; $('rOpt').disabled=true; $('rBuild').disabled=true;
   try{ const data=await orsPost('https://api.openrouteservice.org/optimization',body); const route=data.routes&&data.routes[0]; if(!route) throw new Error('оптимизатор не нашёл решения');
     const orderIds=route.steps.filter(st=>st.type==='job').map(st=>st.job); const orderedVisit=orderIds.map(id=>rStops[id]).filter(Boolean); const fixedStart=(fixedStartIdx!=null)?rStops[fixedStartIdx]:null;
     rStops=[].concat(fixedStart?[fixedStart]:[], orderedVisit, placeStops); renderRoutePanel(); resetBuilt(); $('rStatus').textContent='Порядок оптимизирован, строю маршрут…';
-    rBusy=false; $('rOpt').disabled=false; $('rBuild').disabled=false; await doBuildRoute(); return;
-  }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка оптимизации: '+esc(e.message||e)+'</span>'; } finally{ rBusy=false; $('rOpt').disabled=false; $('rBuild').disabled=false; } }
-let rBusy=false;
+    rBusy=false; updateRouteActions(); await doBuildRoute(); return;
+  }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка оптимизации: '+esc(e.message||e)+'</span>'; } finally{ rBusy=false; updateRouteActions(); } }
 
 function avoidHits(stops){ const zs=appSettings.avoid_zones||[]; if(!zs.length||typeof turf==='undefined') return []; const out=[];
   stops.forEach(s=>{ zs.forEach(z=>{ try{ if(turf.distance([z.lng,z.lat],[s.lng,s.lat],{units:'kilometers'})*1000<=(z.r||150)) out.push(s.name||'точка'); }catch(e){} }); }); return [...new Set(out)]; }
@@ -2381,7 +2444,7 @@ async function doBuildRoute(){ if(rBusy) return; const stops=dedupeStops(routeSt
     rVariants=[mergeFeatures(legs)]; rVarSel=0; applyRVariant(); renderRVariants();
     if(skipped.length) $('rStatus').innerHTML+='<div class="hint" style="color:var(--red);margin-top:4px">Объезды не применены: '+esc(skipped.join(' · '))+'</div>';
     else $('rStatus').innerHTML+='<span class="hint" style="margin:0"> · по участкам</span>';
-  }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка: '+esc(e.message||e)+'</span>'; } finally{ rBusy=false; $('rBuild').disabled=false; if($('rOpt')) $('rOpt').disabled=false; } }
+  }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка: '+esc(e.message||e)+'</span>'; } finally{ rBusy=false; updateRouteActions(); } }
 function applyRVariant(){ const f=rVariants[rVarSel]; if(!f) return; const sum=(f.properties&&f.properties.summary)||{}; rRoute={km:(+sum.distance||0)/1000,driveH:(+sum.duration||0)/3600,geometry:f.geometry}; $('rStatus').innerHTML='<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'+((appSettings.avoid_zones||[]).length?('<span class="hint" style="margin:0"> · объезды: '+appSettings.avoid_zones.length+'</span>'):''); drawStops(); rBuildBuffer(); }
 function renderRVariants(){ const box=$('rVariants'); if(rVariants.length<2){ box.innerHTML=''; return; } box.innerHTML='';
   rVariants.forEach((f,i)=>{ const sum=(f.properties&&f.properties.summary)||{}; const b=document.createElement('button'); b.className='btn sm'+(i===rVarSel?' amber':''); b.style.cssText='margin:0 6px 6px 0'; b.textContent='№'+(i+1)+' · '+((+sum.distance||0)/1000).toFixed(1)+'км · '+Math.round((+sum.duration||0)/60)+'мин'; b.onclick=()=>{ rVarSel=i; applyRVariant(); renderRVariants(); }; box.appendChild(b); }); }
