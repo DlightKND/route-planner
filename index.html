@@ -25,6 +25,29 @@
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2); --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
   }
   
+  /* ── Шкала ───────────────────────────────────────────────────────────
+     За основу взята шкала IBM Carbon, а не Material. Причины две.
+     Первая: наш шрифт — IBM Plex, и Carbon построен вокруг него, включая
+     интерлиньяж. Вторая: Carbon сделан для плотных рабочих интерфейсов,
+     а Material — для потребительских мобильных: его 16dp паддинги, 48dp
+     цели и 28px скругления раздули бы панель, которую мы весь этот заход
+     худили.
+     Из Carbon НЕ берём его прямые углы (radius 0) — скругления это лицо
+     приложения. Их просто свели с четырнадцати значений к четырём.
+
+     Шкала отступов Carbon 2x: 2 / 4 / 8 / 12 / 16 / 24 / 32 / 40. */
+  :root {
+    --sp-1: 2px;  --sp-2: 4px;  --sp-3: 8px;  --sp-4: 12px;
+    --sp-5: 16px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
+    /* Радиусы: мелкий / карточка / плавающая панель / пилюля */
+    --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-pill: 999px;
+    /* Кегли: было двадцать значений, включая 8.5, 9.5, 10.5, 11.5, 12.5
+       и 13.5 — полупиксельный разнобой и есть самый честный признак того,
+       что размер подбирали на глаз. Осталось девять ступеней. */
+    --fs-1: 10px; --fs-2: 11px; --fs-3: 12px; --fs-4: 13px; --fs-5: 14px;
+    --fs-6: 16px; --fs-7: 20px; --fs-8: 24px; --fs-9: 32px;
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; max-width: 100%; overflow-x: hidden; }
   body { font-family: var(--sans); background: var(--bg); color: var(--ink); overflow: hidden; -webkit-font-smoothing: antialiased; }
@@ -42,20 +65,20 @@
   .app { display: flex; height: 100%; height: 100dvh; min-height: 0; overflow: hidden; }
   .rail {
     width: 76px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
-    display: flex; flex-direction: column; align-items: center; padding: 12px 0 10px;
+    display: flex; flex-direction: column; align-items: center; padding: var(--sp-4) 0 var(--sp-3);
     z-index: 100; overflow: hidden;
   }
-  .rail-brand { font-family: var(--mono); font-size: 12px; font-weight: 600;
-    letter-spacing: .5px; color: var(--accent-line); margin-bottom: 14px; display: flex;
-    flex-direction: column; align-items: center; gap: 4px; }
+  .rail-brand { font-family: var(--mono); font-size: var(--fs-3); font-weight: 600;
+    letter-spacing: .5px; color: var(--accent-line); margin-bottom: var(--sp-4); display: flex;
+    flex-direction: column; align-items: center; gap: var(--sp-2); }
   .rail-brand img { height: 20px; display: none; }
-  .rail-items { display: flex; flex-direction: column; gap: 2px; width: 100%; align-items: center; }
-  .rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px;
-    width: 100%; align-items: center; padding-top: 10px; }
+  .rail-items { display: flex; flex-direction: column; gap: var(--sp-1); width: 100%; align-items: center; }
+  .rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-1);
+    width: 100%; align-items: center; padding-top: var(--sp-3); }
   .nav-i {
-    width: 62px; padding: 9px 2px; border: none; background: transparent; border-radius: 10px;
-    display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer;
-    font-family: var(--mono); font-size: 9px; letter-spacing: .2px; color: var(--ink-faint);
+    width: 62px; padding: var(--sp-3) var(--sp-1); border: none; background: transparent; border-radius: var(--r-sm);
+    display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); cursor: pointer;
+    font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .2px; color: var(--ink-faint);
     text-transform: uppercase; transition: background .15s ease, color .15s ease;
   }
   .nav-i svg { width: 20px; height: 20px; flex: none; }
@@ -64,24 +87,24 @@
   .nav-i.active { background: var(--panel-2); color: var(--ink); font-weight: 600; }
   .nav-i.active svg { color: var(--accent-line); }
   .nav-i.hidden { display: none; }
-  .rail .who { font-family: var(--mono); font-size: 8.5px; color: var(--ink-faint);
-    text-align: center; line-height: 1.3; margin-top: 8px; padding: 0 4px; word-break: break-all; }
+  .rail .who { font-family: var(--mono); font-size: var(--fs-1); color: var(--ink-faint);
+    text-align: center; line-height: 1.3; margin-top: var(--sp-3); padding: 0 var(--sp-2); word-break: break-all; }
   .rail .who b { display: block; color: var(--ink-dim); text-transform: uppercase; }
 
   .topbar { 
     height: 56px; background: var(--panel); border-bottom: 1px solid var(--line); 
-    display: flex; align-items: center; padding: 0 16px; gap: 12px;
+    display: flex; align-items: center; padding: 0 var(--sp-5); gap: var(--sp-4);
     box-shadow: 0 1px 4px rgba(0,0,0,0.05); z-index: 100; position: relative; max-width: 100vw; overflow: hidden;
   }
-  .brand { display: flex; align-items: center; gap: 8px; }
+  .brand { display: flex; align-items: center; gap: var(--sp-3); }
   .brand img { height: 26px; display: none; } 
-  .brand h1 { font-family: var(--mono); font-size: 15px; font-weight: 600; letter-spacing: .5px; }
+  .brand h1 { font-family: var(--mono); font-size: var(--fs-5); font-weight: 600; letter-spacing: .5px; }
   .brand h1 b { color: var(--accent-ink); }
   
-  .tabs { display: flex; margin-left: 12px; }
+  .tabs { display: flex; margin-left: var(--sp-4); }
   .tab { 
-    padding: 0 16px; height: 56px; display: flex; align-items: center; 
-    font-family: var(--mono); font-size: 12px; letter-spacing: .6px; 
+    padding: 0 var(--sp-5); height: 56px; display: flex; align-items: center; 
+    font-family: var(--mono); font-size: var(--fs-3); letter-spacing: .6px; 
     text-transform: uppercase; color: var(--ink-dim); cursor: pointer; 
     border-bottom: 2px solid transparent; transition: all 0.2s ease;
   }
@@ -90,39 +113,38 @@
   .tab.hidden { display: none; }
   
   .spacer { flex: 1; }
-  .who { font-family: var(--mono); font-size: 11px; letter-spacing: .5px; color: var(--ink-dim); margin-right: 8px; } 
+  .who { font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; color: var(--ink-dim); margin-right: var(--sp-3); } 
   .who b { color: var(--ink); text-transform: uppercase; }
   
   .icobtn { 
     display: flex; align-items: center; justify-content: center; 
-    width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 8px; 
-    background: var(--panel-2); color: var(--ink); cursor: pointer; font-size: 15px;
+    width: 36px; height: 36px; border: 1px solid var(--line); border-radius: var(--r-sm); 
+    background: var(--panel-2); color: var(--ink); cursor: pointer; font-size: var(--fs-5);
     transition: all 0.2s ease; user-select: none;
   }
   .icobtn:hover { border-color: var(--ink-dim); filter: brightness(1.18); box-shadow: var(--shadow-sm); }
   
   .pop { 
     position: fixed; top: 64px; right: 16px; z-index: 9999; 
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; 
-    padding: 16px; width: 260px; box-shadow: var(--shadow-lg); display: none; 
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); 
+    padding: var(--sp-5); width: 260px; box-shadow: var(--shadow-lg); display: none; 
   }
   .pop.on { display: block; animation: popIn 0.2s ease-out; }
   @keyframes popIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-  .pop h4 { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 12px; }
+  .pop h4 { font-family: var(--mono); font-size: var(--fs-2); letter-spacing: 1px; text-transform: uppercase; color: var(--ink-faint); margin-bottom: var(--sp-4); }
   
-  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 10px; background: var(--panel-2); }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; margin-bottom: var(--sp-3); background: var(--panel-2); }
   .seg button { 
     flex: 1; background: transparent; border: none; color: var(--ink-dim); 
-    font-family: var(--mono); font-size: 11px; letter-spacing: .5px; 
-    text-transform: uppercase; padding: 10px; cursor: pointer; transition: all 0.2s ease;
-  }
+    font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; 
+    text-transform: uppercase; padding: var(--sp-3); cursor: pointer; transition: all 0.2s ease; white-space: nowrap; }
   .seg button:hover { color: var(--ink); }
   .seg button.on { background: var(--accent); color: var(--on-accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
   
-  .ph { margin: auto; max-width: 520px; text-align: center; padding: 40px; }
-  .ph .ic { font-size: 32px; margin-bottom: 12px; }
-  .ph h3 { font-family: var(--mono); font-size: 15px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-ink); margin-bottom: 10px; }
-  .ph p { color: var(--ink-dim); font-size: 14px; line-height: 1.6; }
+  .ph { margin: auto; max-width: 520px; text-align: center; padding: var(--sp-8); }
+  .ph .ic { font-size: var(--fs-9); margin-bottom: var(--sp-4); }
+  .ph h3 { font-family: var(--mono); font-size: var(--fs-5); letter-spacing: 1px; text-transform: uppercase; color: var(--accent-ink); margin-bottom: var(--sp-3); }
+  .ph p { color: var(--ink-dim); font-size: var(--fs-5); line-height: 1.6; }
   
   /* .views — второй ребёнок флекса .app. Без flex-grow он схлопывался
      до ширины контента (сайдбар 380 px), карта получала 0 и уезжала
@@ -146,7 +168,7 @@
     position: absolute; left: 16px; top: 16px;
     width: 360px; min-width: 0; z-index: 500;
     height: auto; max-height: calc(100% - 32px);
-    border: 1px solid var(--line); border-radius: 14px;
+    border: 1px solid var(--line); border-radius: var(--r-lg);
     box-shadow: var(--shadow-lg); overflow: hidden;
     background: color-mix(in srgb, var(--panel) 90%, transparent);
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -157,10 +179,10 @@
   /* Зум Leaflet сидит в том же верхнем левом углу, что и карточка. */
   .view-map .leaflet-top.leaflet-left { margin-left: 392px; }
 
-  .scroll { overflow-y: auto; flex: 1; padding-bottom: 20px; }
-  .side-handle { display: none; align-items: center; justify-content: center; gap: 8px; height: 46px; flex: none; cursor: pointer; user-select: none; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim); position: relative; border-bottom: 1px solid var(--line); }
+  .scroll { overflow-y: auto; flex: 1; padding-bottom: var(--sp-5); }
+  .side-handle { display: none; align-items: center; justify-content: center; gap: var(--sp-3); height: 46px; flex: none; cursor: pointer; user-select: none; font-family: var(--mono); font-size: var(--fs-2); letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim); position: relative; border-bottom: 1px solid var(--line); }
   .view-map .side-handle::before { content: none; }
-  .side-handle::before { content: ''; position: absolute; top: 7px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
+  .side-handle::before { content: ''; position: absolute; top: 7px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; border-radius: var(--r-pill); background: var(--line); }
   .side-handle .sh-chev { transition: transform .2s; }
   .side.sheet-collapsed .side-handle .sh-chev { transform: rotate(180deg); }
   /* anywhere рубил «надлісниц-тво» посреди слога: в колонке 360 px длинные
@@ -168,23 +190,23 @@
      словам и лезет внутрь слова только когда оно одно шире колонки. */
   .scroll, .pane.scrollp { overflow-wrap: break-word; word-break: normal; }
   .scroll::-webkit-scrollbar { width: 6px; } 
-  .scroll::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: 4px; }
+  .scroll::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: var(--r-pill); }
   
-  .block { border-bottom: 1px solid var(--line); padding: 16px 20px; }
+  .block { border-bottom: 1px solid var(--line); padding: var(--sp-5) var(--sp-5); }
   .block h2 { 
-    font-family: var(--mono); font-size: 12px; letter-spacing: 1.2px; 
-    text-transform: uppercase; color: var(--ink-faint); margin-bottom: 12px; 
+    font-family: var(--mono); font-size: var(--fs-3); letter-spacing: 1.2px; 
+    text-transform: uppercase; color: var(--ink-faint); margin-bottom: var(--sp-4); 
     display: flex; justify-content: space-between; align-items: center;
   }
-  .block h2 .cnt { color: var(--accent-ink); font-weight: 600; background: var(--panel-2); padding: 2px 8px; border-radius: 12px; font-size: 10px; }
+  .block h2 .cnt { color: var(--accent-ink); font-weight: 600; background: var(--panel-2); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-1); }
   
-  label { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: .5px; color: var(--ink-dim); text-transform: uppercase; margin: 12px 0 6px; }
+  label { display: block; font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; color: var(--ink-dim); text-transform: uppercase; margin: var(--sp-4) 0 var(--sp-3); }
   input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=number], select, textarea { 
     width: 100%; background: var(--panel-2); border: 1px solid var(--line); 
-    border-radius: 8px; color: var(--ink); font-family: var(--sans); font-size: 14px; 
-    padding: 10px 12px; outline: none; transition: all 0.2s ease;
+    border-radius: var(--r-sm); color: var(--ink); font-family: var(--sans); font-size: var(--fs-5); 
+    padding: var(--sp-3) var(--sp-4); outline: none; transition: all 0.2s ease;
   }
-  input[type=color] { width: 100%; height: 40px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 4px; cursor: pointer; }
+  input[type=color] { width: 100%; height: 40px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-2); cursor: pointer; }
   input:focus, textarea:focus, select:focus { 
     border-color: var(--accent); background: var(--panel);
     box-shadow: 0 0 0 3px rgba(255, 225, 0, 0.15); 
@@ -192,30 +214,30 @@
   textarea { resize: vertical; min-height: 60px; line-height: 1.5; }
   
   .btn { 
-    font-family: var(--mono); font-size: 12px; letter-spacing: .3px; font-weight: 500;
+    font-family: var(--mono); font-size: var(--fs-3); letter-spacing: .3px; font-weight: 500;
     text-transform: none; border: 1px solid var(--line); background: var(--panel-2); 
-    color: var(--ink); padding: 10px 16px; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    color: var(--ink); padding: var(--sp-3) var(--sp-5); border-radius: var(--r-sm); cursor: pointer; transition: all 0.2s ease;
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-3);
   }
   .btn:hover:not(:disabled) { border-color: var(--ink-dim); filter: brightness(1.18); box-shadow: var(--shadow-sm); } 
   .btn.amber { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
   .btn.amber:hover:not(:disabled) { filter: brightness(1.08); }
   .btn.ghost { background: transparent; border-color: transparent; }
   .btn.ghost:hover { background: var(--line); }
-  .btn.sm { padding: 6px 12px; font-size: 11px; } 
+  .btn.sm { padding: var(--sp-3) var(--sp-4); font-size: var(--fs-2); } 
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   
-  .row { display: flex; gap: 10px; align-items: flex-start; } 
+  .row { display: flex; gap: var(--sp-3); align-items: flex-start; } 
   .grow { flex: 1; min-width: 0; }
   
   .pt { 
-    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; 
-    padding: 12px 14px; margin-bottom: 10px; transition: border 0.2s ease;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); 
+    padding: var(--sp-4) var(--sp-4); margin-bottom: var(--sp-3); transition: border 0.2s ease;
   }
   .pt:hover { border-color: var(--ink-dim); }
-  .pt .nm { font-weight: 600; font-size: 14px; display: flex; align-items: flex-start; gap: 8px; }
-  .pt .nm .dot { margin-top: 5px; flex: none; }
+  .pt .nm { font-weight: 600; font-size: var(--fs-5); display: flex; align-items: flex-start; gap: var(--sp-3); }
+  .pt .nm .dot { margin-top: var(--sp-2); flex: none; }
   /* Имя занимает ровно две строки — и когда их две, и когда одна.
      Промежутки между карточками и так были одинаковые (по 10 px), а рваным
      ритм делали РАЗНЫЕ высоты: 62 px у короткого имени против 84 у длинного
@@ -224,34 +246,34 @@
   .pt .nm-t { flex: 1; min-width: 0; line-height: 1.3; min-height: 2.6em;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-  .pt .ds { font-size: 13px; color: var(--ink-dim); margin-top: 4px; line-height: 1.4; } 
+  .pt .ds { font-size: var(--fs-4); color: var(--ink-dim); margin-top: var(--sp-2); line-height: 1.4; } 
   /* Мета — ровно одна строка. Длинное описание («Заїзд через КПП, дзвонити
      за годину») переносило её на вторую, карточка становилась на 12 px выше
      соседних, и ритм снова ломался. Полный текст остаётся в подсказке. */
-  .pt .meta { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); margin-top: 6px;
+  .pt .meta { font-family: var(--mono); font-size: var(--fs-1); color: var(--ink-faint); margin-top: var(--sp-3);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* Действия только у выбранной точки. Четыре кнопки под каждой из
      восьмидесяти строк — это и была «духота» в панели. */
-  .pt .acts { display: none; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .pt .acts { display: none; gap: var(--sp-3); margin-top: var(--sp-3); flex-wrap: wrap; }
   .pt.sel .acts { display: flex; }
   .pt { cursor: pointer; }
   .pt.sel { border-color: var(--accent-line); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent); }
   
-  .listhead { display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer;
-    user-select: none; font-family: var(--mono); font-size: 9.5px; letter-spacing: .9px;
+  .listhead { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-4); cursor: pointer;
+    user-select: none; font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .9px;
     text-transform: uppercase; color: var(--ink-faint); }
   .listhead:hover { color: var(--ink-dim); }
-  .listhead .chev { margin-left: auto; font-size: 10px; transition: transform .2s; }
+  .listhead .chev { margin-left: auto; font-size: var(--fs-1); transition: transform .2s; }
   .listhead .chev::before { content: '▾'; }
   .listhead.folded .chev { transform: rotate(-90deg); }
-  .listbox { max-height: 42vh; overflow-y: auto; margin-top: 8px; }
+  .listbox { max-height: 42vh; overflow-y: auto; margin-top: var(--sp-3); }
   .listbox.folded { display: none; }
   .listbox::-webkit-scrollbar { width: 5px; }
-  .listbox::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: 3px; }
+  .listbox::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: var(--r-pill); }
 
   .pill { 
-    font-family: var(--mono); font-size: 10px; padding: 3px 8px; 
-    border-radius: 12px; background: var(--panel); border: 1px solid var(--line); 
+    font-family: var(--mono); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-3); 
+    border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--line); 
     color: var(--ink-dim); white-space: nowrap; font-weight: 500;
   }
   
@@ -261,7 +283,7 @@
   
   .side-tabs { display: flex; border-bottom: 1px solid var(--line); flex: none; background: var(--panel-2); }
   .side-tabs .stab { 
-    flex: 1; text-align: center; padding: 14px 8px; font-family: var(--mono); font-size: 11px; 
+    flex: 1; text-align: center; padding: var(--sp-4) var(--sp-3); font-family: var(--mono); font-size: var(--fs-2); 
     letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim); cursor: pointer; 
     border-bottom: 2px solid transparent; transition: color 0.2s;
   }
@@ -271,49 +293,63 @@
   .cbub { 
     display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; 
     border-radius: 50%; color: #fff; font-family: var(--mono); 
-    font-weight: 600; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); 
+    font-weight: 600; font-size: var(--fs-3); text-shadow: 0 1px 3px rgba(0,0,0,0.8); 
     box-shadow: 0 3px 8px rgba(0,0,0,0.3); cursor: pointer; transition: transform 0.2s;
   }
   .cbub:hover { transform: scale(1.1); }
   .cbub.hl { transform: scale(1.3); box-shadow: 0 0 0 3px var(--accent), 0 4px 12px rgba(0,0,0,0.5); z-index: 1000; }
-  .eq-alert { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 12px; background: var(--panel); border: 1.5px solid var(--red); border-radius: 50%; animation: pulseA 1.8s infinite; }
+  .eq-alert { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: var(--fs-3); background: var(--panel); border: 1.5px solid var(--red); border-radius: 50%; animation: pulseA 1.8s infinite; }
   @keyframes pulseA { 0% { box-shadow: 0 0 0 0 rgba(255,93,93,.55); } 70% { box-shadow: 0 0 0 9px rgba(255,93,93,0); } 100% { box-shadow: 0 0 0 0 rgba(255,93,93,0); } }
   .pt.hl { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   
   .mode-tag { 
     position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 600; 
-    font-family: var(--mono); font-size: 12px; background: var(--accent); color: var(--on-accent); 
-    padding: 8px 20px; border-radius: 20px; font-weight: 600; box-shadow: var(--shadow-lg); display: none; 
+    font-family: var(--mono); font-size: var(--fs-3); background: var(--accent); color: var(--on-accent); 
+    padding: var(--sp-3) var(--sp-5); border-radius: var(--r-pill); font-weight: 600; box-shadow: var(--shadow-lg); display: none; 
   }
   .mode-tag.on { display: block; animation: dropIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
   @keyframes dropIn { from { transform: translate(-50%, -20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
   
   .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow-lg); }
-  .leaflet-popup-content { font-family: var(--sans); font-size: 13px; line-height: 1.5; margin: 14px; }
+  .leaflet-popup-content { font-family: var(--sans); font-size: var(--fs-4); line-height: 1.5; margin: var(--sp-4); }
   
-  .pane { flex: 1; display: flex; flex-direction: column; padding: 24px 32px; overflow: hidden; background: var(--bg); }
+  .pane { flex: 1; display: flex; flex-direction: column; padding: var(--sp-6) var(--sp-7); overflow: hidden; background: var(--bg); }
   .pane.scrollp { display: block; overflow-y: auto; }
-  .pane-head { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-  .pane-head h2 { font-family: var(--mono); font-size: 16px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink); font-weight: 600; }
+  .pane-head { display: flex; align-items: center; gap: var(--sp-5); margin-bottom: var(--sp-5); flex-wrap: wrap; }
+  /* Шапка раздела и фильтры уезжают вверх при прокрутке длинного списка,
+     и «+ Заявка» вместе с чипами статусов приходится искать, вернувшись
+     наверх. Прилипают к верху области прокрутки — ей и является .pane. */
+  .stickyhead { position: sticky; top: 0; z-index: 6; background: var(--bg); }
+  /* Липкая шапка встаёт не в самый верх, а под верхний отступ .pane —
+     и в этой полоске карточки продолжали проезжать поверх. Закрываем её
+     фоном, вытянутым вверх; за край панели он не вылезет, её overflow режет. */
+  .stickyhead::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%;
+    height: var(--sp-7); background: var(--bg); }
+  .stickyhead::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+    height: 1px; background: var(--line); opacity: 0; transition: opacity .15s ease; }
+  .stickyhead.stuck::after { opacity: 1; }
+  .stickyhead .pane-head { margin-bottom: var(--sp-4); }
+  .stickyhead .chips { margin: 0 0 var(--sp-4); }
+  .pane-head h2 { font-family: var(--mono); font-size: var(--fs-6); letter-spacing: 1px; text-transform: uppercase; color: var(--ink); font-weight: 600; }
   .searchbox { flex: 1; max-width: 420px; }
   
   .card { 
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; 
-    padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); 
+    padding: var(--sp-5); margin-bottom: var(--sp-5); box-shadow: var(--shadow-sm); transition: box-shadow 0.2s;
   }
   .card:hover { box-shadow: var(--shadow-lg); }
-  .card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .card .meta { font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); margin-bottom: 12px; line-height: 1.5; }
-  .card .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .card h3 { font-size: var(--fs-6); font-weight: 600; margin-bottom: var(--sp-3); display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+  .card .meta { font-family: var(--mono); font-size: var(--fs-2); color: var(--ink-faint); margin-bottom: var(--sp-4); line-height: 1.5; }
+  .card .acts { display: flex; gap: var(--sp-3); flex-wrap: wrap; }
   
-  .hint { font-size: 12px; color: var(--ink-dim); line-height: 1.4; margin-top: 6px; }
-  .err { color: var(--red); font-family: var(--mono); font-size: 11px; margin-top: 8px; background: rgba(255, 93, 93, 0.1); padding: 6px 10px; border-radius: 6px; }
+  .hint { font-size: var(--fs-3); color: var(--ink-dim); line-height: 1.4; margin-top: var(--sp-3); }
+  .err { color: var(--red); font-family: var(--mono); font-size: var(--fs-2); margin-top: var(--sp-3); background: rgba(255, 93, 93, 0.1); padding: var(--sp-3) var(--sp-3); border-radius: var(--r-sm); }
   .err:empty { display: none; } 
   .ok { color: var(--green); }
   
   .overlay { 
     position: fixed; inset: 0; background: rgba(8, 9, 11, 0.85); backdrop-filter: blur(4px); 
-    z-index: 2000; display: none; align-items: center; justify-content: center; padding: 20px; 
+    z-index: 2000; display: none; align-items: center; justify-content: center; padding: var(--sp-5); 
   }
   .overlay.on { display: flex; animation: fadeIn 0.2s ease; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -329,15 +365,15 @@
        l — сложные экраны с колонками и вложенными списками
      Размер задаётся КЛАССОМ, чтобы новое окно не придумало десятый. */
   .modal { 
-    background: var(--panel); border: 1px solid var(--line); border-radius: 16px; 
-    width: 560px; max-width: 100%; max-height: 90vh; overflow: auto; padding: 28px; 
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); 
+    width: 560px; max-width: 100%; max-height: 90vh; overflow: auto; padding: var(--sp-6); 
     box-shadow: var(--shadow-lg); transform: translateY(0); transition: transform 0.3s;
   }
   .modal.s { width: 420px; }
   /* Группы полей внутри окна. Двенадцать полей подряд читаются как
      сплошная стена; три подписанные группы дают опору взгляду. */
-  .fgroup { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
-  .fgroup:first-of-type { border-top: none; margin-top: 10px; padding-top: 0; }
+  .fgroup { border-top: 1px solid var(--line); margin-top: var(--sp-5); padding-top: var(--sp-4); }
+  .fgroup:first-of-type { border-top: none; margin-top: var(--sp-3); padding-top: 0; }
   /* Ширина поля — подсказка о длине ответа. Растянутое на полторы тысячи
      пикселей числовое поле для «12,5» обманывает и заставляет глаз бежать
      через весь экран от подписи к значению. Ограничиваем форму по ширине
@@ -348,21 +384,21 @@
      ширины, а занимает всю строку. Поля внутри остаются узкими: строку
      ввода длиной в метр всё равно невозможно читать. */
   .settings-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr));
-    gap: 16px; align-items: start; }
+    gap: var(--sp-5); align-items: start; }
   .settings-body > .card { margin-bottom: 0; }
   .settings-body input[type=number],
   .settings-body input[type=date] { max-width: 220px; }
   .settings-body input[type=text]:not(#orsProxy) { max-width: 420px; }
-  .jobs-legend { display: flex; gap: 8px; align-items: center; margin-bottom: 6px;
-    font-family: var(--mono); font-size: 9px; letter-spacing: .8px;
+  .jobs-legend { display: flex; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3);
+    font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .8px;
     text-transform: uppercase; color: var(--ink-faint); }
   /* Подписи в 30 px над колонками флажка и радио переносились по слогам
      («в выез де»). Ставим их подписью к символу — читается без выравнивания. */
   .jobs-legend .jl-a, .jobs-legend .jl-b { white-space: nowrap; }
-  .jobs-legend .jl-b { margin-left: 6px; }
-  .fgroup > .fg-t { font-family: var(--mono); font-size: 10px; font-weight: 600;
+  .jobs-legend .jl-b { margin-left: var(--sp-3); }
+  .fgroup > .fg-t { font-family: var(--mono); font-size: var(--fs-1); font-weight: 600;
     letter-spacing: 1.1px; text-transform: uppercase; color: var(--ink-faint);
-    margin-bottom: 10px; display: block; }
+    margin-bottom: var(--sp-3); display: block; }
   .modal.l { width: min(900px, 94vw); }
   /* Прописные моноширинные раньше были у пяти уровней сразу: раздел,
      заголовок карточки, подпись поля, текст кнопки, заголовок блока.
@@ -370,89 +406,89 @@
      Оставляем прописные за РАЗДЕЛАМИ и ПОДПИСЯМИ ПОЛЕЙ; заголовки окон
      и карточек переводим в обычный регистр — они читаются быстрее,
      а разделы наконец начинают выделяться. */
-  .modal h3 { font-family: var(--sans); font-size: 19px; font-weight: 600; letter-spacing: -.2px; text-transform: none; color: var(--ink); margin-bottom: 14px; }
-  .modal .sub { font-size: 13px; color: var(--ink-dim); line-height: 1.5; margin-bottom: 16px; }
+  .modal h3 { font-family: var(--sans); font-size: var(--fs-7); font-weight: 600; letter-spacing: -.2px; text-transform: none; color: var(--ink); margin-bottom: var(--sp-4); }
+  .modal .sub { font-size: var(--fs-4); color: var(--ink-dim); line-height: 1.5; margin-bottom: var(--sp-5); }
   
-  .eqitem { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
-  .eqitem .t { font-weight: 600; font-size: 14px; } 
-  .eqitem .m { font-family: var(--mono); font-size: 11px; color: var(--ink-dim); margin-top: 4px; line-height: 1.4; }
+  .eqitem { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-4) var(--sp-4); margin-bottom: var(--sp-3); }
+  .eqitem .t { font-weight: 600; font-size: var(--fs-5); } 
+  .eqitem .m { font-family: var(--mono); font-size: var(--fs-2); color: var(--ink-dim); margin-top: var(--sp-2); line-height: 1.4; }
   
   .warn { color: var(--red); border-color: var(--red); } 
   .good { color: var(--green); border-color: var(--green); }
   
 
-  .rsec { font-family: var(--mono); font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink-faint); margin: 14px 0 6px; border-top: 1px solid var(--line); padding-top: 9px; }
-  .rsec.first { border-top: none; padding-top: 0; margin-top: 6px; }
+  .rsec { font-family: var(--mono); font-size: var(--fs-1); letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink-faint); margin: var(--sp-4) 0 var(--sp-3); border-top: 1px solid var(--line); padding-top: var(--sp-3); }
+  .rsec.first { border-top: none; padding-top: 0; margin-top: var(--sp-3); }
   #jbWorks { max-height: 260px; overflow: auto; }
   .pop { max-height: 80vh; overflow: auto; }
   .side-tabs .stab.hidden { display: none; }
-  .block.collapsible > h2.ch { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
-  .block.collapsible > h2.ch .chev { margin-left: auto; font-size: 10px; color: var(--ink-faint); transition: transform 0.2s; }
+  .block.collapsible > h2.ch { cursor: pointer; user-select: none; display: flex; align-items: center; gap: var(--sp-3); }
+  .block.collapsible > h2.ch .chev { margin-left: auto; font-size: var(--fs-1); color: var(--ink-faint); transition: transform 0.2s; }
   .block.collapsible > h2.ch .chev::before { content: '▾'; }
   .block.collapsible.collapsed > h2.ch .chev { transform: rotate(-90deg); }
   .block.collapsible.collapsed > .block-body { display: none; }
-  .block.subblock { border: 1px solid var(--line); border-radius: 10px; padding: 0; margin: 12px 0; background: var(--panel-2); }
-  .block.subblock > h2.ch { padding: 11px 13px; margin: 0; }
-  .block.subblock > .block-body { padding: 0 13px 13px; }
-  .subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
-  .subtab { padding: 10px 16px; font-family: var(--mono); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-dim); cursor: pointer; border-bottom: 2px solid transparent; }
+  .block.subblock { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 0; margin: var(--sp-4) 0; background: var(--panel-2); }
+  .block.subblock > h2.ch { padding: var(--sp-3) var(--sp-4); margin: 0; }
+  .block.subblock > .block-body { padding: 0 var(--sp-4) var(--sp-4); }
+  .subtabs { display: flex; gap: var(--sp-2); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-5); }
+  .subtab { padding: var(--sp-3) var(--sp-5); font-family: var(--mono); font-size: var(--fs-3); letter-spacing: .6px; text-transform: uppercase; color: var(--ink-dim); cursor: pointer; border-bottom: 2px solid transparent; }
   .subtab:hover { color: var(--ink); }
   .subtab.active { color: var(--accent-ink); border-bottom-color: var(--accent-line); border-bottom-width: 3px; font-weight: 600; }
   .subtab.hidden { display: none; }
-  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--accent); color: var(--ink); padding: 12px 20px; border-radius: 10px; font-family: var(--mono); font-size: 12px; box-shadow: var(--shadow-lg); z-index: 99999; opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--accent); color: var(--ink); padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm); font-family: var(--mono); font-size: var(--fs-3); box-shadow: var(--shadow-lg); z-index: 99999; opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease; }
   .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .ctxmenu { position: fixed; z-index: 9998; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-lg); padding: 6px; display: none; min-width: 210px; }
+  .ctxmenu { position: fixed; z-index: 9998; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: var(--sp-3); display: none; min-width: 210px; }
   .ctxmenu.on { display: block; animation: popIn 0.12s ease; }
-  .ctxmenu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); font-family: var(--sans); font-size: 13px; padding: 9px 12px; border-radius: 7px; cursor: pointer; }
+  .ctxmenu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); font-family: var(--sans); font-size: var(--fs-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-sm); cursor: pointer; }
   .ctxmenu button:hover { background: var(--panel-2); }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
-  .stat-v { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--accent-ink); }
-  .stat-l { font-size: 12px; color: var(--ink-dim); margin-top: 4px; }
-  .stat-s { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
-  .map-summary { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 650; display: none; gap: 16px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 18px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim); box-shadow: var(--shadow-lg); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--sp-4); }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-5); }
+  .stat-v { font-family: var(--mono); font-size: var(--fs-8); font-weight: 700; color: var(--accent-ink); }
+  .stat-l { font-size: var(--fs-3); color: var(--ink-dim); margin-top: var(--sp-2); }
+  .stat-s { font-size: var(--fs-2); color: var(--ink-faint); margin-top: var(--sp-1); }
+  .map-summary { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 650; display: none; gap: var(--sp-5); align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-5); font-family: var(--mono); font-size: var(--fs-3); color: var(--ink-dim); box-shadow: var(--shadow-lg); }
   .map-summary.on { display: flex; }
   .map-tools { position: absolute; top: 16px; right: 16px; z-index: 650;
-    display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap;
+    display: flex; gap: var(--sp-3); align-items: flex-start; flex-wrap: wrap;
     justify-content: flex-end; max-width: calc(100% - 32px); }
-  .veh-btn { z-index: 650; cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: .5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-dim); border-radius: 8px; padding: 7px 11px; box-shadow: var(--shadow-lg); }
+  .veh-btn { z-index: 650; cursor: pointer; font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-dim); border-radius: var(--r-sm); padding: var(--sp-3) var(--sp-3); box-shadow: var(--shadow-lg); }
   .veh-btn.on { color: var(--accent-ink); border-color: var(--accent); }
   /* Ряд фильтров: сегмент типа и чип «внимание» в одну строку —
      раньше это были две строки плюс абзац подсказки между ними. */
-  .filter-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .filter-row { display: flex; gap: var(--sp-3); align-items: center; margin-top: var(--sp-3); flex-wrap: wrap; }
   .filter-row .seg { flex: 1 1 auto; margin: 0; }
-  .chip-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-    font-family: var(--mono); font-size: 11px; letter-spacing: .4px; color: var(--ink-dim);
-    border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px;
-    padding: 8px 10px; white-space: nowrap; user-select: none; flex: none; }
+  .chip-check { display: inline-flex; align-items: center; gap: var(--sp-3); cursor: pointer;
+    font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .4px; color: var(--ink-dim);
+    border: 1px solid var(--line); background: var(--panel-2); border-radius: var(--r-sm);
+    padding: var(--sp-3) var(--sp-3); white-space: nowrap; user-select: none; flex: none; }
   .chip-check:hover { color: var(--ink); }
   .chip-check input { width: auto; margin: 0; }
   .chip-check:has(input:checked) { color: var(--accent-ink); border-color: var(--accent); }
   /* Всплывающее меню слоёв — привязано к карте, а не к окну,
      чтобы на узком экране не улетало за край. */
   .map-pop { position: absolute; top: 56px; right: 16px; z-index: 660; display: none;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-    padding: 14px; width: 270px; max-width: calc(100% - 32px); box-shadow: var(--shadow-lg); }
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
+    padding: var(--sp-4); width: 270px; max-width: calc(100% - 32px); box-shadow: var(--shadow-lg); }
   .map-pop.on { display: block; }
-  .map-pop h4 { font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
-    text-transform: uppercase; color: var(--ink-faint); margin-bottom: 10px; }
-  .map-pop .lay { display: flex; align-items: center; gap: 8px; cursor: pointer;
-    font-size: 12.5px; color: var(--ink-dim); padding: 6px 0; }
+  .map-pop h4 { font-family: var(--mono); font-size: var(--fs-1); letter-spacing: 1px;
+    text-transform: uppercase; color: var(--ink-faint); margin-bottom: var(--sp-3); }
+  .map-pop .lay { display: flex; align-items: center; gap: var(--sp-3); cursor: pointer;
+    font-size: var(--fs-3); color: var(--ink-dim); padding: var(--sp-3) 0; }
   .map-pop .lay:hover { color: var(--ink); }
   .map-pop .lay input { width: auto; margin: 0; }
-  .map-pop .hint { margin: 0 0 6px 24px; }
+  .map-pop .hint { margin: 0 0 var(--sp-3) var(--sp-6); }
   .veh-mk { position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
-  .veh-ico { font-size: 24px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.55)); }
+  .veh-ico { font-size: var(--fs-8); line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.55)); }
   .veh-mk.stale .veh-ico { filter: grayscale(1) drop-shadow(0 2px 4px rgba(0,0,0,.55)); opacity: .55; }
-  .veh-lbl { margin-top: 1px; font-family: var(--mono); font-size: 9px; letter-spacing: .3px; white-space: nowrap; padding: 1px 5px; border-radius: 4px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+  .veh-lbl { margin-top: var(--sp-1); font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .3px; white-space: nowrap; padding: var(--sp-1) var(--sp-2); border-radius: var(--r-pill); background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
   .veh-lbl.moving { border-color: #22c55e; color: #22c55e; }
   .veh-lbl.idle { border-color: #f59e0b; color: #f59e0b; }
   .veh-lbl.stale { border-color: #64748b; color: #94a3b8; }
   .veh-rot { position: absolute; left: 50%; top: 12px; width: 0; height: 0; }
   .veh-dir { position: absolute; left: -5px; top: -25px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid #22c55e; filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
-  .veh-kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 0; }
+  .veh-kv { display: flex; justify-content: space-between; gap: var(--sp-4); font-size: var(--fs-4); padding: var(--sp-2) 0; }
   .veh-kv span:first-child { color: var(--ink-dim); }
-  .map-summary b { color: var(--accent-ink); font-size: 14px; }
+  .map-summary b { color: var(--accent-ink); font-size: var(--fs-5); }
   @media(max-width: 760px) { 
     .view.active { flex-direction: column; } 
     .map-wrap { flex: 1; height: auto; min-height: 0; order: 1; } 
@@ -465,11 +501,11 @@
     .side-handle { display: flex; } .view-map .side-handle::before { content: ''; } 
     .side.sheet-collapsed { max-height: 46px; } 
     .side.sheet-collapsed .scroll { display: none; } 
-    .pane { padding: 16px; } 
-    .modal { padding: 20px; max-height: 95vh; width: 100%; border-radius: 12px; } 
+    .pane { padding: var(--sp-5); } 
+    .modal { padding: var(--sp-5); max-height: 95vh; width: 100%; border-radius: var(--r-md); } 
     .pop { right: 8px; left: 8px; width: auto; } 
-    .btn, input[type=text], input[type=number], input[type=email], input[type=password], select { padding: 12px 16px; font-size: 14px; }
-    .btn.sm { padding: 10px 14px; }
+    .btn, input[type=text], input[type=number], input[type=email], input[type=password], select { padding: var(--sp-4) var(--sp-5); font-size: var(--fs-5); }
+    .btn.sm { padding: var(--sp-3) var(--sp-4); }
     /* Рельс слева на телефоне — ошибка: приложение стоит как PWA,
        инженер держит его одной рукой, левый край недосягаем большим
        пальцем. Уводим навигацию вниз. */
@@ -480,64 +516,64 @@
     .rail-brand { display: none; }
     .rail-items { flex-direction: row; width: auto; gap: 0; flex: 1; }
     .rail-foot { margin-top: 0; flex-direction: row; width: auto; padding-top: 0;
-      border-left: 1px solid var(--line); padding-left: 4px; }
-    .nav-i { width: auto; min-width: 58px; padding: 7px 6px; font-size: 8.5px; }
+      border-left: 1px solid var(--line); padding-left: var(--sp-2); }
+    .nav-i { width: auto; min-width: 58px; padding: var(--sp-3) var(--sp-3); font-size: var(--fs-1); }
     .nav-i svg { width: 18px; height: 18px; }
     .rail .who { display: none; }
     .views { order: 1; flex: 1; min-height: 0; }
-    .topbar { padding: 0 8px; gap: 6px; }
+    .topbar { padding: 0 var(--sp-3); gap: var(--sp-3); }
     .brand { flex: none; }
-    .brand h1 { font-size: 13px; }
-    .tabs { margin-left: 4px; flex: 1; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .brand h1 { font-size: var(--fs-4); }
+    .tabs { margin-left: var(--sp-2); flex: 1; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .tabs::-webkit-scrollbar { display: none; }
-    .tab { padding: 0 10px; font-size: 11px; flex: none; white-space: nowrap; }
+    .tab { padding: 0 var(--sp-3); font-size: var(--fs-2); flex: none; white-space: nowrap; }
     .spacer, .who { display: none; }
-    .icobtn { width: 34px; height: 34px; flex: none; font-size: 14px; }
+    .icobtn { width: 34px; height: 34px; flex: none; font-size: var(--fs-5); }
     .row { flex-wrap: wrap; }
     .row > .grow { flex: 1 1 140px; }
-    .pane-head { gap: 10px; }
-    .block { padding: 14px 16px; }
+    .pane-head { gap: var(--sp-3); }
+    .block { padding: var(--sp-4) var(--sp-5); }
     .toast { max-width: calc(100vw - 24px); }
-    .map-summary { max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; gap: 6px 14px; padding: 8px 12px; }
+    .map-summary { max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; gap: var(--sp-3) var(--sp-4); padding: var(--sp-3) var(--sp-4); }
     .stats { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
   }
   /* --- UX доработки --- */
   .toast.err { border-color: var(--red); color: var(--red); }
-  .toast.undo { display: flex; align-items: center; gap: 12px; }
+  .toast.undo { display: flex; align-items: center; gap: var(--sp-4); }
   .toast.undo.on { pointer-events: auto; }
   .toast.warn { border-color: var(--accent); }
   .btn.red { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
   .btn.red:hover:not(:disabled) { filter: brightness(1.08); box-shadow: var(--shadow-sm); }
   .lnk { color: var(--cyan); cursor: pointer; text-decoration: underline; }
-  .endpoints { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
-  .ep { display: flex; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 6px 10px; }
-  .ep-l { font-family: var(--mono); font-size: 9.5px; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); width: 44px; flex: none; }
-  .ep-v { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .endpoints { display: flex; flex-direction: column; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+  .ep { display: flex; align-items: center; gap: var(--sp-3); background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-3); }
+  .ep-l { font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); width: 44px; flex: none; }
+  .ep-v { flex: 1; min-width: 0; font-size: var(--fs-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ep-v.empty { color: var(--ink-faint); font-style: italic; }
   .stat.nav { cursor: pointer; transition: border-color .15s ease, transform .15s ease; }
   .stat.nav:hover { border-color: var(--ink-dim); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
-  .stat-go { font-family: var(--mono); font-size: 10px; color: var(--cyan); margin-top: 8px; }
+  .stat-go { font-family: var(--mono); font-size: var(--fs-1); color: var(--cyan); margin-top: var(--sp-3); }
   /* --- канбан выездов + мультифильтр статусов --- */
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { cursor: pointer; user-select: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-dim); border-radius: 999px; padding: 4px 11px; font-size: 12px; transition: all .12s ease; }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+  .chip { cursor: pointer; user-select: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-dim); border-radius: var(--r-pill); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-3); transition: all .12s ease; }
   .chip:hover { border-color: var(--ink-dim); }
   .chip.on { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
-  .kanban { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 10px; align-items: flex-start; }
+  .kanban { display: flex; gap: var(--sp-4); overflow-x: auto; padding-bottom: var(--sp-3); align-items: flex-start; }
   /* Колонки росли жёстко по 300 px и упирались в max-height:72vh: три штуки
      занимали меньше половины экрана, а единственная заполненная
      прокручивалась внутри себя, хотя под ней оставался пустой экран.
      Теперь ширина тянется, а высота идёт по содержимому. */
-  .kcol { flex: 1 1 300px; min-width: 260px; max-width: 480px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; }
-  .kcol-h { padding: 10px 12px; font-family: var(--mono); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-dim); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
-  .kcol-h .cnt { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--ink); }
+  .kcol { flex: 1 1 300px; min-width: 260px; max-width: 480px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-md); display: flex; flex-direction: column; }
+  .kcol-h { padding: var(--sp-3) var(--sp-4); font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; text-transform: uppercase; color: var(--ink-dim); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+  .kcol-h .cnt { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-pill); padding: var(--sp-1) var(--sp-3); color: var(--ink); }
   /* Свой скролл у колонки убран: два вложенных скролла — это когда листаешь
      и не понимаешь, что именно поехало. Колонка растёт, страница скроллит одна. */
-  .kcol-b { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-  .kcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
-  .kcard h4 { margin: 0 0 4px; font-size: 13px; }
-  .kcard .meta { font-size: 11.5px; color: var(--ink-dim); margin: 2px 0; }
-  .kcard .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
-  .kcard select.kmove { font-size: 11px; padding: 3px 6px; border-radius: 7px; }
+  .kcol-b { padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-3); }
+  .kcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-3); }
+  .kcard h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-4); }
+  .kcard .meta { font-size: var(--fs-2); color: var(--ink-dim); margin: var(--sp-1) 0; }
+  .kcard .acts { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-3); align-items: center; }
+  .kcard select.kmove { font-size: var(--fs-2); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-sm); }
   .kcard[draggable="true"] { cursor: grab; }
   .kcard.dragging { opacity: .45; }
   .kcol.over { border-color: var(--accent); background: var(--panel); }
@@ -549,7 +585,7 @@
      с дырой справа. Явные три доли тянутся за окном без потолка. */
   /* Без align-items:start — иначе под короткой карточкой оставалась дыра
      до второго ряда. Растягиваем по высоте ряда, нижние грани в одну линию. */
-  .trip-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .trip-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); }
   .trip-grid > .card { display: flex; flex-direction: column; }
   @media (max-width: 1360px) { .trip-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   /* У заявки карточек всего две плюс широкая: в трёх колонках третья ячейка
@@ -564,162 +600,161 @@
   @media (max-width: 900px)  { .trip-grid { grid-template-columns: 1fr; } }
   .trip-grid > .card { margin-bottom: 0; }
   .trip-grid > .card.trip-wide { grid-column: 1 / -1; }
-  .econ-split { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
-  @media (max-width: 900px) { .econ-split { grid-template-columns: 1fr; gap: 16px; } }
-  .econ-split > div > .fg-t { font-family: var(--mono); font-size: 10px; font-weight: 600;
+  .econ-split { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
+  @media (max-width: 900px) { .econ-split { grid-template-columns: 1fr; gap: var(--sp-5); } }
+  .econ-split > div > .fg-t { font-family: var(--mono); font-size: var(--fs-1); font-weight: 600;
     letter-spacing: 1.1px; text-transform: uppercase; color: var(--ink-faint); }
-  .crumbs { display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-    font-family: var(--mono); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); }
+  .crumbs { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3);
+    font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); }
   .crumb { background: none; border: none; padding: 0; cursor: pointer; color: var(--accent-ink);
     font: inherit; letter-spacing: inherit; text-transform: inherit; }
   .crumb:hover { text-decoration: underline; }
   .crumb-sep { color: var(--ink-faint); }
-  .trip-head { display: flex; align-items: flex-start; gap: 20px; flex-wrap: wrap;
-    margin-bottom: 16px; }
+  .trip-head { display: flex; align-items: flex-start; gap: var(--sp-5); flex-wrap: wrap;
+    margin-bottom: var(--sp-5); }
   .trip-head .th-main { flex: 1 1 260px; min-width: 0; }
-  .trip-head h2 { font-family: var(--mono); font-size: 18px; letter-spacing: .5px; color: var(--ink); font-weight: 600; }
-  .th-sub { font-size: 12.5px; color: var(--ink-dim); margin-top: 5px; line-height: 1.5; }
+  .trip-head h2 { font-family: var(--mono); font-size: var(--fs-7); letter-spacing: .5px; color: var(--ink); font-weight: 600; }
+  .th-sub { font-size: var(--fs-3); color: var(--ink-dim); margin-top: var(--sp-2); line-height: 1.5; }
   /* Прибыль — то, ради чего выезд собирают. В модалке она пряталась
      в служебной строке под списком заявок; здесь стоит в шапке. */
   .th-econ { flex: none; text-align: right; font-family: var(--mono); }
-  .th-econ .te-k { font-size: 10px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-faint); }
-  .th-econ .te-v { font-size: 22px; font-weight: 600; line-height: 1.2; margin-top: 2px; }
-  .th-econ .te-s { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
-  @media (max-width: 760px) { .trip-head { gap: 12px; } .th-econ { text-align: left; } }
+  .th-econ .te-k { font-size: var(--fs-1); letter-spacing: .6px; text-transform: uppercase; color: var(--ink-faint); }
+  .th-econ .te-v { font-size: var(--fs-7); font-weight: 600; line-height: 1.2; margin-top: var(--sp-1); }
+  .th-econ .te-s { font-size: var(--fs-2); color: var(--ink-dim); margin-top: var(--sp-1); }
+  @media (max-width: 760px) { .trip-head { gap: var(--sp-4); } .th-econ { text-align: left; } }
   .settings-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr);
-    gap: 18px; align-items: start; max-width: 1640px; }
-  .settings-nav { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; }
-  .son { text-align: left; background: transparent; border: 1px solid transparent; color: var(--ink-dim); border-radius: 9px; padding: 10px 13px; cursor: pointer; font-size: 13px; font-family: inherit; transition: background .12s ease, color .12s ease, border-color .12s ease; }
+    gap: var(--sp-5); align-items: start; max-width: 1640px; }
+  .settings-nav { display: flex; flex-direction: column; gap: var(--sp-2); position: sticky; top: 0; }
+  .son { text-align: left; background: transparent; border: 1px solid transparent; color: var(--ink-dim); border-radius: var(--r-sm); padding: var(--sp-3) var(--sp-4); cursor: pointer; font-size: var(--fs-4); font-family: inherit; transition: background .12s ease, color .12s ease, border-color .12s ease; }
   .son:hover { background: var(--panel-2); color: var(--ink); }
   .son.on { background: var(--panel-2); border-color: var(--line); color: var(--ink); font-weight: 600; }
   .settings-body > .card:first-child { margin-top: 0; }
-  .settings-body > .card > h3 { cursor: pointer; user-select: none; position: relative; padding-right: 22px; }
-  .settings-body > .card > h3::after { content: '▾'; position: absolute; right: 2px; top: 1px; color: var(--ink-faint); font-size: 12px; transition: transform .15s ease; }
+  .settings-body > .card > h3 { cursor: pointer; user-select: none; position: relative; padding-right: var(--sp-6); }
+  .settings-body > .card > h3::after { content: '▾'; position: absolute; right: 2px; top: 1px; color: var(--ink-faint); font-size: var(--fs-3); transition: transform .15s ease; }
   .settings-body > .card.collapsed > h3::after { transform: rotate(-90deg); }
   .settings-body > .card.collapsed > :not(h3) { display: none !important; }
-  .emtree-manu { border: 1px solid var(--line); border-radius: 10px; margin-top: 8px; overflow: hidden; }
-  .emtree-h { padding: 9px 12px; font-weight: 600; cursor: pointer; background: var(--panel-2); font-size: 13px; user-select: none; }
-  .emtree-body { padding: 4px 8px 8px; }
-  .emtree-kind { margin-top: 6px; }
-  .emtree-kh { font-family: var(--mono); font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); padding: 4px 4px 2px; }
-  .emrow { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 8px; }
+  .emtree-manu { border: 1px solid var(--line); border-radius: var(--r-sm); margin-top: var(--sp-3); overflow: hidden; }
+  .emtree-h { padding: var(--sp-3) var(--sp-4); font-weight: 600; cursor: pointer; background: var(--panel-2); font-size: var(--fs-4); user-select: none; }
+  .emtree-body { padding: var(--sp-2) var(--sp-3) var(--sp-3); }
+  .emtree-kind { margin-top: var(--sp-3); }
+  .emtree-kh { font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); padding: var(--sp-2) var(--sp-2) var(--sp-1); }
+  .emrow { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3); border-radius: var(--r-sm); }
   .emrow:hover { background: var(--panel-2); }
-  .emname { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .emmeta { font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
+  .emname { flex: 1; min-width: 0; font-size: var(--fs-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .emmeta { font-size: var(--fs-2); color: var(--ink-dim); white-space: nowrap; }
   /* Ширина дня считается от окна, поэтому горизонтальный скролл больше
      не нужен — он и был признаком того, что период задан не тем. */
-  .gantt-wrap { overflow-x: hidden; padding-bottom: 8px; }
-  .gantt-bar-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-  .gantt-bar-ctl .seg button { white-space: nowrap; }
+  .gantt-wrap { overflow-x: hidden; padding-bottom: var(--sp-3); }
+  .gantt-bar-ctl { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-4); }
   .gantt-day.wknd { background: color-mix(in srgb, var(--ink-faint) 8%, transparent); }
-  .gantt-head { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
-  .gantt-day { flex: none; text-align: center; font-size: 10px; color: var(--ink-faint); font-family: var(--mono); padding: 4px 0; border-left: 1px solid var(--line); }
+  .gantt-head { display: flex; border-bottom: 1px solid var(--line); margin-bottom: var(--sp-3); }
+  .gantt-day { flex: none; text-align: center; font-size: var(--fs-1); color: var(--ink-faint); font-family: var(--mono); padding: var(--sp-2) 0; border-left: 1px solid var(--line); }
   .gantt-day.today { color: var(--accent-ink); background: rgba(255,225,0,0.10); font-weight: 700; }
-  .gantt-eng { position: sticky; left: 0; font-size: 11px; font-weight: 600; color: var(--ink-dim); padding: 10px 6px 3px; background: var(--bg); width: max-content; z-index: 2; }
-  .gantt-row { position: relative; height: 30px; margin-bottom: 4px; }
-  .gantt-bar { position: absolute; top: 2px; height: 24px; border-radius: 6px; font-size: 11px; line-height: 24px; padding: 0 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; color: #111; box-shadow: var(--shadow-sm); }
+  .gantt-eng { position: sticky; left: 0; font-size: var(--fs-2); font-weight: 600; color: var(--ink-dim); padding: var(--sp-3) var(--sp-3) var(--sp-1); background: var(--bg); width: max-content; z-index: 2; }
+  .gantt-row { position: relative; height: 30px; margin-bottom: var(--sp-2); }
+  .gantt-bar { position: absolute; top: 2px; height: 24px; border-radius: var(--r-sm); font-size: var(--fs-2); line-height: 24px; padding: 0 var(--sp-3); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; color: #111; box-shadow: var(--shadow-sm); }
   .gantt-bar.st-planned { background: #9aa1ad; }
   .gantt-bar.st-assigned { background: #5eb3f6; }
   .gantt-bar.st-in_progress { background: var(--accent); }
   .gantt-bar.st-done { background: #16a34a; color: #fff; }
   .gantt-bar.st-cancelled { background: #6b7280; color: #fff; opacity: .55; }
-  @media (max-width: 760px) { .settings-layout { grid-template-columns: 1fr; } .settings-nav { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; } .son { white-space: nowrap; flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; } }
+  @media (max-width: 760px) { .settings-layout { grid-template-columns: 1fr; } .settings-nav { flex-direction: row; overflow-x: auto; gap: var(--sp-3); padding-bottom: var(--sp-2); } .son { white-space: nowrap; flex: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: var(--sp-3) var(--sp-4); } }
 
 /* ── Лента внимания: заявки на шкале времени ──────────────────────────────
    Плоский список одинаковых строк не выглядит отсортированным. Здесь место
    на ленте само по себе кодирует срочность, а узел — это ДАТА, а не заявка:
    три точки на один день читаются как один выезд, а не три дела. */
 .afeed{position:relative;padding-left:96px}
-.afeed-line{position:absolute;left:70px;top:6px;bottom:8px;width:10px;border-radius:5px}
+.afeed-line{position:absolute;left:70px;top:6px;bottom:8px;width:10px;border-radius: var(--r-pill)}
 .a-ax{position:absolute;left:-96px;top:11px;width:62px;text-align:right;font-family:var(--mono)}
-.a-ax b{display:block;font-size:12px;font-weight:600;color:var(--ink)}
-.a-ax i{display:block;font-style:normal;font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);margin-top:2px}
+.a-ax b{display:block;font-size: var(--fs-3);font-weight:600;color:var(--ink)}
+.a-ax i{display:block;font-style:normal;font-size: var(--fs-1);letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);margin-top: var(--sp-1)}
 .a-dot{position:absolute;border-radius:50%;border:3px solid var(--panel);display:flex;align-items:center;
-  justify-content:center;font-family:var(--mono);font-size:11px;font-weight:600;color:#fff;box-sizing:border-box}
+  justify-content:center;font-family:var(--mono);font-size: var(--fs-2);font-weight:600;color:#fff;box-sizing:border-box}
 .a-stem{position:absolute;top:19px;height:2px;background:var(--line)}
 /* Шапка без списка под ней — нижняя граница не нужна. */
 .agrp-h-solo{border-bottom:0}
 .a-break{position:relative;height:30px;display:flex;align-items:center}
-.a-break span{font-family:var(--mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint)}
+.a-break span{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint)}
 .a-break::before{content:'';position:absolute;left:-26px;top:8px;width:14px;height:14px;background:var(--bg)}
-.agrp{position:relative;margin-bottom:20px}
-.agrp:last-child{margin-bottom:0}
+.agrp{position:relative;margin-bottom: var(--sp-5)}
+.agrp:last-child{margin-bottom: 0}
 .agrp-card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line);
-  border-radius:12px;box-shadow:var(--shadow-sm);overflow:hidden}
-.agrp-h{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line)}
-.agrp-n{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--ink);white-space:nowrap}
-.agrp-track{flex:1;min-width:40px;height:6px;border-radius:3px;background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
-.agrp-track i{display:block;height:100%;border-radius:3px}
-.agrp-hint{font-family:var(--mono);font-size:10px;color:var(--ink-dim);white-space:nowrap}
-.agrp-eng{font-family:var(--mono);font-size:10px;color:var(--ink-faint);white-space:nowrap}
+  border-radius: var(--r-md);box-shadow:var(--shadow-sm);overflow:hidden}
+.agrp-h{display:flex;align-items:center;gap: var(--sp-4);padding: var(--sp-3) var(--sp-4);border-bottom:1px solid var(--line)}
+.agrp-n{font-family:var(--mono);font-size: var(--fs-2);font-weight:600;letter-spacing:.4px;color:var(--ink);white-space:nowrap}
+.agrp-track{flex:1;min-width:40px;height:6px;border-radius: var(--r-pill);background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
+.agrp-track i{display:block;height:100%;border-radius: var(--r-pill)}
+.agrp-hint{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-dim);white-space:nowrap}
+.agrp-eng{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint);white-space:nowrap}
 .a-noeng{color:var(--red)}
-.arow2{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer}
+.arow2{display:flex;align-items:center;gap: var(--sp-4);padding: var(--sp-3) var(--sp-4);cursor:pointer}
 .arow2+.arow2{border-top:1px solid var(--line)}
 .arow2:hover{background:var(--panel-2)}
 .a-main{flex:1;min-width:0}
 /* Названия точек украинские и длинные. break-word переносит по словам;
    anywhere рубил бы «надлісниц-тво» посреди слога. */
-.a-name{font-size:14px;font-weight:600;line-height:1.3;overflow-wrap:break-word;word-break:normal}
-.a-sub{font-family:var(--mono);font-size:11px;color:var(--ink-faint);margin-top:2px}
-.a-h{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);white-space:nowrap}
+.a-name{font-size: var(--fs-5);font-weight:600;line-height:1.3;overflow-wrap:break-word;word-break:normal}
+.a-sub{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-faint);margin-top: var(--sp-1)}
+.a-h{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
 @media(max-width:600px){
   .afeed{padding-left:80px}
   .afeed-line{left:54px}
   .a-ax{left:-80px;width:46px}
-  .agrp-h{flex-wrap:wrap;gap:6px 10px}
+  .agrp-h{flex-wrap:wrap;gap: var(--sp-3) var(--sp-3)}
   .agrp-track{flex:1 0 100%;order:3}
 }
 
 /* ── Загрузка инженеров ──────────────────────────────────────────────── */
-.elcard .el-hz{font-family:var(--mono);font-size:10px;font-weight:400;letter-spacing:.5px;
+.elcard .el-hz{font-family:var(--mono);font-size: var(--fs-1);font-weight:400;letter-spacing:.5px;
   text-transform:uppercase;color:var(--ink-faint)}
 .elrow{display:grid;grid-template-columns:1fr auto;grid-template-areas:'n v' 't t' 's s';
-  gap:5px 10px;padding:11px 0;border-bottom:1px solid var(--line)}
-.elrow:last-of-type{border-bottom:0;padding-bottom:2px}
-.el-n{grid-area:n;font-size:13.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.el-v{grid-area:v;font-family:var(--mono);font-size:11.5px;font-weight:600;white-space:nowrap}
-.el-t{grid-area:t;height:8px;border-radius:4px;background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
+  gap: var(--sp-2) var(--sp-3);padding: var(--sp-3) 0;border-bottom:1px solid var(--line)}
+.elrow:last-of-type{border-bottom:0;padding-bottom: var(--sp-1)}
+.el-n{grid-area:n;font-size: var(--fs-4);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.el-v{grid-area:v;font-family:var(--mono);font-size: var(--fs-2);font-weight:600;white-space:nowrap}
+.el-t{grid-area:t;height:8px;border-radius: var(--r-pill);background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
 .el-t{display:flex}
-.el-t i{display:block;height:100%;border-radius:4px}
-.el-t .el-drive{opacity:.4;margin-left:1px}
-.el-s{grid-area:s;font-family:var(--mono);font-size:10px;color:var(--ink-faint)}
+.el-t i{display:block;height:100%;border-radius: var(--r-pill)}
+.el-t .el-drive{opacity:.4;margin-left: var(--sp-1)}
+.el-s{grid-area:s;font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint)}
 .elrow.none .el-n{color:var(--red)}
-.el-tail{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-top:10px;
-  padding-top:9px;border-top:1px solid var(--line)}
-.stat-closed{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-top:9px}
+.el-tail{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint);margin-top: var(--sp-3);
+  padding-top: var(--sp-3);border-top:1px solid var(--line)}
+.stat-closed{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint);margin-top: var(--sp-3)}
 /* Переключатель периода живёт в заголовке карточки, а не отдельной строкой */
-.cardhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.revseg{margin-left:auto;display:inline-flex}
-.revseg button{padding:4px 9px;font-size:10px}
+.cardhead{display:flex;align-items:center;gap: var(--sp-3);flex-wrap:wrap}
+.revseg{margin-left: auto;display:inline-flex}
+.revseg button{padding: var(--sp-2) var(--sp-3);font-size: var(--fs-1)}
 /* План отделён от заработанного и подписан планом */
 .mc-plan .mc-k,.mc-plan .mc-v{color:var(--ink-faint)}
 .mc-note{font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-faint)}
 
 /* Лента внимания на дашборде */
-.dash-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
+.dash-grid{display:grid;grid-template-columns:1.4fr 1fr;gap: var(--sp-5);align-items:start}
 .dash-grid.one-col{grid-template-columns:1fr}
 @media(max-width:900px){.dash-grid{grid-template-columns:1fr}}
-.dash-attn .acaps{text-transform:uppercase;letter-spacing:.12em;font-size:12px;line-height:14px;margin:0 0 8px}
+.dash-attn .acaps{text-transform:uppercase;letter-spacing:.12em;font-size: var(--fs-3);line-height:14px;margin: 0 0 var(--sp-3)}
 /* Подпись «Требует внимания» стоит только над ЛЕВОЙ колонкой и сдвигает её
    вниз на свою высоту. Правая при этом начинается от верха сетки, и две
    белые карточки рядом оказываются на разной высоте — на широком экране
    это видно через весь экран. Отбиваем правую колонку ровно на подпись:
    14 px строки + 8 px отступа. В одну колонку (телефон) отбивка не нужна —
    там колонки идут друг за другом, а не рядом. */
-#dashBody{padding-top:22px}
-@media(max-width:900px){#dashBody{padding-top:0}}
-.arow{display:flex;align-items:center;gap:10px;padding:11px 12px;position:relative;cursor:pointer;border-bottom:1px solid var(--line)}
+#dashBody{padding-top: var(--sp-6)}
+@media(max-width:900px){#dashBody{padding-top: 0}}
+.arow{display:flex;align-items:center;gap: var(--sp-3);padding: var(--sp-3) var(--sp-4);position:relative;cursor:pointer;border-bottom:1px solid var(--line)}
 .arow:last-child{border-bottom:0}
 .arow:hover{background:var(--panel-2)}
-.astripe{position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:3px}
+.astripe{position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius: var(--r-pill)}
 .arow.red .astripe{background:var(--red)}
 .arow.amber .astripe{background:#f5b23d}
 .arow.green .astripe{background:var(--green)}
 .arow.gray .astripe{background:var(--ink-faint)}
-.amain{flex:1;min-width:0;padding-left:8px}
+.amain{flex:1;min-width:0;padding-left: var(--sp-3)}
 .aname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.asub{font-size:12px;color:var(--ink-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.abadge{font-size:11px;padding:3px 8px;border-radius:20px;white-space:nowrap;border:1px solid transparent}
+.asub{font-size: var(--fs-3);color:var(--ink-dim);margin-top: var(--sp-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.abadge{font-size: var(--fs-2);padding: var(--sp-1) var(--sp-3);border-radius: var(--r-pill);white-space:nowrap;border:1px solid transparent}
 /* Фон и рамка бейджа были прибиты литералами из ТЁМНОЙ палитры, тогда как
    цвет текста брался из токена. Половина правила подстраивалась под тему,
    половина — никогда, и в светлой теме на белых карточках получались
@@ -731,10 +766,10 @@
 .abadge.green{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,var(--panel));background:color-mix(in srgb,var(--green) 14%,var(--panel))}
 .abadge.gray{color:var(--ink-dim);border-color:var(--line);background:var(--panel-2)}
 .abadge.noeng{color:var(--cyan);border-color:color-mix(in srgb,var(--cyan) 45%,var(--panel));background:color-mix(in srgb,var(--cyan) 14%,var(--panel))}
-.acold{margin-top:4px}
-.acold summary{list-style:none;cursor:pointer;padding:8px 10px;display:flex;align-items:center;gap:8px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-dim)}
+.acold{margin-top: var(--sp-2)}
+.acold summary{list-style:none;cursor:pointer;padding: var(--sp-3) var(--sp-3);display:flex;align-items:center;gap: var(--sp-3);font-size: var(--fs-3);text-transform:uppercase;letter-spacing:.1em;color:var(--ink-dim)}
 .acold summary::-webkit-details-marker{display:none}
-.acold summary .acount{margin-left:auto;color:var(--ink-dim)}
+.acold summary .acount{margin-left: auto;color:var(--ink-dim)}
 .achev{color:var(--ink-faint);transition:transform .15s}
 .acold[open] .achev{transform:rotate(90deg)}
 /* Раньше внутри лежал плоский список: строки касались краёв тарелки, и это
@@ -743,70 +778,70 @@
    прямо на фоне страницы, как и в правой колонке. */
 #attnBody{background:transparent;border:0;border-radius:0}
 #attnBody:empty{display:none}
-.dash-attn>.acaps{padding:0}
-.asubhead{font-size:10px;color:var(--ink-faint);letter-spacing:.14em;text-transform:uppercase;padding:12px 12px 4px;border-bottom:1px solid var(--line)}
+.dash-attn>.acaps{padding: 0}
+.asubhead{font-size: var(--fs-1);color:var(--ink-faint);letter-spacing:.14em;text-transform:uppercase;padding: var(--sp-4) var(--sp-4) var(--sp-2);border-bottom:1px solid var(--line)}
 /* холодный блок внутри той же тарелки, не отдельной плашкой */
-.acold{background:var(--panel);border:1px solid var(--line);border-radius:12px;
-  box-shadow:var(--shadow-sm);overflow:hidden;margin-top:14px}
-.acold summary{padding:12px 14px}
+.acold{background:var(--panel);border:1px solid var(--line);border-radius: var(--r-md);
+  box-shadow:var(--shadow-sm);overflow:hidden;margin-top: var(--sp-4)}
+.acold summary{padding: var(--sp-4) var(--sp-4)}
 .acold>div .arow:last-child{border-bottom:0}
 /* Правая колонка дашборда: деньги крупно + компактные счётчики */
-.money-card{padding:16px 18px}
-.mc-big{font-size:32px;font-weight:700;letter-spacing:-.5px;font-family:var(--mono);color:var(--ink)}
-.mc-cur{font-size:20px;color:var(--ink-dim)}
-.mc-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:13px}
-.mc-row:first-of-type{margin-top:14px}
+.money-card{padding: var(--sp-5) var(--sp-5)}
+.mc-big{font-size: var(--fs-9);font-weight:700;letter-spacing:-.5px;font-family:var(--mono);color:var(--ink)}
+.mc-cur{font-size: var(--fs-7);color:var(--ink-dim)}
+.mc-row{display:flex;justify-content:space-between;align-items:center;margin-top: var(--sp-3);padding-top: var(--sp-3);border-top:1px solid var(--line);font-size: var(--fs-4)}
+.mc-row:first-of-type{margin-top: var(--sp-4)}
 .mc-k{color:var(--ink-faint)} .mc-v{font-weight:600}
-.stats.mini{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
-.revbars{display:flex;align-items:flex-end;gap:10px;height:118px;margin-top:12px}
+.stats.mini{display:grid;grid-template-columns:1fr 1fr;gap: var(--sp-3);margin-top: var(--sp-5)}
+.revbars{display:flex;align-items:flex-end;gap: var(--sp-3);height:118px;margin-top: var(--sp-4)}
 .revbar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
-.revbar .rb-v{font-family:var(--mono);font-size:10px;color:var(--ink-faint);text-align:center;margin-bottom:4px;font-variant-numeric:tabular-nums}
+.revbar .rb-v{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint);text-align:center;margin-bottom: var(--sp-2);font-variant-numeric:tabular-nums}
 .revbar .rb-c{flex:1;display:flex;align-items:flex-end}
 .revbar .rb-f{width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:0}
-.revbar .rb-l{font-family:var(--mono);font-size:10px;color:var(--ink-faint);text-align:center;margin-top:5px}
-.map-pop .lay-t{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin:2px 0 7px}
-.map-pop .seg{margin:0}
+.revbar .rb-l{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint);text-align:center;margin-top: var(--sp-2)}
+.map-pop .lay-t{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-1) 0 var(--sp-3)}
+.map-pop .seg{margin: 0}
 .map-pop .hint{line-height:1.7}
-.wf-h{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin:14px 0 8px;display:flex;align-items:center;gap:7px}
-.wf-h:first-child{margin-top:4px}
-.wf-row{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:7px;cursor:pointer;transition:border-color .15s ease}
+.wf-h{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-4) 0 var(--sp-3);display:flex;align-items:center;gap: var(--sp-3)}
+.wf-h:first-child{margin-top: var(--sp-2)}
+.wf-row{display:flex;align-items:center;gap: var(--sp-3);background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--line);border-radius: var(--r-sm);padding: var(--sp-3) var(--sp-4);margin-bottom: var(--sp-3);cursor:pointer;transition:border-color .15s ease}
 .wf-row:hover{border-color:var(--ink-dim)}
-.wf-t{font-size:13.5px;font-weight:600;line-height:1.3}
-.wf-s{font-size:11.5px;color:var(--ink-faint);margin-top:2px;font-family:var(--mono)}
-.kempty{font-size:12.5px;color:var(--ink-faint);padding:14px 6px;text-align:center;line-height:1.5}
-.vm-stale{font-size:11.5px;color:var(--ink-faint);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:6px 9px;margin:8px 0 4px;line-height:1.45}
-.mc-per{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
-.mc-delta{font-size:12px;color:var(--green);margin:-2px 0 12px}
+.wf-t{font-size: var(--fs-4);font-weight:600;line-height:1.3}
+.wf-s{font-size: var(--fs-2);color:var(--ink-faint);margin-top: var(--sp-1);font-family:var(--mono)}
+.kempty{font-size: var(--fs-3);color:var(--ink-faint);padding: var(--sp-4) var(--sp-3);text-align:center;line-height:1.5}
+.vm-stale{font-size: var(--fs-2);color:var(--ink-faint);background:var(--panel-2);border:1px solid var(--line);border-radius: var(--r-sm);padding: var(--sp-3) var(--sp-3);margin: var(--sp-3) 0 var(--sp-2);line-height:1.45}
+.mc-per{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin-bottom: var(--sp-3)}
+.mc-delta{font-size: var(--fs-3);color:var(--green);margin:-2px 0 12px}
 .mc-delta.down{color:var(--red)}
-.mc-row.mc-all{border-top:1px solid var(--line);margin-top:8px;padding-top:10px}
-.stats.mini .stat{padding:10px 12px}
-.stats.mini .stat-v{font-size:18px}
-.stats.mini .stat-l{font-size:11px;margin-top:2px}
+.mc-row.mc-all{border-top:1px solid var(--line);margin-top: var(--sp-3);padding-top: var(--sp-3)}
+.stats.mini .stat{padding: var(--sp-3) var(--sp-4)}
+.stats.mini .stat-v{font-size: var(--fs-7)}
+.stats.mini .stat-l{font-size: var(--fs-2);margin-top: var(--sp-1)}
 /* Компактная полоса статусов */
-.statuscard{margin-top:16px}
-.statbar{display:flex;height:12px;border-radius:6px;overflow:hidden;margin:10px 0}
+.statuscard{margin-top: var(--sp-5)}
+.statbar{display:flex;height:12px;border-radius: var(--r-sm);overflow:hidden;margin: var(--sp-3) 0}
 .statbar i{display:block}
-.statleg{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink-dim)}
-.statleg span{display:flex;align-items:center;gap:6px}
+.statleg{display:flex;flex-wrap:wrap;gap: var(--sp-4);font-size: var(--fs-3);color:var(--ink-dim)}
+.statleg span{display:flex;align-items:center;gap: var(--sp-3)}
 .ldot{width:9px;height:9px;border-radius:50%;display:inline-block}
 /* Модалка экономики выезда */
-.ehead{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin:16px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--line)}
-.ehead:first-child{margin-top:0}
-.erow{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:4px 0}
+.ehead{font-size: var(--fs-1);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-5) 0 var(--sp-3);padding-bottom: var(--sp-2);border-bottom:1px solid var(--line)}
+.ehead:first-child{margin-top: 0}
+.erow{display:flex;justify-content:space-between;gap: var(--sp-4);font-size: var(--fs-4);padding: var(--sp-2) 0}
 .ek{color:var(--ink-dim);min-width:0}
 .ev{white-space:nowrap;text-align:right}
-.edim{color:var(--ink-faint);font-size:11px}
-.ejob{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px}
-.ejob-t{margin-bottom:6px}
-.ewarr{font-size:11px;color:var(--cyan);border:1px solid #1f5551;background:#12302e;border-radius:20px;padding:2px 7px;margin-left:6px}
-.etotal{display:flex;justify-content:space-between;align-items:center;border-top:2px solid var(--line);margin-top:10px;padding-top:10px;font-size:15px}
-.ehint{color:var(--ink-faint);font-size:12px;padding:6px 0}
-.emap{height:200px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#111}
-.eleg{display:flex;gap:16px;font-size:11px;color:var(--ink-dim);padding-top:6px}
-.eleg span{display:flex;align-items:center;gap:6px}
+.edim{color:var(--ink-faint);font-size: var(--fs-2)}
+.ejob{background:var(--panel-2);border:1px solid var(--line);border-radius: var(--r-sm);padding: var(--sp-3) var(--sp-4);margin-bottom: var(--sp-3)}
+.ejob-t{margin-bottom: var(--sp-3)}
+.ewarr{font-size: var(--fs-2);color:var(--cyan);border:1px solid #1f5551;background:#12302e;border-radius: var(--r-pill);padding: var(--sp-1) var(--sp-3);margin-left: var(--sp-3)}
+.etotal{display:flex;justify-content:space-between;align-items:center;border-top:2px solid var(--line);margin-top: var(--sp-3);padding-top: var(--sp-3);font-size: var(--fs-5)}
+.ehint{color:var(--ink-faint);font-size: var(--fs-3);padding: var(--sp-3) 0}
+.emap{height:200px;border:1px solid var(--line);border-radius: var(--r-sm);overflow:hidden;background:#111}
+.eleg{display:flex;gap: var(--sp-5);font-size: var(--fs-2);color:var(--ink-dim);padding-top: var(--sp-3)}
+.eleg span{display:flex;align-items:center;gap: var(--sp-3)}
 .edash{width:18px;height:0;border-top:3px dashed #9aa1ad;display:inline-block}
 .esolid{width:18px;height:0;border-top:3px solid var(--accent);display:inline-block}
-.aempty{padding:24px;text-align:center;color:var(--ink-faint)}
+.aempty{padding: var(--sp-6);text-align:center;color:var(--ink-faint)}
 </style>
 </head>
 <body>
@@ -858,8 +893,8 @@
                словами, объяснять их отдельным абзацем не нужно. -->
           <div id="sideTools">
           <input type="search" id="search" placeholder="искать по названию…">
-          <div class="seg" id="typeFilter" style="margin-top:8px"><button class="on" data-tf="all">все</button><button data-tf="client">клиенты</button><button data-tf="base">депо</button></div>
-          <div id="pointTools"><button class="btn amber" id="pointCreate" style="width:100%;margin-top:10px">+ Создать точку</button></div>
+          <div class="seg" id="typeFilter" style="margin-top: var(--sp-3)"><button class="on" data-tf="all">все</button><button data-tf="client">клиенты</button><button data-tf="base">депо</button></div>
+          <div id="pointTools"><button class="btn amber" id="pointCreate" style="width:100%;margin-top: var(--sp-3)">+ Создать точку</button></div>
           </div>
           <!-- Список в своей коробке: восемьдесят точек утаскивали «Маршрут»
                и «Сохранить как выезд» далеко вниз, за пределы карточки.
@@ -880,9 +915,9 @@
              одинаково важным. Редкое (объезды, оптимизация, коридор)
              ушло под раскрытие. -->
         <div id="rEndpoints" class="endpoints"></div>
-        <div id="rStops" style="margin-top:8px"></div>
+        <div id="rStops" style="margin-top: var(--sp-3)"></div>
 
-        <div class="row" style="margin-top:10px">
+        <div class="row" style="margin-top: var(--sp-3)">
           <button class="btn sm" id="rWpMode">+ на карте</button>
           <input type="text" id="rWp" placeholder="или адрес…" class="grow">
           <button class="btn sm" id="rWpAdd">Найти</button>
@@ -890,33 +925,33 @@
         <div class="hint" id="rWpHint" style="display:none">Кликни по карте, чтобы добавить промежуточную точку.</div>
         <div id="rWpRes"></div>
 
-        <div class="row" style="margin-top:12px">
+        <div class="row" style="margin-top: var(--sp-4)">
           <select id="rPref" class="grow"><option value="recommended">рекомендуемый</option><option value="fastest">быстрый</option><option value="shortest">короткий</option></select>
           <button class="btn amber" id="rBuild">Построить</button>
         </div>
-        <div class="row" style="margin-top:6px;align-items:center;gap:8px">
-          <div class="hint grow" id="rStatus" style="margin:0"></div>
+        <div class="row" style="margin-top: var(--sp-3);align-items:center;gap: var(--sp-3)">
+          <div class="hint grow" id="rStatus" style="margin: 0"></div>
           <button class="btn sm ghost" id="rClear">Очистить</button>
         </div>
-        <div id="rVariants" style="margin-top:6px"></div>
+        <div id="rVariants" style="margin-top: var(--sp-3)"></div>
 
-        <button class="btn sm ghost" id="rMoreToggle" style="width:100%;margin-top:12px">▸ Ещё: объезды, оптимизация, коридор</button>
-        <div id="rMore" style="display:none;margin-top:8px">
+        <button class="btn sm ghost" id="rMoreToggle" style="width:100%;margin-top: var(--sp-4)">▸ Ещё: объезды, оптимизация, коридор</button>
+        <div id="rMore" style="display:none;margin-top: var(--sp-3)">
           <!-- Объезды живут здесь, а не среди фильтров точек: «кирпич» нужен
                ровно для одного — чтобы маршрут обошёл плохую дорогу. -->
           <label class="chip-check" id="avoidWrap" style="width:100%;justify-content:center"><input type="checkbox" id="avoidMode"><span>🚫 Ставить объезды</span></label>
           <div class="hint" id="avoidHint" style="display:none">Кликай по карте, где объезжать. Радиус меняется в попапе «кирпича». Быстрее — правый клик по карте.</div>
-          <button class="btn sm" id="rOpt" style="width:100%;margin-top:8px">Оптимизировать и построить</button>
-          <button class="btn sm ghost" id="corToggle" style="width:100%;margin-top:8px">▸ Коридор: найти попутных клиентов</button>
-          <div id="corBody" style="display:none;margin-top:8px">
+          <button class="btn sm" id="rOpt" style="width:100%;margin-top: var(--sp-3)">Оптимизировать и построить</button>
+          <button class="btn sm ghost" id="corToggle" style="width:100%;margin-top: var(--sp-3)">▸ Коридор: найти попутных клиентов</button>
+          <div id="corBody" style="display:none;margin-top: var(--sp-3)">
             <div class="seg"><button id="corDist" class="on">по км</button><button id="corTime">по времени</button></div>
-            <div id="corDistBox" style="margin-top:6px"><div class="row" style="align-items:center"><input type="range" id="rBuf" min="0" max="50" step="1" value="0" class="grow"><span class="hint" id="rBufVal" style="margin:0">0 км</span></div></div>
-            <div id="corTimeBox" style="margin-top:6px;display:none"><div class="row" style="align-items:center"><input type="range" id="rIso" min="0" max="60" step="5" value="0" class="grow"><span class="hint" id="rIsoVal" style="margin:0">0 мин</span><button class="btn sm" id="rIsoBuild">изохрона</button></div></div>
-            <div id="rCorridor" style="margin-top:6px;max-height:200px;overflow:auto"></div>
+            <div id="corDistBox" style="margin-top: var(--sp-3)"><div class="row" style="align-items:center"><input type="range" id="rBuf" min="0" max="50" step="1" value="0" class="grow"><span class="hint" id="rBufVal" style="margin: 0">0 км</span></div></div>
+            <div id="corTimeBox" style="margin-top: var(--sp-3);display:none"><div class="row" style="align-items:center"><input type="range" id="rIso" min="0" max="60" step="5" value="0" class="grow"><span class="hint" id="rIsoVal" style="margin: 0">0 мин</span><button class="btn sm" id="rIsoBuild">изохрона</button></div></div>
+            <div id="rCorridor" style="margin-top: var(--sp-3);max-height:200px;overflow:auto"></div>
           </div>
         </div>
 
-        <button class="btn amber" id="rSaveTrip" style="width:100%;margin-top:12px">Сохранить как выезд</button>
+        <button class="btn amber" id="rSaveTrip" style="width:100%;margin-top: var(--sp-4)">Сохранить как выезд</button>
         </div>
       </div>
       <div class="block"><div class="hint" id="dataStatus">—</div></div>
@@ -937,7 +972,7 @@
         <h4>Слои карты</h4>
         <div class="lay-t">Цвет точек</div>
         <div class="seg" id="colorMode"><button class="on" data-cm="urgency">срочность</button><button data-cm="profit">прибыль</button><button data-cm="own">свой</button></div>
-        <div class="hint" id="profitLegend" style="margin:8px 0 12px"></div>
+        <div class="hint" id="profitLegend" style="margin: var(--sp-3) 0 var(--sp-4)"></div>
         <label class="lay"><input type="checkbox" id="ptAlert"><span>⚠ Только требующие внимания <b id="alertCnt"></b></span></label>
         <div class="hint">Просрочен контакт или подходит ТО. Остальные точки на карте гаснут.</div>
       </div><div class="mode-tag" id="modeTag">● Кликни по карте</div><div class="map-summary" id="mapSummary"></div><div id="map"></div></div>
@@ -962,7 +997,7 @@
       <div class="card"><h3>О заявке</h3>
         <div class="row"><div class="grow"><label>Клиент</label><select id="jbClient"></select></div></div>
         <div class="row"><div class="grow"><label>Техника</label><select id="jbEquip"></select></div></div>
-        <div class="row" style="margin-top:6px;align-items:center"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin:0"><input type="checkbox" id="jbDepot" style="width:auto">Выполняется в депо</label><div class="grow" id="jbDepotWrap" style="display:none"><select id="jbDepotSel"></select></div></div>
+        <div class="row" style="margin-top: var(--sp-3);align-items:center"><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;margin: 0"><input type="checkbox" id="jbDepot" style="width:auto">Выполняется в депо</label><div class="grow" id="jbDepotWrap" style="display:none"><select id="jbDepotSel"></select></div></div>
         <div class="hint" id="jbDepotHint" style="display:none">Технику привозит и забирает клиент. Заявка не попадёт в выезд, дорога и суточные не считаются. Ставка — «в депо» у плательщика.</div>
         <div class="row"><div class="grow"><label>Статус</label><select id="jbStatus"><option value="open">открыта</option><option value="planned">запланирована</option><option value="in_progress">в работе</option><option value="done">закрыта</option><option value="cancelled">отменена</option></select></div><div class="grow"><label>Инженер</label><select id="jbEng"></select></div></div>
       </div>
@@ -971,13 +1006,13 @@
         <div class="row"><div class="grow"><label>Дата визита</label><input type="date" id="jbDate"></div><div class="grow"><label>Окно</label><input type="text" id="jbWindow" placeholder="9:00–11:00"></div></div>
         <div class="row"><div class="grow"><label>Дедлайн SLA</label><input type="date" id="jbDue"></div><div class="grow"><label>Гарантия на ремонт, дней</label><input type="number" id="jbWarrDays" placeholder="0 — без гарантии"></div></div>
         <div class="hint">Гарантия оформится при статусе «закрыта», если есть платные работы и привязана техника.</div>
-        <label style="margin-top:10px">Заметка</label><input type="text" id="jbNotes">
+        <label style="margin-top: var(--sp-3)">Заметка</label><input type="text" id="jbNotes">
       </div>
 
       <div class="card trip-wide"><h3>Работы</h3>
         <div class="row"><select id="jbWorkPick" class="grow"></select><button class="btn sm" id="jbWorkAdd">+ из каталога</button><button class="btn sm" id="jbCustomAdd">+ своя</button></div>
-        <div id="jbWorks" style="margin-top:10px"></div>
-        <div class="hint" id="jbTotals" style="margin-top:8px"></div>
+        <div id="jbWorks" style="margin-top: var(--sp-3)"></div>
+        <div class="hint" id="jbTotals" style="margin-top: var(--sp-3)"></div>
       </div>
     </div>
   </div></div>
@@ -999,13 +1034,13 @@
     <div class="trip-grid">
       <div class="card"><h3>Когда и кто</h3>
         <div class="row"><div class="grow"><label>Дата с</label><input type="date" id="tpFrom"></div><div class="grow"><label>Дата по</label><input type="date" id="tpTo"></div></div>
-        <div class="row"><div class="grow"><label>Авто</label><select id="tpVeh"></select><div class="hint" id="tpVehInfo" style="margin-top:4px"></div></div></div>
+        <div class="row"><div class="grow"><label>Авто</label><select id="tpVeh"></select><div class="hint" id="tpVehInfo" style="margin-top: var(--sp-2)"></div></div></div>
         <div class="row"><div class="grow"><label>Инженер</label><select id="tpEng"></select></div><div class="grow"><label>Статус</label><select id="tpStatus"><option value="planned">план</option><option value="assigned">назначен</option><option value="in_progress">в работе</option><option value="done">завершён</option><option value="cancelled">отменён</option></select></div></div>
-        <label style="margin-top:10px">Заметка</label><input type="text" id="tpNotes">
+        <label style="margin-top: var(--sp-3)">Заметка</label><input type="text" id="tpNotes">
       </div>
 
       <div class="card"><h3>Заявки выезда <span class="cnt" id="tpJobsCnt">0</span></h3>
-        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--ink-dim);margin:2px 0 8px"><input type="checkbox" id="tpJobsRoute" checked style="width:auto">показывать только заявки по точкам маршрута</label>
+        <label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim);margin: var(--sp-1) 0 var(--sp-3)"><input type="checkbox" id="tpJobsRoute" checked style="width:auto">показывать только заявки по точкам маршрута</label>
         <!-- Два разных переключателя на строке, и оба раньше были без подписи.
              Флажок — включить заявку в выезд. Радиокнопка — пометить основную,
              а от неё зависит схема расчёта километража: у основной свой
@@ -1013,31 +1048,31 @@
              напрямую меняет деньги в акте, и догадываться о нём нельзя. -->
         <div class="jobs-legend"><span class="jl-a">☑ в выезде</span><span class="jl-b">◉ основная</span></div>
         <div id="tpJobs" style="max-height:340px;overflow:auto"></div>
-        <div class="hint" style="margin-top:6px">Основная заявка несёт базовый пробег «Депо → она → Депо». Остальным считается только крюк сверх него.</div>
+        <div class="hint" style="margin-top: var(--sp-3)">Основная заявка несёт базовый пробег «Депо → она → Депо». Остальным считается только крюк сверх него.</div>
       </div>
 
       <div class="card"><h3>Маршрут <span class="cnt" id="tpRouteKm">—</span></h3>
         <!-- В макете карта тут была, и не для красоты: список остановок
              не показывает ни формы круга, ни того, что точка стоит в стороне
              от него. Пунктир — план, сплошная — где машина прошла на самом деле. -->
-        <div id="tpMapWrap" style="display:none;margin-bottom:10px">
+        <div id="tpMapWrap" style="display:none;margin-bottom: var(--sp-3)">
           <div id="tpMap" class="emap"></div>
           <div class="eleg"><span><i class="edash"></i>план</span><span><i class="esolid"></i>факт</span></div>
         </div>
         <div id="tpRouteStops" style="max-height:220px;overflow:auto"></div>
-        <div class="hint" id="tpRouteStatus" style="margin-top:6px"></div>
-        <button class="btn sm" id="tpEditMap" style="margin-top:8px;width:100%">Редактировать маршрут на карте</button>
-        <div class="hint" style="margin-top:4px">Построение, старт/депо, буфер и изохрона — в планировщике на вкладке «Карта».</div>
+        <div class="hint" id="tpRouteStatus" style="margin-top: var(--sp-3)"></div>
+        <button class="btn sm" id="tpEditMap" style="margin-top: var(--sp-3);width:100%">Редактировать маршрут на карте</button>
+        <div class="hint" style="margin-top: var(--sp-2)">Построение, старт/депо, буфер и изохрона — в планировщике на вкладке «Карта».</div>
       </div>
 
       <!-- Ручные суммы стоят рядом с разбивкой, на которую влияют: раньше
            это были разные половины окна, и связь приходилось держать в уме. -->
       <div class="card trip-wide"><h3>Экономика</h3>
-        <div class="hint" id="tpEcon" style="margin-bottom:12px"></div>
+        <div class="hint" id="tpEcon" style="margin-bottom: var(--sp-4)"></div>
         <div class="econ-split">
           <div>
             <span class="fg-t">Суммы вручную</span>
-            <div class="row" style="margin-top:8px"><div class="grow"><label>Выручка, ₴</label><input type="number" id="tpOvRev" placeholder="авто"></div><div class="grow"><label>Затраты, ₴</label><input type="number" id="tpOvCost" placeholder="авто"></div></div>
+            <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>Выручка, ₴</label><input type="number" id="tpOvRev" placeholder="авто"></div><div class="grow"><label>Затраты, ₴</label><input type="number" id="tpOvCost" placeholder="авто"></div></div>
             <div id="tpRoadGroups"></div>
             <div class="hint">Пусто — считается из тарифов и себестоимости. Заполнено — фиксированная сумма.</div>
           </div>
@@ -1065,13 +1100,13 @@
         <div class="searchbox"><input type="search" id="emSearch" placeholder="поиск модели…"></div>
         <button class="btn sm amber" id="emShowAdd">+ Модель</button></div>
       <div class="meta">Производитель → тип → модель. Гарантия и сервисный интервал по умолчанию — для привязки к технике клиентов и к работам.</div>
-      <div id="emList" style="margin-top:10px"></div>
+      <div id="emList" style="margin-top: var(--sp-3)"></div>
       <datalist id="emManuList"></datalist><datalist id="emKindList"></datalist>
-      <div class="card" id="emForm" style="margin-top:10px;padding:14px;display:none"><h3 id="emFormTitle" style="font-family:var(--mono);font-size:11px;color:var(--accent-ink)">Добавить модель</h3>
+      <div class="card" id="emForm" style="margin-top: var(--sp-3);padding: var(--sp-4);display:none"><h3 id="emFormTitle" style="font-family:var(--mono);font-size: var(--fs-2);color:var(--accent-ink)">Добавить модель</h3>
         <div class="row"><div class="grow"><label>Производитель</label><input type="text" id="emManu" list="emManuList" placeholder="Bosch"></div><div class="grow"><label>Тип техники</label><input type="text" id="emKind" list="emKindList" placeholder="холодильник"></div><div class="grow"><label>Модель</label><input type="text" id="emModel" placeholder="KGN39…"></div></div>
         <div class="row"><div class="grow"><label>Гарантия, мес</label><input type="number" id="emWarr"></div><div class="grow"><label>Сервисный интервал, моточасов</label><input type="number" id="emInt"></div></div>
         <label>Заметки</label><input type="text" id="emNotes">
-        <div class="row" style="margin-top:10px"><button class="btn amber grow" id="emSave">Сохранить модель</button><button class="btn ghost" id="emCancel">Отмена</button></div>
+        <div class="row" style="margin-top: var(--sp-3)"><button class="btn amber grow" id="emSave">Сохранить модель</button><button class="btn ghost" id="emCancel">Отмена</button></div>
         <div class="err" id="emErr"></div>
       </div>
       </div>
@@ -1088,21 +1123,25 @@
       <div class="subtab" data-sub="trips" id="subTrips" style="display:none">Выезды</div>
     </div>
     <div id="plMine" style="display:none">
-      <div class="pane-head"><h2>Мой день</h2><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="mineDone" style="width:auto">показать завершённые</label></div>
+      <div class="pane-head"><h2>Мой день</h2><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim)"><input type="checkbox" id="mineDone" style="width:auto">показать завершённые</label></div>
       <div id="mineList"></div>
     </div>
     <div id="plJobs">
-      <div class="pane-head"><h2>Заявки</h2>
-        <select id="jobEngFilter" style="width:150px"><option value="">все инженеры</option></select>
-        <div class="searchbox"><input type="search" id="jobSearch" placeholder="поиск по клиенту…"></div>
-        <button class="btn sm amber" id="jobAdd">+ Заявка</button></div>
-      <div class="chips" id="jobStatusChips" style="margin:0 0 12px"></div>
+      <div class="stickyhead">
+        <div class="pane-head"><h2>Заявки</h2>
+          <select id="jobEngFilter" style="width:150px"><option value="">все инженеры</option></select>
+          <div class="searchbox"><input type="search" id="jobSearch" placeholder="поиск по клиенту…"></div>
+          <button class="btn sm amber" id="jobAdd">+ Заявка</button></div>
+        <div class="chips" id="jobStatusChips"></div>
+      </div>
       <div id="jobList"></div>
     </div>
     <div id="plTrips" style="display:none">
-      <div class="pane-head"><h2>Выезды</h2><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
+      <div class="stickyhead">
+        <div class="pane-head"><h2>Выезды</h2><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
+        <div class="chips" id="tripStatusChips"></div>
+      </div>
       <div id="tripsKanban">
-        <div class="chips" id="tripStatusChips" style="margin:0 0 12px"></div>
         <div id="tripList"></div>
       </div>
       <div id="tripsGantt" style="display:none">
@@ -1110,7 +1149,7 @@
              один выезд в октябре растягивал шкалу на полгода. -->
         <div class="gantt-bar-ctl" id="ganttBar"></div>
         <div id="gantt"></div>
-        <div class="meta" style="margin-top:10px"><span style="color:#9aa1ad">■</span> план · <span style="color:#5eb3f6">■</span> назначен · <span style="color:#111;background:var(--accent);padding:0 3px;border-radius:2px">■</span> в работе · <span style="color:#16a34a">■</span> завершён</div>
+        <div class="meta" style="margin-top: var(--sp-3)"><span style="color:#9aa1ad">■</span> план · <span style="color:#5eb3f6">■</span> назначен · <span style="color:#111;background:var(--accent);padding: 0 var(--sp-1);border-radius: var(--r-pill)">■</span> в работе · <span style="color:#16a34a">■</span> завершён</div>
       </div>
     </div>
   </div></div>
@@ -1129,79 +1168,79 @@
       <div class="settings-body">
     <div class="card" data-sec-panel="tariffs"><h3>Общие параметры</h3>
       <div class="row"><div class="grow"><label>Валюта</label><input type="text" id="stCur"></div><div class="grow"><label>Смена, ч</label><input type="number" id="stShift" step="0.5"></div><div class="grow"><label>Допуск, %</label><input type="number" id="stDev" step="1"></div></div>
-      <div class="meta" style="margin-top:12px">Себестоимость по умолчанию (за км / час / день / ночь). Профиль тарифа может переопределить своими значениями:</div>
+      <div class="meta" style="margin-top: var(--sp-4)">Себестоимость по умолчанию (за км / час / день / ночь). Профиль тарифа может переопределить своими значениями:</div>
       <div class="row"><div class="grow"><label>за км</label><input type="number" id="csKm" step="0.01"></div><div class="grow"><label>за час</label><input type="number" id="csHour" step="0.01"></div><div class="grow"><label>за день</label><input type="number" id="csDay" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="csNight" step="0.01"></div></div>
-      <div class="meta" style="margin:12px 0 4px">Стоянки → факт-часы</div>
-      <div class="hint" style="margin-bottom:6px">Стоянка засчитывается в работу, только если попала в радиус точки заявки. Обед на трассе и ночёвка не попадут. Идёт только в себестоимость — нормочасы и акт не трогаются.</div>
+      <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Стоянки → факт-часы</div>
+      <div class="hint" style="margin-bottom: var(--sp-3)">Стоянка засчитывается в работу, только если попала в радиус точки заявки. Обед на трассе и ночёвка не попадут. Идёт только в себестоимость — нормочасы и акт не трогаются.</div>
       <div class="row"><div class="grow"><label>Радиус вокруг точки, м</label><input type="number" id="stStayRad" step="10"></div><div class="grow"><label>Короче этого не считать, мин</label><input type="number" id="stStayMin" step="1"></div></div>
-      <label style="margin-top:12px">Адрес прокси ORS (безопасный режим)</label><input type="text" id="orsProxy" placeholder="https://<проект>.supabase.co/functions/v1/ors">
-      <div class="hint" style="margin-top:4px">Ключ openrouteservice хранится в секрете этой функции на сервере и наружу не отдаётся. Отдельного поля для ключа в приложении нет.</div>
+      <label style="margin-top: var(--sp-4)">Адрес прокси ORS (безопасный режим)</label><input type="text" id="orsProxy" placeholder="https://<проект>.supabase.co/functions/v1/ors">
+      <div class="hint" style="margin-top: var(--sp-2)">Ключ openrouteservice хранится в секрете этой функции на сервере и наружу не отдаётся. Отдельного поля для ключа в приложении нет.</div>
       <!-- Поле «Ключ openrouteservice (прямой режим)» убрано (аудит, В5).
            Ключ жил в settings.ors_key, а эту строку читал любой сотрудник —
            то есть ключ мог утащить кто угодно и сжечь квоту. Теперь он
            только в секрете Edge Function ors, наружу не отдаётся. -->
-      <label style="margin-top:12px">Гарантия на ремонт по умолчанию, дней</label><input type="number" id="stWarrDays" placeholder="90">
-      <label style="margin-top:12px">Период регулярного контакта, дней (0 — выкл)</label><input type="number" id="stContact" placeholder="0">
-      <button class="btn sm amber" id="stSave" style="margin-top:14px">Сохранить</button><span class="hint" id="stStatus" style="margin-left:8px"></span>
+      <label style="margin-top: var(--sp-4)">Гарантия на ремонт по умолчанию, дней</label><input type="number" id="stWarrDays" placeholder="90">
+      <label style="margin-top: var(--sp-4)">Период регулярного контакта, дней (0 — выкл)</label><input type="number" id="stContact" placeholder="0">
+      <button class="btn sm amber" id="stSave" style="margin-top: var(--sp-4)">Сохранить</button><span class="hint" id="stStatus" style="margin-left: var(--sp-3)"></span>
     </div>
     <div class="card" data-sec-panel="tariffs"><h3>Профили тарифов (плательщики)</h3>
       <div class="meta">Профиль = плательщик со своими ставками. Две ветки: платно и гарантия — на строку работ в заявке подставляется по признаку платно/гарантия. Флажки «по умолчанию» задают, какой профиль ставить автоматически. Дорожные ставки понадобятся в расчёте выезда.</div>
-      <div id="tpList" style="margin-top:10px"></div>
-      <button class="btn sm amber" id="profCreate" style="margin-top:12px">+ Создать профиль</button>
+      <div id="tpList" style="margin-top: var(--sp-3)"></div>
+      <button class="btn sm amber" id="profCreate" style="margin-top: var(--sp-4)">+ Создать профиль</button>
     </div>
     <div class="card" data-sec-panel="docs" style="display:none"><h3>Реквизиты организации</h3>
       <div class="meta">Подставляются в акт выполненных работ как «Исполнитель».</div>
       <label>Название организации</label><input type="text" id="coName" placeholder="ООО «…» / ФОП …">
-      <label style="margin-top:10px">Реквизиты (адрес, ЕДРПОУ/ИНН, телефон, банк — свободным текстом)</label><textarea id="coDetails" placeholder="г. …, ул. …&#10;ЕДРПОУ/ИНН …&#10;тел. …"></textarea>
-      <label style="margin-top:10px">Подписант (ФИО, должность)</label><input type="text" id="coSigner" placeholder="Директор Иванов И. И.">
-      <button class="btn sm amber" id="coSave" style="margin-top:12px">Сохранить реквизиты</button><span class="hint" id="coStatus" style="margin-left:8px"></span>
+      <label style="margin-top: var(--sp-3)">Реквизиты (адрес, ЕДРПОУ/ИНН, телефон, банк — свободным текстом)</label><textarea id="coDetails" placeholder="г. …, ул. …&#10;ЕДРПОУ/ИНН …&#10;тел. …"></textarea>
+      <label style="margin-top: var(--sp-3)">Подписант (ФИО, должность)</label><input type="text" id="coSigner" placeholder="Директор Иванов И. И.">
+      <button class="btn sm amber" id="coSave" style="margin-top: var(--sp-4)">Сохранить реквизиты</button><span class="hint" id="coStatus" style="margin-left: var(--sp-3)"></span>
     </div>
     <div class="card" data-sec-panel="docs" style="display:none"><h3>Шаблон акта выполненных работ</h3>
       <div class="meta">Тексты и подписи в печатной форме акта. Пустые поля берут значения по умолчанию. Суммы/строки работ считаются автоматически.</div>
       <label>Заголовок</label><input type="text" id="atTitle" placeholder="Акт выполненных работ">
-      <label style="margin-top:10px">Вступительный текст (необязательно, печатается под датой)</label><textarea id="atIntro" placeholder="Напр.: Настоящий акт составлен о том, что исполнителем выполнены, а заказчиком приняты следующие работы:"></textarea>
+      <label style="margin-top: var(--sp-3)">Вступительный текст (необязательно, печатается под датой)</label><textarea id="atIntro" placeholder="Напр.: Настоящий акт составлен о том, что исполнителем выполнены, а заказчиком приняты следующие работы:"></textarea>
       <div class="row"><div class="grow"><label>Подпись «Исполнитель»</label><input type="text" id="atExecRole" placeholder="Исполнитель"></div><div class="grow"><label>Подпись «Заказчик»</label><input type="text" id="atCustRole" placeholder="Заказчик"></div></div>
-      <label style="margin-top:10px">Заголовок столбца работ</label><input type="text" id="atWorksCol" placeholder="Наименование работ (услуг)">
-      <label style="margin-top:10px">Строка итога (подставится {sum})</label><input type="text" id="atTotalWords" placeholder="Всего оказано услуг на сумму {sum}.">
-      <label style="margin-top:10px">Примечание про гарантию (если есть гарантийные работы)</label><textarea id="atWarrNote" placeholder="Работы, отмеченные как «гарантия», выполнены в рамках гарантийных обязательств и оплате не подлежат."></textarea>
-      <label style="margin-top:10px">Доп. примечание внизу (необязательно)</label><textarea id="atNote" placeholder="Напр.: Претензий по объёму, качеству и срокам стороны не имеют."></textarea>
-      <label style="margin-top:10px">Линия подписи заказчика</label><input type="text" id="atCustSign" placeholder="подпись / ФИО">
-      <button class="btn sm amber" id="atSave" style="margin-top:12px">Сохранить шаблон</button><span class="hint" id="atStatus" style="margin-left:8px"></span>
-      <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
+      <label style="margin-top: var(--sp-3)">Заголовок столбца работ</label><input type="text" id="atWorksCol" placeholder="Наименование работ (услуг)">
+      <label style="margin-top: var(--sp-3)">Строка итога (подставится {sum})</label><input type="text" id="atTotalWords" placeholder="Всего оказано услуг на сумму {sum}.">
+      <label style="margin-top: var(--sp-3)">Примечание про гарантию (если есть гарантийные работы)</label><textarea id="atWarrNote" placeholder="Работы, отмеченные как «гарантия», выполнены в рамках гарантийных обязательств и оплате не подлежат."></textarea>
+      <label style="margin-top: var(--sp-3)">Доп. примечание внизу (необязательно)</label><textarea id="atNote" placeholder="Напр.: Претензий по объёму, качеству и срокам стороны не имеют."></textarea>
+      <label style="margin-top: var(--sp-3)">Линия подписи заказчика</label><input type="text" id="atCustSign" placeholder="подпись / ФИО">
+      <button class="btn sm amber" id="atSave" style="margin-top: var(--sp-4)">Сохранить шаблон</button><span class="hint" id="atStatus" style="margin-left: var(--sp-3)"></span>
+      <div style="border-top:1px solid var(--line);margin-top: var(--sp-4);padding-top: var(--sp-4)">
         <div class="meta">Или загрузи свой <b>Excel-шаблон (.xlsx)</b> с плейсхолдерами — тогда акт будет генерироваться по нему, точь-в-точь твой дизайн (стили, лого, вёрстка). Пусто — печатается встроенный HTML-акт.</div>
-        <div id="axInfo" class="hint" style="margin:8px 0"></div>
-        <div class="row" style="align-items:center"><input type="file" id="axFile" accept=".xlsx" style="font-size:12px"><button class="btn sm ghost" id="axDownload">скачать</button><button class="btn sm ghost" id="axRemove">убрать</button></div>
-        <div class="hint" style="margin-top:8px">Встроенные плейсхолдеры: {{number}} {{date}} {{exec_name}} {{exec_details}} {{exec_signer}} {{client}} {{client_details}} {{client_signer}} {{payer}} {{payer_details}} {{total}} {{total_words}} {{note}}. Строка таблицы работ: {{w_no}} {{w_name}} {{w_hours}} {{w_price}} {{w_sum}}. Свои — в карточке ниже.</div>
+        <div id="axInfo" class="hint" style="margin: var(--sp-3) 0"></div>
+        <div class="row" style="align-items:center"><input type="file" id="axFile" accept=".xlsx" style="font-size: var(--fs-3)"><button class="btn sm ghost" id="axDownload">скачать</button><button class="btn sm ghost" id="axRemove">убрать</button></div>
+        <div class="hint" style="margin-top: var(--sp-3)">Встроенные плейсхолдеры: {{number}} {{date}} {{exec_name}} {{exec_details}} {{exec_signer}} {{client}} {{client_details}} {{client_signer}} {{payer}} {{payer_details}} {{total}} {{total_words}} {{note}}. Строка таблицы работ: {{w_no}} {{w_name}} {{w_hours}} {{w_price}} {{w_sum}}. Свои — в карточке ниже.</div>
       </div>
     </div>
     <div class="card" data-sec-panel="docs" style="display:none"><h3>Свои плейсхолдеры</h3>
       <div class="meta">Придумай любые плейсхолдеры и задай им значения — потом расставь их в Excel-шаблоне там, где нужно. В значении можно ссылаться на встроенные, напр. «Акт № {{number}} от {{date}}».</div>
-      <div id="avList" style="margin-top:10px"></div>
-      <div class="row" style="margin-top:10px"><button class="btn sm" id="avAdd">+ Добавить</button><button class="btn sm amber" id="avSave">Сохранить</button><span class="hint" id="avStatus" style="margin-left:4px"></span></div>
+      <div id="avList" style="margin-top: var(--sp-3)"></div>
+      <div class="row" style="margin-top: var(--sp-3)"><button class="btn sm" id="avAdd">+ Добавить</button><button class="btn sm amber" id="avSave">Сохранить</button><span class="hint" id="avStatus" style="margin-left: var(--sp-2)"></span></div>
     </div>
     <div class="card" data-sec-panel="theme" style="display:none"><h3>Тема по умолчанию для новых пользователей</h3>
       <div class="row"><div class="grow"><label>Режим</label><select id="dtMode"><option value="dark">Тёмная</option><option value="light">Светлая</option></select></div></div>
-      <button class="btn sm amber" id="dtSave" style="margin-top:10px">Сохранить тему по умолчанию</button><span class="hint" id="dtStatus" style="margin-left:8px"></span>
+      <button class="btn sm amber" id="dtSave" style="margin-top: var(--sp-3)">Сохранить тему по умолчанию</button><span class="hint" id="dtStatus" style="margin-left: var(--sp-3)"></span>
     </div>
     <div class="card" data-sec-panel="fleet" style="display:none"><h3>Автопарк</h3>
       <div class="meta">Машины для выбора в выездах. Пробег растёт при завершении выезда; трекинг ТО по интервалу.</div>
-      <div id="vehList" style="margin-top:10px"></div>
-      <div class="row" style="margin-top:10px"><input type="text" id="vhName" placeholder="название (Газель)" class="grow"><input type="text" id="vhPlate" placeholder="госномер" class="grow"></div>
-      <div class="row" style="margin-top:6px"><div class="grow"><label>Пробег, км</label><input type="number" id="vhOdo"></div><div class="grow"><label>Интервал ТО, км</label><input type="number" id="vhInt"></div></div>
-      <div class="row" style="margin-top:6px"><div class="grow"><label>ID объекта в Wialon</label><input type="text" id="vhWialon" placeholder="напр. 28307408"><div class="hint" style="margin-top:4px">Пусто — машина без датчика, на карте её не будет.</div></div></div>
-      <div class="row" style="margin-top:8px"><button class="btn sm amber grow" id="vhAdd">Добавить машину</button><button class="btn sm ghost" id="vhCancel" style="display:none">Отмена</button></div>
+      <div id="vehList" style="margin-top: var(--sp-3)"></div>
+      <div class="row" style="margin-top: var(--sp-3)"><input type="text" id="vhName" placeholder="название (Газель)" class="grow"><input type="text" id="vhPlate" placeholder="госномер" class="grow"></div>
+      <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>Пробег, км</label><input type="number" id="vhOdo"></div><div class="grow"><label>Интервал ТО, км</label><input type="number" id="vhInt"></div></div>
+      <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>ID объекта в Wialon</label><input type="text" id="vhWialon" placeholder="напр. 28307408"><div class="hint" style="margin-top: var(--sp-2)">Пусто — машина без датчика, на карте её не будет.</div></div></div>
+      <div class="row" style="margin-top: var(--sp-3)"><button class="btn sm amber grow" id="vhAdd">Добавить машину</button><button class="btn sm ghost" id="vhCancel" style="display:none">Отмена</button></div>
       <div class="err" id="vhErr"></div>
     </div>
     <div class="card" data-sec-panel="tariffs"><h3>Уведомления на телефон</h3>
       <div class="meta">Пуш о выезде в день начала. Настраивается на каждом устройстве отдельно.</div>
-      <div id="pushState" class="hint" style="margin-top:6px">—</div>
-      <div class="row" style="margin-top:8px"><button class="btn sm amber" id="pushOn">Включить на этом устройстве</button><button class="btn sm ghost" id="pushOff" style="display:none">Выключить</button></div>
-      <div id="pushHelp" class="hint" style="margin-top:8px"></div>
+      <div id="pushState" class="hint" style="margin-top: var(--sp-3)">—</div>
+      <div class="row" style="margin-top: var(--sp-3)"><button class="btn sm amber" id="pushOn">Включить на этом устройстве</button><button class="btn sm ghost" id="pushOff" style="display:none">Выключить</button></div>
+      <div id="pushHelp" class="hint" style="margin-top: var(--sp-3)"></div>
       <div class="err" id="pushErr"></div>
     </div>
     <div class="card" data-sec-panel="users" style="display:none"><h3>Пользователи и роли</h3>
       <div class="meta">Пользователи создаются регистрацией. Здесь меняешь имя и роль.</div>
-      <div id="usersList" style="margin-top:8px"></div>
+      <div id="usersList" style="margin-top: var(--sp-3)"></div>
     </div>
       </div>
     </div>
@@ -1217,30 +1256,30 @@
 <div class="overlay" id="reschedOverlay"><div class="modal s">
   <h3>Перенести выезд</h3>
   <div id="reschedInfo" class="meta"></div>
-  <div class="row" style="margin-top:10px"><div class="grow"><label>Новая дата начала</label><input type="date" id="rsFrom"></div></div>
-  <div class="row" style="margin-top:6px"><div class="grow"><label>Дата окончания <span class="hint" style="margin:0">— пусто = сдвинется сама</span></label><input type="date" id="rsTo"></div></div>
-  <div class="row" style="margin-top:6px"><div class="grow"><label>Причина</label><input type="text" id="rsReason" placeholder="почему переносим"></div></div>
-  <div class="hint" id="rsWarn" style="margin-top:8px"></div>
+  <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>Новая дата начала</label><input type="date" id="rsFrom"></div></div>
+  <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>Дата окончания <span class="hint" style="margin: 0">— пусто = сдвинется сама</span></label><input type="date" id="rsTo"></div></div>
+  <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>Причина</label><input type="text" id="rsReason" placeholder="почему переносим"></div></div>
+  <div class="hint" id="rsWarn" style="margin-top: var(--sp-3)"></div>
   <div class="err" id="rsErr"></div>
-  <div class="row" style="margin-top:12px"><button class="btn amber grow" id="rsSend">Отправить менеджеру</button><button class="btn ghost" id="rsCancel">Отмена</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="rsSend">Отправить менеджеру</button><button class="btn ghost" id="rsCancel">Отмена</button></div>
 </div></div>
 
 <div class="overlay" id="staysOverlay"><div class="modal">
   <h3 id="staysTitle">Стоянки на выезде</h3>
   <div id="staysBody" style="max-height:52vh;overflow:auto"></div>
-  <div class="row" style="margin-top:14px"><button class="btn ghost grow" id="staysClose">Закрыть</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="staysClose">Закрыть</button></div>
 </div></div>
 
 <div class="overlay" id="todayOverlay"><div class="modal s">
   <h3 id="todayTitle">Сегодня выезд</h3>
   <div id="todayBody"></div>
-  <div class="row" style="margin-top:14px"><button class="btn ghost grow" id="todayLater">Позже</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="todayLater">Позже</button></div>
 </div></div>
 
 <div class="overlay" id="vehOverlay"><div class="modal s">
   <h3 id="vehTitle">Машина</h3>
   <div id="vehBody"></div>
-  <div class="row" style="margin-top:14px"><button class="btn sm grow" id="vehCenter">Центрировать</button><button class="btn ghost grow" id="vehClose">Закрыть</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn sm grow" id="vehCenter">Центрировать</button><button class="btn ghost grow" id="vehClose">Закрыть</button></div>
 </div></div>
 
 <!-- Окно экономики выезда убрано: разбивка живёт врезкой на странице
@@ -1251,19 +1290,19 @@
   <h3 id="baseTitle">Старт — депо</h3>
   <div class="sub" id="baseSub"></div>
   <div id="baseList" style="max-height:200px;overflow:auto"></div>
-  <label style="margin-top:8px">Новое депо</label>
+  <label style="margin-top: var(--sp-3)">Новое депо</label>
   <input type="text" id="baseNew" placeholder="адрес депо для поиска координат">
-  <div class="row" style="margin-top:6px"><input type="text" id="baseNewName" class="grow" placeholder="название (необязательно)"><input type="text" id="baseNewDesc" class="grow" placeholder="описание"></div>
-  <button class="btn sm" id="baseNewAdd" style="margin-top:6px;width:100%">Создать депо</button>
+  <div class="row" style="margin-top: var(--sp-3)"><input type="text" id="baseNewName" class="grow" placeholder="название (необязательно)"><input type="text" id="baseNewDesc" class="grow" placeholder="описание"></div>
+  <button class="btn sm" id="baseNewAdd" style="margin-top: var(--sp-3);width:100%">Создать депо</button>
   <div id="baseNewRes"></div>
-  <div class="row" style="margin-top:12px"><button class="btn ghost grow" id="baseSkip">Не нужно</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="baseSkip">Не нужно</button></div>
 </div></div>
 
 <!-- link job prompt -->
 <div class="overlay" id="linkOverlay"><div class="modal s">
   <h3>Заявка для точки</h3>
   <div class="sub" id="linkText"></div>
-  <div class="row" style="margin-top:6px"><button class="btn amber grow" id="linkCreate">Создать заявку</button><button class="btn ghost" id="linkSkip">Без заявки</button></div>
+  <div class="row" style="margin-top: var(--sp-3)"><button class="btn amber grow" id="linkCreate">Создать заявку</button><button class="btn ghost" id="linkSkip">Без заявки</button></div>
 </div></div>
 
 <!-- trip editor -->
@@ -1275,14 +1314,14 @@
 <div class="overlay" id="confirmOverlay"><div class="modal s">
   <h3 id="confirmTitle">Подтверждение</h3>
   <div class="sub" id="confirmMsg"></div>
-  <div class="row" style="margin-top:16px"><button class="btn ghost grow" id="confirmNo">Отмена</button><button class="btn amber grow" id="confirmYes">Подтвердить</button></div>
+  <div class="row" style="margin-top: var(--sp-5)"><button class="btn ghost grow" id="confirmNo">Отмена</button><button class="btn amber grow" id="confirmYes">Подтвердить</button></div>
 </div></div>
 
 <!-- prompt dialog (замена нативного prompt) -->
 <div class="overlay" id="promptOverlay"><div class="modal s">
   <h3 id="promptTitle">Ввод</h3>
   <div id="promptFields"></div>
-  <div class="row" style="margin-top:16px"><button class="btn ghost grow" id="promptNo">Отмена</button><button class="btn amber grow" id="promptYes">Сохранить</button></div>
+  <div class="row" style="margin-top: var(--sp-5)"><button class="btn ghost grow" id="promptNo">Отмена</button><button class="btn amber grow" id="promptYes">Сохранить</button></div>
 </div></div>
 
 <!-- connection -->
@@ -1291,7 +1330,7 @@
   <div class="sub">Обычно заполнять не нужно — значения проекта встроены в сборку. Поля нужны, только чтобы подключиться к другому проекту или стенду. Ключ публичный, доступ ограничивает RLS.</div>
   <label>Project URL</label><input type="text" id="cfgUrl" placeholder="https://xxxx.supabase.co">
   <label>Publishable / anon key</label><input type="text" id="cfgKey" placeholder="sb_publishable_... или eyJ...">
-  <div class="row" style="margin-top:14px"><button class="btn amber grow" id="cfgSave">Сохранить и подключиться</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="cfgSave">Сохранить и подключиться</button></div>
   <div class="err" id="cfgErr"></div>
 </div></div>
 
@@ -1302,7 +1341,7 @@
   <label>Email</label><input type="email" id="auEmail" autocomplete="username">
   <label>Пароль</label><input type="password" id="auPass" autocomplete="current-password">
   <div class="err" id="authErr"></div>
-  <div class="row" style="margin-top:14px"><button class="btn amber grow" id="authBtn">Войти</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="authBtn">Войти</button></div>
   <!-- Саморегистрация убрана (аудит, пункт К2): signUp выдавал роль engineer
        автоматически, а читающие политики пускали любого залогиненного
        к клиентам, технике и себестоимостям. Регистрация отключена
@@ -1314,37 +1353,37 @@
 <div class="overlay" id="profOverlay"><div class="modal">
   <h3 id="tpFormTitle">Новый профиль</h3>
   <label>Название</label><input type="text" id="tpfName" placeholder="Производство / Клиент / Отдел продаж">
-  <div class="meta" style="margin-top:10px">Ставки за час работ (выручка). Себестоимость — общая, задаётся в «Общих параметрах».</div>
+  <div class="meta" style="margin-top: var(--sp-3)">Ставки за час работ (выручка). Себестоимость — общая, задаётся в «Общих параметрах».</div>
   <div class="row"><div class="grow"><label>платно, за час</label><input type="number" id="tpfPaidRate" step="0.01"></div><div class="grow"><label>гарантия, за час (обычно 0)</label><input type="number" id="tpfWarrRate" step="0.01"></div></div>
-  <div class="row" style="margin-top:6px"><div class="grow"><label>в депо, за час</label><input type="number" id="tpfDepotRate" step="0.01"><div class="hint" style="margin-top:4px">Пусто или 0 — работа в депо считается по ставке «платно». Гарантия в депо идёт по гарантийной ставке.</div></div></div>
-  <div class="meta" style="margin-top:10px">Дорога и суточные — выручка этого плательщика:</div>
+  <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>в депо, за час</label><input type="number" id="tpfDepotRate" step="0.01"><div class="hint" style="margin-top: var(--sp-2)">Пусто или 0 — работа в депо считается по ставке «платно». Гарантия в депо идёт по гарантийной ставке.</div></div></div>
+  <div class="meta" style="margin-top: var(--sp-3)">Дорога и суточные — выручка этого плательщика:</div>
   <div class="row"><div class="grow"><label>за км</label><input type="number" id="tpfKmRate" step="0.01"></div><div class="grow"><label>за сутки</label><input type="number" id="tpfDayRate" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="tpfNightRate" step="0.01"></div></div>
-  <label style="margin-top:10px">Реквизиты плательщика (в акт)</label><textarea id="tpfReq" placeholder="Название, адрес, ЕДРПОУ/ИНН, банк…"></textarea>
-  <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:10px;font-size:13px"><input type="checkbox" id="tpfDefWarr" style="width:auto">профиль по умолчанию для гарантийных работ</label>
-  <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-top:6px;font-size:13px"><input type="checkbox" id="tpfDefPaid" style="width:auto">профиль по умолчанию для платных работ</label>
-  <div class="row" style="margin-top:14px"><button class="btn amber grow" id="tpfSave">Добавить профиль</button><button class="btn ghost" id="tpfCancel">Отмена</button></div>
+  <label style="margin-top: var(--sp-3)">Реквизиты плательщика (в акт)</label><textarea id="tpfReq" placeholder="Название, адрес, ЕДРПОУ/ИНН, банк…"></textarea>
+  <label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;margin-top: var(--sp-3);font-size: var(--fs-4)"><input type="checkbox" id="tpfDefWarr" style="width:auto">профиль по умолчанию для гарантийных работ</label>
+  <label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;margin-top: var(--sp-3);font-size: var(--fs-4)"><input type="checkbox" id="tpfDefPaid" style="width:auto">профиль по умолчанию для платных работ</label>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="tpfSave">Добавить профиль</button><button class="btn ghost" id="tpfCancel">Отмена</button></div>
   <div class="err" id="tpfErr"></div>
 </div></div>
 
 <div class="overlay" id="actXlsxOverlay"><div class="modal l">
   <h3>Акт выполненных работ</h3>
   <div class="meta">Превью приблизительное (веб не повторяет Excel 1:1). Точный документ — по кнопке «Скачать .xlsx».</div>
-  <div id="axPreview" style="max-height:60vh;overflow:auto;margin-top:10px;padding:12px;background:#fff;border-radius:8px"></div>
-  <div class="row" style="margin-top:12px"><button class="btn amber grow" id="axDlBtn">Скачать .xlsx</button><button class="btn ghost" id="axClose">Закрыть</button></div>
+  <div id="axPreview" style="max-height:60vh;overflow:auto;margin-top: var(--sp-3);padding: var(--sp-4);background:#fff;border-radius: var(--r-sm)"></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="axDlBtn">Скачать .xlsx</button><button class="btn ghost" id="axClose">Закрыть</button></div>
 </div></div>
 
 <div class="overlay" id="pointOverlay"><div class="modal">
   <h3>Новая точка</h3>
   <button class="btn amber" id="addMode" style="width:100%">📍 Указать на карте</button>
   <div class="hint" id="addHint" style="display:none">Кликните по карте — координаты подставятся сюда.</div>
-  <div class="row" style="margin-top:8px"><input type="text" id="geoQuery" placeholder="…или найти по адресу" class="grow"><button class="btn" id="geoBtn">Найти</button></div>
+  <div class="row" style="margin-top: var(--sp-3)"><input type="text" id="geoQuery" placeholder="…или найти по адресу" class="grow"><button class="btn" id="geoBtn">Найти</button></div>
   <div id="geoResults"></div>
-  <div class="hint" id="pointCoords" style="margin-top:8px"></div>
-  <div id="form" style="margin-top:10px">
+  <div class="hint" id="pointCoords" style="margin-top: var(--sp-3)"></div>
+  <div id="form" style="margin-top: var(--sp-3)">
     <label>Название</label><input type="text" id="fName" placeholder="Напр. ООО Ромашка">
     <label>Описание</label><textarea id="fDesc"></textarea>
-    <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет на карте</label><input type="color" id="fColor" value="#9aa1ad"></div><label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding-bottom:8px;white-space:nowrap"><input type="checkbox" id="fBase" style="width:auto">депо</label></div>
-    <div class="row" style="margin-top:12px"><button class="btn amber grow" id="saveBtn">Сохранить</button><button class="btn ghost" id="cancelBtn">Отмена</button></div>
+    <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет на карте</label><input type="color" id="fColor" value="#9aa1ad"></div><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;padding-bottom: var(--sp-3);white-space:nowrap"><input type="checkbox" id="fBase" style="width:auto">депо</label></div>
+    <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="saveBtn">Сохранить</button><button class="btn ghost" id="cancelBtn">Отмена</button></div>
     <div class="err" id="formErr"></div>
   </div>
 </div></div>
@@ -1352,20 +1391,20 @@
 <div class="overlay" id="editOverlay"><div class="modal">
   <h3>Редактирование точки</h3>
   <label>Название</label><input type="text" id="eName"><label>Описание</label><textarea id="eDesc"></textarea>
-  <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет</label><input type="color" id="eColor"></div><label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding-bottom:8px;white-space:nowrap"><input type="checkbox" id="eBase" style="width:auto">депо</label></div>
-  <label style="margin-top:10px">Профиль тарифа по умолчанию (для платных работ этого клиента)</label><select id="eProfile"></select>
-  <label style="margin-top:10px">Подписант заказчика (в акт, {{client_signer}})</label><input type="text" id="eSigner" placeholder="Директор Петров П.П.">
+  <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет</label><input type="color" id="eColor"></div><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;padding-bottom: var(--sp-3);white-space:nowrap"><input type="checkbox" id="eBase" style="width:auto">депо</label></div>
+  <label style="margin-top: var(--sp-3)">Профиль тарифа по умолчанию (для платных работ этого клиента)</label><select id="eProfile"></select>
+  <label style="margin-top: var(--sp-3)">Подписант заказчика (в акт, {{client_signer}})</label><input type="text" id="eSigner" placeholder="Директор Петров П.П.">
   <div class="row"><div class="grow"><label>Широта</label><input type="text" id="eLat"></div><div class="grow"><label>Долгота</label><input type="text" id="eLng"></div></div>
-  <div class="row" style="margin-top:14px"><button class="btn amber grow" id="eSave">Сохранить</button><button class="btn ghost" id="eCancel">Отмена</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="eSave">Сохранить</button><button class="btn ghost" id="eCancel">Отмена</button></div>
 </div></div>
 
 <!-- equipment of a client -->
 <div class="overlay" id="eqOverlay"><div class="modal">
   <h3 id="eqTitle">Техника клиента</h3>
   <div id="eqList"></div>
-  <div class="card" style="margin-top:6px;padding:12px"><h3 id="eqFormTitle" style="font-family:var(--mono);font-size:11px;color:var(--accent-ink)">Добавить технику</h3>
+  <div class="card" style="margin-top: var(--sp-3);padding: var(--sp-4)"><h3 id="eqFormTitle" style="font-family:var(--mono);font-size: var(--fs-2);color:var(--accent-ink)">Добавить технику</h3>
     <label>Модель из каталога</label><select id="eqModelId"></select>
-    <label style="margin-top:10px">Модель (текст)</label><input type="text" id="eqModel">
+    <label style="margin-top: var(--sp-3)">Модель (текст)</label><input type="text" id="eqModel">
     <div class="row"><div class="grow"><label>Тип/бренд</label><input type="text" id="eqKind" placeholder="для навыков инженера"></div><div class="grow"><label>Серийник</label><input type="text" id="eqSerial"></div></div>
     <div class="row"><div class="grow"><label>Дата установки</label><input type="date" id="eqInstalled"></div><div class="grow"><label>Гарантия до</label><input type="date" id="eqWarranty"></div></div>
     <label>Заметки</label><input type="text" id="eqNotes">
@@ -1374,10 +1413,10 @@
     <div id="eqGeoRes"></div>
     <div class="row"><div class="grow"><label>Широта</label><input type="text" id="eqLat"></div><div class="grow"><label>Долгота</label><input type="text" id="eqLng"></div></div>
     <div class="hint">Пусто — техника в точке клиента. Заполнено — появится своя точка при клике на клиента.</div>
-    <div class="row" style="margin-top:10px"><button class="btn amber grow" id="eqSave">Сохранить технику</button><button class="btn ghost" id="eqFormCancel" style="display:none">Отмена правки</button></div>
+    <div class="row" style="margin-top: var(--sp-3)"><button class="btn amber grow" id="eqSave">Сохранить технику</button><button class="btn ghost" id="eqFormCancel" style="display:none">Отмена правки</button></div>
     <div class="err" id="eqErr"></div>
   </div>
-  <div class="row" style="margin-top:12px"><button class="btn ghost grow" id="eqClose">Закрыть</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="eqClose">Закрыть</button></div>
 </div></div>
 
 <!-- catalog work edit -->
@@ -1385,16 +1424,16 @@
   <h3 id="catFormTitle">Работа</h3>
   <label>Название</label><input type="text" id="cwName">
   <div class="row"><div class="grow"><label>Норма, ч</label><input type="number" id="cwHours" step="0.25"></div><div class="grow"><label>Цена вручную (оверрайд)</label><input type="number" id="cwPrice" step="0.01" placeholder="иначе часы×тариф"></div></div>
-  <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:var(--ink)"><input type="checkbox" id="cwWarranty" style="width:auto"> Может быть гарантийной</label>
-  <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:var(--ink)"><input type="checkbox" id="cwMaint" style="width:auto"> Это ТО / сервис (фиксирует «последнее ТО»)</label>
+  <label style="display:flex;align-items:center;gap: var(--sp-3);text-transform:none;letter-spacing:0;color:var(--ink)"><input type="checkbox" id="cwWarranty" style="width:auto"> Может быть гарантийной</label>
+  <label style="display:flex;align-items:center;gap: var(--sp-3);text-transform:none;letter-spacing:0;color:var(--ink)"><input type="checkbox" id="cwMaint" style="width:auto"> Это ТО / сервис (фиксирует «последнее ТО»)</label>
   <label>Применимость</label>
   <div class="seg" id="cwScope"><button data-cs="all" class="on">Общий набор</button><button data-cs="kinds">По типам</button><button data-cs="models">По моделям</button></div>
-  <div id="cwKindsBox" style="display:none;margin-top:8px"><input type="text" id="cwKinds" placeholder="типы через запятую: насос, компрессор"></div>
-  <div id="cwModelsBox" style="display:none;margin-top:8px"><div class="hint" style="margin:0 0 6px">Отметь модели, к которым применима работа:</div><div id="cwModelsTree" style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px"></div></div>
+  <div id="cwKindsBox" style="display:none;margin-top: var(--sp-3)"><input type="text" id="cwKinds" placeholder="типы через запятую: насос, компрессор"></div>
+  <div id="cwModelsBox" style="display:none;margin-top: var(--sp-3)"><div class="hint" style="margin: 0 0 var(--sp-3)">Отметь модели, к которым применима работа:</div><div id="cwModelsTree" style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius: var(--r-sm);padding: var(--sp-3)"></div></div>
   <label>Материалы (по строке: название;кол-во;ед.)</label><textarea id="cwMaterials" placeholder="фильтр;1;шт"></textarea>
   <label>Порядок проведения</label><textarea id="cwProc"></textarea>
   <label>Мануалы (по строке: название|ссылка)</label><textarea id="cwManuals" placeholder="Инструкция|https://..."></textarea>
-  <div class="row" style="margin-top:12px"><button class="btn amber grow" id="cwSave">Сохранить</button><button class="btn ghost" id="cwCancel">Отмена</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="cwSave">Сохранить</button><button class="btn ghost" id="cwCancel">Отмена</button></div>
   <div class="err" id="cwErr"></div>
 </div></div>
 
