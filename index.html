@@ -163,7 +163,10 @@
   .side-handle::before { content: ''; position: absolute; top: 7px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
   .side-handle .sh-chev { transition: transform .2s; }
   .side.sheet-collapsed .side-handle .sh-chev { transform: rotate(180deg); }
-  .scroll, .pane.scrollp { overflow-wrap: anywhere; }
+  /* anywhere рубил «надлісниц-тво» посреди слога: в колонке 360 px длинные
+     украинские названия выглядели сломанными. break-word переносит по
+     словам и лезет внутрь слова только когда оно одно шире колонки. */
+  .scroll, .pane.scrollp { overflow-wrap: break-word; word-break: normal; }
   .scroll::-webkit-scrollbar { width: 6px; } 
   .scroll::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: 4px; }
   
@@ -211,11 +214,19 @@
     padding: 12px 14px; margin-bottom: 10px; transition: border 0.2s ease;
   }
   .pt:hover { border-color: var(--ink-dim); }
-  .pt .nm { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .pt .nm { font-weight: 600; font-size: 14px; display: flex; align-items: flex-start; gap: 8px; }
+  .pt .nm .dot { margin-top: 5px; flex: none; }
+  .pt .nm-t { flex: 1; min-width: 0; line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
   .pt .ds { font-size: 13px; color: var(--ink-dim); margin-top: 4px; line-height: 1.4; } 
   .pt .meta { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); margin-top: 6px; }
-  .pt .acts { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  /* Действия только у выбранной точки. Четыре кнопки под каждой из
+     восьмидесяти строк — это и была «духота» в панели. */
+  .pt .acts { display: none; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .pt.sel .acts { display: flex; }
+  .pt { cursor: pointer; }
+  .pt.sel { border-color: var(--accent-line); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent); }
   
   .pill { 
     font-family: var(--mono); font-size: 10px; padding: 3px 8px; 
@@ -324,8 +335,10 @@
   .jobs-legend { display: flex; gap: 8px; align-items: center; margin-bottom: 6px;
     font-family: var(--mono); font-size: 9px; letter-spacing: .8px;
     text-transform: uppercase; color: var(--ink-faint); }
-  .jobs-legend .jl-a { width: 30px; text-align: center; }
-  .jobs-legend .jl-b { width: 34px; text-align: center; }
+  /* Подписи в 30 px над колонками флажка и радио переносились по слогам
+     («в выез де»). Ставим их подписью к символу — читается без выравнивания. */
+  .jobs-legend .jl-a, .jobs-legend .jl-b { white-space: nowrap; }
+  .jobs-legend .jl-b { margin-left: 6px; }
   .fgroup > .fg-t { font-family: var(--mono); font-size: 10px; font-weight: 600;
     letter-spacing: 1.1px; text-transform: uppercase; color: var(--ink-faint);
     margin-bottom: 10px; display: block; }
@@ -507,8 +520,38 @@
   .kcard[draggable="true"] { cursor: grab; }
   .kcard.dragging { opacity: .45; }
   .kcol.over { border-color: var(--accent); background: var(--panel); }
-  .trip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
-  @media (max-width: 760px) { .trip-grid { grid-template-columns: 1fr; } }
+  /* Страница выезда. Колонок столько, сколько влезает по 380 px:
+     на ноутбуке две, на широком мониторе три. Экономика — во всю строку. */
+  /* Потолок 1500 держит ровно три колонки: на четвёртую (4×380 + 3×14 =
+     1562) места уже не хватает. Без потолка карточка «Экономики» во всю
+     строку не даёт пустой четвёртой колонке схлопнуться, и три верхние
+     остаются по 400 px, оставляя дыру справа. */
+  .trip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
+    gap: 14px; align-items: start; max-width: 1500px; }
+  .trip-grid > .card { margin-bottom: 0; }
+  .trip-grid > .card.trip-wide { grid-column: 1 / -1; }
+  .econ-split { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 900px) { .econ-split { grid-template-columns: 1fr; gap: 16px; } }
+  .econ-split > div > .fg-t { font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: 1.1px; text-transform: uppercase; color: var(--ink-faint); }
+  .crumbs { display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); }
+  .crumb { background: none; border: none; padding: 0; cursor: pointer; color: var(--accent-ink);
+    font: inherit; letter-spacing: inherit; text-transform: inherit; }
+  .crumb:hover { text-decoration: underline; }
+  .crumb-sep { color: var(--ink-faint); }
+  .trip-head { display: flex; align-items: flex-start; gap: 20px; flex-wrap: wrap;
+    margin-bottom: 16px; max-width: 1500px; }
+  .trip-head .th-main { flex: 1 1 260px; min-width: 0; }
+  .trip-head h2 { font-family: var(--mono); font-size: 18px; letter-spacing: .5px; color: var(--ink); font-weight: 600; }
+  .th-sub { font-size: 12.5px; color: var(--ink-dim); margin-top: 5px; line-height: 1.5; }
+  /* Прибыль — то, ради чего выезд собирают. В модалке она пряталась
+     в служебной строке под списком заявок; здесь стоит в шапке. */
+  .th-econ { flex: none; text-align: right; font-family: var(--mono); }
+  .th-econ .te-k { font-size: 10px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-faint); }
+  .th-econ .te-v { font-size: 22px; font-weight: 600; line-height: 1.2; margin-top: 2px; }
+  .th-econ .te-s { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  @media (max-width: 760px) { .trip-head { gap: 12px; } .th-econ { text-align: left; } }
   .settings-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr);
     gap: 18px; align-items: start; max-width: 1640px; }
   .settings-nav { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; }
@@ -543,10 +586,80 @@
   .gantt-bar.st-cancelled { background: #6b7280; color: #fff; opacity: .55; }
   @media (max-width: 760px) { .settings-layout { grid-template-columns: 1fr; } .settings-nav { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; } .son { white-space: nowrap; flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; } }
 
+/* ── Лента внимания: заявки на шкале времени ──────────────────────────────
+   Плоский список одинаковых строк не выглядит отсортированным. Здесь место
+   на ленте само по себе кодирует срочность, а узел — это ДАТА, а не заявка:
+   три точки на один день читаются как один выезд, а не три дела. */
+.afeed{position:relative;padding-left:96px}
+.afeed-line{position:absolute;left:70px;top:6px;bottom:8px;width:10px;border-radius:5px}
+.a-ax{position:absolute;left:-96px;top:11px;width:62px;text-align:right;font-family:var(--mono)}
+.a-ax b{display:block;font-size:12px;font-weight:600;color:var(--ink)}
+.a-ax i{display:block;font-style:normal;font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);margin-top:2px}
+.a-dot{position:absolute;border-radius:50%;border:3px solid var(--panel);display:flex;align-items:center;
+  justify-content:center;font-family:var(--mono);font-size:11px;font-weight:600;color:#fff;box-sizing:border-box}
+.a-stem{position:absolute;top:19px;height:2px;background:var(--line)}
+.a-today{position:relative;height:34px}
+.a-todaytxt{padding-top:5px;font-size:13px;color:var(--ink-dim)}
+.a-break{position:relative;height:30px;display:flex;align-items:center}
+.a-break span{font-family:var(--mono);font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint)}
+.a-break::before{content:'';position:absolute;left:-26px;top:8px;width:14px;height:14px;background:var(--panel)}
+.agrp{position:relative;margin-bottom:20px}
+.agrp:last-child{margin-bottom:0}
+.agrp-card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line);
+  border-radius:12px;box-shadow:var(--shadow-sm);overflow:hidden}
+.agrp-h{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line)}
+.agrp-n{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--ink);white-space:nowrap}
+.agrp-track{flex:1;min-width:40px;height:6px;border-radius:3px;background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
+.agrp-track i{display:block;height:100%;border-radius:3px}
+.agrp-hint{font-family:var(--mono);font-size:10px;color:var(--ink-dim);white-space:nowrap}
+.agrp-eng{font-family:var(--mono);font-size:10px;color:var(--ink-faint);white-space:nowrap}
+.a-noeng{color:var(--red)}
+.arow2{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer}
+.arow2+.arow2{border-top:1px solid var(--line)}
+.arow2:hover{background:var(--panel-2)}
+.a-main{flex:1;min-width:0}
+/* Названия точек украинские и длинные. break-word переносит по словам;
+   anywhere рубил бы «надлісниц-тво» посреди слога. */
+.a-name{font-size:14px;font-weight:600;line-height:1.3;overflow-wrap:break-word;word-break:normal}
+.a-sub{font-family:var(--mono);font-size:11px;color:var(--ink-faint);margin-top:2px}
+.a-h{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);white-space:nowrap}
+@media(max-width:600px){
+  .afeed{padding-left:80px}
+  .afeed-line{left:54px}
+  .a-ax{left:-80px;width:46px}
+  .agrp-h{flex-wrap:wrap;gap:6px 10px}
+  .agrp-track{flex:1 0 100%;order:3}
+}
+
+/* ── Загрузка инженеров ──────────────────────────────────────────────── */
+.elcard .el-hz{font-family:var(--mono);font-size:10px;font-weight:400;letter-spacing:.5px;
+  text-transform:uppercase;color:var(--ink-faint)}
+.elrow{display:grid;grid-template-columns:1fr auto;grid-template-areas:'n v' 't t' 's s';
+  gap:5px 10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.elrow:last-of-type{border-bottom:0;padding-bottom:2px}
+.el-n{grid-area:n;font-size:13.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.el-v{grid-area:v;font-family:var(--mono);font-size:11.5px;font-weight:600;white-space:nowrap}
+.el-t{grid-area:t;height:8px;border-radius:4px;background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
+.el-t i{display:block;height:100%;border-radius:4px}
+.el-s{grid-area:s;font-family:var(--mono);font-size:10px;color:var(--ink-faint)}
+.elrow.none .el-n{color:var(--red)}
+.el-tail{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-top:10px;
+  padding-top:9px;border-top:1px solid var(--line)}
+.stat-closed{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-top:9px}
+
 /* Лента внимания на дашборде */
 .dash-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
+.dash-grid.one-col{grid-template-columns:1fr}
 @media(max-width:900px){.dash-grid{grid-template-columns:1fr}}
-.dash-attn .acaps{text-transform:uppercase;letter-spacing:.12em;font-size:12px;margin:0 0 8px}
+.dash-attn .acaps{text-transform:uppercase;letter-spacing:.12em;font-size:12px;line-height:14px;margin:0 0 8px}
+/* Подпись «Требует внимания» стоит только над ЛЕВОЙ колонкой и сдвигает её
+   вниз на свою высоту. Правая при этом начинается от верха сетки, и две
+   белые карточки рядом оказываются на разной высоте — на широком экране
+   это видно через весь экран. Отбиваем правую колонку ровно на подпись:
+   14 px строки + 8 px отступа. В одну колонку (телефон) отбивка не нужна —
+   там колонки идут друг за другом, а не рядом. */
+#dashBody{padding-top:22px}
+@media(max-width:900px){#dashBody{padding-top:0}}
 .arow{display:flex;align-items:center;gap:10px;padding:11px 12px;position:relative;cursor:pointer;border-bottom:1px solid var(--line)}
 .arow:last-child{border-bottom:0}
 .arow:hover{background:var(--panel-2)}
@@ -752,6 +865,64 @@
   </div>
 
   <!-- CATALOG -->
+  <!-- ── ВЫЕЗД: страница ────────────────────────────────────────────────
+       Открывается из «Выездов», возврат — хлебной крошкой. Экономика
+       разложена здесь же: раньше она открывалась окном поверх окна. -->
+  <div class="view view-trip"><div class="pane scrollp">
+    <div class="crumbs"><button class="crumb" id="tripCancel">Выезды</button><span class="crumb-sep">›</span><span id="tripCrumb">Выезд</span></div>
+    <div class="trip-head">
+      <div class="th-main">
+        <h2 id="tripTitle">Выезд</h2>
+        <div class="th-sub" id="tripSub"></div>
+      </div>
+      <div class="th-econ" id="tripHeadEcon"></div>
+      <button class="btn amber" id="tpSave">Сохранить выезд</button>
+    </div>
+    <div class="err" id="tripErr"></div>
+    <div class="trip-grid">
+      <div class="card"><h3>Когда и кто</h3>
+        <div class="row"><div class="grow"><label>Дата с</label><input type="date" id="tpFrom"></div><div class="grow"><label>Дата по</label><input type="date" id="tpTo"></div></div>
+        <div class="row"><div class="grow"><label>Авто</label><select id="tpVeh"></select><div class="hint" id="tpVehInfo" style="margin-top:4px"></div></div></div>
+        <div class="row"><div class="grow"><label>Инженер</label><select id="tpEng"></select></div><div class="grow"><label>Статус</label><select id="tpStatus"><option value="planned">план</option><option value="assigned">назначен</option><option value="in_progress">в работе</option><option value="done">завершён</option><option value="cancelled">отменён</option></select></div></div>
+        <label style="margin-top:10px">Заметка</label><input type="text" id="tpNotes">
+      </div>
+
+      <div class="card"><h3>Заявки выезда <span class="cnt" id="tpJobsCnt">0</span></h3>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--ink-dim);margin:2px 0 8px"><input type="checkbox" id="tpJobsRoute" checked style="width:auto">показывать только заявки по точкам маршрута</label>
+        <!-- Два разных переключателя на строке, и оба раньше были без подписи.
+             Флажок — включить заявку в выезд. Радиокнопка — пометить основную,
+             а от неё зависит схема расчёта километража: у основной свой
+             базовый круг, остальные платят только крюк. То есть выбор
+             напрямую меняет деньги в акте, и догадываться о нём нельзя. -->
+        <div class="jobs-legend"><span class="jl-a">☑ в выезде</span><span class="jl-b">◉ основная</span></div>
+        <div id="tpJobs" style="max-height:340px;overflow:auto"></div>
+        <div class="hint" style="margin-top:6px">Основная заявка несёт базовый пробег «Депо → она → Депо». Остальным считается только крюк сверх него.</div>
+      </div>
+
+      <div class="card"><h3>Маршрут <span class="cnt" id="tpRouteKm">—</span></h3>
+        <div id="tpRouteStops" style="max-height:260px;overflow:auto"></div>
+        <div class="hint" id="tpRouteStatus" style="margin-top:6px"></div>
+        <button class="btn sm" id="tpEditMap" style="margin-top:8px;width:100%">Редактировать маршрут на карте</button>
+        <div class="hint" style="margin-top:4px">Построение, старт/депо, буфер и изохрона — в планировщике на вкладке «Карта».</div>
+      </div>
+
+      <!-- Ручные суммы стоят рядом с разбивкой, на которую влияют: раньше
+           это были разные половины окна, и связь приходилось держать в уме. -->
+      <div class="card trip-wide"><h3>Экономика</h3>
+        <div class="hint" id="tpEcon" style="margin-bottom:12px"></div>
+        <div class="econ-split">
+          <div>
+            <span class="fg-t">Суммы вручную</span>
+            <div class="row" style="margin-top:8px"><div class="grow"><label>Выручка, ₴</label><input type="number" id="tpOvRev" placeholder="авто"></div><div class="grow"><label>Затраты, ₴</label><input type="number" id="tpOvCost" placeholder="авто"></div></div>
+            <div id="tpRoadGroups"></div>
+            <div class="hint">Пусто — считается из тарифов и себестоимости. Заполнено — фиксированная сумма.</div>
+          </div>
+          <div id="tpEconBody"></div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
   <div class="view view-catalog">
     <div class="pane scrollp">
       <div class="subtabs">
@@ -994,41 +1165,9 @@
 </div></div>
 
 <!-- trip editor -->
-<div class="overlay" id="tripOverlay"><div class="modal l">
-  <h3 id="tripTitle">Выезд</h3>
-  <div class="trip-grid">
-    <div>
-      <div class="row"><div class="grow"><label>Дата с</label><input type="date" id="tpFrom"></div><div class="grow"><label>Дата по</label><input type="date" id="tpTo"></div></div>
-      <div class="row"><div class="grow"><label>Авто</label><select id="tpVeh"></select><div class="hint" id="tpVehInfo" style="margin-top:4px"></div></div><div class="grow"><label>Инженер</label><select id="tpEng"></select></div></div>
-      <div class="row"><div class="grow"><label>Статус</label><select id="tpStatus"><option value="planned">план</option><option value="assigned">назначен</option><option value="in_progress">в работе</option><option value="done">завершён</option><option value="cancelled">отменён</option></select></div></div>
-      <label>Заметка</label><input type="text" id="tpNotes">
-      <div class="card" style="padding:12px;margin-top:12px"><h3 style="font-family:var(--mono);font-size:11px;color:var(--accent-ink)">Оверрайд сумм</h3>
-        <div class="row"><div class="grow"><label>Выручка, ₴</label><input type="number" id="tpOvRev" placeholder="авто"></div><div class="grow"><label>Затраты, ₴</label><input type="number" id="tpOvCost" placeholder="авто"></div></div>
-        <div id="tpRoadGroups"></div>
-        <div class="hint">Пусто — считается из тарифов и себестоимости. Заполнено — фиксированная сумма.</div></div>
-    </div>
-    <div>
-      <div class="card" style="padding:12px;margin-top:0"><h3 style="font-family:var(--mono);font-size:11px;color:var(--accent-ink)">Заявки выезда</h3>
-        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--ink-dim);margin:2px 0 8px"><input type="checkbox" id="tpJobsRoute" checked style="width:auto">показывать только заявки по точкам маршрута</label>
-        <!-- Два разных переключателя на строке, и оба раньше были без подписи.
-             Флажок — включить заявку в выезд. Радиокнопка — пометить основную,
-             а от неё зависит схема расчёта километража: у основной свой
-             базовый круг, остальные платят только крюк. То есть выбор
-             напрямую меняет деньги в акте, и догадываться о нём нельзя. -->
-        <div class="jobs-legend"><span class="jl-a">в выезде</span><span class="jl-b">основная</span></div>
-        <div id="tpJobs" style="max-height:300px;overflow:auto"></div>
-        <div class="hint" style="margin-top:6px">Основная заявка несёт базовый пробег «Депо → она → Депо». Остальным считается только крюк сверх него.</div><div class="hint" id="tpEcon" style="margin-top:6px"></div><button class="btn sm" id="tpEconBtn" style="margin-top:8px">Разложить экономику</button></div>
-      <div class="card" style="padding:12px"><h3 style="font-family:var(--mono);font-size:11px;color:var(--accent-ink)">Маршрут</h3>
-        <div id="tpRouteStops" style="max-height:200px;overflow:auto"></div>
-        <div class="hint" id="tpRouteStatus" style="margin-top:6px"></div>
-        <button class="btn sm" id="tpEditMap" style="margin-top:8px;width:100%">Редактировать маршрут на карте</button>
-        <div class="hint" style="margin-top:4px">Построение, старт/депо, буфер и изохрона — в планировщике на вкладке «Карта».</div>
-      </div>
-    </div>
-  </div>
-  <div class="row" style="margin-top:12px"><button class="btn amber grow" id="tpSave">Сохранить выезд</button><button class="btn ghost" id="tripCancel">Отмена</button></div>
-  <div class="err" id="tripErr"></div>
-</div></div>
+<!-- Модалка выезда переехала во вкладку .view-trip: внутри неё жили
+     вложенный список заявок, вложенная модалка экономики и кнопка,
+     уводившая на другую вкладку. -->
 
 <!-- confirm dialog (замена нативного confirm) -->
 <div class="overlay" id="confirmOverlay"><div class="modal s">
