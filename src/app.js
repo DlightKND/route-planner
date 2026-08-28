@@ -14,7 +14,7 @@ window.addEventListener('error', (ev) => {
     const d = document.createElement('div');
     d.id = 'bootErr';
     d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;'
-      + 'background:#b00020;color:#fff;font:13px/1.4 monospace;padding:10px 14px;'
+      + 'background:#b00020;color:#fff;font:13px/1.4 monospace;padding: var(--sp-3) var(--sp-4);'
       + 'white-space:pre-wrap;box-shadow:0 2px 8px rgba(0,0,0,.4)';
     document.body && document.body.appendChild(d);
     return d;
@@ -139,7 +139,7 @@ function _cdDone(v){ $('confirmOverlay').classList.remove('on'); const r=_cdRes;
 $('confirmYes').onclick=()=>_cdDone(true); $('confirmNo').onclick=()=>_cdDone(false);
 $('confirmOverlay').addEventListener('click',e=>{ if(e.target===$('confirmOverlay')) _cdDone(false); });
 let _pdRes=null;
-function promptDialog(title,fields){ fields=fields||[]; return new Promise(res=>{ _pdRes=res; $('promptTitle').textContent=title||'Ввод'; $('promptFields').innerHTML=fields.map((f,i)=>'<label'+(i?' style="margin-top:10px"':'')+'>'+esc(f.label||'')+'</label>'+(f.type==='textarea'?('<textarea data-pf="'+esc(f.key)+'">'+esc(f.value||'')+'</textarea>'):('<input type="text" data-pf="'+esc(f.key)+'" value="'+esc(f.value||'')+'">'))).join(''); $('promptOverlay').classList.add('on'); setTimeout(()=>{ const el=$('promptFields').querySelector('[data-pf]'); if(el){ try{ el.focus(); if(el.select) el.select(); }catch(e){} } },30); }); }
+function promptDialog(title,fields){ fields=fields||[]; return new Promise(res=>{ _pdRes=res; $('promptTitle').textContent=title||'Ввод'; $('promptFields').innerHTML=fields.map((f,i)=>'<label'+(i?' style="margin-top: var(--sp-3)"':'')+'>'+esc(f.label||'')+'</label>'+(f.type==='textarea'?('<textarea data-pf="'+esc(f.key)+'">'+esc(f.value||'')+'</textarea>'):('<input type="text" data-pf="'+esc(f.key)+'" value="'+esc(f.value||'')+'">'))).join(''); $('promptOverlay').classList.add('on'); setTimeout(()=>{ const el=$('promptFields').querySelector('[data-pf]'); if(el){ try{ el.focus(); if(el.select) el.select(); }catch(e){} } },30); }); }
 function _pdDone(ok){ const ov=$('promptOverlay'); let out=null; if(ok){ out={}; ov.querySelectorAll('[data-pf]').forEach(el=>{ out[el.dataset.pf]=el.value; }); } ov.classList.remove('on'); const r=_pdRes; _pdRes=null; if(r) r(out); }
 $('promptYes').onclick=()=>_pdDone(true); $('promptNo').onclick=()=>_pdDone(false);
 $('promptOverlay').addEventListener('click',e=>{ if(e.target===$('promptOverlay')) _pdDone(false); });
@@ -270,6 +270,13 @@ function plannerSub(name){ plannerCur=name;
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===name)); document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name)); if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView(); }
 document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.onclick=()=>setTripsView(b.dataset.tv));
+// Тень под закреплённой шапкой появляется только когда под неё что-то уехало.
+// Постоянная линия на нетронутом списке — это шум, которого нечем объяснить.
+(function(){
+  const panes=document.querySelectorAll('.pane.scrollp');
+  const sync=pane=>pane.querySelectorAll('.stickyhead').forEach(h=>h.classList.toggle('stuck',pane.scrollTop>2));
+  panes.forEach(pane=>pane.addEventListener('scroll',()=>sync(pane),{passive:true}));
+})();
 document.querySelectorAll('.view-planner .subtab').forEach(t=>t.onclick=()=>plannerSub(t.dataset.sub));
 
 // ---------- connection ----------
@@ -450,8 +457,8 @@ function profitColorOf(p){ if(!(p>0)) return '#6b7280';
 
 function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); revealedClient=null; markerById={};
   _maxProfit=0; Object.values(clientStats).forEach(s=>{ if(s.profit>_maxProfit) _maxProfit=s.profit; });
-  const ab='cursor:pointer;font-family:var(--mono);font-size:10px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);border-radius:5px;padding:4px 8px';
-  const lb='cursor:pointer;font-family:var(--mono);font-size:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:5px;padding:4px 8px';
+  const ab='cursor:pointer;font-family:var(--mono);font-size: var(--fs-1);border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);border-radius: var(--r-pill);padding: var(--sp-2) var(--sp-3)';
+  const lb='cursor:pointer;font-family:var(--mono);font-size: var(--fs-1);border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius: var(--r-pill);padding: var(--sp-2) var(--sp-3)';
   // Фильтр «требующие внимания» гасит остальные точки НА КАРТЕ. Раньше он
   // менял только список — а список это та половина экрана, на которую
   // не смотришь, работая с картой, и флажок казался мёртвым.
@@ -468,25 +475,25 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
     if(c.is_base){
       const icon=L.divIcon({className:'',html:'<div class="cbub" style="background:'+col+';width:30px;height:30px;border:2.5px solid '+ringColor()+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></div>',iconSize:[30,30],iconAnchor:[15,15]});
       const m=L.marker([c.lat,c.lng],{icon});
-      let html='<strong style="font-size:13px">'+esc(c.name)+'</strong> <span style="color:var(--ink-dim)">· депо</span>'; if(c.description) html+='<br>'+esc(c.description);
-      if(canWrite()){ html+='<br><span style="display:inline-flex;gap:6px;margin-top:6px"><button onclick="addBaseStart(\''+c.id+'\')" style="'+ab+'">▶ старт</button><button onclick="addBaseStop(\''+c.id+'\')" style="'+lb+'">⏹ финиш</button><button onclick="editClient(\''+c.id+'\')" style="'+lb+'">ред.</button></span>'; }
+      let html='<strong style="font-size: var(--fs-4)">'+esc(c.name)+'</strong> <span style="color:var(--ink-dim)">· депо</span>'; if(c.description) html+='<br>'+esc(c.description);
+      if(canWrite()){ html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3)"><button onclick="addBaseStart(\''+c.id+'\')" style="'+ab+'">▶ старт</button><button onclick="addBaseStop(\''+c.id+'\')" style="'+lb+'">⏹ финиш</button><button onclick="editClient(\''+c.id+'\')" style="'+lb+'">ред.</button></span>'; }
       m.bindPopup(html); markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); return;
     }
     const list=eqByClient[c.id]||[]; const count=list.length; const withCoords=list.filter(e=>e.lat!=null&&e.lng!=null).length; const d=Math.min(46,20+count*4);
     const dcol=col;
     const icon=L.divIcon({className:'',html:'<div class="cbub" style="background:'+dcol+';border:2.5px solid '+ringColor()+'">'+(count||'')+'</div>',iconSize:[d,d],iconAnchor:[d/2,d/2]});
     const m=L.marker([c.lat,c.lng],{icon});
-    let html='<strong style="font-size:13px">'+esc(c.name)+'</strong>'; if(c.description) html+='<br>'+esc(c.description);
+    let html='<strong style="font-size: var(--fs-4)">'+esc(c.name)+'</strong>'; if(c.description) html+='<br>'+esc(c.description);
     html+='<br><span style="color:var(--ink-dim)">техники: '+count+(withCoords?(' · своих точек: '+withCoords):'')+'</span>';
     // Что означает цвет этой точки — прямо в попапе, чтобы не сверяться
     // с легендой в меню слоёв.
     const us=clientStats[c.id];
     if(colorMode==='urgency'&&us&&us.open){
-      html+='<br><span style="color:'+(URG_COL[us.urg]||'#94a3b8')+';font-size:11px">● '
+      html+='<br><span style="color:'+(URG_COL[us.urg]||'#94a3b8')+';font-size: var(--fs-2)">● '
         +esc(URG_TXT[us.urg]||'')+' · живых заявок '+us.open+'</span>';
     }
-    const s=clientStats[c.id]; if(s){ const cur=appSettings.currency||'грн'; html+='<br><span style="display:block;margin-top:5px;font-size:11px;color:var(--ink-dim);line-height:1.6">выручка <b style="color:var(--ink)">'+Math.round(s.rev)+' '+esc(cur)+'</b> · прибыль <b style="color:'+(s.profit>=0?'var(--green)':'var(--red)')+'">'+Math.round(s.profit)+'</b><br>гарантия '+s.warrShare+'% · заявок '+s.jobs+(s.done?(' · закрыто '+s.done):'')+'</span>'; }
-    html+='<br><span style="display:inline-flex;gap:6px;margin-top:6px"><button onclick="openEquip(\''+c.id+'\')" style="'+lb+'">техника</button>';
+    const s=clientStats[c.id]; if(s){ const cur=appSettings.currency||'грн'; html+='<br><span style="display:block;margin-top: var(--sp-2);font-size: var(--fs-2);color:var(--ink-dim);line-height:1.6">выручка <b style="color:var(--ink)">'+Math.round(s.rev)+' '+esc(cur)+'</b> · прибыль <b style="color:'+(s.profit>=0?'var(--green)':'var(--red)')+'">'+Math.round(s.profit)+'</b><br>гарантия '+s.warrShare+'% · заявок '+s.jobs+(s.done?(' · закрыто '+s.done):'')+'</span>'; }
+    html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3)"><button onclick="openEquip(\''+c.id+'\')" style="'+lb+'">техника</button>';
     if(canWrite()){ html+='<button onclick="addClientToRoute(\''+c.id+'\')" style="'+ab+'">+ маршрут</button><button onclick="newJobForClient(\''+c.id+'\')" style="'+lb+'">+ заявка</button><button onclick="editClient(\''+c.id+'\')" style="'+lb+'">ред.</button>'; }
     html+='</span>'; m.bindPopup(html);
     m.on('click',()=>{ revealedClient=(revealedClient===c.id)?null:c.id; renderEqMarkers(); });
@@ -525,9 +532,9 @@ function renderEqMarkers(){ eqMarkers.clearLayers(); if(!revealedClient) return;
     const m=L.circleMarker([e.lat,e.lng],{radius:6,color:ringColor(),fillColor:col,fillOpacity:.9,weight:2.5,opacity:1});
     const al=eqAlert(e);
     let eh='<strong>'+esc(e.model)+'</strong><br><span style="color:var(--ink-dim)">'+esc(c.name)+(e.kind?' · '+esc(e.kind):'')+'</span>';
-    eh+='<br><span style="color:var(--ink-faint);font-size:11px">'+(e.last_visit?('визит '+esc(e.last_visit)):'визитов нет')+(e.last_service?(' · ТО '+esc(e.last_service)):'')+'</span>';
-    if(al.any) eh+='<br><span style="color:var(--red);font-size:11px">⚠ '+esc(al.reasons.join('; '))+'</span>';
-    if(canWrite()) eh+='<br><span style="display:inline-flex;gap:6px;margin-top:6px"><button onclick="addEquipToRoute(\''+c.id+'\',\''+e.id+'\')" style="cursor:pointer;font-family:var(--mono);font-size:10px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);border-radius:5px;padding:4px 8px">+ маршрут</button><button onclick="newJobForEquip(\''+c.id+'\',\''+e.id+'\')" style="cursor:pointer;font-family:var(--mono);font-size:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:5px;padding:4px 8px">+ заявка</button></span>';
+    eh+='<br><span style="color:var(--ink-faint);font-size: var(--fs-2)">'+(e.last_visit?('визит '+esc(e.last_visit)):'визитов нет')+(e.last_service?(' · ТО '+esc(e.last_service)):'')+'</span>';
+    if(al.any) eh+='<br><span style="color:var(--red);font-size: var(--fs-2)">⚠ '+esc(al.reasons.join('; '))+'</span>';
+    if(canWrite()) eh+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3)"><button onclick="addEquipToRoute(\''+c.id+'\',\''+e.id+'\')" style="cursor:pointer;font-family:var(--mono);font-size: var(--fs-1);border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);border-radius: var(--r-pill);padding: var(--sp-2) var(--sp-3)">+ маршрут</button><button onclick="newJobForEquip(\''+c.id+'\',\''+e.id+'\')" style="cursor:pointer;font-family:var(--mono);font-size: var(--fs-1);border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius: var(--r-pill);padding: var(--sp-2) var(--sp-3)">+ заявка</button></span>';
     m.bindPopup(eh); eqMarkers.addLayer(m);
     if(al.any){ const ab=L.divIcon({className:'',html:'<div class="eq-alert">'+(al.service?'🔧':'📞')+'</div>',iconSize:[22,22],iconAnchor:[-4,28]}); L.marker([e.lat,e.lng],{icon:ab,interactive:false,zIndexOffset:1200}).addTo(eqMarkers); } }); }
 let pointFilter='all';
@@ -591,7 +598,7 @@ function renderWorkFeed(){
     });
   }
   if(buckets.cold.length){
-    h+='<div class="wf-h" style="margin-top:16px">Без срока <span class="cnt">'+buckets.cold.length+'</span></div>';
+    h+='<div class="wf-h" style="margin-top: var(--sp-5)">Без срока <span class="cnt">'+buckets.cold.length+'</span></div>';
     buckets.cold.slice(0,6).forEach(j=>{
       h+='<div class="wf-row" data-jfly="'+esc(j.client_id)+'" data-jid="'+esc(j.id)+'">'
         +'<div style="flex:1"><div class="wf-t">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
@@ -685,8 +692,8 @@ $('search').oninput=renderList;
 $('addMode').onclick=()=>{ $('pointOverlay').classList.remove('on'); toggleAdd(true); };
 if($('pointCreate')) $('pointCreate').onclick=()=>{ resetForm(); openPointModal(); };
 function toggleAdd(on){ addModeOn=on; $('addMode').classList.toggle('active',on); $('modeTag').classList.toggle('on',on); $('addHint').style.display=on?'block':'none'; map.getContainer().style.cursor=on?'crosshair':''; }
-function avoidBtnStyle(){ return 'cursor:pointer;font-family:var(--mono);font-size:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:5px;padding:4px 8px'; }
-function renderAvoidZones(){ if(!avoidLayer) return; avoidLayer.clearLayers(); (appSettings.avoid_zones||[]).forEach(z=>{ const circ=L.circle([z.lat,z.lng],{radius:z.r||150,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.12,weight:2,dashArray:'5 5'}); const bs=avoidBtnStyle(); let html='<strong>🚫 Объезд</strong> <span style="color:var(--ink-dim)">· '+(z.r||150)+' м</span>'; if(canWrite()) html+='<br><span style="display:inline-flex;gap:6px;margin-top:6px"><button onclick="avoidRadius(\''+z.id+'\',-50)" style="'+bs+'">– радиус</button><button onclick="avoidRadius(\''+z.id+'\',50)" style="'+bs+'">+ радиус</button><button onclick="avoidDel(\''+z.id+'\')" style="'+bs+'">удалить</button></span>'; circ.bindPopup(html); avoidLayer.addLayer(circ); }); }
+function avoidBtnStyle(){ return 'cursor:pointer;font-family:var(--mono);font-size: var(--fs-1);border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius: var(--r-pill);padding: var(--sp-2) var(--sp-3)'; }
+function renderAvoidZones(){ if(!avoidLayer) return; avoidLayer.clearLayers(); (appSettings.avoid_zones||[]).forEach(z=>{ const circ=L.circle([z.lat,z.lng],{radius:z.r||150,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.12,weight:2,dashArray:'5 5'}); const bs=avoidBtnStyle(); let html='<strong>🚫 Объезд</strong> <span style="color:var(--ink-dim)">· '+(z.r||150)+' м</span>'; if(canWrite()) html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3)"><button onclick="avoidRadius(\''+z.id+'\',-50)" style="'+bs+'">– радиус</button><button onclick="avoidRadius(\''+z.id+'\',50)" style="'+bs+'">+ радиус</button><button onclick="avoidDel(\''+z.id+'\')" style="'+bs+'">удалить</button></span>'; circ.bindPopup(html); avoidLayer.addLayer(circ); }); }
 async function saveAvoidZones(){ try{ const {error}=await sb.from('settings').update({avoid_zones:appSettings.avoid_zones||[]}).eq('id',true); if(error) notify('Не удалось сохранить объезды: '+error.message,'err'); }catch(e){ notify('Не удалось сохранить объезды','err'); } }
 function addAvoidZone(ll){ if(!canWrite()) return; appSettings.avoid_zones=appSettings.avoid_zones||[]; appSettings.avoid_zones.push({id:'az'+Date.now().toString(36),lat:ll.lat,lng:ll.lng,r:150}); saveAvoidZones(); renderAvoidZones(); if(avoidAreaKm2()>180) notify('Объездов много (суммарно ~'+avoidAreaKm2().toFixed(0)+' км²). Сервер ORS может отклонить запрос — уменьши радиусы.','warn'); else showToast('Объезд добавлен'); }
 window.avoidRadius=function(id,delta){ if(!canWrite()) return; const z=(appSettings.avoid_zones||[]).find(x=>x.id===id); if(!z) return; z.r=Math.max(50,Math.min(3000,(z.r||150)+delta)); saveAvoidZones(); renderAvoidZones(); };
@@ -754,7 +761,7 @@ function renderEqList(){ const box=$('eqList'); const list=eqByClient[eqClientId
     d.innerHTML='<div class="t">'+esc(e.model)+' '+warrantyBadge(e)+'</div><div class="m">'+[e.kind,e.serial?'S/N '+esc(e.serial):'',e.installed_on?'уст. '+esc(e.installed_on):''].filter(Boolean).join(' · ')+'</div>'+
       (e.notes?'<div class="m">'+esc(e.notes)+'</div>':'')+
       mhLine(e)+
-      '<div class="acts" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-mhr="'+e.id+'">+ замер</button><button class="btn sm amber" data-mhs="'+e.id+'">✔ плановое ТО</button>'+
+      '<div class="acts" style="margin-top: var(--sp-3);display:flex;gap: var(--sp-3);flex-wrap:wrap"><button class="btn sm" data-mhr="'+e.id+'">+ замер</button><button class="btn sm amber" data-mhs="'+e.id+'">✔ плановое ТО</button>'+
       (canWrite()?'<button class="btn sm" data-eqedit="'+e.id+'">ред.</button><button class="btn sm ghost" data-eqdel="'+e.id+'" title="Удалить">×</button>':'')+'</div>';
     box.appendChild(d); });
   box.querySelectorAll('[data-mhr]').forEach(b=>b.onclick=()=>addReading(b.dataset.mhr,'reading'));
@@ -768,7 +775,7 @@ function startEqEdit(id){ const e=(eqByClient[eqClientId]||[]).find(x=>x.id==id)
 $('eqFormCancel').onclick=clearEqForm; if($('eqModelId')) $('eqModelId').onchange=applyEqModel;
 $('eqGeoBtn').onclick=async ()=>{ const q=$('eqGeo').value.trim(); const box=$('eqGeoRes'); if(!q){ box.innerHTML=''; return; } box.innerHTML='<div class="hint">Ищу…</div>';
   try{ const data=await geoSearch(q,5); if(!data.length){ box.innerHTML='<div class="hint">Не найдено.</div>'; return; } box.innerHTML='';
-    data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size:12px;font-weight:500">'+esc(it.display_name)+'</div>';
+    data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size: var(--fs-3);font-weight:500">'+esc(it.display_name)+'</div>';
       d.onclick=()=>{ $('eqLat').value=(+it.lat).toFixed(6); $('eqLng').value=(+it.lon).toFixed(6); box.innerHTML='<div class="hint ok">Координаты заданы.</div>'; }; box.appendChild(d); }); }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||'Ошибка геокодера.')+'</div>'; } };
 $('eqSave').onclick=async ()=>{ const model=$('eqModel').value.trim(); if(!model){ $('eqErr').textContent='Введи модель.'; return; }
   const rec={client_id:eqClientId,model,kind:$('eqKind').value.trim(),serial:$('eqSerial').value.trim(),installed_on:$('eqInstalled').value||null,factory_warranty_until:$('eqWarranty').value||null,notes:$('eqNotes').value.trim(),model_id:$('eqModelId').value||null,lat:parseFloat($('eqLat').value)||null,lng:parseFloat($('eqLng').value)||null};
@@ -823,7 +830,7 @@ function workModelNames(w){ return ((w&&w.model_ids)||[]).map(id=>{ const m=eqMo
 function setCwScope(s){ cwScope=s; document.querySelectorAll('#cwScope [data-cs]').forEach(b=>b.classList.toggle('on',b.dataset.cs===s)); $('cwKindsBox').style.display=(s==='kinds')?'':'none'; $('cwModelsBox').style.display=(s==='models')?'':'none'; if(s==='models') renderCwModelsTree(); }
 function renderCwModelsTree(){ const box=$('cwModelsTree'); if(!box) return; if(!eqModels.length){ box.innerHTML='<div class="hint">Сначала заведи модели в каталоге моделей.</div>'; return; }
   const tree={}; eqModels.forEach(m=>{ const mn=m.manufacturer||'Без производителя'; const kn=m.kind||'Без типа'; tree[mn]=tree[mn]||{}; tree[mn][kn]=tree[mn][kn]||[]; tree[mn][kn].push(m); });
-  let h=''; Object.keys(tree).sort().forEach(mn=>{ h+='<div style="font-weight:600;font-size:12px;margin-top:6px">'+esc(mn)+'</div>'; Object.keys(tree[mn]).sort().forEach(kn=>{ h+='<div style="font-family:var(--mono);font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);margin:4px 0 2px 8px">'+esc(kn)+'</div>'; tree[mn][kn].forEach(m=>{ h+='<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;padding:2px 0 2px 16px"><input type="checkbox" data-cwm="'+m.id+'" '+(cwModelSel.has(m.id)?'checked':'')+' style="width:auto">'+esc(m.model)+'</label>'; }); }); });
+  let h=''; Object.keys(tree).sort().forEach(mn=>{ h+='<div style="font-weight:600;font-size: var(--fs-3);margin-top: var(--sp-3)">'+esc(mn)+'</div>'; Object.keys(tree[mn]).sort().forEach(kn=>{ h+='<div style="font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-2) 0 var(--sp-1) var(--sp-3)">'+esc(kn)+'</div>'; tree[mn][kn].forEach(m=>{ h+='<label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);padding: var(--sp-1) 0 var(--sp-1) var(--sp-5)"><input type="checkbox" data-cwm="'+m.id+'" '+(cwModelSel.has(m.id)?'checked':'')+' style="width:auto">'+esc(m.model)+'</label>'; }); }); });
   box.innerHTML=h; box.querySelectorAll('[data-cwm]').forEach(c=>c.onchange=()=>{ if(c.checked) cwModelSel.add(c.dataset.cwm); else cwModelSel.delete(c.dataset.cwm); }); }
 document.querySelectorAll('#cwScope [data-cs]').forEach(b=>b.onclick=()=>setCwScope(b.dataset.cs));
 function catGrp(title,inner){ return '<div class="emtree-manu"><div class="emtree-h" data-emg="'+esc(title)+'">▾ '+esc(title)+'</div><div class="emtree-body">'+inner+'</div></div>'; }
@@ -845,7 +852,7 @@ async function renderCatalog(){ if(!catalog.length) await loadCatalog(); if(!eqM
   if(general.length) h+=catGrp('Общий набор ('+general.length+')', general.map(workRow).join(''));
   if(byKind.length){ const kinds={}; byKind.forEach(w=>(w.applicable_kinds||[]).forEach(k=>{ (kinds[k]=kinds[k]||[]).push(w); })); let inner=''; Object.keys(kinds).sort().forEach(k=>{ inner+='<div class="emtree-kind"><div class="emtree-kh">'+esc(k)+'</div>'+kinds[k].map(workRow).join('')+'</div>'; }); h+=catGrp('По типам', inner); }
   if(byModel.length){ const tree={}; byModel.forEach(w=>(w.model_ids||[]).forEach(id=>{ const m=eqModels.find(x=>x.id===id); if(!m) return; const mn=m.manufacturer||'Без производителя', kn=m.kind||'Без типа', ml=m.model||'—'; tree[mn]=tree[mn]||{}; tree[mn][kn]=tree[mn][kn]||{}; (tree[mn][kn][ml]=tree[mn][kn][ml]||[]).push(w); }));
-    let inner=''; Object.keys(tree).sort().forEach(mn=>{ inner+='<div style="font-weight:600;font-size:12px;margin-top:8px">'+esc(mn)+'</div>'; Object.keys(tree[mn]).sort().forEach(kn=>{ inner+='<div class="emtree-kh">'+esc(kn)+'</div>'; Object.keys(tree[mn][kn]).sort().forEach(ml=>{ inner+='<div style="font-size:11px;color:var(--ink-dim);margin:3px 0 1px 8px">'+esc(ml)+'</div>'+tree[mn][kn][ml].map(workRow).join(''); }); }); }); h+=catGrp('По моделям', inner); }
+    let inner=''; Object.keys(tree).sort().forEach(mn=>{ inner+='<div style="font-weight:600;font-size: var(--fs-3);margin-top: var(--sp-3)">'+esc(mn)+'</div>'; Object.keys(tree[mn]).sort().forEach(kn=>{ inner+='<div class="emtree-kh">'+esc(kn)+'</div>'; Object.keys(tree[mn][kn]).sort().forEach(ml=>{ inner+='<div style="font-size: var(--fs-2);color:var(--ink-dim);margin: var(--sp-1) 0 var(--sp-1) var(--sp-3)">'+esc(ml)+'</div>'+tree[mn][kn][ml].map(workRow).join(''); }); }); }); h+=catGrp('По моделям', inner); }
   box.innerHTML=h;
   box.querySelectorAll('[data-emg]').forEach(hd=>hd.onclick=()=>{ const b=hd.nextElementSibling; const open=b.style.display!=='none'; b.style.display=open?'none':''; hd.textContent=(open?'▸ ':'▾ ')+hd.dataset.emg; });
   box.querySelectorAll('[data-cwedit]').forEach(b=>b.onclick=()=>openCw(b.dataset.cwedit));
@@ -896,7 +903,7 @@ $('geoBtn').onclick=geocode; $('geoQuery').addEventListener('keydown',e=>{ if(e.
 async function geocode(){ const q=$('geoQuery').value.trim(); const box=$('geoResults'); if(!q){ box.innerHTML=''; return; } box.innerHTML='<div class="hint">Ищу…</div>';
   try{ const data=await geoSearch(q,6);
     if(!data.length){ box.innerHTML='<div class="hint">Ничего не найдено.</div>'; return; } box.innerHTML='';
-    data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size:12px;font-weight:500">'+esc(it.display_name)+'</div>';
+    data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size: var(--fs-3);font-weight:500">'+esc(it.display_name)+'</div>';
       d.onclick=()=>{ pendingLatLng={lat:parseFloat(it.lat),lng:parseFloat(it.lon)}; flashPending(); map.flyTo([pendingLatLng.lat,pendingLatLng.lng],14); if(!$('fName').value.trim()) $('fName').value=it.display_name.split(',')[0]; box.innerHTML=''; updatePointCoords(); $('fName').focus(); }; box.appendChild(d); });
   }catch(err){ box.innerHTML='<div class="err">'+esc(err.message||'Ошибка геокодера.')+'</div>'; } }
 
@@ -917,7 +924,7 @@ function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.
   const eb=(j.assigned_engineer===session.user.id&&(j.status==='open'||j.status==='planned'))?'<button class="btn sm amber" data-jst="'+j.id+'|in_progress">В работу</button>':'';
   const eb2=(j.assigned_engineer===session.user.id&&j.status==='in_progress')?'<button class="btn sm amber" data-jst="'+j.id+'|done">Завершить</button>':'';
   const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+((canWrite()&&j.status==='done')?'<button class="btn sm" data-jact="'+j.id+'" title="Акт">📄</button>':'')+(canWrite()?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
-  return '<div class="kcard" data-kid="'+j.id+'">'+head+(tags?'<div style="margin:3px 0">'+tags+'</div>':'')+meta+acts+'</div>'; }
+  return '<div class="kcard" data-kid="'+j.id+'">'+head+(tags?'<div style="margin: var(--sp-1) 0">'+tags+'</div>':'')+meta+acts+'</div>'; }
 function wireJobCards(box){
   box.querySelectorAll('[data-jedit]').forEach(b=>b.onclick=()=>openJob(b.dataset.jedit));
   box.querySelectorAll('[data-jst]').forEach(b=>b.onclick=()=>{ const a=b.dataset.jst.split('|'); jobSetStatus(a[0],a[1]); });
@@ -1456,12 +1463,12 @@ async function renderMine(){
     if(jl.length){
       // Кликабельны: инженеру из «Моего дня» надо открыть заявку и внести
       // работы — иначе он видит список точек и ничего не может с ним сделать.
-      h+='<div style="margin-top:8px">'+jl.map(j=>
-        '<div class="ds" data-mopen="'+j.id+'" style="display:flex;justify-content:space-between;gap:8px;cursor:pointer">'+
+      h+='<div style="margin-top: var(--sp-3)">'+jl.map(j=>
+        '<div class="ds" data-mopen="'+j.id+'" style="display:flex;justify-content:space-between;gap: var(--sp-3);cursor:pointer">'+
         '<span>'+esc(j.clients?j.clients.name:'—')+(j.equipment?(' · '+esc(j.equipment.model)):'')+'</span>'+
         '<span style="color:var(--ink-dim)">'+esc(ST[j.status]||j.status)+' ›</span></div>').join('')+'</div>';
     } else {
-      h+='<div class="hint" style="margin-top:6px">Заявок к выезду не привязано.</div>';
+      h+='<div class="hint" style="margin-top: var(--sp-3)">Заявок к выезду не привязано.</div>';
     }
     if(t.notes) h+='<div class="ds">'+esc(t.notes)+'</div>';
     h+=reschedBanner(t);
@@ -1485,7 +1492,7 @@ async function renderMine(){
       w.innerHTML='<h3>🔧 В депо <span class="pill">'+dep.length+'</span></h3>'+
         '<div class="meta">Технику привозит клиент. Выезд не нужен.</div>'+
         dep.map(j=>{ const d=clients.find(c=>c.id==j.depot_id);
-          return '<div class="ds" data-mopen="'+j.id+'" style="display:flex;justify-content:space-between;gap:8px;cursor:pointer">'+
+          return '<div class="ds" data-mopen="'+j.id+'" style="display:flex;justify-content:space-between;gap: var(--sp-3);cursor:pointer">'+
           '<span>'+esc(j.clients?j.clients.name:'—')+(j.equipment?(' · '+esc(j.equipment.model)):'')+
           (d?(' <span class="pill">'+esc(d.name)+'</span>'):'')+'</span>'+
           '<span style="color:var(--ink-dim)">'+esc(ST[j.status]||j.status)+' ›</span></div>'; }).join('');
@@ -1497,7 +1504,7 @@ async function renderMine(){
       const w=document.createElement('div'); w.className='card';
       w.innerHTML='<h3>Заявки без выезда <span class="pill">'+loose.length+'</span></h3>'+
         '<div class="meta">Назначены на тебя, но не привязаны ни к одному выезду.</div>'+
-        loose.map(j=>'<div class="ds" style="display:flex;justify-content:space-between;gap:8px">'+
+        loose.map(j=>'<div class="ds" style="display:flex;justify-content:space-between;gap: var(--sp-3)">'+
           '<span>'+esc(j.clients?j.clients.name:'—')+(j.scheduled_date?(' · '+esc(j.scheduled_date)):'')+'</span>'+
           '<span><button class="btn sm ghost" data-mopen="'+j.id+'">открыть</button></span></div>').join('');
       box.appendChild(w);
@@ -1640,15 +1647,15 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   curWorks.forEach((w,i)=>{ const d=document.createElement('div'); d.className='eqitem';
     const head=w.custom?('<input type="text" placeholder="название работы" value="'+esc(w.name)+'" data-wn="'+i+'" style="width:100%">'):('<div class="t">'+esc(w.name)+'</div>');
     const rev=workRevenue(w);
-    d.innerHTML=head+'<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">'+
-      '<input type="number" step="0.25" value="'+w.hours+'" data-wh="'+i+'" style="width:74px" title="часы"><span class="hint" style="margin:0">ч</span>'+
+    d.innerHTML=head+'<div style="display:flex;gap: var(--sp-3);align-items:center;margin-top: var(--sp-3);flex-wrap:wrap">'+
+      '<input type="number" step="0.25" value="'+w.hours+'" data-wh="'+i+'" style="width:74px" title="часы"><span class="hint" style="margin: 0">ч</span>'+
       '<button class="btn sm '+(w.billable?'amber':'ghost')+'" data-wb="'+i+'">'+(w.billable?'платно':'гарантия')+'</button>'+
-      '<select data-wp="'+i+'" style="max-width:120px;font-size:11px" title="профиль тарифа (плательщик)"><option value="">— профиль —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'"'+(w.profile===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select>'+
+      '<select data-wp="'+i+'" style="max-width:120px;font-size: var(--fs-2)" title="профиль тарифа (плательщик)"><option value="">— профиль —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'"'+(w.profile===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select>'+
       '<input type="number" step="0.01" value="'+esc(w.override)+'" data-wo="'+i+'" placeholder="авто" style="width:84px" title="цена вручную (оверрайд)">'+
-      '<span class="hint" style="margin:0">= '+rev.toFixed(0)+'</span>'+
-      '<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left:auto">×</button></div>'+
-      ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top:4px">'+esc(w.reasons.join(' · '))+'</div>':'')+
-      (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top:4px;font-size:12px">'):'');
+      '<span class="hint" style="margin: 0">= '+rev.toFixed(0)+'</span>'+
+      '<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button></div>'+
+      ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top: var(--sp-2)">'+esc(w.reasons.join(' · '))+'</div>':'')+
+      (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
     box.appendChild(d); });
   box.querySelectorAll('[data-wn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wn].name=inp.value; });
   box.querySelectorAll('[data-wo]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wo].override=inp.value; jobTotals(); });
@@ -1690,8 +1697,8 @@ function syncRouteStops(){ const jobStops=tripStops(); const desired=new Set(job
 function resetTripRoute(){ tripRoute={km:0,driveH:0,geometry:null}; tripVariants=[]; if($('tpVariants')) $('tpVariants').innerHTML=''; if($('tpRouteStatus')) $('tpRouteStatus').textContent='маршрут не построен'; tripEcon(); }
 function renderRouteStops(){ const box=$('tpRouteStops'); const hasAny=tripStart||tripRouteStops.length; box.innerHTML=hasAny?'':'<div class="hint">Точек нет. Отметь заявки или добавь промежуточную.</div>';
   let n=0;
-  if(tripStart){ n++; const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap:8px;align-items:center'; d.innerHTML='<span class="grow">'+n+'. '+esc(tripStart.name||'старт')+' <span class="pill">старт</span></span>'; box.appendChild(d); }
-  tripRouteStops.forEach((s,i)=>{ n++; const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap:8px;align-items:center';
+  if(tripStart){ n++; const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap: var(--sp-3);align-items:center'; d.innerHTML='<span class="grow">'+n+'. '+esc(tripStart.name||'старт')+' <span class="pill">старт</span></span>'; box.appendChild(d); }
+  tripRouteStops.forEach((s,i)=>{ n++; const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap: var(--sp-3);align-items:center';
     const tag=s.type==='wp'?' <span class="pill">пром.</span>':(s.type==='place'?' <span class="pill">депо</span>':'');
     d.innerHTML='<span class="grow">'+n+'. '+esc(s.name||'точка')+tag+'</span>'+
       '<button class="btn sm ghost" data-up="'+i+'">↑</button><button class="btn sm ghost" data-down="'+i+'">↓</button>'+(s.type==='wp'?'<button class="btn sm ghost" data-wprm="'+i+'">×</button>':'');
@@ -1763,7 +1770,7 @@ function renderGanttBar(){
     +'<button class="btn sm" data-gnav="-1" title="Раньше">←</button>'
     +'<button class="btn sm" data-gnav="0">Сегодня</button>'
     +'<button class="btn sm" data-gnav="1" title="Позже">→</button>'
-    +'<span class="hint" style="margin:0">'+esc(tripPeriod(todayISO(d0),todayISO(d1)))+'</span>';
+    +'<span class="hint" style="margin: 0">'+esc(tripPeriod(todayISO(d0),todayISO(d1)))+'</span>';
   box.querySelectorAll('[data-gd]').forEach(b=>b.onclick=()=>{ ganttDays=+b.dataset.gd; renderGanttBar(); renderGantt(); });
   box.querySelectorAll('[data-gnav]').forEach(b=>b.onclick=()=>{
     const v=+b.dataset.gnav; ganttShift=v?(ganttShift+v):0; renderGanttBar(); renderGantt(); });
@@ -1945,17 +1952,17 @@ function renderTripJobs(){ const box=$('tpJobs');
   let list=tripJobsAll; if(useFilter) list=tripJobsAll.filter(j=>curTripJobs.has(j.id)||tripRouteKeys.has(jobKey(j)));
   const hidden=tripJobsAll.length-list.length;
   box.innerHTML=list.length?'':'<div class="hint">'+(useFilter?'Нет заявок по точкам этого маршрута. Снимите галочку, чтобы показать все.':'Заявок нет.')+'</div>';
-  list.forEach(j=>{ const w=j.job_works||[]; const rev=w.reduce((a,x)=>a+(+x.revenue||0),0); const d=document.createElement('label'); d.className='eqitem'; d.style.cssText='display:flex;gap:8px;align-items:center';   // выручка: и платные, и гарантийные
+  list.forEach(j=>{ const w=j.job_works||[]; const rev=w.reduce((a,x)=>a+(+x.revenue||0),0); const d=document.createElement('label'); d.className='eqitem'; d.style.cssText='display:flex;gap: var(--sp-3);align-items:center';   // выручка: и платные, и гарантийные
     // Радио «основная»: её плательщик несёт базовый пробег, остальные — крюк.
     // Осмысленна только для заявок, включённых в выезд.
     const isMain=(tripMainJobId===j.id);
     const mainRadio=curTripJobs.has(j.id)
       ? '<input type="radio" name="tpMain" data-tjmain="'+j.id+'" '+(isMain?'checked':'')
-        +' title="основная заявка выезда" style="width:auto;margin-left:4px">'
+        +' title="основная заявка выезда" style="width:auto;margin-left: var(--sp-2)">'
       : '<span style="width:13px;display:inline-block"></span>';
     d.innerHTML='<input type="checkbox" data-tj="'+j.id+'" '+(curTripJobs.has(j.id)?'checked':'')+' style="width:auto">'+mainRadio+
       '<span class="grow">'+esc(j.clients?j.clients.name:'—')+' · '+esc(ST[j.status]||j.status)+(j.scheduled_date?' · '+esc(j.scheduled_date):'')+'</span>'+
-      '<span class="hint" style="margin:0">'+(rev?('выручка '+rev):'гар.')+'</span>';
+      '<span class="hint" style="margin: 0">'+(rev?('выручка '+rev):'гар.')+'</span>';
     box.appendChild(d); });
   if(useFilter&&hidden>0){ const h=document.createElement('div'); h.className='hint'; h.style.marginTop='6px'; h.textContent='Скрыто '+hidden+' заявок вне маршрута.'; box.appendChild(h); }
   box.querySelectorAll('[data-tjmain]').forEach(r=>r.onchange=()=>{
@@ -2013,8 +2020,8 @@ function tripEcon(){ const e=tripCalc();
 function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const rb=(tripStart&&(appSettings.tariff_profiles||[]).length)?roadByPayer(tripStart,jobs):null;
   if(!rb||!rb.groups.length){ box.innerHTML=''; return; }
   if(!tripOverrides.road) tripOverrides.road={}; const rd=tripOverrides.road;
-  let h='<div class="meta" style="margin-top:10px">Дорога по плательщикам (оверрайд выручки, пусто = авто):</div>';
-  rb.groups.forEach(g=>{ h+='<div class="row" style="align-items:center;margin-top:4px"><span class="grow" style="font-size:12px">'+esc(g.name)+' · '+g.km.toFixed(0)+' км × '+g.rate+' = '+g.rev.toFixed(0)+'</span><input type="number" data-rgov="'+esc(g.payer)+'" value="'+(rd[g.payer]!=null?rd[g.payer]:'')+'" placeholder="'+g.rev.toFixed(0)+'" style="max-width:110px"></div>'; });
+  let h='<div class="meta" style="margin-top: var(--sp-3)">Дорога по плательщикам (оверрайд выручки, пусто = авто):</div>';
+  rb.groups.forEach(g=>{ h+='<div class="row" style="align-items:center;margin-top: var(--sp-2)"><span class="grow" style="font-size: var(--fs-3)">'+esc(g.name)+' · '+g.km.toFixed(0)+' км × '+g.rate+' = '+g.rev.toFixed(0)+'</span><input type="number" data-rgov="'+esc(g.payer)+'" value="'+(rd[g.payer]!=null?rd[g.payer]:'')+'" placeholder="'+g.rev.toFixed(0)+'" style="max-width:110px"></div>'; });
   box.innerHTML=h;
   box.querySelectorAll('[data-rgov]').forEach(inp=>inp.onchange=()=>{ const k=inp.dataset.rgov; if(inp.value==='') delete tripOverrides.road[k]; else tripOverrides.road[k]=inp.value; tripEcon(); }); }
 // [сборка] Удалено мёртвое определение showTripOnMap(id)=>loadTripIntoPlanner:
@@ -2130,7 +2137,7 @@ function tpProfiles(){ return appSettings.tariff_profiles||[]; }
 function renderProfiles(){ const box=$('tpList'); if(!box) return; const list=tpProfiles();
   if(!list.length){ box.innerHTML='<div class="hint">Профилей нет. Добавь первый — например «Производство» (флажок гарантии) и «Клиент» (флажок платного).</div>'; return; }
   box.innerHTML=list.map(p=>{ const wp=p.work_paid||{}, ww=p.work_warr||{}, rd=p.road||{}; const badges=(p.def_warranty?'<span class="pill warn">гарантия по умолч.</span>':'')+(p.def_paid?'<span class="pill good">платно по умолч.</span>':'');
-    return '<div class="card" style="padding:10px;margin-top:8px"><h3 style="font-size:13px">'+esc(p.name||'—')+' '+badges+'</h3>'+
+    return '<div class="card" style="padding: var(--sp-3);margin-top: var(--sp-3)"><h3 style="font-size: var(--fs-4)">'+esc(p.name||'—')+' '+badges+'</h3>'+
       '<div class="meta">платно '+(+wp.rate||0)+'/ч · гарантия '+(+ww.rate||0)+'/ч · км '+(+rd.km_rate||0)+' · сутки '+(+rd.day_rate||0)+' · ночь '+(+rd.night_rate||0)+'</div>'+
       '<div class="acts"><button class="btn sm" data-pedit="'+p.id+'">ред.</button><button class="btn sm ghost" data-pdel="'+p.id+'" title="Удалить">×</button></div></div>'; }).join('');
   box.querySelectorAll('[data-pedit]').forEach(b=>b.onclick=()=>profileEdit(b.dataset.pedit));
@@ -2166,7 +2173,7 @@ let actVarsCur=[];
 function actVars(){ return (appSettings.act_template&&appSettings.act_template.vars)||[]; }
 function renderActVars(){ const box=$('avList'); if(!box) return;
   if(!actVarsCur.length){ box.innerHTML='<div class="hint">Пока нет. «+ Добавить» — и укажи имя и значение.</div>'; return; }
-  box.innerHTML=actVarsCur.map((v,i)=>'<div class="row" style="align-items:center;margin-top:6px"><span class="hint" style="margin:0;font-family:var(--mono);white-space:nowrap">{{</span><input type="text" data-avk="'+i+'" value="'+esc(v.k||'')+'" placeholder="имя" style="max-width:150px"><span class="hint" style="margin:0;font-family:var(--mono);white-space:nowrap">}}</span><input type="text" data-avv="'+i+'" value="'+esc(v.v||'')+'" placeholder="значение" class="grow"><button class="btn sm ghost" data-avrm="'+i+'" title="Удалить">×</button></div>').join('');
+  box.innerHTML=actVarsCur.map((v,i)=>'<div class="row" style="align-items:center;margin-top: var(--sp-3)"><span class="hint" style="margin: 0;font-family:var(--mono);white-space:nowrap">{{</span><input type="text" data-avk="'+i+'" value="'+esc(v.k||'')+'" placeholder="имя" style="max-width:150px"><span class="hint" style="margin: 0;font-family:var(--mono);white-space:nowrap">}}</span><input type="text" data-avv="'+i+'" value="'+esc(v.v||'')+'" placeholder="значение" class="grow"><button class="btn sm ghost" data-avrm="'+i+'" title="Удалить">×</button></div>').join('');
   box.querySelectorAll('[data-avk]').forEach(inp=>inp.oninput=()=>{ actVarsCur[inp.dataset.avk].k=inp.value.trim(); });
   box.querySelectorAll('[data-avv]').forEach(inp=>inp.oninput=()=>{ actVarsCur[inp.dataset.avv].v=inp.value; });
   box.querySelectorAll('[data-avrm]').forEach(b=>b.onclick=()=>{ actVarsCur.splice(b.dataset.avrm,1); renderActVars(); }); }
@@ -2179,7 +2186,7 @@ if($('avSave')) $('avSave').onclick=async ()=>{ const bad=actVarsCur.find(v=>v.k
 $('atSave').onclick=async ()=>{ const act_template={title:$('atTitle').value.trim(),intro:$('atIntro').value.trim(),execRole:$('atExecRole').value.trim(),custRole:$('atCustRole').value.trim(),worksCol:$('atWorksCol').value.trim(),totalWords:$('atTotalWords').value.trim(),warrNote:$('atWarrNote').value.trim(),note:$('atNote').value.trim(),custSign:$('atCustSign').value.trim(),vars:actVars()}; const {error}=await sb.from('settings').update({act_template}).eq('id',true); if(error){ $('atStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.act_template=act_template; $('atStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 async function renderUsersAdmin(){ const {data,error}=await sb.from('profiles').select('id,full_name,role'); const box=$('usersList'); if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
   profilesList=data||[]; box.innerHTML='';
-  profilesList.forEach(p=>{ const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap:8px;align-items:center';
+  profilesList.forEach(p=>{ const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap: var(--sp-3);align-items:center';
     d.innerHTML='<input type="text" value="'+esc(p.full_name||'')+'" data-un="'+p.id+'" placeholder="имя" class="grow">'+
       '<select data-ur="'+p.id+'" style="width:130px"><option value="admin">админ</option><option value="logist">логист</option><option value="engineer">инженер</option></select>'+
       '<button class="btn sm" data-us="'+p.id+'">сохранить</button>';
@@ -2357,15 +2364,15 @@ function reschedBanner(t){
   const r=reschedByTrip[t.id]; if(!r) return '';
   const who=(r.profiles&&r.profiles.full_name)?r.profiles.full_name:'инженер';
   const dates=esc(r.new_from)+((r.new_to&&r.new_to!==r.new_from)?(' — '+esc(r.new_to)):'');
-  let h='<div class="ds" style="border-left:3px solid var(--accent);padding-left:8px;margin-top:8px">'+
+  let h='<div class="ds" style="border-left:3px solid var(--accent);padding-left: var(--sp-3);margin-top: var(--sp-3)">'+
         '<b>⏳ Просьба перенести на '+dates+'</b>'+
         (r.reason?('<br><span style="color:var(--ink-dim)">'+esc(r.reason)+'</span>'):'')+
-        '<br><span class="hint" style="margin:0">'+esc(who)+'</span>';
+        '<br><span class="hint" style="margin: 0">'+esc(who)+'</span>';
   if(canWrite()){
-    h+='<div class="row" style="margin-top:6px"><button class="btn sm amber" data-rok="'+r.id+'">Утвердить</button>'+
+    h+='<div class="row" style="margin-top: var(--sp-3)"><button class="btn sm amber" data-rok="'+r.id+'">Утвердить</button>'+
        '<button class="btn sm ghost" data-rno="'+r.id+'">Отклонить</button></div>';
   } else {
-    h+='<div class="row" style="margin-top:6px"><button class="btn sm ghost" data-rcancel="'+r.id+'">Отозвать</button></div>';
+    h+='<div class="row" style="margin-top: var(--sp-3)"><button class="btn sm ghost" data-rcancel="'+r.id+'">Отозвать</button></div>';
   }
   return h+'</div>';
 }
@@ -2411,13 +2418,13 @@ async function openStaysModal(tid){
   if(!list.length){ $('staysBody').innerHTML='<div class="hint">Стоянок не найдено. Либо машина нигде не стояла дольше порога, либо трек не писался.</div>'; return; }
 
   const mgr=canWrite();
-  let h='<div class="hint" style="margin-bottom:8px">Идёт только в себестоимость. Нормочасы в заявках и акт это не меняет.</div>';
+  let h='<div class="hint" style="margin-bottom: var(--sp-3)">Идёт только в себестоимость. Нормочасы в заявках и акт это не меняет.</div>';
 
   list.forEach(s=>{
     const cli=s.jobs&&s.jobs.clients?s.jobs.clients.name:null;
     const cur=(s.minutes_mgr!=null?s.minutes_mgr:(s.minutes_eng!=null?s.minutes_eng:s.minutes_raw));
-    h+='<div class="card" style="margin-bottom:8px">';
-    h+='<h3 style="font-size:14px">'+(cli?esc(cli):'<span style="color:var(--ink-dim)">не у заявки</span>')+
+    h+='<div class="card" style="margin-bottom: var(--sp-3)">';
+    h+='<h3 style="font-size: var(--fs-5)">'+(cli?esc(cli):'<span style="color:var(--ink-dim)">не у заявки</span>')+
        ' <span class="pill">'+esc(STAY_ST[s.status]||s.status)+'</span></h3>';
     h+='<div class="meta">'+hhmm(s.stay_from)+' — '+hhmm(s.stay_to)+' · детектор: '+minText(s.minutes_raw)+
        (s.dist_m!=null?(' · '+s.dist_m+' м до точки'):'')+'</div>';
@@ -2425,7 +2432,7 @@ async function openStaysModal(tid){
     // Инженер физически стоял на объекте — его координата точнее
     // геокодированного адреса. Со второго визита автопривязка сработает сама.
     if(cli && s.dist_m!=null && s.dist_m>0 && s.status!=='rejected' && (mgr||s.status!=='approved')){
-      h+='<div class="row" style="margin-top:6px"><button class="btn sm ghost" data-spin="'+s.id+'">'+
+      h+='<div class="row" style="margin-top: var(--sp-3)"><button class="btn sm ghost" data-spin="'+s.id+'">'+
          'Уточнить точку объекта ('+s.dist_m+' м)</button></div>';
     }
 
@@ -2434,20 +2441,20 @@ async function openStaysModal(tid){
       // и почему не засчитала. Иначе «где мои два часа» — вечный вопрос.
       h+='<div class="hint">Ни одной заявки выезда рядом — в часы не идёт.</div>';
       if(stayJobs.length && (mgr||s.status!=='approved')){
-        h+='<div class="row" style="margin-top:6px"><select data-sjob="'+s.id+'" style="flex:1">'+
+        h+='<div class="row" style="margin-top: var(--sp-3)"><select data-sjob="'+s.id+'" style="flex:1">'+
            '<option value="">— привязать к заявке вручную —</option>'+
            stayJobs.map(j=>'<option value="'+j.id+'">'+esc(j.name)+'</option>').join('')+
            '</select></div>';
       }
     } else if(s.status==='approved'){
       h+='<div class="ds">Зачтено: <b>'+minText(s.minutes_mgr)+'</b>'+
-         (s.minutes_eng!=null&&s.minutes_eng!=s.minutes_mgr?(' <span class="hint" style="margin:0">(инженер ставил '+minText(s.minutes_eng)+')</span>'):'')+'</div>';
+         (s.minutes_eng!=null&&s.minutes_eng!=s.minutes_mgr?(' <span class="hint" style="margin: 0">(инженер ставил '+minText(s.minutes_eng)+')</span>'):'')+'</div>';
     } else if(s.status==='rejected'){
       h+='<div class="ds" style="color:var(--ink-dim)">Отклонено'+(s.note?(': '+esc(s.note)):'')+'</div>';
     } else {
       const canAct=mgr?(s.status==='engineer_ok'||s.status==='detected'):(s.status==='detected');
       if(canAct){
-        h+='<div class="row" style="margin-top:6px;align-items:center">'+
+        h+='<div class="row" style="margin-top: var(--sp-3);align-items:center">'+
            '<div style="width:120px"><label>минут</label><input type="number" min="0" step="5" id="sm_'+s.id+'" value="'+(cur!=null?cur:0)+'"></div>'+
            '<button class="btn sm amber" data-sok="'+s.id+'">'+(mgr?'Утвердить':'Подтвердить')+'</button>'+
            '<button class="btn sm ghost" data-sno="'+s.id+'">Не работа</button></div>';
@@ -2459,7 +2466,7 @@ async function openStaysModal(tid){
   });
 
   const approved=list.filter(s=>s.status==='approved'&&s.job_id).reduce((a,s)=>a+(+s.minutes_mgr||0),0);
-  h+='<div class="ds" style="margin-top:4px"><b>Утверждено в себестоимость: '+(approved/60).toFixed(2)+' ч</b></div>';
+  h+='<div class="ds" style="margin-top: var(--sp-2)"><b>Утверждено в себестоимость: '+(approved/60).toFixed(2)+' ч</b></div>';
   $('staysBody').innerHTML=h;
 
   $('staysBody').querySelectorAll('[data-sok]').forEach(b=>b.onclick=()=>stayAct(b.dataset.sok,mgr?'approve':'confirm',tid));
@@ -2562,7 +2569,7 @@ async function checkTodayTrip(){
     let h='<div class="meta">'+esc(tripPeriod(t.date_from,t.date_to))+' · '+esc(veh)+'</div>';
     if(late) h+='<div class="ds" style="color:var(--red)">Дата выезда уже прошла, а он так и не начат.</div>';
     if(list.length>1) h+='<div class="hint">И ещё '+(list.length-1)+' — остальные в «Моём дне».</div>';
-    h+='<div class="row" style="margin-top:12px"><button class="btn amber grow" id="todayStart">▶ Начать выезд</button><button class="btn grow" id="todayResched">📅 Перенести</button></div>';
+    h+='<div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="todayStart">▶ Начать выезд</button><button class="btn grow" id="todayResched">📅 Перенести</button></div>';
     $('todayBody').innerHTML=h;
     $('todayStart').onclick=async ()=>{ $('todayOverlay').classList.remove('on'); await tripAction(t.id,'start'); };
     $('todayResched').onclick=()=>{ $('todayOverlay').classList.remove('on'); openReschedModal(t.id); };
@@ -2682,9 +2689,9 @@ function showVehModal(vid){
   const stale=!!r.lost_since || age>VEH_STALE_MIN;
 
   $('vehTitle').textContent=v.name+(v.plate?(' · '+v.plate):'');
-  let h='<div style="font-size:15px;font-weight:600;color:'+col+';margin-bottom:8px">'+esc(vehTitle(r))+'</div>';
+  let h='<div style="font-size: var(--fs-5);font-weight:600;color:'+col+';margin-bottom: var(--sp-3)">'+esc(vehTitle(r))+'</div>';
 
-  h+=vehRow('Данные получены', hhmm+' <span class="hint" style="margin:0">('+vehAgeText(age)+')</span>');
+  h+=vehRow('Данные получены', hhmm+' <span class="hint" style="margin: 0">('+vehAgeText(age)+')</span>');
   if(stale) h+='<div class="vm-stale">Ниже — на момент последней связи, не текущее состояние.</div>';
   const dimv=v=>stale?('<span style="color:var(--ink-faint)">'+v+'</span>'):v;
   if(cls!=='idle') h+=vehRow('Скорость', dimv(Math.round(+r.speed||0)+' км/ч'));
@@ -2699,19 +2706,19 @@ function showVehModal(vid){
       : (age>VEH_STALE_MIN ? '<span style="color:var(--ink-dim)">сообщений нет</span>' : '<span style="color:var(--green)">есть</span>'));
 
   const trip=r.trip_id?(trips||[]).find(t=>t.id===r.trip_id):null;
-  h+='<div class="meta" style="margin:10px 0 2px">Выезд</div>';
+  h+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Выезд</div>';
   if(trip){
     h+=vehRow('Дата', esc(trip.date_from||'—')+(trip.date_to&&trip.date_to!==trip.date_from?(' — '+esc(trip.date_to)):''));
     h+=vehRow('Статус', esc(trip.status||'—'));
-    h+='<div class="hint" style="margin-top:4px">Трек пишется в историю.</div>';
+    h+='<div class="hint" style="margin-top: var(--sp-2)">Трек пишется в историю.</div>';
   } else {
     // Не молчим об этом: без активного выезда история не пишется, и это
     // штатно. Иначе потом ищешь трек, которого никогда не было.
-    h+='<div class="hint" style="margin-top:2px">Активного выезда нет — трек в историю не пишется. Поставь выезду статус «в работе».</div>';
+    h+='<div class="hint" style="margin-top: var(--sp-1)">Активного выезда нет — трек в историю не пишется. Поставь выезду статус «в работе».</div>';
   }
 
-  h+='<div class="meta" style="margin:10px 0 2px">Координаты</div>';
-  h+='<div class="veh-kv"><span style="font-family:var(--mono);font-size:11px">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
+  h+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Координаты</div>';
+  h+='<div class="veh-kv"><span style="font-family:var(--mono);font-size: var(--fs-2)">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
      '<span><button class="btn sm ghost" id="vehCopy">копировать</button></span></div>';
 
   $('vehBody').innerHTML=h;
@@ -2816,11 +2823,11 @@ if($('rMoreToggle')) $('rMoreToggle').onclick=()=>{
 $('corToggle').onclick=()=>{ const closed=$('corBody').style.display==='none'; $('corBody').style.display=closed?'':'none'; $('corToggle').textContent=(closed?'▾':'▸')+' Коридор: найти попутных клиентов'; };
 $('rWpAdd').onclick=async ()=>{ const q=$('rWp').value.trim(); const box=$('rWpRes'); if(!q) return; box.innerHTML='<div class="hint">Ищу…</div>';
   try{ const data=await geoSearch(q,5); if(!data.length){ box.innerHTML='<div class="hint">Не найдено.</div>'; return; } box.innerHTML='';
-    data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size:12px;font-weight:500">'+esc(it.display_name)+'</div>'; d.onclick=()=>{ rStops.push({type:'wp',name:it.display_name.split(',')[0],lat:+it.lat,lng:+it.lon}); $('rWp').value=''; box.innerHTML=''; renderRoutePanel(); resetBuilt(); }; box.appendChild(d); }); }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||'Ошибка геокодера.')+'</div>'; } };
+    data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size: var(--fs-3);font-weight:500">'+esc(it.display_name)+'</div>'; d.onclick=()=>{ rStops.push({type:'wp',name:it.display_name.split(',')[0],lat:+it.lat,lng:+it.lon}); $('rWp').value=''; box.innerHTML=''; renderRoutePanel(); resetBuilt(); }; box.appendChild(d); }); }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||'Ошибка геокодера.')+'</div>'; } };
 $('rClear').onclick=()=>{ rStops=[]; rStart=null; plannerTripId=null; endDeclined=false; $('rBuf').value=0; bufferKm=0; $('rBufVal').textContent='0 км'; $('rIso').value=0; isoMin=0; $('rIsoVal').textContent='0 мин'; tripLayer.clearLayers(); renderRoutePanel(); resetBuilt(); };
 function openBasePicker(mode,after){ baseMode=mode; baseAfter=after||null; $('baseTitle').textContent=(mode==='start'?'Старт — депо':'Финиш — депо'); $('baseSub').textContent=(mode==='start'?'Выбери депо старта или создай новое. «Не нужно» — стартом станет первая точка маршрута.':'Выбери депо для финиша или откажись.'); renderBaseList(); $('baseNew').value=''; $('baseNewRes').innerHTML=''; $('baseOverlay').classList.add('on'); }
 function renderBaseList(){ const box=$('baseList'); box.innerHTML=places.length?'':'<div class="hint">Депо пока нет. Создай новое ниже.</div>';
-  places.forEach(p=>{ const d=document.createElement('div'); d.className='pt'; d.innerHTML='<div style="display:flex;gap:8px;align-items:center"><span class="grow" style="cursor:pointer" data-bpick="'+p.id+'"><b>'+esc(p.name)+'</b>'+(p.description?'<div class="hint" style="margin:0">'+esc(p.description)+'</div>':'')+'</span><button class="btn sm ghost" data-bedit="'+p.id+'">ред.</button></div>'; box.appendChild(d); });
+  places.forEach(p=>{ const d=document.createElement('div'); d.className='pt'; d.innerHTML='<div style="display:flex;gap: var(--sp-3);align-items:center"><span class="grow" style="cursor:pointer" data-bpick="'+p.id+'"><b>'+esc(p.name)+'</b>'+(p.description?'<div class="hint" style="margin: 0">'+esc(p.description)+'</div>':'')+'</span><button class="btn sm ghost" data-bedit="'+p.id+'">ред.</button></div>'; box.appendChild(d); });
   box.querySelectorAll('[data-bpick]').forEach(el=>el.onclick=()=>{ const p=places.find(x=>x.id==el.dataset.bpick); if(p) chooseBase(p); });
   box.querySelectorAll('[data-bedit]').forEach(b=>b.onclick=async ()=>{ const p=places.find(x=>x.id==b.dataset.bedit); if(!p) return; const r=await promptDialog('Депо',[{key:'name',label:'Название',value:p.name},{key:'desc',label:'Описание',value:p.description||'',type:'textarea'}]); if(!r) return; const {error}=await sb.from('clients').update({name:((r.name||'').trim()||p.name),description:(r.desc||'').trim()}).eq('id',p.id); if(error){ notify(error.message,'err'); return; } await loadAll(); renderBaseList(); }); }
 function chooseBase(p){ const o={name:p.name,lat:p.lat,lng:p.lng,placeId:p.id,description:p.description||''}; if(baseMode==='start'){ rStart=o; } else { rStops.push(Object.assign({type:'place'},o)); } $('baseOverlay').classList.remove('on'); renderRoutePanel(); resetBuilt(); const a=baseAfter; baseAfter=null; if(typeof a==='function') a(true); }
@@ -3160,12 +3167,12 @@ async function doBuildRoute(){ if(rBusy) return; const stops=dedupeStops(routeSt
       legs.push(res.feature); if(res.split) splits+=res.split;
       if(res.noAvoid) skipped.push((stops[i].name||'?')+' → '+(stops[i+1].name||'?')); }
     rVariants=[mergeFeatures(legs)]; rVarSel=0; applyRVariant(); renderRVariants();
-    if(skipped.length) $('rStatus').innerHTML+='<div class="hint" style="color:var(--red);margin-top:4px">Объезды не применены: '+esc(skipped.join(' · '))+'</div>';
-    else $('rStatus').innerHTML+='<span class="hint" style="margin:0"> · по участкам</span>';
+    if(skipped.length) $('rStatus').innerHTML+='<div class="hint" style="color:var(--red);margin-top: var(--sp-2)">Объезды не применены: '+esc(skipped.join(' · '))+'</div>';
+    else $('rStatus').innerHTML+='<span class="hint" style="margin: 0"> · по участкам</span>';
   }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка: '+esc(e.message||e)+'</span>'; } finally{ rBusy=false; updateRouteActions(); } }
-function applyRVariant(){ const f=rVariants[rVarSel]; if(!f) return; const sum=(f.properties&&f.properties.summary)||{}; rRoute={km:(+sum.distance||0)/1000,driveH:(+sum.duration||0)/3600,geometry:f.geometry}; $('rStatus').innerHTML='<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'+((appSettings.avoid_zones||[]).length?('<span class="hint" style="margin:0"> · объезды: '+appSettings.avoid_zones.length+'</span>'):''); drawStops(); rBuildBuffer(); }
+function applyRVariant(){ const f=rVariants[rVarSel]; if(!f) return; const sum=(f.properties&&f.properties.summary)||{}; rRoute={km:(+sum.distance||0)/1000,driveH:(+sum.duration||0)/3600,geometry:f.geometry}; $('rStatus').innerHTML='<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'+((appSettings.avoid_zones||[]).length?('<span class="hint" style="margin: 0"> · объезды: '+appSettings.avoid_zones.length+'</span>'):''); drawStops(); rBuildBuffer(); }
 function renderRVariants(){ const box=$('rVariants'); if(rVariants.length<2){ box.innerHTML=''; return; } box.innerHTML='';
-  rVariants.forEach((f,i)=>{ const sum=(f.properties&&f.properties.summary)||{}; const b=document.createElement('button'); b.className='btn sm'+(i===rVarSel?' amber':''); b.style.cssText='margin:0 6px 6px 0'; b.textContent='№'+(i+1)+' · '+((+sum.distance||0)/1000).toFixed(1)+'км · '+Math.round((+sum.duration||0)/60)+'мин'; b.onclick=()=>{ rVarSel=i; applyRVariant(); renderRVariants(); }; box.appendChild(b); }); }
+  rVariants.forEach((f,i)=>{ const sum=(f.properties&&f.properties.summary)||{}; const b=document.createElement('button'); b.className='btn sm'+(i===rVarSel?' amber':''); b.style.cssText='margin: 0 var(--sp-3) var(--sp-3) 0'; b.textContent='№'+(i+1)+' · '+((+sum.distance||0)/1000).toFixed(1)+'км · '+Math.round((+sum.duration||0)/60)+'мин'; b.onclick=()=>{ rVarSel=i; applyRVariant(); renderRVariants(); }; box.appendChild(b); }); }
 $('corDist').onclick=()=>{ $('corDist').classList.add('on'); $('corTime').classList.remove('on'); $('corDistBox').style.display=''; $('corTimeBox').style.display='none'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; rBuildBuffer(); };
 $('corTime').onclick=()=>{ $('corTime').classList.add('on'); $('corDist').classList.remove('on'); $('corTimeBox').style.display=''; $('corDistBox').style.display='none'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; };
 $('rBuf').oninput=e=>{ bufferKm=+e.target.value; $('rBufVal').textContent=bufferKm+' км'; rBuildBuffer(); };
@@ -3245,7 +3252,7 @@ $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<
 $('linkSkip').onclick=()=>{ $('linkOverlay').classList.remove('on'); pendingLinkClient=null; };
 $('linkCreate').onclick=()=>{ $('linkOverlay').classList.remove('on'); const cid=pendingLinkClient; pendingLinkClient=null; if(cid) openJob(null,cid); };
 // ---------- economics breakdown ----------
-function econRow(k,v){ return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span class="hint" style="margin:0">'+esc(k)+'</span><span>'+esc(v)+'</span></div>'; }
+function econRow(k,v){ return '<div style="display:flex;justify-content:space-between;font-size: var(--fs-4);padding: var(--sp-1) 0"><span class="hint" style="margin: 0">'+esc(k)+'</span><span>'+esc(v)+'</span></div>'; }
 
 
 // kmBetween и circuitKm жили здесь своими копиями, дублируя src/core/geo.js.
@@ -3423,18 +3430,18 @@ function buildActHtml(job){ const co=appSettings.company||{}; const tpl=appSetti
   return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Акт '+esc(actNo(job))+'</title>'+
     '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">'+
     '<style>@page{size:A4;margin:18mm 16mm}*{box-sizing:border-box}'+
-    'body{font-family:"IBM Plex Sans",Arial,sans-serif;color:#111;font-size:12.5px;line-height:1.5;margin:0;padding:26px}'+
-    '.org{font-size:16px;font-weight:700}.org-d{color:#555;white-space:pre-line;font-size:11.5px;margin-top:2px}'+
-    'h1{font-size:18px;font-weight:700;text-align:center;margin:24px 0 2px}.subt{text-align:center;color:#555;font-size:12px;margin-bottom:18px}'+
-    '.parties{display:flex;gap:24px;margin:16px 0}.parties>div{flex:1}'+
-    '.parties .lbl{color:#888;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px}.parties .nm{font-weight:600}.parties .d{color:#555;white-space:pre-line;font-size:11.5px;margin-top:2px}'+
-    '.eqline{margin:10px 0;padding:8px 10px;background:#f6f6f6;border-radius:6px}'+
-    'table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #d6d6d6;padding:7px 9px;text-align:left;vertical-align:top}'+
-    'th{background:#f2f2f2;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px}td.c,th.c{text-align:center}td.r,th.r{text-align:right}tfoot td{font-weight:700;background:#fafafa}'+
-    '.warr{color:#a06000;font-weight:600}.sec{font-weight:600;margin:18px 0 0;font-size:13px}.mt th,.mt td{font-size:11.5px}'+
-    '.intro{margin:12px 0 2px;font-size:12px;color:#333;white-space:pre-line}.total-words{margin:16px 0 4px;font-weight:600}.note{color:#777;font-size:11px;margin-top:8px}'+
-    '.sign{display:flex;gap:40px;margin-top:46px}.sign>div{flex:1}.sign .role{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.6px}.sign .line{border-top:1px solid #333;margin-top:34px;padding-top:4px;color:#555;font-size:11px}'+
-    '@media print{body{padding:0}}</style></head><body>'+
+    'body{font-family:"IBM Plex Sans",Arial,sans-serif;color:#111;font-size: var(--fs-3);line-height:1.5;margin: 0;padding: var(--sp-6)}'+
+    '.org{font-size: var(--fs-6);font-weight:700}.org-d{color:#555;white-space:pre-line;font-size: var(--fs-2);margin-top: var(--sp-1)}'+
+    'h1{font-size: var(--fs-7);font-weight:700;text-align:center;margin: var(--sp-6) 0 var(--sp-1)}.subt{text-align:center;color:#555;font-size: var(--fs-3);margin-bottom: var(--sp-5)}'+
+    '.parties{display:flex;gap: var(--sp-6);margin: var(--sp-5) 0}.parties>div{flex:1}'+
+    '.parties .lbl{color:#888;font-size: var(--fs-1);text-transform:uppercase;letter-spacing:.6px;margin-bottom: var(--sp-1)}.parties .nm{font-weight:600}.parties .d{color:#555;white-space:pre-line;font-size: var(--fs-2);margin-top: var(--sp-1)}'+
+    '.eqline{margin: var(--sp-3) 0;padding: var(--sp-3) var(--sp-3);background:#f6f6f6;border-radius: var(--r-sm)}'+
+    'table{width:100%;border-collapse:collapse;margin-top: var(--sp-3)}th,td{border:1px solid #d6d6d6;padding: var(--sp-3) var(--sp-3);text-align:left;vertical-align:top}'+
+    'th{background:#f2f2f2;font-weight:600;font-size: var(--fs-2);text-transform:uppercase;letter-spacing:.4px}td.c,th.c{text-align:center}td.r,th.r{text-align:right}tfoot td{font-weight:700;background:#fafafa}'+
+    '.warr{color:#a06000;font-weight:600}.sec{font-weight:600;margin: var(--sp-5) 0 0;font-size: var(--fs-4)}.mt th,.mt td{font-size: var(--fs-2)}'+
+    '.intro{margin: var(--sp-4) 0 var(--sp-1);font-size: var(--fs-3);color:#333;white-space:pre-line}.total-words{margin: var(--sp-5) 0 var(--sp-2);font-weight:600}.note{color:#777;font-size: var(--fs-2);margin-top: var(--sp-3)}'+
+    '.sign{display:flex;gap: var(--sp-8);margin-top:46px}.sign>div{flex:1}.sign .role{font-size: var(--fs-2);color:#888;text-transform:uppercase;letter-spacing:.6px}.sign .line{border-top:1px solid #333;margin-top: var(--sp-7);padding-top: var(--sp-2);color:#555;font-size: var(--fs-2)}'+
+    '@media print{body{padding: 0}}</style></head><body>'+
     '<div class="org">'+esc(co.name||'Организация')+'</div>'+(co.details?('<div class="org-d">'+esc(co.details)+'</div>'):'')+
     '<h1>'+esc(tpl.title||'Акт выполненных работ')+' № '+esc(actNo(job))+'</h1><div class="subt">от '+esc(actDate(job))+'</div>'+(tpl.intro?('<div class="intro">'+esc(tpl.intro)+'</div>'):'')+
     '<div class="parties"><div><div class="lbl">'+esc(execRole)+'</div><div class="nm">'+esc(co.name||'—')+'</div>'+(co.details?('<div class="d">'+esc(co.details)+'</div>'):'')+'</div>'+
@@ -3488,8 +3495,8 @@ function buildActData(job){ const co=appSettings.company||{}; const tpl=appSetti
   return d; }
 function wsToHtml(ws){ const skip={}, span={}; (ws.model.merges||[]).forEach(m=>{ const [a,b]=m.split(':'); const s=cellRC(a),e=cellRC(b); span[a]={cs:e.c-s.c+1,rs:e.r-s.r+1}; for(let r=s.r;r<=e.r;r++)for(let c=s.c;c<=e.c;c++){ if(r===s.r&&c===s.c) continue; skip[colLetter(c)+r]=1; } });
   let maxCol=1; ws.eachRow({includeEmpty:true},row=>{ if(row.cellCount>maxCol) maxCol=row.cellCount; });
-  let h='<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;color:#000">';
-  for(let r=1;r<=ws.rowCount;r++){ const row=ws.getRow(r); h+='<tr>'; for(let c=1;c<=maxCol;c++){ const ref=colLetter(c)+r; if(skip[ref]) continue; const cell=row.getCell(c); const st=cell.style||{}; const f=st.font||{}; let css='border:1px solid #e2e2e2;padding:3px 7px;vertical-align:top;'; if(f.bold)css+='font-weight:bold;'; if(f.italic)css+='font-style:italic;'; if(f.size)css+='font-size:'+f.size+'px;'; if(f.color&&f.color.argb)css+='color:#'+f.color.argb.slice(-6)+';'; if(st.fill&&st.fill.fgColor&&st.fill.fgColor.argb)css+='background:#'+st.fill.fgColor.argb.slice(-6)+';'; const al=st.alignment||{}; if(al.horizontal)css+='text-align:'+al.horizontal+';'; const sp=span[ref]?(' colspan="'+span[ref].cs+'" rowspan="'+span[ref].rs+'"'):''; let v=cell.value; if(v&&typeof v==='object') v=v.richText?v.richText.map(t=>t.text).join(''):(v.text!=null?v.text:(v.result!=null?v.result:'')); h+='<td'+sp+' style="'+css+'">'+esc(v==null?'':String(v))+'</td>'; } h+='</tr>'; } return h+'</table>'; }
+  let h='<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size: var(--fs-4);color:#000">';
+  for(let r=1;r<=ws.rowCount;r++){ const row=ws.getRow(r); h+='<tr>'; for(let c=1;c<=maxCol;c++){ const ref=colLetter(c)+r; if(skip[ref]) continue; const cell=row.getCell(c); const st=cell.style||{}; const f=st.font||{}; let css='border:1px solid #e2e2e2;padding: var(--sp-1) var(--sp-3);vertical-align:top;'; if(f.bold)css+='font-weight:bold;'; if(f.italic)css+='font-style:italic;'; if(f.size)css+='font-size:'+f.size+'px;'; if(f.color&&f.color.argb)css+='color:#'+f.color.argb.slice(-6)+';'; if(st.fill&&st.fill.fgColor&&st.fill.fgColor.argb)css+='background:#'+st.fill.fgColor.argb.slice(-6)+';'; const al=st.alignment||{}; if(al.horizontal)css+='text-align:'+al.horizontal+';'; const sp=span[ref]?(' colspan="'+span[ref].cs+'" rowspan="'+span[ref].rs+'"'):''; let v=cell.value; if(v&&typeof v==='object') v=v.richText?v.richText.map(t=>t.text).join(''):(v.text!=null?v.text:(v.result!=null?v.result:'')); h+='<td'+sp+' style="'+css+'">'+esc(v==null?'':String(v))+'</td>'; } h+='</tr>'; } return h+'</table>'; }
 // Содержимое шаблона догружается только тогда, когда оно действительно
 // нужно: при выгрузке акта или при скачивании самого шаблона.
 async function ensureActXlsxData(){
