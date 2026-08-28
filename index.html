@@ -216,11 +216,20 @@
   .pt:hover { border-color: var(--ink-dim); }
   .pt .nm { font-weight: 600; font-size: 14px; display: flex; align-items: flex-start; gap: 8px; }
   .pt .nm .dot { margin-top: 5px; flex: none; }
-  .pt .nm-t { flex: 1; min-width: 0; line-height: 1.3;
+  /* Имя занимает ровно две строки — и когда их две, и когда одна.
+     Промежутки между карточками и так были одинаковые (по 10 px), а рваным
+     ритм делали РАЗНЫЕ высоты: 62 px у короткого имени против 84 у длинного
+     с описанием. Фиксированная высота имени и описание, убранное в строку
+     меты, дают одну высоту на все карточки. */
+  .pt .nm-t { flex: 1; min-width: 0; line-height: 1.3; min-height: 2.6em;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
   .pt .ds { font-size: 13px; color: var(--ink-dim); margin-top: 4px; line-height: 1.4; } 
-  .pt .meta { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); margin-top: 6px; }
+  /* Мета — ровно одна строка. Длинное описание («Заїзд через КПП, дзвонити
+     за годину») переносило её на вторую, карточка становилась на 12 px выше
+     соседних, и ритм снова ломался. Полный текст остаётся в подсказке. */
+  .pt .meta { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); margin-top: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* Действия только у выбранной точки. Четыре кнопки под каждой из
      восьмидесяти строк — это и была «духота» в панели. */
   .pt .acts { display: none; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
@@ -228,6 +237,18 @@
   .pt { cursor: pointer; }
   .pt.sel { border-color: var(--accent-line); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent); }
   
+  .listhead { display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer;
+    user-select: none; font-family: var(--mono); font-size: 9.5px; letter-spacing: .9px;
+    text-transform: uppercase; color: var(--ink-faint); }
+  .listhead:hover { color: var(--ink-dim); }
+  .listhead .chev { margin-left: auto; font-size: 10px; transition: transform .2s; }
+  .listhead .chev::before { content: '▾'; }
+  .listhead.folded .chev { transform: rotate(-90deg); }
+  .listbox { max-height: 42vh; overflow-y: auto; margin-top: 8px; }
+  .listbox.folded { display: none; }
+  .listbox::-webkit-scrollbar { width: 5px; }
+  .listbox::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: 3px; }
+
   .pill { 
     font-family: var(--mono); font-size: 10px; padding: 3px 8px; 
     border-radius: 12px; background: var(--panel); border: 1px solid var(--line); 
@@ -505,13 +526,13 @@
   /* Колонки росли жёстко по 300 px и упирались в max-height:72vh: три штуки
      занимали меньше половины экрана, а единственная заполненная
      прокручивалась внутри себя, хотя под ней оставался пустой экран.
-     Теперь ширина тянется, а высоту ограничиваем только когда колонок
-     много и они реально длинные. */
+     Теперь ширина тянется, а высота идёт по содержимому. */
   .kcol { flex: 1 1 300px; min-width: 260px; max-width: 480px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; }
-  .kcol-b { max-height: calc(100vh - 300px); }
   .kcol-h { padding: 10px 12px; font-family: var(--mono); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-dim); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
   .kcol-h .cnt { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--ink); }
-  .kcol-b { padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  /* Свой скролл у колонки убран: два вложенных скролла — это когда листаешь
+     и не понимаешь, что именно поехало. Колонка растёт, страница скроллит одна. */
+  .kcol-b { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
   .kcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
   .kcard h4 { margin: 0 0 4px; font-size: 13px; }
   .kcard .meta { font-size: 11.5px; color: var(--ink-dim); margin: 2px 0; }
@@ -526,8 +547,10 @@
      во всю строку («Экономика», «Работы») не даёт пустой четвёртой колонке
      схлопнуться, и на широком мониторе три верхние застревали по 400 px
      с дырой справа. Явные три доли тянутся за окном без потолка. */
-  .trip-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px; align-items: start; }
+  /* Без align-items:start — иначе под короткой карточкой оставалась дыра
+     до второго ряда. Растягиваем по высоте ряда, нижние грани в одну линию. */
+  .trip-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .trip-grid > .card { display: flex; flex-direction: column; }
   @media (max-width: 1360px) { .trip-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   /* У заявки карточек всего две плюс широкая: в трёх колонках третья ячейка
      первого ряда оставалась пустой дырой. Две колонки её закрывают.
@@ -583,7 +606,12 @@
   .emrow:hover { background: var(--panel-2); }
   .emname { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .emmeta { font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
-  .gantt-wrap { overflow-x: auto; padding-bottom: 8px; }
+  /* Ширина дня считается от окна, поэтому горизонтальный скролл больше
+     не нужен — он и был признаком того, что период задан не тем. */
+  .gantt-wrap { overflow-x: hidden; padding-bottom: 8px; }
+  .gantt-bar-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .gantt-bar-ctl .seg button { white-space: nowrap; }
+  .gantt-day.wknd { background: color-mix(in srgb, var(--ink-faint) 8%, transparent); }
   .gantt-head { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
   .gantt-day { flex: none; text-align: center; font-size: 10px; color: var(--ink-faint); font-family: var(--mono); padding: 4px 0; border-left: 1px solid var(--line); }
   .gantt-day.today { color: var(--accent-ink); background: rgba(255,225,0,0.10); font-weight: 700; }
@@ -659,6 +687,13 @@
 .el-tail{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-top:10px;
   padding-top:9px;border-top:1px solid var(--line)}
 .stat-closed{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-top:9px}
+/* Переключатель периода живёт в заголовке карточки, а не отдельной строкой */
+.cardhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.revseg{margin-left:auto;display:inline-flex}
+.revseg button{padding:4px 9px;font-size:10px}
+/* План отделён от заработанного и подписан планом */
+.mc-plan .mc-k,.mc-plan .mc-v{color:var(--ink-faint)}
+.mc-note{font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-faint)}
 
 /* Лента внимания на дашборде */
 .dash-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
@@ -788,7 +823,7 @@
     <button class="nav-i" data-tab="catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><circle cx="10" cy="18" r="1.5" fill="currentColor"/></svg><span>Каталог</span></button>
   </div>
   <div class="rail-foot">
-    <button class="nav-i" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>Настройки</span></button>
+    <button class="nav-i" data-tab="settings"><svg viewBox="0 0 24 24"width="28"height="28"fill="none"stroke="currentColor"stroke-width="2"stroke-linecap="round"stroke-linejoin="round"aria-hidden="true"><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.6-1.25-1.8-3.1-1.9.8a8 8 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.45a8 8 0 0 0-2.6 1.5L6 6.15l-1.8 3.1L5.8 10.5a7.8 7.8 0 0 0 0 3l-1.6 1.25L6 17.85l1.9-.8a8 8 0 0 0 2.6 1.5l.3 2.45h3.6l.3-2.45a8 8 0 0 0 2.6-1.5l1.9.8 1.8-3.1-1.6-1.25z"/></svg><span>Настройки</span></button>
     <button class="nav-i" id="themeBtn" title="Внешний вид"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg><span>Вид</span></button>
     <button class="nav-i" id="cfgBtn" title="Подключение"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 7h14M5 17h14"/></svg><span>Связь</span></button>
     <button class="nav-i" id="logoutBtn" style="display:none" title="Выйти"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h10"/></svg><span>Выйти</span></button>
@@ -815,7 +850,6 @@
                Весь справочник — вторым режимом. Из 24 точек в работе обычно
                единицы, и остальные два десятка мешают их найти. -->
           <div class="seg" id="mapScope"><button class="on" data-ms="work">в работе</button><button data-ms="all">весь справочник</button></div>
-          <div id="workFeed"></div>
           <!-- Панель похудела с 22 органов управления до восьми.
                Режимы просмотра (подсветка прибыльных, расстановка объездов)
                переехали в меню слоёв на самой карте: это режимы, а не
@@ -827,34 +861,61 @@
           <div class="seg" id="typeFilter" style="margin-top:8px"><button class="on" data-tf="all">все</button><button data-tf="client">клиенты</button><button data-tf="base">депо</button></div>
           <div id="pointTools"><button class="btn amber" id="pointCreate" style="width:100%;margin-top:10px">+ Создать точку</button></div>
           </div>
-          <div id="list" style="margin-top:10px"></div>
+          <!-- Список в своей коробке: восемьдесят точек утаскивали «Маршрут»
+               и «Сохранить как выезд» далеко вниз, за пределы карточки.
+               Шапку можно свернуть — тогда под панелью остаётся только карта. -->
+          <div class="listhead" id="listHead"><span id="listHeadT">свернуть список</span><span class="chev"></span></div>
+          <div class="listbox" id="pointsBox">
+            <div id="workFeed"></div>
+            <div id="list"></div>
+          </div>
         </div>
       </div>
       <div class="block collapsible collapsed" id="routeBlock">
         <h2 class="ch">Маршрут <span class="cnt" id="rCount">0</span><span class="chev"></span></h2>
         <div class="block-body">
+        <!-- Порядок: сперва что в маршруте, потом чем его дополнить, потом
+             один главный ход. Три жёлтые кнопки подряд и двенадцать органов
+             управления в столбик — это и была «духота»: всё выглядело
+             одинаково важным. Редкое (объезды, оптимизация, коридор)
+             ушло под раскрытие. -->
         <div id="rEndpoints" class="endpoints"></div>
-        <button class="btn amber" id="rWpMode" style="width:100%;margin-top:8px">+ Точка на карте</button>
-        <div class="hint" id="rWpHint" style="display:none">Кликни по карте, чтобы добавить промежуточную точку.</div>
-        <div class="row" style="margin-top:8px"><input type="text" id="rWp" placeholder="…или найти по адресу" class="grow"><button class="btn" id="rWpAdd">Найти</button></div>
-        <div id="rWpRes"></div>
-        <div id="rStops" style="margin-top:10px"></div>
-        <div class="row" style="margin-top:10px"><select id="rPref" class="grow"><option value="recommended">рекомендуемый</option><option value="fastest">быстрый</option><option value="shortest">короткий</option></select></div>
-        <div class="row" style="margin-top:6px"><button class="btn amber grow" id="rBuild">Построить маршрут</button><button class="btn ghost" id="rClear">Очистить</button></div>
-        <!-- Объезды живут здесь, а не среди фильтров точек: «кирпич» нужен
-             ровно для одного — чтобы маршрут обошёл плохую дорогу. -->
-        <label class="chip-check" id="avoidWrap" style="width:100%;margin-top:6px;justify-content:center"><input type="checkbox" id="avoidMode"><span>🚫 Ставить объезды</span></label>
-        <div class="hint" id="avoidHint" style="display:none">Кликай по карте, где объезжать. Радиус меняется в попапе «кирпича». Быстрее — правый клик по карте.</div>
-        <button class="btn sm" id="rOpt" style="width:100%;margin-top:6px">Оптимизировать и построить</button>
-        <div class="hint" id="rStatus"></div>
-        <div id="rVariants" style="margin-top:6px"></div>
-        <button class="btn sm ghost" id="corToggle" style="width:100%;margin-top:10px">▸ Коридор: найти попутных клиентов</button>
-        <div id="corBody" style="display:none;margin-top:8px">
-          <div class="seg"><button id="corDist" class="on">по км</button><button id="corTime">по времени</button></div>
-          <div id="corDistBox" style="margin-top:6px"><div class="row" style="align-items:center"><input type="range" id="rBuf" min="0" max="50" step="1" value="0" class="grow"><span class="hint" id="rBufVal" style="margin:0">0 км</span></div></div>
-          <div id="corTimeBox" style="margin-top:6px;display:none"><div class="row" style="align-items:center"><input type="range" id="rIso" min="0" max="60" step="5" value="0" class="grow"><span class="hint" id="rIsoVal" style="margin:0">0 мин</span><button class="btn sm" id="rIsoBuild">изохрона</button></div></div>
-          <div id="rCorridor" style="margin-top:6px;max-height:200px;overflow:auto"></div>
+        <div id="rStops" style="margin-top:8px"></div>
+
+        <div class="row" style="margin-top:10px">
+          <button class="btn sm" id="rWpMode">+ на карте</button>
+          <input type="text" id="rWp" placeholder="или адрес…" class="grow">
+          <button class="btn sm" id="rWpAdd">Найти</button>
         </div>
+        <div class="hint" id="rWpHint" style="display:none">Кликни по карте, чтобы добавить промежуточную точку.</div>
+        <div id="rWpRes"></div>
+
+        <div class="row" style="margin-top:12px">
+          <select id="rPref" class="grow"><option value="recommended">рекомендуемый</option><option value="fastest">быстрый</option><option value="shortest">короткий</option></select>
+          <button class="btn amber" id="rBuild">Построить</button>
+        </div>
+        <div class="row" style="margin-top:6px;align-items:center;gap:8px">
+          <div class="hint grow" id="rStatus" style="margin:0"></div>
+          <button class="btn sm ghost" id="rClear">Очистить</button>
+        </div>
+        <div id="rVariants" style="margin-top:6px"></div>
+
+        <button class="btn sm ghost" id="rMoreToggle" style="width:100%;margin-top:12px">▸ Ещё: объезды, оптимизация, коридор</button>
+        <div id="rMore" style="display:none;margin-top:8px">
+          <!-- Объезды живут здесь, а не среди фильтров точек: «кирпич» нужен
+               ровно для одного — чтобы маршрут обошёл плохую дорогу. -->
+          <label class="chip-check" id="avoidWrap" style="width:100%;justify-content:center"><input type="checkbox" id="avoidMode"><span>🚫 Ставить объезды</span></label>
+          <div class="hint" id="avoidHint" style="display:none">Кликай по карте, где объезжать. Радиус меняется в попапе «кирпича». Быстрее — правый клик по карте.</div>
+          <button class="btn sm" id="rOpt" style="width:100%;margin-top:8px">Оптимизировать и построить</button>
+          <button class="btn sm ghost" id="corToggle" style="width:100%;margin-top:8px">▸ Коридор: найти попутных клиентов</button>
+          <div id="corBody" style="display:none;margin-top:8px">
+            <div class="seg"><button id="corDist" class="on">по км</button><button id="corTime">по времени</button></div>
+            <div id="corDistBox" style="margin-top:6px"><div class="row" style="align-items:center"><input type="range" id="rBuf" min="0" max="50" step="1" value="0" class="grow"><span class="hint" id="rBufVal" style="margin:0">0 км</span></div></div>
+            <div id="corTimeBox" style="margin-top:6px;display:none"><div class="row" style="align-items:center"><input type="range" id="rIso" min="0" max="60" step="5" value="0" class="grow"><span class="hint" id="rIsoVal" style="margin:0">0 мин</span><button class="btn sm" id="rIsoBuild">изохрона</button></div></div>
+            <div id="rCorridor" style="margin-top:6px;max-height:200px;overflow:auto"></div>
+          </div>
+        </div>
+
         <button class="btn amber" id="rSaveTrip" style="width:100%;margin-top:12px">Сохранить как выезд</button>
         </div>
       </div>
@@ -990,7 +1051,7 @@
     <div class="pane scrollp">
       <div class="subtabs">
         <div class="subtab active" data-csub="works">Работы</div>
-        <div class="subtab" data-csub="models">Модели</div>
+        <div class="subtab" data-csub="models">Техника</div>
       </div>
       <div id="catWorks">
       <div class="pane-head"><h2>Нормированные работы</h2>
@@ -1000,7 +1061,7 @@
       <div id="catList"></div>
       </div>
       <div id="catModels" style="display:none">
-      <div class="pane-head"><h2>Модели техники</h2>
+      <div class="pane-head"><h2>Техника</h2>
         <div class="searchbox"><input type="search" id="emSearch" placeholder="поиск модели…"></div>
         <button class="btn sm amber" id="emShowAdd">+ Модель</button></div>
       <div class="meta">Производитель → тип → модель. Гарантия и сервисный интервал по умолчанию — для привязки к технике клиентов и к работам.</div>
@@ -1045,6 +1106,9 @@
         <div id="tripList"></div>
       </div>
       <div id="tripsGantt" style="display:none">
+        <!-- Период выбирается, а не выводится из крайних дат выездов:
+             один выезд в октябре растягивал шкалу на полгода. -->
+        <div class="gantt-bar-ctl" id="ganttBar"></div>
         <div id="gantt"></div>
         <div class="meta" style="margin-top:10px"><span style="color:#9aa1ad">■</span> план · <span style="color:#5eb3f6">■</span> назначен · <span style="color:#111;background:var(--accent);padding:0 3px;border-radius:2px">■</span> в работе · <span style="color:#16a34a">■</span> завершён</div>
       </div>
