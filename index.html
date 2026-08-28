@@ -926,8 +926,12 @@
 </div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2.111.0/dist/umd/supabase.js" integrity="sha384-faMlYZUtkJj+Sh6Bmu/L0GzPcraRWN6CW+9RH3GUrK/Z0WS9tgaNNt0tHiLxsbdb" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js" integrity="sha384-82q0nm29xZzIo5BMtDYnh2/NxeO6FoaK1S/0nF84w3cEsqbBfun3JdMyDVYWfVY5" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://unpkg.com/exceljs@4.4.0/dist/exceljs.min.js" integrity="sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- turf и exceljs здесь больше НЕ подключаются.
+     Они выполнялись до первой строки app.js и задерживали запуск примерно
+     на полтора мегабайта. Теперь их подгружает loadLib() в src/app.js —
+     turf прогревается сразу после старта и ожидается там, где от него
+     зависят цифры; exceljs приезжает только при выгрузке акта по шаблону.
+     Хэши integrity переехали в app.js без изменений. -->
 <script type="module" src="/src/app.js"></script>
 </body>
 </html>
