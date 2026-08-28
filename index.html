@@ -19,7 +19,8 @@
        нормально, но подчёркивание активной вкладки, единственный указатель
        «где я», в светлой теме им почти не рисуется. В тёмной оставляем
        фирменный, в светлой уводим в охру. */
-    --accent-line: #ffe100;
+    --accent-line: #ffe100; --focus: #ffe100;
+    --nav-bg: #24262b; --nav-ink: #ffe100;
     --cyan: #27d3c4; --red: #ff5d5d; --green: #4ec97a;
     --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2); --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.3); --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
@@ -43,7 +44,7 @@
        складывалась. Три ступени высоты и два кольца закрывают всё. */
     --bd: 1px solid var(--line);
     --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
-    --ring-solid: 0 0 0 2px var(--accent-line);
+    --ring-solid: 0 0 0 2px var(--focus);
     --t-fast: .12s ease;  --t: .18s ease;
     --sp-1: 2px;  --sp-2: 4px;  --sp-3: 8px;  --sp-4: 12px;
     --sp-5: 16px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
@@ -77,7 +78,7 @@
     z-index: 100; overflow: hidden;
   }
   .rail-brand { font-family: var(--mono); font-size: var(--fs-3); font-weight: 600;
-    letter-spacing: .5px; color: var(--accent-line); margin-bottom: var(--sp-4); display: flex;
+    letter-spacing: .5px; color: var(--ink); margin-bottom: var(--sp-4); display: flex;
     flex-direction: column; align-items: center; gap: var(--sp-2); }
   .rail-brand img { height: 20px; display: none; }
   .rail-items { display: flex; flex-direction: column; gap: var(--sp-1); width: 100%; align-items: center; }
@@ -91,8 +92,11 @@
   }
   .nav-i svg { width: 20px; height: 20px; flex: none; }
   .nav-i span { line-height: 1.15; text-align: center; }
-  .nav-i.active { background: var(--panel-2); color: var(--ink); font-weight: 600; }
-  .nav-i.active svg { color: var(--accent-line); }
+  /* «Где я» в рельсе — заливка, а не оттенок текста: в светлой теме
+     затемнённый жёлтый превращался в горчицу, а фирменный на светлом
+     фоне не виден. Заливка решает обе задачи сразу. */
+  .nav-i.active { background: var(--nav-bg); color: var(--nav-ink); font-weight: 600; }
+  .nav-i.active svg { color: var(--nav-ink); }
   .nav-i.hidden { display: none; }
   .rail .who { font-family: var(--mono); font-size: var(--fs-1); color: var(--ink-faint);
     text-align: center; line-height: 1.3; margin-top: var(--sp-3); padding: 0 var(--sp-2); word-break: break-all; }
@@ -143,7 +147,10 @@
     flex: 1; background: transparent; border: none; color: var(--ink-dim); 
     font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; 
     text-transform: uppercase; padding: var(--sp-3); cursor: pointer; transition: border-color var(--t), background var(--t), color var(--t), box-shadow var(--t); white-space: nowrap; }
-  .seg button.on { background: var(--accent); color: var(--on-accent); font-weight: 600; box-shadow: var(--shadow-sm); }
+  /* Как и чипы: выбранный сегмент — состояние, поэтому чернила, а не жёлтый.
+     Жёлтый в интерфейсе значит «нажми меня» либо «ты здесь» (рейл, подчёркивание
+     вкладки); переключатель периода — ни то, ни другое. */
+  .seg button.on { background: var(--ink); color: var(--panel); font-weight: 600; box-shadow: var(--shadow-sm); }
   
   .ph { margin: auto; max-width: 520px; text-align: center; padding: var(--sp-8); }
   .ph .ic { font-size: var(--fs-9); margin-bottom: var(--sp-4); }
@@ -212,14 +219,14 @@
   }
   input[type=color] { width: 100%; height: 40px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-2); cursor: pointer; }
   input:focus, textarea:focus, select:focus { 
-    border-color: var(--accent-line); background: var(--panel);
+    border-color: var(--focus); background: var(--panel);
     box-shadow: var(--ring);
   }
   /* Клавиатурный фокус был только у полей ввода — у кнопок, чипов, вкладок
      и карточек его не было вовсе, и человек с клавиатуры не видел, где он.
      :focus-visible не трогает клик мышью, поэтому обводка появляется
      ровно там, где она нужна. */
-  :focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; } 
   textarea { resize: vertical; min-height: 60px; line-height: 1.5; }
   
@@ -272,7 +279,7 @@
   .pt .acts { display: none; gap: var(--sp-3); margin-top: var(--sp-3); flex-wrap: wrap; }
   .pt.sel .acts { display: flex; }
   .pt { cursor: pointer; }
-  .pt.sel { border-color: var(--accent-line); box-shadow: var(--ring); }
+  .pt.sel { border-color: var(--focus); box-shadow: var(--ring); }
   
   .listhead { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-4); cursor: pointer;
     user-select: none; font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .9px;
@@ -670,7 +677,12 @@
   /* --- канбан выездов + мультифильтр статусов --- */
   .chips { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
   .chip { cursor: pointer; user-select: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-dim); border-radius: var(--r-pill); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-3); transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast); }
-  .chip.on { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+  /* Выбранный фильтр — это состояние, а не действие. Жёлтая заливка
+     закреплена за главными кнопками («В работу», «Завершить»); если ею же
+     красить активные чипы, на экране заявок семь одинаковых жёлтых пилюль,
+     и глазу не за что зацепиться. Состояние даём чернилами. */
+  .chip.on { background: var(--ink); color: var(--panel); border-color: var(--ink); font-weight: 600; }
+  .chip.on:hover { border-color: var(--ink); }
   .kanban { display: flex; gap: var(--sp-4); overflow-x: auto; padding-bottom: var(--sp-3); align-items: flex-start; }
   /* Колонки росли жёстко по 300 px и упирались в max-height:72vh: три штуки
      занимали меньше половины экрана, а единственная заполненная
