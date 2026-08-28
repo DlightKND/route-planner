@@ -152,8 +152,8 @@ document.addEventListener('click',e=>{ const p=$('themePop'); if(p.classList.con
 $('modeDark').onclick=()=>{ theme.mode='dark'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); $('themePop').classList.remove('on'); };
 $('modeLight').onclick=()=>{ theme.mode='light'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); $('themePop').classList.remove('on'); };
 // закрытие модалок по фону и Esc
-['jobOverlay','econOverlay','baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o) o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('on'); }); });
-document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; ['jobOverlay','econOverlay','baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o&&o.classList.contains('on')) o.classList.remove('on'); }); const tp=$('themePop'); if(tp) tp.classList.remove('on'); });
+['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o) o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('on'); }); });
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; ['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o&&o.classList.contains('on')) o.classList.remove('on'); }); const tp=$('themePop'); if(tp) tp.classList.remove('on'); });
 
 // ---------- logo ----------
 (function(){ const lg=$('logoImg'); lg.onload=()=>{lg.style.display='block';$('wordmark').style.display='none';}; lg.onerror=()=>{lg.style.display='none';$('wordmark').style.display='';}; lg.src='./logo.png'; })();
@@ -251,6 +251,7 @@ function switchTab(name, sub){ if(!tabAllowed(name)) return;
   // У страницы выезда нет своего пункта в рельсе: она — вложенный экран
   // «Выездов», и подсветка должна остаться на них, иначе непонятно, где ты.
   if(name==='trip') document.querySelectorAll('.nav-i[data-sub="trips"]').forEach(t=>t.classList.add('active'));
+  if(name==='job') document.querySelectorAll('.nav-i[data-sub="jobs"]').forEach(t=>t.classList.add('active'));
   if(name==='map'){ setTimeout(()=>map.invalidateSize(),60); }
   if(name==='catalog') catSub(catCur);
   if(name==='planner') plannerSub(sub||plannerCur);
@@ -1029,21 +1030,34 @@ async function renderAttention(){
       +'<div class="afeed-line" style="background:linear-gradient(180deg,'+stops.join(',')+')"></div>';
 
     // ── Сегодня ──────────────────────────────────────────────────────────
+    // Такая же карточка, как у групп, а не голая строка над ними. Иначе
+    // первая карточка ленты начиналась на 34 px ниже первой карточки правой
+    // колонки, и две колонки дашборда стояли вразнобой.
     const over=groups.filter(g=>g.left<0);
     const overN=over.reduce((a,g)=>a+g.jobs.length,0);
-    h+='<div class="a-today">'
+    const overH=over.reduce((a,g)=>a+g.h,0);
+    h+='<div class="agrp">'
       +'<div class="a-ax"><b style="color:var(--red)">'+shortDate(todayISO())+'</b><i>сегодня</i></div>'
-      +'<span class="a-dot" style="width:22px;height:22px;left:-32px;top:5px;background:#dc2626;box-shadow:0 0 0 1px #dc2626"></span>'
-      +'<div class="a-todaytxt">'+(overN
-          ? '<b style="color:var(--red)">Просрочено: '+overN+'</b>'
-          : 'Просроченного нет')+'</div></div>';
+      +'<span class="a-dot" style="width:20px;height:20px;left:-31px;top:10px;background:#dc2626;box-shadow:0 0 0 1px #dc2626"></span>'
+      +'<span class="a-stem" style="left:-11px;width:11px"></span>'
+      +'<div class="agrp-card" style="border-left-color:#dc2626">'
+      +'<div class="agrp-h agrp-h-solo" style="background:color-mix(in srgb,#dc2626 '+(overN?'12':'7')+'%,var(--panel))">'
+        +'<span class="agrp-n">Сегодня</span>'
+        +'<span class="agrp-hint" style="flex:1">'+(overN
+            ? '<b style="color:var(--red)">просрочено '+overN+' '+plural(overN,'заявка','заявки','заявок')
+              +' · '+overH.toFixed(overH%1?1:0)+' ч</b>'
+            : 'просроченного нет')+'</span>'
+      +'</div></div></div>';
 
     // ── Группы ───────────────────────────────────────────────────────────
     let prevLeft=0;
     groups.forEach(g=>{
       // Разрыв шкалы: пустые недели схлопываем в подпись, иначе ближние
       // сроки слиплись бы в верхней трети, а дальний уехал бы в одиночестве.
-      const gapW=Math.floor((g.left-prevLeft)/7);
+      // Пустые недели считаем только вперёд: окно между просроченной
+      // заявкой и следующим сроком частью лежит в прошлом, и писать
+      // «три недели без сроков» про уже прошедшие дни — неправда.
+      const gapW=Math.floor((g.left-Math.max(0,prevLeft))/7);
       if(gapW>=3) h+='<div class="a-break"><span>'+gapW+' '+plural(gapW,'неделя','недели','недель')+' без сроков</span></div>';
       prevLeft=g.left;
 
@@ -1463,7 +1477,8 @@ async function mineTripJobs(ids){
 
 async function jobSetStatus(id,st){ const {error}=await sb.from('jobs').update({status:st}).eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } if(st==='done'){ try{ await sb.rpc('register_equipment_visit',{p_job:id}); await reloadEquip(); }catch(e){ notify('Заявка закрыта, но визит по технике не отметился: '+(e.message||e),'err'); } } showToast('Статус: '+(ST[st]||st)); renderJobs(); }
 function populateEquip(){ const list=eqByClient[$('jbClient').value]||[]; $('jbEquip').innerHTML='<option value="">— без привязки —</option>'+list.map(e=>'<option value="'+e.id+'">'+esc(e.model+(e.serial?' · '+e.serial:''))+'</option>').join(''); }
-$('jbClient').onchange=populateEquip;
+$('jbClient').onchange=()=>{ populateEquip(); jobHead(); };
+['jbEquip','jbStatus','jbEng','jbDue'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',jobHead); });
 async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEditId=id; const j=id?jobs.find(x=>x.id==id):null;
   $('jbClient').innerHTML=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   $('jbEng').innerHTML='<option value="">— не назначен —</option>'+profilesList.map(p=>'<option value="'+p.id+'">'+esc((p.full_name||'без имени')+' ('+p.role+')')+'</option>').join('');
@@ -1482,7 +1497,43 @@ async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEdit
   renderJobWorks();
   const ro=!canWrite() && !(j&&j.assigned_engineer===session.user.id);
   ['jbClient','jbEquip','jbEng','jbDate','jbWindow','jbDue','jbNotes','jbWorkPick','jbWorkAdd','jbCustomAdd','jobSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
-  $('jobErr').textContent=''; $('jobOverlay').classList.add('on'); }
+  $('jobErr').textContent=''; jobHead();
+  // Куда вернёт хлебная крошка. Заявку открывают из пяти мест — со сводки,
+  // с карты, из канбана, из выезда, — и возвращать всегда в канбан значит
+  // выкидывать человека из того места, где он работал.
+  const cur=document.querySelector('.view.active');
+  jobBack=(cur&&cur.className.match(/view-(\w+)/)||[])[1]||'planner';
+  if(jobBack==='job') jobBack='planner';
+  jobBackSub=(jobBack==='planner')?plannerCur:null;
+  switchTab('job');
+  const pane=document.querySelector('.view-job .pane'); if(pane) pane.scrollTop=0; }
+let jobBack='planner', jobBackSub='jobs';
+// Шапка страницы заявки: кто, что за техника, сколько это стоит и когда срок.
+function jobHead(){
+  const cl=clients.find(c=>c.id==$('jbClient').value);
+  const eqName=(()=>{ const sel=$('jbEquip'); return (sel&&sel.selectedIndex>0)?sel.options[sel.selectedIndex].text:''; })();
+  const nm=cl?cl.name:'Новая заявка';
+  $('jobTitle').textContent=jobEditId?nm:('Новая заявка' + (cl?(' · '+nm):''));
+  $('jobCrumb').textContent=jobEditId?nm:'Новая заявка';
+  const parts=[];
+  if(eqName) parts.push(esc(eqName)); else parts.push('без техники');
+  const st=$('jbStatus'); if(st) parts.push(esc(st.options[st.selectedIndex].text));
+  const en=$('jbEng'); if(en&&en.selectedIndex>0) parts.push(esc(en.options[en.selectedIndex].text));
+  const due=$('jbDue').value;
+  if(due){
+    const u=jobUrgency({due_date:due,created_at:null},new Date());
+    const col=urgHue(u);
+    parts.push('<span style="color:'+col+'">срок '+esc(tripPeriod(due,null))
+      +(u.left<0?(' · просрочено '+(-u.left)+' дн'):(' · '+u.left+' дн'))+'</span>');
+  }
+  $('jobSub').innerHTML=parts.join(' · ');
+  const hrs=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
+  const rev=curWorks.reduce((a,w)=>a+(+workRevenue(w)||0),0);
+  const cur=appSettings.currency||'';
+  $('jobHeadEcon').innerHTML='<div class="te-k">Выручка</div>'
+    +'<div class="te-v">'+Math.round(rev).toLocaleString('ru-RU')+' '+cur+'</div>'
+    +'<div class="te-s">'+hrs.toFixed(hrs%1?1:0)+' ч · '+curWorks.length+' '+plural(curWorks.length,'работа','работы','работ')+'</div>';
+}
 if($('jbDepot')) $('jbDepot').onchange=()=>{
   if($('jbDepot').checked && !depotList().length){
     $('jbDepot').checked=false;
@@ -1557,8 +1608,8 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); });
   jobTotals(); }
 function workCost(w){ return (+w.hours||0)*((appSettings.costs&&appSettings.costs.hour)||0); }
-function jobTotals(){ const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0); const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0); $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · прибыль '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)'; }
-$('jobCancel').onclick=()=>$('jobOverlay').classList.remove('on');
+function jobTotals(){ jobHead(); const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0); const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0); $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · прибыль '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)'; }
+$('jobCancel').onclick=()=>switchTab(jobBack, jobBackSub);
 $('jobSave').onclick=async ()=>{ const client_id=$('jbClient').value; if(!client_id){ $('jobErr').textContent='Выбери клиента.'; return; } if(curWorks.some(w=>w.custom&&!w.name.trim())){ $('jobErr').textContent='У своей работы укажи название.'; return; }
   const rec={client_id,equipment_id:$('jbEquip').value||null,status:$('jbStatus').value,scheduled_date:$('jbDate').value||null,time_window:$('jbWindow').value.trim(),due_date:$('jbDue').value||null,assigned_engineer:$('jbEng').value||null,notes:$('jbNotes').value.trim(),at_depot:!!jobAtDepot,depot_id:(jobAtDepot?($('jbDepotSel').value||null):null)};
   $('jobSave').disabled=true;
@@ -1569,7 +1620,7 @@ $('jobSave').onclick=async ()=>{ const client_id=$('jbClient').value; if(!client
     if(curWorks.length){ const rows=curWorks.map(w=>({job_id:jobId,work_id:w.work_id||null,title:w.name||'',hours:w.hours,billable:w.billable,billable_reason:w.billable_reason||'',tariff_profile:(w.profile||null),revenue:workRevenue(w),revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)})); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
     if(canWrite() && rec.status==='done' && rec.equipment_id && curWorks.some(w=>w.billable)){ const days=parseInt($('jbWarrDays').value)||0; if(days>0){ try{ const {data:ex}=await sb.from('repair_warranties').select('id').eq('origin_job_id',jobId).limit(1); if(!ex||!ex.length){ const until=new Date(Date.now()+days*86400000).toISOString().slice(0,10); const covers=curWorks.filter(w=>w.billable).map(w=>w.name).filter(Boolean).join(', ').slice(0,300); const {error:rwErr}=await sb.from('repair_warranties').insert({equipment_id:rec.equipment_id,origin_job_id:jobId,covers,until}); if(!rwErr) showToast('Гарантия на ремонт до '+until); else notify('Гарантия на ремонт не создалась: '+rwErr.message,'err'); } }catch(e2){ notify('Гарантия на ремонт не создалась: '+(e2.message||e2),'err'); } } }
     if(rec.status==='done' && rec.equipment_id){ try{ await sb.rpc('register_equipment_visit',{p_job:jobId}); await reloadEquip(); }catch(e3){ notify('Заявка сохранена, но визит по технике не отметился: '+(e3.message||e3),'err'); } }
-    $('jobOverlay').classList.remove('on'); await renderJobs(); await refreshStats(); showToast('Заявка сохранена');
+    switchTab(jobBack, jobBackSub); await renderJobs(); await refreshStats(); showToast('Заявка сохранена');
   }catch(err){ $('jobErr').textContent='Ошибка: '+(err.message||err); } finally{ $('jobSave').disabled=false; } };
 async function delJob(id){ if(!await confirmDialog('Удалить заявку?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('jobs').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderJobs(); await refreshStats();
   undoToast('Заявка удалена', async ()=>{ const {error:e2}=await sb.from('jobs').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Восстановлено'); }); }
@@ -1702,12 +1753,11 @@ function tripCard(t){ const e=t.econ_snapshot||{}; const eng=profilesList.find(p
     : '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок'+(e.km!=null?(' · '+(+e.km).toFixed(0)+' км'):'')+(e.driveH!=null?(' · '+(+e.driveH).toFixed(1)+' ч'):'')+'</div>';
   const mv=canWrite()?('<select class="kmove" data-tstat="'+t.id+'" title="Сменить статус">'+TRIP_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===t.status?' selected':'')+'>'+esc(ST_TRIP[s])+'</option>').join('')+'</select>'):'';
   const acts=canWrite()
-    ? '<div class="acts">'+mv+'<button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tecon="'+t.id+'" title="Экономика">₴</button><button class="btn sm" data-tmap="'+t.id+'" title="На карте">карта</button><button class="btn sm" data-tgm="'+t.id+'" title="Google Maps">⌖</button><button class="btn sm ghost" data-tdel="'+t.id+'" title="Удалить выезд">×</button></div>'
+    ? '<div class="acts">'+mv+'<button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tmap="'+t.id+'" title="На карте">карта</button><button class="btn sm" data-tgm="'+t.id+'" title="Google Maps">⌖</button><button class="btn sm ghost" data-tdel="'+t.id+'" title="Удалить выезд">×</button></div>'
     : '<div class="acts"><button class="btn sm" data-tmap="'+t.id+'">карта</button><button class="btn sm" data-tgm="'+t.id+'">⌖ GMaps</button></div>';
   return '<div class="kcard" data-kid="'+t.id+'">'+head+meta+acts+'</div>'; }
 function wireTripCards(box){
   box.querySelectorAll('[data-tedit]').forEach(b=>b.onclick=()=>openTrip(b.dataset.tedit));
-  box.querySelectorAll('[data-tecon]').forEach(b=>b.onclick=()=>showTripEcon(b.dataset.tecon));
   box.querySelectorAll('[data-tmap]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.tmap));
   box.querySelectorAll('[data-tgm]').forEach(b=>b.onclick=()=>tripGmaps(b.dataset.tgm));
   box.querySelectorAll('[data-tdel]').forEach(b=>b.onclick=()=>delTrip(b.dataset.tdel));
@@ -1749,6 +1799,7 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs();
   tripRouteKeys=new Set(saved.filter(s=>s.lat!=null&&s.lng!=null).map(s=>(+s.lat).toFixed(5)+','+(+s.lng).toFixed(5))); if($('tpJobsRoute')) $('tpJobsRoute').checked=true;
   tripRouteStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'job',name:x.name,lat:x.lat,lng:x.lng})); syncRouteStops(); renderRouteStops();
   $('tpRouteStatus').innerHTML=tripRoute.km?('<span class="ok">'+tripRoute.km.toFixed(1)+' км · '+tripRoute.driveH.toFixed(1)+' ч</span>'):'';
+  drawTripMap(t);
   renderTripJobs(); $('tripErr').textContent=''; tripEcon(); switchTab('trip');
   const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
 // Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
@@ -3186,11 +3237,37 @@ function econHTML(d, mapId){
 
   return h;
 }
-function showEconModal(d){ $('econBody').innerHTML=econHTML(d,'econMap');
-  $('econOverlay').classList.add('on'); drawEconMap(d,'econMap'); }
+
+
+// Мини-карта на странице выезда. Раньше её роль играла кнопка «Экономика»
+// в списке — окно, куда карта была спрятана вместе с разбивкой. Разбивка
+// переехала на страницу, карта тоже: смотреть на маршрут, редактируя его,
+// естественнее, чем открывать ради этого отдельное окно.
+async function drawTripMap(t){
+  const wrap=$('tpMapWrap'); if(!wrap) return;
+  wrap.style.display='none';
+  if(!t) return;
+  const d={geoPlan:null,geoFact:null};
+  // План: геометрия маршрута, как её вернул роутер.
+  const g=t.route_geometry;
+  if(g&&g.coordinates&&g.coordinates.length) d.geoPlan=g.coordinates.map(c=>[c[1],c[0]]);
+  else {
+    // Маршрут не строили — рисуем хотя бы ломаную по остановкам.
+    const st=(t.route_stops||[]).filter(x=>x&&x.lat!=null&&x.lng!=null);
+    if(st.length>1) d.geoPlan=st.map(x=>[+x.lat,+x.lng]);
+  }
+  // Факт: трек машины за дни выезда, если он есть.
+  try{
+    const {data}=await sb.from('vehicle_positions').select('lat,lng,ts')
+      .eq('trip_id',t.id).order('ts',{ascending:true}).limit(2000);
+    if(data&&data.length>1) d.geoFact=data.map(r=>[+r.lat,+r.lng]);
+  }catch(e){}
+  if(!d.geoPlan&&!d.geoFact) return;
+  drawEconMap(d,'tpMap');
+}
 
 // Мини-карта: плановый маршрут пунктиром, реально пройденный — сплошной.
-// Данные кладёт showTripEcon в d.geoPlan / d.geoFact; если их нет, блок скрыт.
+// Данные кладёт drawTripMap в d.geoPlan / d.geoFact; если их нет, блок скрыт.
 function drawEconMap(d, mapId){
   mapId=mapId||'econMap';
   const wrap=$(mapId+'Wrap'); if(!wrap) return;
@@ -3198,9 +3275,12 @@ function drawEconMap(d, mapId){
   if(!hasPlan&&!hasFact) return;
   wrap.style.display='';
   try{
-    if(window._econMap){ window._econMap.remove(); window._econMap=null; }
+    // Слот на каждую карту свой: страница выезда и врезка экономики могут
+    // жить одновременно, и общий слот убивал бы чужую карту.
+    window._miniMaps=window._miniMaps||{};
+    if(window._miniMaps[mapId]){ window._miniMaps[mapId].remove(); window._miniMaps[mapId]=null; }
     const m=L.map(mapId,{zoomControl:false});
-    window._econMap=m;
+    window._miniMaps[mapId]=m;
     // Те же тайлы, что и на главной карте. Раньше здесь стоял cartocdn —
     // единственное место в приложении с другим поставщиком. Он раздаёт
     // тайлы только по ключу, и без ключа возвращал картинки с надписью
@@ -3217,45 +3297,9 @@ function drawEconMap(d, mapId){
     setTimeout(()=>{ try{ m.invalidateSize(); }catch(e){} },60);
   }catch(e){ wrap.style.display='none'; }
 }
-$('econClose').onclick=()=>$('econOverlay').classList.remove('on');
 if($('tpJobsRoute')) $('tpJobsRoute').onchange=renderTripJobs;
-async function showTripEcon(id){ const t=trips.find(x=>x.id==id); if(!t) return;
-  await ensureTurf().catch(()=>{}); const es=t.econ_snapshot||{}; const ts=t.tariffs_snapshot||{shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency,tariff_profiles:appSettings.tariff_profiles||[]};
-  let jobs=[]; try{ const {data}=await sb.from('trip_jobs').select('jobs(id, client_id, clients(name,lat,lng), equipment(lat,lng), job_works(hours,billable,revenue,tariff_profile))').is('jobs.deleted_at',null).eq('trip_id',id); jobs=(data||[]).map(r=>r.jobs).filter(Boolean); }catch(e){}
-  const stStop=(t.route_stops||[]).find(x=>x.type==='start'); const start=stStop?{lat:stStop.lat,lng:stStop.lng,name:stStop.name}:null;
-
-  // Факт часов по КАЖДОЙ заявке — для разложения «план/факт» в модалке.
-  // Считает trip_fact_hours_by_job: утверждённые стоянки, привязанные к заявке.
-  let factHoursByJob={};
-  try{
-    const { data:fh }=await sb.rpc('trip_fact_hours_by_job',{p_trip:id});
-    (fh||[]).forEach(r=>{ factHoursByJob[r.job_id]=+r.hours||0; });
-  }catch(e){ /* факта нет — модалка покажет только план */ }
-
-  // Геометрия для мини-карты: план — построенный маршрут, факт — трек машины.
-  let geoPlan=[], geoFact=[];
-  try{
-    const g=t.route_geometry;
-    const coords=(g&&g.coordinates)?g.coordinates:(Array.isArray(g)?g:null);
-    if(coords) geoPlan=coords.map(c=>[c[1],c[0]]);   // GeoJSON [lng,lat] → [lat,lng]
-  }catch(e){}
-  try{
-    const { data:pts }=await sb.from('vehicle_positions')
-      .select('lat,lng,ts').eq('trip_id',id).order('ts',{ascending:true}).limit(3000);
-    geoFact=(pts||[]).map(p=>[+p.lat,+p.lng]);
-  }catch(e){}
-
-  console.info('Экономика выезда: готовые км из базы =', t.road_km_by_payer,
-    '| плательщики заявок =', (jobs||[]).map(j=>jobRoadPayer(j)));
-  const d=econCompute(jobs,es.km||0,es.driveH||0,ts,t.overrides||{},
-    {start,dateFrom:t.date_from,dateTo:t.date_to,factKm:t.fact_km,
-     factWorkH:factHByTrip[t.id],factHoursByJob,
-     roadKm:t.road_km_by_payer||null},   // готовые км по реальным маршрутам
-    appSettings.tariff_profiles,window.turf);
-  console.info('Экономика выезда: км по дорогам применены =', d.roadExact,
-    '| группы =', d.roadGroups);
-  d.geoPlan=geoPlan; d.geoFact=geoFact;
-  showEconModal(d); }
+// [сборка] showTripEcon удалён вместе с окном экономики: страница выезда
+// показывает ту же разбивку врезкой, а карту план/факт — в карточке маршрута.
 
 // ---------- акт выполненных работ ----------
 function printDoc(html){ const f=document.createElement('iframe'); f.setAttribute('aria-hidden','true'); f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
