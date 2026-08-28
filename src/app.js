@@ -31,7 +31,7 @@ const { money, hhmm, businessDays, colNum, colLetter, cellRC, jobRoadPayer, rate
         econCompute, roadByPayer, jobPoint,
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
-        simplifyLine } = core;
+        simplifyLine, kmBetween } = core;
 
 
 const $=id=>document.getElementById(id);
@@ -257,13 +257,14 @@ async function loadAll(){ $('dataStatus').textContent='Загрузка…';
   render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),{padding:[40,40]}); else fitUkraine(); }
 async function refreshStats(){ if(!canWrite()) return; await loadClientStats(); renderMarkers(); }
 async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
-  try{ const {data}=await sb.from('jobs').select('client_id,status,job_works(hours,billable,revenue,tariff_profile)').is('deleted_at',null);
+  try{ const {data,error}=await sb.from('jobs').select('client_id,status,job_works(hours,billable,revenue,tariff_profile)').is('deleted_at',null);
+    if(error) throw error;
     const ch=+((appSettings.costs&&appSettings.costs.hour))||0;
     (data||[]).forEach(j=>{ if(!j.client_id) return; const s=clientStats[j.client_id]||(clientStats[j.client_id]={rev:0,hours:0,warrH:0,cost:0,jobs:0,done:0});
       s.jobs++; if(j.status==='done') s.done++;
       (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; s.hours+=h; s.cost+=h*ch; if(w.billable===false) s.warrH+=h; s.rev+=(+w.revenue||0); }); });   // выручка и с гарантийных: тариф свой, но счёт есть всегда
     Object.values(clientStats).forEach(s=>{ s.profit=s.rev-s.cost; s.warrShare=s.hours>0?Math.round(s.warrH/s.hours*100):0; });
-  }catch(e){ clientStats={}; } }
+  }catch(e){ clientStats={}; loadFail('статистику по клиентам',e); } }
 
 function render(){ $('cliCount').textContent=clients.length; places=clients.filter(c=>c.is_base); renderMarkers(); renderAvoidZones(); renderList(); }
 if($('profitMode')) $('profitMode').onchange=()=>{ profitMode=$('profitMode').checked; if($('profitLegend')) $('profitLegend').style.display=profitMode?'':'none'; renderMarkers(); };
@@ -294,8 +295,9 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
     markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); }); }
 
 let readingsByEq={};
-async function loadReadings(){ readingsByEq={}; try{ const {data}=await sb.from('equipment_readings').select('*').order('taken_on');
-  (data||[]).forEach(r=>{ (readingsByEq[r.equipment_id]=readingsByEq[r.equipment_id]||[]).push(r); }); }catch(e){ readingsByEq={}; } }
+async function loadReadings(){ readingsByEq={}; try{ const {data,error}=await sb.from('equipment_readings').select('*').order('taken_on');
+  if(error) throw error;
+  (data||[]).forEach(r=>{ (readingsByEq[r.equipment_id]=readingsByEq[r.equipment_id]||[]).push(r); }); }catch(e){ readingsByEq={}; loadFail('показания моточасов',e); } }
 
 function eqRate(e){ const own=rateFrom(readingsByEq[e.id]); if(own>0) return {rate:own,src:'unit'};
   let sum=0,n=0; (eqByClient[e.client_id]||[]).forEach(x=>{ const r=rateFrom(readingsByEq[x.id]); if(r>0){ sum+=r; n++; } });
@@ -1402,10 +1404,11 @@ function getTrip(id){ return (trips||[]).find(x=>x.id==id) || tripCache[id] || n
 
 async function loadRescheds(){
   try{
-    const { data }=await sb.from('trip_reschedules')
+    const { data, error }=await sb.from('trip_reschedules')
       .select('*, profiles:req_by(full_name)').eq('status','pending');
+    if(error) throw error;
     reschedByTrip={}; (data||[]).forEach(r=>reschedByTrip[r.trip_id]=r);
-  }catch(e){ reschedByTrip={}; }
+  }catch(e){ reschedByTrip={}; loadFail('просьбы о переносе',e); }
 }
 
 let rsTripId=null;
@@ -1489,11 +1492,12 @@ let factHByTrip={};
 
 async function loadFactHours(){
   try{
-    const { data }=await sb.from('trip_stays').select('trip_id,minutes_mgr,status,job_id')
+    const { data, error }=await sb.from('trip_stays').select('trip_id,minutes_mgr,status,job_id')
       .eq('status','approved').not('job_id','is',null);
+    if(error) throw error;
     const m={}; (data||[]).forEach(r=>{ m[r.trip_id]=(m[r.trip_id]||0)+(+r.minutes_mgr||0); });
     factHByTrip={}; Object.keys(m).forEach(k=>factHByTrip[k]=Math.round(m[k]/60*100)/100);
-  }catch(e){ factHByTrip={}; }
+  }catch(e){ factHByTrip={}; loadFail('фактические часы по выездам',e); }
 }
 
 
@@ -1950,7 +1954,10 @@ function avoidAreaKm2(){ return (appSettings.avoid_zones||[]).reduce((a,z)=>a+Ma
 function orsErrMsg(status,t){ let msg=t; try{ const j=JSON.parse(t); if(j&&j.error) msg=(typeof j.error==='string')?j.error:(j.error.message||JSON.stringify(j.error)); }catch(e){}
   msg=String(msg||'').slice(0,180);
   if(status===429) return 'превышен лимит запросов ORS (на бесплатном ключе ~40 в минуту). Подожди минуту и повтори.';
-  if(status===401||status===403) return 'ключ ORS не принят ('+status+'). Проверь ключ в настройках.';
+  // 401/403 приходят от НАШЕГО прокси, а не от ORS: он проверяет сессию через
+  // is_staff() и отказывает неактивным. Его текст точнее любого нашего домысла,
+  // поэтому показываем сообщение прокси, а не гадаем про ключ.
+  if(status===401||status===403) return msg || ('доступ к маршрутизации закрыт ('+status+').');
   if(isAvoidLimit(t)) return 'ORS не применяет объезды к маршрутам длиннее 150 км (лимит бесплатного сервера).';
   if(/routable|could not be found|not found/i.test(msg)) return 'ORS не смог привязать точку к дороге. Обычно причина — точка далеко от дорог или попала в зону объезда. ('+msg+')';
   if(/no route|route could not/i.test(msg)) return 'маршрут не найден — возможно, зоны объезда перекрыли единственную дорогу. ('+msg+')';
@@ -2255,8 +2262,11 @@ $('linkCreate').onclick=()=>{ $('linkOverlay').classList.remove('on'); const cid
 function econRow(k,v){ return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span class="hint" style="margin:0">'+esc(k)+'</span><span>'+esc(v)+'</span></div>'; }
 
 
-function kmBetween(a,b){ try{ return turf.distance([a.lng,a.lat],[b.lng,b.lat],{units:'kilometers'}); }catch(e){ return 0; } }
-function circuitKm(start,pts){ if(!pts||!pts.length) return 0; if(pts.length===1) return 2*kmBetween(start,pts[0]); let rem=pts.slice(),cur=start,total=0; while(rem.length){ let bi=0,bd=Infinity; rem.forEach((p,i)=>{ const d=kmBetween(cur,p); if(d<bd){bd=d;bi=i;} }); total+=bd; cur=rem[bi]; rem.splice(bi,1); } total+=kmBetween(cur,start); return total; }
+// kmBetween и circuitKm жили здесь своими копиями, дублируя src/core/geo.js.
+// Копии перекрывали импорт: подъём объявлений делал их видимыми во всём
+// модуле, и весь километраж планировщика считался мимо тестов ядра.
+// Теперь kmBetween берётся из core (см. импорт наверху), а circuitKm отсюда
+// не вызывался вовсе — он нужен только внутри economics.js, где и живёт.
 
 
 function showEconModal(d){
