@@ -169,8 +169,19 @@ function fitUkraine(){ map.fitBounds(UA_BOUNDS); }
 let markers=L.layerGroup().addTo(map), eqMarkers=L.layerGroup().addTo(map), tripLayer=L.layerGroup().addTo(map), routeLayer=L.layerGroup().addTo(map), bufferLayer=L.layerGroup().addTo(map), pendingMarker=null, revealedClient=null, wpModeOn=false, markerById={};
 let clientStats={}, profitMode=false, avoidModeOn=false, avoidLayer=L.layerGroup().addTo(map);
 let vehLayer=L.layerGroup().addTo(map), vehShow=true, vehState=[], vehMk={}, vehTick=null, vehVisWired=false, vehModalId=null;
-function updatePointCoords(){ const el=$('pointCoords'); if(!el) return; if(pendingLatLng){ el.innerHTML='<span class="ok">📍 координаты заданы: '+(+pendingLatLng.lat).toFixed(5)+', '+(+pendingLatLng.lng).toFixed(5)+'</span>'; } else { el.textContent='Место не задано — «Указать на карте» или найдите по адресу.'; } }
-function openPointModal(){ updatePointCoords(); $('pointOverlay').classList.add('on'); setTimeout(()=>{ try{ $('fName').focus(); }catch(e){} },40); }
+// Кнопка «Сохранить» в карточке точки не должна нажиматься, пока сохранять
+// нечего. Состояние и так известно — подсказка «Место не задано» выводится
+// рядом, — просто кнопка о нём не знала и отвечала ошибкой уже после нажатия.
+function updatePointSaveState(){
+  const b=$('saveBtn'); if(!b) return;
+  const hasName=!!($('fName')&&$('fName').value.trim());
+  const hasPlace=!!pendingLatLng||!!editId;
+  b.disabled=!(hasName&&hasPlace);
+}
+
+function updatePointCoords(){ const el=$('pointCoords'); if(!el) return; if(pendingLatLng){ el.innerHTML='<span class="ok">📍 координаты заданы: '+(+pendingLatLng.lat).toFixed(5)+', '+(+pendingLatLng.lng).toFixed(5)+'</span>'; } else { el.textContent='Место не задано — «Указать на карте» или найдите по адресу.'; } updatePointSaveState(); }
+if($('fName')) $('fName').oninput=updatePointSaveState;
+function openPointModal(){ updatePointCoords(); updatePointSaveState(); $('pointOverlay').classList.add('on'); setTimeout(()=>{ try{ $('fName').focus(); }catch(e){} },40); }
 map.on('click',e=>{ if(avoidModeOn){ addAvoidZone(e.latlng); return; } if(addModeOn){ pendingLatLng=e.latlng; toggleAdd(false); flashPending(); openPointModal(); return; } if(wpModeOn){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:e.latlng.lat,lng:e.latlng.lng}); renderRoutePanel(); resetBuilt(); } });
 function flashPending(){ if(pendingMarker) map.removeLayer(pendingMarker); if(!pendingLatLng) return; pendingMarker=L.circleMarker(pendingLatLng,{radius:9,color:ringColor(),fillColor:theme.accent,fillOpacity:.6,weight:2.5}).addTo(map); }
 function hlMarker(id,on){ const m=markerById[id]; if(!m||!m.getElement) return; const el=m.getElement(); if(!el) return; const b=el.querySelector('.cbub'); if(b) b.classList.toggle('hl',on); }
@@ -310,14 +321,32 @@ async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
     Object.values(clientStats).forEach(s=>{ s.profit=s.rev-s.cost; s.warrShare=s.hours>0?Math.round(s.warrH/s.hours*100):0; });
   }catch(e){ clientStats={}; loadFail('статистику по клиентам',e); } }
 
-function render(){ $('cliCount').textContent=clients.length; places=clients.filter(c=>c.is_base); renderMarkers(); renderAvoidZones(); renderList(); }
+// Тревоги по клиентам — один расчёт на загрузку данных, а не на каждую
+// отрисовку. eqAlert() внутри идёт через eqService и eqRate по показаниям
+// всей техники клиента, так что считать его в обработчике ввода нельзя.
+let alertCount={};
+function recomputeAlerts(){
+  alertCount={};
+  clients.forEach(c=>{ alertCount[c.id]=(eqByClient[c.id]||[]).filter(e=>eqAlert(e).any).length; });
+  const total=Object.values(alertCount).filter(x=>x>0).length;
+  const el=$('alertCnt'); if(el) el.textContent=total?('· '+total):'';
+}
+function alertOnly(){ return !!($('ptAlert')&&$('ptAlert').checked); }
+
+function render(){ $('cliCount').textContent=clients.length; places=clients.filter(c=>c.is_base); recomputeAlerts(); renderMarkers(); renderAvoidZones(); renderList(); }
 if($('profitMode')) $('profitMode').onchange=()=>{ profitMode=$('profitMode').checked; if($('profitLegend')) $('profitLegend').style.display=profitMode?'':'none'; renderMarkers(); };
 function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); revealedClient=null; markerById={};
   let maxProfit=0; if(profitMode){ Object.values(clientStats).forEach(s=>{ if(s.profit>maxProfit) maxProfit=s.profit; }); }
   const profitColor=p=>{ if(!(p>0)) return '#6b7280'; const r=maxProfit>0?(p/maxProfit):0; return r>=0.6?'#16a34a':(r>=0.3?'#84cc16':'#eab308'); };
   const ab='cursor:pointer;font-family:var(--mono);font-size:10px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);border-radius:5px;padding:4px 8px';
   const lb='cursor:pointer;font-family:var(--mono);font-size:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:5px;padding:4px 8px';
+  // Фильтр «требующие внимания» гасит остальные точки НА КАРТЕ. Раньше он
+  // менял только список — а список это та половина экрана, на которую
+  // не смотришь, работая с картой, и флажок казался мёртвым.
+  // Депо не гасим никогда: без них не построить маршрут.
+  const dimOthers=alertOnly();
   clients.forEach(c=>{ const col=c.color||'#9aa1ad';
+    const dim=dimOthers && !c.is_base && !(alertCount[c.id]>0);
     if(c.is_base){
       const icon=L.divIcon({className:'',html:'<div class="cbub" style="background:'+col+';width:30px;height:30px;border:2.5px solid '+ringColor()+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></div>',iconSize:[30,30],iconAnchor:[15,15]});
       const m=L.marker([c.lat,c.lng],{icon});
@@ -336,6 +365,7 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
     if(canWrite()){ html+='<button onclick="addClientToRoute(\''+c.id+'\')" style="'+ab+'">+ маршрут</button><button onclick="newJobForClient(\''+c.id+'\')" style="'+lb+'">+ заявка</button><button onclick="editClient(\''+c.id+'\')" style="'+lb+'">ред.</button>'; }
     html+='</span>'; m.bindPopup(html);
     m.on('click',()=>{ revealedClient=(revealedClient===c.id)?null:c.id; renderEqMarkers(); });
+    if(dim) m.setOpacity(.25);
     markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); }); }
 
 let readingsByEq={};
@@ -377,20 +407,15 @@ function renderEqMarkers(){ eqMarkers.clearLayers(); if(!revealedClient) return;
     if(al.any){ const ab=L.divIcon({className:'',html:'<div class="eq-alert">'+(al.service?'🔧':'📞')+'</div>',iconSize:[22,22],iconAnchor:[-4,28]}); L.marker([e.lat,e.lng],{icon:ab,interactive:false,zIndexOffset:1200}).addTo(eqMarkers); } }); }
 let pointFilter='all';
 function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('list');
-  const onlyAlert=$('ptAlert')&&$('ptAlert').checked;
+  const onlyAlert=alertOnly();
+  const alerts=alertCount;
 
-  // Тревоги считаем ОДИН раз на отрисовку. Раньше eqAlert() звался дважды
-  // на каждого клиента — в фильтре и в подсчёте, — а внутри он идёт через
-  // eqService и eqRate по всем показаниям соседней техники. На каждое
-  // нажатие клавиши в поиске это давало квадратичную работу.
-  const alerts={}, oldestVisit={};
+  // Самый давний визит по технике клиента: нет визита — «никогда»,
+  // такие точки идут первыми.
+  const oldestVisit={};
   clients.forEach(c=>{
-    const list=eqByClient[c.id]||[];
-    alerts[c.id]=list.filter(e=>eqAlert(e).any).length;
-    // Самый давний визит по технике клиента: нет визита — считаем «никогда»,
-    // такие точки должны идти первыми.
     let ov=null;
-    list.forEach(e=>{ const v=e.last_visit||null;
+    (eqByClient[c.id]||[]).forEach(e=>{ const v=e.last_visit||null;
       if(!v){ ov=''; return; }
       if(ov===null||(ov!==''&&v<ov)) ov=v; });
     oldestVisit[c.id]=(ov===null?'':ov);
@@ -427,7 +452,7 @@ function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('li
   box.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editClient(b.dataset.edit));
   box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delClient(b.dataset.del)); }
 document.querySelectorAll('#typeFilter button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('#typeFilter button').forEach(x=>x.classList.toggle('on',x===b)); pointFilter=b.dataset.tf; renderList(); });
-if($('ptAlert')) $('ptAlert').onchange=renderList;
+if($('ptAlert')) $('ptAlert').onchange=()=>{ renderMarkers(); renderList(); };
 $('search').oninput=renderList;
 
 // ---------- client add/edit ----------
