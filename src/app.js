@@ -194,16 +194,45 @@ const map=L.map('map',{zoomControl:true});
 const MAPTILER_KEY=(import.meta.env&&import.meta.env.VITE_MAPTILER_KEY)||'';
 const MT_ATTR='<a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
 const OSM_ATTR='© OpenStreetMap';
+// Растровый XYZ-эндпоинт, а не style.json: карта на Leaflet, а style.json —
+// это векторная спецификация для MapLibre GL. Leaflet её без плагина
+// не понимает. Здесь MapTiler отрисовывает тот же стиль у себя и отдаёт
+// готовые картинки: /{id}/{размер тайла}/{z}/{x}/{y}@2x.{формат}.
+// @2x — версия для экранов с удвоенной плотностью; на телефоне без неё
+// подписи мылят.
 function mtUrl(id,fmt){ return 'https://api.maptiler.com/maps/'+id+'/256/{z}/{x}/{y}@2x.'+(fmt||'png')+'?key='+MAPTILER_KEY; }
-function hasSat(){ return !!MAPTILER_KEY; }
+// mtBroken — MapTiler ответил отказом: не тот домен у ключа, кончилась
+// квота, сменился идентификатор стиля. Пустая карта в поле хуже старой,
+// поэтому в этом случае молча возвращаемся на OSM (см. guardTiles).
+let mtBroken=false;
+function mtOn(){ return !!MAPTILER_KEY && !mtBroken; }
+function hasSat(){ return mtOn(); }
+// Если подложка не грузится, человек видит серый прямоугольник и не знает,
+// что делать. Считаем неудачные тайлы: один-два — это сеть моргнула,
+// шесть — это отказ. Тогда выбрасываем слои MapTiler и пересобираем всё
+// на OSM, а спутник гасим.
+function guardTiles(layer){
+  if(!layer||!MAPTILER_KEY||!layer.on) return layer;
+  let bad=0;
+  layer.on('tileerror',()=>{
+    if(mtBroken||++bad<6) return;
+    mtBroken=true;
+    Object.keys(baseLayers).forEach(k=>{ delete baseLayers[k]; });
+    if(mapStyle==='sat'){ mapStyle='map'; try{ localStorage.removeItem(LS_MAPSTYLE); }catch(e){} }
+    if(currentBase){ map.removeLayer(currentBase); currentBase=null; }
+    applyBase(); syncMapStyleSeg();
+    showToast('Подложка MapTiler не отвечает — вернулся на OpenStreetMap');
+  });
+  return layer;
+}
 // Каждый вызов создаёт НОВЫЙ слой: один экземпляр Leaflet нельзя повесить
 // на две карты, а мини-карты выезда берут ту же подложку.
 function makeBase(key){
-  if(key==='sat'){ return MAPTILER_KEY
-    ? L.tileLayer(mtUrl('hybrid-v4','jpg'),{maxZoom:20,attribution:MT_ATTR})
+  if(key==='sat'){ return mtOn()
+    ? guardTiles(L.tileLayer(mtUrl('hybrid-v4','jpg'),{maxZoom:20,attribution:MT_ATTR}))
     : null; }
   const dark=(key==='map-dark');
-  if(MAPTILER_KEY) return L.tileLayer(mtUrl(dark?'backdrop-v4-dark':'backdrop-v4-light'),{maxZoom:20,attribution:MT_ATTR});
+  if(mtOn()) return guardTiles(L.tileLayer(mtUrl(dark?'backdrop-v4-dark':'backdrop-v4-light'),{maxZoom:20,attribution:MT_ATTR}));
   return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     {maxZoom:19,attribution:OSM_ATTR,className:dark?'dark-tiles':''});
 }
