@@ -352,7 +352,58 @@ function navAllowed(el){
 function applyTabs(){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('hidden',!tabAllowed(t.dataset.tab)));
   document.querySelectorAll('.nav-i[data-tab]').forEach(t=>t.classList.toggle('hidden',!navAllowed(t)));
+  applyMobileNav();
 }
+
+// ---------- нижнее меню на телефоне ----------
+//
+// Материал ограничивает нижнюю панель тремя-пятью РАЗДЕЛАМИ равной
+// важности, и каждый её значок обязан вести в раздел, а не открывать меню
+// или диалог. У нас там было шесть пунктов, из них «Вид» и «Выйти» —
+// не разделы вовсе. Остальное уводим в шторку «Ещё».
+//
+// Что второстепенно, зависит от роли. Инженеру «Выезды» дублируют
+// «Сегодня» — там те же его выезды, только без разбора на сейчас и потом.
+// Менеджеру нужны обе очереди, зато не нужны с телефона каталог
+// и настройки: их всё равно ведут с компьютера.
+function navKey(b){ return b.id?('#'+b.id):(b.dataset.tab+(b.dataset.sub?(':'+b.dataset.sub):'')); }
+function secondaryNav(){
+  const base=['#themeBtn','#cfgBtn','#logoutBtn'];
+  return new Set(base.concat(role==='engineer'
+    ? ['planner:trips','catalog','settings']
+    : ['catalog','settings']));
+}
+function applyMobileNav(){
+  const sec=secondaryNav();
+  document.querySelectorAll('.rail .nav-i').forEach(b=>{
+    if(b.id==='moreBtn') return;
+    b.classList.toggle('nav-sec',sec.has(navKey(b)));
+  });
+  buildMoreSheet();
+}
+// Строки шторки собираются ИЗ САМИХ пунктов рельса и кликают по ним же.
+// Второй список тех же разделов рано или поздно разошёлся бы с первым.
+function buildMoreSheet(){
+  const box=$('moreList'); if(!box) return;
+  box.innerHTML='';
+  document.querySelectorAll('.rail .nav-i.nav-sec').forEach(b=>{
+    if(b.classList.contains('hidden')||b.style.display==='none') return;
+    const svg=b.querySelector('svg'), lab=b.querySelector('span');
+    const r=document.createElement('button');
+    r.type='button';
+    r.className='sheet-row'+(b.id==='logoutBtn'?' danger':'');
+    r.innerHTML=(svg?svg.outerHTML:'')+'<span>'+esc(lab?lab.textContent:'')+'</span>';
+    r.onclick=()=>{ closeMore(); b.click(); };
+    box.appendChild(r);
+  });
+  const w=$('sheetWho'), src=$('whoLabel');
+  if(w) w.innerHTML=src?src.innerHTML:'';
+}
+function openMore(){ buildMoreSheet(); $('moreSheet').classList.add('on'); $('moreBack').classList.add('on'); }
+function closeMore(){ $('moreSheet').classList.remove('on'); $('moreBack').classList.remove('on'); }
+if($('moreBtn')) $('moreBtn').onclick=openMore;
+if($('moreBack')) $('moreBack').onclick=closeMore;
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeMore(); });
 // В рельсе «Мой день», «Заявки» и «Выезды» — пункты первого уровня,
 // но ведут все три в один и тот же view-planner. Поэтому у них есть
 // data-sub, и подсветка идёт по паре (tab, sub), а не по одному tab.
@@ -386,6 +437,17 @@ function plannerSub(name){ plannerCur=name;
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===name)); document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name)); if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView(); }
 document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.onclick=()=>setTripsView(b.dataset.tv));
+// Поворот телефона и открытие на планшете меняют раскладку списков —
+// перерисовываем, когда пересекли границу, а не на каждый пиксель.
+try{
+  const mqPhone=window.matchMedia('(max-width:760px)');
+  const onPhoneChange=()=>{
+    if(!document.querySelector('.view-planner.active')) return;
+    if(plannerCur==='jobs') renderJobs();
+    else if(plannerCur==='trips') renderTripsView();
+  };
+  if(mqPhone.addEventListener) mqPhone.addEventListener('change',onPhoneChange);
+}catch(e){}
 // Подсказки по «?». Делегирование, а не обработчик на каждую: часть кружков
 // приезжает из JS вместе с перерисовкой, и вешать их поштучно значило бы
 // терять обработчик при каждом рендере.
@@ -444,7 +506,12 @@ async function doAuth(){ const email=$('auEmail').value.trim(), password=$('auPa
   }catch(err){ $('authErr').textContent='Ошибка: '+(err.message||err); } }
 // Наш собственный выход не должен считаться потерей сессии.
 let authLeaving=false;
-$('logoutBtn').onclick=async ()=>{ authLeaving=true; await sb.auth.signOut(); location.reload(); };
+// Выход — с подтверждением. В нижнем меню он стоял вплотную к разделам,
+// и промах пальцем выбрасывал инженера из приложения посреди выезда;
+// обратно он попадёт только через пароль, которого может не помнить.
+$('logoutBtn').onclick=async ()=>{
+  if(!await confirmDialog('Выйти из приложения? Чтобы вернуться, понадобится пароль.',{okText:'Выйти',danger:true})) return;
+  authLeaving=true; await sb.auth.signOut(); location.reload(); };
 
 // Истечение сессии раньше выглядело как случайно опустевшие экраны: запросы
 // начинали возвращать ошибки RLS, а те глотались пустыми catch. Теперь
@@ -1062,6 +1129,34 @@ async function ensureRefs(){ if(!catalog.length) await loadCatalog(); if(!profil
 const ST={open:'открыта',planned:'запланирована',in_progress:'в работе',done:'закрыта',cancelled:'отменена'};
 const JOB_STATUS_ORDER=['open','planned','in_progress','done','cancelled'];
 let jobVisible={open:true,planned:true,in_progress:true,done:false,cancelled:false};
+// ---------- канбан против списка ----------
+//
+// Доска работает потому, что колонки видны ОДНОВРЕМЕННО: взгляд сравнивает
+// высоту стопок и переносит карточку между ними. На телефоне колонки
+// складываются в столбик — сравнивать нечего, а цена доски остаётся:
+// заголовки, счётчики и пустая колонка на пол-экрана («Назначен · 0 —
+// назначенных нет»). Поэтому на узком экране показываем ОДИН список,
+// отсортированный по сроку: ближайшее сверху.
+//
+// Счётчики при этом переезжают внутрь чипов — без заголовков колонок это
+// единственное место, где видно, сколько чего.
+function isPhone(){ try{ return window.matchMedia('(max-width:760px)').matches; }catch(e){ return false; } }
+function chipCounts(box,attr,pool){
+  if(!box) return;
+  const cnt={}; pool.forEach(x=>{ cnt[x.status]=(cnt[x.status]||0)+1; });
+  box.querySelectorAll('[data-'+attr+']').forEach(c=>{
+    const k=c.dataset[attr];
+    let b=c.querySelector('.chip-n');
+    if(!b){ b=document.createElement('b'); b.className='chip-n'; c.appendChild(b); }
+    b.textContent=cnt[k]||0; });
+}
+// Сортировка по сроку, а не по статусу: у списка нет колонок, и порядок —
+// единственное, что осталось от приоритета. Без срока — в конец.
+function flatList(pool,visible,dateOf,card,empty){
+  const key=x=>dateOf(x)||'9999-99-99';
+  const arr=pool.filter(x=>visible[x.status]).sort((a,b)=>key(a)<key(b)?-1:(key(a)>key(b)?1:0));
+  return arr.length?arr.map(card).join(''):'<div class="hint">'+esc(empty)+'</div>';
+}
 function renderJobChips(){ const box=$('jobStatusChips'); if(!box) return; box.innerHTML=JOB_STATUS_ORDER.map(s=>'<span class="chip'+(jobVisible[s]?' on':'')+'" data-js="'+s+'">'+esc(ST[s])+'</span>').join('');
   box.querySelectorAll('[data-js]').forEach(c=>c.onclick=()=>{ jobVisible[c.dataset.js]=!jobVisible[c.dataset.js]; renderJobChips(); renderJobs(); }); }
 function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.hours||0),0); const rev=w.reduce((a,x)=>a+(+x.revenue||0),0);   // и платные, и гарантийные
@@ -1104,6 +1199,8 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
   if(!cols.length){ box.className=''; box.innerHTML='<div class="hint">Выберите хотя бы один статус выше.</div>'; return; }
   const pool=baseJobs.filter(match);
   if(!pool.length){ box.className=''; box.innerHTML='<div class="hint">Заявок нет. Создай первую.</div>'; return; }
+  chipCounts($('jobStatusChips'),'js',pool);
+  if(isPhone()){ box.className='klist'; box.innerHTML=flatList(pool,jobVisible,j=>j.due_date,jobCard,'По выбранным статусам заявок нет.'); wireJobCards(box); return; }
   box.className='kanban';
   box.innerHTML=cols.map(s=>{ const items=pool.filter(j=>j.status===s);
     // Тире — это не пустое состояние, это отсутствие ответа. Строка о том,
@@ -1454,7 +1551,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   if(role==='engineer'){
     if(grid) grid.classList.add('one-col');
     if(box) box.style.display='none';
-    if(attnCaps) attnCaps.textContent='Мой день';
+    if(attnCaps) attnCaps.textContent='Сегодня';
     return;   // правую колонку инженеру не строим вовсе
   }
   // Через класс, а не инлайном: инлайновый grid-template-columns перебивал
@@ -1671,39 +1768,91 @@ async function renderMine(){
 
   let list=data||[];
   if(!showDone) list=list.filter(t=>t.status!=='done'&&t.status!=='cancelled');
-  const ord={in_progress:0,finished:1,assigned:2,planned:3,done:4,cancelled:5};
-  list.sort((a,b)=>((ord[a.status]??9)-(ord[b.status]??9))||(((a.date_from||'9999')<(b.date_from||'9999'))?-1:1));
 
   list.forEach(t=>{ tripCache[t.id]=t; });
   const byTrip=await mineTripJobs(list.map(t=>t.id));
   await loadRescheds();
 
-  box.innerHTML='';
-  if(!list.length) box.innerHTML='<div class="hint">Выездов нет.</div>';
+  // Раскладка по времени, а не по статусу.
+  //
+  // Раздел называется «Сегодня», а показывал все выезды подряд,
+  // отсортированные по статусу: сегодняшний ничем не отличался от
+  // сентябрьского. Инженер каждый раз сам вычислял, что у него сейчас, —
+  // на морозе, одной рукой.
+  //
+  // Теперь порядок задаёт время: идущий выезд → сегодняшние → будущие →
+  // остальное. Первый занимает экран целиком, дальше идут строки.
+  const today=todayISO();
+  const from=t=>t.date_from||'9999-99-99';
+  const to=t=>t.date_to||t.date_from||'0000-00-00';
+  const running=t=>t.status==='in_progress';
+  const isToday=t=>from(t)<=today&&to(t)>=today;
+  const isPast=t=>to(t)<today;
+  const byDate=(a,b)=>from(a)<from(b)?-1:(from(a)>from(b)?1:0);
 
-  list.forEach(t=>{
-    const d=document.createElement('div'); d.className='card';
+  const now=list.filter(t=>running(t)||isToday(t)).sort(byDate);
+  const hero=now[0]||null;
+  const alsoToday=now.slice(1);
+  const ahead=list.filter(t=>t!==hero&&alsoToday.indexOf(t)<0&&!isPast(t)&&from(t)>today).sort(byDate);
+  // Просроченное — не «позже», это долг. Отдельной группой и наверху,
+  // сразу под текущим.
+  const overdue=list.filter(t=>t!==hero&&alsoToday.indexOf(t)<0&&isPast(t)).sort(byDate);
+
+  box.innerHTML='';
+  if(!list.length) box.innerHTML='<div class="hint">Выездов нет. Как только диспетчер назначит выезд, он появится здесь.</div>';
+
+  // Тело выезда одинаково и для текущего, и для развёрнутой строки —
+  // одна функция, чтобы они не разошлись.
+  function tripBody(t){
     const jl=byTrip[t.id]||[];
     const veh=t.vehicles?(t.vehicles.name+(t.vehicles.plate?(' · '+t.vehicles.plate):'')):(t.vehicle_label||'машина не назначена');
-    // Заголовок — к кому едем; период, машина и точки — подписью под ним.
     let h='<h3>'+esc(tripTitle(t,jl))+' <span class="pill">'+esc(ST_TRIP[t.status]||t.status)+'</span> '+tripDayLabel(t)+'</h3>';
     h+='<div class="meta">'+esc(tripPeriod(t.date_from,t.date_to))+' · '+esc(veh)+' · точек: '+jl.length+(t.fact_km?(' · факт '+Math.round(t.fact_km)+' км'):'')+(factHByTrip[t.id]?(' · '+factHByTrip[t.id].toFixed(1)+' ч на точках'):'')+'</div>';
-
     if(jl.length){
-      // Кликабельны: инженеру из «Моего дня» надо открыть заявку и внести
-      // работы — иначе он видит список точек и ничего не может с ним сделать.
-      h+='<div style="margin-top: var(--sp-3)">'+jl.map(j=>
-        '<div class="ds" data-mopen="'+j.id+'" style="display:flex;justify-content:space-between;gap: var(--sp-3);cursor:pointer">'+
-        '<span>'+esc(j.clients?j.clients.name:'—')+(j.equipment?(' · '+esc(j.equipment.model)):'')+'</span>'+
-        '<span style="color:var(--ink-dim)">'+esc(ST[j.status]||j.status)+' ›</span></div>').join('')+'</div>';
+      h+='<div class="mine-pts">'+jl.map(j=>{
+        const c=j.clients||{}; const tel=telHref(c.phone); const nav=navHref(c.lat,c.lng);
+        return '<div class="mine-pt">'
+          +'<button class="mine-pt-main" type="button" data-mopen="'+j.id+'">'
+          +'<span class="mp-name">'+esc(c.name||'—')+(j.equipment?(' <span class="mp-eq">'+esc(j.equipment.model)+'</span>'):'')+'</span>'
+          +'<span class="mp-st">'+esc(ST[j.status]||j.status)+' ›</span></button>'
+          +'<span class="mine-pt-acts">'
+          +(tel?('<a class="btn sm" href="'+esc(tel)+'" title="Позвонить">Позвонить</a>'):'')
+          +(nav?('<a class="btn sm" href="'+esc(nav)+'" target="_blank" rel="noopener" title="Проехать">Проехать</a>'):'')
+          +'</span></div>'; }).join('')+'</div>';
     } else {
-      h+='<div class="hint" style="margin-top: var(--sp-3)">Заявок к выезду не привязано.</div>';
+      h+='<div class="hint" style="margin-top: var(--sp-3)">Точек к выезду не привязано — диспетчер ещё не собрал маршрут.</div>';
     }
     if(t.notes) h+='<div class="ds">'+esc(t.notes)+'</div>';
     h+=reschedBanner(t);
     h+='<div class="acts">'+tripActs(t)+'</div>';
-    d.innerHTML=h; box.appendChild(d);
-  });
+    return h;
+  }
+  function heroCard(t){
+    const d=document.createElement('div'); d.className='card mine-hero';
+    // Подпись только у идущего выезда: «Сегодня» над карточкой в разделе
+    // «Сегодня» — это повтор, а не информация.
+    d.innerHTML=(running(t)?'<div class="mine-cap">Сейчас в работе</div>':'')+tripBody(t);
+    return d;
+  }
+  // Остальные выезды — строкой. Раскрываются на месте через <details>:
+  // никакого состояния и никакой перерисовки, а внутри та же карточка
+  // со всеми кнопками.
+  function rowsCard(title,arr,tone){
+    if(!arr.length) return null;
+    const d=document.createElement('div'); d.className='card mine-group';
+    let h='<div class="mine-cap'+(tone?(' '+tone):'')+'">'+esc(title)+' <span class="acount">'+arr.length+'</span></div>';
+    h+=arr.map(t=>{ const jl=byTrip[t.id]||[];
+      return '<details class="mine-det"><summary class="mine-row">'
+        +'<span class="mr-main"><span class="mr-name">'+esc(tripTitle(t,jl))+'</span>'
+        +'<span class="mr-sub">'+esc(tripPeriod(t.date_from,t.date_to))+' · точек: '+jl.length+'</span></span>'
+        +'<span class="mr-st">'+esc(ST_TRIP[t.status]||t.status)+'</span></summary>'
+        +'<div class="mine-body">'+tripBody(t)+'</div></details>'; }).join('');
+    d.innerHTML=h; return d;
+  }
+  if(hero) box.appendChild(heroCard(hero));
+  [rowsCard('Просрочено',overdue,'bad'),
+   rowsCard('Ещё сегодня',alsoToday),
+   rowsCard('Дальше',ahead)].forEach(c=>{ if(c) box.appendChild(c); });
 
   // Заявки, назначенные лично, но не попавшие ни в один выезд.
   if(!mgr){
@@ -1764,7 +1913,7 @@ async function renderMine(){
 async function mineTripJobs(ids){
   const out={}; if(!ids.length) return out;
   const { data }=await sb.from('trip_jobs')
-    .select('trip_id, ord, jobs(id,status,client_id,equipment_id,clients(name,lat,lng),equipment(model))')
+    .select('trip_id, ord, jobs(id,status,client_id,equipment_id,clients(name,lat,lng,phone),equipment(model))')
     .in('trip_id',ids).order('ord');
   (data||[]).forEach(r=>{ if(!r.jobs) return; (out[r.trip_id]=out[r.trip_id]||[]).push(r.jobs); });
   return out;
@@ -1792,7 +1941,18 @@ async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEdit
   renderJobWorks();
   const ro=!canWrite() && !(j&&j.assigned_engineer===session.user.id);
   ['jbClient','jbEquip','jbEng','jbDate','jbWindow','jbDue','jbNotes','jbWorkPick','jbWorkAdd','jbCustomAdd','jobSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
-  $('jobErr').textContent=''; jobHead();
+  // Инженеру — вид «задание»: работы наверх, справочные поля свёрнуты и
+  // на чтение. Он их не заполняет — их заполняет диспетчер, когда принимает
+  // заявку; а случайно сменить у заявки клиента или исполнителя он мог.
+  setJobMode(!canWrite());
+  // Кнопка — только для новой заявки; у существующей на её месте
+  // состояние автосохранения.
+  clearTimeout(jobSaveT); jobSaveT=null; jobSaving=false; jobSaveAgain=false;
+  if($('jobSave')) $('jobSave').style.display=jobEditId?'none':'';
+  if($('jobSaveState')){ $('jobSaveState').style.display=(jobEditId&&!ro)?'':'none'; jobSaveState('сохранено'); }
+  if($('jobRefToggle')) $('jobRefToggle').textContent='Подробности заявки';
+  $('jobErr').textContent=''; jobHead(); jobFootUpdate();
+  loadJobPhotos();
   // Куда вернёт хлебная крошка. Заявку открывают из пяти мест — со сводки,
   // с карты, из канбана, из выезда, — и возвращать всегда в канбан значит
   // выкидывать человека из того места, где он работал.
@@ -1803,6 +1963,86 @@ async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEdit
   switchTab('job');
   const pane=document.querySelector('.view-job .pane'); if(pane) pane.scrollTop=0; }
 let jobBack='planner', jobBackSub='jobs';
+
+// ---------- заявка: два режима одной страницы ----------
+//
+// Диспетчер ЗАВОДИТ заявку, инженер её ВЫПОЛНЯЕТ. Первому нужна форма,
+// второму — задание: к кому, что сломано, записать часы, закрыть.
+// Одна страница на обе роли отдавала инженеру полэкрана выпадающих
+// списков до первого, что ему нужно, — и позволяла случайно сменить
+// у заявки клиента или исполнителя.
+// Дата словами. Системный ввод даты показывает её в формате браузера,
+// и «09/11/2026» читается и как 9 ноября, и как 11 сентября.
+const MON_GEN=['января','февраля','марта','апреля','мая','июня','июля',
+  'августа','сентября','октября','ноября','декабря'];
+function dateHuman(iso){ if(!iso) return '—';
+  const d=new Date(iso+'T00:00:00'); if(isNaN(d)) return iso;
+  return d.getDate()+' '+MON_GEN[d.getMonth()]+' '+d.getFullYear(); }
+function selText(id){ const s=$(id); if(!s||s.selectedIndex<0) return '—';
+  const t=(s.options[s.selectedIndex]||{}).text||''; return t.trim()||'—'; }
+function setJobMode(task){
+  const v=document.querySelector('.view-job'); if(!v) return;
+  v.classList.toggle('job-task',!!task);
+  const read=$('jobRefRead'), tg=$('jobRefToggle');
+  if(task&&read){
+    read.hidden=true;
+    if(tg) tg.setAttribute('aria-expanded','false');
+    buildJobRead();
+  }
+}
+// Пересобирается при каждом обновлении шапки: после «Взять в работу»
+// статус в справке должен меняться вместе с кнопкой, а не после
+// перезахода на страницу.
+function buildJobRead(){
+  const read=$('jobRefRead'); if(!read) return;
+  const rows=[
+      ['Клиент',selText('jbClient')],
+      ['Техника',($('jbEquip')&&$('jbEquip').selectedIndex>0)?selText('jbEquip'):'без привязки'],
+      ['Статус',selText('jbStatus')],
+      ['Инженер',($('jbEng')&&$('jbEng').selectedIndex>0)?selText('jbEng'):'не назначен'],
+      ['Дата визита',dateHuman($('jbDate').value)],
+      ['Окно',$('jbWindow').value.trim()||'—'],
+      ['Дедлайн SLA',dateHuman($('jbDue').value)],
+      ['Заметка',$('jbNotes').value.trim()||'—']];
+  if(jobAtDepot) rows.splice(2,0,['В депо',selText('jbDepotSel')]);
+  read.innerHTML='<dl>'+rows.map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join('')+'</dl>';
+}
+if($('jobRefToggle')) $('jobRefToggle').onclick=()=>{
+  const read=$('jobRefRead'); if(!read) return;
+  const open=read.hidden;
+  read.hidden=!open;
+  $('jobRefToggle').setAttribute('aria-expanded',open?'true':'false');
+  $('jobRefToggle').textContent=open?'Скрыть подробности':'Подробности заявки';
+};
+
+// Одно главное действие внизу страницы. Инженер закрывает заявку отсюда,
+// а не ищет статус в выпадающем списке в свёрнутом блоке.
+const JOB_NEXT={open:'in_progress',planned:'in_progress',in_progress:'done'};
+const JOB_NEXT_LABEL={open:'Взять в работу',planned:'Взять в работу',in_progress:'Завершить заявку'};
+function jobFootUpdate(){
+  const foot=$('jobFoot'); if(!foot) return;
+  const st=$('jbStatus')?$('jbStatus').value:'';
+  const mine=canWrite()||(jobEditId&&$('jbEng')&&$('jbEng').value===session.user.id);
+  const next=JOB_NEXT[st];
+  const show=!!(jobEditId&&next&&mine);
+  foot.style.display=show?'':'none';
+  if(!show) return;
+  $('jobPrimary').textContent=JOB_NEXT_LABEL[st]||'Дальше';
+  const hrs=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
+  $('jobFootHint').textContent=(next==='done'&&!hrs)
+    ? 'Часы не записаны — заявка закроется с нулём'
+    : (next==='done'?('Записано '+hrs.toFixed(1)+' ч'):'');
+}
+if($('jobPrimary')) $('jobPrimary').onclick=async ()=>{
+  const st=$('jbStatus').value, next=JOB_NEXT[st]; if(!next) return;
+  if(next==='done'){
+    const hrs=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
+    if(!await confirmDialog(hrs?('Завершить заявку? Записано '+hrs.toFixed(1)+' ч.')
+      :'Часы не записаны. Всё равно завершить заявку?',{okText:'Завершить'})) return;
+  }
+  $('jbStatus').value=next; jobHead(); jobFootUpdate();
+  await saveJobNow();
+};
 // Шапка страницы заявки: кто, что за техника, сколько это стоит и когда срок.
 function jobHead(){
   const cl=clients.find(c=>c.id==$('jbClient').value);
@@ -1835,9 +2075,21 @@ function jobHead(){
   const hrs=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
   const rev=curWorks.reduce((a,w)=>a+(+workRevenue(w)||0),0);
   const cur=appSettings.currency||'';
-  $('jobHeadEcon').innerHTML='<div class="te-k">Выручка</div>'
-    +'<div class="te-v">'+Math.round(rev).toLocaleString('ru-RU')+' '+cur+'</div>'
-    +'<div class="te-s">'+hrs.toFixed(hrs%1?1:0)+' ч · '+curWorks.length+' '+plural(curWorks.length,'работа','работы','работ')+'</div>';
+  const works=curWorks.length+' '+plural(curWorks.length,'работа','работы','работ');
+  // Крупно — то, чем человек распоряжается. Менеджеру это деньги, инженеру
+  // часы: выручку он не назначает, и в поле она ему ни о чём не говорит.
+  $('jobHeadEcon').innerHTML=canWrite()
+    ? ('<div class="te-k">Выручка</div>'
+      +'<div class="te-v">'+Math.round(rev).toLocaleString('ru-RU')+' '+cur+'</div>'
+      +'<div class="te-s">'+hrs.toFixed(hrs%1?1:0)+' ч · '+works+'</div>')
+    : ('<div class="te-k">Записано</div>'
+      +'<div class="te-v">'+hrs.toFixed(hrs%1?1:0)+' ч</div>'
+      +'<div class="te-s">'+works+'</div>');
+  // Дата словами рядом с системным полем: «09/11/2026» читается и как
+  // 9 ноября, и как 11 сентября — формат берётся из браузера, не из страницы.
+  if($('jbDateHint')) $('jbDateHint').textContent=$('jbDate').value?dateHuman($('jbDate').value):'';
+  if($('jbDueHint')) $('jbDueHint').textContent=$('jbDue').value?dateHuman($('jbDue').value):'';
+  if(document.querySelector('.view-job.job-task')) buildJobRead();
 }
 if($('jbDepot')) $('jbDepot').onchange=()=>{
   if($('jbDepot').checked && !depotList().length){
@@ -1894,12 +2146,19 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   curWorks.forEach((w,i)=>{ const d=document.createElement('div'); d.className='eqitem';
     const head=w.custom?('<input type="text" placeholder="название работы" value="'+esc(w.name)+'" data-wn="'+i+'" style="width:100%">'):('<div class="t">'+esc(w.name)+'</div>');
     const rev=workRevenue(w);
+    // Тариф, ручная цена и сумма строки — органы управления деньгами.
+    // Инженеру их не показываем вовсе: писать выручку ему всё равно не даёт
+    // сервер (guard_job_work_money), а на экране они занимали половину
+    // строки и предлагали трогать то, что трогать нельзя.
+    const money=canWrite()
+      ? ('<select data-wp="'+i+'" style="max-width:120px;font-size: var(--fs-2)" title="профиль тарифа (плательщик)"><option value="">— профиль —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'"'+(w.profile===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select>'
+        +'<input type="number" step="0.01" value="'+esc(w.override)+'" data-wo="'+i+'" placeholder="авто" style="width:84px" title="цена вручную (оверрайд)">'
+        +'<span class="hint" style="margin: 0">= '+rev.toFixed(0)+'</span>')
+      : '';
     d.innerHTML=head+'<div style="display:flex;gap: var(--sp-3);align-items:center;margin-top: var(--sp-3);flex-wrap:wrap">'+
       '<input type="number" step="0.25" value="'+w.hours+'" data-wh="'+i+'" style="width:74px" title="часы"><span class="hint" style="margin: 0">ч</span>'+
       '<button class="btn sm '+(w.billable?'amber':'ghost')+'" data-wb="'+i+'">'+(w.billable?'платно':'гарантия')+'</button>'+
-      '<select data-wp="'+i+'" style="max-width:120px;font-size: var(--fs-2)" title="профиль тарифа (плательщик)"><option value="">— профиль —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'"'+(w.profile===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select>'+
-      '<input type="number" step="0.01" value="'+esc(w.override)+'" data-wo="'+i+'" placeholder="авто" style="width:84px" title="цена вручную (оверрайд)">'+
-      '<span class="hint" style="margin: 0">= '+rev.toFixed(0)+'</span>'+
+      money+
       '<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button></div>'+
       ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top: var(--sp-2)">'+esc(w.reasons.join(' · '))+'</div>':'')+
       (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
@@ -1913,20 +2172,228 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); });
   jobTotals(); }
 function workCost(w){ return (+w.hours||0)*((appSettings.costs&&appSettings.costs.hour)||0); }
-function jobTotals(){ jobHead(); const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0); const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0); $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · прибыль '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)'; }
-$('jobCancel').onclick=()=>switchTab(jobBack, jobBackSub);
-$('jobSave').onclick=async ()=>{ const client_id=$('jbClient').value; if(!client_id){ $('jobErr').textContent='Выбери клиента.'; return; } if(curWorks.some(w=>w.custom&&!w.name.trim())){ $('jobErr').textContent='У своей работы укажи название.'; return; }
-  const rec={client_id,equipment_id:$('jbEquip').value||null,status:$('jbStatus').value,scheduled_date:$('jbDate').value||null,time_window:$('jbWindow').value.trim(),due_date:$('jbDue').value||null,assigned_engineer:$('jbEng').value||null,notes:$('jbNotes').value.trim(),at_depot:!!jobAtDepot,depot_id:(jobAtDepot?($('jbDepotSel').value||null):null)};
+function jobTotals(){ jobHead(); jobFootUpdate();
+  const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
+  // Инженеру — только часы: выручку и прибыль он не назначает, а строка
+  // с деньгами под его же работой читается как оценка его работы.
+  if(!canWrite()){ $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · '+curWorks.length+' '+plural(curWorks.length,'работа','работы','работ'); return; }
+  const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0);
+  $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · прибыль '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)'; }
+// Уходя со страницы — дописываем то, что ещё ждало таймера, и обновляем
+// список, если за время правки что-то изменилось. Иначе человек вернулся
+// бы в канбан и увидел там старые данные.
+$('jobCancel').onclick=async ()=>{
+  if(jobSaveT) await saveJobNow();
+  switchTab(jobBack, jobBackSub);
+  if(jobsDirty){ jobsDirty=false; await renderJobs(); await refreshStats(); } };
+// ---------- фото к заявке ----------
+//
+// В настройках зашита гарантия на ремонт, а доказательной базы под неё не
+// было ни одной. Снимок «до» отвечает на «оно уже было сломано», «после» —
+// на «вы не сделали», «дефект» — на «деталь была бракованной».
+//
+// Главное решение здесь не про интерфейс, а про размер: снимок с телефона
+// весит 3–12 МБ, и в поле на слабой связи он просто не уходит. Ужимаем до
+// 1600 px по длинной стороне и JPEG 0.8 — это ~250 КБ, разницы на экране
+// не видно, а отправка перестаёт быть лотереей. Перекодирование заодно
+// срезает EXIF: координаты съёмки в архиве нам не нужны, место заявки
+// и так известно.
+const PH_MAX=1600, PH_Q=0.8, PH_TARGET=600*1024;
+const PH_LABEL={before:'до',after:'после',defect:'дефект'};
+let jobPhotos=[], phBusy=0;
+function phState(txt,bad){ const el=$('jbPhotoState'); if(!el) return;
+  el.textContent=txt||''; el.className='ph-state'+(bad?' bad':''); }
+async function shrinkImage(file){
+  // createImageBitmap с imageOrientation учитывает поворот из EXIF —
+  // без него снятое вертикально приезжает лёжа.
+  let bmp;
+  try{ bmp=await createImageBitmap(file,{imageOrientation:'from-image'}); }
+  catch(e){ bmp=await createImageBitmap(file); }
+  // Ограничиваем не только сторону, но и БАЙТЫ. Мелкая деталь — трещина,
+  // шильдик — сжимается плохо, и снимок «по стороне 1600» иногда весит
+  // за мегабайт. На слабой связи это снова лотерея, поэтому при перевесе
+  // сначала опускаем качество, потом сторону.
+  const steps=[[PH_MAX,PH_Q],[PH_MAX,0.6],[1200,0.6]];
+  let blob=null;
+  for(const [side,q] of steps){
+    const k=Math.min(1,side/Math.max(bmp.width,bmp.height));
+    const w=Math.round(bmp.width*k), h=Math.round(bmp.height*k);
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    cv.getContext('2d').drawImage(bmp,0,0,w,h);
+    blob=await new Promise(res=>cv.toBlob(res,'image/jpeg',q));
+    if(!blob) break;
+    if(blob.size<=PH_TARGET) break;
+  }
+  if(bmp.close) bmp.close();
+  if(!blob) throw new Error('не удалось пережать снимок');
+  return blob;
+}
+async function loadJobPhotos(){
+  const box=$('jbPhotoList'); if(!box) return;
+  jobPhotos=[];
+  if(!jobEditId){ box.innerHTML=''; phState('Снимки можно добавить после создания заявки'); return; }
+  try{
+    const {data,error}=await sb.from('job_photos').select('id,path,kind,created_by,created_at')
+      .eq('job_id',jobEditId).order('created_at');
+    if(error) throw error;
+    jobPhotos=data||[];
+    await renderJobPhotos();
+    phState(jobPhotos.length?'':'Снимков нет');
+  }catch(e){
+    // Таблицы может не быть, если SQL ещё не выполнен, — говорим прямо,
+    // а не показываем пустую сетку, как будто снимков нет.
+    box.innerHTML=''; phState('Фото недоступны: '+(e.message||e),true);
+  }
+}
+async function renderJobPhotos(){
+  const box=$('jbPhotoList'); if(!box) return;
+  if(!jobPhotos.length){ box.innerHTML=''; return; }
+  // Бакет приватный: адреса подписываются на час. Публичный положил бы
+  // снимки чужой техники на угадываемый адрес навсегда.
+  let urls={};
+  try{
+    const {data}=await sb.storage.from('job-photos').createSignedUrls(jobPhotos.map(p=>p.path),3600);
+    (data||[]).forEach(r=>{ if(r&&r.path&&r.signedUrl) urls[r.path]=r.signedUrl; });
+  }catch(e){ /* без ссылок покажем плитки-заглушки, а не пустоту */ }
+  const mayDel=p=>role==='admin'||(p.created_by===session.user.id&&$('jbStatus').value!=='done');
+  box.innerHTML=jobPhotos.map(p=>'<div class="ph-item">'
+    +(urls[p.path]?('<img src="'+esc(urls[p.path])+'" alt="'+esc(PH_LABEL[p.kind]||'')+'" data-phv="'+esc(urls[p.path])+'">')
+                  :'<div class="ph-wait">нет доступа</div>')
+    +'<span class="ph-tag">'+esc(PH_LABEL[p.kind]||p.kind)+'</span>'
+    +(mayDel(p)?('<button class="ph-del" type="button" data-phd="'+p.id+'" aria-label="Удалить снимок">×</button>'):'')
+    +'</div>').join('');
+  box.querySelectorAll('[data-phv]').forEach(im=>im.onclick=()=>{
+    $('phViewImg').src=im.dataset.phv; $('phView').hidden=false; });
+  box.querySelectorAll('[data-phd]').forEach(b=>b.onclick=()=>delJobPhoto(b.dataset.phd));
+}
+async function addJobPhotos(files,kind){
+  if(!jobEditId||!files||!files.length) return;
+  // По одному, а не пачкой: на слабой связи параллельные отправки мешают
+  // друг другу и все разом отваливаются по таймауту.
+  for(let i=0;i<files.length;i++){
+    phBusy=i+1;
+    phState(files.length>1?('Отправляю '+(i+1)+' из '+files.length+'…'):'Отправляю снимок…');
+    try{
+      const blob=await shrinkImage(files[i]);
+      const path='jobs/'+jobEditId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg';
+      const up=await sb.storage.from('job-photos').upload(path,blob,{contentType:'image/jpeg'});
+      if(up.error) throw up.error;
+      // Файл без строки — мусор, которого приложение не увидит: если
+      // запись не прошла, убираем и файл.
+      const {error}=await sb.from('job_photos').insert({job_id:jobEditId,path,kind});
+      if(error){ try{ await sb.storage.from('job-photos').remove([path]); }catch(e2){} throw error; }
+    }catch(e){
+      phBusy=0;
+      const left=files.length-i-1;
+      phState('Не отправлено: '+(e.message||e)+(left?(' · осталось '+left+', попробуй ещё раз'):''),true);
+      await loadJobPhotos(); phState('Не отправлено: '+(e.message||e),true);
+      return;
+    }
+  }
+  phBusy=0; phState('');
+  await loadJobPhotos();
+}
+async function delJobPhoto(id){
+  const p=jobPhotos.find(x=>x.id===id); if(!p) return;
+  if(!await confirmDialog('Удалить снимок «'+(PH_LABEL[p.kind]||p.kind)+'»?',{danger:true,okText:'Удалить'})) return;
+  try{
+    const {error}=await sb.from('job_photos').delete().eq('id',id);
+    if(error) throw error;
+    try{ await sb.storage.from('job-photos').remove([p.path]); }catch(e){}
+    await loadJobPhotos();
+  }catch(e){ phState('Не удалось удалить: '+(e.message||e),true); }
+}
+(function(){
+  const add=$('jbPhotoAdd'), inp=$('jbPhotoFile'); if(!add||!inp) return;
+  let kind='defect';
+  add.querySelectorAll('[data-ph]').forEach(b=>b.onclick=()=>{
+    if(!jobEditId){ phState('Сначала создай заявку',true); return; }
+    kind=b.dataset.ph; inp.value=''; inp.click(); });
+  inp.onchange=()=>{ const files=[...(inp.files||[])]; inp.value=''; addJobPhotos(files,kind); };
+  if($('phClose')) $('phClose').onclick=()=>{ $('phView').hidden=true; $('phViewImg').src=''; };
+  if($('phView')) $('phView').onclick=e=>{ if(e.target===$('phView')){ $('phView').hidden=true; $('phViewImg').src=''; } };
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('phView')&&!$('phView').hidden){ $('phView').hidden=true; $('phViewImg').src=''; } });
+})();
+
+// ---------- сохранение заявки ----------
+//
+// Ручное сохранение на телефоне — способ потерять работу: приложение
+// сворачивают, звонят, связь пропадает, и заполненная форма исчезает
+// молча, без единого слова. Существующая заявка сохраняется сама, а
+// кнопка остаётся только для создания новой — там сохранять ещё нечего.
+//
+// Состояние показываем словами рядом с шапкой: «сохраняю…», «сохранено»,
+// «не сохранено · причина». Молчащее автосохранение хуже кнопки: человек
+// не знает, можно ли закрывать приложение.
+let jobSaveT=null, jobSaving=false, jobSaveAgain=false, jobsDirty=false;
+function jobRec(){
+  return {client_id:$('jbClient').value,
+    equipment_id:$('jbEquip').value||null,
+    status:$('jbStatus').value,
+    scheduled_date:$('jbDate').value||null,
+    time_window:$('jbWindow').value.trim(),
+    due_date:$('jbDue').value||null,
+    assigned_engineer:$('jbEng').value||null,
+    notes:$('jbNotes').value.trim(),
+    at_depot:!!jobAtDepot,
+    depot_id:(jobAtDepot?($('jbDepotSel').value||null):null)};
+}
+function jobProblem(){
+  if(!$('jbClient').value) return 'не выбран клиент';
+  if(curWorks.some(w=>w.custom&&!w.name.trim())) return 'у своей работы нет названия';
+  return '';
+}
+function jobSaveState(txt,cls){ const el=$('jobSaveState'); if(!el) return;
+  el.textContent=txt; el.className='savestate'+(cls?(' '+cls):''); }
+// Запись без навигации и без тостов: её зовёт и кнопка, и автосохранение.
+async function persistJob(rec){
+  let jobId=jobEditId;
+  if(jobEditId){ const {error}=await sb.from('jobs').update(rec).eq('id',jobEditId); if(error) throw error; }
+  else { rec.created_by=session.user.id; const {data,error}=await sb.from('jobs').insert(rec).select('id').single(); if(error) throw error; jobId=data.id; }
+  await sb.from('job_works').delete().eq('job_id',jobId);
+  if(curWorks.length){ const rows=curWorks.map(w=>({job_id:jobId,work_id:w.work_id||null,title:w.name||'',hours:w.hours,billable:w.billable,billable_reason:w.billable_reason||'',tariff_profile:(w.profile||null),revenue:workRevenue(w),revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)})); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
+  // Гарантия и отметка визита привязаны к переходу в «закрыта» — при
+  // автосохранении ровно так же, как раньше при нажатии кнопки.
+  if(canWrite() && rec.status==='done' && rec.equipment_id && curWorks.some(w=>w.billable)){ const days=parseInt($('jbWarrDays').value)||0; if(days>0){ try{ const {data:ex}=await sb.from('repair_warranties').select('id').eq('origin_job_id',jobId).limit(1); if(!ex||!ex.length){ const until=new Date(Date.now()+days*86400000).toISOString().slice(0,10); const covers=curWorks.filter(w=>w.billable).map(w=>w.name).filter(Boolean).join(', ').slice(0,300); const {error:rwErr}=await sb.from('repair_warranties').insert({equipment_id:rec.equipment_id,origin_job_id:jobId,covers,until}); if(!rwErr) showToast('Гарантия на ремонт до '+until); else notify('Гарантия на ремонт не создалась: '+rwErr.message,'err'); } }catch(e2){ notify('Гарантия на ремонт не создалась: '+(e2.message||e2),'err'); } } }
+  if(rec.status==='done' && rec.equipment_id){ try{ await sb.rpc('register_equipment_visit',{p_job:jobId}); await reloadEquip(); }catch(e3){ notify('Заявка сохранена, но визит по технике не отметился: '+(e3.message||e3),'err'); } }
+  return jobId;
+}
+function queueJobSave(){
+  if(!jobEditId) return;                       // новая — только кнопкой
+  if($('jobSave')&&$('jobSave').disabled) return;   // нет прав на запись
+  clearTimeout(jobSaveT);
+  jobSaveState('изменено');
+  jobSaveT=setTimeout(saveJobNow,800);
+}
+async function saveJobNow(){
+  clearTimeout(jobSaveT); jobSaveT=null;
+  if(!jobEditId) return;
+  const problem=jobProblem();
+  if(problem){ jobSaveState('не сохранено · '+problem,'bad'); return; }
+  // Одна запись за раз: параллельные удаления и вставки job_works
+  // переставляли бы строки местами. Пришедшее во время записи изменение
+  // не теряем — повторяем сразу после.
+  if(jobSaving){ jobSaveAgain=true; return; }
+  jobSaving=true; jobSaveState('сохраняю…','busy');
+  try{ await persistJob(jobRec()); jobsDirty=true; jobSaveState('сохранено'); }
+  catch(e){ jobSaveState('не сохранено · '+(e.message||e),'bad'); }
+  finally{ jobSaving=false; if(jobSaveAgain){ jobSaveAgain=false; saveJobNow(); } }
+}
+$('jobSave').onclick=async ()=>{
+  const problem=jobProblem();
+  if(problem){ $('jobErr').textContent='Не сохранить: '+problem+'.'; return; }
   $('jobSave').disabled=true;
-  try{ let jobId=jobEditId;
-    if(jobEditId){ const {error}=await sb.from('jobs').update(rec).eq('id',jobEditId); if(error) throw error; }
-    else { rec.created_by=session.user.id; const {data,error}=await sb.from('jobs').insert(rec).select('id').single(); if(error) throw error; jobId=data.id; }
-    await sb.from('job_works').delete().eq('job_id',jobId);
-    if(curWorks.length){ const rows=curWorks.map(w=>({job_id:jobId,work_id:w.work_id||null,title:w.name||'',hours:w.hours,billable:w.billable,billable_reason:w.billable_reason||'',tariff_profile:(w.profile||null),revenue:workRevenue(w),revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)})); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
-    if(canWrite() && rec.status==='done' && rec.equipment_id && curWorks.some(w=>w.billable)){ const days=parseInt($('jbWarrDays').value)||0; if(days>0){ try{ const {data:ex}=await sb.from('repair_warranties').select('id').eq('origin_job_id',jobId).limit(1); if(!ex||!ex.length){ const until=new Date(Date.now()+days*86400000).toISOString().slice(0,10); const covers=curWorks.filter(w=>w.billable).map(w=>w.name).filter(Boolean).join(', ').slice(0,300); const {error:rwErr}=await sb.from('repair_warranties').insert({equipment_id:rec.equipment_id,origin_job_id:jobId,covers,until}); if(!rwErr) showToast('Гарантия на ремонт до '+until); else notify('Гарантия на ремонт не создалась: '+rwErr.message,'err'); } }catch(e2){ notify('Гарантия на ремонт не создалась: '+(e2.message||e2),'err'); } } }
-    if(rec.status==='done' && rec.equipment_id){ try{ await sb.rpc('register_equipment_visit',{p_job:jobId}); await reloadEquip(); }catch(e3){ notify('Заявка сохранена, но визит по технике не отметился: '+(e3.message||e3),'err'); } }
-    switchTab(jobBack, jobBackSub); await renderJobs(); await refreshStats(); showToast('Заявка сохранена');
-  }catch(err){ $('jobErr').textContent='Ошибка: '+(err.message||err); } finally{ $('jobSave').disabled=false; } };
+  try{
+    await persistJob(jobRec());
+    switchTab(jobBack, jobBackSub); await renderJobs(); await refreshStats(); showToast('Заявка создана');
+  }catch(err){ $('jobErr').textContent='Ошибка: '+(err.message||err); }
+  finally{ $('jobSave').disabled=false; } };
+// Ловим правки всей страницы разом: строки работ перерисовываются, и
+// обработчики на каждом поле терялись бы при каждом рендере.
+(function(){ const v=document.querySelector('.view-job'); if(!v) return;
+  ['input','change'].forEach(ev=>v.addEventListener(ev,e=>{
+    if(e.target.closest('#jobFoot')) return;
+    queueJobSave(); jobFootUpdate(); })); })();
 async function delJob(id){ if(!await confirmDialog('Удалить заявку?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('jobs').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderJobs(); await refreshStats();
   undoToast('Заявка удалена', async ()=>{ const {error:e2}=await sb.from('jobs').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Восстановлено'); }); }
 
@@ -2143,6 +2610,9 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
   const cols=TRIP_STATUS_ORDER.filter(s=>tripVisible[s]);
   if(!cols.length){ box.className=''; box.innerHTML='<div class="hint">Выберите хотя бы один статус выше.</div>'; return; }
   if(!trips.length){ box.className=''; box.innerHTML='<div class="hint">'+(canWrite()?'Выездов нет. Собери первый из заявок на карте.':'На тебя пока не назначены выезды.')+'</div>'; return; }
+  const tpool=trips.filter(match);
+  chipCounts($('tripStatusChips'),'ts',tpool);
+  if(isPhone()){ box.className='klist'; box.innerHTML=flatList(tpool,tripVisible,t=>t.date_from,tripCard,'По выбранным статусам выездов нет.'); wireTripCards(box); return; }
   box.className='kanban';
   box.innerHTML=cols.map(s=>{ const items=trips.filter(t=>t.status===s&&match(t));
     const TEMPTY={planned:'Запланированных выездов нет',assigned:'Назначенных нет',
