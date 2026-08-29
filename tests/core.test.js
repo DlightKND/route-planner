@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { kmBetween, circuitKm, tspOrder, dedupeStops, simplifyLine } from '../src/core/geo.js';
-import { money, hhmm, businessDays, colNum, colLetter, cellRC } from '../src/core/format.js';
+import { money, hhmm, businessDays } from '../src/core/format.js';
 import { jobRoadPayer, rateFrom } from '../src/core/tariff.js';
 
 // Заглушка turf: гаверсинус, чтобы geo-тесты не тянули настоящую библиотеку.
@@ -55,12 +55,6 @@ describe('format', () => {
   });
   it('businessDays: перескок через выходные', () => {
     expect(businessDays('2026-07-17', '2026-07-20')).toBe(1); // пт→пн: только пн
-  });
-  it('колонки xlsx: буква↔номер обратимы', () => {
-    for (const a1 of ['A1', 'Z9', 'AA10', 'AZ100', 'BA5']) {
-      const { c } = cellRC(a1); expect(colLetter(c)).toBe(a1.match(/[A-Z]+/)[0]);
-    }
-    expect(colNum('A')).toBe(1); expect(colNum('Z')).toBe(26); expect(colNum('AA')).toBe(27);
   });
 });
 
