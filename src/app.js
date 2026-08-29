@@ -1960,7 +1960,7 @@ async function mineTripJobs(ids){
     // Полная строка заявки, а не только имя и статус: этот же набор
     // ложится в снимок, и по нему инженер должен уметь открыть заявку
     // и внести часы без связи.
-    .select('trip_id, ord, jobs(*, clients(name,lat,lng,phone), equipment(model), job_works(*))')
+    .select('trip_id, ord, jobs(*, clients(name,lat,lng,phone), equipment(model), job_works(*), job_visits(id,started_at,ended_at,created_by))')
     .in('trip_id',ids).order('ord');
   (data||[]).forEach(r=>{ if(!r.jobs) return; (out[r.trip_id]=out[r.trip_id]||[]).push(r.jobs); });
   return out;
@@ -2008,7 +2008,7 @@ async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEdit
   if($('jobSaveState')){ $('jobSaveState').style.display=(jobEditId&&!ro)?'':'none'; jobSaveState('сохранено'); }
   if($('jobRefToggle')) $('jobRefToggle').textContent='Подробности заявки';
   $('jobErr').textContent=''; jobHead(); jobFootUpdate();
-  loadJobPhotos();
+  loadJobPhotos(); loadJobVisits();
   // Куда вернёт хлебная крошка. Заявку открывают из пяти мест — со сводки,
   // с карты, из канбана, из выезда, — и возвращать всегда в канбан значит
   // выкидывать человека из того места, где он работал.
@@ -2331,6 +2331,9 @@ function offlineBanner(at){
 // с очереди и говорим вслух. Молча копить неотправляемое хуже, чем
 // признать потерю.
 let qCount=0, qFlushing=false;
+// Пока связи не было, визит жил под временным id. При отправке сервер
+// выдаёт настоящий, и «уехал» из очереди должен попасть в ту же строку.
+const qLocalIds={};
 function isNetErr(e){
   const m=String((e&&e.message)||e||'').toLowerCase();
   return !m || m.includes('fetch') || m.includes('network') || m.includes('offline')
@@ -2404,6 +2407,21 @@ async function qSendOne(it){
     const {data,error}=await sb.rpc(TRIP_RPC[p.action],{p_trip:p.tripId});
     if(error) throw error;
     if(data==='wrong_status'||data==='not_found') throw new Error(TRIP_SAY[data]||String(data));
+    return;
+  }
+  if(it.kind==='visit'){
+    if(p.op==='start'){
+      // Возвращаем настоящий id и запоминаем соответствие: закрытие
+      // того же визита может лежать в очереди следом.
+      const {data,error}=await sb.from('job_visits').insert({job_id:p.jobId,started_at:p.startedAt}).select('id').single();
+      if(error) throw error;
+      qLocalIds[p.localId]=data.id;
+      return;
+    }
+    const id=qLocalIds[p.visitId]||p.visitId;
+    if(String(id).startsWith('local-')) throw new Error('отметка приезда не отправилась');
+    const {error}=await sb.from('job_visits').update({ended_at:p.endedAt}).eq('id',id);
+    if(error) throw error;
     return;
   }
   if(it.kind==='photo'){
@@ -2602,6 +2620,102 @@ async function delJobPhoto(id){
   if($('phView')) $('phView').onclick=e=>{ if(e.target===$('phView')){ $('phView').hidden=true; $('phViewImg').src=''; } };
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('phView')&&!$('phView').hidden){ $('phView').hidden=true; $('phViewImg').src=''; } });
 })();
+
+// ---------- «я на месте» ----------
+//
+// Фактические часы выводились только из стоянок трекера машины. Без трекера
+// данных нет вовсе; две заявки на одной площадке трекер не разделяет;
+// а инженер ничего не подтверждает — он только смотрит на догадку детектора
+// о собственном дне.
+//
+// Отметка «приехал/уехал» — свидетельство самого инженера. Трекер остаётся
+// независимой проверкой: две записи об одном и том же, сделанные разными
+// способами, и есть способ поймать ошибку.
+let jobVisits=[];
+function openVisit(){ return jobVisits.find(v=>!v.ended_at)||null; }
+function visitTime(iso){ if(!iso) return ''; const d=new Date(iso); if(isNaN(d)) return '';
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function visitHours(v){ if(!v||!v.started_at||!v.ended_at) return 0;
+  return Math.max(0,(new Date(v.ended_at)-new Date(v.started_at))/3600000); }
+function visitsTotal(){ return jobVisits.reduce((a,v)=>a+visitHours(v),0); }
+async function loadJobVisits(){
+  jobVisits=[];
+  if(!jobEditId){ paintVisit(); return; }
+  try{
+    const {data,error}=await sb.from('job_visits').select('id,started_at,ended_at,created_by')
+      .eq('job_id',jobEditId).order('started_at');
+    if(error) throw error;
+    jobVisits=data||[];
+  }catch(e){
+    // Без связи берём отметки из снимка — там они лежат вместе с заявкой.
+    const j=await snapFindJob(jobEditId);
+    jobVisits=(j&&j.job_visits)||[];
+  }
+  paintVisit();
+}
+function paintVisit(){
+  const box=$('jbVisit'); if(!box) return;
+  if(!jobEditId){ box.innerHTML=''; return; }
+  const v=openVisit(), total=visitsTotal();
+  let h='';
+  if(v){
+    h+='<button class="btn amber" type="button" id="visitEnd">Уехал</button>'
+      +'<span class="visit-note">на месте с '+esc(visitTime(v.started_at))+'</span>';
+  } else {
+    h+='<button class="btn" type="button" id="visitStart">Я на месте</button>';
+    // Меньше четверти часа не показываем: это промах по кнопке,
+    // а не работа, и «по отметкам 0 ч» выглядит как поломка.
+    if(total>=0.25) h+='<span class="visit-note">по отметкам '+total.toFixed(2).replace(/\.?0+$/,'')+' ч</span>';
+  }
+  box.innerHTML=h;
+  if($('visitStart')) $('visitStart').onclick=visitStart;
+  if($('visitEnd')) $('visitEnd').onclick=visitEnd;
+}
+async function visitStart(){
+  if(!jobEditId||openVisit()) return;
+  const at=new Date().toISOString();
+  try{
+    const {data,error}=await sb.from('job_visits').insert({job_id:jobEditId,started_at:at}).select('id,started_at,ended_at,created_by').single();
+    if(error) throw error;
+    jobVisits.push(data);
+  }catch(e){
+    if(!isNetErr(e)){ notify('Отметка не сохранилась: '+((e&&e.message)||e),'err'); return; }
+    // Локальный id: по нему потом закроем визит в очереди.
+    const tmp='local-'+Date.now();
+    jobVisits.push({id:tmp,started_at:at,ended_at:null,created_by:session.user.id});
+    await qPush('visit',{op:'start',jobId:jobEditId,localId:tmp,startedAt:at});
+    showToast('Нет связи — отметку отправлю позже');
+  }
+  paintVisit();
+}
+async function visitEnd(){
+  const v=openVisit(); if(!v) return;
+  const at=new Date().toISOString();
+  v.ended_at=at;
+  try{
+    if(String(v.id).startsWith('local-')) throw new Error('offline');
+    const {error}=await sb.from('job_visits').update({ended_at:at}).eq('id',v.id);
+    if(error) throw error;
+  }catch(e){
+    if(!isNetErr(e)&&String(e&&e.message)!=='offline'){ notify('Отметка не сохранилась: '+((e&&e.message)||e),'err'); v.ended_at=null; paintVisit(); return; }
+    await qPush('visit',{op:'end',jobId:jobEditId,localId:String(v.id),visitId:String(v.id),endedAt:at});
+    showToast('Нет связи — отметку отправлю позже');
+  }
+  paintVisit();
+  // Предложить записать наработанное. Часы в акте пишет человек, но
+  // предлагать ему считать в уме то, что уже посчитано, незачем.
+  const h=Math.round(visitHours(v)*4)/4;   // до четверти часа
+  if(h>=0.25){
+    const cur=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
+    if(await confirmDialog('На месте '+h.toFixed(2).replace(/\.?0+$/,'')+' ч. Записать в работы?'
+      +(cur?(' Сейчас записано '+cur.toFixed(1)+' ч — они заменятся.'):''),{okText:'Записать'})){
+      // Если работ ещё нет — заводим строку, иначе часы некуда положить.
+      // Название пустое: его пишет инженер, придумывать за него нельзя.
+      if(!curWorks.length) curWorks.push({work_id:null,name:'',hours:0,override:'',billable:true,reasons:[],billable_reason:'',profile:defaultProfileId(true),custom:true});
+      curWorks[0].hours=h; renderJobWorks(); queueJobSave();
+    }
+  }
+}
 
 // ---------- подпись заказчика ----------
 //
