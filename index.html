@@ -835,8 +835,16 @@
        Тень же рисуется снаружи бокса и прокруткой содержимого не задета.
        Первая тень закрывает полосу верхнего отступа панели, вторая —
        черта под строкой, она появляется только когда под неё что-то уехало. */
+    /* Строка распахнута на всю ширину панели: её собственная коробка была
+       вписана в отступы .pane (16 px слева и справа), и в этих двух полосках
+       из-под неё продолжали ехать карточки — отсюда и «обрубленный» чип
+       по краям, и полоса другого цвета вдоль края. Отрицательные поля
+       выносят коробку к краям экрана, внутренние отступы возвращают
+       чипам прежнюю отбивку. */
     .settings-nav { flex-direction: row; overflow-x: auto; gap: var(--sp-3);
       z-index: 6; background: var(--bg);
+      margin-left: calc(var(--sp-5) * -1); margin-right: calc(var(--sp-5) * -1);
+      padding-left: var(--sp-5); padding-right: var(--sp-5);
       padding-bottom: var(--sp-4); margin-bottom: var(--sp-2); }
     /* Полоса сверху появляется только когда строка ПРИЛИПЛА: пока страница
        не прокручена, над чипами стоит заголовок «Настройки», и закрашивать
@@ -1247,7 +1255,9 @@
     <button class="nav-i" data-tab="catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><circle cx="10" cy="18" r="1.5" fill="currentColor"/></svg><span>Каталог</span></button>
   </div>
   <div class="rail-foot">
-    <button class="nav-i" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>Настройки</span></button>
+    <!-- Шестерёнка одним контуром: прежняя «звёздочка» из отдельных чёрточек
+         на 18–20 px рассыпалась на несвязанные штрихи и читалась как солнце. -->
+    <button class="nav-i" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.6-1.25-1.8-3.1-1.9.8a8 8 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.45a8 8 0 0 0-2.6 1.5L6 6.15l-1.8 3.1L5.8 10.5a7.8 7.8 0 0 0 0 3l-1.6 1.25L6 17.85l1.9-.8a8 8 0 0 0 2.6 1.5l.3 2.45h3.6l.3-2.45a8 8 0 0 0 2.6-1.5l1.9.8 1.8-3.1-1.6-1.25z"/></svg><span>Настройки</span></button>
     <button class="nav-i" id="themeBtn" title="Внешний вид"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg><span>Вид</span></button>
     <button class="nav-i" id="cfgBtn" title="Подключение"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 7h14M5 17h14"/></svg><span>Связь</span></button>
     <button class="nav-i" id="logoutBtn" style="display:none" title="Выйти"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h10"/></svg><span>Выйти</span></button>
