@@ -472,7 +472,9 @@ document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return;
 // Постоянная линия на нетронутом списке — это шум, которого нечем объяснить.
 (function(){
   const panes=document.querySelectorAll('.pane.scrollp');
-  const sync=pane=>pane.querySelectorAll('.stickyhead').forEach(h=>h.classList.toggle('stuck',pane.scrollTop>2));
+  // .settings-nav липнет так же, как .stickyhead, — и черта под ней нужна
+  // по тому же правилу.
+  const sync=pane=>pane.querySelectorAll('.stickyhead, .settings-nav').forEach(h=>h.classList.toggle('stuck',pane.scrollTop>2));
   panes.forEach(pane=>pane.addEventListener('scroll',()=>sync(pane),{passive:true}));
 })();
 document.querySelectorAll('.view-planner .subtab').forEach(t=>t.onclick=()=>plannerSub(t.dataset.sub));
@@ -1759,19 +1761,30 @@ async function renderMine(){
   const showDone=$('mineDone')&&$('mineDone').checked;
   const mgr=canWrite();
 
-  // Менеджеру — все выезды, инженеру — только свои. Фильтр на сервере,
-  // а не в браузере: RLS инженеру чужие всё равно не отдаст.
-  let q=sb.from('trips').select('*, vehicles(name,plate)').is('deleted_at',null);
-  if(!mgr) q=q.eq('lead_engineer',session.user.id);
-  const { data, error }=await q.order('date_from',{ascending:true});
-  if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
+  // Сеть, а если её нет — снимок с устройства. Именно этот экран инженер
+  // открывает первым, и именно он раньше встречал его пустотой.
+  let list=null, byTrip=null, snapAt=0, offline=false;
+  try{
+    // Менеджеру — все выезды, инженеру — только свои. Фильтр на сервере,
+    // а не в браузере: RLS инженеру чужие всё равно не отдаст.
+    let q=sb.from('trips').select('*, vehicles(name,plate)').is('deleted_at',null);
+    if(!mgr) q=q.eq('lead_engineer',session.user.id);
+    const { data, error }=await q.order('date_from',{ascending:true});
+    if(error) throw error;
+    list=data||[];
+    byTrip=await mineTripJobs(list.map(t=>t.id));
+    await loadRescheds();
+    // Кладём ДО фильтра «показать завершённые»: снимок не должен зависеть
+    // от того, какая галочка стояла в момент последней загрузки.
+    snapSet('mine',{list,byTrip});
+  }catch(e){
+    const s=await snapGet('mine');
+    if(s&&s.val&&s.val.list){ list=s.val.list; byTrip=s.val.byTrip||{}; snapAt=s.at; offline=true; }
+    else { box.innerHTML='<div class="err">'+esc((e&&e.message)||e)+'</div>'; return; }
+  }
 
-  let list=data||[];
   if(!showDone) list=list.filter(t=>t.status!=='done'&&t.status!=='cancelled');
-
   list.forEach(t=>{ tripCache[t.id]=t; });
-  const byTrip=await mineTripJobs(list.map(t=>t.id));
-  await loadRescheds();
 
   // Раскладка по времени, а не по статусу.
   //
@@ -1798,8 +1811,8 @@ async function renderMine(){
   // сразу под текущим.
   const overdue=list.filter(t=>t!==hero&&alsoToday.indexOf(t)<0&&isPast(t)).sort(byDate);
 
-  box.innerHTML='';
-  if(!list.length) box.innerHTML='<div class="hint">Выездов нет. Как только диспетчер назначит выезд, он появится здесь.</div>';
+  box.innerHTML=offline?offlineBanner(snapAt):'';
+  if(!list.length) box.innerHTML+='<div class="hint">Выездов нет. Как только диспетчер назначит выезд, он появится здесь.</div>';
 
   // Тело выезда одинаково и для текущего, и для развёрнутой строки —
   // одна функция, чтобы они не разошлись.
@@ -1897,6 +1910,16 @@ async function renderMine(){
     }
   }
 
+  // Без связи гасим всё, что пишет или требует запроса. Кнопка, которая
+  // всегда падает, хуже погашенной: человек нажимает её несколько раз,
+  // прежде чем поверить. «Позвонить» и «Проехать» — обычные ссылки,
+  // они работают и офлайн, и остаются доступными.
+  if(offline){
+    box.querySelectorAll('.acts button, .mine-pt-main, button[data-mopen]').forEach(b=>{
+      b.disabled=true;
+      b.title='Нет связи. Действие станет доступно, когда появится сеть.';
+    });
+  }
   box.querySelectorAll('[data-tstart]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tstart,'start'));
   box.querySelectorAll('[data-tfin]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tfin,'finish'));
   box.querySelectorAll('[data-tconf]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tconf,'confirm'));
@@ -2186,6 +2209,59 @@ $('jobCancel').onclick=async ()=>{
   if(jobSaveT) await saveJobNow();
   switchTab(jobBack, jobBackSub);
   if(jobsDirty){ jobsDirty=false; await renderJobs(); await refreshStats(); } };
+// ---------- снимок данных на устройстве ----------
+//
+// Кэш оболочки (service worker) даёт приложению открыться без связи, но
+// открыться пустым. Инженеру нужен ответ на «куда я еду и что там делать»,
+// а это данные. Кладём их на устройство при каждой удачной загрузке
+// и достаём, когда сети нет.
+//
+// Только чтение. Запись в офлайне пока не поддерживаем — и говорим об этом
+// прямо, а не делаем вид, что сохранили.
+//
+// IndexedDB, а не localStorage: там строки, синхронный доступ и лимит
+// в несколько мегабайт, а здесь список выездов с точками.
+const SNAP_DB='dlight-snap', SNAP_STORE='kv';
+let snapDbP=null;
+function snapDb(){
+  if(snapDbP) return snapDbP;
+  snapDbP=new Promise((res,rej)=>{
+    let rq; try{ rq=indexedDB.open(SNAP_DB,1); }catch(e){ rej(e); return; }
+    rq.onupgradeneeded=()=>{ try{ rq.result.createObjectStore(SNAP_STORE); }catch(e){} };
+    rq.onsuccess=()=>res(rq.result);
+    rq.onerror=()=>rej(rq.error||new Error('indexeddb'));
+  }).catch(e=>{ snapDbP=null; throw e; });
+  return snapDbP;
+}
+async function snapSet(key,val){
+  try{ const db=await snapDb();
+    await new Promise((res,rej)=>{ const t=db.transaction(SNAP_STORE,'readwrite');
+      t.objectStore(SNAP_STORE).put({at:Date.now(),val},key);
+      t.oncomplete=res; t.onerror=()=>rej(t.error); });
+  }catch(e){ /* нет места или приватный режим — снимок не главная функция */ }
+}
+async function snapGet(key){
+  try{ const db=await snapDb();
+    return await new Promise((res,rej)=>{ const t=db.transaction(SNAP_STORE,'readonly');
+      const rq=t.objectStore(SNAP_STORE).get(key);
+      rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>rej(rq.error); });
+  }catch(e){ return null; }
+}
+function snapAge(at){
+  if(!at) return '';
+  const d=new Date(at), now=new Date();
+  const hh=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const sameDay=d.toDateString()===now.toDateString();
+  return sameDay?('данные на '+hh):('данные от '+d.getDate()+' '+MON_GEN[d.getMonth()]+', '+hh);
+}
+// Признак связи: navigator.onLine врёт в одну сторону (говорит «есть»,
+// когда есть только Wi-Fi без интернета), поэтому опираемся на факт
+// провала запроса, а onLine используем лишь для быстрой подсказки.
+function offlineBanner(at){
+  return '<div class="offbar">Нет связи · '+esc(snapAge(at))
+    +'<span class="offbar-h">показываю сохранённое, изменения сейчас не сохранятся</span></div>';
+}
+
 // ---------- фото к заявке ----------
 //
 // В настройках зашита гарантия на ремонт, а доказательной базы под неё не
@@ -2920,9 +2996,11 @@ if($('avSave')) $('avSave').onclick=async ()=>{ const bad=actVarsCur.find(v=>v.k
 $('atSave').onclick=async ()=>{ const act_template={title:$('atTitle').value.trim(),intro:$('atIntro').value.trim(),execRole:$('atExecRole').value.trim(),custRole:$('atCustRole').value.trim(),worksCol:$('atWorksCol').value.trim(),totalWords:$('atTotalWords').value.trim(),warrNote:$('atWarrNote').value.trim(),note:$('atNote').value.trim(),custSign:$('atCustSign').value.trim(),vars:actVars()}; const {error}=await sb.from('settings').update({act_template}).eq('id',true); if(error){ $('atStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.act_template=act_template; $('atStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 async function renderUsersAdmin(){ const {data,error}=await sb.from('profiles').select('id,full_name,role'); const box=$('usersList'); if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
   profilesList=data||[]; box.innerHTML='';
-  profilesList.forEach(p=>{ const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap: var(--sp-3);align-items:center';
+  // Раскладка строки — в стилях (класс .urow), а не инлайном: на телефоне
+  // ей нужно переноситься, а инлайновый стиль медиазапросу не перебить.
+  profilesList.forEach(p=>{ const d=document.createElement('div'); d.className='eqitem urow';
     d.innerHTML='<input type="text" value="'+esc(p.full_name||'')+'" data-un="'+p.id+'" placeholder="имя" class="grow">'+
-      '<select data-ur="'+p.id+'" style="width:130px"><option value="admin">админ</option><option value="logist">логист</option><option value="engineer">инженер</option></select>'+
+      '<select data-ur="'+p.id+'"><option value="admin">админ</option><option value="logist">логист</option><option value="engineer">инженер</option></select>'+
       '<button class="btn sm" data-us="'+p.id+'">сохранить</button>';
     box.appendChild(d); d.querySelector('[data-ur]').value=p.role; });
   box.querySelectorAll('[data-us]').forEach(b=>b.onclick=async ()=>{ const id=b.dataset.us; const name=box.querySelector('[data-un="'+id+'"]').value.trim(); const r=box.querySelector('[data-ur="'+id+'"]').value;
@@ -2950,6 +3028,11 @@ function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent); }
 function isStandalone(){ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }
 
 let swReg=null;
+// Регистрация воркера переехала в index.html отдельным инлайн-скриптом:
+// раньше она жила внутри initPush, и у того, кто не включил уведомления,
+// воркера не было вовсе — а вместе с ним и кэша оболочки. Инлайн, а не
+// здесь, потому что этот файл может и не выполниться (не загрузился
+// leaflet, упала строка выше) — а кэш нужен именно в такие моменты.
 async function initPush(){
   const st=$('pushState'), help=$('pushHelp');
   if(!st) return;
@@ -2962,7 +3045,9 @@ async function initPush(){
     return;
   }
   try{
-    swReg=await navigator.serviceWorker.register('sw.js');
+    // Воркер уже зарегистрирован инлайн-скриптом — здесь только дожидаемся.
+    swReg=await navigator.serviceWorker.ready.catch(()=>null)
+       || await navigator.serviceWorker.register('sw.js');
     const sub=await swReg.pushManager.getSubscription();
     setPushUI(!!sub);
     // Подписки на iOS умеют молча протухать после пары недель простоя.
