@@ -789,7 +789,12 @@
   @media (max-width: 760px) { .trip-head { gap: var(--sp-4); } .th-econ { text-align: left; } }
   .settings-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr);
     gap: var(--sp-5); align-items: start; max-width: 1640px; }
-  .settings-nav { display: flex; flex-direction: column; gap: var(--sp-2); position: sticky; top: 0; }
+  .settings-nav { display: flex; flex-direction: column; gap: var(--sp-2); }
+  /* Липкость обёртка берёт из .stickyhead. На десктопе она больше ничего
+     не делает: ни отступа под собой, ни черты — это нужно только телефону,
+     где строка чипов уезжает под заголовок. */
+  .settings-navwrap { padding-bottom: 0; }
+  .settings-navwrap::before, .settings-navwrap::after { content: none; }
   .son { text-align: left; background: transparent; border: 1px solid transparent; color: var(--ink-dim); border-radius: var(--r-sm); padding: var(--sp-3) var(--sp-4); cursor: pointer; font-size: var(--fs-4); font-family: inherit; transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast); }
   .son.on { background: var(--panel-2); border-color: var(--line); color: var(--ink); font-weight: 600; }
   /* Строка пользователя в настройках. */
@@ -835,21 +840,22 @@
        Тень же рисуется снаружи бокса и прокруткой содержимого не задета.
        Первая тень закрывает полосу верхнего отступа панели, вторая —
        черта под строкой, она появляется только когда под неё что-то уехало. */
-    /* Строка распахнута на всю ширину панели: её собственная коробка была
-       вписана в отступы .pane (16 px слева и справа), и в этих двух полосках
-       из-под неё продолжали ехать карточки — отсюда и «обрубленный» чип
-       по краям, и полоса другого цвета вдоль края. Отрицательные поля
-       выносят коробку к краям экрана, внутренние отступы возвращают
-       чипам прежнюю отбивку. */
-    .settings-nav { flex-direction: row; overflow-x: auto; gap: var(--sp-3);
-      z-index: 6; background: var(--bg);
-      margin-left: calc(var(--sp-5) * -1); margin-right: calc(var(--sp-5) * -1);
-      padding-left: var(--sp-5); padding-right: var(--sp-5);
-      padding-bottom: var(--sp-4); margin-bottom: var(--sp-2); }
-    /* Полоса сверху появляется только когда строка ПРИЛИПЛА: пока страница
-       не прокручена, над чипами стоит заголовок «Настройки», и закрашивать
-       его нечем и незачем. */
-    .settings-nav.stuck { box-shadow: 0 calc(var(--sp-7) * -1) 0 var(--bg), 0 1px 0 var(--line); }
+    /* Липнет и красит фон обёртка, прокручивается вбок строка внутри неё —
+       как на «Заявках» и «Выездах». Раньше это был один элемент: он и
+       прокручивался, и должен был закрывать собой полосу верхнего отступа
+       панели. Псевдоэлемент внутри прокручиваемой коробки уезжает вместе
+       с содержимым, поэтому фон рисовался тенью, а коробку приходилось
+       распахивать во всю ширину экрана отрицательными полями. Разделив
+       роли, обе подпорки можно убрать — и чипы встают в те же отступы,
+       что и остальное содержимое страницы. */
+    /* min-width:0 обязателен: обёртка — ячейка сетки, а у ячейки ширина
+       по умолчанию не меньше min-content. Без этого колонка растягивалась
+       под всю строку чипов (631 px при экране в 390), прокрутки внутри
+       не возникало вовсе, и правые чипы просто уезжали за край экрана. */
+    .settings-navwrap { padding-bottom: var(--sp-4); margin-bottom: var(--sp-2); min-width: 0; }
+    .settings-navwrap::before { content: ''; }
+    .settings-navwrap.stuck::after { content: ''; opacity: 1; }
+    .settings-nav { flex-direction: row; overflow-x: auto; gap: var(--sp-3); }
     .settings-nav::-webkit-scrollbar { display: none; }
     .son { white-space: nowrap; flex: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: var(--sp-3) var(--sp-4); }
     /* Строка пользователя: имя во всю ширину, роль и «сохранить» — под ним.
@@ -1114,8 +1120,8 @@
 .visit-note{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim)}
 
 /* ── Подпись ─────────────────────────────────────────────────────────
-   Белое поле независимо от темы: подпись потом печатается на бумаге,
-   и хранить её надо в том виде, в каком она попадёт в акт. */
+   Белое поле независимо от темы: подпись — доказательство и однажды
+   ляжет на бумагу, поэтому хранить её надо чёрным по белому. */
 .sign-modal{max-width:680px}
 .signpad{display:block;width:100%;height:auto;aspect-ratio:2/1;margin-top: var(--sp-4);
   background:#fff;border:1px solid var(--line);border-radius: var(--r-md);
@@ -1284,8 +1290,11 @@
     <button class="nav-i" data-tab="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 9h8V3h-8z"/></svg><span>Сводка</span></button>
     <button class="nav-i" data-tab="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3z"/><path d="M9 3v15M15 6v15"/></svg><span>Карта</span></button>
     <button class="nav-i" data-tab="planner" data-sub="mine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><span>Сегодня</span></button>
-    <button class="nav-i" data-tab="planner" data-sub="jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h10"/></svg><span>Заявки</span></button>
-    <button class="nav-i" data-tab="planner" data-sub="trips"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h2l2-8h9l3 8h2"/><circle cx="7.5" cy="18.5" r="1.8"/><circle cx="17" cy="18.5" r="1.8"/></svg><span>Выезды</span></button>
+    <!-- Заявки и выезды — две очереди одной работы: заявка попадает в выезд,
+         выезд состоит из заявок. Раздельными пунктами меню они заставляли
+         прыгать туда-обратно и занимали два места в нижней панели, где их
+         всего пять. Теперь это один раздел с переключателем внутри. -->
+    <button class="nav-i" data-tab="planner" data-sub="disp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6v3H9z"/><path d="M9 5.5H7a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-2"/><path d="M9.5 12h5M9.5 16h3"/></svg><span>Диспетчер</span></button>
     <button class="nav-i" data-tab="catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><circle cx="10" cy="18" r="1.5" fill="currentColor"/></svg><span>Каталог</span></button>
   </div>
   <div class="rail-foot">
@@ -1558,7 +1567,7 @@
              Флажок — включить заявку в выезд. Радиокнопка — пометить основную,
              а от неё зависит схема расчёта километража: у основной свой
              базовый круг, остальные платят только крюк. То есть выбор
-             напрямую меняет деньги в акте, и догадываться о нём нельзя. -->
+             напрямую меняет деньги выезда, и догадываться о нём нельзя. -->
         <div class="jobs-legend"><span class="jl-a">☑ в выезде</span><span class="jl-b">◉ основная</span><span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Флажок включает заявку в выезд. Радиокнопка помечает основную: она несёт базовый пробег «Депо → она → Депо», остальным считается только крюк сверх него.</span></span></div>
         <div id="tpJobs" style="max-height:340px;overflow:auto"></div>
         
@@ -1627,13 +1636,15 @@
   </div>
     <!-- JOBS -->
   <div class="view view-planner"><div class="pane scrollp">
-    <div class="subtabs">
-      <!-- Подвкладки переехали в рельс: «Мой день», «Заявки» и «Выезды»
-           теперь пункты первого уровня. Разметка оставлена скрытой,
-           потому что plannerSub() красит .subtab по data-sub. -->
+    <!-- «Сегодня» — отдельный пункт меню, а не подраздел: это домашний
+         экран инженера, и прятать его за переключателем значило бы делать
+         главное вторым. Поэтому строка подразделов при нём скрыта целиком,
+         а сам пункт остаётся в разметке — по нему plannerSub() красит
+         активную подвкладку. -->
+    <div class="subtabs" id="plSubtabs">
       <div class="subtab" data-sub="mine" style="display:none">Сегодня</div>
-      <div class="subtab active" data-sub="jobs" style="display:none">Заявки</div>
-      <div class="subtab" data-sub="trips" id="subTrips" style="display:none">Выезды</div>
+      <div class="subtab active" data-sub="jobs">Заявки</div>
+      <div class="subtab" data-sub="trips" id="subTrips">Выезды</div>
     </div>
     <div id="plMine" style="display:none">
       <div class="pane-head"><h2>Сегодня</h2><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim)"><input type="checkbox" id="mineDone" style="width:auto">показать завершённые</label></div>
@@ -1671,19 +1682,25 @@
   <div class="view view-settings"><div class="pane scrollp">
     <div class="pane-head"><h2>Настройки</h2></div>
     <div class="settings-layout">
+      <!-- Обёртка нужна для телефона: там строка чипов прокручивается вбок,
+           а липнуть и красить под собой фон должно то, что НЕ прокручивается.
+           Ровно так устроена .stickyhead на «Заявках» и «Выездах», поэтому
+           здесь тот же класс — и поведение получается то же. -->
+      <div class="settings-navwrap stickyhead">
       <div class="settings-nav" id="settingsNav">
         <button class="son on" data-sec="tariffs">Тарифы и параметры</button>
-        <button class="son" data-sec="docs">Реквизиты и документы</button>
+        <button class="son" data-sec="docs">Реквизиты</button>
         <button class="son" data-sec="fleet">Автопарк</button>
         <button class="son" data-sec="users">Пользователи и роли</button>
         <button class="son" data-sec="theme">Оформление</button>
+      </div>
       </div>
       <div class="settings-body">
     <div class="card" data-sec-panel="tariffs"><h3 class="cardhead">Общие параметры</h3>
       <div class="row"><div class="grow"><label>Валюта</label><input type="text" id="stCur"></div><div class="grow"><label>Смена, ч</label><input type="number" id="stShift" step="0.5"></div><div class="grow"><label>Допуск, %</label><input type="number" id="stDev" step="1"></div></div>
       <div class="meta" style="margin-top: var(--sp-4)">Себестоимость по умолчанию <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">За км, час, день и ночь. Профиль тарифа может переопределить эти значения своими.</span></span></div>
       <div class="row"><div class="grow"><label>за км</label><input type="number" id="csKm" step="0.01"></div><div class="grow"><label>за час</label><input type="number" id="csHour" step="0.01"></div><div class="grow"><label>за день</label><input type="number" id="csDay" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="csNight" step="0.01"></div></div>
-      <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Стоянки → факт-часы <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Стоянка засчитывается в работу, только если попала в радиус точки заявки. Обед на трассе и ночёвка не попадут. Идёт только в себестоимость — нормочасы и акт не трогаются.</span></span></div>
+      <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Стоянки → факт-часы <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Стоянка засчитывается в работу, только если попала в радиус точки заявки. Обед на трассе и ночёвка не попадут. Идёт только в себестоимость — нормочасы не трогаются.</span></span></div>
       <div class="row"><div class="grow"><label>Радиус вокруг точки, м</label><input type="number" id="stStayRad" step="10"></div><div class="grow"><label>Короче этого не считать, мин</label><input type="number" id="stStayMin" step="1"></div></div>
       <label style="margin-top: var(--sp-4)">Адрес прокси ORS <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Безопасный режим. Ключ openrouteservice хранится в секрете этой функции на сервере и наружу не отдаётся. Отдельного поля для ключа в приложении нет.</span></span></label><input type="text" id="orsProxy" placeholder="https://<проект>.supabase.co/functions/v1/ors">
       
@@ -1699,33 +1716,11 @@
       <div id="tpList" style="margin-top: var(--sp-3)"></div>
       <button class="btn sm amber" id="profCreate" style="margin-top: var(--sp-4)">+ Создать профиль</button>
     </div>
-    <div class="card" data-sec-panel="docs" style="display:none"><h3 class="cardhead">Реквизиты организации <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Подставляются в акт выполненных работ как «Исполнитель».</span></span></h3>
+    <div class="card" data-sec-panel="docs" style="display:none"><h3 class="cardhead">Реквизиты организации <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Справочные данные организации. Документы приложение не печатает — реквизиты нужны, чтобы они лежали в одном месте, а не в переписке.</span></span></h3>
       <label>Название организации</label><input type="text" id="coName" placeholder="ООО «…» / ФОП …">
       <label style="margin-top: var(--sp-3)">Реквизиты (адрес, ЕДРПОУ/ИНН, телефон, банк — свободным текстом)</label><textarea id="coDetails" placeholder="г. …, ул. …&#10;ЕДРПОУ/ИНН …&#10;тел. …"></textarea>
       <label style="margin-top: var(--sp-3)">Подписант (ФИО, должность)</label><input type="text" id="coSigner" placeholder="Директор Иванов И. И.">
       <button class="btn sm amber" id="coSave" style="margin-top: var(--sp-4)">Сохранить реквизиты</button><span class="hint" id="coStatus" style="margin-left: var(--sp-3)"></span>
-    </div>
-    <div class="card" data-sec-panel="docs" style="display:none"><h3 class="cardhead">Шаблон акта <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Тексты и подписи в печатной форме акта. Пустые поля берут значения по умолчанию. Суммы и строки работ считаются автоматически.</span></span></h3>
-      <label>Заголовок</label><input type="text" id="atTitle" placeholder="Акт выполненных работ">
-      <label style="margin-top: var(--sp-3)">Вступительный текст (необязательно, печатается под датой)</label><textarea id="atIntro" placeholder="Напр.: Настоящий акт составлен о том, что исполнителем выполнены, а заказчиком приняты следующие работы:"></textarea>
-      <div class="row"><div class="grow"><label>Подпись «Исполнитель»</label><input type="text" id="atExecRole" placeholder="Исполнитель"></div><div class="grow"><label>Подпись «Заказчик»</label><input type="text" id="atCustRole" placeholder="Заказчик"></div></div>
-      <label style="margin-top: var(--sp-3)">Заголовок столбца работ</label><input type="text" id="atWorksCol" placeholder="Наименование работ (услуг)">
-      <label style="margin-top: var(--sp-3)">Строка итога (подставится {sum})</label><input type="text" id="atTotalWords" placeholder="Всего оказано услуг на сумму {sum}.">
-      <label style="margin-top: var(--sp-3)">Примечание про гарантию (если есть гарантийные работы)</label><textarea id="atWarrNote" placeholder="Работы, отмеченные как «гарантия», выполнены в рамках гарантийных обязательств и оплате не подлежат."></textarea>
-      <label style="margin-top: var(--sp-3)">Доп. примечание внизу (необязательно)</label><textarea id="atNote" placeholder="Напр.: Претензий по объёму, качеству и срокам стороны не имеют."></textarea>
-      <label style="margin-top: var(--sp-3)">Линия подписи заказчика</label><input type="text" id="atCustSign" placeholder="подпись / ФИО">
-      <button class="btn sm amber" id="atSave" style="margin-top: var(--sp-4)">Сохранить шаблон</button><span class="hint" id="atStatus" style="margin-left: var(--sp-3)"></span>
-      <div style="border-top:1px solid var(--line);margin-top: var(--sp-4);padding-top: var(--sp-4)">
-        <div class="meta">Или загрузи свой <b>Excel-шаблон (.xlsx)</b> с плейсхолдерами — тогда акт будет генерироваться по нему, точь-в-точь твой дизайн (стили, лого, вёрстка). Пусто — печатается встроенный HTML-акт.</div>
-        <div id="axInfo" class="hint" style="margin: var(--sp-3) 0"></div>
-        <div class="row" style="align-items:center"><input type="file" id="axFile" accept=".xlsx" style="font-size: var(--fs-3)"><button class="btn sm ghost" id="axDownload">скачать</button><button class="btn sm ghost" id="axRemove">убрать</button></div>
-        <div class="hint" style="margin-top: var(--sp-3)">Встроенные плейсхолдеры: {{number}} {{date}} {{exec_name}} {{exec_details}} {{exec_signer}} {{client}} {{client_details}} {{client_signer}} {{payer}} {{payer_details}} {{total}} {{total_words}} {{note}}. Строка таблицы работ: {{w_no}} {{w_name}} {{w_hours}} {{w_price}} {{w_sum}}. Свои — в карточке ниже.</div>
-      </div>
-    </div>
-    <div class="card" data-sec-panel="docs" style="display:none"><h3>Свои плейсхолдеры</h3>
-      <div class="meta">Придумай любые плейсхолдеры и задай им значения — потом расставь их в Excel-шаблоне там, где нужно. В значении можно ссылаться на встроенные, напр. «Акт № {{number}} от {{date}}».</div>
-      <div id="avList" style="margin-top: var(--sp-3)"></div>
-      <div class="row" style="margin-top: var(--sp-3)"><button class="btn sm" id="avAdd">+ Добавить</button><button class="btn sm amber" id="avSave">Сохранить</button><span class="hint" id="avStatus" style="margin-left: var(--sp-2)"></span></div>
     </div>
     <div class="card" data-sec-panel="theme" style="display:none"><h3>Тема по умолчанию для новых пользователей</h3>
       <div class="row"><div class="grow"><label>Режим</label><select id="dtMode"><option value="dark">Тёмная</option><option value="light">Светлая</option></select></div></div>
@@ -1864,19 +1859,13 @@
   <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>в депо, за час</label><input type="number" id="tpfDepotRate" step="0.01"><div class="hint" style="margin-top: var(--sp-2)">Пусто или 0 — работа в депо считается по ставке «платно». Гарантия в депо идёт по гарантийной ставке.</div></div></div>
   <div class="meta" style="margin-top: var(--sp-3)">Дорога и суточные — выручка этого плательщика:</div>
   <div class="row"><div class="grow"><label>за км</label><input type="number" id="tpfKmRate" step="0.01"></div><div class="grow"><label>за сутки</label><input type="number" id="tpfDayRate" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="tpfNightRate" step="0.01"></div></div>
-  <label style="margin-top: var(--sp-3)">Реквизиты плательщика (в акт)</label><textarea id="tpfReq" placeholder="Название, адрес, ЕДРПОУ/ИНН, банк…"></textarea>
+  <label style="margin-top: var(--sp-3)">Реквизиты плательщика</label><textarea id="tpfReq" placeholder="Название, адрес, ЕДРПОУ/ИНН, банк…"></textarea>
   <label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;margin-top: var(--sp-3);font-size: var(--fs-4)"><input type="checkbox" id="tpfDefWarr" style="width:auto">профиль по умолчанию для гарантийных работ</label>
   <label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;margin-top: var(--sp-3);font-size: var(--fs-4)"><input type="checkbox" id="tpfDefPaid" style="width:auto">профиль по умолчанию для платных работ</label>
   <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="tpfSave">Добавить профиль</button><button class="btn ghost" id="tpfCancel">Отмена</button></div>
   <div class="err" id="tpfErr"></div>
 </div></div>
 
-<div class="overlay" id="actXlsxOverlay"><div class="modal l">
-  <h3>Акт выполненных работ</h3>
-  <div class="meta">Превью приблизительное (веб не повторяет Excel 1:1). Точный документ — по кнопке «Скачать .xlsx».</div>
-  <div id="axPreview" style="max-height:60vh;overflow:auto;margin-top: var(--sp-3);padding: var(--sp-4);background:#fff;border-radius: var(--r-sm)"></div>
-  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="axDlBtn">Скачать .xlsx</button><button class="btn ghost" id="axClose">Закрыть</button></div>
-</div></div>
 
 <div class="overlay" id="pointOverlay"><div class="modal">
   <h3>Новая точка</h3>
@@ -1902,7 +1891,7 @@
   <label>Описание</label><textarea id="eDesc"></textarea>
   <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет</label><input type="color" id="eColor"></div><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;padding-bottom: var(--sp-3);white-space:nowrap"><input type="checkbox" id="eBase" style="width:auto">депо</label></div>
   <label style="margin-top: var(--sp-3)">Профиль тарифа по умолчанию (для платных работ этого клиента)</label><select id="eProfile"></select>
-  <label style="margin-top: var(--sp-3)">Подписант заказчика (в акт, {{client_signer}})</label><input type="text" id="eSigner" placeholder="Директор Петров П.П.">
+  <label style="margin-top: var(--sp-3)">Подписант заказчика</label><input type="text" id="eSigner" placeholder="Директор Петров П.П.">
   <div class="row"><div class="grow"><label>Широта</label><input type="text" id="eLat"></div><div class="grow"><label>Долгота</label><input type="text" id="eLng"></div></div>
   <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="eSave">Сохранить</button><button class="btn ghost" id="eCancel">Отмена</button></div>
 </div></div>
@@ -1961,12 +1950,12 @@
 </div>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2.111.0/dist/umd/supabase.js" integrity="sha384-faMlYZUtkJj+Sh6Bmu/L0GzPcraRWN6CW+9RH3GUrK/Z0WS9tgaNNt0tHiLxsbdb" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<!-- turf и exceljs здесь больше НЕ подключаются.
-     Они выполнялись до первой строки app.js и задерживали запуск примерно
-     на полтора мегабайта. Теперь их подгружает loadLib() в src/app.js —
-     turf прогревается сразу после старта и ожидается там, где от него
-     зависят цифры; exceljs приезжает только при выгрузке акта по шаблону.
-     Хэши integrity переехали в app.js без изменений. -->
+<!-- turf здесь больше НЕ подключается.
+     Он выполнялся до первой строки app.js и задерживал запуск на полмегабайта.
+     Теперь его подгружает loadLib() в src/app.js: прогрев сразу после старта
+     и ожидание там, где от него зависят цифры. Хэш integrity переехал в
+     app.js без изменений. Рядом так же грузился exceljs (~900 КБ) — он ушёл
+     вместе с генерацией актов. -->
 <!-- Регистрация service worker'а отдельно от бандла и раньше него.
      Он держит кэш оболочки, и нужен ровно тогда, когда бандл выполниться
      НЕ смог: нет связи, не приехал leaflet, упала строка при запуске.
