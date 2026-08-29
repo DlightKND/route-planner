@@ -151,6 +151,10 @@
      Жёлтый в интерфейсе значит «нажми меня» либо «ты здесь» (рейл, подчёркивание
      вкладки); переключатель периода — ни то, ни другое. */
   .seg button.on { background: var(--ink); color: var(--panel); font-weight: 600; box-shadow: var(--shadow-sm); }
+  /* Недоступный сегмент (спутник без ключа) — гасим и снимаем курсор,
+     чтобы было видно: это не «не нажалось», а «пока нельзя». */
+  .seg button:disabled { color: var(--ink-faint); cursor: not-allowed; }
+  .seg button:disabled:hover { color: var(--ink-faint); }
   
   .ph { margin: auto; max-width: 520px; text-align: center; padding: var(--sp-8); }
   .ph .ic { font-size: var(--fs-9); margin-bottom: var(--sp-4); }
@@ -212,7 +216,7 @@
   .block h2 .cnt { color: var(--accent-ink); font-weight: 600; background: var(--panel-2); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-1); }
   
   label { display: block; font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; color: var(--ink-dim); text-transform: uppercase; margin: var(--sp-4) 0 var(--sp-3); }
-  input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=number], select, textarea { 
+  input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=number], input[type=tel], select, textarea {
     width: 100%; background: var(--panel-2); border: 1px solid var(--line); 
     border-radius: var(--r-sm); color: var(--ink); font-family: var(--sans); font-size: var(--fs-5); 
     padding: var(--sp-3) var(--sp-4); outline: none; transition: border-color var(--t), background var(--t), color var(--t), box-shadow var(--t);
@@ -573,7 +577,7 @@
   @media (pointer: coarse) {
     :root { --fs-1: 11px; --fs-2: 12px; }
     input[type=text], input[type=email], input[type=password], input[type=search],
-    input[type=date], input[type=month], input[type=number], select, textarea {
+    input[type=date], input[type=month], input[type=number], input[type=tel], select, textarea {
       font-size: 16px; min-height: 44px; }
     .btn, .btn.sm, .icobtn, .veh-btn { min-height: 44px; min-width: 44px; }
     .seg button, .subtab, .son, .side-tabs .stab, .tab { min-height: 44px; }
@@ -610,7 +614,7 @@
     .pane { padding: var(--sp-5); } 
     .modal { padding: var(--sp-5); max-height: 95vh; width: 100%; border-radius: var(--r-md); } 
     .pop { right: 8px; left: 8px; width: auto; } 
-    .btn, input[type=text], input[type=number], input[type=email], input[type=password], select { padding: var(--sp-4) var(--sp-5); }
+    .btn, input[type=text], input[type=number], input[type=tel], input[type=email], input[type=password], select { padding: var(--sp-4) var(--sp-5); }
     .btn.sm { padding: var(--sp-3) var(--sp-4); }
     /* Рельс слева на телефоне — ошибка: приложение стоит как PWA,
        инженер держит его одной рукой, левый край недосягаем большим
@@ -747,6 +751,11 @@
   .th-sub { font-size: var(--fs-3); color: var(--ink-dim); margin-top: var(--sp-2); line-height: 1.5; }
   /* Прибыль — то, ради чего выезд собирают. В модалке она пряталась
      в служебной строке под списком заявок; здесь стоит в шапке. */
+  /* Действия «на месте» под подзаголовком заявки: позвонить и доехать.
+     Ссылки, а не кнопки, — их работу выполняет система, а не приложение;
+     .btn им дан только ради общей геометрии и зоны нажатия. */
+  .th-acts { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); }
+  .th-acts .btn { text-decoration: none; }
   .th-econ { flex: none; text-align: right; font-family: var(--mono); }
   .th-econ .te-k { font-size: var(--fs-1); letter-spacing: .6px; text-transform: uppercase; color: var(--ink-faint); }
   .th-econ .te-v { font-size: var(--fs-7); font-weight: 600; line-height: 1.2; margin-top: var(--sp-1); }
@@ -825,9 +834,16 @@
 .a-sub{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-faint);margin-top: var(--sp-1)}
 .a-h{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
 @media(max-width:600px){
-  .afeed{padding-left:88px}
-  .afeed-line{left:62px}
-  .a-ax{left:-88px;width:54px}
+  /* На телефоне ось дат съедала около четверти ширины экрана — и ради чего:
+     дата уже написана в шапке каждой группы («чт 03 сентября»). Ось убираем,
+     оставляя ленту и точки: срочность несёт цвет, а не подпись. Столбик
+     дат нужен на широком экране, где взгляд идёт вдоль шкалы. */
+  /* 26px оставляем ровно под точки: они позиционируются от левого края
+     группы и центрируются на -21px, то есть попадают на ленту в 0…8px. */
+  .afeed{padding-left:26px}
+  .afeed-line{left:0;width:8px}
+  .a-ax{display:none}
+  .a-break::before{left:-27px;width:10px}
   .agrp-h{flex-wrap:wrap;gap: var(--sp-3) var(--sp-3)}
   .agrp-track{flex:1 0 100%;order:3}
 }
@@ -937,6 +953,10 @@
 .map-pop .lay-t{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-1) 0 var(--sp-3)}
 .map-pop .seg{margin: 0}
 .map-pop .hint{line-height:1.7}
+/* Пояснение под переключателем подложки — прижато к нему, а не к следующему
+   заголовку: иначе читается как подпись к «Цвету точек». */
+#mapStyleHint{margin-top: var(--sp-2)}
+.map-pop .hint + .lay-t{margin-top: var(--sp-5)}
 .wf-h{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-4) 0 var(--sp-3);display:flex;align-items:center;gap: var(--sp-3)}
 .wf-h:first-child{margin-top: var(--sp-2)}
 .wf-row > div { min-width: 0; }
@@ -1108,6 +1128,11 @@
            столбиком, пояснение уехало под «?». -->
       <div class="map-pop" id="layersPop">
         <h4>Слои карты</h4>
+        <!-- Подложка первой: это выбор «на чём я смотрю», а всё остальное
+             в этом окне — «что я на этом вижу». -->
+        <div class="lay-t">Подложка</div>
+        <div class="seg" id="mapStyleSeg"><button class="on" data-mstyle="map">обычная</button><button data-mstyle="sat">спутник</button></div>
+        <div class="hint" id="mapStyleHint" style="display:none">Спутник включится, когда в сборке появится ключ MapTiler — секрет VITE_MAPTILER_KEY.</div>
         <div class="lay-t">Цвет точек</div>
         <div class="seg" id="colorMode"><button class="on" data-cm="urgency">срочность</button><button data-cm="profit">прибыль</button><button data-cm="own">свой</button></div>
         <div class="lay-legend" id="profitLegend"></div>
@@ -1125,6 +1150,9 @@
       <div class="th-main">
         <h2 id="jobTitle">Заявка</h2>
         <div class="th-sub" id="jobSub"></div>
+        <!-- Действия «на месте». Пустой блок не занимает высоты: скрывается
+             из jobHead(), когда у точки нет ни телефона, ни координат. -->
+        <div class="th-acts" id="jobActs" style="display:none"></div>
       </div>
       <div class="th-econ" id="jobHeadEcon"></div>
       <button class="btn amber" id="jobSave">Сохранить заявку</button>
@@ -1510,6 +1538,7 @@
   <div class="hint" id="pointCoords" style="margin-top: var(--sp-3)"></div>
   <div id="form" style="margin-top: var(--sp-3)">
     <label>Название</label><input type="text" id="fName" placeholder="Напр. ООО Ромашка">
+    <label>Телефон на месте</label><input type="tel" id="fPhone" inputmode="tel" autocomplete="tel" placeholder="+380 …">
     <label>Описание</label><textarea id="fDesc"></textarea>
     <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет на карте</label><input type="color" id="fColor" value="#9aa1ad"></div><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;padding-bottom: var(--sp-3);white-space:nowrap"><input type="checkbox" id="fBase" style="width:auto">депо</label></div>
     <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="saveBtn">Сохранить</button><button class="btn ghost" id="cancelBtn">Отмена</button></div>
@@ -1519,7 +1548,9 @@
 
 <div class="overlay" id="editOverlay"><div class="modal">
   <h3>Редактирование точки</h3>
-  <label>Название</label><input type="text" id="eName"><label>Описание</label><textarea id="eDesc"></textarea>
+  <label>Название</label><input type="text" id="eName">
+  <label>Телефон на месте <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Кого набирать по приезде. Виден инженеру в шапке заявки и в попапе точки на карте — оттуда набирается одним нажатием.</span></span></label><input type="tel" id="ePhone" inputmode="tel" autocomplete="tel" placeholder="+380 …">
+  <label>Описание</label><textarea id="eDesc"></textarea>
   <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет</label><input type="color" id="eColor"></div><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;padding-bottom: var(--sp-3);white-space:nowrap"><input type="checkbox" id="eBase" style="width:auto">депо</label></div>
   <label style="margin-top: var(--sp-3)">Профиль тарифа по умолчанию (для платных работ этого клиента)</label><select id="eProfile"></select>
   <label style="margin-top: var(--sp-3)">Подписант заказчика (в акт, {{client_signer}})</label><input type="text" id="eSigner" placeholder="Директор Петров П.П.">
