@@ -7,6 +7,7 @@ export default [{
       location:"readonly",setTimeout:"readonly",setInterval:"readonly",clearTimeout:"readonly",
       clearInterval:"readonly",Notification:"readonly",Blob:"readonly",URL:"readonly",
       atob:"readonly",btoa:"readonly",alert:"readonly",matchMedia:"readonly",
+      createImageBitmap:"readonly",
       requestAnimationFrame:"readonly",FileReader:"readonly",Image:"readonly",self:"readonly",
       getComputedStyle:"readonly",XMLHttpRequest:"readonly",history:"readonly",crypto:"readonly",
       // Функции, объявленные как window.X=... и вызываемые из onclick в строках
