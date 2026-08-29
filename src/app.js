@@ -178,15 +178,82 @@ document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; ['baseOver
 
 // ---------- map ----------
 const map=L.map('map',{zoomControl:true});
-const baseLayers={
-  light:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}),
-  dark:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,className:'dark-tiles',attribution:'© OpenStreetMap'})
-};
+
+// ---------- подложка карты ----------
+//
+// Два стиля: «обычная» и «спутник». Обычная идёт за темой приложения —
+// backdrop-v4-light и backdrop-v4-dark у MapTiler: это намеренно тихая
+// подложка, на которой видно НАШИ точки, а не топонимы. Спутник —
+// hybrid-v4, снимок с подписями и дорогами: без подписей на снимке
+// невозможно понять, куда смотришь.
+//
+// Ключ MapTiler подставляется на сборке из секрета VITE_MAPTILER_KEY,
+// в репозитории его нет. Без ключа приложение не ломается: обычная карта
+// откатывается на OSM (тёмная — фильтром, как было раньше), а спутник
+// недоступен, и кнопка гаснет с пояснением.
+const MAPTILER_KEY=(import.meta.env&&import.meta.env.VITE_MAPTILER_KEY)||'';
+const MT_ATTR='<a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">© MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
+const OSM_ATTR='© OpenStreetMap';
+function mtUrl(id,fmt){ return 'https://api.maptiler.com/maps/'+id+'/256/{z}/{x}/{y}@2x.'+(fmt||'png')+'?key='+MAPTILER_KEY; }
+function hasSat(){ return !!MAPTILER_KEY; }
+// Каждый вызов создаёт НОВЫЙ слой: один экземпляр Leaflet нельзя повесить
+// на две карты, а мини-карты выезда берут ту же подложку.
+function makeBase(key){
+  if(key==='sat'){ return MAPTILER_KEY
+    ? L.tileLayer(mtUrl('hybrid-v4','jpg'),{maxZoom:20,attribution:MT_ATTR})
+    : null; }
+  const dark=(key==='map-dark');
+  if(MAPTILER_KEY) return L.tileLayer(mtUrl(dark?'backdrop-v4-dark':'backdrop-v4-light'),{maxZoom:20,attribution:MT_ATTR});
+  return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom:19,attribution:OSM_ATTR,className:dark?'dark-tiles':''});
+}
+const LS_MAPSTYLE='dl_map_style';
+let mapMode='dark', mapStyle='map';
+try{ if(localStorage.getItem(LS_MAPSTYLE)==='sat'&&MAPTILER_KEY) mapStyle='sat'; }catch(e){}
+const baseLayers={};
 let currentBase=null;
-function setBaseLayer(kind){ const next=baseLayers[kind]||baseLayers.light; if(currentBase===next) return; if(currentBase) map.removeLayer(currentBase); map.addLayer(next); currentBase=next; if(next.bringToBack) next.bringToBack(); }
+function baseKey(){ return mapStyle==='sat'?'sat':('map-'+mapMode); }
+function applyBase(){
+  const k=baseKey();
+  const next=baseLayers[k]||(baseLayers[k]=makeBase(k));
+  if(!next||next===currentBase) return;
+  if(currentBase) map.removeLayer(currentBase);
+  map.addLayer(next); currentBase=next;
+  if(next.bringToBack) next.bringToBack();
+}
+// Тема зовёт эту функцию — она меняет ТОЛЬКО обычную подложку. На спутнике
+// смена темы подложку не трогает: снимок не бывает светлым или тёмным.
+function setBaseLayer(kind){ mapMode=(kind==='dark')?'dark':'light'; applyBase(); }
+function setMapStyle(s){
+  const want=(s==='sat')?'sat':'map';
+  if(want==='sat'&&!hasSat()) return;
+  mapStyle=want; try{ localStorage.setItem(LS_MAPSTYLE,mapStyle); }catch(e){}
+  applyBase(); syncMapStyleSeg();
+}
+function syncMapStyleSeg(){
+  const box=$('mapStyleSeg'); if(!box) return;
+  box.querySelectorAll('button[data-mstyle]').forEach(b=>{
+    b.classList.toggle('on',b.dataset.mstyle===mapStyle);
+    if(b.dataset.mstyle==='sat'&&!hasSat()) b.disabled=true;
+  });
+  const h=$('mapStyleHint'); if(h) h.style.display=hasSat()?'none':'';
+}
 setBaseLayer('dark');
 map.setView([48.4,31.2],6);
 function fitUkraine(){ map.fitBounds(UA_BOUNDS); }
+
+// ---------- связь с точкой ----------
+//
+// Две вещи, которых инженеру не хватало на месте: позвонить и доехать.
+// Обе решаются ссылками — набор номера и внешнюю навигацию берут на себя
+// системные приложения, нам остаётся отдать им данные в правильном виде.
+// Из номера выкидываем всё, кроме цифр и ведущего плюса: tel: со скобками
+// и пробелами часть телефонов набирает неверно.
+function telHref(phone){ const t=String(phone||'').trim(); if(!t) return '';
+  const d=t.replace(/[^\d+]/g,'').replace(/(?!^)\+/g,'');
+  return /\d/.test(d)?('tel:'+d):''; }
+function navHref(lat,lng){ if(lat==null||lng==null||isNaN(+lat)||isNaN(+lng)) return '';
+  return 'https://www.google.com/maps/dir/?api=1&destination='+(+lat).toFixed(6)+','+(+lng).toFixed(6)+'&travelmode=driving'; }
 let markers=L.layerGroup().addTo(map), eqMarkers=L.layerGroup().addTo(map), tripLayer=L.layerGroup().addTo(map), routeLayer=L.layerGroup().addTo(map), bufferLayer=L.layerGroup().addTo(map), pendingMarker=null, revealedClient=null, wpModeOn=false, markerById={};
 let clientStats={}, profitMode=false, avoidModeOn=false, avoidLayer=L.layerGroup().addTo(map);
 // Живые заявки для ленты на карте (см. loadClientStats).
@@ -487,6 +554,8 @@ document.querySelectorAll('#colorMode button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#colorMode button').forEach(x=>x.classList.toggle('on',x===b));
   colorMode=b.dataset.cm; profitMode=(colorMode==='profit');
   renderColorLegend(); renderMarkers(); });
+document.querySelectorAll('#mapStyleSeg button[data-mstyle]').forEach(b=>b.onclick=()=>setMapStyle(b.dataset.mstyle));
+syncMapStyleSeg();
 // Шкала прибыльности вынесена из renderMarkers: ею пользуется markerColor(),
 // а он вызывается и до отрисовки — например, из списка точек.
 let _maxProfit=0;
@@ -514,6 +583,10 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
       const icon=L.divIcon({className:'',html:'<div class="cbub" style="background:'+col+';width:30px;height:30px;border:2.5px solid '+ringColor()+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></div>',iconSize:[30,30],iconAnchor:[15,15]});
       const m=L.marker([c.lat,c.lng],{icon});
       let html='<strong style="font-size: var(--fs-4)">'+esc(c.name)+'</strong> <span style="color:var(--ink-dim)">· депо</span>'; if(c.description) html+='<br>'+esc(c.description);
+      if(c.phone) html+='<br><span style="color:var(--ink-dim)">тел. '+esc(c.phone)+'</span>';
+      html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3);flex-wrap:wrap">'
+        +(telHref(c.phone)?('<a href="'+esc(telHref(c.phone))+'" style="'+ab+';text-decoration:none">Позвонить</a>'):'')
+        +'<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" style="'+lb+';text-decoration:none">Проехать</a></span>';
       if(canWrite()){ html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3)"><button onclick="addBaseStart(\''+c.id+'\')" style="'+ab+'">▶ старт</button><button onclick="addBaseStop(\''+c.id+'\')" style="'+lb+'">⏹ финиш</button><button onclick="editClient(\''+c.id+'\')" style="'+lb+'">ред.</button></span>'; }
       m.bindPopup(html); markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); return;
     }
@@ -531,7 +604,14 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
         +esc(URG_TXT[us.urg]||'')+' · живых заявок '+us.open+'</span>';
     }
     const s=clientStats[c.id]; if(s){ const cur=appSettings.currency||'грн'; html+='<br><span style="display:block;margin-top: var(--sp-2);font-size: var(--fs-2);color:var(--ink-dim);line-height:1.6">выручка <b style="color:var(--ink)">'+Math.round(s.rev)+' '+esc(cur)+'</b> · прибыль <b style="color:'+(s.profit>=0?'var(--green)':'var(--red)')+'">'+Math.round(s.profit)+'</b><br>гарантия '+s.warrShare+'% · заявок '+s.jobs+(s.done?(' · закрыто '+s.done):'')+'</span>'; }
-    html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3)"><button onclick="openEquip(\''+c.id+'\')" style="'+lb+'">техника</button>';
+    if(c.phone) html+='<br><span style="color:var(--ink-dim)">тел. '+esc(c.phone)+'</span>';
+    // «Позвонить» и «Проехать» — первыми и всем, включая инженера: на месте
+    // это единственные две кнопки, которые вообще нужны.
+    const tel=telHref(c.phone);
+    html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3);flex-wrap:wrap">';
+    if(tel) html+='<a href="'+esc(tel)+'" style="'+ab+';text-decoration:none">Позвонить</a>';
+    html+='<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" style="'+lb+';text-decoration:none">Проехать</a>';
+    html+='<button onclick="openEquip(\''+c.id+'\')" style="'+lb+'">техника</button>';
     if(canWrite()){ html+='<button onclick="addClientToRoute(\''+c.id+'\')" style="'+ab+'">+ маршрут</button><button onclick="newJobForClient(\''+c.id+'\')" style="'+lb+'">+ заявка</button><button onclick="editClient(\''+c.id+'\')" style="'+lb+'">ред.</button>'; }
     html+='</span>'; m.bindPopup(html);
     m.on('click',()=>{ revealedClient=(revealedClient===c.id)?null:c.id; renderEqMarkers(); });
@@ -752,12 +832,12 @@ document.addEventListener('click',(e)=>{ const p=$('layersPop'); if(!p||!p.class
 $('cancelBtn').onclick=()=>{ resetForm(); toggleAdd(false); $('pointOverlay').classList.remove('on'); };
 function resetForm(){ $('fName').value='';$('fDesc').value='';$('fColor').value='#9aa1ad';$('fBase').checked=false;$('geoQuery').value='';$('geoResults').innerHTML='';$('formErr').textContent=''; pendingLatLng=null; if(pendingMarker){map.removeLayer(pendingMarker);pendingMarker=null;} }
 $('saveBtn').onclick=async ()=>{ const name=$('fName').value.trim(); if(!name){ $('formErr').textContent='Введи название.'; return; } if(!pendingLatLng){ $('formErr').textContent='Задай точку на карте или по адресу.'; return; }
-  $('saveBtn').disabled=true; const { error }=await sb.from('clients').insert({name,description:$('fDesc').value.trim(),color:$('fColor').value,lat:pendingLatLng.lat,lng:pendingLatLng.lng,is_base:$('fBase').checked}); $('saveBtn').disabled=false;
+  $('saveBtn').disabled=true; const { error }=await sb.from('clients').insert({name,description:$('fDesc').value.trim(),phone:($('fPhone').value.trim()||null),color:$('fColor').value,lat:pendingLatLng.lat,lng:pendingLatLng.lng,is_base:$('fBase').checked}); $('saveBtn').disabled=false;
   if(error){ $('formErr').textContent='Ошибка: '+error.message; return; } const wasBase=$('fBase').checked; resetForm(); $('pointOverlay').classList.remove('on'); await loadAll(); showToast(wasBase?'Депо сохранено':'Точка сохранена'); };
 window.editClient=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWrite()) return; editId=id; map.closePopup();
-  $('eName').value=c.name; $('eDesc').value=c.description||''; $('eColor').value=c.color||'#9aa1ad'; $('eBase').checked=!!c.is_base; $('eLat').value=c.lat; $('eLng').value=c.lng; $('eProfile').innerHTML='<option value="">— не задан (по умолчанию платный) —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join(''); $('eProfile').value=c.default_profile||''; $('eSigner').value=c.signer||''; $('editOverlay').classList.add('on'); };
+  $('eName').value=c.name; $('eDesc').value=c.description||''; $('ePhone').value=c.phone||''; $('eColor').value=c.color||'#9aa1ad'; $('eBase').checked=!!c.is_base; $('eLat').value=c.lat; $('eLng').value=c.lng; $('eProfile').innerHTML='<option value="">— не задан (по умолчанию платный) —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join(''); $('eProfile').value=c.default_profile||''; $('eSigner').value=c.signer||''; $('editOverlay').classList.add('on'); };
 $('eCancel').onclick=()=>$('editOverlay').classList.remove('on');
-$('eSave').onclick=async ()=>{ const { error }=await sb.from('clients').update({name:$('eName').value.trim(),description:$('eDesc').value.trim(),color:$('eColor').value,is_base:$('eBase').checked,default_profile:($('eProfile').value||null),signer:($('eSigner').value.trim()||null),lat:parseFloat($('eLat').value),lng:parseFloat($('eLng').value)}).eq('id',editId);
+$('eSave').onclick=async ()=>{ const { error }=await sb.from('clients').update({name:$('eName').value.trim(),description:$('eDesc').value.trim(),phone:($('ePhone').value.trim()||null),color:$('eColor').value,is_base:$('eBase').checked,default_profile:($('eProfile').value||null),signer:($('eSigner').value.trim()||null),lat:parseFloat($('eLat').value),lng:parseFloat($('eLng').value)}).eq('id',editId);
   if(error){ notify('Ошибка: '+error.message,'err'); return; } $('editOverlay').classList.remove('on'); await loadAll(); showToast('Изменения сохранены'); };
 async function delClient(id){ if(!await confirmDialog('Удалить точку вместе с её техникой и заявками? Их можно вернуть кнопкой «Отменить».',{danger:true,okText:'Удалить'})) return;
   const { data, error }=await sb.rpc('soft_delete_client',{p_id:id}); if(error){ notify('Ошибка: '+error.message,'err'); return; }
@@ -957,7 +1037,19 @@ function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.
   const warr=w.some(x=>!x.billable), paid=w.some(x=>x.billable); const eng=profilesList.find(p=>p.id===j.assigned_engineer);
   const head='<h4>'+esc(j.clients?j.clients.name:'—')+'</h4>'+(j.equipment?'<div class="meta">'+esc(j.equipment.model||'')+'</div>':'');
   const tags=(warr?'<span class="pill warn">гар.</span>':'')+(paid?'<span class="pill good">платно</span>':'');
-  const meta='<div class="meta">'+(j.scheduled_date?'визит '+esc(j.scheduled_date)+' · ':'')+(j.due_date?'SLA '+esc(j.due_date)+' · ':'')+w.length+' раб · '+hours.toFixed(1)+' ч'+(rev?' · выручка '+rev:'')+(eng?' · '+esc(eng.full_name||'инж.'):'')+'</div>';
+  // Срок пишем так, как его читают: «до 11 сентября · 14 дн», а не
+  // «SLA 2026-09-11». Остаток дней важнее самой даты — по нему принимают
+  // решение, и он же красится по остроте.
+  let dueTxt='';
+  if(j.due_date){
+    const u=jobUrgency({due_date:j.due_date,created_at:j.created_at||null},new Date());
+    dueTxt='<span style="color:'+urgHue(u)+'">до '+esc(tripPeriod(j.due_date,null))
+      +(u.left<0?(' · просрочено '+(-u.left)+' дн'):(' · '+u.left+' дн'))+'</span> · ';
+  }
+  // Выручку показываем только тем, кто ею распоряжается. Инженеру в поле
+  // это не данные для решения, а лишняя строка в карточке.
+  const revTxt=(rev&&canWrite())?(' · выручка '+rev):'';
+  const meta='<div class="meta">'+(j.scheduled_date?'визит '+esc(tripPeriod(j.scheduled_date,null))+' · ':'')+dueTxt+w.length+' раб · '+hours.toFixed(1)+' ч'+revTxt+(eng?' · '+esc(eng.full_name||'инж.'):'')+'</div>';
   const mv=canWrite()?('<select class="kmove" data-jstat="'+j.id+'" title="Сменить статус">'+JOB_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===j.status?' selected':'')+'>'+esc(ST[s])+'</option>').join('')+'</select>'):'';
   const eb=(j.assigned_engineer===session.user.id&&(j.status==='open'||j.status==='planned'))?'<button class="btn sm amber" data-jst="'+j.id+'|in_progress">В работу</button>':'';
   const eb2=(j.assigned_engineer===session.user.id&&j.status==='in_progress')?'<button class="btn sm amber" data-jst="'+j.id+'|done">Завершить</button>':'';
@@ -1562,10 +1654,9 @@ async function renderMine(){
     const d=document.createElement('div'); d.className='card';
     const jl=byTrip[t.id]||[];
     const veh=t.vehicles?(t.vehicles.name+(t.vehicles.plate?(' · '+t.vehicles.plate):'')):(t.vehicle_label||'машина не назначена');
-    const dates=esc(t.date_from||'—')+((t.date_to&&t.date_to!==t.date_from)?(' — '+esc(t.date_to)):'');
-
-    let h='<h3>Выезд '+dates+' <span class="pill">'+esc(ST_TRIP[t.status]||t.status)+'</span> '+tripDayLabel(t)+'</h3>';
-    h+='<div class="meta">'+esc(veh)+' · точек: '+jl.length+(t.fact_km?(' · факт '+Math.round(t.fact_km)+' км'):'')+(factHByTrip[t.id]?(' · '+factHByTrip[t.id].toFixed(1)+' ч на точках'):'')+'</div>';
+    // Заголовок — к кому едем; период, машина и точки — подписью под ним.
+    let h='<h3>'+esc(tripTitle(t,jl))+' <span class="pill">'+esc(ST_TRIP[t.status]||t.status)+'</span> '+tripDayLabel(t)+'</h3>';
+    h+='<div class="meta">'+esc(tripPeriod(t.date_from,t.date_to))+' · '+esc(veh)+' · точек: '+jl.length+(t.fact_km?(' · факт '+Math.round(t.fact_km)+' км'):'')+(factHByTrip[t.id]?(' · '+factHByTrip[t.id].toFixed(1)+' ч на точках'):'')+'</div>';
 
     if(jl.length){
       // Кликабельны: инженеру из «Моего дня» надо открыть заявку и внести
@@ -1608,12 +1699,20 @@ async function renderMine(){
 
     const loose=(orphans||[]).filter(j=>!inTrip.has(j.id) && !j.at_depot);
     if(loose.length){
+      // Нераспределённые заявки — очередь ДИСПЕТЧЕРА, а не работа инженера:
+      // он не может их распланировать. Раскрытым блоком на треть экрана
+      // они каждый день говорили ему «у тебя 31 дело», и это неправда.
+      // Оставляем доступ, но закрытым и в самом низу.
+      // Вся строка кликабельна — отдельная кнопка «открыть» отнимала
+      // у строки её собственную цель нажатия.
       const w=document.createElement('div'); w.className='card';
-      w.innerHTML='<h3>Заявки без выезда <span class="pill">'+loose.length+'</span></h3>'+
-        '<div class="meta">Назначены на тебя, но не привязаны ни к одному выезду.</div>'+
-        loose.map(j=>'<div class="ds" style="display:flex;justify-content:space-between;gap: var(--sp-3)">'+
-          '<span>'+esc(j.clients?j.clients.name:'—')+(j.scheduled_date?(' · '+esc(j.scheduled_date)):'')+'</span>'+
-          '<span><button class="btn sm ghost" data-mopen="'+j.id+'">открыть</button></span></div>').join('');
+      w.innerHTML='<details class="acold"><summary><span class="achev">▸</span>'+
+        'Заявки без выезда <span class="acount">'+loose.length+'</span></summary>'+
+        '<div class="meta">Назначены на тебя, но не привязаны ни к одному выезду. Планирует их диспетчер.</div>'+
+        loose.map(j=>'<div class="ds" data-mopen="'+j.id+'" style="display:flex;justify-content:space-between;gap: var(--sp-3);cursor:pointer">'+
+          '<span>'+esc(j.clients?j.clients.name:'—')+(j.scheduled_date?(' · '+esc(tripPeriod(j.scheduled_date,null))):'')+'</span>'+
+          '<span style="color:var(--ink-dim)">'+esc(ST[j.status]||j.status)+' ›</span></div>').join('')+
+        '</details>';
       box.appendChild(w);
     }
   }
@@ -1692,6 +1791,16 @@ function jobHead(){
       +(u.left<0?(' · просрочено '+(-u.left)+' дн'):(' · '+u.left+' дн'))+'</span>');
   }
   $('jobSub').innerHTML=parts.join(' · ');
+  // Позвонить и доехать — прямо в шапке заявки, а не после поисков по карте.
+  // Кнопки появляются, только когда есть чему появляться: номер задан,
+  // координаты у точки есть.
+  const ja=$('jobActs');
+  if(ja){
+    let a=''; const tel=cl?telHref(cl.phone):'';
+    if(tel) a+='<a class="btn sm" href="'+esc(tel)+'">Позвонить</a>';
+    if(cl&&cl.lat!=null&&cl.lng!=null) a+='<a class="btn sm ghost" href="'+esc(navHref(cl.lat,cl.lng))+'" target="_blank" rel="noopener">Проехать</a>';
+    ja.innerHTML=a; ja.style.display=a?'':'none';
+  }
   const hrs=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
   const rev=curWorks.reduce((a,w)=>a+(+workRevenue(w)||0),0);
   const cur=appSettings.currency||'';
@@ -1955,9 +2064,26 @@ const TRIP_STATUS_ORDER=['planned','assigned','in_progress','finished','done','c
 let tripVisible={planned:true,assigned:true,in_progress:true,finished:true,done:false,cancelled:false};
 function renderTripChips(){ const box=$('tripStatusChips'); if(!box) return; box.innerHTML=TRIP_STATUS_ORDER.map(s=>'<span class="chip'+(tripVisible[s]?' on':'')+'" data-ts="'+s+'">'+esc(ST_TRIP[s])+'</span>').join('');
   box.querySelectorAll('[data-ts]').forEach(c=>c.onclick=()=>{ tripVisible[c.dataset.ts]=!tripVisible[c.dataset.ts]; renderTripChips(); renderTrips(); }); }
+// Имя выезда — это КУДА он едет, а не КОГДА. Человек опознаёт выезд по
+// клиенту; диапазон дат в ISO не опознаётся вообще, а на телефоне он ещё
+// и занимает всю строку заголовка. Даты уходят в подпись.
+// Порядок источников: заявки выезда → именованные остановки маршрута →
+// период (когда ехать известно, а к кому — ещё нет).
+function tripTitle(t,jobs){
+  const names=[];
+  (jobs||[]).forEach(j=>{ const n=j.clients&&j.clients.name; if(n&&names.indexOf(n)<0) names.push(n); });
+  if(!names.length){
+    (t.route_stops||[]).filter(s=>s&&s.name&&s.type!=='start'&&s.type!=='place'&&s.type!=='wp'&&!/^точка\s*\d+$/i.test(String(s.name).trim()))
+      .forEach(s=>{ const n=String(s.name).split(' · ')[0].trim(); if(n&&names.indexOf(n)<0) names.push(n); });
+  }
+  if(!names.length) return tripPeriod(t.date_from,t.date_to);
+  return names.slice(0,2).join(', ')+(names.length>2?(' +'+(names.length-2)):'');
+}
 function tripCard(t){ const e=t.econ_snapshot||{}; const eng=profilesList.find(p=>p.id===t.lead_engineer); const share=e.totalHours?Math.round((e.warrantyHours/e.totalHours)*100):0;
   const pts=(t.route_stops||[]).filter(s=>s&&s.name&&s.type!=='start'&&s.type!=='place'&&s.type!=='wp'&&!/^точка\s*\d+$/i.test(String(s.name).trim())).map(s=>String(s.name).split(' · ')[0].trim()).filter(Boolean);
-  const uniq=[...new Set(pts)]; const dates=(t.date_from||'?')+' → '+(t.date_to||'?');
+  // Даты по-человечески: «10 августа–11 сентября», а не «2026-08-10 → 2026-09-11».
+  // ISO нужен базе, а не тому, кто смотрит на карточку.
+  const uniq=[...new Set(pts)]; const dates=tripPeriod(t.date_from,t.date_to);
   const title=uniq.length?(uniq.slice(0,2).join(', ')+(uniq.length>2?(' +'+(uniq.length-2)):'')):dates;
   const mb=[]; if(uniq.length) mb.push(dates); if(t.vehicle_label) mb.push(t.vehicle_label);
   const head='<h4>'+esc(title)+'</h4>'+(mb.length?'<div class="meta">'+esc(mb.join(' · '))+'</div>':'');
@@ -3505,9 +3631,10 @@ function drawEconMap(d, mapId){
     // «API KEY» поперёк всей карты, прямо под итоговой прибылью.
     // Указание авторства OSM обязательно по лицензии, поэтому
     // attributionControl больше не отключаем.
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      {maxZoom:19,attribution:'© OpenStreetMap',
-       className:(theme.mode==='dark'?'dark-tiles':'')}).addTo(m);
+    // Подложка — та же, что на главной карте, включая выбранный стиль:
+    // если человек смотрит спутник, врезка не должна показывать схему.
+    const mb=makeBase(baseKey())||makeBase('map-'+(theme.mode==='dark'?'dark':'light'));
+    if(mb) mb.addTo(m);
     const layers=[];
     if(hasPlan) layers.push(L.polyline(d.geoPlan,{color:'#9aa1ad',weight:3,dashArray:'6,6',opacity:.9}).addTo(m));
     if(hasFact) layers.push(L.polyline(d.geoFact,{color:'#ffe100',weight:3,opacity:.95}).addTo(m));
