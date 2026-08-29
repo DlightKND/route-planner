@@ -27,7 +27,7 @@ window.addEventListener('unhandledrejection', (ev) => {
   console.error('[boot promise]', ev.reason);
 });
 
-const { money, hhmm, businessDays, colNum, colLetter, cellRC, jobRoadPayer, rateFrom, dedupeStops, tspOrder,
+const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder,
         econCompute, roadByPayer, jobPoint,
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
@@ -38,11 +38,13 @@ const $=id=>document.getElementById(id);
 
 
 // ── Ленивая загрузка тяжёлых библиотек ──────────────────────────────────────
-// turf (~500 КБ) и exceljs (~900 КБ) висели тегами <script> в index.html и
-// выполнялись ДО первой строки app.js — то есть приложение не начинало
-// работать, пока не приедут оба. При этом turf нужен только для маршрутов
-// и экономики, а exceljs — только для выгрузки акта по шаблону xlsx.
-// Инженеру в поле со слабой связью это полтора мегабайта ожидания ни за что.
+// turf (~500 КБ) висел тегом <script> в index.html и выполнялся ДО первой
+// строки app.js — то есть приложение не начинало работать, пока библиотека
+// не приедет. Нужна она только для маршрутов и экономики: инженеру в поле
+// со слабой связью это полмегабайта ожидания ни за что.
+//
+// Здесь же грузился exceljs (~900 КБ) — ради выгрузки акта по шаблону xlsx.
+// Генерация документов из приложения убрана, вместе с ней ушёл и exceljs.
 //
 // Хэши integrity перенесены из index.html дословно: проверка целостности
 // осталась ровно та же, изменился только момент загрузки.
@@ -50,9 +52,6 @@ const LIBS={
   turf:{ src:'https://unpkg.com/@turf/turf@6.5.0/turf.min.js',
          integrity:'sha384-82q0nm29xZzIo5BMtDYnh2/NxeO6FoaK1S/0nF84w3cEsqbBfun3JdMyDVYWfVY5',
          global:'turf', label:'библиотеку геометрии (turf)' },
-  excel:{ src:'https://unpkg.com/exceljs@4.4.0/dist/exceljs.min.js',
-          integrity:'sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz',
-          global:'ExcelJS', label:'библиотеку Excel (exceljs)' }
 };
 const _libP={};
 function loadLib(key){
@@ -74,7 +73,6 @@ function loadLib(key){
   return _libP[key];
 }
 const ensureTurf=()=>loadLib('turf');
-const ensureExcel=()=>loadLib('excel');
 // Прогрев: не блокирует запуск, но к моменту, когда человек дойдёт до карты,
 // turf обычно уже на месте. Места, где от него зависит ПРАВИЛЬНОСТЬ цифр,
 // всё равно ждут его явно через await — на прогрев там не полагаемся.
@@ -362,16 +360,15 @@ function applyTabs(){
 // или диалог. У нас там было шесть пунктов, из них «Вид» и «Выйти» —
 // не разделы вовсе. Остальное уводим в шторку «Ещё».
 //
-// Что второстепенно, зависит от роли. Инженеру «Выезды» дублируют
-// «Сегодня» — там те же его выезды, только без разбора на сейчас и потом.
-// Менеджеру нужны обе очереди, зато не нужны с телефона каталог
+// Что второстепенно, зависит от роли. С телефона не нужны каталог
 // и настройки: их всё равно ведут с компьютера.
+//
+// «Выезды» здесь больше не упоминаются: они переехали внутрь «Диспетчера»
+// и отдельным пунктом панели не бывают ни у кого.
 function navKey(b){ return b.id?('#'+b.id):(b.dataset.tab+(b.dataset.sub?(':'+b.dataset.sub):'')); }
 function secondaryNav(){
   const base=['#themeBtn','#cfgBtn','#logoutBtn'];
-  return new Set(base.concat(role==='engineer'
-    ? ['planner:trips','catalog','settings']
-    : ['catalog','settings']));
+  return new Set(base.concat(['catalog','settings']));
 }
 function applyMobileNav(){
   const sec=secondaryNav();
@@ -410,24 +407,32 @@ function closeMore(){ $('moreSheet').classList.remove('on'); $('moreBack').class
 if($('moreBtn')) $('moreBtn').onclick=openMore;
 if($('moreBack')) $('moreBack').onclick=closeMore;
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeMore(); });
-// В рельсе «Мой день», «Заявки» и «Выезды» — пункты первого уровня,
-// но ведут все три в один и тот же view-planner. Поэтому у них есть
-// data-sub, и подсветка идёт по паре (tab, sub), а не по одному tab.
+// В рельсе «Сегодня» и «Диспетчер» — разные пункты, но ведут в один и тот
+// же view-planner. Поэтому у них есть data-sub, и подсветка идёт по паре
+// (tab, sub), а не по одному tab.
+//
+// Внутри «Диспетчера» два подраздела, «Заявки» и «Выезды». В рельсе им
+// соответствует ОДИН пункт data-sub="disp": navSub() и переводит состояние
+// страницы в ключ пункта меню. Без этого перехода на «Выездах» не
+// подсвечивалось бы ничего.
+function navSub(s){ return (s==='jobs'||s==='trips')?'disp':s; }
 function switchTab(name, sub){ if(!tabAllowed(name)) return;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
   document.querySelectorAll('.nav-i[data-tab]').forEach(t=>{
-    const hit = t.dataset.tab===name && (!t.dataset.sub || t.dataset.sub===(sub||plannerCur));
+    const hit = t.dataset.tab===name && (!t.dataset.sub || t.dataset.sub===navSub(sub||plannerCur));
     t.classList.toggle('active',hit);
   });
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelector('.view-'+name).classList.add('active');
   // У страницы выезда нет своего пункта в рельсе: она — вложенный экран
   // «Выездов», и подсветка должна остаться на них, иначе непонятно, где ты.
-  if(name==='trip') document.querySelectorAll('.nav-i[data-sub="trips"]').forEach(t=>t.classList.add('active'));
-  if(name==='job') document.querySelectorAll('.nav-i[data-sub="jobs"]').forEach(t=>t.classList.add('active'));
+  if(name==='trip'||name==='job') document.querySelectorAll('.nav-i[data-sub="disp"]').forEach(t=>t.classList.add('active'));
   if(name==='map'){ setTimeout(()=>map.invalidateSize(),60); }
   if(name==='catalog') catSub(catCur);
-  if(name==='planner') plannerSub(sub||plannerCur);
+  // Клик по «Диспетчеру» возвращает в тот подраздел, где человек был
+  // в прошлый раз: уводить его каждый раз на «Заявки» значило бы терять
+  // место в работе на ровном месте.
+  if(name==='planner') plannerSub(sub==='disp'?dispCur:(sub||plannerCur));
   if(name==='dash') renderDashboard(); if(name==='settings') renderSettings(); }
 document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
   el.onclick=()=>switchTab(el.dataset.tab, el.dataset.sub||null);
@@ -436,12 +441,18 @@ let catCur='works';
 function catSub(name){ catCur=name; document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.classList.toggle('active',t.dataset.csub===name)); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; if(name==='works') renderCatalog(); else renderEqModels(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
 let plannerCur='jobs';
+let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
 let tripsView='kanban';
 function renderTripsView(){ const kb=(tripsView==='kanban'); if($('tripsKanban')) $('tripsKanban').style.display=kb?'':'none'; if($('tripsGantt')) $('tripsGantt').style.display=kb?'none':''; if(kb) renderTrips(); else renderGantt(); }
 function setTripsView(v){ tripsView=v; document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.classList.toggle('on',b.dataset.tv===v)); renderTripsView(); }
 function plannerSub(name){ plannerCur=name;
+  if(name==='jobs'||name==='trips') dispCur=name;
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
-    t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===name)); document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name)); if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView(); }
+    t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
+  document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name));
+  // При «Сегодня» переключателя нет: подраздел там один.
+  if($('plSubtabs')) $('plSubtabs').style.display=(name==='mine')?'none':'';
+  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView(); }
 document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.onclick=()=>setTripsView(b.dataset.tv));
 // Поворот телефона и открытие на планшете меняют раскладку списков —
 // перерисовываем, когда пересекли границу, а не на каждый пиксель.
@@ -478,9 +489,9 @@ document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return;
 // Постоянная линия на нетронутом списке — это шум, которого нечем объяснить.
 (function(){
   const panes=document.querySelectorAll('.pane.scrollp');
-  // .settings-nav липнет так же, как .stickyhead, — и черта под ней нужна
-  // по тому же правилу.
-  const sync=pane=>pane.querySelectorAll('.stickyhead, .settings-nav').forEach(h=>h.classList.toggle('stuck',pane.scrollTop>2));
+  // Навигация настроек липнет тем же классом .stickyhead — черта под ней
+  // нужна по тому же правилу, и отдельного случая здесь больше нет.
+  const sync=pane=>pane.querySelectorAll('.stickyhead').forEach(h=>h.classList.toggle('stuck',pane.scrollTop>2));
   panes.forEach(pane=>pane.addEventListener('scroll',()=>sync(pane),{passive:true}));
 })();
 document.querySelectorAll('.view-planner .subtab').forEach(t=>t.onclick=()=>plannerSub(t.dataset.sub));
@@ -1201,13 +1212,12 @@ function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.
   const mv=canWrite()?('<select class="kmove" data-jstat="'+j.id+'" title="Сменить статус">'+JOB_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===j.status?' selected':'')+'>'+esc(ST[s])+'</option>').join('')+'</select>'):'';
   const eb=(j.assigned_engineer===session.user.id&&(j.status==='open'||j.status==='planned'))?'<button class="btn sm amber" data-jst="'+j.id+'|in_progress">В работу</button>':'';
   const eb2=(j.assigned_engineer===session.user.id&&j.status==='in_progress')?'<button class="btn sm amber" data-jst="'+j.id+'|done">Завершить</button>':'';
-  const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+((canWrite()&&j.status==='done')?'<button class="btn sm" data-jact="'+j.id+'" title="Акт">📄</button>':'')+(canWrite()?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
+  const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+(canWrite()?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
   return '<div class="kcard" data-kid="'+j.id+'">'+head+(tags?'<div class="ktags">'+tags+'</div>':'')+meta+acts+'</div>'; }
 function wireJobCards(box){
   box.querySelectorAll('[data-jedit]').forEach(b=>b.onclick=()=>openJob(b.dataset.jedit));
   box.querySelectorAll('[data-jst]').forEach(b=>b.onclick=()=>{ const a=b.dataset.jst.split('|'); jobSetStatus(a[0],a[1]); });
   box.querySelectorAll('[data-jdel]').forEach(b=>b.onclick=()=>delJob(b.dataset.jdel));
-  box.querySelectorAll('[data-jact]').forEach(b=>b.onclick=()=>openAct(b.dataset.jact));
   box.querySelectorAll('[data-jstat]').forEach(sel=>sel.onchange=()=>jobSetStatus(sel.dataset.jstat, sel.value)); }
 async function renderJobs(){ await ensureRefs(); renderJobChips();
   const { data, error }=await sb.from('jobs').select('*, clients(name), equipment(model,kind), job_works(*)').is('deleted_at',null).order('created_at',{ascending:false});
@@ -3330,7 +3340,7 @@ function tripGmaps(id){ const t=trips.find(x=>x.id==id); const stops=(t&&t.route
   const pts=stops.map(s=>(+s.lat).toFixed(6)+','+(+s.lng).toFixed(6)); const url='https://www.google.com/maps/dir/?api=1&origin='+pts[0]+'&destination='+pts[pts.length-1]+(pts.length>2?'&waypoints='+encodeURIComponent(pts.slice(1,-1).join('|')):'')+'&travelmode=driving'; window.open(url,'_blank'); }
 
 // ---------- settings ----------
-let appSettings={shift_hours:8,deviation_pct:10,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,company:{},act_template:{},avoid_zones:[],tariff_profiles:[],act_xlsx:{name:null,data:null},ors_proxy:''};
+let appSettings={shift_hours:8,deviation_pct:10,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,company:{},avoid_zones:[],tariff_profiles:[],ors_proxy:''};
 let vehicles=[], vhEditId=null;
 async function loadVehicles(){ try{ const {data}=await sb.from('vehicles').select('*').order('name'); vehicles=data||[]; renderVehicles(); }catch(e){ loadFail('список машин',e); } }
 function renderVehicles(){ const box=$('vehList'); if(!box) return; box.innerHTML=vehicles.length?'':'<div class="hint">Машин нет. Добавь ниже.</div>';
@@ -3357,21 +3367,18 @@ async function loadSettings(){ try{
   // читается только менеджером. Инженеру политика settings_read её не отдаёт,
   // поэтому для него берём settings_public — там валюта, тема, зоны объезда,
   // адрес прокси и пороги стоянок. Недостающие поля остаются нулями, а всё,
-  // что их использует (экономика, акты), инженеру и так не показывается.
-  // Столбцы перечислены поимённо, а не '*', ради act_xlsx: там лежит
-  // xlsx-шаблон акта, закодированный base64 (файл до 3 МБ превращается
-  // примерно в 4 МБ текста). При select('*') этот блоб приезжал КАЖДЫЙ раз,
-  // когда открываются настройки, — а нужен он только при выгрузке акта.
-  // Вместо содержимого берём одно имя файла: по нему видно, загружен ли
-  // шаблон, и этого хватает всему, кроме самой выгрузки.
+  // что их использует (экономика), инженеру и так не показывается.
+  //
+  // Столбцы перечислены поимённо, а не '*': в таблице остались колонки от
+  // выпиленной генерации актов (act_template и act_xlsx — там лежал шаблон
+  // в base64, файл до 3 МБ превращался примерно в 4 МБ текста). При
+  // select('*') этот блоб приезжал бы каждый раз, когда открывают настройки.
   const SETTINGS_COLS='id,shift_hours,deviation_pct,currency,tariffs,costs,'
-    +'default_theme,repair_warranty_days,contact_period_days,company,act_template,'
-    +'avoid_zones,tariff_profiles,ors_proxy,stay_radius_m,stay_min_minutes,'
-    +'act_xlsx_name:act_xlsx->>name';
+    +'default_theme,repair_warranty_days,contact_period_days,company,'
+    +'avoid_zones,tariff_profiles,ors_proxy,stay_radius_m,stay_min_minutes';
   let {data}=await sb.from('settings').select(SETTINGS_COLS).eq('id',true).single();
   if(!data){ const pub=await sb.from('settings_public').select('*').eq('id',true).single(); data=pub.data||null; }
-  // Инженеру settings_public шаблон не отдаёт вовсе — там его и нет.
-  if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),stay_radius_m:(data.stay_radius_m==null?300:data.stay_radius_m),stay_min_minutes:(data.stay_min_minutes==null?10:data.stay_min_minutes),company:(data.company||{}),act_template:(data.act_template||{}),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),act_xlsx:{name:(data.act_xlsx_name||null),data:null},ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); }
+  if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),stay_radius_m:(data.stay_radius_m==null?300:data.stay_radius_m),stay_min_minutes:(data.stay_min_minutes==null?10:data.stay_min_minutes),company:(data.company||{}),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); }
   // Пустой результат по обоим источникам — это не «настроек нет», это сбой
   // связи или прав. Без сообщения приложение молча открывалось бы без темы,
   // без зон объезда и без маршрутизации, и искать причину пришлось бы наугад.
@@ -3382,7 +3389,6 @@ function renderSettings(){ const s=appSettings; $('stShift').value=s.shift_hours
   if($('stStayRad')) $('stStayRad').value=(s.stay_radius_m==null?300:s.stay_radius_m);
   if($('stStayMin')) $('stStayMin').value=(s.stay_min_minutes==null?10:s.stay_min_minutes);
   const dt=s.default_theme||{}; $('dtMode').value=dt.mode||'dark'; $('orsProxy').value=s.ors_proxy||''; $('stWarrDays').value=(s.repair_warranty_days==null?90:s.repair_warranty_days); $('stContact').value=s.contact_period_days||0; const co=s.company||{}; $('coName').value=co.name||''; $('coDetails').value=co.details||''; $('coSigner').value=co.signer||'';
-  const at=s.act_template||{}; $('atTitle').value=at.title||''; $('atIntro').value=at.intro||''; $('atExecRole').value=at.execRole||''; $('atCustRole').value=at.custRole||''; $('atWorksCol').value=at.worksCol||''; $('atTotalWords').value=at.totalWords||''; $('atWarrNote').value=at.warrNote||''; $('atNote').value=at.note||''; $('atCustSign').value=at.custSign||''; actVarsCur=(at.vars||[]).map(v=>({k:v.k,v:v.v})); renderActVars(); updateAxInfo();
   renderProfiles(); renderVehicles(); renderUsersAdmin(); }
 let profEditId=null;
 function tpProfiles(){ return appSettings.tariff_profiles||[]; }
@@ -3421,21 +3427,6 @@ $('stSave').onclick=async ()=>{ const rec={shift_hours:parseFloat($('stShift').v
   const {error}=await sb.from('settings').update(rec).eq('id',true); if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings=Object.assign(appSettings,rec); $('stStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 $('dtSave').onclick=async ()=>{ const dt={mode:$('dtMode').value,accent:'#ffe100'}; const {error}=await sb.from('settings').update({default_theme:dt}).eq('id',true); if(error){ $('dtStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.default_theme=dt; $('dtStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 $('coSave').onclick=async ()=>{ const company={name:$('coName').value.trim(),details:$('coDetails').value.trim(),signer:$('coSigner').value.trim()}; const {error}=await sb.from('settings').update({company}).eq('id',true); if(error){ $('coStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.company=company; $('coStatus').innerHTML='<span class="ok">Сохранено</span>'; };
-let actVarsCur=[];
-function actVars(){ return (appSettings.act_template&&appSettings.act_template.vars)||[]; }
-function renderActVars(){ const box=$('avList'); if(!box) return;
-  if(!actVarsCur.length){ box.innerHTML='<div class="hint">Пока нет. «+ Добавить» — и укажи имя и значение.</div>'; return; }
-  box.innerHTML=actVarsCur.map((v,i)=>'<div class="row" style="align-items:center;margin-top: var(--sp-3)"><span class="hint" style="margin: 0;font-family:var(--mono);white-space:nowrap">{{</span><input type="text" data-avk="'+i+'" value="'+esc(v.k||'')+'" placeholder="имя" style="max-width:150px"><span class="hint" style="margin: 0;font-family:var(--mono);white-space:nowrap">}}</span><input type="text" data-avv="'+i+'" value="'+esc(v.v||'')+'" placeholder="значение" class="grow"><button class="btn sm ghost" data-avrm="'+i+'" title="Удалить">×</button></div>').join('');
-  box.querySelectorAll('[data-avk]').forEach(inp=>inp.oninput=()=>{ actVarsCur[inp.dataset.avk].k=inp.value.trim(); });
-  box.querySelectorAll('[data-avv]').forEach(inp=>inp.oninput=()=>{ actVarsCur[inp.dataset.avv].v=inp.value; });
-  box.querySelectorAll('[data-avrm]').forEach(b=>b.onclick=()=>{ actVarsCur.splice(b.dataset.avrm,1); renderActVars(); }); }
-if($('avAdd')) $('avAdd').onclick=()=>{ actVarsCur.push({k:'',v:''}); renderActVars(); };
-if($('avSave')) $('avSave').onclick=async ()=>{ const bad=actVarsCur.find(v=>v.k&&!/^[A-Za-zА-Яа-яЁё0-9_]+$/.test(v.k));
-  if(bad){ $('avStatus').innerHTML='<span class="err">Имя «'+esc(bad.k)+'»: только буквы, цифры и _</span>'; return; }
-  const vars=actVarsCur.filter(v=>v.k); const act_template=Object.assign({},appSettings.act_template||{},{vars});
-  const {error}=await sb.from('settings').update({act_template}).eq('id',true); if(error){ $('avStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; }
-  appSettings.act_template=act_template; actVarsCur=vars.map(v=>({k:v.k,v:v.v})); renderActVars(); $('avStatus').innerHTML='<span class="ok">Сохранено</span>'; };
-$('atSave').onclick=async ()=>{ const act_template={title:$('atTitle').value.trim(),intro:$('atIntro').value.trim(),execRole:$('atExecRole').value.trim(),custRole:$('atCustRole').value.trim(),worksCol:$('atWorksCol').value.trim(),totalWords:$('atTotalWords').value.trim(),warrNote:$('atWarrNote').value.trim(),note:$('atNote').value.trim(),custSign:$('atCustSign').value.trim(),vars:actVars()}; const {error}=await sb.from('settings').update({act_template}).eq('id',true); if(error){ $('atStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.act_template=act_template; $('atStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 async function renderUsersAdmin(){ const {data,error}=await sb.from('profiles').select('id,full_name,role'); const box=$('usersList'); if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
   profilesList=data||[]; box.innerHTML='';
   // Раскладка строки — в стилях (класс .urow), а не инлайном: на телефоне
@@ -4696,135 +4687,6 @@ if($('tpJobsRoute')) $('tpJobsRoute').onchange=renderTripJobs;
 // [сборка] showTripEcon удалён вместе с окном экономики: страница выезда
 // показывает ту же разбивку врезкой, а карту план/факт — в карточке маршрута.
 
-// ---------- акт выполненных работ ----------
-function printDoc(html){ const f=document.createElement('iframe'); f.setAttribute('aria-hidden','true'); f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
-  document.body.appendChild(f); const d=f.contentWindow.document; d.open(); d.write(html); d.close();
-  setTimeout(()=>{ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){} setTimeout(()=>{ try{ f.remove(); }catch(e){} },1500); },350); }
-function actNo(job){ const d=job.scheduled_date?new Date(job.scheduled_date):new Date(); const p=n=>String(n).padStart(2,'0'); return p(d.getDate())+p(d.getMonth()+1)+String(d.getFullYear()).slice(2)+'-'+String(job.id||'').replace(/-/g,'').slice(0,4).toUpperCase(); }
-function actDate(job){ const d=job.scheduled_date?new Date(job.scheduled_date):new Date(); const p=n=>String(n).padStart(2,'0'); return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear(); }
-
-function workName(w){ if(w.title) return w.title; const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return cw?cw.name:'Работа'; }
-function buildActHtml(job){ const co=appSettings.company||{}; const tpl=appSettings.act_template||{}; const execRole=tpl.execRole||'Исполнитель'; const custRole=tpl.custRole||'Заказчик'; const cur=appSettings.currency||'грн'; const cl=job.clients||{}; const eq=job.equipment||null; const works=job.job_works||[]; let total=0;
-  const rows=works.map((w,i)=>{ const h=+w.hours||0; const bill=w.billable!==false; const sum=bill?(+w.revenue||0):0; total+=sum; const price=bill?(h>0?sum/h:sum):0;
-    return '<tr><td class="c">'+(i+1)+'</td><td>'+esc(workName(w))+(bill?'':' <span class="warr">(гарантия)</span>')+'</td><td class="c">'+(h?h.toLocaleString('ru-RU'):'—')+'</td><td class="r">'+(bill?money(price):'—')+'</td><td class="r">'+money(sum)+'</td></tr>'; }).join('');
-  const mats=[]; works.forEach(w=>(w.materials||[]).forEach(m=>{ if(m&&m.name) mats.push(m); }));
-  const matsHtml=mats.length?('<div class="sec">Использованные материалы</div><table class="mt"><thead><tr><th>Наименование</th><th class="c" style="width:90px">Кол-во</th><th style="width:70px">Ед.</th></tr></thead><tbody>'+mats.map(m=>'<tr><td>'+esc(m.name)+'</td><td class="c">'+esc(String(m.qty==null?'':m.qty))+'</td><td>'+esc(m.unit||'')+'</td></tr>').join('')+'</tbody></table>'):'';
-  const hasWarr=works.some(w=>w.billable===false);
-  const equipLine=eq?('<div class="eqline"><b>Оборудование:</b> '+esc(eq.model||'')+(eq.serial?(' · S/N '+esc(eq.serial)):'')+(eq.kind?(' · '+esc(eq.kind)):'')+'</div>'):'';
-  return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Акт '+esc(actNo(job))+'</title>'+
-    '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">'+
-    '<style>@page{size:A4;margin:18mm 16mm}*{box-sizing:border-box}'+
-    'body{font-family:"IBM Plex Sans",Arial,sans-serif;color:#111;font-size: var(--fs-3);line-height:1.5;margin: 0;padding: var(--sp-6)}'+
-    '.org{font-size: var(--fs-6);font-weight:700}.org-d{color:#555;white-space:pre-line;font-size: var(--fs-2);margin-top: var(--sp-1)}'+
-    'h1{font-size: var(--fs-7);font-weight:700;text-align:center;margin: var(--sp-6) 0 var(--sp-1)}.subt{text-align:center;color:#555;font-size: var(--fs-3);margin-bottom: var(--sp-5)}'+
-    '.parties{display:flex;gap: var(--sp-6);margin: var(--sp-5) 0}.parties>div{flex:1}'+
-    '.parties .lbl{color:#888;font-size: var(--fs-1);text-transform:uppercase;letter-spacing:.6px;margin-bottom: var(--sp-1)}.parties .nm{font-weight:600}.parties .d{color:#555;white-space:pre-line;font-size: var(--fs-2);margin-top: var(--sp-1)}'+
-    '.eqline{margin: var(--sp-3) 0;padding: var(--sp-3) var(--sp-3);background:#f6f6f6;border-radius: var(--r-sm)}'+
-    'table{width:100%;border-collapse:collapse;margin-top: var(--sp-3)}th,td{border:1px solid #d6d6d6;padding: var(--sp-3) var(--sp-3);text-align:left;vertical-align:top}'+
-    'th{background:#f2f2f2;font-weight:600;font-size: var(--fs-2);text-transform:uppercase;letter-spacing:.4px}td.c,th.c{text-align:center}td.r,th.r{text-align:right}tfoot td{font-weight:700;background:#fafafa}'+
-    '.warr{color:#a06000;font-weight:600}.sec{font-weight:600;margin: var(--sp-5) 0 0;font-size: var(--fs-4)}.mt th,.mt td{font-size: var(--fs-2)}'+
-    '.intro{margin: var(--sp-4) 0 var(--sp-1);font-size: var(--fs-3);color:#333;white-space:pre-line}.total-words{margin: var(--sp-5) 0 var(--sp-2);font-weight:600}.note{color:#777;font-size: var(--fs-2);margin-top: var(--sp-3)}'+
-    '.sign{display:flex;gap: var(--sp-8);margin-top:46px}.sign>div{flex:1}.sign .role{font-size: var(--fs-2);color:#888;text-transform:uppercase;letter-spacing:.6px}.sign .line{border-top:1px solid #333;margin-top: var(--sp-7);padding-top: var(--sp-2);color:#555;font-size: var(--fs-2)}'+
-    '@media print{body{padding: 0}}</style></head><body>'+
-    '<div class="org">'+esc(co.name||'Организация')+'</div>'+(co.details?('<div class="org-d">'+esc(co.details)+'</div>'):'')+
-    '<h1>'+esc(tpl.title||'Акт выполненных работ')+' № '+esc(actNo(job))+'</h1><div class="subt">от '+esc(actDate(job))+'</div>'+(tpl.intro?('<div class="intro">'+esc(tpl.intro)+'</div>'):'')+
-    '<div class="parties"><div><div class="lbl">'+esc(execRole)+'</div><div class="nm">'+esc(co.name||'—')+'</div>'+(co.details?('<div class="d">'+esc(co.details)+'</div>'):'')+'</div>'+
-    '<div><div class="lbl">'+esc(custRole)+'</div><div class="nm">'+esc(cl.name||'—')+'</div>'+(cl.description?('<div class="d">'+esc(cl.description)+'</div>'):'')+'</div></div>'+
-    equipLine+
-    '<table><thead><tr><th class="c" style="width:34px">№</th><th>'+esc(tpl.worksCol||'Наименование работ (услуг)')+'</th><th class="c" style="width:74px">Кол-во, ч</th><th class="r" style="width:110px">Цена, '+esc(cur)+'</th><th class="r" style="width:120px">Сумма, '+esc(cur)+'</th></tr></thead>'+
-    '<tbody>'+(rows||'<tr><td colspan="5" class="c" style="color:#888">Работы не указаны</td></tr>')+'</tbody>'+
-    '<tfoot><tr><td colspan="4" class="r">Итого</td><td class="r">'+money(total)+' '+esc(cur)+'</td></tr></tfoot></table>'+
-    matsHtml+
-    '<div class="total-words">'+esc((tpl.totalWords||'Всего оказано услуг на сумму {sum}.').replace('{sum}', money(total)+' '+cur))+'</div>'+
-    (hasWarr?('<div class="note">'+esc(tpl.warrNote||'Работы, отмеченные как «гарантия», выполнены в рамках гарантийных обязательств и оплате не подлежат.')+'</div>'):'')+
-    (tpl.note?('<div class="note">'+esc(tpl.note)+'</div>'):'')+
-    '<div class="sign"><div><div class="role">'+esc(execRole)+'</div><div class="line">'+esc(co.signer||' ')+'</div></div>'+
-    '<div><div class="role">'+esc(custRole)+'</div><div class="line">'+esc(tpl.custSign||'подпись / ФИО')+'</div></div></div></body></html>'; }
-// ---------- xlsx act ----------
-
-
-
-function actSubSimple(str,d){ let s=str; for(let pass=0;pass<2;pass++){ if(s.indexOf('{{')<0) break; s=s.replace(/\{\{\s*([A-Za-zА-Яа-яЁё0-9_]+)\s*\}\}/g,(m,k)=>(d[k]!=null?String(d[k]):m)); } return s; }
-function actSubWork(str,w,i){ return str.replace(/\{\{w_(no|name|hours|price|sum)\}\}/g,(_,k)=>{ if(k==='no') return String(i+1); return (w[k]!=null?String(w[k]):''); }); }
-function actFillSheet(ws,data){ let tplRow=null; ws.eachRow({includeEmpty:true},(row,rn)=>{ if(tplRow) return; row.eachCell({includeEmpty:true},cell=>{ if(typeof cell.value==='string'&&/\{\{w_/.test(cell.value)) tplRow=rn; }); });
-  if(tplRow){ const works=data.works||[]; const n=works.length; if(n>1) ws.duplicateRow(tplRow,n-1,true); if(n===0){ ws.spliceRows(tplRow,1); } else { for(let i=0;i<n;i++){ const row=ws.getRow(tplRow+i); row.eachCell({includeEmpty:true},cell=>{ if(typeof cell.value==='string') cell.value=actSubWork(cell.value,works[i],i); }); } } }
-  ws.eachRow({includeEmpty:true},row=>{ row.eachCell({includeEmpty:true},cell=>{ if(typeof cell.value==='string'&&cell.value.indexOf('{{')>=0) cell.value=actSubSimple(cell.value,data); }); }); }
-function jobActPayer(job){ const works=job.job_works||[]; const paid=works.find(w=>w.billable!==false&&w.tariff_profile); if(paid) return profileById(paid.tariff_profile); const any=works.find(w=>w.tariff_profile); return any?profileById(any.tariff_profile):null; }
-
-// Правило «одна заявка = один плательщик» — договорённость, на которую акт
-// молча опирается: jobActPayer берёт профиль ПЕРВОЙ платной работы, а сумма
-// складывается по ВСЕМ платным. Совпади на заявке два плательщика — счёт
-// целиком уедет одному, без единого сообщения. Правило, на которое опирается
-// код, обязано быть проверяемым, а не подразумеваемым.
-//
-// Гарантия здесь ни при чём: её выручка — внутренняя цифра для аналитики,
-// в акт она не идёт и плательщика акта не определяет.
-function actBlocker(job){
-  const works=(job.job_works||[]).filter(w=>w.billable!==false);
-  if(!works.length) return 'В заявке нет платных работ — актировать нечего. Гарантийные работы в акт не входят: это внутренняя цифра, «Производство» по ним не платит.';
-  const ids=[...new Set(works.map(w=>w.tariff_profile).filter(Boolean))];
-  if(ids.length>1){
-    const names=ids.map(i=>{ const p=profileById(i); return p?p.name:'(профиль удалён)'; });
-    return 'На заявке платные работы разных плательщиков: '+names.join(', ')+
-           '. Акт выставляется одному — сумма ушла бы не туда. Раздели заявку по плательщикам.';
-  }
-  if(!ids.length) return 'У платных работ не проставлен тариф — непонятно, кому выставлять акт.';
-  return null;
-}
-function buildActData(job){ const co=appSettings.company||{}; const tpl=appSettings.act_template||{}; const cur=appSettings.currency||'грн'; const cl=job.clients||{}; const works=job.job_works||[]; let total=0;
-  const wr=works.map(w=>{ const h=+w.hours||0; const bill=w.billable!==false; const sum=bill?(+w.revenue||0):0; total+=sum; return {name:workName(w)+(bill?'':' (гарантия)'),hours:h?h.toLocaleString('ru-RU'):'—',price:bill?(h>0?money(sum/h):money(sum)):'—',sum:money(sum)}; });
-  const pay=jobActPayer(job); const tw=(tpl.totalWords||'Всего оказано услуг на сумму {sum}.').replace('{sum}',money(total)+' '+cur);
-  const d={ number:actNo(job), date:actDate(job), exec_name:co.name||'', exec_details:co.details||'', exec_signer:co.signer||'', client:cl.name||'', client_details:cl.description||'', client_signer:cl.signer||'', payer:pay?pay.name:'', payer_details:pay?(pay.requisites||''):'', total:money(total)+' '+cur, total_words:tw, note:tpl.note||'', works:wr };
-  (tpl.vars||[]).forEach(v=>{ if(v.k&&d[v.k]===undefined) d[v.k]=(v.v!=null?v.v:''); });
-  return d; }
-function wsToHtml(ws){ const skip={}, span={}; (ws.model.merges||[]).forEach(m=>{ const [a,b]=m.split(':'); const s=cellRC(a),e=cellRC(b); span[a]={cs:e.c-s.c+1,rs:e.r-s.r+1}; for(let r=s.r;r<=e.r;r++)for(let c=s.c;c<=e.c;c++){ if(r===s.r&&c===s.c) continue; skip[colLetter(c)+r]=1; } });
-  let maxCol=1; ws.eachRow({includeEmpty:true},row=>{ if(row.cellCount>maxCol) maxCol=row.cellCount; });
-  let h='<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size: var(--fs-4);color:#000">';
-  for(let r=1;r<=ws.rowCount;r++){ const row=ws.getRow(r); h+='<tr>'; for(let c=1;c<=maxCol;c++){ const ref=colLetter(c)+r; if(skip[ref]) continue; const cell=row.getCell(c); const st=cell.style||{}; const f=st.font||{}; let css='border:1px solid #e2e2e2;padding: var(--sp-1) var(--sp-3);vertical-align:top;'; if(f.bold)css+='font-weight:bold;'; if(f.italic)css+='font-style:italic;'; if(f.size)css+='font-size:'+f.size+'px;'; if(f.color&&f.color.argb)css+='color:#'+f.color.argb.slice(-6)+';'; if(st.fill&&st.fill.fgColor&&st.fill.fgColor.argb)css+='background:#'+st.fill.fgColor.argb.slice(-6)+';'; const al=st.alignment||{}; if(al.horizontal)css+='text-align:'+al.horizontal+';'; const sp=span[ref]?(' colspan="'+span[ref].cs+'" rowspan="'+span[ref].rs+'"'):''; let v=cell.value; if(v&&typeof v==='object') v=v.richText?v.richText.map(t=>t.text).join(''):(v.text!=null?v.text:(v.result!=null?v.result:'')); h+='<td'+sp+' style="'+css+'">'+esc(v==null?'':String(v))+'</td>'; } h+='</tr>'; } return h+'</table>'; }
-// Содержимое шаблона догружается только тогда, когда оно действительно
-// нужно: при выгрузке акта или при скачивании самого шаблона.
-async function ensureActXlsxData(){
-  const ax=appSettings.act_xlsx||{};
-  if(ax.data) return ax.data;
-  if(!ax.name) return null;                  // шаблон не загружен вовсе
-  const {data,error}=await sb.from('settings').select('act_xlsx').eq('id',true).single();
-  if(error||!data||!data.act_xlsx||!data.act_xlsx.data){
-    notify('Не удалось получить шаблон акта'+(error?(': '+error.message):''),'err');
-    return null;
-  }
-  appSettings.act_xlsx={name:data.act_xlsx.name||ax.name,data:data.act_xlsx.data};
-  return appSettings.act_xlsx.data;
-}
-
-async function genActXlsx(job){
-  const ax=appSettings.act_xlsx||{}; if(!ax.name) return false;
-  const b64=await ensureActXlsxData(); if(!b64) return false;
-  // exceljs грузится только здесь — а сюда попадают, лишь когда загружен
-  // шаблон xlsx и человек открыл акт. У большинства открытий приложения
-  // этих 900 КБ теперь просто нет.
-  try{ await ensureExcel(); }catch(e){ notify(e.message,'err'); return false; }
-  try{ const bin=atob(b64); const buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); const wb=new ExcelJS.Workbook(); await wb.xlsx.load(buf.buffer); const ws=wb.worksheets[0]; const data=buildActData(job); actFillSheet(ws,data);
-    const out=await wb.xlsx.writeBuffer(); const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-    $('axPreview').innerHTML=wsToHtml(ws);
-    // URL освобождаем сразу после клика: без revoke каждый скачанный акт
-    // держал свой буфер в памяти до перезагрузки вкладки.
-    $('axDlBtn').onclick=()=>{ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='Акт '+data.number+'.xlsx'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1000); };
-    $('actXlsxOverlay').classList.add('on'); return true;
-  }catch(e){ notify('Ошибка генерации акта по шаблону: '+(e.message||e),'err'); return false; } }
-if($('axClose')) $('axClose').onclick=()=>$('actXlsxOverlay').classList.remove('on');
-function updateAxInfo(){ const ax=appSettings.act_xlsx||{}; if($('axInfo')) $('axInfo').innerHTML=ax.name?('<span class="ok">Шаблон загружен: '+esc(ax.name||'act.xlsx')+'</span>'):'Шаблон не загружен — используется встроенный HTML-акт.'; }
-if($('axFile')) $('axFile').onchange=e=>{ const file=e.target.files[0]; if(!file) return; if(file.size>3000000){ notify('Файл великоват (>3 МБ).','err'); return; } const rd=new FileReader(); rd.onload=async()=>{ const b64=String(rd.result).split(',')[1]; const ax={name:file.name,data:b64}; const {error}=await sb.from('settings').update({act_xlsx:ax}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.act_xlsx=ax; updateAxInfo(); showToast('Шаблон акта загружен'); $('axFile').value=''; }; rd.readAsDataURL(file); };
-if($('axDownload')) $('axDownload').onclick=async()=>{ const ax=appSettings.act_xlsx||{}; if(!ax.name){ notify('Шаблон не загружен.','warn'); return; } const b64=await ensureActXlsxData(); if(!b64) return; const bin=atob(b64); const buf=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i); const u=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); const a=document.createElement('a'); a.href=u; a.download=ax.name||'act-template.xlsx'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1000); };
-if($('axRemove')) $('axRemove').onclick=async()=>{ if(!await confirmDialog('Убрать Excel-шаблон акта? Вернётся встроенный HTML-акт.',{danger:true,okText:'Убрать'})) return; const {error}=await sb.from('settings').update({act_xlsx:{}}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.act_xlsx={name:null,data:null}; updateAxInfo(); };
-async function openAct(id){ let job=null;
-  try{ const {data,error}=await sb.from('jobs').select('*, clients(*), equipment(*), job_works(*)').eq('id',id).single(); if(error) throw error; job=data; }
-  catch(e){ notify('Не удалось загрузить заявку: '+(e.message||e),'err'); return; }
-  if(!catalog.length){ try{ await loadCatalog(); }catch(e){ loadFail('каталог работ',e); } }
-  // Проверка ДО обеих веток (HTML и Excel) — точка входа одна.
-  const stop=actBlocker(job); if(stop){ notify(stop,'err'); return; }
-  if(!(appSettings.company&&appSettings.company.name)) showToast('Заполни реквизиты организации в Настройках — в акте будут пустые поля «Исполнителя»');
-  if((appSettings.act_xlsx||{}).name){ if(await genActXlsx(job)) return; }
-  printDoc(buildActHtml(job)); }
 
 // ---------- boot ----------
 (async function boot(){ const c=loadCfg(); if(!c.url||!c.key){ $('cfgOverlay').classList.add('on'); return; }
