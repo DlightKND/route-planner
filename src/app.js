@@ -393,7 +393,13 @@ function buildMoreSheet(){
     r.type='button';
     r.className='sheet-row'+(b.id==='logoutBtn'?' danger':'');
     r.innerHTML=(svg?svg.outerHTML:'')+'<span>'+esc(lab?lab.textContent:'')+'</span>';
-    r.onclick=()=>{ closeMore(); b.click(); };
+    // Клик по исходному пункту — СЛЕДУЮЩИМ тактом. Иначе он срабатывает
+    // внутри обработки текущего касания, и то же самое касание, продолжая
+    // всплывать до document, тут же закрывает открытое им окно: обработчик
+    // «клик мимо» видит целью строку шторки, а не кнопку. Из-за этого «Вид»
+    // на телефоне открывался и закрывался в одно нажатие — то есть
+    // не работал вовсе.
+    r.onclick=()=>{ closeMore(); setTimeout(()=>b.click(),0); };
     box.appendChild(r);
   });
   const w=$('sheetWho'), src=$('whoLabel');
