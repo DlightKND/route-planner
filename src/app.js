@@ -263,7 +263,9 @@ function syncMapStyleSeg(){
   const box=$('mapStyleSeg'); if(!box) return;
   box.querySelectorAll('button[data-mstyle]').forEach(b=>{
     b.classList.toggle('on',b.dataset.mstyle===mapStyle);
-    if(b.dataset.mstyle==='sat'&&!hasSat()) b.disabled=true;
+    // Присваиваем, а не включаем: было `if(...) disabled=true`, и кнопка,
+    // однажды погашенная, уже не могла ожить.
+    if(b.dataset.mstyle==='sat') b.disabled=!hasSat();
   });
   const h=$('mapStyleHint'); if(h) h.style.display=hasSat()?'none':'';
 }
