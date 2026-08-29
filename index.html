@@ -1106,6 +1106,19 @@
 .ph-del{position:absolute;right: var(--sp-2);top: var(--sp-2);width:32px;height:32px;
   border:0;border-radius:50%;cursor:pointer;line-height:1;
   background:color-mix(in srgb, #000 62%, transparent);color:#fff;font-size: var(--fs-5)}
+/* ── Подпись ─────────────────────────────────────────────────────────
+   Белое поле независимо от темы: подпись потом печатается на бумаге,
+   и хранить её надо в том виде, в каком она попадёт в акт. */
+.sign-modal{max-width:680px}
+.signpad{display:block;width:100%;height:auto;aspect-ratio:2/1;margin-top: var(--sp-4);
+  background:#fff;border:1px solid var(--line);border-radius: var(--r-md);
+  touch-action:none;cursor:crosshair}
+.sign-modal .row{display:flex;align-items:center;gap: var(--sp-3)}
+
+/* Снимок, который ещё не уехал: приглушён и подписан. Не спрятан —
+   инженер должен видеть, что кадр сделан, и не переснимать. */
+.ph-item.pending img{opacity:.72}
+.ph-item.pending{border-style:dashed}
 .ph-item .ph-wait{position:absolute;inset:0;display:grid;place-items:center;
   font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);background:var(--panel-2)}
 .ph-view{position:fixed;inset:0;z-index:1500;background:rgba(0,0,0,.92);
@@ -1160,6 +1173,20 @@
   padding: var(--sp-4);margin-bottom: var(--sp-5);
   font-family:var(--mono);font-size: var(--fs-3);color:var(--ink)}
 .offbar-h{color:var(--ink-faint);font-size: var(--fs-2)}
+/* Счётчик неотправленного. Не тревожный и не модальный: это не ошибка,
+   а состояние. Но и не спрятанный — иначе инженер уедет с площадки,
+   думая, что всё записано. */
+.qbadge{position:fixed;left:50%;transform:translateX(-50%);
+  bottom: calc(var(--sp-5) + env(safe-area-inset-bottom, 0px));
+  z-index:1200;pointer-events:none;
+  background:var(--ink);color:var(--panel);
+  font-family:var(--mono);font-size: var(--fs-2);letter-spacing:.3px;
+  padding: var(--sp-3) var(--sp-5);border-radius: var(--r-pill);
+  box-shadow: var(--shadow-md);max-width:calc(100% - var(--sp-6));text-align:center}
+@media (max-width: 760px){
+  /* Над нижним меню, а не под ним. */
+  .qbadge{bottom: calc(74px + env(safe-area-inset-bottom, 0px))}
+}
 
 /* ── Сегодня ─────────────────────────────────────────────────────────
    Один выезд — текущий — занимает экран целиком; остальные свёрнуты
@@ -1465,6 +1492,20 @@
         <div class="ph-grid" id="jbPhotoList"></div>
       </div>
     </div>
+    <!-- Подпись заказчика. Отдельным окном при закрытии заявки: это
+         последний шаг, и он должен быть один на экране, без соседей. -->
+    <div class="overlay" id="signOverlay"><div class="modal sign-modal">
+      <h3>Подпись заказчика</h3>
+      <div class="hint" id="signWho">Распишитесь в поле ниже</div>
+      <canvas id="signPad" class="signpad" width="640" height="320"></canvas>
+      <div class="row" style="margin-top: var(--sp-4)">
+        <button class="btn" id="signClear" type="button">Стереть</button>
+        <span class="grow"></span>
+        <button class="btn" id="signSkip" type="button">Без подписи</button>
+        <button class="btn amber" id="signOk" type="button">Готово</button>
+      </div>
+      <div class="err" id="signErr"></div>
+    </div></div>
     <!-- Просмотр снимка во весь экран. Обычная картинка поверх затемнения:
          в поле нужен размер, а не галерея с переходами. -->
     <div class="ph-view" id="phView" hidden>
@@ -1901,6 +1942,9 @@
 <div class="toast" id="toast"></div>
 <div class="toast undo" id="undoToast"><span id="undoMsg"></span><button class="btn sm amber" id="undoBtn">Отменить</button></div>
 <div class="ctxmenu" id="ctxMenu"></div>
+<!-- Сколько изменений ещё не уехало. Видно на любом экране: инженер должен
+     знать, что его работа пока лежит в телефоне, а не в базе. -->
+<div class="qbadge" id="qBadge" style="display:none"></div>
 <div class="pop" id="themePop">
   <h4>Тема</h4>
   <div class="seg"><button id="modeDark">Тёмная</button><button id="modeLight">Светлая</button></div>
