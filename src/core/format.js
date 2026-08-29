@@ -24,10 +24,9 @@ export function businessDays(from, to) {
   return n;
 }
 
-// Адрес ячейки таблицы: буква столбца → номер и обратно (для генерации xlsx).
-export function colNum(s) { let n = 0; for (let i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64); return n; }
-export function colLetter(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26; } return s; }
-export function cellRC(a1) { const m = a1.match(/([A-Z]+)(\d+)/); return { c: colNum(m[1]), r: +m[2] }; }
+// Адресация ячеек xlsx (colNum/colLetter/cellRC) жила здесь ради превью акта
+// по Excel-шаблону. Генерация документов из приложения убрана — вместе с ней
+// ушёл единственный потребитель, а за ним и сами функции с их тестами.
 
 // Дата и месяц по МЕСТНОМУ календарю.
 //
