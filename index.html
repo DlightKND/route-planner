@@ -1106,6 +1106,13 @@
 .ph-del{position:absolute;right: var(--sp-2);top: var(--sp-2);width:32px;height:32px;
   border:0;border-radius:50%;cursor:pointer;line-height:1;
   background:color-mix(in srgb, #000 62%, transparent);color:#fff;font-size: var(--fs-5)}
+/* Отметка «я на месте». Строка над выбором работ: приехал → нажал →
+   работаешь → уехал → часы уже посчитаны. */
+.visit-row{display:flex;flex-wrap:wrap;align-items:center;gap: var(--sp-4);
+  margin-bottom: var(--sp-4)}
+.visit-row:empty{display:none}
+.visit-note{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim)}
+
 /* ── Подпись ─────────────────────────────────────────────────────────
    Белое поле независимо от темы: подпись потом печатается на бумаге,
    и хранить её надо в том виде, в каком она попадёт в акт. */
@@ -1472,6 +1479,9 @@
       </div>
 
       <div class="card trip-wide job-works"><h3>Работы</h3>
+        <!-- Отметка присутствия — рядом с часами, а не отдельной карточкой:
+             это одно и то же действие, разнесённое во времени. -->
+        <div class="visit-row" id="jbVisit"></div>
         <div class="row"><select id="jbWorkPick" class="grow"></select><button class="btn sm" id="jbWorkAdd">+ из каталога</button><button class="btn sm" id="jbCustomAdd">+ своя</button></div>
         <div id="jbWorks" style="margin-top: var(--sp-3)"></div>
         <div class="hint" id="jbTotals" style="margin-top: var(--sp-3)"></div>
