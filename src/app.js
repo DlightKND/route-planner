@@ -566,13 +566,27 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   setTimeout(()=>{ map.invalidateSize(); fitUkraine(); },80);
   await loadAll(); await loadPlaces(); await loadVehicles(); await loadEqModels();
   await loadVehState(); subscribeVeh(); await loadFactHours(); await loadRescheds();
+  // Очередь: показать, сколько лежит, и сразу попробовать отправить —
+  // приложение чаще всего открывают уже вернувшись в зону связи.
+  await qRefresh(); qFlush();
   checkTodayTrip(); initPush(); }
 
 // ---------- data load ----------
 async function loadAll(){ $('dataStatus').textContent='Загрузка…';
   const [cRes,eRes]=await Promise.all([ sb.from('clients').select('*').is('deleted_at',null).order('created_at'), sb.from('equipment').select('*').is('deleted_at',null).order('created_at') ]);
-  if(cRes.error){ $('dataStatus').innerHTML='<span class="err">'+esc(cRes.error.message)+'</span>'; return; }
+  if(cRes.error){
+    // Справочник точек нужен всему: без него не подписать заявку и не
+    // построить карту. Без связи поднимаем последний снимок — так экран
+    // заявки остаётся рабочим, а не пустым.
+    const s=await snapGet('refs');
+    if(isNetErr(cRes.error) && s && s.val && s.val.clients){
+      clients=s.val.clients; eqByClient=s.val.eqByClient||{};
+      $('dataStatus').innerHTML='<span class="err">Нет связи · '+esc(snapAge(s.at))+'</span>';
+      render(); return;
+    }
+    $('dataStatus').innerHTML='<span class="err">'+esc(cRes.error.message)+'</span>'; return; }
   clients=cRes.data||[]; eqByClient={}; (eRes.data||[]).forEach(e=>{ (eqByClient[e.client_id]=eqByClient[e.client_id]||[]).push(e); });
+  snapSet('refs',{clients,eqByClient});
   $('dataStatus').innerHTML='<span class="ok">На карте: '+clients.length+'</span>';
   await loadReadings(); await loadClientStats();
   render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),{padding:[40,40]}); else fitUkraine(); }
@@ -1916,12 +1930,13 @@ async function renderMine(){
     }
   }
 
-  // Без связи гасим всё, что пишет или требует запроса. Кнопка, которая
-  // всегда падает, хуже погашенной: человек нажимает её несколько раз,
-  // прежде чем поверить. «Позвонить» и «Проехать» — обычные ссылки,
-  // они работают и офлайн, и остаются доступными.
+  // Без связи гасим только то, что офлайн действительно не работает:
+  // «открыть» и «Стоянки» тянут данные с сервера, «Перенести» пишет
+  // отдельную запись мимо очереди. Старт, финиш и подтверждение теперь
+  // не падают, а становятся в очередь, поэтому остаются живыми —
+  // ради них офлайн и затевался. Точки открываются из снимка.
   if(offline){
-    box.querySelectorAll('.acts button, .mine-pt-main, button[data-mopen]').forEach(b=>{
+    box.querySelectorAll('[data-topen],[data-tstay],[data-tresched]').forEach(b=>{
       b.disabled=true;
       b.title='Нет связи. Действие станет доступно, когда появится сеть.';
     });
@@ -1942,7 +1957,10 @@ async function renderMine(){
 async function mineTripJobs(ids){
   const out={}; if(!ids.length) return out;
   const { data }=await sb.from('trip_jobs')
-    .select('trip_id, ord, jobs(id,status,client_id,equipment_id,clients(name,lat,lng,phone),equipment(model))')
+    // Полная строка заявки, а не только имя и статус: этот же набор
+    // ложится в снимок, и по нему инженер должен уметь открыть заявку
+    // и внести часы без связи.
+    .select('trip_id, ord, jobs(*, clients(name,lat,lng,phone), equipment(model), job_works(*))')
     .in('trip_id',ids).order('ord');
   (data||[]).forEach(r=>{ if(!r.jobs) return; (out[r.trip_id]=out[r.trip_id]||[]).push(r.jobs); });
   return out;
@@ -1952,7 +1970,16 @@ async function jobSetStatus(id,st){ const {error}=await sb.from('jobs').update({
 function populateEquip(){ const list=eqByClient[$('jbClient').value]||[]; $('jbEquip').innerHTML='<option value="">— без привязки —</option>'+list.map(e=>'<option value="'+e.id+'">'+esc(e.model+(e.serial?' · '+e.serial:''))+'</option>').join(''); }
 $('jbClient').onchange=()=>{ populateEquip(); jobHead(); };
 ['jbEquip','jbStatus','jbEng','jbDue'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',jobHead); });
-async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEditId=id; const j=id?jobs.find(x=>x.id==id):null;
+// Заявку открывают и из «Сегодня», где без связи список jobs пуст.
+// Тогда берём строку из снимка — она там полная, вместе с работами.
+async function snapFindJob(id){
+  const s=await snapGet('mine'); if(!s||!s.val||!s.val.byTrip) return null;
+  let hit=null;
+  Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{ if(j.id===id) hit=j; }));
+  return hit;
+}
+async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEditId=id;
+  const j=id?(jobs.find(x=>x.id==id)||await snapFindJob(id)):null;
   $('jbClient').innerHTML=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   $('jbEng').innerHTML='<option value="">— не назначен —</option>'+profilesList.map(p=>'<option value="'+p.id+'">'+esc((p.full_name||'без имени')+' ('+p.role+')')+'</option>').join('');
   $('jbWorkPick').innerHTML='<option value="">— выбрать работу —</option>'+catalog.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join('');
@@ -2069,7 +2096,16 @@ if($('jobPrimary')) $('jobPrimary').onclick=async ()=>{
     if(!await confirmDialog(hrs?('Завершить заявку? Записано '+hrs.toFixed(1)+' ч.')
       :'Часы не записаны. Всё равно завершить заявку?',{okText:'Завершить'})) return;
   }
+  // Подпись просим ДО смены статуса: после закрытия правило удаления
+  // делает её неприкосновенной, и переподписать криво поставленную
+  // будет уже нельзя. Отказаться можно — заказчика может не быть на месте.
+  let sig=null;
+  if(next==='done'&&!jobPhotos.some(p=>p.kind==='signature')){
+    const cl=clients.find(c=>c.id==$('jbClient').value);
+    sig=await askSignature(cl?cl.name:'');
+  }
   $('jbStatus').value=next; jobHead(); jobFootUpdate();
+  if(sig) await saveSignature(sig);
   await saveJobNow();
 };
 // Шапка страницы заявки: кто, что за техника, сколько это стоит и когда срок.
@@ -2227,22 +2263,31 @@ $('jobCancel').onclick=async ()=>{
 //
 // IndexedDB, а не localStorage: там строки, синхронный доступ и лимит
 // в несколько мегабайт, а здесь список выездов с точками.
-const SNAP_DB='dlight-snap', SNAP_STORE='kv';
+const SNAP_DB='dlight-snap', SNAP_STORE='kv', Q_STORE='queue';
 let snapDbP=null;
 function snapDb(){
   if(snapDbP) return snapDbP;
   snapDbP=new Promise((res,rej)=>{
-    let rq; try{ rq=indexedDB.open(SNAP_DB,1); }catch(e){ rej(e); return; }
-    rq.onupgradeneeded=()=>{ try{ rq.result.createObjectStore(SNAP_STORE); }catch(e){} };
+    let rq; try{ rq=indexedDB.open(SNAP_DB,2); }catch(e){ rej(e); return; }
+    rq.onupgradeneeded=()=>{ const db=rq.result;
+      try{ if(!db.objectStoreNames.contains(SNAP_STORE)) db.createObjectStore(SNAP_STORE); }catch(e){}
+      // Очередь с автоключом: порядок отправки должен совпадать с порядком
+      // действий. Инженер сначала берёт заявку в работу, потом закрывает —
+      // наоборот сервер не примет.
+      try{ if(!db.objectStoreNames.contains(Q_STORE)) db.createObjectStore(Q_STORE,{keyPath:'id',autoIncrement:true}); }catch(e){}
+    };
     rq.onsuccess=()=>res(rq.result);
     rq.onerror=()=>rej(rq.error||new Error('indexeddb'));
   }).catch(e=>{ snapDbP=null; throw e; });
   return snapDbP;
 }
-async function snapSet(key,val){
+// at передаётся, когда снимок правится локально: отметка времени должна
+// остаться прежней. Иначе правка в офлайне выдавала бы данные за свежие,
+// и полоса «данные на 08:40» врала бы.
+async function snapSet(key,val,at){
   try{ const db=await snapDb();
     await new Promise((res,rej)=>{ const t=db.transaction(SNAP_STORE,'readwrite');
-      t.objectStore(SNAP_STORE).put({at:Date.now(),val},key);
+      t.objectStore(SNAP_STORE).put({at:at||Date.now(),val},key);
       t.oncomplete=res; t.onerror=()=>rej(t.error); });
   }catch(e){ /* нет места или приватный режим — снимок не главная функция */ }
 }
@@ -2264,9 +2309,132 @@ function snapAge(at){
 // когда есть только Wi-Fi без интернета), поэтому опираемся на факт
 // провала запроса, а onLine используем лишь для быстрой подсказки.
 function offlineBanner(at){
+  const n=qCount;
   return '<div class="offbar">Нет связи · '+esc(snapAge(at))
-    +'<span class="offbar-h">показываю сохранённое, изменения сейчас не сохранятся</span></div>';
+    +'<span class="offbar-h">'
+    +(n?('показываю сохранённое · '+n+' '+plural(n,'изменение ждёт','изменения ждут','изменений ждут')+' отправки')
+       :'показываю сохранённое, изменения уйдут, когда появится связь')
+    +'</span></div>';
 }
+
+// ---------- очередь записи ----------
+//
+// Второй уровень офлайна. Снимок отвечает на «куда я еду», очередь — на
+// «я это сделал». Без неё инженер без связи видит день, но не может
+// отметить ни одного шага, и вечером восстанавливает всё по памяти.
+//
+// Порядок важен: «взял в работу» должно уйти раньше «завершил», поэтому
+// хранилище с автоключом и строго последовательная отправка.
+//
+// Сетевую ошибку от отказа сервера отличаем по тексту: отказ («статус уже
+// изменился», «нет прав») повторять бессмысленно — такой пункт снимаем
+// с очереди и говорим вслух. Молча копить неотправляемое хуже, чем
+// признать потерю.
+let qCount=0, qFlushing=false;
+function isNetErr(e){
+  const m=String((e&&e.message)||e||'').toLowerCase();
+  return !m || m.includes('fetch') || m.includes('network') || m.includes('offline')
+      || m.includes('timeout') || m.includes('соедин');
+}
+async function qPush(kind,payload){
+  try{
+    const db=await snapDb();
+    await new Promise((res,rej)=>{ const t=db.transaction(Q_STORE,'readwrite');
+      t.objectStore(Q_STORE).add({kind,payload,at:Date.now()});
+      t.oncomplete=res; t.onerror=()=>rej(t.error); });
+    await qRefresh();
+    return true;
+  }catch(e){ return false; }
+}
+async function qAll(){
+  try{ const db=await snapDb();
+    return await new Promise((res,rej)=>{ const t=db.transaction(Q_STORE,'readonly');
+      const rq=t.objectStore(Q_STORE).getAll();
+      rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); });
+  }catch(e){ return []; }
+}
+async function qDrop(id){
+  try{ const db=await snapDb();
+    await new Promise((res,rej)=>{ const t=db.transaction(Q_STORE,'readwrite');
+      t.objectStore(Q_STORE).delete(id); t.oncomplete=res; t.onerror=()=>rej(t.error); });
+  }catch(e){}
+}
+// Снять из очереди прежние сохранения этой заявки. Фото и действия
+// по выезду не трогаем: они не заменяют друг друга.
+async function qDropJob(jobId){
+  const items=await qAll();
+  for(const it of items){
+    if(it.kind==='job'&&it.payload&&it.payload.jobId===jobId) await qDrop(it.id);
+  }
+}
+async function qRefresh(){ qCount=(await qAll()).length; paintQueue(); return qCount; }
+function paintQueue(){
+  const el=$('qBadge'); if(!el) return;
+  el.style.display=qCount?'':'none';
+  // Глагол склоняем вместе с числом: «1 изменение ждут отправки» —
+  // мелочь, но именно по таким мелочам интерфейс читается как небрежный.
+  el.textContent=qCount+' '+plural(qCount,'изменение ждёт','изменения ждут','изменений ждут')+' отправки';
+}
+// Одна попытка отправки всей очереди. Возвращает, сколько ушло.
+async function qFlush(){
+  if(qFlushing) return 0;
+  qFlushing=true;
+  let sent=0, dropped=0;
+  try{
+    const items=await qAll();
+    for(const it of items){
+      try{
+        await qSendOne(it);
+        await qDrop(it.id); sent++;
+      }catch(e){
+        if(isNetErr(e)) break;                 // связи нет — пробуем позже
+        await qDrop(it.id); dropped++;         // отказ сервера — снимаем
+        notify('Изменение не принято сервером и снято с очереди: '+((e&&e.message)||e),'err');
+      }
+    }
+  } finally { qFlushing=false; }
+  await qRefresh();
+  if(sent) showToast('Отправлено: '+sent+' '+plural(sent,'изменение','изменения','изменений'));
+  if(sent&&!dropped){ try{ await loadAll(); }catch(e){} }
+  return sent;
+}
+async function qSendOne(it){
+  const p=it.payload||{};
+  if(it.kind==='trip'){
+    const {data,error}=await sb.rpc(TRIP_RPC[p.action],{p_trip:p.tripId});
+    if(error) throw error;
+    if(data==='wrong_status'||data==='not_found') throw new Error(TRIP_SAY[data]||String(data));
+    return;
+  }
+  if(it.kind==='photo'){
+    // Файл лежит в очереди как есть — IndexedDB хранит Blob, пережимать
+    // второй раз нечего. Порядок тот же: сначала файл, потом строка;
+    // строка без файла показала бы пустую плитку.
+    const path='jobs/'+p.jobId+'/'+p.name;
+    const up=await sb.storage.from('job-photos').upload(path,p.blob,{contentType:'image/jpeg'});
+    if(up.error) throw up.error;
+    const {error}=await sb.from('job_photos').insert({job_id:p.jobId,path,kind:p.kind});
+    if(error){ try{ await sb.storage.from('job-photos').remove([path]); }catch(e){} throw error; }
+    return;
+  }
+  if(it.kind==='job'){
+    const {error}=await sb.from('jobs').update(p.rec).eq('id',p.jobId);
+    if(error) throw error;
+    const del=await sb.from('job_works').delete().eq('job_id',p.jobId);
+    if(del.error) throw del.error;
+    if(p.works&&p.works.length){
+      const ins=await sb.from('job_works').insert(p.works.map(w=>Object.assign({job_id:p.jobId},w)));
+      if(ins.error) throw ins.error;
+    }
+    return;
+  }
+  throw new Error('неизвестный тип записи');
+}
+// Пробуем отправить: при запуске, при возврате связи и при возврате
+// на вкладку. Три повода вместо одного — потому что событие online
+// приходит не всегда, а вкладку инженер переключает постоянно.
+window.addEventListener('online',()=>{ qFlush(); });
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) qFlush(); });
 
 // ---------- фото к заявке ----------
 //
@@ -2281,8 +2449,8 @@ function offlineBanner(at){
 // срезает EXIF: координаты съёмки в архиве нам не нужны, место заявки
 // и так известно.
 const PH_MAX=1600, PH_Q=0.8, PH_TARGET=600*1024;
-const PH_LABEL={before:'до',after:'после',defect:'дефект'};
-let jobPhotos=[], phBusy=0;
+const PH_LABEL={before:'до',after:'после',defect:'дефект',signature:'подпись'};
+let jobPhotos=[], jobPhotosQ=[], phBusy=0, phUrls=[];
 function phState(txt,bad){ const el=$('jbPhotoState'); if(!el) return;
   el.textContent=txt||''; el.className='ph-state'+(bad?' bad':''); }
 async function shrinkImage(file){
@@ -2312,24 +2480,36 @@ async function shrinkImage(file){
 }
 async function loadJobPhotos(){
   const box=$('jbPhotoList'); if(!box) return;
-  jobPhotos=[];
+  jobPhotos=[]; jobPhotosQ=[];
   if(!jobEditId){ box.innerHTML=''; phState('Снимки можно добавить после создания заявки'); return; }
+  // Отложенные снимки этой заявки — из очереди. Показываем вместе
+  // с отправленными: инженер сфотографировал, значит снимок есть,
+  // и он должен его видеть, а не гадать, сохранилось ли.
+  jobPhotosQ=(await qAll())
+    .filter(i=>i.kind==='photo'&&i.payload&&i.payload.jobId===jobEditId)
+    .map(i=>({qid:i.id,kind:i.payload.kind,blob:i.payload.blob,pending:true}));
+  let netFail=false;
   try{
     const {data,error}=await sb.from('job_photos').select('id,path,kind,created_by,created_at')
       .eq('job_id',jobEditId).order('created_at');
     if(error) throw error;
     jobPhotos=data||[];
-    await renderJobPhotos();
-    phState(jobPhotos.length?'':'Снимков нет');
   }catch(e){
-    // Таблицы может не быть, если SQL ещё не выполнен, — говорим прямо,
-    // а не показываем пустую сетку, как будто снимков нет.
-    box.innerHTML=''; phState('Фото недоступны: '+(e.message||e),true);
+    // Нет связи — показываем то, что есть на устройстве. Иначе (нет таблицы,
+    // нет прав) говорим прямо, а не рисуем пустую сетку, будто снимков нет.
+    if(!isNetErr(e)){ box.innerHTML=''; phState('Фото недоступны: '+(e.message||e),true); return; }
+    netFail=true;
   }
+  await renderJobPhotos();
+  phState((jobPhotos.length||jobPhotosQ.length)?'':(netFail?'Нет связи — снимки покажу позже':'Снимков нет'));
 }
 async function renderJobPhotos(){
   const box=$('jbPhotoList'); if(!box) return;
-  if(!jobPhotos.length){ box.innerHTML=''; return; }
+  // Ссылки на локальные файлы освобождаем при каждой перерисовке: иначе
+  // за смену их накопятся десятки, и браузер будет держать все снимки
+  // в памяти.
+  phUrls.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} }); phUrls=[];
+  if(!jobPhotos.length&&!jobPhotosQ.length){ box.innerHTML=''; return; }
   // Бакет приватный: адреса подписываются на час. Публичный положил бы
   // снимки чужой техники на угадываемый адрес навсегда.
   let urls={};
@@ -2338,15 +2518,28 @@ async function renderJobPhotos(){
     (data||[]).forEach(r=>{ if(r&&r.path&&r.signedUrl) urls[r.path]=r.signedUrl; });
   }catch(e){ /* без ссылок покажем плитки-заглушки, а не пустоту */ }
   const mayDel=p=>role==='admin'||(p.created_by===session.user.id&&$('jbStatus').value!=='done');
-  box.innerHTML=jobPhotos.map(p=>'<div class="ph-item">'
+  const sent=jobPhotos.map(p=>'<div class="ph-item">'
     +(urls[p.path]?('<img src="'+esc(urls[p.path])+'" alt="'+esc(PH_LABEL[p.kind]||'')+'" data-phv="'+esc(urls[p.path])+'">')
                   :'<div class="ph-wait">нет доступа</div>')
     +'<span class="ph-tag">'+esc(PH_LABEL[p.kind]||p.kind)+'</span>'
     +(mayDel(p)?('<button class="ph-del" type="button" data-phd="'+p.id+'" aria-label="Удалить снимок">×</button>'):'')
     +'</div>').join('');
+  // Отложенные снимки — те же плитки, но из локального файла и с пометкой.
+  // Удаление такой плитки убирает её из очереди: на сервере её ещё нет.
+  const waiting=jobPhotosQ.map(p=>{
+    let u=''; try{ u=URL.createObjectURL(p.blob); phUrls.push(u); }catch(e){}
+    return '<div class="ph-item pending">'
+      +(u?('<img src="'+esc(u)+'" alt="'+esc(PH_LABEL[p.kind]||'')+'" data-phv="'+esc(u)+'">'):'<div class="ph-wait">файл</div>')
+      +'<span class="ph-tag">'+esc(PH_LABEL[p.kind]||p.kind)+' · ждёт</span>'
+      +'<button class="ph-del" type="button" data-phq="'+p.qid+'" aria-label="Убрать снимок из очереди">×</button>'
+      +'</div>'; }).join('');
+  box.innerHTML=sent+waiting;
   box.querySelectorAll('[data-phv]').forEach(im=>im.onclick=()=>{
     $('phViewImg').src=im.dataset.phv; $('phView').hidden=false; });
   box.querySelectorAll('[data-phd]').forEach(b=>b.onclick=()=>delJobPhoto(b.dataset.phd));
+  box.querySelectorAll('[data-phq]').forEach(b=>b.onclick=async ()=>{
+    if(!await confirmDialog('Убрать снимок из очереди? Он ещё не отправлен и будет потерян.',{danger:true,okText:'Убрать'})) return;
+    await qDrop(+b.dataset.phq); await qRefresh(); await loadJobPhotos(); });
 }
 async function addJobPhotos(files,kind){
   if(!jobEditId||!files||!files.length) return;
@@ -2365,6 +2558,19 @@ async function addJobPhotos(files,kind){
       const {error}=await sb.from('job_photos').insert({job_id:jobEditId,path,kind});
       if(error){ try{ await sb.storage.from('job-photos').remove([path]); }catch(e2){} throw error; }
     }catch(e){
+      // Нет связи — снимок не теряем: он и делается ровно там, где связи
+      // обычно нет. Кладём в очередь вместе с файлом; плитка появится
+      // сразу, с пометкой «ждёт отправки».
+      if(isNetErr(e)){
+        let ok=false;
+        try{
+          const blob=await shrinkImage(files[i]);
+          ok=await qPush('photo',{jobId:jobEditId,kind,blob,
+            name:Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg'});
+        }catch(e2){ ok=false; }
+        if(ok) continue;
+        phState('Нет связи и не удалось отложить снимок',true); phBusy=0; return;
+      }
       phBusy=0;
       const left=files.length-i-1;
       phState('Не отправлено: '+(e.message||e)+(left?(' · осталось '+left+', попробуй ещё раз'):''),true);
@@ -2397,6 +2603,85 @@ async function delJobPhoto(id){
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('phView')&&!$('phView').hidden){ $('phView').hidden=true; $('phViewImg').src=''; } });
 })();
 
+// ---------- подпись заказчика ----------
+//
+// Акт печатается с компьютера, то есть в поле подтвердить выполнение было
+// нечем, и между работой и подписью проходили дни — ровно тогда, когда
+// возражения снимаются дешевле всего.
+//
+// Хранится как ещё одна метка в job_photos: тот же приватный бакет, те же
+// правила чтения и та же неизменяемость, что у фото «до/после». Отдельная
+// таблица завела бы второй набор политик, который однажды разошёлся бы
+// с первым.
+let signCtx=null, signDrawing=false, signDirty=false, signResolve=null;
+function signSetup(){
+  const cv=$('signPad'); if(!cv) return null;
+  // Внутренний размер холста подгоняем под экранный, иначе на телефоне
+  // линия рисуется со смещением и «уезжает» от пальца.
+  const r=cv.getBoundingClientRect();
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=Math.max(320,Math.round(r.width*dpr));
+  cv.height=Math.max(160,Math.round(r.height*dpr));
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.strokeStyle='#111'; ctx.lineWidth=Math.max(2,2*dpr);
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  signCtx=ctx; signDirty=false;
+  return ctx;
+}
+function signPoint(e){
+  const cv=$('signPad'), r=cv.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*(cv.width/r.width), y:(e.clientY-r.top)*(cv.height/r.height)};
+}
+(function(){
+  const cv=$('signPad'); if(!cv) return;
+  cv.addEventListener('pointerdown',e=>{ if(!signCtx) return;
+    cv.setPointerCapture(e.pointerId); signDrawing=true; signDirty=true;
+    $('signErr').textContent='';   // начал расписываться — упрёк убираем
+    const p=signPoint(e); signCtx.beginPath(); signCtx.moveTo(p.x,p.y); e.preventDefault(); });
+  cv.addEventListener('pointermove',e=>{ if(!signDrawing||!signCtx) return;
+    const p=signPoint(e); signCtx.lineTo(p.x,p.y); signCtx.stroke(); e.preventDefault(); });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>cv.addEventListener(ev,()=>{ signDrawing=false; }));
+  if($('signClear')) $('signClear').onclick=()=>signSetup();
+  if($('signSkip')) $('signSkip').onclick=()=>signDone(null);
+  if($('signOk')) $('signOk').onclick=()=>{
+    if(!signDirty){ $('signErr').textContent='Поле пустое. Распишитесь или выберите «Без подписи».'; return; }
+    $('signPad').toBlob(b=>signDone(b),'image/jpeg',0.85);
+  };
+})();
+function signDone(blob){
+  $('signOverlay').classList.remove('on');
+  const r=signResolve; signResolve=null; if(r) r(blob);
+}
+// Возвращает Blob или null (расписаться отказались/нечем).
+function askSignature(clientName){
+  return new Promise(res=>{
+    if(!$('signOverlay')){ res(null); return; }
+    $('signErr').textContent='';
+    $('signWho').textContent=clientName?('Заказчик: '+clientName):'Распишитесь в поле ниже';
+    $('signOverlay').classList.add('on');
+    // Холст меряем уже показанным — у скрытого ширина нулевая.
+    setTimeout(signSetup,30);
+    signResolve=res;
+  });
+}
+// Подпись уходит тем же путём, что фото: сеть — сразу, без связи — в очередь.
+async function saveSignature(blob){
+  if(!blob||!jobEditId) return;
+  const name='sign-'+Date.now()+'.jpg';
+  try{
+    const path='jobs/'+jobEditId+'/'+name;
+    const up=await sb.storage.from('job-photos').upload(path,blob,{contentType:'image/jpeg'});
+    if(up.error) throw up.error;
+    const {error}=await sb.from('job_photos').insert({job_id:jobEditId,path,kind:'signature'});
+    if(error){ try{ await sb.storage.from('job-photos').remove([path]); }catch(e){} throw error; }
+    await loadJobPhotos();
+  }catch(e){
+    if(isNetErr(e)){ await qPush('photo',{jobId:jobEditId,kind:'signature',blob,name}); await loadJobPhotos(); return; }
+    notify('Подпись не сохранилась: '+((e&&e.message)||e),'err');
+  }
+}
+
 // ---------- сохранение заявки ----------
 //
 // Ручное сохранение на телефоне — способ потерять работу: приложение
@@ -2427,13 +2712,32 @@ function jobProblem(){
 }
 function jobSaveState(txt,cls){ const el=$('jobSaveState'); if(!el) return;
   el.textContent=txt; el.className='savestate'+(cls?(' '+cls):''); }
+// Строка работы в том виде, в каком она уезжает в базу. Вынесена, потому
+// что теперь её собирает и обычное сохранение, и очередь.
+function jobWorkRow(w){
+  return {work_id:w.work_id||null,title:w.name||'',hours:w.hours,billable:w.billable,
+    billable_reason:w.billable_reason||'',tariff_profile:(w.profile||null),
+    revenue:workRevenue(w),
+    revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)};
+}
+// Правка местного снимка после постановки в очередь: заявка внутри
+// «Сегодня» должна показывать то, что инженер только что ввёл.
+async function snapJobPatch(jobId,rec,works){
+  const s=await snapGet('mine'); if(!s||!s.val||!s.val.byTrip) return;
+  let touched=false;
+  Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{
+    if(j.id!==jobId) return;
+    j.status=rec.status; j.job_works=works; touched=true;
+  }));
+  if(touched) await snapSet('mine',s.val,s.at);
+}
 // Запись без навигации и без тостов: её зовёт и кнопка, и автосохранение.
 async function persistJob(rec){
   let jobId=jobEditId;
   if(jobEditId){ const {error}=await sb.from('jobs').update(rec).eq('id',jobEditId); if(error) throw error; }
   else { rec.created_by=session.user.id; const {data,error}=await sb.from('jobs').insert(rec).select('id').single(); if(error) throw error; jobId=data.id; }
   await sb.from('job_works').delete().eq('job_id',jobId);
-  if(curWorks.length){ const rows=curWorks.map(w=>({job_id:jobId,work_id:w.work_id||null,title:w.name||'',hours:w.hours,billable:w.billable,billable_reason:w.billable_reason||'',tariff_profile:(w.profile||null),revenue:workRevenue(w),revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)})); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
+  if(curWorks.length){ const rows=curWorks.map(w=>Object.assign({job_id:jobId},jobWorkRow(w))); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
   // Гарантия и отметка визита привязаны к переходу в «закрыта» — при
   // автосохранении ровно так же, как раньше при нажатии кнопки.
   if(canWrite() && rec.status==='done' && rec.equipment_id && curWorks.some(w=>w.billable)){ const days=parseInt($('jbWarrDays').value)||0; if(days>0){ try{ const {data:ex}=await sb.from('repair_warranties').select('id').eq('origin_job_id',jobId).limit(1); if(!ex||!ex.length){ const until=new Date(Date.now()+days*86400000).toISOString().slice(0,10); const covers=curWorks.filter(w=>w.billable).map(w=>w.name).filter(Boolean).join(', ').slice(0,300); const {error:rwErr}=await sb.from('repair_warranties').insert({equipment_id:rec.equipment_id,origin_job_id:jobId,covers,until}); if(!rwErr) showToast('Гарантия на ремонт до '+until); else notify('Гарантия на ремонт не создалась: '+rwErr.message,'err'); } }catch(e2){ notify('Гарантия на ремонт не создалась: '+(e2.message||e2),'err'); } } }
@@ -2458,7 +2762,22 @@ async function saveJobNow(){
   if(jobSaving){ jobSaveAgain=true; return; }
   jobSaving=true; jobSaveState('сохраняю…','busy');
   try{ await persistJob(jobRec()); jobsDirty=true; jobSaveState('сохранено'); }
-  catch(e){ jobSaveState('не сохранено · '+(e.message||e),'bad'); }
+  catch(e){
+    // Нет связи — кладём в очередь и правим местный снимок, чтобы при
+    // возврате на заявку инженер увидел свои часы, а не старые.
+    if(isNetErr(e)){
+      const rec=jobRec(), works=curWorks.map(jobWorkRow);
+      // Прежние записи этой же заявки снимаем: в очереди лежит полная
+      // строка, и каждая новая целиком заменяет предыдущую. Иначе правка
+      // часов десять раз подряд дала бы десять одинаковых по смыслу
+      // отправок и счётчик, который врёт о количестве работы.
+      await qDropJob(jobEditId);
+      if(await qPush('job',{jobId:jobEditId,rec,works})){
+        await snapJobPatch(jobEditId,rec,works);
+        jobSaveState('без связи · отправлю позже');
+      } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
+    } else jobSaveState('не сохранено · '+(e.message||e),'bad');
+  }
   finally{ jobSaving=false; if(jobSaveAgain){ jobSaveAgain=false; saveJobNow(); } }
 }
 $('jobSave').onclick=async ()=>{
@@ -2474,7 +2793,10 @@ $('jobSave').onclick=async ()=>{
 // обработчики на каждом поле терялись бы при каждом рендере.
 (function(){ const v=document.querySelector('.view-job'); if(!v) return;
   ['input','change'].forEach(ev=>v.addEventListener(ev,e=>{
-    if(e.target.closest('#jobFoot')) return;
+    // Кнопки внизу и выбор файла к полям заявки отношения не имеют:
+    // от них не должно случаться сохранение (а в офлайне — ещё и лишняя
+    // запись в очереди).
+    if(e.target.closest('#jobFoot')||e.target.closest('.job-photos')) return;
     queueJobSave(); jobFootUpdate(); })); })();
 async function delJob(id){ if(!await confirmDialog('Удалить заявку?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('jobs').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderJobs(); await refreshStats();
   undoToast('Заявка удалена', async ()=>{ const {error:e2}=await sb.from('jobs').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Восстановлено'); }); }
@@ -3368,7 +3690,29 @@ async function tripAction(id,kind){
     // ещё помнит день. Через сутки он уже не вспомнит, стоял он у клиента
     // два часа или полтора.
     if(data==='finished') setTimeout(()=>openStaysModal(id),200);
-  }catch(e){ notify('Ошибка: '+(e.message||e),'err'); }
+  }catch(e){
+    // Нет связи — не теряем действие, а кладём в очередь и сразу двигаем
+    // статус в местном снимке: инженер должен видеть, что нажатие
+    // засчитано, иначе он нажмёт ещё раз и ещё.
+    if(isNetErr(e) && await qPush('trip',{tripId:id,action:kind})){
+      await snapTripStatus(id,TRIP_NEXT_STATUS[kind]);
+      showToast('Нет связи — отправлю, когда появится');
+      if(plannerCur==='mine') renderMine();
+      return;
+    }
+    notify('Ошибка: '+(e.message||e),'err');
+  }
+}
+// Куда переходит выезд по каждому действию. Нужен, чтобы в офлайне
+// показать результат до того, как сервер его подтвердит. Сервер остаётся
+// последним словом: при отправке guard_trip_status всё равно проверит.
+const TRIP_NEXT_STATUS={start:'in_progress',finish:'finished',confirm:'done'};
+async function snapTripStatus(id,st){
+  if(!st) return;
+  const s=await snapGet('mine'); if(!s||!s.val||!s.val.list) return;
+  const t=s.val.list.find(x=>x.id===id); if(!t) return;
+  t.status=st;
+  await snapSet('mine',s.val,s.at);
 }
 
 // ---------- модалка «сегодня выезд» ----------
