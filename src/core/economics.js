@@ -15,6 +15,25 @@
 import { circuitKm } from './geo.js';
 import { jobRoadPayer } from './tariff.js';
 
+// Деньги по запчастям заявки.
+//
+// Продажа считается только с платных строк: гарантийная запчасть — это
+// то, что мы отдали даром, выручки по ней нет. Закупка считается со ВСЕХ:
+// гарантийная деталь стоила денег ровно столько же, и именно эта сумма
+// и есть цена гарантии, которой в отчётах до сих пор не было.
+//
+// price и cost хранятся ЗА ЕДИНИЦУ — сумма строки считается здесь, а не
+// в базе: сохранённая сумма разошлась бы с количеством на первой правке.
+export function partsMoney(j) {
+  let rev = 0, cost = 0;
+  ((j && j.job_parts) || []).forEach(p => {
+    const q = +p.qty || 0;
+    if (p.billable !== false) rev += q * (+p.price || 0);
+    cost += q * (+p.cost || 0);
+  });
+  return { rev, cost };
+}
+
 // Точка заявки: сперва координаты техники, иначе клиента.
 export function jobPoint(j) {
   const eq = j.equipment;
@@ -83,7 +102,7 @@ export function roadByPayer(start, jobs, profs, gKm, turf, precomputed) {
 //   turf             — для разбивки дороги по плательщикам.
 export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles, turf) {
   ov = ov || {}; ctx = ctx || {};
-  let rWork = 0, wh = 0, workH = 0, cLabor = 0; const perJob = [];
+  let rWork = 0, wh = 0, workH = 0, cLabor = 0, rParts = 0, cParts = 0; const perJob = [];
   const c = (T.costs) || {};
   (jobs || []).forEach(j => {
     let jr = 0, jh = 0, jwh = 0;
@@ -113,14 +132,23 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
     const factHours = (fh != null && fh > 0) ? +fh : null;
     const costPlan = jh * ((c.hour) || 0);
     const costFact = (factHours != null) ? factHours * ((c.hour) || 0) : null;
+    // Запчасти. costPlan/costFact остаются ЧИСТЫМ трудом — так они и
+    // подписаны на экране («себестоимость труда»), и подмешивать в них
+    // закупку значило бы врать подписью. Запчасти идут своей строкой
+    // и складываются только в итог заявки.
+    const pm = partsMoney(j);
+    rParts += pm.rev; cParts += pm.cost;
+    const jCost = ((costFact != null) ? costFact : costPlan) + pm.cost;
     perJob.push({
       id: j.id ?? null,
       name: (j.clients && j.clients.name) || 'заявка',
-      revenue: jr, hours: jh, warrantyHours: jwh,
+      revenue: jr + pm.rev, workRevenue: jr, hours: jh, warrantyHours: jwh,
+      partsRevenue: pm.rev, partsCost: pm.cost,
+      partsCount: ((j.job_parts) || []).length,
       factHours,                                  // null = факта нет
       costPlan, costFact,
-      cost: (costFact != null) ? costFact : costPlan,
-      profit: jr - ((costFact != null) ? costFact : costPlan)
+      cost: jCost,
+      profit: (jr + pm.rev) - jCost
     });
   });
   const t = (T.tariffs) || {};
@@ -176,10 +204,10 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
     rPerDiem = days * (t.day || 0) + nights * (t.night || 0);
   }
 
-  const cRev = rWork + rTravel + rPerDiem;
+  const cRev = rWork + rParts + rTravel + rPerDiem;
   const cKm = costKm * (c.km || 0), cDay = days * (c.day || 0), cNight = nights * (c.night || 0);
   if (factWorkH != null) cLabor = costWorkH * (c.hour || 0);
-  const cCost = cLabor + cKm + cDay + cNight;
+  const cCost = cLabor + cParts + cKm + cDay + cNight;
 
   const revOv = (ov.revenue != null && ov.revenue !== ''), costOv = (ov.cost != null && ov.cost !== '');
   const rev = revOv ? (+ov.revenue || 0) : cRev;
@@ -188,10 +216,10 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
   const share = workH ? Math.round(wh / workH * 100) : 0;
 
   return {
-    rWork, rTravel, rPerDiem, revComputed: cRev, rev, revOv, perJob,
+    rWork, rParts, rTravel, rPerDiem, revComputed: cRev, rev, revOv, perJob,
     workH, driveH: dH, totalH, days, daysByCal, nights, km,
     factKm, costKm, factWorkH, costWorkH,
-    cLabor, cKm, cDay, cNight, costComputed: cCost, cost, costOv,
+    cLabor, cParts, cKm, cDay, cNight, costComputed: cCost, cost, costOv,
     profit, margin, wh, share, cur: T.currency || '',
     jobCount: (jobs || []).length, roadGroups,
     // Сводка по способу расчёта дороги — для подписей в модалке.
