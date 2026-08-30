@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { econCompute, jobPoint, roadByPayer } from '../src/core/economics.js';
+import { econCompute, jobPoint, roadByPayer, partsMoney } from '../src/core/economics.js';
 
 const turf = { distance([lng1,lat1],[lng2,lat2]){ const R=6371,r=Math.PI/180,
   dLat=(lat2-lat1)*r,dLng=(lng2-lng1)*r,
@@ -155,5 +155,65 @@ describe('perJob — разложение по заявке: только раб
       // себестоимость заявки — только труд, дорога/сутки сюда не входят
       expect(p.cost).toBeLessThanOrEqual(p.hours*750 + 0.001);
     });
+  });
+});
+
+describe('запчасти', () => {
+  const T2 = { tariffs:{km:0,day:0,night:0,hour:0}, costs:{km:0,day:0,night:0,hour:750},
+               shift_hours:8, deviation_pct:0, currency:'₴' };
+
+  it('partsMoney: продажа только с платных, закупка со всех', () => {
+    const m = partsMoney({ job_parts:[
+      { qty:2, price:1500, cost:900, billable:true },
+      { qty:1, price:4000, cost:2600, billable:false },   // гарантийная
+    ]});
+    expect(m.rev).toBe(3000);            // 2×1500; гарантийная не продаётся
+    expect(m.cost).toBe(900*2 + 2600);   // а стоила она нам всё равно
+  });
+  it('partsMoney: нет запчастей — нули, а не NaN', () => {
+    expect(partsMoney({})).toEqual({rev:0,cost:0});
+    expect(partsMoney({job_parts:[]})).toEqual({rev:0,cost:0});
+  });
+  it('partsMoney: количество умножает обе цены', () => {
+    const m = partsMoney({ job_parts:[{ qty:2.5, price:200, cost:100, billable:true }]});
+    expect(m.rev).toBe(500); expect(m.cost).toBe(250);
+  });
+
+  const jobP = { id:'jp', clients:{name:'К',lat:49.5,lng:33.5},
+    job_works:[{hours:4,billable:true,revenue:3000}],
+    job_parts:[{qty:2,price:1500,cost:900,billable:true},
+               {qty:1,price:4000,cost:2600,billable:false}] };
+
+  it('выручка заявки = работы + продажа запчастей', () => {
+    const e = econCompute([jobP],0,0,T2,{},{},[],turf);
+    const a = e.perJob[0];
+    expect(a.workRevenue).toBe(3000);
+    expect(a.partsRevenue).toBe(3000);
+    expect(a.revenue).toBe(6000);
+  });
+  it('себестоимость труда остаётся чистым трудом, закупка идёт отдельно', () => {
+    const e = econCompute([jobP],0,0,T2,{},{},[],turf);
+    const a = e.perJob[0];
+    expect(a.costPlan).toBe(4*750);                 // подпись «труд» не врёт
+    expect(a.partsCost).toBe(900*2 + 2600);
+    expect(a.cost).toBe(4*750 + 900*2 + 2600);      // а в итог входит всё
+    expect(a.profit).toBe(6000 - (4*750 + 4400));
+  });
+  it('итоги выезда: rParts в выручке, cParts в затратах', () => {
+    const e = econCompute([jobP],0,0,T2,{},{},[],turf);
+    expect(e.rParts).toBe(3000);
+    expect(e.cParts).toBe(4400);
+    expect(e.revComputed).toBe(e.rWork + e.rParts + e.rTravel + e.rPerDiem);
+    expect(e.costComputed).toBe(e.cLabor + e.cParts + e.cKm + e.cDay + e.cNight);
+  });
+  it('заявка без запчастей считается ровно как раньше', () => {
+    const bare = { id:'b', clients:{name:'К',lat:49.5,lng:33.5},
+      job_works:[{hours:4,billable:true,revenue:3000}] };
+    const e = econCompute([bare],0,0,T2,{},{},[],turf);
+    const a = e.perJob[0];
+    expect(a.revenue).toBe(3000);
+    expect(a.partsRevenue).toBe(0);
+    expect(a.cost).toBe(4*750);
+    expect(e.rParts).toBe(0); expect(e.cParts).toBe(0);
   });
 });
