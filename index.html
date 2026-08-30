@@ -500,6 +500,11 @@
   .subtab { padding: var(--sp-3) var(--sp-5); font-family: var(--mono); font-size: var(--fs-3); letter-spacing: .6px; text-transform: uppercase; color: var(--ink-dim); cursor: pointer; border-bottom: 2px solid transparent; }
   .subtab.active { color: var(--accent-ink); border-bottom-color: var(--accent-line); border-bottom-width: 3px; font-weight: 600; }
   .subtab.hidden { display: none; }
+  /* Переключатель подразделов в роли заголовка: размер и начертание —
+     как у h2, чтобы строка читалась как название страницы, а не как
+     панель фильтров. Подчёркивание активного остаётся прежним. */
+  .pane-head .subtabs { border-bottom: 0; margin: 0; gap: var(--sp-5); flex: 1 1 auto; }
+  .pane-head .subtab { padding: 0 0 var(--sp-2); font-size: var(--fs-6); letter-spacing: 1px; }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--accent); color: var(--ink); padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm); font-family: var(--mono); font-size: var(--fs-3); box-shadow: var(--shadow-lg); z-index: 99999; opacity: 0; pointer-events: none; transition: opacity var(--t), transform var(--t); }
   .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
   .ctxmenu { position: fixed; z-index: 9998; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: var(--sp-3); display: none; min-width: 210px; }
@@ -1079,12 +1084,13 @@
   color:var(--ink-faint);white-space:nowrap;margin-top: var(--sp-3)}
 .savestate.busy{color:var(--ink-dim)}
 .savestate.bad{color:var(--red)}
-/* Порядок в режиме задания: работы → фото → подробности.
-   Фото идут сразу за работами: их делают в тот же момент, что и запись
-   часов, и до закрытия заявки. */
+/* Порядок в режиме задания: работы → запчасти → фото → подробности.
+   Всё это делают в один и тот же момент — на объекте, до закрытия
+   заявки, — и в том же порядке, в каком оно происходит. */
 .view-job.job-task .job-ref{display:none}
 .view-job.job-task .job-works{order:1}
-.view-job.job-task .job-photos{order:2}
+.view-job.job-task .job-parts{order:2}
+.view-job.job-task .job-photos{order:3}
 .job-ref-read{display:none}
 .view-job.job-task .job-ref-read{display:block;grid-column:1/-1;order:4}
 .view-job.job-task .job-ref-read[hidden]{display:none}
@@ -1118,6 +1124,41 @@
   margin-bottom: var(--sp-4)}
 .visit-row:empty{display:none}
 .visit-note{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim)}
+
+/* ── Запчасти ────────────────────────────────────────────────────────
+   Строка складывается из двух ярусов: сверху то, что пишет инженер
+   (название и артикул), снизу то, что считается (количество, признак
+   оплаты и — только менеджеру — деньги). */
+.pt-add{display:flex;gap: var(--sp-3);align-items:center;flex-wrap:wrap}
+.pt-sug{display:flex;gap: var(--sp-2);flex-wrap:wrap}
+.pt-sug button{font-size: var(--fs-2)}
+.pt-row{margin-top: var(--sp-3)}
+.pt-top{display:flex;gap: var(--sp-3);align-items:center}
+.pt-top input[data-pn]{flex:1 1 auto;min-width:0}
+.pt-top input[data-ps]{width:130px;flex:none}
+.pt-bot{display:flex;gap: var(--sp-3);align-items:center;margin-top: var(--sp-3);flex-wrap:wrap}
+.pt-bot input[data-pq]{width:74px;flex:none}
+.pt-bot select[data-pu]{width:88px;flex:none}
+/* Цена, закупка и сумма переносятся ОДНОЙ группой: разорванные по разным
+   строкам, они читаются как три независимых числа, а это одно —
+   «почём продали, почём взяли, сколько вышло». */
+.pt-money{display:flex;gap: var(--sp-3);align-items:center;flex:none}
+.pt-money input{width:92px;flex:none}
+.pt-sum{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
+.pt-rm{margin-left: auto}
+@media (max-width: 760px){
+  /* На 390 точках верхний ярус в одну строку оставлял названию около
+     100 px — «Фильтр масляны…». Артикул уходит под название целиком,
+     а крестик поднимается к названию: своей строкой он занимал бы
+     сорок четыре точки высоты ради одного знака. */
+  .pt-top{flex-wrap:wrap}
+  /* Ширина имени задаётся базой 0, а не auto: базовое правило для полей
+     ставит width:100%, и при переносе строк имя занимало всю строку
+     целиком, выталкивая крестик на следующую. */
+  .pt-top input[data-pn]{order:0;flex:1 1 0;width:auto;min-width:0}
+  .pt-top .pt-rm{order:1;flex:none;margin-left: 0}
+  .pt-top input[data-ps]{order:2;flex:1 0 100%;width:auto}
+}
 
 /* ── Подпись ─────────────────────────────────────────────────────────
    Белое поле независимо от темы: подпись — доказательство и однажды
@@ -1496,6 +1537,15 @@
         <div class="hint" id="jbTotals" style="margin-top: var(--sp-3)"></div>
       </div>
 
+      <div class="card trip-wide job-parts"><h3 class="cardhead">Запчасти и материалы <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Что поставили на машину. Две причины вести: без этого прибыль выезда считается без проданного узла — то есть занижена и по выручке, и по закупке; и через два года это единственное место, где будет ответ на «когда меняли».</span></span></h3>
+        <div class="pt-add" id="jbPartAdd">
+          <button class="btn sm" type="button" id="jbPartNew">+ запчасть</button>
+          <span class="pt-sug" id="jbPartSug"></span>
+        </div>
+        <div id="jbParts" style="margin-top: var(--sp-3)"></div>
+        <div class="hint" id="jbPartTotals" style="margin-top: var(--sp-3)"></div>
+      </div>
+
       <div class="card trip-wide job-photos"><h3 class="cardhead">Фото <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Снимок «до» отвечает на «оно уже было сломано», «после» — на «вы не сделали», «дефект» — на «деталь была бракованной». Это доказательная база к гарантии на ремонт, а не украшение. Снимок ужимается перед отправкой, чтобы уходил и на слабой связи.</span></span></h3>
         <div class="ph-add" id="jbPhotoAdd">
           <button class="btn sm" type="button" data-ph="before">+ до</button>
@@ -1636,23 +1686,23 @@
   </div>
     <!-- JOBS -->
   <div class="view view-planner"><div class="pane scrollp">
-    <!-- «Сегодня» — отдельный пункт меню, а не подраздел: это домашний
-         экран инженера, и прятать его за переключателем значило бы делать
-         главное вторым. Поэтому строка подразделов при нём скрыта целиком,
-         а сам пункт остаётся в разметке — по нему plannerSub() красит
-         активную подвкладку. -->
-    <div class="subtabs" id="plSubtabs">
-      <div class="subtab" data-sub="mine" style="display:none">Сегодня</div>
-      <div class="subtab active" data-sub="jobs">Заявки</div>
-      <div class="subtab" data-sub="trips" id="subTrips">Выезды</div>
-    </div>
+    <!-- Переключатель подразделов стоит НА МЕСТЕ заголовка страницы,
+         в каждой из них своей копией. Отдельной строкой над заголовком он
+         повторял то же слово дважды: «ЗАЯВКИ / ВЫЕЗДЫ», а под ними ещё раз
+         «ЗАЯВКИ». Заголовок и есть переключатель — активный подраздел
+         подчёркнут жёлтым, как везде в приложении.
+         Копий две, но список один: plannerSub() красит все .subtab по
+         data-sub, а видна всегда только одна панель.
+         «Сегодня» подразделом не является — это отдельный пункт меню
+         и домашний экран инженера. Он остаётся в разметке скрытым, чтобы
+         plannerSub() было что подсвечивать. -->
     <div id="plMine" style="display:none">
       <div class="pane-head"><h2>Сегодня</h2><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim)"><input type="checkbox" id="mineDone" style="width:auto">показать завершённые</label></div>
       <div id="mineList"></div>
     </div>
     <div id="plJobs">
       <div class="stickyhead">
-        <div class="pane-head"><h2>Заявки</h2>
+        <div class="pane-head"><div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">Сегодня</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
           <select id="jobEngFilter" style="width:150px"><option value="">все инженеры</option></select>
           <div class="searchbox"><input type="search" id="jobSearch" placeholder="поиск по клиенту…"></div>
           <button class="btn sm amber" id="jobAdd">+ Заявка</button></div>
@@ -1662,7 +1712,7 @@
     </div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
-        <div class="pane-head"><h2>Выезды</h2><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
+        <div class="pane-head"><div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">Сегодня</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
         <div class="chips" id="tripStatusChips"></div>
       </div>
       <div id="tripsKanban">
@@ -1689,7 +1739,6 @@
       <div class="settings-navwrap stickyhead">
       <div class="settings-nav" id="settingsNav">
         <button class="son on" data-sec="tariffs">Тарифы и параметры</button>
-        <button class="son" data-sec="docs">Реквизиты</button>
         <button class="son" data-sec="fleet">Автопарк</button>
         <button class="son" data-sec="users">Пользователи и роли</button>
         <button class="son" data-sec="theme">Оформление</button>
@@ -1716,12 +1765,6 @@
       <div id="tpList" style="margin-top: var(--sp-3)"></div>
       <button class="btn sm amber" id="profCreate" style="margin-top: var(--sp-4)">+ Создать профиль</button>
     </div>
-    <div class="card" data-sec-panel="docs" style="display:none"><h3 class="cardhead">Реквизиты организации <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Справочные данные организации. Документы приложение не печатает — реквизиты нужны, чтобы они лежали в одном месте, а не в переписке.</span></span></h3>
-      <label>Название организации</label><input type="text" id="coName" placeholder="ООО «…» / ФОП …">
-      <label style="margin-top: var(--sp-3)">Реквизиты (адрес, ЕДРПОУ/ИНН, телефон, банк — свободным текстом)</label><textarea id="coDetails" placeholder="г. …, ул. …&#10;ЕДРПОУ/ИНН …&#10;тел. …"></textarea>
-      <label style="margin-top: var(--sp-3)">Подписант (ФИО, должность)</label><input type="text" id="coSigner" placeholder="Директор Иванов И. И.">
-      <button class="btn sm amber" id="coSave" style="margin-top: var(--sp-4)">Сохранить реквизиты</button><span class="hint" id="coStatus" style="margin-left: var(--sp-3)"></span>
-    </div>
     <div class="card" data-sec-panel="theme" style="display:none"><h3>Тема по умолчанию для новых пользователей</h3>
       <div class="row"><div class="grow"><label>Режим</label><select id="dtMode"><option value="dark">Тёмная</option><option value="light">Светлая</option></select></div></div>
       <button class="btn sm amber" id="dtSave" style="margin-top: var(--sp-3)">Сохранить тему по умолчанию</button><span class="hint" id="dtStatus" style="margin-left: var(--sp-3)"></span>
@@ -1740,7 +1783,7 @@
       <div id="pushHelp" class="hint" style="margin-top: var(--sp-3)"></div>
       <div class="err" id="pushErr"></div>
     </div>
-    <div class="card" data-sec-panel="users" style="display:none"><h3 class="cardhead">Пользователи и роли <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Пользователи создаются регистрацией. Здесь меняются имя и роль.</span></span></h3>
+    <div class="card" data-sec-panel="users" style="display:none"><h3 class="cardhead">Пользователи и роли <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Саморегистрация отключена: учётную запись заводит администратор в Supabase (Authentication → Users), после чего она появится здесь. Тут меняются имя и роль.</span></span></h3>
       <div id="usersList" style="margin-top: var(--sp-3)"></div>
     </div>
       </div>
@@ -1837,7 +1880,7 @@
 
 <!-- auth -->
 <div class="overlay" id="authOverlay"><div class="modal s">
-  <h3 id="authTitle">Вход</h3>
+  <h3>Вход</h3>
   <div class="sub">Войди под учётной записью. Первого пользователя зарегистрируй, затем назначь ему роль admin в Supabase.</div>
   <label>Email</label><input type="email" id="auEmail" autocomplete="username">
   <label>Пароль</label><input type="password" id="auPass" autocomplete="current-password">
