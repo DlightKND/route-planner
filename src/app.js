@@ -3541,13 +3541,16 @@ function tripCard(t){ const e=t.econ_snapshot||{}; const eng=profilesList.find(p
     : '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок'+(e.km!=null?(' · '+(+e.km).toFixed(0)+' км'):'')+(e.driveH!=null?(' · '+(+e.driveH).toFixed(1)+' ч'):'')+'</div>';
   const mv=canWrite()?('<select class="kmove" data-tstat="'+t.id+'" title="Сменить статус">'+TRIP_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===t.status?' selected':'')+'>'+esc(ST_TRIP[s])+'</option>').join('')+'</select>'):'';
   const acts=canWrite()
-    ? '<div class="acts">'+mv+'<button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tmap="'+t.id+'" title="На карте">карта</button><button class="btn sm" data-tgm="'+t.id+'" title="Google Maps">⌖</button><button class="btn sm ghost" data-tdel="'+t.id+'" title="Удалить выезд">×</button></div>'
+    ? '<div class="acts">'+mv+'<button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tmap="'+t.id+'" title="На карте">карта</button>'
+      +((t.status==='finished'||t.status==='done')?('<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ км</button>'):'')
+      +'<button class="btn sm" data-tgm="'+t.id+'" title="Google Maps">⌖</button><button class="btn sm ghost" data-tdel="'+t.id+'" title="Удалить выезд">×</button></div>'
     : '<div class="acts"><button class="btn sm" data-tmap="'+t.id+'">карта</button><button class="btn sm" data-tgm="'+t.id+'">⌖ GMaps</button></div>';
   return '<div class="kcard" data-kid="'+t.id+'">'+head+meta+acts+'</div>'; }
 function wireTripCards(box){
   box.querySelectorAll('[data-tedit]').forEach(b=>b.onclick=()=>openTrip(b.dataset.tedit));
   box.querySelectorAll('[data-tmap]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.tmap));
   box.querySelectorAll('[data-tgm]').forEach(b=>b.onclick=()=>tripGmaps(b.dataset.tgm));
+  box.querySelectorAll('[data-tkm]').forEach(b=>b.onclick=()=>remeasureTrip(b.dataset.tkm));
   box.querySelectorAll('[data-tdel]').forEach(b=>b.onclick=()=>delTrip(b.dataset.tdel));
   box.querySelectorAll('[data-tstat]').forEach(sel=>sel.onchange=async()=>{ const id=sel.dataset.tstat, st=sel.value;
     const kind=TRIP_KIND[st];
@@ -3595,6 +3598,29 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs();
   const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
 // Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
 // было собирать глазами из четырёх мест модалки.
+// Факт-пробег в карточке выезда: число, откуда оно взято, что было с треком
+// и кнопка пересчёта.
+//
+// Почему это отдельный блок, а не строка в «Экономике». Число там —
+// слагаемое в себестоимости, и увидеть его недостаточно: надо понимать, чем
+// оно получено. «303 км (одометр)» и «303 км по треку» стоят одинаково, но
+// доверия заслуживают разного, а «вырезано аномалий: 4» объясняет разницу
+// с планом лучше любой сводки.
+function renderTpFactKm(){
+  const box=$('tpFactBox'); if(!box) return;
+  const t=tripEditId?trips.find(x=>x.id==tripEditId):null;
+  if(!t||!canWrite()||(t.status!=='finished'&&t.status!=='done')){ box.innerHTML=''; return; }
+  const val=t.fact_km!=null
+    ? ('<b>'+Math.round(t.fact_km)+' км</b>'+esc(factSrcRu(t.fact_km_source)))
+    : '<span class="fg-t">не сведён</span>';
+  box.innerHTML='<div class="hint">Факт-пробег: '+val
+    +(t.fact_km_note?('<br><span class="fg-t">'+esc(t.fact_km_note)+'</span>'):'')+'</div>'
+    +'<button class="btn sm" id="tpKmCalc" style="margin-top: var(--sp-3);width:100%">'
+    +(t.fact_km!=null?'↻ Пересчитать пробег по треку':'Свести пробег по треку')+'</button>';
+  const b=$('tpKmCalc');
+  if(b) b.onclick=async()=>{ const id=tripEditId; await remeasureTrip(id); if(tripEditId===id) renderTpFactKm(); };
+}
+
 function tripHead(){
   const per=tripPeriod($('tpFrom').value,$('tpTo').value);
   $('tripTitle').textContent=tripEditId?('Выезд '+per):'Новый выезд';
@@ -3614,6 +3640,7 @@ function tripHead(){
     +'<div class="te-s">маржа '+e.margin.toFixed(0)+'% · выручка '+Math.round(e.rev).toLocaleString('ru-RU')+'</div>';
   if($('tpJobsCnt')) $('tpJobsCnt').textContent=e.jobCount+' из '+tripJobsAll.length;
   if($('tpRouteKm')) $('tpRouteKm').textContent=tripRoute.km?(tripRoute.km.toFixed(0)+' км'):'—';
+  renderTpFactKm();
 }
 function plural(n,a,b,c){ n=Math.abs(n)%100; const n1=n%10;
   if(n>10&&n<20) return c; if(n1>1&&n1<5) return b; if(n1===1) return a; return c; }
