@@ -31,7 +31,8 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         econCompute, roadByPayer, jobPoint, partsMoney,
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
-        simplifyLine, kmBetween, todayISO, monthKey } = core;
+        simplifyLine, kmBetween, todayISO, monthKey,
+        cleanTrack, trackTotalKm, planGapFills, resolveAnomalies } = core;
 
 
 const $=id=>document.getElementById(id);
@@ -161,6 +162,14 @@ $('promptYes').onclick=()=>_pdDone(true); $('promptNo').onclick=()=>_pdDone(fals
 $('promptOverlay').addEventListener('click',e=>{ if(e.target===$('promptOverlay')) _pdDone(false); });
 document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; if($('confirmOverlay').classList.contains('on')) _cdDone(false); if($('promptOverlay').classList.contains('on')) _pdDone(false); });
 window.gotoSettings=()=>{ try{ switchTab('settings'); }catch(e){} };
+// Откуда взято число пробега — одним коротким словом рядом с ним.
+// Пустой источник у старых выездов значит «пришло от Wialon».
+function factSrcRu(src){
+  if(src==='track') return '';
+  if(src==='odometer') return ' (одометр)';
+  if(src==='wialon'||!src) return ' (Wialon)';
+  return '';
+}
 function orsKeyMissing(){ return !(appSettings.ors_proxy||'').trim(); }
 function orsMissing(el){ if(el) el.innerHTML='Маршрутизация не настроена. <span class="lnk" onclick="gotoSettings()">Указать ключ ORS или адрес прокси в настройках</span>'; }
 $('themeBtn').onclick=e=>{ e.stopPropagation(); $('themePop').classList.toggle('on'); };
@@ -335,6 +344,15 @@ map.on('click',()=>$('ctxMenu').classList.remove('on'));
 document.addEventListener('click',e=>{ const m=$('ctxMenu'); if(m.classList.contains('on') && !m.contains(e.target)) m.classList.remove('on'); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const m=$('ctxMenu'); if(m) m.classList.remove('on'); } });
 function canWrite(){ return role==='admin'||role==='logist'; }
+// Роль в списках и подписях — словом, а не идентификатором из базы:
+// «Гречка Р.І. (engineer)» в шапке заявки читал инженер, которому это
+// слово не говорит ничего.
+const ROLE_RU={admin:'админ',logist:'логист',engineer:'инженер'};
+function personLabel(p){
+  if(!p) return '';
+  const nm=p.full_name||'без имени';
+  return nm+(ROLE_RU[p.role]?(' · '+ROLE_RU[p.role]):'');
+}
 
 // ---------- tabs ----------
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
@@ -1785,6 +1803,12 @@ function tripActs(t){
   if(t.status==='finished' && canWrite()) a+='<button class="btn sm amber" data-tconf="'+t.id+'">✓ Подтвердить</button>';
   if(t.status==='finished' && !canWrite()) a+='<span class="pill">ждёт менеджера</span>';
   if(t.status==='finished'||t.status==='done') a+='<button class="btn sm" data-tstay="'+t.id+'">⏱ Стоянки</button>';
+  // Ручной пересчёт. Нужен, когда ORS в момент подтверждения был недоступен
+  // или отвечал ошибками: тогда часть точек осудили по кругу или по отказу
+  // маршрутизатора, а не по дорогам. Повторный запуск считает всё заново
+  // с чистого листа — никакой прошлый результат не подмешивается.
+  if((t.status==='finished'||t.status==='done')&&canWrite())
+    a+='<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ Пробег</button>';
   if(canWrite()) a+='<button class="btn sm" data-topen="'+t.id+'">открыть</button>';
   a+='<button class="btn sm ghost" data-tmap="'+t.id+'">на карте</button>';
   return a;
@@ -1854,8 +1878,17 @@ async function renderMine(){
   function tripBody(t){
     const jl=byTrip[t.id]||[];
     const veh=t.vehicles?(t.vehicles.name+(t.vehicles.plate?(' · '+t.vehicles.plate):'')):(t.vehicle_label||'машина не назначена');
-    let h='<h3>'+esc(tripTitle(t,jl))+' <span class="pill">'+esc(ST_TRIP[t.status]||t.status)+'</span> '+tripDayLabel(t)+'</h3>';
-    h+='<div class="meta">'+esc(tripPeriod(t.date_from,t.date_to))+' · '+esc(veh)+' · точек: '+jl.length+(t.fact_km?(' · факт '+Math.round(t.fact_km)+' км'):'')+(factHByTrip[t.id]?(' · '+factHByTrip[t.id].toFixed(1)+' ч на точках'):'')+'</div>';
+    // Пилюль было две: статус выезда и метка дня. Рядом они спорили —
+    // «план» и «идёт» на одной строке читаются как два разных состояния
+    // одного и того же. Метка дня важнее: она отвечает на «мне сегодня
+    // ехать?», а статус переезжает в строку под ней, к остальным фактам.
+    const day=tripDayLabel(t);
+    let h='<h3>'+esc(tripTitle(t,jl))+(day?(' '+day):'')+'</h3>';
+    // Заголовок падает на период, когда у выезда нет названий точек, —
+    // тогда дата в строке ниже была бы вторым её повторением подряд.
+    const per=esc(tripPeriod(t.date_from,t.date_to));
+    const titleIsPeriod=(esc(tripTitle(t,jl))===per);
+    h+='<div class="meta">'+esc(ST_TRIP[t.status]||t.status)+(titleIsPeriod?'':(' · '+per))+' · '+esc(veh)+' · точек: '+jl.length+(t.fact_km?(' · факт '+Math.round(t.fact_km)+' км'+factSrcRu(t.fact_km_source)):'')+(factHByTrip[t.id]?(' · '+factHByTrip[t.id].toFixed(1)+' ч на точках'):'')+'</div>';
     if(jl.length){
       h+='<div class="mine-pts">'+jl.map(j=>{
         const c=j.clients||{}; const tel=telHref(c.phone); const nav=navHref(c.lat,c.lng);
@@ -1890,9 +1923,12 @@ async function renderMine(){
     const d=document.createElement('div'); d.className='card mine-group';
     let h='<div class="mine-cap'+(tone?(' '+tone):'')+'">'+esc(title)+' <span class="acount">'+arr.length+'</span></div>';
     h+=arr.map(t=>{ const jl=byTrip[t.id]||[];
+      // У выезда без привязанных точек заголовком становится сам период —
+      // и тогда строка под ним печатала ту же дату второй раз подряд.
+      const nm=esc(tripTitle(t,jl)), per=esc(tripPeriod(t.date_from,t.date_to));
       return '<details class="mine-det"><summary class="mine-row">'
-        +'<span class="mr-main"><span class="mr-name">'+esc(tripTitle(t,jl))+'</span>'
-        +'<span class="mr-sub">'+esc(tripPeriod(t.date_from,t.date_to))+' · точек: '+jl.length+'</span></span>'
+        +'<span class="mr-main"><span class="mr-name">'+nm+'</span>'
+        +'<span class="mr-sub">'+(nm===per?'':(per+' · '))+'точек: '+jl.length+'</span></span>'
         +'<span class="mr-st">'+esc(ST_TRIP[t.status]||t.status)+'</span></summary>'
         +'<div class="mine-body">'+tripBody(t)+'</div></details>'; }).join('');
     d.innerHTML=h; return d;
@@ -1963,6 +1999,7 @@ async function renderMine(){
   box.querySelectorAll('[data-mopen]').forEach(b=>b.onclick=()=>openJob(b.dataset.mopen));
   box.querySelectorAll('[data-tmap]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.tmap));
   box.querySelectorAll('[data-tstay]').forEach(b=>b.onclick=()=>openStaysModal(b.dataset.tstay));
+  box.querySelectorAll('[data-tkm]').forEach(b=>b.onclick=()=>remeasureTrip(b.dataset.tkm));
   box.querySelectorAll('[data-tresched]').forEach(b=>b.onclick=()=>openReschedModal(b.dataset.tresched));
   box.querySelectorAll('[data-rok]').forEach(b=>b.onclick=()=>reschedDecide(b.dataset.rok,true));
   box.querySelectorAll('[data-rno]').forEach(b=>b.onclick=()=>reschedDecide(b.dataset.rno,false));
@@ -1987,6 +2024,9 @@ async function jobSetStatus(id,st){ const j=jobs.find(x=>x.id==id);
 function populateEquip(){ const list=eqByClient[$('jbClient').value]||[]; $('jbEquip').innerHTML='<option value="">— без привязки —</option>'+list.map(e=>'<option value="'+e.id+'">'+esc(e.model+(e.serial?' · '+e.serial:''))+'</option>').join(''); }
 $('jbClient').onchange=()=>{ populateEquip(); jobHead(); };
 ['jbEquip','jbStatus','jbEng','jbDue'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',jobHead); });
+// Сменили исполнителя или статус — меняются и права на действия внутри
+// страницы: отметка приезда и правка запчастей смотрят на то же самое.
+['jbEng','jbStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',()=>{ paintVisit(); renderJobParts(); }); });
 // Заявку открывают и из «Сегодня», где без связи список jobs пуст.
 // Тогда берём строку из снимка — она там полная, вместе с работами.
 async function snapFindJob(id){
@@ -1998,7 +2038,7 @@ async function snapFindJob(id){
 async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEditId=id;
   const j=id?(jobs.find(x=>x.id==id)||await snapFindJob(id)):null;
   $('jbClient').innerHTML=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
-  $('jbEng').innerHTML='<option value="">— не назначен —</option>'+profilesList.map(p=>'<option value="'+p.id+'">'+esc((p.full_name||'без имени')+' ('+p.role+')')+'</option>').join('');
+  $('jbEng').innerHTML='<option value="">— не назначен —</option>'+profilesList.map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
   $('jbWorkPick').innerHTML='<option value="">— выбрать работу —</option>'+catalog.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join('');
   $('jobTitle').textContent=id?'Заявка':'Новая заявка';
   $('jbClient').value=j?j.client_id:(presetClient||(clients[0]?clients[0].id:'')); populateEquip();
@@ -2153,7 +2193,9 @@ function jobHead(){
   const parts=[];
   if(eqName) parts.push(esc(eqName)); else parts.push('без техники');
   const st=$('jbStatus'); if(st) parts.push(esc(st.options[st.selectedIndex].text));
-  const en=$('jbEng'); if(en&&en.selectedIndex>0) parts.push(esc(en.options[en.selectedIndex].text));
+  // Своё имя человек в подписи не читает — он и так знает, чья это заявка.
+  const en=$('jbEng');
+  if(en&&en.selectedIndex>0) parts.push(en.value===session.user.id?'на мне':esc(en.options[en.selectedIndex].text));
   const due=$('jbDue').value;
   if(due){
     const u=jobUrgency({due_date:due,created_at:null},new Date());
@@ -2510,14 +2552,15 @@ async function qSendOne(it){
     return;
   }
   if(it.kind==='job'){
-    const {error}=await sb.from('jobs').update(p.rec).eq('id',p.jobId);
-    if(error) throw error;
+    // Тот же порядок, что и при обычном сохранении: работы, затем статус.
     const del=await sb.from('job_works').delete().eq('job_id',p.jobId);
     if(del.error) throw del.error;
     if(p.works&&p.works.length){
       const ins=await sb.from('job_works').insert(p.works.map(w=>Object.assign({job_id:p.jobId},w)));
       if(ins.error) throw ins.error;
     }
+    const {error}=await sb.from('jobs').update(p.rec).eq('id',p.jobId);
+    if(error) throw error;
     // Заявку закрыли без связи — последствия наступают сейчас, а не теряются.
     if(p.rec&&p.rec.status==='done') await jobClosed(p.jobId,{equipmentId:p.rec.equipment_id,works:p.works||[]});
     return;
@@ -2729,21 +2772,42 @@ async function loadJobVisits(){
   }
   paintVisit();
 }
+// «Я на месте» — свидетельство о СЕБЕ, и нажать его может только тот, кто
+// на этом месте есть: исполнитель заявки. Менеджеру кнопка показывалась
+// потому, что рисовалась по одному признаку «заявка открыта», и он мог
+// отметить чужой приезд от своего имени — сервер бы это принял, политика
+// job_visits смотрит на created_by, а не на исполнителя.
+//
+// Сами отметки менеджер видит: это данные о дне инженера, ради них всё
+// и заводилось. Разница между «видеть» и «делать» здесь и есть роль.
+function canMarkVisit(){
+  return !!(jobEditId && !jobRO && $('jbEng') && $('jbEng').value===session.user.id);
+}
+function visitTotalNote(total){
+  // Меньше четверти часа не показываем: это промах по кнопке,
+  // а не работа, и «по отметкам 0 ч» выглядит как поломка.
+  return (total>=0.25)
+    ? '<span class="visit-note">по отметкам '+total.toFixed(2).replace(/\.?0+$/,'')+' ч</span>'
+    : '';
+}
 function paintVisit(){
   const box=$('jbVisit'); if(!box) return;
   if(!jobEditId){ box.innerHTML=''; return; }
-  const v=openVisit(), total=visitsTotal();
+  const v=openVisit(), total=visitsTotal(), mine=canMarkVisit();
   let h='';
-  if(v){
+  if(!mine){
+    // Читателю — только факт. Пустая строка и есть пустая строка:
+    // «отметок нет» под каждой заявкой было бы шумом на весь список.
+    if(v) h+='<span class="visit-note">инженер на месте с '+esc(visitTime(v.started_at))+'</span>';
+    h+=visitTotalNote(total);
+  } else if(v){
     h+='<button class="btn amber" type="button" id="visitEnd">Уехал</button>'
       +'<span class="visit-note">на месте с '+esc(visitTime(v.started_at))+'</span>';
   } else {
-    h+='<button class="btn" type="button" id="visitStart">Я на месте</button>';
-    // Меньше четверти часа не показываем: это промах по кнопке,
-    // а не работа, и «по отметкам 0 ч» выглядит как поломка.
-    if(total>=0.25) h+='<span class="visit-note">по отметкам '+total.toFixed(2).replace(/\.?0+$/,'')+' ч</span>';
+    h+='<button class="btn" type="button" id="visitStart">Я на месте</button>'+visitTotalNote(total);
   }
   box.innerHTML=h;
+  box.style.display=h?'':'none';
   if($('visitStart')) $('visitStart').onclick=visitStart;
   if($('visitEnd')) $('visitEnd').onclick=visitEnd;
 }
@@ -3155,10 +3219,21 @@ async function snapJobPatch(jobId,rec,works){
 // Запись без навигации и без тостов: её зовёт и кнопка, и автосохранение.
 async function persistJob(rec){
   let jobId=jobEditId;
-  if(jobEditId){ const {error}=await sb.from('jobs').update(rec).eq('id',jobEditId); if(error) throw error; }
-  else { rec.created_by=session.user.id; const {data,error}=await sb.from('jobs').insert(rec).select('id').single(); if(error) throw error; jobId=data.id; }
-  await sb.from('job_works').delete().eq('job_id',jobId);
-  if(curWorks.length){ const rows=curWorks.map(w=>Object.assign({job_id:jobId},jobWorkRow(w))); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
+  // Порядок: сначала работы, потом статус. Обратный порядок делал закрытие
+  // заявки невозможным для инженера, как только на job_works появится
+  // условие «пока заявка не закрыта»: он ставил бы «закрыта», а следующим
+  // же запросом пытался переписать работы уже закрытой заявки.
+  // Порядок важен и без политики: если что-то оборвётся посередине, лучше
+  // сохранённые работы при старом статусе, чем закрытая заявка без работ.
+  if(jobEditId){
+    await sb.from('job_works').delete().eq('job_id',jobId);
+    if(curWorks.length){ const rows=curWorks.map(w=>Object.assign({job_id:jobId},jobWorkRow(w))); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
+    const {error}=await sb.from('jobs').update(rec).eq('id',jobEditId); if(error) throw error;
+  } else {
+    rec.created_by=session.user.id;
+    const {data,error}=await sb.from('jobs').insert(rec).select('id').single(); if(error) throw error; jobId=data.id;
+    if(curWorks.length){ const rows=curWorks.map(w=>Object.assign({job_id:jobId},jobWorkRow(w))); const {error:e2}=await sb.from('job_works').insert(rows); if(e2) throw e2; }
+  }
   if(rec.status==='done') await jobClosed(jobId,{equipmentId:rec.equipment_id,
     works:curWorks.map(w=>({billable:w.billable,title:w.name})),
     days:parseInt($('jbWarrDays').value,10)});
@@ -3179,28 +3254,27 @@ async function persistJob(rec){
 //
 // Теперь путь один, и все четыре места ведут сюда.
 async function jobClosed(jobId,opts){
-  const o=opts||{}; if(!jobId||!o.equipmentId) return;
-  const works=(o.works||[]).filter(w=>w&&w.billable!==false);
-  const days=(o.days!=null&&!isNaN(o.days))?o.days:(parseInt(appSettings.repair_warranty_days,10)||0);
-  if(days>0 && works.length){
-    try{
-      // Повторное закрытие не должно плодить вторую гарантию.
-      const {data:ex,error:exErr}=await sb.from('repair_warranties').select('id').eq('origin_job_id',jobId).limit(1);
-      if(exErr) throw exErr;
-      if(!ex||!ex.length){
-        const until=new Date(Date.now()+days*86400000).toISOString().slice(0,10);
-        const covers=works.map(w=>w.title||w.name||'').filter(Boolean).join(', ').slice(0,300);
-        const {error}=await sb.from('repair_warranties').insert({equipment_id:o.equipmentId,origin_job_id:jobId,covers,until});
-        if(error) throw error;
-        showToast('Гарантия на ремонт до '+until);
-      }
-    }catch(e){
-      // Инженеру технический текст ничего не даёт: политику базы правит
-      // не он. Говорим то, что он может сделать.
-      notify(canWrite()
-        ? ('Гарантия на ремонт не создалась: '+((e&&e.message)||e))
-        : 'Гарантия на ремонт не записалась — скажи менеджеру','err');
-    }
+  const o=opts||{}; if(!jobId) return;
+  // Оба последствия — серверными функциями, а не запросами отсюда.
+  //
+  // Политика repair_warranties разрешает запись только роли admin/logist,
+  // то есть прямой insert от инженера отказывался бы — а закрывает заявку
+  // как раз он. Функция с security definer снимает вопрос: правило «кому
+  // положена гарантия» живёт там же, где данные, и одинаково работает
+  // из поля, из канбана и из очереди после офлайна.
+  //
+  // Ровно тот же приём уже применён к отметке визита по технике
+  // (register_equipment_visit): она идемпотентна — берёт greatest от
+  // прежней даты, поэтому повторный вызов ничего не портит.
+  const days=(o.days!=null&&!isNaN(o.days)&&o.days>0)?o.days:null;
+  try{
+    const {data,error}=await sb.rpc('register_repair_warranty',days!=null?{p_job:jobId,p_days:days}:{p_job:jobId});
+    if(error) throw error;
+    if(data) showToast('Гарантия на ремонт до '+data);
+  }catch(e){
+    // Функции ещё нет в базе — это не поломка закрытия заявки, а
+    // невыполненная миграция. Инженеру про неё знать нечего.
+    if(canWrite()) notify('Гарантия на ремонт не создалась: '+((e&&e.message)||e)+' (выполнен ли sql/19?)','err');
   }
   try{ await sb.rpc('register_equipment_visit',{p_job:jobId}); await reloadEquip(); }
   catch(e){ notify('Заявка закрыта, но визит по технике не отметился: '+((e&&e.message)||e),'err'); }
@@ -3506,7 +3580,7 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs();
   // покажет другую цифру — поэтому ждём здесь, до первого tripCalc().
   await ensureTurf().catch(()=>{}); tripEditId=id; const t=id?getTrip(id):null; tripMainJobId=(t&&t.main_job_id)||null;
   $('tpFrom').value=t?(t.date_from||''):''; $('tpTo').value=t?(t.date_to||''):''; $('tpVeh').innerHTML='<option value="">— авто —</option>'+vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.name+(v.plate?(' · '+v.plate):''))+'</option>').join(''); $('tpVeh').value=t&&t.vehicle_id?t.vehicle_id:''; updateVehInfo(); $('tpVeh').onchange=()=>{ updateVehInfo(); tripHead(); }; $('tpNotes').value=t?(t.notes||''):'';
-  $('tpEng').innerHTML='<option value="">— инженер —</option>'+profilesList.map(p=>'<option value="'+p.id+'">'+esc((p.full_name||'без имени')+' ('+p.role+')')+'</option>').join('');
+  $('tpEng').innerHTML='<option value="">— инженер —</option>'+profilesList.map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
   $('tpEng').value=t&&t.lead_engineer?t.lead_engineer:''; $('tpStatus').value=t?t.status:'planned';
   curTripJobs=new Set(); if(t){ const {data}=await sb.from('trip_jobs').select('job_id').eq('trip_id',id); (data||[]).forEach(r=>curTripJobs.add(r.job_id)); }
   const ro=!canWrite(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
@@ -3728,10 +3802,11 @@ async function loadSettings(){ try{
   // select('*') этот блоб приезжал бы каждый раз, когда открывают настройки.
   const SETTINGS_COLS='id,shift_hours,deviation_pct,currency,tariffs,costs,'
     +'default_theme,repair_warranty_days,contact_period_days,'
-    +'avoid_zones,tariff_profiles,ors_proxy,stay_radius_m,stay_min_minutes';
+    +'avoid_zones,tariff_profiles,ors_proxy,stay_radius_m,stay_min_minutes,'
+    +'track_max_kmh,track_slack';
   let {data}=await sb.from('settings').select(SETTINGS_COLS).eq('id',true).single();
   if(!data){ const pub=await sb.from('settings_public').select('*').eq('id',true).single(); data=pub.data||null; }
-  if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),stay_radius_m:(data.stay_radius_m==null?300:data.stay_radius_m),stay_min_minutes:(data.stay_min_minutes==null?10:data.stay_min_minutes),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); }
+  if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),stay_radius_m:(data.stay_radius_m==null?300:data.stay_radius_m),stay_min_minutes:(data.stay_min_minutes==null?10:data.stay_min_minutes),track_max_kmh:(data.track_max_kmh==null?300:data.track_max_kmh),track_slack:(data.track_slack==null?1.5:data.track_slack),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); }
   // Пустой результат по обоим источникам — это не «настроек нет», это сбой
   // связи или прав. Без сообщения приложение молча открывалось бы без темы,
   // без зон объезда и без маршрутизации, и искать причину пришлось бы наугад.
@@ -3741,6 +3816,8 @@ function renderSettings(){ const s=appSettings; $('stShift').value=s.shift_hours
   const c=s.costs||{}; $('csKm').value=c.km||0;$('csHour').value=c.hour||0;$('csDay').value=c.day||0;$('csNight').value=c.night||0;
   if($('stStayRad')) $('stStayRad').value=(s.stay_radius_m==null?300:s.stay_radius_m);
   if($('stStayMin')) $('stStayMin').value=(s.stay_min_minutes==null?10:s.stay_min_minutes);
+  if($('stTrkKmh')) $('stTrkKmh').value=(s.track_max_kmh==null?300:s.track_max_kmh);
+  if($('stTrkSlack')) $('stTrkSlack').value=(s.track_slack==null?1.5:s.track_slack);
   const dt=s.default_theme||{}; $('dtMode').value=dt.mode||'dark'; $('orsProxy').value=s.ors_proxy||''; $('stWarrDays').value=(s.repair_warranty_days==null?90:s.repair_warranty_days); $('stContact').value=s.contact_period_days||0;
   renderProfiles(); renderVehicles(); renderUsersAdmin(); }
 let profEditId=null;
@@ -3776,7 +3853,7 @@ if($('profCreate')) $('profCreate').onclick=()=>{ profileResetForm(); $('profOve
 function settingsNav(sec){ document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
 document.querySelectorAll('#settingsNav .son').forEach(b=>b.onclick=()=>settingsNav(b.dataset.sec));
 document.querySelectorAll('.settings-body > .card > h3').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('collapsed'));
-$('stSave').onclick=async ()=>{ const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,updated_at:new Date().toISOString()};
+$('stSave').onclick=async ()=>{ const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,updated_at:new Date().toISOString()};
   const {error}=await sb.from('settings').update(rec).eq('id',true); if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings=Object.assign(appSettings,rec); $('stStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 $('dtSave').onclick=async ()=>{ const dt={mode:$('dtMode').value,accent:'#ffe100'}; const {error}=await sb.from('settings').update({default_theme:dt}).eq('id',true); if(error){ $('dtStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.default_theme=dt; $('dtStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 async function renderUsersAdmin(){ const {data,error}=await sb.from('profiles').select('id,full_name,role'); const box=$('usersList'); if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
@@ -4172,9 +4249,69 @@ async function refreshTripEcon(tripId){
   }catch(e){ console.warn('Пересчёт экономики выезда не прошёл:',e); return false; }
 }
 
+// Ручной пересчёт пробега из карточки выезда.
+//
+// Проверка по дорогам зависит от чужого сервиса, а он бывает недоступен —
+// кончилась квота, упал прокси, вернул ошибку на конкретную координату.
+// В такой момент часть решений принимается кругом, и результат честно
+// помечается словами «судили по кругу». Пересчёт даёт этому вторую попытку.
+//
+// Считаем ЗАНОВО, с нуля: прошлые достроенные отрезки не подмешиваем, иначе
+// повтор наследовал бы ровно те ошибки, ради которых его и запускают.
+async function remeasureTrip(tid){
+  if(!canWrite()) return;
+  const t=trips.find(x=>x.id==tid);
+  const wasDone=t&&t.status==='done';
+  if(!await confirmDialog(
+      wasDone
+        ? 'Пересчитать факт-пробег по треку? Выезд уже подтверждён: деньги пересоберутся, а одометр машины менялся в момент подтверждения — сверь его показания вручную.'
+        : 'Пересчитать факт-пробег по треку?',
+      {okText:'Пересчитать'})) return;
+  delete gapRoutes[tid]; delete gapLines[tid];
+  if(!await settleFactKm(tid)) return;
+  if(wasDone) await refreshTripEcon(tid);
+  await loadAll();
+  if(plannerCur==='mine') renderMine(); else renderTripsView();
+  renderTrips();
+}
+
+// Сведение факта по выезду. Возвращает false, если закрывать рано:
+// человек отказался вписывать одометр, а придумывать число за него мы не
+// станем — лучше выезд повисит на проверке, чем в отчёт уедет выдумка.
+async function settleFactKm(tid){
+  let m;
+  try{ showToast('Считаю фактический пробег…'); m=await measureTripKm(tid); }
+  catch(e){ notify('Пробег посчитать не вышло: '+(e.message||e),'err'); m=null; }
+
+  if(m&&m.ok){
+    try{ await writeFactKm(tid,m.km,'track',m.note); }
+    catch(e){ notify('Пробег посчитан, но не записался: '+(e.message||e),'err'); return false; }
+    showToast('Факт: '+m.km+' км по треку'+(m.note?(' · '+m.note):''));
+    return true;
+  }
+
+  const why=(m&&m.why)||'трек посчитать не удалось';
+  const ok=await confirmDialog(
+    why+'. Свести пробег по навигации нельзя — впиши два числа с одометра машины.',
+    {title:'Трек недостоверен',okText:'Ввести одометр',cancelText:'Отложить'});
+  if(!ok) return false;
+  const od=await askOdometer(tid);
+  if(!od) return false;
+  try{ await writeFactKm(tid,od.km,'odometer','по одометру '+od.a+' → '+od.b+'; '+why); }
+  catch(e){ notify('Одометр не записался: '+(e.message||e),'err'); return false; }
+  showToast('Факт: '+od.km+' км по одометру');
+  return true;
+}
+
 async function tripAction(id,kind){
   const a=TRIP_ASK[kind];
   if(!await confirmDialog(a.q,{okText:a.ok})) return;
+  // Подтверждение — последняя точка, где пробег ещё можно поправить: сразу
+  // после него число уходит в одометр машины и в себестоимость. Поэтому
+  // считаем факт ЗДЕСЬ, до RPC, и своими руками.
+  if(kind==='confirm'&&canWrite()){
+    if(!await settleFactKm(id)) return;
+  }
   try{
     const { data, error }=await sb.rpc(TRIP_RPC[kind],{p_trip:id});
     if(error) throw error;
@@ -4255,23 +4392,326 @@ if($('todayLater')) $('todayLater').onclick=()=>$('todayOverlay').classList.remo
 
 // ---------- факт-трек на карте ----------
 let factLayer=L.layerGroup().addTo(map);
+// Трек рисуется НЕ сырым. Приёмник ошибается тремя разными способами, и
+// сплошная линия по всем точкам подряд врёт по-разному в каждом случае:
+// телепорт добавляет две длины выброса, дрожание на стоянке — километры
+// стоящей машины, а пропажа связи, наоборот, занижает — прямая через
+// разрыв короче дороги.
+//
+// Поэтому: выбросы вырезаем, дрожание не считаем, а разрывы ПОКАЗЫВАЕМ
+// как разрывы — отдельной пунктирной линией другого цвета. Дорисовать их
+// маршрутом по дорогам можно и нужно, но пока этого не сделано, честнее
+// нарисовать «здесь мы не знаем», чем провести прямую и промолчать.
 async function showTripOnMap(tid){
   switchTab('map');
   factLayer.clearLayers();
   try{
     const { data }=await sb.from('vehicle_positions').select('lat,lng,ts,status')
       .eq('trip_id',tid).order('ts');
-    const pts=(data||[]).filter(p=>p.lat!=null&&p.lng!=null);
-    if(!pts.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Фактического трека нет'); return; }
-    // Факт поверх плана: план уже рисует routeLayer, мы кладём вторую линию.
-    factLayer.addLayer(L.polyline(pts.map(p=>[p.lat,p.lng]),{color:'#22c55e',weight:4,opacity:.85,dashArray:'1 7',lineCap:'round'}));
+    const raw=(data||[]).filter(p=>p.lat!=null&&p.lng!=null);
+    if(!raw.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Фактического трека нет'); return; }
+    const c=cleanTrack(raw);
+    const pts=c.points;
+    if(!pts.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
+
+    // Рвём линию на кусках-разрывах: одна сплошная через дыру нарисовала бы
+    // проезд, которого мы не видели.
+    const gapAt=new Set(c.gaps.map(g=>g.from));
+    let seg=[pts[0]];
+    const segs=[];
+    for(let i=1;i<pts.length;i++){
+      if(gapAt.has(pts[i-1].ts)){ segs.push(seg); seg=[pts[i]]; }
+      else seg.push(pts[i]);
+    }
+    segs.push(seg);
+    segs.filter(s2=>s2.length>1).forEach(s2=>factLayer.addLayer(
+      L.polyline(s2.map(p=>[p.lat,p.lng]),{color:'#22c55e',weight:4,opacity:.85,dashArray:'1 7',lineCap:'round'})));
+
+    // Разрывы: короткие достраиваем прямой прямо сейчас, длинные —
+    // маршрутом по дорогам. Порог в пяти километрах не про точность ради
+    // точности: ниже него прямая отличается от дороги на сотни метров,
+    // и внешний запрос за такой разницей не окупается, а выше — ошибка
+    // уже в километрах, и это прямо себестоимость выезда.
+    const plan=planGapFills(c);
+    const known=gapLines[tid]||{}, knownKm=gapRoutes[tid]||{};
+    plan.forEach(g=>{
+      // Отрезок, посчитанный при сведении выезда, уже лежит у нас целиком —
+      // и линией, и километрами. Рисуем его, а не серую прямую, и ничего
+      // не спрашиваем заново.
+      const line=known[g.from];
+      if(line&&line.length>1){
+        factLayer.addLayer(L.polyline(line.map(pt=>[pt[1],pt[0]]),
+          {color:'#9aa1ad',weight:3,opacity:.9,dashArray:'10 8'})
+          .bindPopup('Связи не было '+g.minutes+' мин. По дорогам '
+            +(knownKm[g.from]!=null?(+knownKm[g.from]).toFixed(1):'?')+' км.'));
+        return;
+      }
+      const straight=[[g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]];
+      const why=(g.fill==='ors')
+        ? 'Связи не было '+g.minutes+' мин. Достраиваю маршрутом по дорогам…'
+        : 'Связи не было '+g.minutes+' мин. По прямой '+g.straightKm.toFixed(1)+' км'
+          +(g.why==='короткий'?' — на таком куске дорога от прямой почти не отличается.'
+                              :' — маршрут не строился: '+g.why+'.');
+      factLayer.addLayer(L.polyline(straight,{color:'#9aa1ad',weight:3,opacity:.8,dashArray:'10 8'}).bindPopup(why));
+    });
+    // Маршруты по дорогам — после отрисовки, чтобы карта не ждала сеть.
+    const need=plan.filter(g=>g.fill==='ors'&&known[g.from]==null);
+    if(need.length) fillGapsByRoad(tid,need,c);
+    // Вырезанное показываем, а не прячем: если приёмник врёт постоянно,
+    // это видно на карте, и разговор с поставщиком трекера предметный.
+    c.dropped.forEach(p=>{
+      factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:4,color:'#dc2626',fillColor:'#dc2626',fillOpacity:.6,weight:1})
+        .bindPopup('Отброшено: '+esc(p.why)+'<br>'+new Date(p.ts).toLocaleString('ru')));
+    });
     pts.filter(p=>p.status==='idle').forEach(p=>{
       factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:5,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:.9,weight:2})
         .bindPopup('Стоянка с '+new Date(p.ts).toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'})));
     });
     setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(pts.map(p=>[p.lat,p.lng])).getBounds(),{padding:[40,40]}); },60);
-    showToast('Факт: '+pts.length+' точек');
+    const tot=trackTotalKm(c,gapRoutes[tid]||null);
+    const bits=['Факт: '+Math.round(tot.km)+' км по '+c.keptCount+' точкам'];
+    if(c.gaps.length) bits.push(c.gaps.length+' '+plural(c.gaps.length,'разрыв','разрыва','разрывов')
+      +' (+'+Math.round(tot.straightKm+tot.routeKm)+' км)');
+    if(c.dropped.length) bits.push('вырезано '+c.dropped.length);
+    if(c.jitterKm>=0.5) bits.push('дрожание '+c.jitterKm.toFixed(1)+' км');
+    // Число на карте — это то, что видно сейчас. Записанный факт мог быть
+    // сведён иначе (по одометру, при другой доступности ORS), и путать их
+    // нельзя: в деньги идёт записанный.
+    const tr=trips.find(x=>x.id==tid);
+    if(tr&&tr.fact_km!=null) bits.push('записано '+Math.round(tr.fact_km)+' км'+factSrcRu(tr.fact_km_source));
+    showToast(bits.join(' · '));
   }catch(e){ notify('Трек не загрузился: '+(e.message||e),'err'); }
+}
+
+// Достройка длинных разрывов маршрутом по дорогам.
+//
+// Отдельной функцией и после отрисовки: сеть может отвечать секунды, а
+// трек человек должен увидеть сразу. Каждый посчитанный кусок заменяет
+// свою серую прямую линией по дорогам и уточняет цифру в подписи.
+//
+// Результат отсюда в fact_km НЕ пишется: это просмотр карты, а не сведение
+// выезда. Факт считается один раз и в одном месте — в settleFactKm при
+// подтверждении, — иначе у одной цифры заведётся два источника, ровно то,
+// от чего мы уже лечили econ_snapshot.
+let gapRoutes={};
+// Геометрия достроенных отрезков: рисуется на карте, второй раз у ORS не
+// запрашивается. Живёт рядом с километрами, но отдельно от них — считает
+// пробег trackTotalKm, а он про линии ничего не знает и знать не должен.
+let gapLines={};
+async function fillGapsByRoad(tid,need,c){
+  if(orsKeyMissing()) return;
+  const got=Object.assign({},gapRoutes[tid]||{});
+  for(const g of need){
+    if(got[g.from]!=null) continue;
+    try{
+      const gj=await orsPost(ORS_DIR,{coordinates:[[g.fromPt.lng,g.fromPt.lat],[g.toPt.lng,g.toPt.lat]]});
+      const f=(gj.features||[])[0]; if(!f) continue;
+      const km=(+(((f.properties||{}).summary||{}).distance)||0)/1000;
+      if(!km) continue;
+      got[g.from]=km;
+      const line=(f.geometry&&f.geometry.coordinates)||[];
+      if(line.length>1){
+        gapLines[tid]=Object.assign({},gapLines[tid]||{},{[g.from]:line});
+        factLayer.addLayer(L.polyline(line.map(p=>[p[1],p[0]]),
+          {color:'#9aa1ad',weight:3,opacity:.9,dashArray:'10 8'})
+          .bindPopup('Связи не было '+g.minutes+' мин. По дорогам '+km.toFixed(1)+
+                     ' км (по прямой было бы '+g.straightKm.toFixed(1)+').'));
+      }
+    }catch(e){ /* один разрыв не достроился — остальные не отменяем */ }
+  }
+  gapRoutes[tid]=got;
+  const t=trackTotalKm(c,got);
+  const bits=['Факт: '+Math.round(t.km)+' км'];
+  if(t.routeKm) bits.push('из них '+Math.round(t.routeKm)+' достроено по дорогам');
+  if(t.pendingRoutes) bits.push(t.pendingRoutes+' '+plural(t.pendingRoutes,'разрыв','разрыва','разрывов')+' не достроено');
+  showToast(bits.join(' · '));
+}
+
+// ---------- достоверность факт-трека и наш собственный пробег ----------
+//
+// ЗАЧЕМ. Пробег выезда до сих пор приходил числом от Wialon. Проверка на
+// живом выезде показала, что верить ему нельзя: сумма прямых по точкам дала
+// 12 500 км, Wialon записал 200, физический одометр показал 303. То есть
+// в треке была аномалия, Wialon её по-своему вырезал — вместе с настоящим
+// куском дороги, — и отдал заниженное число. Два разных детектора, две
+// разные ошибки и ни одного способа узнать, какая цифра верна.
+//
+// Поэтому факт считаем сами и по своим правилам. Проверяем КАЖДЫЙ выезд:
+// когда аномалий нет, проход стоит один цикл по точкам и ни одного внешнего
+// запроса — он просто попарно подтверждает точки и заканчивается словом
+// «чисто». Платим только там, где трек действительно рвался.
+//
+// ДВА ИНСТРУМЕНТА ОДНОГО ПРАВИЛА. Круг радиусом 300 км/ч × Δt — грубая
+// форма: бесплатная, и на срыве отвечает сразу. Изохрона по дорогам —
+// точная: она строже круга и нужна ровно в одном месте — когда после срыва
+// круг разросся до сотен километров и перестал что-либо значить, а решить
+// надо, вернулась ли машина в трек. За это и платим запросом.
+//
+// ЧЕМ СПРАШИВАТЬ ПРО ДОРОГИ. Сначала это была изохрона: строим от последней
+// достоверной точки область «куда успел бы за Δt» и смотрим, попал ли
+// кандидат внутрь. Идея правильная, инструмент — нет. У изохрон везде
+// потолок около часа (ORS — 3600 секунд для машины, у Mapbox и GraphHopper
+// то же самое), и это не жадность бесплатного тарифа: область растёт по
+// площади, и час — предел, за которым её честный расчёт дорожает обвально.
+// А нам нужен ровно противоположный случай: длинный сбой, когда трека нет
+// два-три часа. Именно там круг уже бесполезен, а изохрона отвечать
+// отказывается.
+//
+// Обходить потолок цепочкой изохрон — считать вторую от края первой — плохо
+// вдвойне. Область от дуги приближается несколькими точками на ней, и союз
+// таких кусков ВСЕГДА меньше настоящей области. Ошибка копится с каждым
+// шагом и работает в самую опасную сторону: мы объявляли бы недостижимыми
+// точки, до которых машина доезжала, и удаляли бы настоящий трек.
+//
+// Вопрос был поставлен сложнее, чем нужно. Изохрона отвечает «куда успел бы»
+// — это ответ для СОТНИ кандидатов сразу. Кандидат у нас один: после каждой
+// принятой точки якорь переезжает. Для одного кандидата есть прямой вопрос:
+// СКОЛЬКО ЕХАТЬ ПО ДОРОГАМ от a до b. Маршрут отвечает и временем, и
+// расстоянием, никакого потолка у него нет, эндпоинт уже разрешён в прокси
+// и уже используется приложением.
+//
+// И ответ строже. Изохрона — это дискретная оценка того же самого: областью
+// с конечным числом углов. Маршрут даёт время САМОГО БЫСТРОГО пути, то есть
+// точную нижнюю границу. Если ORS говорит «три часа», а у нас было сорок
+// минут, — это не «вероятно нет», это нет.
+//
+// ЗАПАС (настройка «Запас времени»). ORS считает по разрешённым скоростям и
+// без пробок; техника с краном едет медленнее, а не быстрее. Значит запас
+// нужен в одну сторону — в сторону «не удалять»: пропускаем, если по
+// дорогам выходит не больше чем в track_slack раз дольше доступного
+// времени. Водитель мог гнать, ORS мог переоценить город. Не мог он только
+// телепортироваться.
+//
+// КОРОТКИЕ РАЗРЫВЫ НЕ СПРАШИВАЕМ ВООБЩЕ. Множитель без нижней границы сам
+// порождает ложные срабатывания: молчание шесть минут, машина прошла десять
+// километров по трассе, ORS насчитал на них десять минут — шесть на полтора
+// это девять, и нормальная точка объявлена невозможной. Дело не в величине
+// множителя, а в том, что на коротком интервале ошибка самого расчёта
+// времени сравнима с интервалом. Поэтому ниже REACH_MIN_MS решает круг —
+// это не третья настройка, а граница применимости второй.
+const REACH_MIN_MS = 10 * 60000;
+
+// reach(a, b, ms) → {ok, km, line} | null.
+// null — «спросить не удалось», решает круг. НЕ путать с {ok:false}.
+function makeReach(){
+  if(orsKeyMissing()) return null;
+  const slack=+appSettings.track_slack>0?+appSettings.track_slack:1.5;
+  return async function(a,b,ms){
+    if(ms<REACH_MIN_MS) return null;
+    try{
+      const gj=await orsPost(ORS_DIR,{coordinates:[[a.lng,a.lat],[b.lng,b.lat]]});
+      const f=(gj.features||[])[0];
+      const sm=(f&&f.properties&&f.properties.summary)||{};
+      const sec=+sm.duration, km=(+sm.distance||0)/1000;
+      if(!isFinite(sec)||sec<=0) return null;
+      // Маршрут пригодится дважды: решить судьбу точки и закрыть им же
+      // разрыв в треке. Второй раз то же самое не спрашиваем — ни линию,
+      // ни километры.
+      return {ok:sec<=(ms/1000)*slack, km, line:(f.geometry&&f.geometry.coordinates)||null};
+    }catch(e){
+      // ОШИБКА МАРШРУТИЗАЦИИ — ЭТО ДОВОД ПРОТИВ ТОЧКИ. Если ORS не может
+      // доехать до координаты, значит её выбросило в поле, в лес или в море:
+      // сама по себе такая точка уже аномальна. Отвечаем «нет».
+      //
+      // Но только если отказал МАРШРУТ, а не связь. Кончилась квота, упала
+      // сеть, прокси вернул 500 — это ничего не говорит о точке, и считать
+      // такое подтверждением аномалии нельзя: на исчерпанной квоте мы бы
+      // вырезали весь трек целиком и объявили выезд недостоверным.
+      // Отвечаем «не знаю» и оставляем решение кругу.
+      return orsSaysNoRoute(e)?{ok:false}:null;
+    }
+  };
+}
+
+// ORS кодирует причину в теле ответа. Про саму точку говорят ровно два кода:
+// 2009 — маршрут между точками не найден, 2010 — рядом с координатой нет
+// дороги. Остальные коды — про наш запрос (2003 неверное значение, 2012
+// незнакомый параметр) или про сервис (403, 429, 5xx, обрыв связи), и
+// принимать их за приговор точке нельзя: сломанный запрос вырезал бы весь
+// трек до последней точки.
+function orsSaysNoRoute(e){
+  if(!e||e.status==null) return false;
+  if(e.status===403||e.status===429||e.status>=500) return false;
+  return /"code"\s*:\s*20(09|10)\b/.test(String(e.raw||''));
+}
+
+// Полный расчёт факта по выезду: вырезать аномалии → почистить дрожание →
+// достроить разрывы → отдать одно число и объяснение к нему.
+async function measureTripKm(tid){
+  const { data }=await sb.from('vehicle_positions').select('lat,lng,ts,status')
+    .eq('trip_id',tid).order('ts');
+  const raw=(data||[]).filter(p=>p.lat!=null&&p.lng!=null);
+  if(raw.length<2) return {ok:false,why:'трека нет'};
+
+  const hard=+appSettings.track_max_kmh>0?+appSettings.track_max_kmh:300;
+  const res=await resolveAnomalies(raw,{hardSpeedKmh:hard},makeReach());
+  if(res.verdict.indexOf('трек недостоверен')===0){
+    return {ok:false,why:res.verdict,resolve:res};
+  }
+  // Дальше — обычная чистка по уже достоверным точкам: дрожание на стоянке
+  // и разрывы. Аномалий там уже нет, и вторая проверка скорости их не ищет.
+  const c=cleanTrack(res.points);
+  const plan=planGapFills(c);
+  // Мосты, посчитанные при проверке: та же пара точек, тот же маршрут по
+  // дорогам. Спрашивать ORS второй раз про уже известный отрезок — платить
+  // дважды за один ответ.
+  const got=Object.assign({},gapRoutes[tid]||{});
+  const lines=Object.assign({},gapLines[tid]||{});
+  (res.bridges||[]).forEach(b=>{
+    if(got[b.from]==null) got[b.from]=b.km;
+    if(b.line&&b.line.length>1) lines[b.from]=b.line;
+  });
+  gapLines[tid]=lines;
+  const need=plan.filter(g=>g.fill==='ors'&&got[g.from]==null);
+  if(need.length&&!orsKeyMissing()){
+    for(const g of need){
+      if(got[g.from]!=null) continue;
+      try{
+        const gj=await orsPost(ORS_DIR,{coordinates:[[g.fromPt.lng,g.fromPt.lat],[g.toPt.lng,g.toPt.lat]]});
+        const f=(gj.features||[])[0]; if(!f) continue;
+        const km=(+(((f.properties||{}).summary||{}).distance)||0)/1000;
+        if(km) got[g.from]=km;
+      }catch(e){ /* один разрыв не достроился — счёт не отменяем */ }
+    }
+    gapRoutes[tid]=got;
+  }
+  const tot=trackTotalKm(c,got);
+  const note=[];
+  if(res.dropped.length) note.push('вырезано аномалий: '+res.dropped.length);
+  if(res.restored) note.push('возвращено по пути: '+res.restored);
+  if(res.bridges&&res.bridges.length) note.push('мостов по дорогам: '+res.bridges.length);
+  if(res.weakChecks) note.push('дороги не проверились '+res.weakChecks+' раз, судили по кругу');
+  if(c.jitterKm>=0.5) note.push('дрожание на стоянке: '+c.jitterKm.toFixed(1)+' км');
+  if(tot.routeKm) note.push('достроено по дорогам: '+Math.round(tot.routeKm)+' км');
+  if(tot.straightKm) note.push('достроено прямыми: '+Math.round(tot.straightKm)+' км');
+  if(tot.pendingRoutes) note.push('не достроено разрывов: '+tot.pendingRoutes);
+  return {ok:true,km:Math.round(tot.km*10)/10,note:note.join('; '),resolve:res,clean:c,total:tot};
+}
+
+// Ручной ввод одометра — фолбэк, когда треку верить нельзя. Человек читает
+// с панели два числа, разницу считаем мы: складывать в уме на морозе он
+// не обязан, а ошибка в этом месте уходит прямо в себестоимость.
+async function askOdometer(tid){
+  const v=await promptDialog('Пробег по одометру машины',[
+    {key:'a',label:'Одометр на старте выезда, км'},
+    {key:'b',label:'Одометр на финише, км'}
+  ]);
+  if(!v) return null;
+  const a=+String(v.a).replace(',','.').replace(/\s/g,''), b=+String(v.b).replace(',','.').replace(/\s/g,'');
+  if(!isFinite(a)||!isFinite(b)){ notify('Одометр не разобрал: нужны два числа.','err'); return null; }
+  if(b<a){ notify('Финиш меньше старта — числа перепутаны местами.','err'); return null; }
+  const km=Math.round((b-a)*10)/10;
+  if(km<=0){ notify('Разница нулевая — выезд без пробега так не закрывают.','err'); return null; }
+  return {km,a,b,tid};
+}
+
+// Записываем факт ДО подтверждения: trip_confirm гонит fact_km в одометр
+// машины, и если писать после, в одометр уедет чужое число.
+async function writeFactKm(tid,km,src,note){
+  const {error}=await sb.from('trips').update({
+    fact_km:km, fact_km_source:src, fact_km_note:note||null
+  }).eq('id',tid);
+  if(error) throw error;
 }
 
 // ---------- машины на карте (трекинг Wialon) ----------
