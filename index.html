@@ -500,11 +500,9 @@
   .subtab { padding: var(--sp-3) var(--sp-5); font-family: var(--mono); font-size: var(--fs-3); letter-spacing: .6px; text-transform: uppercase; color: var(--ink-dim); cursor: pointer; border-bottom: 2px solid transparent; }
   .subtab.active { color: var(--accent-ink); border-bottom-color: var(--accent-line); border-bottom-width: 3px; font-weight: 600; }
   .subtab.hidden { display: none; }
-  /* Переключатель подразделов в роли заголовка: размер и начертание —
-     как у h2, чтобы строка читалась как название страницы, а не как
-     панель фильтров. Подчёркивание активного остаётся прежним. */
-  .pane-head .subtabs { border-bottom: 0; margin: 0; gap: var(--sp-5); flex: 1 1 auto; }
-  .pane-head .subtab { padding: 0 0 var(--sp-2); font-size: var(--fs-6); letter-spacing: 1px; }
+  /* Внутри липкой шапки отступ снизу меньше: под переключателем сразу
+     идут чипы статусов, и полный отступ разрывал бы их на две группы. */
+  .stickyhead .subtabs { margin-bottom: var(--sp-4); }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--accent); color: var(--ink); padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm); font-family: var(--mono); font-size: var(--fs-3); box-shadow: var(--shadow-lg); z-index: 99999; opacity: 0; pointer-events: none; transition: opacity var(--t), transform var(--t); }
   .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
   .ctxmenu { position: fixed; z-index: 9998; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: var(--sp-3); display: none; min-width: 210px; }
@@ -585,6 +583,11 @@
     input[type=date], input[type=month], input[type=number], input[type=tel], select, textarea {
       font-size: 16px; min-height: 44px; }
     .btn, .btn.sm, .icobtn, .veh-btn { min-height: 44px; min-width: 44px; }
+    /* Прозрачная рамка у .ghost рассчитана на наведение мышью: на десктопе
+       кнопка проявляется под курсором. На телефоне наводить нечем, и
+       «Проехать», «на карте», «Подробности заявки» читались как обычный
+       текст — то есть как то, что нажимать не нужно. */
+    .btn.ghost { border-color: var(--line); }
     .seg button, .subtab, .son, .side-tabs .stab, .tab { min-height: 44px; }
     .perseg button { min-height: 44px; }
     .chip { min-height: 32px; display: inline-flex; align-items: center; }
@@ -1088,6 +1091,11 @@
    Всё это делают в один и тот же момент — на объекте, до закрытия
    заявки, — и в том же порядке, в каком оно происходит. */
 .view-job.job-task .job-ref{display:none}
+/* Полоса действия липнет к низу, но в потоке она шла ПЕРВОЙ: у неё не было
+   своего order, то есть 0, а у карточек 1, 2, 3. Из-за этого её собственное
+   место оказывалось выше всего содержимого, и последняя карточка не могла
+   из-под неё выехать даже в самом низу прокрутки. */
+.view-job.job-task .job-foot{order:9}
 .view-job.job-task .job-works{order:1}
 .view-job.job-task .job-parts{order:2}
 .view-job.job-task .job-photos{order:3}
@@ -1151,6 +1159,12 @@
      100 px — «Фильтр масляны…». Артикул уходит под название целиком,
      а крестик поднимается к названию: своей строкой он занимал бы
      сорок четыре точки высоты ради одного знака. */
+  /* Выбор работы и две кнопки при 390 px ломались на три строки:
+     список занимал всю ширину, «+ из каталога» уезжала к нему,
+     «+ своя» оставалась одна. Список — своей строкой, кнопки — пополам. */
+  .job-works > .row{flex-wrap:wrap}
+  #jbWorkPick{flex:1 0 100%}
+  #jbWorkAdd,#jbCustomAdd{flex:1 1 0;min-width:0;justify-content:center}
   .pt-top{flex-wrap:wrap}
   /* Ширина имени задаётся базой 0, а не auto: базовое правило для полей
      ставит width:100%, и при переносе строк имя занимало всю строку
@@ -1656,11 +1670,12 @@
 
   <div class="view view-catalog">
     <div class="pane scrollp">
-      <div class="subtabs">
-        <div class="subtab active" data-csub="works">Работы</div>
-        <div class="subtab" data-csub="models">Техника</div>
-      </div>
+      <!-- Переключатель подразделов стоит на месте заголовка — так же, как
+           в «Диспетчере». Раньше он был отдельной строкой над заголовком:
+           два яруса вместо одного и своя черта во всю ширину, которой
+           больше нигде нет. -->
       <div id="catWorks">
+      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div></div>
       <div class="pane-head"><h2>Нормированные работы</h2>
         <div class="searchbox"><input type="search" id="catSearch" placeholder="поиск работы…"></div>
         <select id="catFilter" style="width:160px"><option value="">все</option><option value="warranty">гарантийные</option><option value="paid">только платные</option><option value="maint">ТО / сервис</option></select>
@@ -1668,6 +1683,7 @@
       <div id="catList"></div>
       </div>
       <div id="catModels" style="display:none">
+      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div></div>
       <div class="pane-head"><h2>Техника <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Справочник моделей: производитель → тип → модель. Гарантия и сервисный интервал по умолчанию нужны для привязки к технике клиентов и к работам.</span></span></h2>
         <div class="searchbox"><input type="search" id="emSearch" placeholder="поиск модели…"></div>
         <button class="btn sm amber" id="emShowAdd">+ Модель</button></div>
@@ -1702,7 +1718,8 @@
     </div>
     <div id="plJobs">
       <div class="stickyhead">
-        <div class="pane-head"><div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">Сегодня</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
+        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">Сегодня</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
+        <div class="pane-head">
           <select id="jobEngFilter" style="width:150px"><option value="">все инженеры</option></select>
           <div class="searchbox"><input type="search" id="jobSearch" placeholder="поиск по клиенту…"></div>
           <button class="btn sm amber" id="jobAdd">+ Заявка</button></div>
@@ -1712,7 +1729,8 @@
     </div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
-        <div class="pane-head"><div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">Сегодня</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
+        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">Сегодня</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
+        <div class="pane-head"><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
         <div class="chips" id="tripStatusChips"></div>
       </div>
       <div id="tripsKanban">
@@ -1751,6 +1769,8 @@
       <div class="row"><div class="grow"><label>за км</label><input type="number" id="csKm" step="0.01"></div><div class="grow"><label>за час</label><input type="number" id="csHour" step="0.01"></div><div class="grow"><label>за день</label><input type="number" id="csDay" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="csNight" step="0.01"></div></div>
       <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Стоянки → факт-часы <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Стоянка засчитывается в работу, только если попала в радиус точки заявки. Обед на трассе и ночёвка не попадут. Идёт только в себестоимость — нормочасы не трогаются.</span></span></div>
       <div class="row"><div class="grow"><label>Радиус вокруг точки, м</label><input type="number" id="stStayRad" step="10"></div><div class="grow"><label>Короче этого не считать, мин</label><input type="number" id="stStayMin" step="1"></div></div>
+      <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Проверка факт-трека <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Два порога, по которым выезд признаётся достоверным. Скорость — грубый отсев: быстрее неё по прямой техника не ездит, такая точка выбрасывается сразу и бесплатно. Запас времени — точная проверка: после сбоя связи спрашиваем у ORS, сколько ехать по дорогам до следующей точки, и сравниваем с тем временем, которое реально было. Запас 1,5 значит «принимаем, если уложился в полтора раза дольше доступного». Меньше — строже и больше ложных срабатываний, больше — мягче.</span></span></div>
+      <div class="row"><div class="grow"><label>Предельная скорость, км/ч</label><input type="number" id="stTrkKmh" step="10"></div><div class="grow"><label>Запас времени, ×</label><input type="number" id="stTrkSlack" step="0.1"></div></div>
       <label style="margin-top: var(--sp-4)">Адрес прокси ORS <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Безопасный режим. Ключ openrouteservice хранится в секрете этой функции на сервере и наружу не отдаётся. Отдельного поля для ключа в приложении нет.</span></span></label><input type="text" id="orsProxy" placeholder="https://<проект>.supabase.co/functions/v1/ors">
       
       <!-- Поле «Ключ openrouteservice (прямой режим)» убрано (аудит, В5).
