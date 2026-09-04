@@ -62,6 +62,56 @@
        прокрутить. Точное число ставит railHeight() по факту вёрстки;
        здесь запасное, чтобы до первого замера ничего не пряталось. */
     --rail-h: 0px;
+    /* Ширина бокового рельса. Нужна не только ему: карта на широком
+       экране уезжает под него ровно на эту величину, а элементы карты
+       отступают от него на неё же. */
+    --rail-w: 76px;
+    /* Высота пришвартованной снизу шторки карты — над ней держится
+       подпись об источнике карты. На широком экране шторка низ карты
+       не занимает, поэтому ноль. */
+    --sheet-h: 0px;
+
+    /* ── Лестница отступов ────────────────────────────────────────────
+       Ступени --sp-* отвечают на «сколько пикселей». Этого мало: восемь
+       значений на выбор — это восемь способов сделать по-своему, и в
+       файле уже жили карточки с полем 8, 12, 16 и 24 без всякого
+       правила, какое из них когда.
+       Поле определяет РАНГ поверхности, а не вкус автора:
+
+         метка     2×8   — подпись, которую не нажимают: .pill, .cnt, .a-tag
+         чип       4×8   — компактный орган: .chip, фильтры, строки меню
+         строка    8×12  — кнопка, поле ввода, строка списка, вложенная
+                           карточка. Самый частый ранг: им живёт всё,
+                           что человек нажимает пальцем
+         карточка  16    — самостоятельная карточка и плавающая панель
+         окно      24    — модалка и страница: держат карточки
+
+       У контейнеров, которые только держат чужое (колонки, коробки
+       списков), поле равно шагу между детьми — отдельного ранга им
+       не нужно.
+
+       Шаги между элементами — та же лестница, четыре ступени:
+         --gap-tight 4  значок и подпись внутри одного органа
+         --gap-row   8  элементы в ряд, строки списка
+         --gap-block 12 блоки внутри карточки
+         --gap-card  16 карточки между собой */
+    --pad-tag: var(--sp-1) var(--sp-3);
+    --pad-chip: var(--sp-2) var(--sp-3);
+    --pad-row: var(--sp-3) var(--sp-4);
+    /* Кнопка и вкладка — тот же ранг строки, но подписи нужен воздух
+       по бокам: одна ступень вправо. Значение и так было общим у .btn,
+       .subtab, .mode-tag и .qbadge — теперь у него есть имя. */
+    --pad-btn: var(--sp-3) var(--sp-5);
+    /* Телефон. Палец требует 44 px, и органы с подписью поднимаются
+       на ступень: это не исключение из лестницы, а её мобильная
+       ступень — применяется ко всему, что нажимают. */
+    --pad-touch: var(--sp-4) var(--sp-5);
+    --pad-card: var(--sp-5);
+    --pad-window: var(--sp-6);
+    --gap-tight: var(--sp-2);
+    --gap-row: var(--sp-3);
+    --gap-block: var(--sp-4);
+    --gap-card: var(--sp-5);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -80,20 +130,24 @@
      большого пальца, а приложение стоит у инженеров как PWA. */
   .app { display: flex; height: 100%; height: 100dvh; min-height: 0; overflow: hidden; }
   .rail {
-    width: 76px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
+    width: var(--rail-w); flex: none; background: var(--panel); border-right: 1px solid var(--line);
     display: flex; flex-direction: column; align-items: center; padding: var(--sp-4) 0 var(--sp-3);
-    z-index: 100; overflow: hidden;
+    /* position обязателен: без него z-index на элементе в потоке не значит
+       ничего, и карта, уезжающая под рельс, накрыла бы его. 1100 — выше
+       всего, что рисует карта (её собственные слои и элементы управления
+       доходят до 1000), и ниже окон, шторок и тостов. */
+    position: relative; z-index: 1100; overflow: hidden;
   }
   .rail-brand { font-family: var(--mono); font-size: var(--fs-3); font-weight: 600;
     letter-spacing: .5px; color: var(--ink); margin-bottom: var(--sp-4); display: flex;
-    flex-direction: column; align-items: center; gap: var(--sp-2); }
+    flex-direction: column; align-items: center; gap: var(--gap-tight); }
   .rail-brand img { height: 20px; display: none; }
   .rail-items { display: flex; flex-direction: column; gap: var(--sp-1); width: 100%; align-items: center; }
   .rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-1);
     width: 100%; align-items: center; padding-top: var(--sp-3); }
   .nav-i {
     width: 62px; padding: var(--sp-3) var(--sp-1); border: none; background: transparent; border-radius: var(--r-sm);
-    display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: var(--gap-tight); cursor: pointer;
     font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .2px; color: var(--ink-faint);
     text-transform: uppercase; transition: background var(--t), color var(--t);
   }
@@ -110,7 +164,7 @@
   .rail .who b { display: block; color: var(--ink-dim); text-transform: uppercase; }
   /* Метка версии. Служебная, поэтому самая тихая надпись в интерфейсе:
      нужна раз в месяц, но тогда нужна точно. */
-  .verline { display: flex; align-items: center; gap: var(--sp-3);
+  .verline { display: flex; align-items: center; gap: var(--gap-row);
     background: none; border: none; padding: var(--sp-2) 0; cursor: pointer;
     font-family: var(--mono); font-size: var(--fs-2); color: var(--ink-dim);
     transition: color var(--t); }
@@ -121,7 +175,7 @@
   /* Легенда факт-трека. Без неё серый пунктир достроенного куска и серый
      пунктир недостающего выглядят одинаково, а значат противоположное. */
   .mleg { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm);
-    padding: var(--sp-3) var(--sp-4); font-size: var(--fs-2); color: var(--ink-dim);
+    padding: var(--pad-row); font-size: var(--fs-2); color: var(--ink-dim);
     box-shadow: var(--shadow-sm); line-height: 1.9; }
   .mleg i { width: 20px; height: 0; display: inline-block; vertical-align: middle;
     margin-right: var(--sp-3); flex: none; }
@@ -143,7 +197,7 @@
      панель вдвое шире, а на телефоне она и так впритык. */
   .mleg-s { margin: -2px 0 2px 26px; color: var(--ink-faint); }
   /* Окно времени: два поля в строку через тире — как период на сводке. */
-  .mleg-tf { display: flex; align-items: center; gap: var(--sp-2);
+  .mleg-tf { display: flex; align-items: center; gap: var(--gap-tight);
     margin: 0 0 var(--sp-3); padding-bottom: var(--sp-3);
     border-bottom: 1px solid var(--line); }
   .mleg-tf input { width: auto; flex: 1 1 auto; min-width: 0; margin: 0;
@@ -156,7 +210,7 @@
     color: var(--ink-faint); text-decoration: underline; }
   .mleg-tf button:hover { color: var(--ink); }
   /* Шкала скорости: полоса градиента и два конца подписи. */
-  .mleg-sp { display: flex; align-items: center; gap: var(--sp-2);
+  .mleg-sp { display: flex; align-items: center; gap: var(--gap-tight);
     margin: 0 0 3px 26px; color: var(--ink-faint); font-size: var(--fs-1); }
   .mleg-sp i { flex: 1; height: 5px; border-radius: 3px; display: block; }
   .mleg-x { position: absolute; top: 2px; right: 4px; width: 20px; height: 20px;
@@ -167,17 +221,17 @@
   /* Таблица составляющих: моноширинная, чтобы хеши и числа строк стояли
      столбиком и сверялись взглядом, а не чтением. */
   .vt { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: var(--fs-2); }
-  .vt td { padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--line); vertical-align: baseline; }
+  .vt td { padding: var(--pad-chip); border-top: 1px solid var(--line); vertical-align: baseline; }
   .vt tr:first-child td { border-top: none; }
   .vt .h { color: var(--ink-dim); }
   .vt .n { text-align: right; color: var(--ink-faint); white-space: nowrap; }
 
   .topbar { 
     height: 56px; background: var(--panel); border-bottom: 1px solid var(--line); 
-    display: flex; align-items: center; padding: 0 var(--sp-5); gap: var(--sp-4);
+    display: flex; align-items: center; padding: 0 var(--sp-5); gap: var(--gap-block);
     box-shadow: var(--shadow-sm); z-index: 100; position: relative; max-width: 100vw; overflow: hidden;
   }
-  .brand { display: flex; align-items: center; gap: var(--sp-3); }
+  .brand { display: flex; align-items: center; gap: var(--gap-row); }
   .brand img { height: 26px; display: none; } 
   .brand h1 { font-family: var(--mono); font-size: var(--fs-5); font-weight: 600; letter-spacing: .5px; }
   .brand h1 b { color: var(--accent-ink); }
@@ -206,7 +260,7 @@
   .pop { 
     position: fixed; top: 64px; right: 16px; z-index: 9999; 
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); 
-    padding: var(--sp-5); width: 260px; box-shadow: var(--shadow-lg); display: none; 
+    padding: var(--pad-card); width: 260px; box-shadow: var(--shadow-lg); display: none; 
   }
   .pop.on { display: block; animation: popIn 0.2s ease-out; }
   @keyframes popIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
@@ -216,7 +270,7 @@
   .seg button { 
     flex: 1; background: transparent; border: none; color: var(--ink-dim); 
     font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; 
-    text-transform: uppercase; padding: var(--sp-3); cursor: pointer; transition: border-color var(--t), background var(--t), color var(--t), box-shadow var(--t); white-space: nowrap; }
+    text-transform: uppercase; padding: var(--pad-row); cursor: pointer; transition: border-color var(--t), background var(--t), color var(--t), box-shadow var(--t); white-space: nowrap; }
   /* Как и чипы: выбранный сегмент — состояние, поэтому чернила, а не жёлтый.
      Жёлтый в интерфейсе значит «нажми меня» либо «ты здесь» (рейл, подчёркивание
      вкладки); переключатель периода — ни то, ни другое. */
@@ -249,6 +303,11 @@
      Карта — фон всей вкладки, панель лежит на ней карточкой, как в макете.
      Складывается по клику на шапку: тогда карта остаётся целиком. */
   .view-map .map-wrap { position: absolute; inset: 0; flex: none; }
+  /* Карта продолжается ПОД рельсом. Ради этого всё и затевалось: рельсу
+     нужно что-то размывать, а карта — единственная поверхность, которую
+     можно продлить влево, ничего не потеряв (полоса в 76 px уходит под
+     панель, а не пропадает; вписывание точек про неё знает — fitPad). */
+  .view-map .map-wrap { left: calc(var(--rail-w) * -1); }
   .view-map .side {
     position: absolute; left: 16px; top: 16px;
     width: 360px; min-width: 0; z-index: 500;
@@ -262,14 +321,76 @@
   .view-map .side > .scroll { flex: 0 1 auto; }
   .view-map .side.sheet-collapsed .scroll { display: none; }
   /* Зум Leaflet сидит в том же верхнем левом углу, что и карточка. */
-  .view-map .leaflet-top.leaflet-left { margin-left: 392px; }
+  .view-map .leaflet-top.leaflet-left { margin-left: calc(392px + var(--rail-w)); }
 
   .scroll { overflow-y: auto; flex: 1; padding-bottom: var(--sp-5); }
-  .side-handle { display: none; align-items: center; justify-content: center; gap: var(--sp-3); height: 46px; flex: none; cursor: pointer; user-select: none; font-family: var(--mono); font-size: var(--fs-2); letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim); position: relative; border-bottom: 1px solid var(--line); }
-  .view-map .side-handle::before { content: none; }
-  .side-handle::before { content: ''; position: absolute; top: 7px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; border-radius: var(--r-pill); background: var(--line); }
-  .side-handle .sh-chev { transition: transform var(--t); }
-  .side.sheet-collapsed .side-handle .sh-chev { transform: rotate(180deg); }
+  /* ── Ручка шторки ────────────────────────────────────────────────────
+     Только черта. Слово «Панель» со стрелкой занимало 46 px и объясняло
+     то, что и так понятно по форме: за черту тянут. Высота 26 px — это
+     сама черта плюс поле, за которое палец попадает не глядя;
+     touch-action:none обязателен, иначе браузер заберёт вертикальное
+     движение себе на прокрутку и перетаскивания не будет. */
+  .side-handle { display: none; align-items: center; justify-content: center; height: 26px;
+    flex: none; cursor: grab; user-select: none; touch-action: none; position: relative;
+    border-bottom: 1px solid var(--line); }
+  .side-handle:active { cursor: grabbing; }
+  .side-handle::before { content: ''; width: 44px; height: 5px; border-radius: var(--r-pill);
+    background: var(--ink-faint); opacity: .5; transition: opacity var(--t); }
+  .side-handle:hover::before { opacity: .8; }
+  /* ── Вкладки панели ──────────────────────────────────────────────────
+     «Точки» и «Маршрут» были двумя сворачиваемыми блоками друг под
+     другом: на телефоне маршрут жил ниже экрана, и чтобы до него
+     добраться, надо было сперва свернуть точки. Это не два раздела
+     подряд, а два режима одной панели — значит вкладки. */
+  .side-tabs2 { display: flex; flex: none; padding: 0 var(--sp-4); gap: var(--gap-block);
+    border-bottom: 1px solid var(--line); }
+  .side-tabs2 button { flex: 1; background: none; border: 0; cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    padding: var(--sp-3) 0 var(--sp-4); font-family: var(--mono); font-size: var(--fs-2);
+    letter-spacing: .6px; text-transform: uppercase; color: var(--ink-faint);
+    display: flex; align-items: center; justify-content: center; gap: var(--gap-row);
+    transition: color var(--t), border-color var(--t); }
+  .side-tabs2 button.on { color: var(--ink); border-bottom-color: var(--accent); }
+  .side-tabs2 .cnt { font-size: var(--fs-1); }
+  /* Одна вкладка — это не переключатель, а заголовок: подчёркивание
+     обещало бы вторую, которой нет. */
+  .side-tabs2.solo button { justify-content: flex-start; border-bottom-color: transparent; }
+  /* ── Фильтры чипами ──────────────────────────────────────────────────
+     Те же самые кнопки (обработчики смотрят на data-ms и data-tf), только
+     по размеру содержимого и в одну строку с прокруткой вбок. Два
+     сегментных переключателя во всю ширину съедали две строки из четырёх,
+     что помещаются в шторку. */
+  /* На широком экране чипы переносятся: прятать половину фильтров
+     за горизонтальную прокрутку там, где места хватает, незачем.
+     На телефоне (см. медиазапрос ниже) — одна строка с прокруткой:
+     привычный приём, и вторая строка чипов отняла бы у списка ещё
+     сорок точек высоты. */
+  .chiprow { display: flex; align-items: center; flex-wrap: wrap;
+    gap: var(--gap-tight); margin-top: var(--sp-3); padding-bottom: 2px; }
+  .chiprow::-webkit-scrollbar { display: none; }
+  .chipsep { flex: none; width: 1px; height: 18px; background: var(--line); margin: 0 var(--sp-2); }
+  .seg.chipseg { display: flex; flex: none; gap: var(--gap-tight); border: 0; background: none;
+    border-radius: 0; overflow: visible; margin: 0; }
+  .seg.chipseg button { flex: none; border: 1px solid var(--line); border-radius: var(--r-pill);
+    background: var(--panel); color: var(--ink-dim); padding: var(--pad-chip);
+    font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .3px;
+    white-space: nowrap; min-height: 0; }
+  .seg.chipseg button.on { background: var(--ink); color: var(--panel); border-color: var(--ink);
+    font-weight: 600; }
+  /* Сноска под списком: «на карте: 24». Раньше это была отдельная строка
+     в конце панели — целый блок ради числа, которое смотрят раз в день. */
+  .datachip { margin: var(--sp-4) 0 var(--sp-2); font-family: var(--mono);
+    font-size: var(--fs-1); letter-spacing: .3px; color: var(--ink-faint); text-align: center; }
+  .datachip .ok { color: var(--ink-faint); }
+  /* Круглая кнопка создания точки — над картой, у правого края, выше
+     панели слоёв по стеку, но ниже самой шторки. */
+  .fab-add { position: absolute; right: 16px;
+    bottom: calc(16px + var(--sheet-h) + var(--rail-h)); width: 48px; height: 48px;
+    border-radius: 50%; border: 0; cursor: pointer; z-index: 640;
+    background: var(--accent); color: var(--on-accent); font-size: 26px; line-height: 1;
+    box-shadow: var(--shadow-lg); display: flex; align-items: center; justify-content: center;
+    transition: transform var(--t-fast); }
+  .fab-add:active { transform: scale(.94); }
   /* anywhere рубил «надлісниц-тво» посреди слога: в колонке 360 px длинные
      украинские названия выглядели сломанными. break-word переносит по
      словам и лезет внутрь слова только когда оно одно шире колонки. */
@@ -277,19 +398,19 @@
   .scroll::-webkit-scrollbar { width: 6px; } 
   .scroll::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: var(--r-pill); }
   
-  .block { border-bottom: 1px solid var(--line); padding: var(--sp-5) var(--sp-5); }
+  .block { border-bottom: 1px solid var(--line); padding: var(--pad-card); }
   .block h2 { 
     font-family: var(--mono); font-size: var(--fs-3); letter-spacing: 1.2px; 
     text-transform: uppercase; color: var(--ink-faint); margin-bottom: var(--sp-4); 
     display: flex; justify-content: space-between; align-items: center;
   }
-  .block h2 .cnt { color: var(--accent-ink); font-weight: 600; background: var(--panel-2); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-1); }
+  .block h2 .cnt { color: var(--accent-ink); font-weight: 600; background: var(--panel-2); padding: var(--pad-tag); border-radius: var(--r-md); font-size: var(--fs-1); }
   
   label { display: block; font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; color: var(--ink-dim); text-transform: uppercase; margin: var(--sp-4) 0 var(--sp-3); }
   input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=number], input[type=tel], select, textarea {
     width: 100%; background: var(--panel-2); border: 1px solid var(--line); 
     border-radius: var(--r-sm); color: var(--ink); font-family: var(--sans); font-size: var(--fs-5); 
-    padding: var(--sp-3) var(--sp-4); outline: none; transition: border-color var(--t), background var(--t), color var(--t), box-shadow var(--t);
+    padding: var(--pad-row); outline: none; transition: border-color var(--t), background var(--t), color var(--t), box-shadow var(--t);
   }
   input[type=color] { width: 100%; height: 40px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-2); cursor: pointer; }
   input:focus, textarea:focus, select:focus { 
@@ -307,17 +428,17 @@
   .btn { 
     font-family: var(--mono); font-size: var(--fs-3); letter-spacing: .3px; font-weight: 500;
     text-transform: none; border: 1px solid var(--line); background: var(--panel-2); 
-    color: var(--ink); padding: var(--sp-3) var(--sp-5); border-radius: var(--r-sm); cursor: pointer; transition: border-color var(--t), background var(--t), color var(--t), box-shadow var(--t);
-    display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-3);
+    color: var(--ink); padding: var(--pad-btn); border-radius: var(--r-sm); cursor: pointer; transition: border-color var(--t), background var(--t), color var(--t), box-shadow var(--t);
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--gap-row);
   }
   .btn.amber { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
   .btn.amber:hover:not(:disabled) { filter: brightness(1.08); }
   .btn.ghost { background: transparent; border-color: transparent; }
-  .btn.sm { padding: var(--sp-3) var(--sp-4); font-size: var(--fs-2); } 
+  .btn.sm { padding: var(--pad-row); font-size: var(--fs-2); } 
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   
-  .row { display: flex; gap: var(--sp-3); align-items: flex-start; } 
+  .row { display: flex; gap: var(--gap-row); align-items: flex-start; } 
   .grow { flex: 1; min-width: 0; }
   
   .pt { 
@@ -328,13 +449,13 @@
      меркам: карточка 81 px против строки 49. Это один и тот же список точек
      в двух режимах, дышать по-разному он не может. Общая анатомия: те же
      поля, тот же кегль заголовка, те же две строки под имя, та же мета. */
-  .pt, .wf-row { padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); }
+  .pt, .wf-row { padding: var(--pad-row); margin-bottom: var(--sp-3); }
   .pt .nm-t, .wf-t { font-size: var(--fs-4); font-weight: 600; line-height: 1.3; min-height: 2.6em;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     overflow-wrap: break-word; word-break: normal; }
   .pt .meta, .wf-s { font-size: var(--fs-2); margin-top: var(--sp-2);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pt .nm { font-weight: 600; font-size: var(--fs-5); display: flex; align-items: flex-start; gap: var(--sp-3); }
+  .pt .nm { font-weight: 600; font-size: var(--fs-5); display: flex; align-items: flex-start; gap: var(--gap-row); }
   .pt .nm .dot { margin-top: var(--sp-2); flex: none; }
   /* Имя занимает ровно две строки — и когда их две, и когда одна.
      Промежутки между карточками и так были одинаковые (по 10 px), а рваным
@@ -350,8 +471,39 @@
   .pt .meta { font-family: var(--mono); color: var(--ink-faint); }
   /* Действия только у выбранной точки. Четыре кнопки под каждой из
      восьмидесяти строк — это и была «духота» в панели. */
-  .pt .acts { display: none; gap: var(--sp-3); margin-top: var(--sp-3); flex-wrap: wrap; }
+  .pt .acts { display: none; gap: var(--gap-row); margin-top: var(--sp-3); flex-wrap: wrap; }
   .pt.sel .acts { display: flex; }
+  /* ── Тонкая карточка точки ───────────────────────────────────────────
+     Карточка на 81 px — это роскошь окна, а не шторки: в неё помещалась
+     ровно одна точка, а в справочнике их два десятка. Но и строка
+     с разделителем вместо рамки выбивалась из остального приложения,
+     где всё карточками. Значит карточка, только тонкая: имя и мета
+     в одну строку вместо трёх этажей — 40 px вместо 93 с промежутком.
+     Полный текст остаётся в подсказке, действия по-прежнему появляются
+     у выбранной. Маршрута это не касается — там карточки в полный рост,
+     они несут кнопки порядка. */
+  #pointsBox .pt, #pointsBox .wf-row {
+    margin: 0 0 var(--sp-2); padding: var(--pad-row); }
+  #pointsBox .pt { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--gap-row); }
+  #pointsBox .pt:last-child, #pointsBox .wf-row:last-child { margin-bottom: 0; }
+  /* Имя ужимается, мета — нет. Наоборот было бы вредно: у меты («без
+     техники») содержимое короткое и постоянное, а имя длинное и всё
+     равно не поместится целиком. Когда сжимались оба, от «Військова
+     частина Т0950» на строке оставалась одна буква. */
+  /* Основа 0, а не auto: при auto ширина названия участвует в раскладке
+     строки, длинное имя выталкивало мету на второй этаж, и высоты строк
+     снова разъезжались. */
+  #pointsBox .pt .nm { flex: 1 1 0; min-width: 0; align-items: center; }
+  #pointsBox .pt .nm .dot { margin-top: 0; }
+  #pointsBox .pt .nm-t, #pointsBox .wf-t {
+    min-height: 0; display: block; -webkit-line-clamp: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pointsBox .pt .meta {
+    flex: 0 0 auto; margin: 0; max-width: 45%;
+    font-size: var(--fs-1); text-align: right; }
+  #pointsBox .wf-s { margin-top: 0; font-size: var(--fs-1); }
+  #pointsBox .pt .ds { flex: 1 0 100%; }
+  #pointsBox .pt .acts { flex: 1 0 100%; margin-top: var(--sp-3); }
   /* СПИСОК ТОЧЕК МАРШРУТА.
      Правило «действия только у выбранной карточки» писалось для справочника
      на восемьдесят строк. В маршруте их четыре, выделения нет вовсе — и
@@ -384,7 +536,7 @@
   .pt { cursor: pointer; }
   .pt.sel { border-color: var(--focus); box-shadow: var(--ring); }
   
-  .listhead { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-4); cursor: pointer;
+  .listhead { display: flex; align-items: center; gap: var(--gap-row); margin-top: var(--sp-4); cursor: pointer;
     user-select: none; font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .9px;
     text-transform: uppercase; color: var(--ink-faint); }
   .listhead .chev { margin-left: auto; font-size: var(--fs-1); transition: transform var(--t); }
@@ -394,7 +546,7 @@
      flex-ребёнка без min-width:0 — нерушимая строка не давала ему сжаться.
      Вертикальному нужен жёлоб, иначе ползунок ложится на карточки. */
   .listbox { max-height: 42vh; overflow-y: auto; overflow-x: hidden;
-    margin-top: var(--sp-3); padding-right: var(--sp-3); scrollbar-gutter: stable; }
+    margin-top: var(--sp-3); scrollbar-gutter: stable; }
   .listbox.folded { display: none; }
   .listbox::-webkit-scrollbar { width: 5px; }
   .listbox::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: var(--r-pill); }
@@ -412,7 +564,7 @@
   .qm:hover { border-color: var(--ink-dim); color: var(--ink); }
   .q.on .qm { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .qbody { display: none; position: absolute; z-index: 900; top: calc(100% + var(--sp-2)); left: 0;
-    width: 270px; max-width: 74vw; padding: var(--sp-4);
+    width: 270px; max-width: 74vw; padding: var(--pad-card);
     background: var(--panel); border: var(--bd); border-radius: var(--r-md);
     box-shadow: var(--shadow-md); font-family: var(--sans); font-size: var(--fs-4);
     font-weight: 400; line-height: 1.5; color: var(--ink-dim); text-transform: none;
@@ -421,7 +573,7 @@
   .q.flip .qbody { left: auto; right: 0; }
 
   .pill { 
-    font-family: var(--mono); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-3); 
+    font-family: var(--mono); font-size: var(--fs-1); padding: var(--pad-tag); 
     border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--line); 
     color: var(--ink-dim); white-space: nowrap; font-weight: 500;
   }
@@ -432,7 +584,7 @@
   
   .side-tabs { display: flex; border-bottom: 1px solid var(--line); flex: none; background: var(--panel-2); }
   .side-tabs .stab { 
-    flex: 1; text-align: center; padding: var(--sp-4) var(--sp-3); font-family: var(--mono); font-size: var(--fs-2); 
+    flex: 1; text-align: center; padding: var(--pad-row); font-family: var(--mono); font-size: var(--fs-2); 
     letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim); cursor: pointer; 
     border-bottom: 2px solid transparent; transition: color var(--t);
   }
@@ -453,7 +605,7 @@
   .mode-tag { 
     position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 600; 
     font-family: var(--mono); font-size: var(--fs-3); background: var(--accent); color: var(--on-accent); 
-    padding: var(--sp-3) var(--sp-5); border-radius: var(--r-pill); font-weight: 600; box-shadow: var(--shadow-lg); display: none; 
+    padding: var(--pad-btn); border-radius: var(--r-pill); font-weight: 600; box-shadow: var(--shadow-lg); display: none; 
   }
   .mode-tag.on { display: block; animation: dropIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
   @keyframes dropIn { from { transform: translate(-50%, -20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
@@ -461,9 +613,9 @@
   .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow-lg); }
   .leaflet-popup-content { font-family: var(--sans); font-size: var(--fs-4); line-height: 1.5; margin: var(--sp-4); }
   
-  .pane { flex: 1; display: flex; flex-direction: column; padding: var(--sp-6) var(--sp-7); overflow: hidden; background: var(--bg); }
+  .pane { flex: 1; display: flex; flex-direction: column; padding: var(--pad-window); overflow: hidden; background: var(--bg); }
   .pane.scrollp { display: block; overflow-y: auto; }
-  .pane-head { display: flex; align-items: center; gap: var(--sp-5); margin-bottom: var(--sp-5); flex-wrap: wrap; }
+  .pane-head { display: flex; align-items: center; gap: var(--gap-card); margin-bottom: var(--sp-5); flex-wrap: wrap; }
   /* Шапка раздела и фильтры уезжают вверх при прокрутке длинного списка,
      и «+ Заявка» вместе с чипами статусов приходится искать, вернувшись
      наверх. Прилипают к верху области прокрутки — ей и является .pane. */
@@ -498,7 +650,7 @@
   
   .card { 
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); 
-    padding: var(--sp-5); margin-bottom: var(--sp-5); box-shadow: var(--shadow-sm); transition: box-shadow var(--t);
+    padding: var(--pad-card); margin-bottom: var(--sp-5); box-shadow: var(--shadow-sm); transition: box-shadow var(--t);
   }
   /* ── Наведение ───────────────────────────────────────────────────────
      Было двадцать пять правил, меняющих семь разных свойств: где-то цвет,
@@ -523,18 +675,18 @@
     .nav-i:hover, .tab:hover, .seg button:not(.on):hover, .subtab:hover, .listhead:hover,
     .side-tabs .stab:hover, .chip-check:hover, .map-pop .lay:hover { color: var(--ink); }
   }
-  .card h3 { font-size: var(--fs-6); font-weight: 600; margin-bottom: var(--sp-3); display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+  .card h3 { font-size: var(--fs-6); font-weight: 600; margin-bottom: var(--sp-3); display: flex; gap: var(--gap-row); align-items: center; flex-wrap: wrap; }
   .card .meta { font-family: var(--mono); font-size: var(--fs-2); color: var(--ink-faint); margin-bottom: var(--sp-4); line-height: 1.5; }
-  .card .acts { display: flex; gap: var(--sp-3); flex-wrap: wrap; }
+  .card .acts { display: flex; gap: var(--gap-row); flex-wrap: wrap; }
   
   .hint { font-size: var(--fs-3); color: var(--ink-dim); line-height: 1.4; margin-top: var(--sp-3); }
-  .err { color: var(--red); font-family: var(--mono); font-size: var(--fs-2); margin-top: var(--sp-3); background: rgba(255, 93, 93, 0.1); padding: var(--sp-3) var(--sp-3); border-radius: var(--r-sm); }
+  .err { color: var(--red); font-family: var(--mono); font-size: var(--fs-2); margin-top: var(--sp-3); background: rgba(255, 93, 93, 0.1); padding: var(--pad-row); border-radius: var(--r-sm); }
   .err:empty { display: none; } 
   .ok { color: var(--green); }
   
   .overlay { 
     position: fixed; inset: 0; background: rgba(8, 9, 11, 0.85); backdrop-filter: blur(4px); 
-    z-index: 2000; display: none; align-items: center; justify-content: center; padding: var(--sp-5); 
+    z-index: 2000; display: none; align-items: center; justify-content: center; padding: var(--pad-card); 
   }
   .overlay.on { display: flex; animation: fadeIn 0.2s ease; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -551,7 +703,7 @@
      Размер задаётся КЛАССОМ, чтобы новое окно не придумало десятый. */
   .modal { 
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); 
-    width: 560px; max-width: 100%; max-height: 90vh; overflow: auto; padding: var(--sp-6); 
+    width: 560px; max-width: 100%; max-height: 90vh; overflow: auto; padding: var(--pad-window); 
     box-shadow: var(--shadow-lg); transform: translateY(0); transition: transform var(--t);
   }
   .modal.s { width: 420px; }
@@ -569,12 +721,12 @@
      ширины, а занимает всю строку. Поля внутри остаются узкими: строку
      ввода длиной в метр всё равно невозможно читать. */
   .settings-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr));
-    gap: var(--sp-5); align-items: start; }
+    gap: var(--gap-card); align-items: start; }
   .settings-body > .card { margin-bottom: 0; }
   .settings-body input[type=number],
   .settings-body input[type=date] { max-width: 220px; }
   .settings-body input[type=text]:not(#orsProxy) { max-width: 420px; }
-  .jobs-legend { display: flex; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3);
+  .jobs-legend { display: flex; gap: var(--gap-row); align-items: center; margin-bottom: var(--sp-3);
     font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .8px;
     text-transform: uppercase; color: var(--ink-faint); }
   /* Подписи в 30 px над колонками флажка и радио переносились по слогам
@@ -594,7 +746,7 @@
   .modal h3 { font-family: var(--sans); font-size: var(--fs-7); font-weight: 600; letter-spacing: -.2px; text-transform: none; color: var(--ink); margin-bottom: var(--sp-4); }
   .modal .sub { font-size: var(--fs-4); color: var(--ink-dim); line-height: 1.5; margin-bottom: var(--sp-5); }
   
-  .eqitem { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-4) var(--sp-4); margin-bottom: var(--sp-3); }
+  .eqitem { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--pad-row); margin-bottom: var(--sp-3); }
   .eqitem .t { font-weight: 600; font-size: var(--fs-5); } 
   .eqitem .m { font-family: var(--mono); font-size: var(--fs-2); color: var(--ink-dim); margin-top: var(--sp-2); line-height: 1.4; }
   
@@ -607,22 +759,26 @@
   #jbWorks { max-height: 260px; overflow: auto; }
   .pop { max-height: 80vh; overflow: auto; }
   .side-tabs .stab.hidden { display: none; }
-  .block.collapsible > h2.ch { cursor: pointer; user-select: none; display: flex; align-items: center; gap: var(--sp-3); }
+  .block.collapsible > h2.ch { cursor: pointer; user-select: none; display: flex; align-items: center; gap: var(--gap-row); }
   .block.collapsible > h2.ch .chev { margin-left: auto; font-size: var(--fs-1); color: var(--ink-faint); transition: transform var(--t); }
   .block.collapsible > h2.ch .chev::before { content: '▾'; }
   .block.collapsible.collapsed > h2.ch .chev { transform: rotate(-90deg); }
   .block.collapsible.collapsed > .block-body { display: none; }
+  /* Блок-вкладка: заголовка у него больше нет (его роль играет вкладка),
+     значит и рамки под пустым местом быть не должно. */
+  #pointsBlock, #routeBlock { border-bottom: 0; }
+  #pointsBlock.collapsed, #routeBlock.collapsed { padding: 0; }
   .block.subblock { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 0; margin: var(--sp-4) 0; background: var(--panel-2); }
-  .block.subblock > h2.ch { padding: var(--sp-3) var(--sp-4); margin: 0; }
+  .block.subblock > h2.ch { padding: var(--pad-row); margin: 0; }
   .block.subblock > .block-body { padding: 0 var(--sp-4) var(--sp-4); }
-  .subtabs { display: flex; gap: var(--sp-2); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-5); }
-  .subtab { padding: var(--sp-3) var(--sp-5); font-family: var(--mono); font-size: var(--fs-3); letter-spacing: .6px; text-transform: uppercase; color: var(--ink-dim); cursor: pointer; border-bottom: 2px solid transparent; }
+  .subtabs { display: flex; gap: var(--gap-tight); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-5); }
+  .subtab { padding: var(--pad-btn); font-family: var(--mono); font-size: var(--fs-3); letter-spacing: .6px; text-transform: uppercase; color: var(--ink-dim); cursor: pointer; border-bottom: 2px solid transparent; }
   .subtab.active { color: var(--accent-ink); border-bottom-color: var(--accent-line); border-bottom-width: 3px; font-weight: 600; }
   .subtab.hidden { display: none; }
   /* Внутри липкой шапки отступ снизу меньше: под переключателем сразу
      идут чипы статусов, и полный отступ разрывал бы их на две группы. */
   .stickyhead .subtabs { margin-bottom: var(--sp-4); }
-  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--accent); color: var(--ink); padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm); font-family: var(--mono); font-size: var(--fs-3); box-shadow: var(--shadow-lg); z-index: 99999; opacity: 0; pointer-events: none; transition: opacity var(--t), transform var(--t); }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--accent); color: var(--ink); padding: var(--pad-card); border-radius: var(--r-sm); font-family: var(--mono); font-size: var(--fs-3); box-shadow: var(--shadow-lg); z-index: 99999; opacity: 0; pointer-events: none; transition: opacity var(--t), transform var(--t); }
   .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
 
   /* ── МАТОВОЕ СТЕКЛО ──────────────────────────────────────────────────
@@ -645,19 +801,12 @@
     .topbar, .rail, .modal, .sheet, .map-pop, .mleg, .busy, .toast,
     .pop, .ctxmenu { background: var(--panel); }
   }
-  /* Рельс на широком экране — особый случай, и вот почему.
-     Все остальные стеклянные поверхности ЛЕЖАТ НА содержимом: под шапкой,
-     модалкой, панелью карты едут карточки и карта, и просвечивает именно
-     они. Рельс же стоит собственной колонкой от края до края — позади него
-     нет ничего, кроме подложки страницы. Общая прозрачность 0.58 в таком
-     месте просвечивает не содержимое, а фон, который темнее панели, и
-     колонка выходит ТЕМНЕЕ карточек рядом. Это видно глазом, и читается
-     как ошибка, а не как стекло.
-     Поэтому здесь та же пропорция, что у плавающей панели карты, — 90%:
-     тон совпадает с карточками, размытие остаётся. На телефоне рельс
-     лежит на содержимом, там просвечивать есть чему, и действует общее
-     правило (см. медиазапрос ниже). */
-  .rail { background: color-mix(in srgb, var(--panel) 92%, transparent); }
+  /* Рельсу нужно, чтобы позади него что-то БЫЛО, иначе прозрачность
+     просвечивает подложку страницы и колонка просто выходит темнее
+     панелей — стекла не получается. Поэтому на вкладке карты карта
+     уходит под него (см. .view-map .map-wrap ниже): там за рельсом
+     настоящая картинка, и размытие видно. На остальных вкладках позади
+     рельса подложка страницы — он просвечивает её, как и положено. */
   /* Липкая шапка — особый случай: её фон рисует псевдоэлемент, вытянутый
      за боковые отступы панели. Размытие вешаем на него же, иначе стекло
      кончалось бы там, где начинается вылет. */
@@ -675,12 +824,12 @@
      сломалось. Стоит выше тоста, чтобы они не наезжали друг на друга. */
   .busy { position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%) translateY(20px);
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm);
-    box-shadow: var(--shadow-lg); padding: var(--sp-4) var(--sp-5); min-width: 260px;
+    box-shadow: var(--shadow-lg); padding: var(--pad-card); min-width: 260px;
     z-index: 99999; opacity: 0; pointer-events: none;
     transition: opacity var(--t), transform var(--t); }
   .busy.on { opacity: 1; transform: translateX(-50%) translateY(0); }
   .busy-t { font-family: var(--mono); font-size: var(--fs-2); color: var(--ink-dim);
-    display: flex; align-items: center; gap: var(--sp-3); }
+    display: flex; align-items: center; gap: var(--gap-row); }
   .busy-s { width: 12px; height: 12px; flex: none; border-radius: 50%;
     border: 2px solid var(--line); border-top-color: var(--accent);
     animation: spin 0.7s linear infinite; }
@@ -689,54 +838,54 @@
     border-radius: 2px; overflow: hidden; }
   .busy-bar i { display: block; height: 100%; width: 0; background: var(--accent);
     transition: width .2s linear; }
-  .ctxmenu { position: fixed; z-index: 9998; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: var(--sp-3); display: none; min-width: 210px; }
+  .ctxmenu { position: fixed; z-index: 9998; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: var(--gap-row); display: none; min-width: 210px; }
   .ctxmenu.on { display: block; animation: popIn 0.12s ease; }
-  .ctxmenu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); font-family: var(--sans); font-size: var(--fs-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-sm); cursor: pointer; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--sp-4); }
-  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-5); }
+  .ctxmenu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); font-family: var(--sans); font-size: var(--fs-4); padding: var(--pad-row); border-radius: var(--r-sm); cursor: pointer; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--gap-block); }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--pad-card); }
   .stat-v { font-family: var(--mono); font-size: var(--fs-8); font-weight: 700; color: var(--accent-ink); }
   .stat-l { font-size: var(--fs-3); color: var(--ink-dim); margin-top: var(--sp-2); }
   .stat-s { font-size: var(--fs-2); color: var(--ink-faint); margin-top: var(--sp-1); }
   .map-tools { position: absolute; top: 16px; right: 16px; z-index: 650;
-    display: flex; gap: var(--sp-3); align-items: flex-start; flex-wrap: wrap;
+    display: flex; gap: var(--gap-row); align-items: flex-start; flex-wrap: wrap;
     justify-content: flex-end; max-width: calc(100% - 32px); }
-  .veh-btn { z-index: 650; cursor: pointer; font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-dim); border-radius: var(--r-sm); padding: var(--sp-3) var(--sp-3); box-shadow: var(--shadow-lg); }
+  .veh-btn { z-index: 650; cursor: pointer; font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-dim); border-radius: var(--r-sm); padding: var(--pad-row); box-shadow: var(--shadow-lg); }
   .veh-btn.on { color: var(--accent-ink); border-color: var(--accent); }
   .veh-btn .vb-ic { vertical-align: -1px; }
   /* Ряд фильтров: сегмент типа и чип «внимание» в одну строку —
      раньше это были две строки плюс абзац подсказки между ними. */
-  .filter-row { display: flex; gap: var(--sp-3); align-items: center; margin-top: var(--sp-3); flex-wrap: wrap; }
+  .filter-row { display: flex; gap: var(--gap-row); align-items: center; margin-top: var(--sp-3); flex-wrap: wrap; }
   .filter-row .seg { flex: 1 1 auto; margin: 0; }
-  .chip-check { display: inline-flex; align-items: center; gap: var(--sp-3); cursor: pointer;
+  .chip-check { display: inline-flex; align-items: center; gap: var(--gap-row); cursor: pointer;
     font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .4px; color: var(--ink-dim);
     border: 1px solid var(--line); background: var(--panel-2); border-radius: var(--r-sm);
-    padding: var(--sp-3) var(--sp-3); white-space: nowrap; user-select: none; flex: none; }
+    padding: var(--pad-row); white-space: nowrap; user-select: none; flex: none; }
   .chip-check input { width: auto; margin: 0; }
   .chip-check:has(input:checked) { color: var(--accent-ink); border-color: var(--accent); }
   /* Всплывающее меню слоёв — привязано к карте, а не к окну,
      чтобы на узком экране не улетало за край. */
   .map-pop { position: absolute; top: 56px; right: 16px; z-index: 660; display: none;
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
-    padding: var(--sp-4); width: 270px; max-width: calc(100% - 32px); box-shadow: var(--shadow-lg); }
+    padding: var(--pad-card); width: 270px; max-width: calc(100% - 32px); box-shadow: var(--shadow-lg); }
   .map-pop.on { display: block; }
   .map-pop h4 { font-family: var(--mono); font-size: var(--fs-1); letter-spacing: 1px;
     text-transform: uppercase; color: var(--ink-faint); margin-bottom: var(--sp-3); }
   /* .lay — это label, и глобальное правило делало из него прописные
      моно-подписи для полей ввода. Здесь это не подпись поля, а строка
      переключателя: обычный текст обычным шрифтом. */
-  .map-pop .lay { display: flex; align-items: center; gap: var(--sp-3); cursor: pointer;
+  .map-pop .lay { display: flex; align-items: center; gap: var(--gap-row); cursor: pointer;
     font-family: var(--sans); text-transform: none; letter-spacing: normal;
-    font-size: var(--fs-4); color: var(--ink-dim); padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-2);
-    margin-top: var(--sp-4); border: var(--bd); border-radius: var(--r-sm);
+    font-size: var(--fs-4); color: var(--ink-dim); padding: var(--pad-row);
+    margin-top: var(--gap-block); border: var(--bd); border-radius: var(--r-sm);
     background: var(--panel-2); transition: border-color var(--t); }
   .map-pop .lay:hover { border-color: var(--ink-dim); }
   .map-pop .lay input { width: auto; margin: 0; flex: none; }
   .map-pop .lay-x { flex: 1; min-width: 0; }
   /* Пять цветов через точку в одну строку рвались по словам и не читались.
      Столбик: кружок, подпись — глаз идёт сверху вниз по одному каналу. */
-  .lay-legend { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-1) var(--sp-3);
+  .lay-legend { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-tight) var(--gap-row);
     margin-top: var(--sp-4); font-size: var(--fs-3); color: var(--ink-dim); }
-  .lay-legend span { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
+  .lay-legend span { display: flex; align-items: center; gap: var(--gap-tight); white-space: nowrap; }
   .lay-legend i { width: 8px; height: 8px; border-radius: var(--r-pill); flex: none; font-style: normal; }
   .veh-mk { position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
   /* Плоский силуэт вместо эмодзи: красится токенами, состояние задаётся
@@ -754,7 +903,7 @@
   .veh-lbl.stale { border-color: #64748b; color: #94a3b8; }
   .veh-rot { position: absolute; left: 50%; top: 12px; width: 0; height: 0; }
   .veh-dir { position: absolute; left: -5px; top: -25px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid #22c55e; filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
-  .veh-kv { display: flex; justify-content: space-between; gap: var(--sp-4); font-size: var(--fs-4); padding: var(--sp-2) 0; }
+  .veh-kv { display: flex; justify-content: space-between; gap: var(--gap-block); font-size: var(--fs-4); padding: var(--sp-2) 0; }
   .veh-kv span:first-child { color: var(--ink-dim); }
   /* ── Палец, а не курсор ───────────────────────────────────────────────
      Замер на 390 px показал: почти всё интерактивное было ниже 44 px —
@@ -803,30 +952,65 @@
        как сплошная заливка. Теперь под рельсом карта — он и стал
        стеклом. Шторка пришвартована НАД рельсом: её содержимое
        нажимают, прятать его под навигацию нельзя. */
+    /* Высота — переменная, а не 52vh: шторку тянут за черту, и она встаёт
+       в одно из трёх положений (см. wireSheetDrag). Переход выключается
+       на время самого перетаскивания, иначе шторка едет за пальцем
+       с отставанием. */
     .view-map .side { position: absolute; left: 0; right: 0; top: auto;
       bottom: var(--rail-h); z-index: 500;
-      width: 100%; max-height: 52vh; border: none; border-top: 1px solid var(--line);
+      width: 100%; height: var(--sheet-snap, 52vh); max-height: none;
+      transition: height var(--t); border: none; border-top: 1px solid var(--line);
       border-radius: 0; background: var(--panel);
       /* Тень плавающей карточки светит вниз на 40 px и ложилась прямо на
          навигацию. Пришвартованной снизу шторке низ не нужен вовсе:
          отрицательное растекание срезает его, сверху тень остаётся. */
-      box-shadow: 0 -8px 18px -8px rgba(0,0,0,0.28);
-      backdrop-filter: none; -webkit-backdrop-filter: none; }
-    .listbox { max-height: 30vh; }
+      box-shadow: 0 -8px 18px -8px rgba(0,0,0,0.28); }
+    /* Шторка лежит на карте — значит, ей положено то же стекло, что
+       и рельсу под ней: две пришвартованные друг к другу поверхности,
+       разный материал у них читался бы как разные слои. */
+    .view-map .side, .view-map .side > .scroll { background: transparent; }
+    .view-map .side { background: var(--glass-panel);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      backdrop-filter: saturate(180%) blur(20px); }
+    @supports not (backdrop-filter: blur(1px)) {
+      .view-map .side { background: var(--panel); }
+    }
+    /* Один прокручиваемый слой вместо двух. Своя прокрутка у списка внутри
+       прокручиваемой шторки — это два жеста, различить которые пальцем
+       нельзя: список «залипает», когда доезжает до края. Высоту задаёт
+       сама шторка, список просто течёт. */
+    /* Жёлоб под ползунок нужен только там, где у списка своя прокрутка.
+       На телефоне её нет — и поле справа было шире поля слева. */
+    .listbox { max-height: none; overflow: visible; padding-right: 0; }
+    .view-map .side > .scroll { flex: 1 1 auto; min-height: 0; }
+    .chiprow { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .view-map .map-wrap { position: absolute; inset: 0; flex: none; }
     .view-map .leaflet-top.leaflet-left { margin-left: 0; }
+    /* Подпись об источнике карты обязана быть видна (этого требуют
+       условия MapTiler и OSM), а карта уходит под шторку и рельс.
+       Поднимаем её ровно на то, что её закрывает. */
+    .view-map .leaflet-bottom { margin-bottom: calc(var(--sheet-h) + var(--rail-h)); }
     /* Тень шторки светила вниз и ложилась на навигацию. Отрицательное
        растекание убирает нижний край: сверху тень осталась, снизу её
        больше нет. */
     .side { width: 100%; min-width: 0; height: auto; flex: none; order: 2; border-right: none; border-top: 1px solid var(--line); box-shadow: 0 -8px 18px -8px rgba(0,0,0,0.28); max-height: 58vh; min-height: 0; } 
-    .side-handle { display: flex; } .view-map .side-handle::before { content: ''; } 
-    .side.sheet-collapsed { max-height: 46px; } 
-    .side.sheet-collapsed .scroll { display: none; } 
-    .pane { padding: var(--sp-5); padding-bottom: calc(var(--sp-5) + var(--rail-h)); } 
-    .modal { padding: var(--sp-5); max-height: 95vh; width: 100%; border-radius: var(--r-md); } 
+    .side-handle { display: flex; }
+    .view-map .side.dragging { transition: none; }
+    /* Свёрнутая шторка — ровно черта и ничего больше. Ни счётчика,
+       ни подписи: сколько на карте точек, написано под самим списком,
+       а место на телефоне дороже. */
+    .view-map .side.sheet-collapsed { height: 27px; }
+    /* Со свёрнутым списком шторка садится по содержимому: держать
+       заданную высоту значило бы показать пустую половину экрана вместо
+       карты, ради которой список и свернули. */
+    .view-map .side.list-folded { height: auto; }
+    .side.sheet-collapsed { max-height: 46px; }
+    .side.sheet-collapsed .scroll, .side.sheet-collapsed .side-tabs2 { display: none; }
+    .pane { padding: var(--pad-card); padding-bottom: calc(var(--sp-5) + var(--rail-h)); } 
+    .modal { padding: var(--pad-card); max-height: 95vh; width: 100%; border-radius: var(--r-md); } 
     .pop { right: 8px; left: 8px; width: auto; } 
-    .btn, input[type=text], input[type=number], input[type=tel], input[type=email], input[type=password], select { padding: var(--sp-4) var(--sp-5); }
-    .btn.sm { padding: var(--sp-3) var(--sp-4); }
+    .btn, input[type=text], input[type=number], input[type=tel], input[type=email], input[type=password], select { padding: var(--pad-touch); }
+    .btn.sm { padding: var(--pad-row); }
     /* Рельс слева на телефоне — ошибка: приложение стоит как PWA,
        инженер держит его одной рукой, левый край недосягаем большим
        пальцем. Уводим навигацию вниз. */
@@ -840,7 +1024,10 @@
       /* Здесь под рельсом едет содержимое — общая прозрачность работает
          по назначению. */
       background: var(--glass-panel);
-      position: absolute; left: 0; right: 0; bottom: 0; z-index: 600;
+      /* 1100, а не 600: карта теперь идёт под рельс, а её собственные
+         элементы (подпись об источнике, зум) сидят на z-index 1000 и
+         прорисовывались поверх навигации. */
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 1100;
       border-right: none; border-top: 1px solid var(--line);
       padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); overflow-x: auto; }
     .rail-brand { display: none; }
@@ -877,7 +1064,7 @@
     .rail-items { justify-content: space-around; }
     .rail .who { display: none; }
     .views { order: 1; flex: 1; min-height: 0; }
-    .topbar { padding: 0 var(--sp-3); gap: var(--sp-3); }
+    .topbar { padding: 0 var(--sp-3); gap: var(--gap-row); }
     .brand { flex: none; }
     .brand h1 { font-size: var(--fs-4); }
     .tabs { margin-left: var(--sp-2); flex: 1; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -897,61 +1084,61 @@
     .kcol { max-width: none; min-width: 0; width: 100%; }
     /* Мелкая кнопка не должна получать паддинг обычной: три действия
        в карточке переставали помещаться в строку, и «×» уезжал вниз. */
-    .btn.sm { padding: var(--sp-3) var(--sp-4); }
-    .pane-head { gap: var(--sp-3); }
+    .btn.sm { padding: var(--pad-row); }
+    .pane-head { gap: var(--gap-row); }
     .pane-head h2 { flex: 1 1 auto; }
     .pane-head > .btn { flex: none; order: 2; }
     .pane-head .seg { order: 6; flex: 1 0 100%; }
     .pane-head select { order: 7; flex: 1 1 140px; width: auto; }
     .pane-head .searchbox { order: 8; flex: 1 0 100%; max-width: none; }
-    .block { padding: var(--sp-4) var(--sp-5); }
+    .block { padding: var(--pad-card); }
     .toast { max-width: calc(100vw - 24px); }
     .stats { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
   }
   /* --- UX доработки --- */
   .toast.err { border-color: var(--red); color: var(--red); }
-  .toast.undo { display: flex; align-items: center; gap: var(--sp-4); }
+  .toast.undo { display: flex; align-items: center; gap: var(--gap-block); }
   .toast.undo.on { pointer-events: auto; }
   .toast.warn { border-color: var(--accent); }
   .btn.red { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
   .btn.red:hover:not(:disabled) { filter: brightness(1.08); box-shadow: var(--shadow-sm); }
   .lnk { color: var(--cyan); cursor: pointer; text-decoration: underline; }
-  .endpoints { display: flex; flex-direction: column; gap: var(--sp-3); margin-bottom: var(--sp-2); }
-  .ep { display: flex; align-items: center; gap: var(--sp-3); background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-3); }
+  .endpoints { display: flex; flex-direction: column; gap: var(--gap-row); margin-bottom: var(--sp-2); }
+  .ep { display: flex; align-items: center; gap: var(--gap-row); background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--gap-row); }
   .ep-l { font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); width: 44px; flex: none; }
   .ep-v { flex: 1; min-width: 0; font-size: var(--fs-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ep-v.empty { color: var(--ink-faint); font-style: italic; }
   .stat.nav { cursor: pointer; transition: border-color var(--t), transform var(--t); }
   .stat-go { font-family: var(--mono); font-size: var(--fs-1); color: var(--cyan); margin-top: var(--sp-3); }
   /* --- канбан выездов + мультифильтр статусов --- */
-  .chips { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
-  .chip { cursor: pointer; user-select: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-dim); border-radius: var(--r-pill); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-3); transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast); }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--gap-row); }
+  .chip { cursor: pointer; user-select: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-dim); border-radius: var(--r-pill); padding: var(--pad-chip); font-size: var(--fs-3); transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast); }
   /* Выбранный фильтр — это состояние, а не действие. Жёлтая заливка
      закреплена за главными кнопками («В работу», «Завершить»); если ею же
      красить активные чипы, на экране заявок семь одинаковых жёлтых пилюль,
      и глазу не за что зацепиться. Состояние даём чернилами. */
   .chip.on { background: var(--ink); color: var(--panel); border-color: var(--ink); font-weight: 600; }
   .chip.on:hover { border-color: var(--ink); }
-  .kanban { display: flex; gap: var(--sp-4); overflow-x: auto; padding-bottom: var(--sp-3); align-items: flex-start; }
+  .kanban { display: flex; gap: var(--gap-block); overflow-x: auto; padding-bottom: var(--sp-3); align-items: flex-start; }
   /* Колонки росли жёстко по 300 px и упирались в max-height:72vh: три штуки
      занимали меньше половины экрана, а единственная заполненная
      прокручивалась внутри себя, хотя под ней оставался пустой экран.
      Теперь ширина тянется, а высота идёт по содержимому. */
   .kcol { flex: 1 1 300px; min-width: 260px; max-width: 480px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-md); display: flex; flex-direction: column; }
-  .kcol-h { padding: var(--sp-3) var(--sp-4); font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; text-transform: uppercase; color: var(--ink-dim); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
-  .kcol-h .cnt { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-pill); padding: var(--sp-1) var(--sp-3); color: var(--ink); }
+  .kcol-h { padding: var(--pad-row); font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; text-transform: uppercase; color: var(--ink-dim); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+  .kcol-h .cnt { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-pill); padding: var(--pad-tag); color: var(--ink); }
   /* Свой скролл у колонки убран: два вложенных скролла — это когда листаешь
      и не понимаешь, что именно поехало. Колонка растёт, страница скроллит одна. */
-  .kcol-b { padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-3); }
-  .kcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-3); }
+  .kcol-b { padding: var(--gap-row); display: flex; flex-direction: column; gap: var(--gap-row); }
+  .kcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--pad-row); }
   .kcard h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-4); }
   .kcard .meta { font-size: var(--fs-2); color: var(--ink-dim); margin: var(--sp-1) 0; }
   /* Чипы стояли строкой с margin 2px сверху и снизу, и при схлопывании
      с такой же метой между ними оставалось два пикселя — пилюля упиралась
      в текст. Своя строка со своим воздухом. */
-  .kcard .ktags { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
-  .kcard .acts { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-3); align-items: center; }
-  .kcard select.kmove { font-size: var(--fs-2); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-sm); }
+  .kcard .ktags { display: flex; flex-wrap: wrap; gap: var(--gap-tight); margin: var(--sp-3) 0; }
+  .kcard .acts { display: flex; flex-wrap: wrap; gap: var(--gap-row); margin-top: var(--sp-3); align-items: center; }
+  .kcard select.kmove { font-size: var(--fs-2); padding: var(--pad-tag); border-radius: var(--r-sm); }
   @media (pointer: coarse) { .kcard select.kmove { font-size: 16px; padding: var(--sp-3); } }
   .kcard[draggable="true"] { cursor: grab; }
   .kcard.dragging { opacity: .45; }
@@ -964,7 +1151,7 @@
      с дырой справа. Явные три доли тянутся за окном без потолка. */
   /* Без align-items:start — иначе под короткой карточкой оставалась дыра
      до второго ряда. Растягиваем по высоте ряда, нижние грани в одну линию. */
-  .trip-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); }
+  .trip-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-block); }
   .trip-grid > .card { display: flex; flex-direction: column; }
   @media (max-width: 1360px) { .trip-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   /* У заявки карточек всего две плюс широкая: в трёх колонках третья ячейка
@@ -979,17 +1166,17 @@
   @media (max-width: 900px)  { .trip-grid { grid-template-columns: 1fr; } }
   .trip-grid > .card { margin-bottom: 0; }
   .trip-grid > .card.trip-wide { grid-column: 1 / -1; }
-  .econ-split { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
-  @media (max-width: 900px) { .econ-split { grid-template-columns: 1fr; gap: var(--sp-5); } }
+  .econ-split { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: var(--gap-card); align-items: start; }
+  @media (max-width: 900px) { .econ-split { grid-template-columns: 1fr; gap: var(--gap-card); } }
   .econ-split > div > .fg-t { font-family: var(--mono); font-size: var(--fs-1); font-weight: 600;
     letter-spacing: 1.1px; text-transform: uppercase; color: var(--ink-faint); }
-  .crumbs { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3);
+  .crumbs { display: flex; align-items: center; gap: var(--gap-row); margin-bottom: var(--sp-3);
     font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); }
   .crumb { background: none; border: none; padding: 0; cursor: pointer; color: var(--accent-ink);
     font: inherit; letter-spacing: inherit; text-transform: inherit; }
   .crumb:hover { text-decoration: underline; }
   .crumb-sep { color: var(--ink-faint); }
-  .trip-head { display: flex; align-items: flex-start; gap: var(--sp-5); flex-wrap: wrap;
+  .trip-head { display: flex; align-items: flex-start; gap: var(--gap-card); flex-wrap: wrap;
     margin-bottom: var(--sp-5); }
   .trip-head .th-main { flex: 1 1 260px; min-width: 0; }
   .trip-head h2 { font-family: var(--mono); font-size: var(--fs-7); letter-spacing: .5px; color: var(--ink); font-weight: 600; }
@@ -999,25 +1186,25 @@
   /* Действия «на месте» под подзаголовком заявки: позвонить и доехать.
      Ссылки, а не кнопки, — их работу выполняет система, а не приложение;
      .btn им дан только ради общей геометрии и зоны нажатия. */
-  .th-acts { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); }
+  .th-acts { display: flex; flex-wrap: wrap; gap: var(--gap-row); margin-top: var(--sp-4); }
   .th-acts .btn { text-decoration: none; }
   .th-econ { flex: none; text-align: right; font-family: var(--mono); }
   .th-econ .te-k { font-size: var(--fs-1); letter-spacing: .6px; text-transform: uppercase; color: var(--ink-faint); }
   .th-econ .te-v { font-size: var(--fs-7); font-weight: 600; line-height: 1.2; margin-top: var(--sp-1); }
   .th-econ .te-s { font-size: var(--fs-2); color: var(--ink-dim); margin-top: var(--sp-1); }
-  @media (max-width: 760px) { .trip-head { gap: var(--sp-4); } .th-econ { text-align: left; } }
+  @media (max-width: 760px) { .trip-head { gap: var(--gap-block); } .th-econ { text-align: left; } }
   .settings-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr);
-    gap: var(--sp-5); align-items: start; max-width: 1640px; }
-  .settings-nav { display: flex; flex-direction: column; gap: var(--sp-2); }
+    gap: var(--gap-card); align-items: start; max-width: 1640px; }
+  .settings-nav { display: flex; flex-direction: column; gap: var(--gap-tight); }
   /* Липкость обёртка берёт из .stickyhead. На десктопе она больше ничего
      не делает: ни отступа под собой, ни черты — это нужно только телефону,
      где строка чипов уезжает под заголовок. */
   .settings-navwrap { padding-bottom: 0; }
   .settings-navwrap::before, .settings-navwrap::after { content: none; }
-  .son { text-align: left; background: transparent; border: 1px solid transparent; color: var(--ink-dim); border-radius: var(--r-sm); padding: var(--sp-3) var(--sp-4); cursor: pointer; font-size: var(--fs-4); font-family: inherit; transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast); }
+  .son { text-align: left; background: transparent; border: 1px solid transparent; color: var(--ink-dim); border-radius: var(--r-sm); padding: var(--pad-row); cursor: pointer; font-size: var(--fs-4); font-family: inherit; transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast); }
   .son.on { background: var(--panel-2); border-color: var(--line); color: var(--ink); font-weight: 600; }
   /* Строка пользователя в настройках. */
-  .urow { display: flex; gap: var(--sp-3); align-items: center; }
+  .urow { display: flex; gap: var(--gap-row); align-items: center; }
   .urow select { width: 130px; }
   .settings-body > .card:first-child { margin-top: 0; }
   .settings-body > .card > h3 { cursor: pointer; user-select: none; position: relative; padding-right: var(--sp-6); }
@@ -1025,17 +1212,17 @@
   .settings-body > .card.collapsed > h3::after { transform: rotate(-90deg); }
   .settings-body > .card.collapsed > :not(h3) { display: none !important; }
   .emtree-manu { border: 1px solid var(--line); border-radius: var(--r-sm); margin-top: var(--sp-3); overflow: hidden; }
-  .emtree-h { padding: var(--sp-3) var(--sp-4); font-weight: 600; cursor: pointer; background: var(--panel-2); font-size: var(--fs-4); user-select: none; }
+  .emtree-h { padding: var(--pad-row); font-weight: 600; cursor: pointer; background: var(--panel-2); font-size: var(--fs-4); user-select: none; }
   .emtree-body { padding: var(--sp-2) var(--sp-3) var(--sp-3); }
   .emtree-kind { margin-top: var(--sp-3); }
   .emtree-kh { font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); padding: var(--sp-2) var(--sp-2) var(--sp-1); }
-  .emrow { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3); border-radius: var(--r-sm); }
+  .emrow { display: flex; align-items: center; gap: var(--gap-row); padding: var(--pad-row); border-radius: var(--r-sm); }
   .emname { flex: 1; min-width: 0; font-size: var(--fs-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .emmeta { font-size: var(--fs-2); color: var(--ink-dim); white-space: nowrap; }
   /* Ширина дня считается от окна, поэтому горизонтальный скролл больше
      не нужен — он и был признаком того, что период задан не тем. */
   .gantt-wrap { overflow-x: hidden; padding-bottom: var(--sp-3); }
-  .gantt-bar-ctl { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+  .gantt-bar-ctl { display: flex; align-items: center; gap: var(--gap-row); flex-wrap: wrap; margin-bottom: var(--sp-4); }
   .gantt-day.wknd { background: color-mix(in srgb, var(--ink-faint) 8%, transparent); }
   .gantt-head { display: flex; border-bottom: 1px solid var(--line); margin-bottom: var(--sp-3); }
   .gantt-day { flex: none; text-align: center; font-size: var(--fs-1); color: var(--ink-faint); font-family: var(--mono); padding: var(--sp-2) 0; border-left: 1px solid var(--line); }
@@ -1074,9 +1261,9 @@
     .settings-navwrap { padding-bottom: var(--sp-4); margin-bottom: var(--sp-2); min-width: 0; }
     .settings-navwrap::before { content: ''; }
     .settings-navwrap.stuck::after { content: ''; opacity: 1; }
-    .settings-nav { flex-direction: row; overflow-x: auto; gap: var(--sp-3); }
+    .settings-nav { flex-direction: row; overflow-x: auto; gap: var(--gap-row); }
     .settings-nav::-webkit-scrollbar { display: none; }
-    .son { white-space: nowrap; flex: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: var(--sp-3) var(--sp-4); }
+    .son { white-space: nowrap; flex: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: var(--pad-row); }
     /* Строка пользователя: имя во всю ширину, роль и «сохранить» — под ним.
        В одну строку имени доставалось около 110 px, и от «Гречка Р.І.»
        было видно «Гре». */
@@ -1106,15 +1293,85 @@
 .agrp:last-child{margin-bottom: 0}
 .agrp-card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line);
   border-radius: var(--r-md);box-shadow:var(--shadow-sm);overflow:hidden}
-.agrp-h{display:flex;align-items:center;gap: var(--sp-4);padding: var(--sp-3) var(--sp-4);border-bottom:1px solid var(--line)}
+.agrp-h{display:flex;align-items:center;gap: var(--gap-block);padding: var(--pad-row);border-bottom:1px solid var(--line)}
 .agrp-n{font-family:var(--mono);font-size: var(--fs-2);font-weight:600;letter-spacing:.4px;color:var(--ink);white-space:nowrap}
 .agrp-track{flex:1;min-width:40px;height:6px;border-radius: var(--r-pill);background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
 .agrp-track i{display:block;height:100%;border-radius: var(--r-pill)}
 .agrp-hint{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-dim);white-space:nowrap}
 .agrp-eng{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint);white-space:nowrap}
 .a-noeng{color:var(--red)}
-.arow2{display:flex;align-items:center;gap: var(--sp-4);padding: var(--sp-3) var(--sp-4);cursor:pointer}
+.arow2{display:flex;align-items:flex-start;gap: var(--gap-block);padding: var(--pad-row);cursor:pointer}
 .arow2+.arow2{border-top:1px solid var(--line)}
+/* ── Метки строки ────────────────────────────────────────────────────
+   «С выездом / без выезда / в депо» — свойство заявки, а не раздел
+   списка. Раньше по этому признаку заявки лежали в разных карточках, и
+   срок переставал задавать порядок: горящая сегодня оказывалась ниже
+   той, что через неделю, только потому что её ещё не собрали в маршрут.
+   Метка отвечает на тот же вопрос, ничего не переставляя. */
+.a-tags{display:flex;flex-wrap:wrap;gap: var(--gap-tight);margin-top: var(--sp-2)}
+.a-tag{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.3px;
+  border:1px solid var(--line);border-radius: var(--r-pill);padding: var(--pad-tag);color:var(--ink-faint);
+  white-space:nowrap}
+.a-tag.has{color:var(--ink-dim)}
+.a-tag.dep{color:var(--cyan);border-color:color-mix(in srgb,var(--cyan) 40%,var(--line))}
+.a-tag.none{color:var(--ink-faint);border-style:dashed}
+.a-tag.st{text-transform:lowercase}
+/* ── Первая группа — самая срочная ───────────────────────────────────
+   Экран читают на ходу, одной рукой, не всегда глядя. Когда все карточки
+   одного роста, глаз каждый раз заново ищет, с чего начать, — а начинать
+   всегда надо с верхней. Высота и кегль отвечают на этот вопрос раньше,
+   чем человек начнёт читать. */
+.agrp-lead .agrp-card{box-shadow: var(--shadow-lg)}
+.agrp-lead .agrp-h{padding: var(--sp-4)}
+.agrp-lead .agrp-n{font-size: var(--fs-4)}
+.arow2-lead{padding: var(--sp-4)}
+.arow2-lead .a-name{font-size: var(--fs-6);line-height:1.25}
+.arow2-lead .a-sub{font-size: var(--fs-3)}
+.arow2-lead .a-h{font-size: var(--fs-4);font-weight:600;color:var(--ink)}
+.a-acts{display:flex;gap: var(--gap-row);padding: 0 var(--sp-4) var(--sp-4)}
+/* Кнопки по содержимому, а не во всю ширину: «Проехать» в одиночку,
+   растянутое на экран, кричит громче названия точки, ради которого
+   строка и существует. */
+.a-acts .btn{flex:0 1 auto;justify-content:center;text-decoration:none}
+.a-acts:empty{display:none}
+/* ── Колода просрочки ────────────────────────────────────────────────
+   Просроченное нельзя сделать вовремя — оно уже опоздало. Развёрнутым
+   списком оно занимало верх экрана и каждое утро отодвигало вниз то,
+   что человек ещё может успеть. Колода отвечает на «сколько там» одной
+   строкой, а из-под неё выглядывают края остальных карточек: видно,
+   что там не одна, и видно, что их можно достать.
+   Пульсация — та же, что у восклицательного знака на карте (pulseA).
+   Двигаться на экране имеет право ровно один элемент, и это тот, мимо
+   которого нельзя пройти. */
+.odeck{position:relative;z-index:3}
+.odeck-l{position:absolute;top:10px;border:1px solid var(--line);border-radius: var(--r-md);
+  background:var(--panel);box-shadow: var(--shadow-sm)}
+.odeck-face{position:relative;z-index:4;display:block;width:100%;text-align:left;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--red);
+  border-radius: var(--r-md);box-shadow: var(--shadow-sm);color:var(--ink);font-family:inherit;
+  padding: var(--pad-card);transition:transform var(--t-fast),box-shadow var(--t)}
+.odeck-face:active{transform:scale(.995)}
+.odeck-t{display:block;font-family:var(--mono);font-size: var(--fs-4);font-weight:600;color:var(--red)}
+.odeck-s{display:block;font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-faint);margin-top: var(--sp-2)}
+.a-dot-pulse{animation:pulseA 1.8s infinite}
+.odeck-body{margin-bottom: var(--sp-5)}
+.odeck-fold{display:flex;justify-content:center;padding-top: var(--sp-2)}
+.odeck-hide{background:none;border:0;cursor:pointer;font-family:var(--mono);font-size: var(--fs-2);
+  letter-spacing:.4px;color:var(--ink-faint);padding: var(--sp-3)}
+@media (prefers-reduced-motion: reduce){ .a-dot-pulse{animation:none} }
+
+/* Подвал группы — кнопки самого выезда. Инженеру страница выезда
+   недоступна (это право менеджера), и «Начать выезд» он достаёт
+   только отсюда. */
+.a-foot{display:flex;align-items:center;flex-wrap:wrap;gap: var(--gap-row);
+  padding: var(--pad-row);border-top:1px solid var(--line);
+  background:color-mix(in srgb,var(--ink-faint) 6%,var(--panel))}
+.a-foot-n{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.6px;
+  text-transform:uppercase;color:var(--ink-faint);flex:1 0 100%}
+.a-foot .acts{display:flex;gap: var(--gap-row);flex-wrap:wrap;flex:1}
+@media(max-width:600px){
+  .a-foot .acts .btn{flex:1 1 auto;justify-content:center}
+}
 .a-main{flex:1;min-width:0}
 /* Названия точек украинские и длинные. break-word переносит по словам;
    anywhere рубил бы «надлісниц-тво» посреди слога. */
@@ -1140,7 +1397,7 @@
 .elcard .el-hz{font-family:var(--mono);font-size: var(--fs-1);font-weight:400;letter-spacing:.5px;
   text-transform:uppercase;color:var(--ink-faint)}
 .elrow{display:grid;grid-template-columns:1fr auto;grid-template-areas:'n v' 't t' 's s';
-  gap: var(--sp-2) var(--sp-3);padding: var(--sp-3) 0;border-bottom:1px solid var(--line)}
+  gap: var(--gap-tight) var(--gap-row);padding: var(--sp-3) 0;border-bottom:1px solid var(--line)}
 .elrow:last-of-type{border-bottom:0;padding-bottom: var(--sp-1)}
 .el-n{grid-area:n;font-size: var(--fs-4);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .el-v{grid-area:v;font-family:var(--mono);font-size: var(--fs-2);font-weight:600;white-space:nowrap}
@@ -1154,24 +1411,24 @@
   padding-top: var(--sp-3);border-top:1px solid var(--line)}
 .stat-closed{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint);margin-top: var(--sp-3)}
 /* Переключатель периода живёт в заголовке карточки, а не отдельной строкой */
-.cardhead{display:flex;align-items:center;gap: var(--sp-3);flex-wrap:wrap}
+.cardhead{display:flex;align-items:center;gap: var(--gap-row);flex-wrap:wrap}
 /* Переключатель периода живёт в шапке карточки, окно с датами — строкой под
    ним: order + flex-basis 100% переносят его на свою строку внутри той же
    шапки, без отдельного контейнера и без position:absolute. */
 .perseg{margin-left: auto;display:inline-flex;flex:none}
-.perseg button{padding: var(--sp-2) var(--sp-3);font-size: var(--fs-1)}
-.perpop{display:none;order:9;flex:1 0 100%;align-items:center;gap: var(--sp-2);
-  margin-top: var(--sp-3);padding: var(--sp-3);background:var(--panel-2);
+.perseg button{padding: var(--pad-chip);font-size: var(--fs-1)}
+.perpop{display:none;order:9;flex:1 0 100%;align-items:center;gap: var(--gap-tight);
+  margin-top: var(--sp-3);padding: var(--pad-row);background:var(--panel-2);
   border:var(--bd);border-radius: var(--r-sm)}
 .perpop.on{display:flex}
-.perpop input{width:auto;flex:1 1 120px;min-width:0;padding: var(--sp-2) var(--sp-3);font-size: var(--fs-4)}
+.perpop input{width:auto;flex:1 1 120px;min-width:0;padding: var(--pad-chip);font-size: var(--fs-4)}
 .perdash{color:var(--ink-faint);flex:none}
 /* План отделён от заработанного и подписан планом */
 .mc-plan .mc-k,.mc-plan .mc-v{color:var(--ink-faint)}
 .mc-note{font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-faint)}
 
 /* Лента внимания на дашборде */
-.dash-grid{display:grid;grid-template-columns:1.4fr 1fr;gap: var(--sp-5);align-items:start}
+.dash-grid{display:grid;grid-template-columns:1.4fr 1fr;gap: var(--gap-card);align-items:start}
 .dash-grid.one-col{grid-template-columns:1fr}
 @media(max-width:900px){.dash-grid{grid-template-columns:1fr}}
 .dash-attn .acaps{text-transform:uppercase;letter-spacing:.12em;font-size: var(--fs-3);line-height:14px;margin: 0 0 var(--sp-3)}
@@ -1183,7 +1440,7 @@
    там колонки идут друг за другом, а не рядом. */
 #dashBody{padding-top: var(--sp-6)}
 @media(max-width:900px){#dashBody{padding-top: 0}}
-.arow{display:flex;align-items:center;gap: var(--sp-3);padding: var(--sp-3) var(--sp-4);position:relative;cursor:pointer;border-bottom:1px solid var(--line)}
+.arow{display:flex;align-items:center;gap: var(--gap-row);padding: var(--pad-row);position:relative;cursor:pointer;border-bottom:1px solid var(--line)}
 .arow:last-child{border-bottom:0}
 .astripe{position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius: var(--r-pill)}
 .arow.red .astripe{background:var(--red)}
@@ -1193,7 +1450,7 @@
 .amain{flex:1;min-width:0;padding-left: var(--sp-3)}
 .aname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .asub{font-size: var(--fs-3);color:var(--ink-dim);margin-top: var(--sp-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.abadge{font-size: var(--fs-2);padding: var(--sp-1) var(--sp-3);border-radius: var(--r-pill);white-space:nowrap;border:1px solid transparent}
+.abadge{font-size: var(--fs-2);padding: var(--pad-tag);border-radius: var(--r-pill);white-space:nowrap;border:1px solid transparent}
 /* Фон и рамка бейджа были прибиты литералами из ТЁМНОЙ палитры, тогда как
    цвет текста брался из токена. Половина правила подстраивалась под тему,
    половина — никогда, и в светлой теме на белых карточках получались
@@ -1206,7 +1463,7 @@
 .abadge.gray{color:var(--ink-dim);border-color:var(--line);background:var(--panel-2)}
 .abadge.noeng{color:var(--cyan);border-color:color-mix(in srgb,var(--cyan) 45%,var(--panel));background:color-mix(in srgb,var(--cyan) 14%,var(--panel))}
 .acold{margin-top: var(--sp-2)}
-.acold summary{list-style:none;cursor:pointer;padding: var(--sp-3) var(--sp-3);display:flex;align-items:center;gap: var(--sp-3);font-size: var(--fs-3);text-transform:uppercase;letter-spacing:.1em;color:var(--ink-dim)}
+.acold summary{list-style:none;cursor:pointer;padding: var(--pad-row);display:flex;align-items:center;gap: var(--gap-row);font-size: var(--fs-3);text-transform:uppercase;letter-spacing:.1em;color:var(--ink-dim)}
 .acold summary::-webkit-details-marker{display:none}
 .acold summary .acount{margin-left: auto;color:var(--ink-dim)}
 .achev{color:var(--ink-faint);transition:transform var(--t)}
@@ -1231,8 +1488,8 @@
 .mc-row{display:flex;justify-content:space-between;align-items:center;margin-top: var(--sp-3);padding-top: var(--sp-3);border-top:1px solid var(--line);font-size: var(--fs-4)}
 .mc-row:first-of-type{margin-top: var(--sp-4)}
 .mc-k{color:var(--ink-faint)} .mc-v{font-weight:600}
-.stats.mini{display:grid;grid-template-columns:1fr 1fr;gap: var(--sp-3);margin-top: var(--sp-5)}
-.revbars{display:flex;align-items:flex-end;gap: var(--sp-3);height:118px;margin-top: var(--sp-4)}
+.stats.mini{display:grid;grid-template-columns:1fr 1fr;gap: var(--gap-row);margin-top: var(--sp-5)}
+.revbars{display:flex;align-items:flex-end;gap: var(--gap-row);height:118px;margin-top: var(--sp-4)}
 .revbar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
 .revbar .rb-v{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint);text-align:center;margin-bottom: var(--sp-2);font-variant-numeric:tabular-nums}
 .revbar .rb-c{flex:1;display:flex;align-items:flex-end}
@@ -1248,11 +1505,11 @@
 .wf-h{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-4) 0 var(--sp-3);display:flex;align-items:center;gap: var(--sp-3)}
 .wf-h:first-child{margin-top: var(--sp-2)}
 .wf-row > div { min-width: 0; }
-.wf-row{display:flex;align-items:center;gap: var(--sp-3);background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--line);border-radius: var(--r-sm);cursor:pointer;transition:border-color var(--t)}
+.wf-row{display:flex;align-items:center;gap: var(--gap-row);background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--line);border-radius: var(--r-sm);cursor:pointer;transition:border-color var(--t)}
 .wf-t{min-width:0}
 .wf-s{color:var(--ink-faint);font-family:var(--mono)}
-.kempty{font-size: var(--fs-3);color:var(--ink-faint);padding: var(--sp-4) var(--sp-3);text-align:center;line-height:1.5}
-.vm-stale{font-size: var(--fs-2);color:var(--ink-faint);background:var(--panel-2);border:1px solid var(--line);border-radius: var(--r-sm);padding: var(--sp-3) var(--sp-3);margin: var(--sp-3) 0 var(--sp-2);line-height:1.45}
+.kempty{font-size: var(--fs-3);color:var(--ink-faint);padding: var(--pad-row);text-align:center;line-height:1.5}
+.vm-stale{font-size: var(--fs-2);color:var(--ink-faint);background:var(--panel-2);border:1px solid var(--line);border-radius: var(--r-sm);padding: var(--pad-row);margin: var(--sp-3) 0 var(--sp-2);line-height:1.45}
 .mc-per{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:1px;text-transform:uppercase;color:var(--ink-faint);margin-bottom: var(--sp-3)}
 .mc-delta{font-size: var(--fs-3);color:var(--green);margin:-2px 0 12px}
 .mc-delta.down{color:var(--red)}
@@ -1264,19 +1521,19 @@
 .statuscard{margin-top: var(--sp-5)}
 .statbar{display:flex;height:12px;border-radius: var(--r-sm);overflow:hidden;margin: var(--sp-3) 0}
 .statbar i{display:block}
-.statleg{display:flex;flex-wrap:wrap;gap: var(--sp-4);font-size: var(--fs-3);color:var(--ink-dim)}
+.statleg{display:flex;flex-wrap:wrap;gap: var(--gap-block);font-size: var(--fs-3);color:var(--ink-dim)}
 .statleg span{display:flex;align-items:center;gap: var(--sp-3)}
 .ldot{width:9px;height:9px;border-radius:50%;display:inline-block}
 /* Модалка экономики выезда */
 .ehead{font-size: var(--fs-1);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-5) 0 var(--sp-3);padding-bottom: var(--sp-2);border-bottom:1px solid var(--line)}
 .ehead:first-child{margin-top: 0}
-.erow{display:flex;justify-content:space-between;gap: var(--sp-4);font-size: var(--fs-4);padding: var(--sp-2) 0}
+.erow{display:flex;justify-content:space-between;gap: var(--gap-block);font-size: var(--fs-4);padding: var(--sp-2) 0}
 .ek{color:var(--ink-dim);min-width:0}
 .ev{white-space:nowrap;text-align:right}
 .edim{color:var(--ink-faint);font-size: var(--fs-2)}
-.ejob{background:var(--panel-2);border:1px solid var(--line);border-radius: var(--r-sm);padding: var(--sp-3) var(--sp-4);margin-bottom: var(--sp-3)}
+.ejob{background:var(--panel-2);border:1px solid var(--line);border-radius: var(--r-sm);padding: var(--pad-row);margin-bottom: var(--sp-3)}
 .ejob-t{margin-bottom: var(--sp-3)}
-.ewarr{font-size: var(--fs-2);color:var(--cyan);border:1px solid color-mix(in srgb,var(--cyan) 45%,var(--panel));background:color-mix(in srgb,var(--cyan) 14%,var(--panel));border-radius: var(--r-pill);padding: var(--sp-1) var(--sp-3);margin-left: var(--sp-3)}
+.ewarr{font-size: var(--fs-2);color:var(--cyan);border:1px solid color-mix(in srgb,var(--cyan) 45%,var(--panel));background:color-mix(in srgb,var(--cyan) 14%,var(--panel));border-radius: var(--r-pill);padding: var(--pad-tag);margin-left: var(--sp-3)}
 .etotal{display:flex;justify-content:space-between;align-items:center;border-top:2px solid var(--line);margin-top: var(--sp-3);padding-top: var(--sp-3);font-size: var(--fs-5)}
 .ehint{color:var(--ink-faint);font-size: var(--fs-3);padding: var(--sp-3) 0}
 .emap{height:200px;border:1px solid var(--line);border-radius: var(--r-sm);overflow:hidden;background:#111}
@@ -1284,13 +1541,13 @@
 #tpMapWrap{position:relative}
 .emap-open{position:absolute;right:8px;top:8px;z-index:500;pointer-events:none;
   background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);
-  padding:2px 8px;font-family:var(--mono);font-size:var(--fs-1);color:var(--ink-dim);
+  padding: var(--pad-tag);font-family:var(--mono);font-size:var(--fs-1);color:var(--ink-dim);
   box-shadow:var(--shadow-sm)}
-.eleg{display:flex;gap: var(--sp-5);font-size: var(--fs-2);color:var(--ink-dim);padding-top: var(--sp-3)}
+.eleg{display:flex;gap: var(--gap-card);font-size: var(--fs-2);color:var(--ink-dim);padding-top: var(--sp-3)}
 .eleg span{display:flex;align-items:center;gap: var(--sp-3)}
 .edash{width:18px;height:0;border-top:3px dashed #9aa1ad;display:inline-block}
 .esolid{width:18px;height:0;border-top:3px solid var(--accent);display:inline-block}
-.aempty{padding: var(--sp-6);text-align:center;color:var(--ink-faint)}
+.aempty{padding: var(--pad-window);text-align:center;color:var(--ink-faint)}
 
 /* ── Заявка: две разные страницы под одну запись ──────────────────────
    Диспетчер ЗАВОДИТ заявку: клиент, техника, исполнитель, сроки. Инженер
@@ -1340,7 +1597,7 @@
 .job-ref-read{display:none}
 .view-job.job-task .job-ref-read{display:block;grid-column:1/-1;order:4}
 .view-job.job-task .job-ref-read[hidden]{display:none}
-.job-ref-read dl{display:grid;grid-template-columns:auto 1fr;gap: var(--sp-3) var(--sp-5);
+.job-ref-read dl{display:grid;grid-template-columns:auto 1fr;gap: var(--gap-row) var(--gap-card);
   margin:0;padding: var(--sp-4) 0 0}
 .job-ref-read dt{font-family:var(--mono);font-size: var(--fs-2);letter-spacing:.5px;
   text-transform:uppercase;color:var(--ink-faint);white-space:nowrap}
@@ -1348,11 +1605,11 @@
 /* ── Фото ────────────────────────────────────────────────────────────
    Три кнопки вместо «выбрать метку → снять»: метка известна заранее,
    и лишний выбор посреди работы стоит дороже трёх кнопок. */
-.ph-add{display:flex;flex-wrap:wrap;gap: var(--sp-3);align-items:center}
+.ph-add{display:flex;flex-wrap:wrap;gap: var(--gap-row);align-items:center}
 .ph-state{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-faint)}
 .ph-state.bad{color:var(--red)}
 .ph-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));
-  gap: var(--sp-3);margin-top: var(--sp-4)}
+  gap: var(--gap-row);margin-top: var(--sp-4)}
 .ph-grid:empty{display:none}
 .ph-item{position:relative;border:1px solid var(--line);border-radius: var(--r-md);
   overflow:hidden;background:var(--panel-2);aspect-ratio:4/3}
@@ -1360,13 +1617,13 @@
 .ph-tag{position:absolute;left: var(--sp-2);bottom: var(--sp-2);
   font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.5px;text-transform:uppercase;
   background:color-mix(in srgb, #000 62%, transparent);color:#fff;
-  padding:2px var(--sp-3);border-radius: var(--r-pill)}
+  padding: var(--pad-tag);border-radius: var(--r-pill)}
 .ph-del{position:absolute;right: var(--sp-2);top: var(--sp-2);width:32px;height:32px;
   border:0;border-radius:50%;cursor:pointer;line-height:1;
   background:color-mix(in srgb, #000 62%, transparent);color:#fff;font-size: var(--fs-5)}
 /* Отметка «я на месте». Строка над выбором работ: приехал → нажал →
    работаешь → уехал → часы уже посчитаны. */
-.visit-row{display:flex;flex-wrap:wrap;align-items:center;gap: var(--sp-4);
+.visit-row{display:flex;flex-wrap:wrap;align-items:center;gap: var(--gap-block);
   margin-bottom: var(--sp-4)}
 .visit-row:empty{display:none}
 .visit-note{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim)}
@@ -1375,20 +1632,20 @@
    Строка складывается из двух ярусов: сверху то, что пишет инженер
    (название и артикул), снизу то, что считается (количество, признак
    оплаты и — только менеджеру — деньги). */
-.pt-add{display:flex;gap: var(--sp-3);align-items:center;flex-wrap:wrap}
-.pt-sug{display:flex;gap: var(--sp-2);flex-wrap:wrap}
+.pt-add{display:flex;gap: var(--gap-row);align-items:center;flex-wrap:wrap}
+.pt-sug{display:flex;gap: var(--gap-tight);flex-wrap:wrap}
 .pt-sug button{font-size: var(--fs-2)}
 .pt-row{margin-top: var(--sp-3)}
-.pt-top{display:flex;gap: var(--sp-3);align-items:center}
+.pt-top{display:flex;gap: var(--gap-row);align-items:center}
 .pt-top input[data-pn]{flex:1 1 auto;min-width:0}
 .pt-top input[data-ps]{width:130px;flex:none}
-.pt-bot{display:flex;gap: var(--sp-3);align-items:center;margin-top: var(--sp-3);flex-wrap:wrap}
+.pt-bot{display:flex;gap: var(--gap-row);align-items:center;margin-top: var(--sp-3);flex-wrap:wrap}
 .pt-bot input[data-pq]{width:74px;flex:none}
 .pt-bot select[data-pu]{width:88px;flex:none}
 /* Цена, закупка и сумма переносятся ОДНОЙ группой: разорванные по разным
    строкам, они читаются как три независимых числа, а это одно —
    «почём продали, почём взяли, сколько вышло». */
-.pt-money{display:flex;gap: var(--sp-3);align-items:center;flex:none}
+.pt-money{display:flex;gap: var(--gap-row);align-items:center;flex:none}
 .pt-money input{width:92px;flex:none}
 .pt-sum{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
 .pt-rm{margin-left: auto}
@@ -1453,7 +1710,7 @@
    висела над пустотой. Отрицательное смещение ровно на отступ возвращает
    её к краю. */
 .job-foot{position:sticky;bottom:calc(var(--sp-6) * -1);z-index:5;display:flex;align-items:center;
-  justify-content:flex-end;gap: var(--sp-4);
+  justify-content:flex-end;gap: var(--gap-block);
   margin: var(--sp-5) calc(var(--sp-6) * -1) calc(var(--sp-6) * -1);
   padding: var(--sp-4) var(--sp-6) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
   background:color-mix(in srgb, var(--bg) 92%, transparent);
@@ -1483,10 +1740,10 @@
 /* Полоса «нет связи». Не тревожная красная — это не поломка, а рабочее
    состояние в поле; но и не молчаливая: человек должен знать, что видит
    сохранённое и что записать сейчас не выйдет. */
-.offbar{display:flex;flex-wrap:wrap;align-items:baseline;gap: var(--sp-2) var(--sp-4);
+.offbar{display:flex;flex-wrap:wrap;align-items:baseline;gap: var(--gap-tight) var(--gap-block);
   border:1px solid var(--line);border-left:3px solid #f59e0b;
   border-radius: var(--r-md);background:var(--panel-2);
-  padding: var(--sp-4);margin-bottom: var(--sp-5);
+  padding: var(--pad-card);margin-bottom: var(--gap-card);
   font-family:var(--mono);font-size: var(--fs-3);color:var(--ink)}
 .offbar-h{color:var(--ink-faint);font-size: var(--fs-2)}
 /* Счётчик неотправленного. Не тревожный и не модальный: это не ошибка,
@@ -1497,70 +1754,18 @@
   z-index:1200;pointer-events:none;
   background:var(--ink);color:var(--panel);
   font-family:var(--mono);font-size: var(--fs-2);letter-spacing:.3px;
-  padding: var(--sp-3) var(--sp-5);border-radius: var(--r-pill);
+  padding: var(--pad-btn);border-radius: var(--r-pill);
   box-shadow: var(--shadow-md);max-width:calc(100% - var(--sp-6));text-align:center}
 @media (max-width: 760px){
   /* Над нижним меню, а не под ним. */
   .qbadge{bottom: calc(74px + env(safe-area-inset-bottom, 0px))}
 }
 
-/* ── Сегодня ─────────────────────────────────────────────────────────
-   Один выезд — текущий — занимает экран целиком; остальные свёрнуты
-   в строку и раскрываются на месте. Так у инженера всегда ровно одна
-   активная задача перед глазами, а не список равноправных карточек,
-   из которого он каждый раз сам вычисляет, что делать сейчас. */
-.mine-cap{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:1px;
-  text-transform:uppercase;color:var(--ink-faint);margin-bottom: var(--sp-3);
-  display:flex;align-items:center;gap: var(--sp-3)}
-.mine-cap.bad{color:var(--red)}
-.mine-hero{border-color:var(--ink-faint)}
-.mine-hero h3{font-size: var(--fs-7);line-height:1.2}
-.mine-pts{margin-top: var(--sp-4);display:flex;flex-direction:column;gap: var(--sp-3)}
-.mine-pt{border:1px solid var(--line);border-radius: var(--r-md);overflow:hidden;background:var(--panel-2)}
-.mine-pt-main{display:flex;width:100%;align-items:center;justify-content:space-between;
-  gap: var(--sp-4);padding: var(--sp-4);background:transparent;border:0;cursor:pointer;
-  color:var(--ink);font-family:inherit;font-size: var(--fs-5);text-align:left;
-  transition:background var(--t-fast)}
-.mine-pt-main:hover{background:var(--panel)}
-.mp-name{font-weight:600;min-width:0;overflow-wrap:break-word}
-.mp-eq{font-weight:400;color:var(--ink-dim);font-size: var(--fs-3)}
-/* flex:none обязателен. Названия у нас длиной в строку («Димерське
-   надлісництво Філії …»), и без запрета на сжатие статус ужимался до
-   нуля: «открыта ›» разваливалась по буквам в столбик или уезжала под
-   обрез. Статус — короткий и постоянный, место ему положено целиком,
-   переносится пусть название. */
-.mp-st{flex:none;font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
-/* Позвонить и проехать — по одной точке, а не по выезду целиком:
-   на маршруте их несколько, и звонить надо тому, к кому едешь сейчас. */
-.mine-pt-acts{display:flex;gap: var(--sp-3);padding: 0 var(--sp-4) var(--sp-4);flex-wrap:wrap}
-.mine-pt-acts:empty{display:none}
-.mine-pt-acts .btn{text-decoration:none}
-.mine-row{display:flex;align-items:center;justify-content:space-between;gap: var(--sp-4);
-  padding: var(--sp-4) var(--sp-3);cursor:pointer;list-style:none;
-  border-top:1px solid var(--line);transition:background var(--t-fast)}
-.mine-det:first-of-type .mine-row{border-top:0}
-.mine-row::-webkit-details-marker{display:none}
-.mine-row:hover{background:var(--panel-2)}
-.mr-main{display:flex;flex-direction:column;gap:2px;min-width:0}
-.mr-name{font-weight:600;font-size: var(--fs-5);overflow-wrap:break-word}
-.mr-sub{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-faint)}
-.mr-st{flex:none;font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
-.mine-det[open] .mine-row{background:var(--panel-2)}
-.mine-hero .acts{margin-top: var(--sp-5)}
-.mine-body{padding: var(--sp-4) var(--sp-3) var(--sp-5);border-top:1px solid var(--line)}
-.mine-body h3{font-size: var(--fs-6)}
-/* Телефон. Названия точек здесь во всю ширину, поэтому статус встаёт
-   к ВЕРХНЕЙ строке названия, а не к его середине: у названия в три
-   строки центрированный статус висел напротив пустого места. Кнопки
-   делят строку поровну — «Позвонить» и «Проехать» жмут на ходу, и
-   промахнуться по ним не должно быть возможности. */
-@media (max-width: 760px){
-  .mine-hero h3{font-size: var(--fs-6)}
-  .mine-pt-main{align-items:flex-start;gap: var(--sp-3)}
-  .mine-pt-acts .btn{flex:1 1 0;min-width:0;justify-content:center}
-  .mine-hero .acts .btn{flex:1 1 auto;justify-content:center}
-  .mine-row{align-items:flex-start}
-}
+/* Экран «Сегодня» больше не имеет своей вёрстки: он показывает ту же
+   ленту, что и «Требует внимания» в сводке (см. renderFeed). Стили
+   прежнего экрана — карточка текущего выезда, свёрнутые строки,
+   отдельные карточки «в депо» и «без выезда» — удалены целиком: мёртвый
+   CSS переживает любой рефакторинг и потом врёт о том, как всё устроено. */
 
 /* ── Шторка «Ещё» ────────────────────────────────────────────────────
    Нижнее меню держит только РАЗДЕЛЫ — 3–5 штук, как и предписывают
@@ -1586,8 +1791,8 @@
   color:var(--ink-faint);padding: 0 var(--sp-3) var(--sp-3)}
 .sheet-who b{color:var(--ink-dim);font-weight:600;text-transform:uppercase;margin-left:.5em}
 .sheet-list{display:flex;flex-direction:column;gap: var(--sp-1)}
-.sheet-row{display:flex;align-items:center;gap: var(--sp-4);width:100%;
-  min-height:52px;padding: var(--sp-3) var(--sp-4);
+.sheet-row{display:flex;align-items:center;gap: var(--gap-block);width:100%;
+  min-height:52px;padding: var(--pad-row);
   background:transparent;border:1px solid transparent;border-radius: var(--r-md);
   color:var(--ink);font-family:inherit;font-size: var(--fs-6);text-align:left;cursor:pointer;
   transition:background var(--t-fast)}
@@ -1657,39 +1862,61 @@
   </div></div>
   <div class="view view-map active">
     <aside class="side">
-      <div class="side-handle" id="sideHandle"><span class="sh-chev">▾</span><span>Панель</span></div>
+      <!-- Ручка — просто черта, как в любой шторке телефона. Слово
+           «Панель» со стрелкой занимало 46 px и объясняло то, что и так
+           понятно по форме: за черту тянут. Тянут её и здесь — шторка
+           встаёт в одно из трёх положений (см. wireSheetDrag). -->
+      <div class="side-handle" id="sideHandle" role="button" tabindex="0" aria-label="Размер панели"></div>
+      <!-- Два блока стали вкладками. Раньше это были два сворачиваемых
+           заголовка друг под другом, и «Маршрут» на телефоне жил ниже
+           экрана: чтобы его увидеть, надо было сперва свернуть точки. -->
+      <div class="side-tabs2" id="sideTabs">
+        <button type="button" class="on" data-sb="points"><span id="sideTitle">В работе</span> <span class="cnt" id="cliCount">0</span></button>
+        <button type="button" data-sb="route">Маршрут <span class="cnt" id="rCount">0</span></button>
+      </div>
       <div class="scroll">
       <div class="block collapsible" id="pointsBlock">
-        <h2 class="ch"><span id="sideTitle">В работе</span> <span class="cnt" id="cliCount">0</span><span class="chev"></span></h2>
         <div class="block-body">
           <!-- Карта по умолчанию показывает не адресную книгу, а то, чем
                сейчас занимаются: точки с живыми заявками, депо и машины.
                Весь справочник — вторым режимом. Из 24 точек в работе обычно
                единицы, и остальные два десятка мешают их найти. -->
-          <div class="seg" id="mapScope"><button class="on" data-ms="work">в работе</button><button data-ms="all">весь справочник</button></div>
           <!-- Панель похудела с 22 органов управления до восьми.
                Режимы просмотра (подсветка прибыльных, расстановка объездов)
                переехали в меню слоёв на самой карте: это режимы, а не
                действия, и им не место в столбце над списком.
                Подсказки убраны — действия в карточке теперь подписаны
                словами, объяснять их отдельным абзацем не нужно. -->
+          <!-- Поиск первой строкой, фильтры — лентой чипов под ним.
+               Два сегментных переключателя во всю ширину, поиск и жёлтая
+               кнопка съедали 364 px из 439: на список точек, ради которого
+               панель и открывают, оставалось 75 px — одна карточка. Чипы —
+               те же самые кнопки, только по размеру содержимого и в одну
+               строку с прокруткой вбок. -->
           <div id="sideTools">
           <input type="search" id="search" placeholder="искать по названию…">
-          <div class="seg" id="typeFilter" style="margin-top: var(--sp-3)"><button class="on" data-tf="all">все</button><button data-tf="client">клиенты</button><button data-tf="base">депо</button></div>
-          <div id="pointTools"><button class="btn amber" id="pointCreate" style="width:100%;margin-top: var(--sp-3)">+ Создать точку</button></div>
+          <div class="chiprow">
+            <div class="seg chipseg" id="mapScope"><button class="on" data-ms="work">в работе</button><button data-ms="all">весь справочник</button></div>
+            <span class="chipsep"></span>
+            <div class="seg chipseg" id="typeFilter"><button class="on" data-tf="all">все</button><button data-tf="client">клиенты</button><button data-tf="base">депо</button></div>
           </div>
-          <!-- Список в своей коробке: восемьдесят точек утаскивали «Маршрут»
-               и «Сохранить как выезд» далеко вниз, за пределы карточки.
-               Шапку можно свернуть — тогда под панелью остаётся только карта. -->
+          </div>
+          <!-- Свернуть список — не то же самое, что свернуть панель.
+               Шторкой прячут всё сразу; здесь остаются поиск и фильтры,
+               а список уходит, и под панелью открывается карта. Это два
+               разных движения, и оба нужны. -->
           <div class="listhead" id="listHead"><span id="listHeadT">свернуть список</span><span class="chev"></span></div>
           <div class="listbox" id="pointsBox">
             <div id="workFeed"></div>
             <div id="list"></div>
+            <!-- «На карте: N» — сноской под списком, а не строкой в панели:
+                 это подтверждение, что данные загрузились, и смотрят на него
+                 раз в день. -->
+            <div class="datachip" id="dataStatus">—</div>
           </div>
         </div>
       </div>
       <div class="block collapsible collapsed" id="routeBlock">
-        <h2 class="ch">Маршрут <span class="cnt" id="rCount">0</span><span class="chev"></span></h2>
         <div class="block-body">
         <!-- Порядок: сперва что в маршруте, потом чем его дополнить, потом
              один главный ход. Три жёлтые кнопки подряд и двенадцать органов
@@ -1735,7 +1962,6 @@
         <button class="btn amber" id="rSaveTrip" style="width:100%;margin-top: var(--sp-4)">Сохранить как выезд</button>
         </div>
       </div>
-      <div class="block"><div class="hint" id="dataStatus">—</div></div>
       </div>
     </aside>
     <div class="map-wrap">
@@ -1753,6 +1979,11 @@
            силуэт стоит на самих машинах на карте. -->
       <button class="veh-btn on" id="vehBtn" title="Показать машины службы"><svg class="vb-ic" viewBox="0 0 34 20" width="17" height="10" aria-hidden="true" fill="currentColor"><path d="M1 3.5a1.5 1.5 0 0 1 1.5-1.5h14a1.5 1.5 0 0 1 1.5 1.5V14H1z"/><path d="M18 6.5h5.6a2 2 0 0 1 1.5.7l3.4 3.9a2 2 0 0 1 .5 1.3V14H18z"/><circle cx="8" cy="14.6" r="3.2"/><circle cx="24" cy="14.6" r="3.2"/></svg> Машины</button>
       </div>
+      <!-- Создание точки — действие НАД картой, а не строка в списке:
+           жёлтая кнопка во всю ширину панели весила больше самого списка
+           и стояла ровно между фильтрами и результатом. Живёт у правого
+           нижнего края и поднимается над шторкой ровно на её высоту. -->
+      <div id="pointTools"><button class="fab-add" id="pointCreate" type="button" title="Создать точку" aria-label="Создать точку">+</button></div>
       <!-- Легенда шла сплошной строкой в пять пунктов через точку и рвалась
            по словам, а пояснение под флажком висело постоянно. Легенда стала
            столбиком, пояснение уехало под «?». -->
