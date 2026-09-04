@@ -9,6 +9,14 @@ const at = (km, min) => ({
   lat: DEPOT.lat, lng: DEPOT.lng + kmEast(km),
   ts: new Date(Date.UTC(2026, 8, 2, 8, 0, Math.round((min || 0) * 60))).toISOString()
 });
+// Точка по МЕСТНОМУ времени. Нужна там, где проверяется опора: правило
+// «выехал в шесть утра» человеческое, то есть местное, и точка, заданная
+// в UTC, в другом часовом поясе попадает на другие сутки. На этом уже
+// спотыкались — CI гоняет тесты ещё и в America/Los_Angeles.
+const atLocal = (km, h, mi) => ({
+  lat: DEPOT.lat, lng: DEPOT.lng + kmEast(km),
+  ts: new Date(2026, 8, 2, h, mi || 0, 0).toISOString()
+});
 // Счётчик обращений к дорогам: ровно то, за что мы платим.
 function roads(answer) {
   const calls = [];
@@ -19,10 +27,18 @@ function roads(answer) {
   fn.calls = calls;
   return fn;
 }
-// Дороги длиннее прямой в 1.3 раза, скорость 80 км/ч — правдоподобный ответ.
-const realRoads = roads((a, b) => {
+// Правдоподобный маршрутизатор: дороги длиннее прямой в 1.3 раза, средняя
+// скорость 100 км/ч (трасса), и он ЧЕСТНО отвечает «не доехал бы», когда
+// времени не хватает. Заглушка, которая всегда говорит «да», проверяла бы
+// половину алгоритма и молчала про вторую.
+//
+// Числа подобраны под разбор: сто километров по прямой это 130 по дороге и
+// 78 минут — те самые «75 минут по ORS», которые проходят против 55 минут
+// фактических (78 ≤ 55 × 1.5).
+const realRoads = roads((a, b, ms) => {
   const km = haversineKm(a, b) * 1.3;
-  return { ok: true, km, sec: km / 80 * 3600 };
+  const sec = km / 100 * 3600;
+  return { ok: ms == null || sec <= (ms / 1000) * TRACK_DEFAULTS.slack, km, sec };
 });
 
 describe('haversineKm', () => {
@@ -156,15 +172,16 @@ describe('опора берётся из выезда', () => {
   it('трек начался далеко — опорой становится сам старт с шести утра', async () => {
     // Первая точка в ста километрах: это не аномалия, это «трекер очнулся
     // в дороге». От депо с шести утра туда времени навалом.
-    const p = [at(100, 180), at(115, 195), at(130, 210)];
+    const p = [atLocal(100, 15, 0), atLocal(115, 15, 15), atLocal(130, 15, 30)];
     const m = await measureTrip(p, null, { start: START }, realRoads);
     expect(m.points[0].anchor).toBe('старт выезда');
     expect(new Date(m.points[0].ts).getHours()).toBe(TRACK_DEFAULTS.dayStartHour);
+    expect(new Date(m.points[0].ts).getDate()).toBe(new Date(p[0].ts).getDate());
     expect(m.dropped.length).toBe(0);
     expect(m.points.length).toBe(4);               // опора плюс три точки
   });
   it('дорога от депо до первой точки посчитана по дорогам', async () => {
-    const p = [at(100, 180), at(115, 195)];
+    const p = [atLocal(100, 15, 0), atLocal(115, 15, 15)];
     const m = await measureTrip(p, null, { start: START }, roads({ ok: true, km: 128 }));
     expect(m.segments[0].kind).toBe('road');
     expect(m.segments[0].km).toBe(128);
@@ -181,17 +198,37 @@ describe('опора берётся из выезда', () => {
     expect(m.verdict).not.toMatch(/недостовер/);
     expect(m.km).toBeCloseTo(257, 0);
   });
+  it('широкое окно от шести утра не делает первую точку достоверной', async () => {
+    // Трекер очнулся в девять вечера: от шести утра пятнадцать часов, и
+    // круг за них — четыре с половиной тысячи километров, то есть никакой
+    // не круг. Время отправления мы не знаем, оно допущение. Поэтому первая
+    // точка при подставленной опоре — подозреваемая с самого начала, и
+    // решает не круг, а дорога: не «сколько бы успел», а «сколько ехать».
+    const p = [atLocal(2800, 21, 0), atLocal(2801, 21, 20), atLocal(2802, 21, 40)];
+    const m = await measureTrip(p, null, { start: START }, realRoads);
+    expect(m.dropped.length).toBe(3);
+    expect(m.dropped[0].why).toBe('по дорогам не доехал бы');
+  });
+  it('но настоящий вечерний выезд проходит', async () => {
+    const p = [atLocal(100, 21, 0), atLocal(115, 21, 20), atLocal(130, 21, 40)];
+    const m = await measureTrip(p, null, { start: START }, realRoads);
+    expect(m.dropped.length).toBe(0);
+    expect(m.segments[0].kind).toBe('road');
+  });
   it('без карточки выезда опорой служит первая точка', async () => {
     const p = [at(0, 0), at(10, 10)];
     const m = await measureTrip(p, null, {}, realRoads);
     expect(m.points[0].ts).toBe(p[0].ts);
   });
   it('трек, начавшийся до шести утра, опору не ломает', async () => {
-    const early = (km, h, mi) => ({ lat: DEPOT.lat, lng: DEPOT.lng + kmEast(km),
-      ts: new Date(2026, 8, 2, h, mi).toISOString() });
-    const m = await measureTrip([early(100, 4, 30), early(115, 5, 0)], null, { start: START }, realRoads);
+    // Соблазн был поставить опору за минуту до первой точки — и это тихо
+    // убивало бы ранние выезды: круг за минуту равен пяти километрам,
+    // точка в ста километрах его не проходит, вылетает, следующая
+    // проверяется с той же опоры и вылетает тоже.
+    const m = await measureTrip([atLocal(100, 4, 30), atLocal(115, 5, 0)], null, { start: START }, realRoads);
     expect(m.points[0].anchor).toBe('старт выезда');
     expect(new Date(m.points[0].ts).getHours()).toBe(0);   // полночь тех же суток
+    expect(new Date(m.points[0].ts).getDate()).toBe(2);
     expect(m.dropped.length).toBe(0);
   });
 });
