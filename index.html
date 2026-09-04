@@ -426,6 +426,13 @@
   .stickyhead::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0;
     height: 1px; background: var(--line); opacity: 0; transition: opacity var(--t); }
   .stickyhead.stuck::after { opacity: 1; }
+  /* Тень под прилипшей шапкой. Проверка показала, что поверх шапки ничего
+     не рисуется — она непрозрачна и лежит выше. Но контент обрезается ровно
+     по её нижнему краю, и наполовину срезанная кнопка с тенью карточки
+     вплотную читаются как грязь, размазанная по шапке. Лечится не слоями,
+     а видимой границей: с тенью снизу сразу понятно, что содержимое уезжает
+     ПОД шапку, а не пачкает её. */
+  .stickyhead.stuck { box-shadow: 0 7px 10px -7px rgba(15, 20, 27, .30); }
   .stickyhead .pane-head { margin-bottom: var(--sp-4); }
   .stickyhead .chips { margin: 0; }
   .pane-head h2 { font-family: var(--mono); font-size: var(--fs-6); letter-spacing: 1px; text-transform: uppercase; color: var(--ink); font-weight: 600; }
@@ -632,6 +639,9 @@
   .veh-kv { display: flex; justify-content: space-between; gap: var(--sp-4); font-size: var(--fs-4); padding: var(--sp-2) 0; }
   .veh-kv span:first-child { color: var(--ink-dim); }
   .map-summary b { color: var(--accent-ink); font-size: var(--fs-5); }
+  /* Факт отделён чертой: он не про план, и складывать их взглядом не надо. */
+  .map-summary .ms-f { border-left: 1px solid var(--line); padding-left: var(--sp-5); }
+  .map-summary .ms-f b { color: #7c3aed; }
   /* ── Палец, а не курсор ───────────────────────────────────────────────
      Замер на 390 px показал: почти всё интерактивное было ниже 44 px —
      кнопки 31, чипы 24, подвкладки 33, селект статуса в карточке 20,
