@@ -1440,6 +1440,20 @@
 .a-tag.dep{color:var(--cyan);border-color:color-mix(in srgb,var(--cyan) 40%,var(--line))}
 .a-tag.none{color:var(--ink-faint);border-style:dashed}
 .a-tag.st{text-transform:lowercase}
+/* Метка дня работы: «план» — даты поставил диспетчер, «авто» — подобрал
+   график. Читается как свойство даты, поэтому стоит вплотную к ней. */
+.a-tag.plan{color:var(--cyan);border-color:color-mix(in srgb,var(--cyan) 40%,var(--line))}
+.a-tag.auto{color:var(--ink-faint);border-style:dashed}
+.a-tag.bad{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,var(--line))}
+.agrp-hint.bad{color:var(--red)}
+/* Перегруз — сигнал тому, кто ставит даты. Инженер его не видит: чинить
+   график не в его власти, а тревожить его этим незачем. */
+.planwarn{border:1px solid color-mix(in srgb,var(--red) 45%,var(--line));
+  background:color-mix(in srgb,var(--red) 7%,var(--panel));border-radius: var(--r-md);
+  padding: var(--pad-row);margin-bottom: var(--gap-card)}
+.planwarn b{display:block;color:var(--red);font-size: var(--fs-2);margin-bottom: var(--sp-2)}
+.planwarn ul{margin:0;padding-left: var(--sp-5);font-size: var(--fs-2);color:var(--ink-dim)}
+.planwarn li+li{margin-top: var(--sp-1)}
 /* ── Первая группа — самая срочная ───────────────────────────────────
    Экран читают на ходу, одной рукой, не всегда глядя. Когда все карточки
    одного роста, глаз каждый раз заново ищет, с чего начать, — а начинать
@@ -1552,9 +1566,16 @@
 .mc-note{font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-faint)}
 
 /* Лента внимания на дашборде */
-.dash-grid{display:grid;grid-template-columns:1.4fr 1fr;gap: var(--gap-card);align-items:start}
-.dash-grid.one-col{grid-template-columns:1fr}
-@media(max-width:900px){.dash-grid{grid-template-columns:1fr}}
+/* minmax(0,…), а не просто дробь. Дорожка 1fr — это minmax(auto,1fr),
+   и её минимум равен min-content содержимого: одно длинное название
+   («Комунальне підприємство Багатогалузеве об'єднання…») расширяло
+   колонку под себя, а вместе с ней и всю сводку — на телефоне правый
+   край уезжал за экран у ВСЕГО, стоило раскрыть холодные потребности.
+   min-width:0 на самих колонках закрывает тот же случай для флекса. */
+.dash-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap: var(--gap-card);align-items:start}
+.dash-grid>*{min-width:0}
+.dash-grid.one-col{grid-template-columns:minmax(0,1fr)}
+@media(max-width:900px){.dash-grid{grid-template-columns:minmax(0,1fr)}}
 .dash-attn .acaps{text-transform:uppercase;letter-spacing:.12em;font-size: var(--fs-3);line-height:14px;margin: 0 0 var(--sp-3)}
 /* Подпись «Требует внимания» стоит только над ЛЕВОЙ колонкой и сдвигает её
    вниз на свою высоту. Правая при этом начинается от верха сетки, и две
