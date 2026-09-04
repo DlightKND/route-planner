@@ -32,6 +32,7 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
+        planSchedule, driveOfLegs,
         measureTrip } = core;
 
 
@@ -1722,6 +1723,7 @@ async function renderFeed(box,o){
 
     // Поле называется full_name — так его читают все остальные восемь мест
     // в файле.
+    const u2=j=>Math.round((utcOf(j.due_date)-utcOf(todayISO()))/DAY_MS);
     const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||''):''; };
     const hours=j=>(j.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
     const shift=(+appSettings.shift_hours)||8;
@@ -1733,16 +1735,63 @@ async function renderFeed(box,o){
     }
 
     // ── Группировка по дате срока ────────────────────────────────────────
+    // ── Календарный план ─────────────────────────────────────────────────
+    //
+    // Срок (SLA) — это обещание клиенту, а не день работы. Раньше лента
+    // группировалась по сроку, и на карточке стояла дата, в которую никто
+    // не собирался приезжать: у выезда с 9 по 11 сентября все три заявки
+    // лежали под своими сроками, а сами даты выезда не показывались нигде.
+    //
+    // Теперь день работы считает планировщик (src/core/schedule.js): даты
+    // выезда, поставленные диспетчером, он берёт как есть, остальному
+    // подбирает дни от срока назад — по часам работ, смене и допуску, с
+    // дорогой по плечам маршрута. На карточке стоит эта дата с меткой
+    // «план» (руками) или «авто» (подобрано), а срок — рядом.
+    const blockOf={}, tripJobs={};
+    dated.forEach(({job})=>{ const tid=tripOf[job.id];
+      if(tid&&tripById[tid]&&tripById[tid].status!=='cancelled') (tripJobs[tid]||(tripJobs[tid]=[])).push(job); });
+    const blocks=[];
+    Object.keys(tripJobs).forEach(tid=>{
+      const t=tripById[tid], js=tripJobs[tid], es=t.econ_snapshot||{};
+      // Плечи знают, сколько ехать ДО первой точки и сколько обратно.
+      // Их нет у выездов, сохранённых до появления плеч, — там дорога
+      // делится пополам, как делили раньше.
+      const d=driveOfLegs(es.legs), dh=+es.driveH||0;
+      const slas=js.map(j=>j.due_date).filter(Boolean).sort();
+      blocks.push({id:'t'+tid,kind:'trip',engineer:t.lead_engineer||js[0].assigned_engineer||null,
+        sla:slas[0]||null,workH:js.reduce((a,j)=>a+hours(j),0),
+        driveToH:d.toH||dh/2,driveBackH:d.backH||dh/2,driveMidH:d.midH||0,
+        from:t.date_from||null,to:t.date_to||t.date_from||null,jobIds:js.map(j=>j.id)});
+      js.forEach(j=>{ blockOf[j.id]='t'+tid; });
+    });
+    dated.forEach(({job})=>{ if(blockOf[job.id]) return;
+      blocks.push({id:'j'+job.id,kind:'job',engineer:job.assigned_engineer||null,
+        sla:job.due_date||null,workH:hours(job),jobIds:[job.id]});
+      blockOf[job.id]='j'+job.id; });
+    const plan=planSchedule(blocks,{shiftH:shift,deviationPct:(+appSettings.deviation_pct||0)},{today:todayISO()});
+    const planOf={}; plan.blocks.forEach(b=>{ planOf[b.id]=b; });
+    const planJob=j=>planOf[blockOf[j.id]]||null;
+
+    // ── Группировка по дню работы ────────────────────────────────────────
     const gmap=new Map();
     dated.forEach(({job,u})=>{
-      const k=String(job.due_date);
-      if(!gmap.has(k)) gmap.set(k,{date:k,left:u.left,u:u,jobs:[],h:0});
+      const pb=planJob(job);
+      const k=String((pb&&pb.workFrom)||job.due_date);
+      if(!gmap.has(k)) gmap.set(k,{date:k,to:k,left:u.left,u:u,jobs:[],h:0,sla:job.due_date,fixedN:0,autoN:0,why:''});
       const g=gmap.get(k); g.jobs.push(job); g.h+=hours(job);
+      if(pb){ if(pb.fixed) g.fixedN++; else g.autoN++;
+        if(pb.workTo>g.to) g.to=pb.workTo;
+        if(!pb.ok&&!g.why) g.why=pb.why; }
+      if(job.due_date&&job.due_date<g.sla) g.sla=job.due_date;
       // У группы берём самый острый уровень: если хоть одна заявка горит,
       // горит вся дата.
       if(urgencyRank(u.level)<urgencyRank(g.u.level)) g.u=u;
+      if(u.left<g.left) g.left=u.left;
     });
-    const groups=[...gmap.values()].sort((a,b)=>a.left-b.left);
+    const today0=utcOf(todayISO());
+    const groups=[...gmap.values()].sort((a,b)=>utcOf(a.date)-utcOf(b.date));
+    // Сколько дней до дня работы: ось ленты идёт по нему, а не по сроку.
+    groups.forEach(g=>{ g.dleft=Math.round((utcOf(g.date)-today0)/DAY_MS); });
 
     // ── Лента: градиент по остроте групп сверху вниз ─────────────────────
     // Остановки ставим в процентах, а не в пикселях: высота карточек
@@ -1753,7 +1802,24 @@ async function renderFeed(box,o){
     groups.forEach((g,i)=>stops.push(urgHue(g.u)+' '+((i+0.5)/N*100).toFixed(1)+'%'));
     stops.push(urgHue(groups[N-1].u)+' 100%');
 
-    let h=(offline?offlineBanner(snapAt):'')
+    // Перегруз и опоздание — сигнал тому, кто ставит даты. Инженеру его не
+    // показываем: разложить график не в его власти.
+    const planWarn=(!o.mine&&plan.warnings.length)?(function(){
+      const nameOf=id=>{ const b=planOf[id]; const raw=String(id).slice(1);
+        if(b&&b.kind==='trip'){ const t=tripById[raw]; return 'Выезд'+(t&&t.date_from?(' '+shortDate(t.date_from)):''); }
+        const j=list.find(x=>String(x.id)===raw); return (j&&j.clients&&j.clients.name)||'Заявка'; };
+      const wText=w=>w.kind==='overflow'
+        ? (w.fixed
+            ? ('даты выставлены вручную, но работа в них не помещается — перегружено '
+               +w.days+' '+plural(w.days,'день','дня','дней')+', с '+shortDate(w.date))
+            : ('свободных дней нет — работа встала поверх занятых, с '+shortDate(w.date)))
+        : ('к сроку '+shortDate(w.sla)+' не успеваем: работа заканчивается '+shortDate(w.date));
+      const items=plan.warnings.slice(0,4).map(w=>'<li>'+esc(nameOf(w.blockId))+' — '+esc(wText(w))+'</li>').join('');
+      const more=plan.warnings.length>4?('<div class="hint">и ещё '+(plan.warnings.length-4)+'</div>'):'';
+      return '<div class="planwarn"><b>График не сходится</b><ul>'+items+'</ul>'+more+'</div>';
+    })():'';
+
+    let h=(offline?offlineBanner(snapAt):'')+planWarn
       +'<div class="afeed">'
       +'<div class="afeed-line" style="background:linear-gradient(180deg,'+stops.join(',')+')"></div>';
 
@@ -1786,26 +1852,17 @@ async function renderFeed(box,o){
     // инженеров, поэтому и ёмкость общая: пять смен на каждого действующего.
     // Мерить командную неделю одной сменой значило бы показывать 400 %
     // на ровном месте.
-    const dayH={};
-    groups.forEach(g=>{ dayH[g.date]=(dayH[g.date]||0)+g.h; });
-    Object.values(tripById).forEach(t=>{
-      if(!t||t.status==='cancelled'||!t.date_from) return;
-      if(o.mine&&t.lead_engineer!==session.user.id) return;
-      const d=+((t.econ_snapshot||{}).driveH)||0; if(!d) return;
-      const a=utcOf(t.date_from), b=utcOf(t.date_to||t.date_from);
-      const n=Math.max(1,Math.round((b-a)/DAY_MS)+1), per=d/n;
-      for(let i=0;i<n;i++) { const k=isoOf(a+i*DAY_MS); dayH[k]=(dayH[k]||0)+per; }
-    });
+    // Часы дня берём у планировщика: он уже разложил и работу, и дорогу
+    // по тем дням, в которые их делают. Прежняя раскладка делила дорогу
+    // поровну на все дни выезда и приписывала работу дню срока — то есть
+    // показывала загрузку не тех дней.
+    const dayH={}, dayJobs={};
+    Object.keys(plan.load).forEach(k=>{ const l=plan.load[k];
+      dayH[l.date]=(dayH[l.date]||0)+l.workH+l.driveH; });
+    plan.blocks.forEach(b=>{ const wd=b.days.filter(c=>c.workH>0.001);
+      wd.forEach(c=>{ dayJobs[c.iso]=(dayJobs[c.iso]||0)+b.jobIds.length; }); });
     const engN=o.mine?1:Math.max(1,(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false).length);
     const dayCap=shift*engN, weekCap=dayCap*5;
-    // День в полоске горит по ЗАЯВКАМ, а не по часам. Дорога делится на
-    // все дни выезда, и выезд с 10 августа по 11 сентября раздаёт по
-    // полчаса каждому из тридцати трёх дней — по часам «занятыми»
-    // оказывались и суббота, и воскресенье, и вся неделя целиком.
-    // Полоска отвечает на «когда я работаю», а это дни со сроками;
-    // часы и процент считаются по-прежнему со всей дорогой.
-    const dayJobs={};
-    groups.forEach(g=>{ dayJobs[g.date]=(dayJobs[g.date]||0)+g.jobs.length; });
     const weeks={};
     Object.keys(dayH).forEach(d=>{ const w=weekOf(d); if(!w) return;
       const it=weeks[w.key]||(weeks[w.key]={w,h:0,n:0,days:{}});
@@ -1852,9 +1909,9 @@ async function renderFeed(box,o){
       // Пустые недели считаем только вперёд: окно между просроченной
       // заявкой и следующим сроком частью лежит в прошлом, и писать
       // «три недели без сроков» про уже прошедшие дни — неправда.
-      const gapW=Math.floor((g.left-Math.max(0,prevLeft))/7);
-      if(gapW>=3) h+='<div class="a-break"><span>'+gapW+' '+plural(gapW,'неделя','недели','недель')+' без сроков</span></div>';
-      prevLeft=g.left;
+      const gapW=Math.floor((g.dleft-Math.max(0,prevLeft))/7);
+      if(gapW>=3) h+='<div class="a-break"><span>'+gapW+' '+plural(gapW,'неделя','недели','недель')+' без работ</span></div>';
+      prevLeft=g.dleft;
 
       // Первая группа — ближайшая по сроку, и ей отдаётся высота.
       //
@@ -1874,9 +1931,28 @@ async function renderFeed(box,o){
       const load=g.h>shift
         ? esc(g.h.toFixed(g.h%1?1:0))+' ч · '+Math.ceil(shifts)+' '+plural(Math.ceil(shifts),'смена','смены','смен')
         : esc(g.h.toFixed(g.h%1?1:0))+' ч';
-      const leftTxt=g.left<0?('−'+(-g.left)+' дн'):(g.left+' дн');
-      const nearTxt=g.left<0?('просрочено на '+(-g.left)+' '+plural(-g.left,'день','дня','дней'))
-        :(g.left===0?'сегодня':('через '+g.left+' '+plural(g.left,'день','дня','дней')));
+      // Ось ленты идёт по дню работы. Срок стоит в шапке отдельной строкой:
+      // это разные вещи, и путать их — значит обещать клиенту день, в
+      // который никто не выезжает.
+      const dl=g.dleft;
+      const leftTxt=dl<0?('−'+(-dl)+' дн'):(dl+' дн');
+      const running=dl<0&&g.to>=todayISO();
+      const nearTxt=running?'идёт сейчас'
+        :(dl<0?('было '+(-dl)+' '+plural(-dl,'день','дня','дней')+' назад')
+        :(dl===0?'сегодня':('через '+dl+' '+plural(dl,'день','дня','дней'))));
+      // «план» — даты выставил диспетчер, «авто» — подобрал график.
+      // Смешанной группе метка не нужна: она соврала бы про половину строк.
+      const mode=g.fixedN&&g.autoN?'':(g.fixedN?'plan':'auto');
+      // День работы: один день — с днём недели («чт 10 сентября»), несколько —
+      // диапазоном в одном формате. Смешивать «10 августа – 11.09» нельзя:
+      // это читается как две разные величины.
+      const dateTxt=(g.to&&g.to!==g.date)?(shortDate(g.date)+' – '+shortDate(g.to)):dayLabel(g.date);
+      // Сроки группы: один — «срок 10.09», разные — «сроки 04.09–10.09».
+      // Один срок за всю группу врал бы про остальные строки.
+      const slaMax=g.jobs.reduce((a,j)=>(j.due_date&&j.due_date>a?j.due_date:a),g.sla||'');
+      const slaTxt=!g.sla?'':(slaMax&&slaMax!==g.sla
+        ? ('сроки '+shortDate(g.sla)+'–'+shortDate(slaMax))
+        : ('срок '+shortDate(g.sla)));
 
       h+='<div class="agrp'+(lead?' agrp-lead':'')+'">'
         +'<div class="a-ax"><b>'+shortDate(g.date)+'</b><i>'+leftTxt+'</i></div>'
@@ -1885,7 +1961,10 @@ async function renderFeed(box,o){
         +'<span class="a-stem" style="left:'+(-21+dia/2)+'px;width:'+(21-dia/2)+'px"></span>'
         +'<div class="agrp-card" style="border-left-color:'+col+'">'
         +'<div class="agrp-h" style="background:color-mix(in srgb,'+col+' '+(lead?'14':'9')+'%,var(--panel))">'
-          +'<span class="agrp-n">'+dayLabel(g.date)+'</span>'
+          +'<span class="agrp-n">'+esc(dateTxt)+'</span>'
+          +(mode?('<span class="a-tag '+mode+'">'+(mode==='plan'?'план':'авто')+'</span>'):'')
+          +(slaTxt?('<span class="agrp-hint'+(g.left<0?' bad':'')+'">'+esc(slaTxt)+'</span>'):'')
+          +(g.why&&!o.mine?('<span class="a-tag bad">'+(g.why==='overflow'?'перегруз':'не успеваем')+'</span>'):'')
           +(lead?('<span class="agrp-hint" style="color:'+col+'">'+esc(nearTxt)+'</span>'):'')
           +'<span class="agrp-track"><i style="width:'+Math.min(100,g.h/(shift*5)*100).toFixed(0)+'%;background:'+col+'"></i></span>'
           +'<span class="agrp-hint">'+load+(n>1?(' · '+n+' '+plural(n,'точка','точки','точек')):'')+'</span>'
@@ -1899,6 +1978,9 @@ async function renderFeed(box,o){
           +'<div class="a-main"><div class="a-name">'+esc(c.name||'—')+'</div>'
           +(mdl?('<div class="a-sub">'+esc(mdl)+'</div>'):'')
           +'<div class="a-tags">'+tripTagHtml(j,tripOf,tripById)
+            // Срок строки. В шапке стоит день работы, и без этой метки
+            // заявка с более поздним сроком выглядела бы как соседняя.
+            +(j.due_date?('<span class="a-tag'+(u2(j)<0?' bad':'')+'">срок '+shortDate(j.due_date)+'</span>'):'')
             // Статус — только инженеру: на его экране это ответ на «я это
             // уже начал?». В сводке менеджер смотрит на сроки и загрузку,
             // и вторая пилюля в каждой строке была бы шумом.
@@ -3783,7 +3865,7 @@ async function delJob(id){ if(!await confirmDialog('Удалить заявку?
 // ---------- trips ----------
 let trips=[], tripJobsAll=[], curTripJobs=new Set(), tripEditId=null, tripRouteKeys=new Set();
 const ST_TRIP={planned:'план',assigned:'назначен',in_progress:'в работе',finished:'на проверке',done:'завершён',cancelled:'отменён'};
-let tripRoute={km:0,driveH:0,geometry:null}, tripRouteStops=[], tripVariants=[], tripVarSel=0, tripStart=null, tripOverrides={revenue:'',cost:'',road:{}};
+let tripRoute={km:0,driveH:0,geometry:null,legs:[]}, tripRouteStops=[], tripVariants=[], tripVarSel=0, tripStart=null, tripOverrides={revenue:'',cost:'',road:{}};
 async function loadTripJobs(){ const {data}=await sb.from('jobs').select('id,status,scheduled_date,equipment_id,at_depot, clients(name,lat,lng), equipment(model,lat,lng), job_works(hours,billable,revenue,tariff_profile), job_parts(qty,price,cost,billable)').is('deleted_at',null).or('at_depot.is.null,at_depot.eq.false').order('created_at',{ascending:false}); tripJobsAll=data||[]; }
 function tripStops(){ const stops=[]; const seen=new Set(); tripJobsAll.filter(j=>curTripJobs.has(j.id)).forEach(j=>{ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); if(lat==null) return; const nm=(eq&&eq.lat!=null)?((j.clients?j.clients.name:'')+' · '+(eq.model||'')):(j.clients?j.clients.name:''); const key=(+lat).toFixed(5)+','+(+lng).toFixed(5); if(seen.has(key)) return; seen.add(key); stops.push({name:nm,lat,lng}); }); return stops; }
 const keyOf=s=>(+s.lat).toFixed(5)+','+(+s.lng).toFixed(5);
@@ -3791,7 +3873,7 @@ function syncRouteStops(){ const jobStops=tripStops(); const desired=new Set(job
   tripRouteStops=tripRouteStops.filter(s=>s.type!=='job'||desired.has(keyOf(s)));
   const present=new Set(tripRouteStops.map(keyOf));
   jobStops.forEach(s=>{ if(!present.has(keyOf(s))) tripRouteStops.push({type:'job',name:s.name,lat:s.lat,lng:s.lng}); }); }
-function resetTripRoute(){ tripRoute={km:0,driveH:0,geometry:null}; tripVariants=[]; if($('tpRouteStatus')) $('tpRouteStatus').textContent='маршрут не построен'; tripEcon(); }
+function resetTripRoute(){ tripRoute={km:0,driveH:0,geometry:null,legs:[]}; tripVariants=[]; if($('tpRouteStatus')) $('tpRouteStatus').textContent='маршрут не построен'; tripEcon(); }
 function renderRouteStops(){ const box=$('tpRouteStops'); const hasAny=tripStart||tripRouteStops.length; box.innerHTML=hasAny?'':'<div class="hint">Точек нет. Отметь заявки или добавь промежуточную.</div>';
   let n=0;
   if(tripStart){ n++; const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap: var(--sp-3);align-items:center'; d.innerHTML='<span class="grow">'+n+'. '+esc(tripStart.name||'старт')+' <span class="pill">старт</span></span>'; box.appendChild(d); }
@@ -4020,7 +4102,7 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs();
   $('tpEng').value=t&&t.lead_engineer?t.lead_engineer:''; $('tpStatus').value=t?t.status:'planned';
   curTripJobs=new Set(); if(t){ const {data}=await sb.from('trip_jobs').select('job_id').eq('trip_id',id); (data||[]).forEach(r=>curTripJobs.add(r.job_id)); }
   const ro=!canWrite(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
-  const es=(t&&t.econ_snapshot)||{}; tripRoute={km:es.km||0,driveH:es.driveH||0,geometry:(t&&t.route_geometry)||null}; tripVariants=[];
+  const es=(t&&t.econ_snapshot)||{}; tripRoute={km:es.km||0,driveH:es.driveH||0,geometry:(t&&t.route_geometry)||null,legs:es.legs||[]}; tripVariants=[];
   const ovs=(t&&t.overrides)||{}; tripOverrides={revenue:(ovs.revenue!=null?String(ovs.revenue):''),cost:(ovs.cost!=null?String(ovs.cost):''),road:(ovs.road||{})}; $('tpOvRev').value=tripOverrides.revenue; $('tpOvCost').value=tripOverrides.cost;
   const saved=(t&&t.route_stops)?t.route_stops:[]; const st=saved.find(x=>x.type==='start'); tripStart=st?{name:st.name,lat:st.lat,lng:st.lng}:null;
   tripRouteKeys=new Set(saved.filter(s=>s.lat!=null&&s.lng!=null).map(s=>(+s.lat).toFixed(5)+','+(+s.lng).toFixed(5))); if($('tpJobsRoute')) $('tpJobsRoute').checked=true;
@@ -4182,7 +4264,7 @@ $('tpEditMap').onclick=()=>{ if(tripEditId){ showTripOnMap(tripEditId); } else {
 function loadTripIntoPlanner(id){ const t=trips.find(x=>x.id==id); if(!t) return; switchTab('map'); tripLayer.clearLayers(); plannerTripId=id;
   const saved=t.route_stops||[]; const st=saved.find(x=>x.type==='start'); rStart=st?{name:st.name,lat:st.lat,lng:st.lng,description:st.description||''}:null;
   rStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'client',name:x.name,lat:x.lat,lng:x.lng,clientId:x.clientId||null,equipId:x.equipId||null,description:x.description||''}));
-  const es=t.econ_snapshot||{}; rRoute={km:es.km||0,driveH:es.driveH||0,geometry:t.route_geometry||null}; rVariants=[]; if($('rVariants')) $('rVariants').innerHTML='';
+  const es=t.econ_snapshot||{}; rRoute={km:es.km||0,driveH:es.driveH||0,geometry:t.route_geometry||null,legs:es.legs||[]}; rVariants=[]; if($('rVariants')) $('rVariants').innerHTML='';
   renderRoutePanel(); $('rStatus').innerHTML=rRoute.km?('<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'):'';
   if(rStops.length) map.fitBounds(routeStopsAll().map(s=>[s.lat,s.lng]),fitPadL(fitPad(60))); return;
 }
@@ -4209,7 +4291,7 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
     factWorkH:tripEditId?factHByTrip[tripEditId]:null
   },jobIds.length);
 
-  const rec={main_job_id:tripMainJobId||null,road_km_by_payer:roadKmTrip,date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:e,tariffs_snapshot:tripT()};
+  const rec={main_job_id:tripMainJobId||null,road_km_by_payer:roadKmTrip,date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:$('tpEng').value||null,status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:withLegs(e,tripRoute.legs),tariffs_snapshot:tripT()};
   $('tpSave').disabled=true;
   try{ let tid=tripEditId;
     if(tripEditId){ const {error}=await sb.from('trips').update(rec).eq('id',tripEditId); if(error) throw error; }
@@ -5602,11 +5684,11 @@ if($('vehBtn')) $('vehBtn').onclick=()=>{
 };
 
 // ---------- map route planner ----------
-let rStops=[], rStart=null, rRoute={km:0,driveH:0,geometry:null}, rVariants=[], rVarSel=0, bufferKm=0, isoMin=0, places=[], plannerTripId=null, pendingLinkClient=null, baseMode='start', baseAfter=null, endDeclined=false, rBusy=false;
+let rStops=[], rLegStops=[], rStart=null, rRoute={km:0,driveH:0,geometry:null,legs:[]}, rVariants=[], rVarSel=0, bufferKm=0, isoMin=0, places=[], plannerTripId=null, pendingLinkClient=null, baseMode='start', baseAfter=null, endDeclined=false, rBusy=false;
 async function loadPlaces(){ places=clients.filter(c=>c.is_base); }
 function routeStopsAll(){ return (rStart?[{type:'start',name:rStart.name,lat:rStart.lat,lng:rStart.lng,description:rStart.description||''}]:[]).concat(rStops); }
 function routeHasClient(cid){ return rStops.some(s=>s.clientId===cid); }
-function resetBuilt(){ rRoute={km:0,driveH:0,geometry:null}; rVariants=[]; $('rVariants').innerHTML=''; $('rStatus').textContent='маршрут не построен'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; endDeclined=false; drawStops(); }
+function resetBuilt(){ rRoute={km:0,driveH:0,geometry:null,legs:[]}; rVariants=[]; $('rVariants').innerHTML=''; $('rStatus').textContent='маршрут не построен'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; endDeclined=false; drawStops(); }
 function pushClientStop(c){ rStops.push({type:'client',name:c.name,lat:c.lat,lng:c.lng,clientId:c.id}); }
 window.addBaseStop=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); rStops.push({type:'place',name:c.name,lat:c.lat,lng:c.lng,placeId:c.id,description:c.description||''}); showRouteTab(); renderRoutePanel(); resetBuilt(); };
 window.addClientToRoute=function(cid){ const c=clients.find(x=>x.id==cid); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); pushClientStop(c); showRouteTab(); renderRoutePanel(); resetBuilt(); maybePromptJob(cid); };
@@ -5882,9 +5964,46 @@ async function orsPost(url,body){ const px=(appSettings.ors_proxy||'').trim(); l
     +'\n'+t.slice(0,600));
   const err=new Error(orsErrMsg(r.status,t)); err.raw=t; err.status=r.status; throw err; }
 const ORS_DIR='https://api.openrouteservice.org/v2/directions/driving-car/geojson';
-function mergeFeatures(fs){ let line=[],dist=0,dur=0;
-  fs.forEach((f,i)=>{ const sm=(f.properties&&f.properties.summary)||{}; dist+=(+sm.distance||0); dur+=(+sm.duration||0); const c=(f.geometry&&f.geometry.coordinates)||[]; line=line.concat(i?c.slice(1):c); });
-  return {type:'Feature',properties:{summary:{distance:dist,duration:dur}},geometry:{type:'LineString',coordinates:line}}; }
+// ── Плечи маршрута ──────────────────────────────────────────────────────
+//
+// ORS отдаёт их сам: в ответе на ОДИН запрос с несколькими точками лежит
+// properties.segments — по отрезку на каждую пару соседних точек, с
+// расстоянием и временем. Отдельных запросов это не стоит ни одного.
+//
+// Плечи нужны графику: чтобы разложить выезд по дням, мало общего времени
+// дороги — надо знать, сколько ехать ДО точки и сколько обратно. Общее
+// время делится пополам только у выезда в одну точку; у выезда депо → А →
+// Б → депо половина — это выдумка.
+// Плечи кладутся в снимок расчёта: там уже лежат общий километраж и общее
+// время дороги, и плечи — их разбивка. Отдельная колонка потребовала бы
+// миграции ради того же самого.
+function withLegs(e,legs){ return Object.assign({},e,{legs:(legs||[]).map(l=>({km:+(+l.km).toFixed(2),h:+(+l.h).toFixed(3),a:l.a||'',b:l.b||''}))}); }
+function legsOf(f){
+  // Маршрут, собранный из участков, кладёт готовые плечи сам: там дроблёное
+  // плечо — это несколько segments, а плечо графику нужно одно, между точками.
+  const own=(f&&f.properties&&f.properties.dlLegs)||null;
+  if(own&&own.length) return own.map(l=>({km:+l.km||0,h:+l.h||0}));
+  const segs=(f&&f.properties&&f.properties.segments)||null;
+  if(segs&&segs.length) return segs.map(g=>({km:(+g.distance||0)/1000,h:(+g.duration||0)/3600}));
+  const sm=(f&&f.properties&&f.properties.summary)||null;
+  return sm?[{km:(+sm.distance||0)/1000,h:(+sm.duration||0)/3600}]:[];
+}
+function sumLeg(f){ const sm=(f&&f.properties&&f.properties.summary)||{}; return {km:(+sm.distance||0)/1000,h:(+sm.duration||0)/3600}; }
+// Плечо привязывается к точкам, а не к порядковому номеру: между построением
+// и сохранением список точек может измениться (совпадающие подряд отбрасываются
+// при построении), и график, читающий плечи по индексу, свяжет дорогу не с той
+// заявкой. Ключ точки — координаты с той же точностью, что и везде в проекте.
+function ptKey(p){ return p&&p.lat!=null&&p.lng!=null?((+p.lat).toFixed(5)+','+(+p.lng).toFixed(5)):''; }
+function pairLegs(legs,stops){ return (legs||[]).map((l,i)=>Object.assign({},l,{a:ptKey(stops&&stops[i]),b:ptKey(stops&&stops[i+1])})); }
+function mergeFeatures(fs){ let line=[],dist=0,dur=0,segs=[];
+  fs.forEach((f,i)=>{ const sm=(f.properties&&f.properties.summary)||{}; dist+=(+sm.distance||0); dur+=(+sm.duration||0);
+    // Склейка идёт по плечам, а не по итогам: маршрут, построенный
+    // по участкам (когда объезды не влезли в один запрос), обязан
+    // отдать те же плечи, что и построенный целиком.
+    const ss=(f.properties&&f.properties.segments)||null;
+    if(ss&&ss.length) segs=segs.concat(ss); else segs.push({distance:+sm.distance||0,duration:+sm.duration||0});
+    const c=(f.geometry&&f.geometry.coordinates)||[]; line=line.concat(i?c.slice(1):c); });
+  return {type:'Feature',properties:{summary:{distance:dist,duration:dur},segments:segs},geometry:{type:'LineString',coordinates:line}}; }
 // Расставляем промежуточные точки по РЕАЛЬНОЙ линии дороги через каждые chunkKm.
 // Точку, попавшую внутрь зоны объезда, пропускаем и идём дальше по линии —
 // иначе ORS не сможет к ней подъехать.
@@ -6091,7 +6210,7 @@ async function doBuildRoute(){ if(rBusy) return; const stops=dedupeStops(routeSt
   try{ await ensureTurf(); }catch(e){ $('rStatus').innerHTML='<span class="err">'+esc(e.message)+'</span>'; return; }
   const hits=avoidHits(stops); if(hits.length){ $('rStatus').innerHTML='<span class="err">В зоне объезда: '+esc(hits.join(', '))+'. ORS не построит маршрут к точке внутри «кирпича» — уменьши радиус или убери зону.</span>'; return; }
   rBusy=true; $('rBuild').disabled=true; $('rStatus').textContent='Считаю…';
-  const pref=$('rPref').value; const coords=stops.map(s=>[s.lng,s.lat]); const ap=avoidPolygons();
+  const pref=$('rPref').value; const coords=stops.map(s=>[s.lng,s.lat]); const ap=avoidPolygons(); rLegStops=stops;
   try{
     if(!ap){ const body={coordinates:coords,preference:pref}; if(stops.length===2) body.alternative_routes={target_count:3,weight_factor:1.6,share_factor:0.6};
       const gj=await orsPost(ORS_DIR,body); rVariants=(gj.features||[]).filter(f=>f&&f.geometry); rVarSel=0;
@@ -6106,11 +6225,12 @@ async function doBuildRoute(){ if(rBusy) return; const stops=dedupeStops(routeSt
       const res=await legWithAvoid(stops[i],stops[i+1],pref,ap,m=>{ $('rStatus').textContent=m; });
       legs.push(res.feature); if(res.split) splits+=res.split;
       if(res.noAvoid) skipped.push((stops[i].name||'?')+' → '+(stops[i+1].name||'?')); }
-    rVariants=[mergeFeatures(legs)]; rVarSel=0; applyRVariant(); renderRVariants();
+    const merged=mergeFeatures(legs); merged.properties.dlLegs=legs.map(sumLeg);
+    rVariants=[merged]; rVarSel=0; applyRVariant(); renderRVariants();
     if(skipped.length) $('rStatus').innerHTML+='<div class="hint" style="color:var(--red);margin-top: var(--sp-2)">Объезды не применены: '+esc(skipped.join(' · '))+'</div>';
     else $('rStatus').innerHTML+='<span class="hint" style="margin: 0"> · по участкам</span>';
   }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка: '+esc(e.message||e)+'</span>'; } finally{ rBusy=false; updateRouteActions(); } }
-function applyRVariant(){ const f=rVariants[rVarSel]; if(!f) return; const sum=(f.properties&&f.properties.summary)||{}; rRoute={km:(+sum.distance||0)/1000,driveH:(+sum.duration||0)/3600,geometry:f.geometry}; $('rStatus').innerHTML='<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'+((appSettings.avoid_zones||[]).length?('<span class="hint" style="margin: 0"> · объезды: '+appSettings.avoid_zones.length+'</span>'):''); drawStops(); rBuildBuffer(); }
+function applyRVariant(){ const f=rVariants[rVarSel]; if(!f) return; const sum=(f.properties&&f.properties.summary)||{}; rRoute={km:(+sum.distance||0)/1000,driveH:(+sum.duration||0)/3600,geometry:f.geometry,legs:pairLegs(legsOf(f),rLegStops)}; $('rStatus').innerHTML='<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'+((appSettings.avoid_zones||[]).length?('<span class="hint" style="margin: 0"> · объезды: '+appSettings.avoid_zones.length+'</span>'):''); drawStops(); rBuildBuffer(); }
 function renderRVariants(){ const box=$('rVariants'); if(rVariants.length<2){ box.innerHTML=''; return; } box.innerHTML='';
   rVariants.forEach((f,i)=>{ const sum=(f.properties&&f.properties.summary)||{}; const b=document.createElement('button'); b.className='btn sm'+(i===rVarSel?' amber':''); b.style.cssText='margin: 0 var(--sp-3) var(--sp-3) 0'; b.textContent='№'+(i+1)+' · '+((+sum.distance||0)/1000).toFixed(1)+'км · '+Math.round((+sum.duration||0)/60)+'мин'; b.onclick=()=>{ rVarSel=i; applyRVariant(); renderRVariants(); }; box.appendChild(b); }); }
 $('corDist').onclick=()=>{ $('corDist').classList.add('on'); $('corTime').classList.remove('on'); $('corDistBox').style.display=''; $('corTimeBox').style.display='none'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; rBuildBuffer(); };
@@ -6175,7 +6295,7 @@ $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<
     factWorkH:plannerTripId?(factHByTrip[plannerTripId]!=null?factHByTrip[plannerTripId]:null):null
   },linked.length);
 
-  const rec={route_stops:stops.map(s=>({type:s.type,name:s.name,lat:s.lat,lng:s.lng,clientId:s.clientId||null,equipId:s.equipId||null,description:s.description||''})),route_geometry:slimGeometry(rRoute.geometry)||null,road_km_by_payer:roadKm,overrides:ov,econ_snapshot:e,tariffs_snapshot:T};
+  const rec={route_stops:stops.map(s=>({type:s.type,name:s.name,lat:s.lat,lng:s.lng,clientId:s.clientId||null,equipId:s.equipId||null,description:s.description||''})),route_geometry:slimGeometry(rRoute.geometry)||null,road_km_by_payer:roadKm,overrides:ov,econ_snapshot:withLegs(e,rRoute.legs),tariffs_snapshot:T};
   let tid=plannerTripId;
   try{ if(plannerTripId){ const {error}=await sb.from('trips').update(rec).eq('id',plannerTripId); if(error) throw error; }
     else { rec.status='planned'; rec.created_by=session.user.id; const {data,error}=await sb.from('trips').insert(rec).select('id').single(); if(error) throw error; tid=data.id; plannerTripId=tid; }
