@@ -302,7 +302,31 @@ function syncMapStyleSeg(){
 }
 setBaseLayer('dark');
 map.setView([48.4,31.2],6);
-function fitUkraine(){ map.fitBounds(UA_BOUNDS); }
+// Отступы вписывания с оглядкой на шторку.
+//
+// На телефоне карта лежит во весь экран, а шторка и нижняя навигация —
+// НА ней: только так под ними есть что размывать, иначе стекло, о котором
+// договорились для всего остального, здесь превращается в заливку.
+// Плата за это — нижняя часть карты закрыта, и вписывать точки надо
+// в ту часть, которую видно, иначе половина маршрута окажется под
+// шторкой. Высоту меряем по факту: шторка бывает свёрнутой, и число
+// в коде разошлось бы с ней в первый же раз.
+function fitPad(p){
+  p=p||40;
+  const out={paddingTopLeft:[p,p],paddingBottomRight:[p,p]};
+  const sd=document.querySelector('.view-map .side'), mw=document.querySelector('.view-map .map-wrap');
+  if(!sd||!mw) return out;
+  try{
+    if(getComputedStyle(sd).position!=='absolute') return out;
+    const r=sd.getBoundingClientRect(), m=mw.getBoundingClientRect();
+    // Шторка сбоку (широкий экран) низ карты не занимает.
+    if(r.width<m.width*0.9) return out;
+    const hide=Math.round(m.bottom-r.top);
+    if(hide>0&&hide<m.height-120) out.paddingBottomRight=[p,hide+p];
+  }catch(e){}
+  return out;
+}
+function fitUkraine(){ map.fitBounds(UA_BOUNDS,fitPad(20)); }
 
 // ---------- связь с точкой ----------
 //
@@ -419,7 +443,74 @@ function applyMobileNav(){
     b.classList.toggle('nav-sec',sec.has(navKey(b)));
   });
   buildMoreSheet();
+  railHeight();
 }
+
+// Высота нижней навигации — в --rail-h.
+//
+// На телефоне рельс лежит НА содержимом: только так под ним есть что
+// размывать, и стекло, о котором договорились для шапок и модалок,
+// работает и здесь. Плата за это — полоса, которую содержимое обязано
+// уметь под собой прокрутить; её и раздаёт переменная.
+//
+// Меряем по факту, а не считаем: высота зависит от кегля, от того,
+// сколько пунктов оставила роль, и от безопасной зоны телефона —
+// любое зашитое число разойдётся с вёрсткой в первый же день.
+// На широком экране рельс стоит слева, загораживать нечего — ноль.
+function railHeight(){
+  const rail=document.querySelector('.rail'); if(!rail) return;
+  const over=getComputedStyle(rail).position==='absolute';
+  const px=over?Math.round(rail.getBoundingClientRect().height):0;
+  document.documentElement.style.setProperty('--rail-h',px+'px');
+}
+if(typeof ResizeObserver!=='undefined'){
+  const ro=new ResizeObserver(()=>railHeight());
+  const startRailWatch=()=>{ const r=document.querySelector('.rail'); if(r) ro.observe(r); railHeight(); };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',startRailWatch);
+  else startRailWatch();
+}
+window.addEventListener('resize',railHeight);
+
+// ---------- сворачиваемые карточки заявки ----------
+//
+// На телефоне «Работы», «Запчасти» и «Фото» стоят одна под другой.
+// Заполненная первая уводит две другие за нижний край экрана, и до
+// фотографий инженер прокручивает половину страницы каждый раз.
+// Свёрнутая карточка оставляет заголовок и число строк: видно, что
+// там есть, разворачивать ради этого не нужно.
+//
+// Состояние живёт в памяти вкладки и НЕ пишется в базу: это положение
+// рук, а не данные заявки. Между заявками оно сохраняется — свернувший
+// «Фото» инженер не хочет сворачивать их снова в каждой следующей.
+const folded=new Set();
+function foldKey(card){ return card.dataset.fold||''; }
+function foldSums(){
+  document.querySelectorAll('.card.foldable').forEach(card=>{
+    const out=card.querySelector('.foldsum'); if(!out) return;
+    const box=$(foldKey(card));
+    // Строк столько, сколько ЭЛЕМЕНТОВ в списке: текстовые заглушки
+    // («Ничего не ставили») детьми не считаются — иначе пустая карточка
+    // докладывала бы об одной позиции.
+    const n=box?box.querySelectorAll(':scope > *').length:0;
+    const w=(card.dataset.foldWord||'').split('|');
+    out.textContent=n?(n+' '+(w.length===3?plural(n,w[0],w[1],w[2]):(w[0]||''))):'пусто';
+  });
+}
+function foldApply(){
+  document.querySelectorAll('.card.foldable').forEach(card=>{
+    card.classList.toggle('folded',folded.has(foldKey(card)));
+  });
+  foldSums();
+}
+document.addEventListener('click',e=>{
+  const h=e.target.closest('.card.foldable > h3'); if(!h) return;
+  // Кружок «?» внутри заголовка — своё действие. Складывать карточку по
+  // нажатию на пояснение значит прятать ответ вместе с вопросом.
+  if(e.target.closest('.q')) return;
+  const card=h.parentElement, k=foldKey(card);
+  if(folded.has(k)) folded.delete(k); else folded.add(k);
+  foldApply();
+});
 // Строки шторки собираются ИЗ САМИХ пунктов рельса и кликают по ним же.
 // Второй список тех же разделов рано или поздно разошёлся бы с первым.
 function buildMoreSheet(){
@@ -640,7 +731,7 @@ async function loadAll(){ $('dataStatus').textContent='Загрузка…';
   snapSet('refs',{clients,eqByClient});
   $('dataStatus').innerHTML='<span class="ok">На карте: '+clients.length+'</span>';
   await loadReadings(); await loadClientStats();
-  render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),{padding:[40,40]}); else fitUkraine(); }
+  render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),fitPad(40)); else fitUkraine(); }
 async function refreshStats(){ if(!canWrite()) return; await loadClientStats(); renderMarkers(); }
 async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
   // due_date и created_at добавлены к тому же запросу: по ним считается
@@ -1821,7 +1912,7 @@ function tripActs(t){
   let a='';
   if(t.status==='planned'||t.status==='assigned'){
     a+='<button class="btn sm amber" data-tstart="'+t.id+'">▶ Начать выезд</button>';
-    if(!reschedByTrip[t.id]) a+='<button class="btn sm" data-tresched="'+t.id+'">📅 Перенести</button>';
+    if(!reschedByTrip[t.id]) a+='<button class="btn sm" data-tresched="'+t.id+'">Перенести</button>';
   }
   if(t.status==='in_progress') a+='<button class="btn sm amber" data-tfin="'+t.id+'">■ Завершить</button>';
   if(t.status==='finished' && canWrite()) a+='<button class="btn sm amber" data-tconf="'+t.id+'">✓ Подтвердить</button>';
@@ -1907,12 +1998,17 @@ async function renderMine(){
     // одного и того же. Метка дня важнее: она отвечает на «мне сегодня
     // ехать?», а статус переезжает в строку под ней, к остальным фактам.
     const day=tripDayLabel(t);
-    let h='<h3>'+esc(tripTitle(t,jl))+(day?(' '+day):'')+'</h3>';
-    // Заголовок падает на период, когда у выезда нет названий точек, —
-    // тогда дата в строке ниже была бы вторым её повторением подряд.
     const per=esc(tripPeriod(t.date_from,t.date_to));
-    const titleIsPeriod=(esc(tripTitle(t,jl))===per);
-    h+='<div class="meta">'+esc(ST_TRIP[t.status]||t.status)+(titleIsPeriod?'':(' · '+per))+' · '+esc(veh)+' · точек: '+jl.length+(t.fact_km?(' · факт '+Math.round(t.fact_km)+' км'+factSrcRu(t.fact_km_source)):'')+(factHByTrip[t.id]?(' · '+factHByTrip[t.id].toFixed(1)+' ч на точках'):'')+'</div>';
+    // Заголовок не пересказывает список под собой. Раньше он склеивал
+    // названия точек — те самые, что строкой ниже стоят отдельными
+    // кнопками: на телефоне это две строки повтора вместо ответа на
+    // «когда». Есть точки — в заголовке период, а имена читаются в
+    // списке. Нет точек — заголовку остаются имена (или тот же период,
+    // если и их нет), и тогда строка ниже дату не повторяет.
+    const nm=esc(tripTitle(t,jl));
+    const head=jl.length?per:nm;
+    let h='<h3>'+head+(day?(' '+day):'')+'</h3>';
+    h+='<div class="meta">'+esc(ST_TRIP[t.status]||t.status)+(head===per?'':(' · '+per))+' · '+esc(veh)+' · точек: '+jl.length+(t.fact_km?(' · факт '+Math.round(t.fact_km)+' км'+factSrcRu(t.fact_km_source)):'')+(factHByTrip[t.id]?(' · '+factHByTrip[t.id].toFixed(1)+' ч на точках'):'')+'</div>';
     if(jl.length){
       h+='<div class="mine-pts">'+jl.map(j=>{
         const c=j.clients||{}; const tel=telHref(c.phone); const nav=navHref(c.lat,c.lng);
@@ -1975,7 +2071,7 @@ async function renderMine(){
     const dep=(orphans||[]).filter(j=>j.at_depot);
     if(dep.length){
       const w=document.createElement('div'); w.className='card';
-      w.innerHTML='<h3>🔧 В депо <span class="pill">'+dep.length+'</span></h3>'+
+      w.innerHTML='<h3>В депо <span class="pill">'+dep.length+'</span></h3>'+
         '<div class="meta">Технику привозит клиент. Выезд не нужен.</div>'+
         dep.map(j=>{ const d=clients.find(c=>c.id==j.depot_id);
           return '<div class="ds" data-mopen="'+j.id+'" style="display:flex;justify-content:space-between;gap: var(--sp-3);cursor:pointer">'+
@@ -2345,9 +2441,10 @@ function jobTotals(){ jobHead(); jobFootUpdate();
   const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
   // Инженеру — только часы: выручку и прибыль он не назначает, а строка
   // с деньгами под его же работой читается как оценка его работы.
-  if(!canWrite()){ $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · '+curWorks.length+' '+plural(curWorks.length,'работа','работы','работ'); return; }
+  if(!canWrite()){ $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · '+curWorks.length+' '+plural(curWorks.length,'работа','работы','работ'); foldSums(); return; }
   const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0);
-  $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · прибыль '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)'; }
+  $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · прибыль '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)';
+  foldSums(); }
 // Уходя со страницы — дописываем то, что ещё ждало таймера, и обновляем
 // список, если за время правки что-то изменилось. Иначе человек вернулся
 // бы в канбан и увидел там старые данные.
@@ -2663,6 +2760,7 @@ async function loadJobPhotos(){
   }
   await renderJobPhotos();
   phState((jobPhotos.length||jobPhotosQ.length)?'':(netFail?'Нет связи — снимки покажу позже':'Снимков нет'));
+  foldSums();
 }
 async function renderJobPhotos(){
   const box=$('jbPhotoList'); if(!box) return;
@@ -3017,13 +3115,14 @@ function partTotals(){
   const el=$('jbPartTotals'); if(!el) return;
   const n=jobParts.length;
   if(!n){ el.textContent=!jobEditId ? 'Появится, когда заявка будет создана.'
-    : (canEditParts()?'Ничего не ставили — строк нет.':'Запчастей нет.'); return; }
+    : (canEditParts()?'Ничего не ставили — строк нет.':'Запчастей нет.'); foldSums(); return; }
   const cur=appSettings.currency||'';
   const pcs=n+' '+plural(n,'позиция','позиции','позиций');
-  if(!canWrite()){ el.textContent='Итого: '+pcs; return; }
+  if(!canWrite()){ el.textContent='Итого: '+pcs; foldSums(); return; }
   const m=partsMoney({job_parts:jobParts}), r=m.rev, c=m.cost;
   el.textContent='Итого: '+pcs+' · продажа '+r.toFixed(0)+' · закупка '+c.toFixed(0)
     +' · наценка '+(r-c).toFixed(0)+' '+cur;
+  foldSums();
 }
 function partAdd(seed){
   if(!jobEditId){ notify('Сначала создай заявку','warn'); return; }
@@ -3775,7 +3874,7 @@ function loadTripIntoPlanner(id){ const t=trips.find(x=>x.id==id); if(!t) return
   rStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'client',name:x.name,lat:x.lat,lng:x.lng,clientId:x.clientId||null,equipId:x.equipId||null,description:x.description||''}));
   const es=t.econ_snapshot||{}; rRoute={km:es.km||0,driveH:es.driveH||0,geometry:t.route_geometry||null}; rVariants=[]; if($('rVariants')) $('rVariants').innerHTML='';
   renderRoutePanel(); $('rStatus').innerHTML=rRoute.km?('<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'):'';
-  if(rStops.length) map.fitBounds(routeStopsAll().map(s=>[s.lat,s.lng]),{padding:[60,60]}); return;
+  if(rStops.length) map.fitBounds(routeStopsAll().map(s=>[s.lat,s.lng]),fitPad(60)); return;
 }
 $('tripCancel').onclick=()=>switchTab('planner','trips');
 ['tpFrom','tpTo','tpEng','tpStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',tripEcon); });
@@ -4827,7 +4926,7 @@ async function showTripFact(tid){
     const bpts=[];
     m.segments.forEach(g=>{ bpts.push([g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]); });
     (m.points||[]).forEach(p=>bpts.push([p.lat,p.lng]));
-    if(bpts.length) setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(bpts).getBounds(),{padding:[40,40]}); },60);
+    if(bpts.length) setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(bpts).getBounds(),fitPad(40)); },60);
     showFactLegend(m);
     const bits=['Факт: '+Math.round(m.km)+' км по '+m.points.length+' точкам'];
     if(m.dropped.length) bits.push('вырезано '+(m.droppedTotal||m.dropped.length));
