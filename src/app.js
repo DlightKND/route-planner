@@ -4335,7 +4335,14 @@ async function settleFactKm(tid){
   finally{ busyDone(); }
 
   if(m&&m.ok){
-    try{ busy('Записываю пробег…',1); await writeFactKm(tid,m.km,'track',m.note); }
+    try{
+      busy('Записываю пробег…',1);
+      await writeFactKm(tid,m.km,'track',m.note);
+      // Разбор — отдельной записью и не фатально: если он не лёг, число
+      // всё равно записано, а карта просто пересчитает показ сама.
+      try{ if(m.measure) await writeFactTrack(tid,m.measure); }
+      catch(e2){ console.warn('Разбор трека не сохранился:',e2); }
+    }
     catch(e){ notify('Пробег посчитан, но не записался: '+(e.message||e),'err'); return false; }
     finally{ busyDone(); }
     showToast('Факт: '+m.km+' км по треку'+(m.note?(' · '+m.note):''));
@@ -4349,7 +4356,15 @@ async function settleFactKm(tid){
   if(!ok) return false;
   const od=await askOdometer();
   if(!od) return false;
-  try{ busy('Записываю пробег…',1); await writeFactKm(tid,od.km,'odometer','по одометру '+od.a+' → '+od.b+'; '+why); }
+  try{
+    busy('Записываю пробег…',1);
+    await writeFactKm(tid,od.km,'odometer','по одометру '+od.a+' → '+od.b+'; '+why);
+    // Разбор сохраняем и здесь, хотя число взято с одометра: именно на
+    // недостоверном треке и хочется посмотреть, что алгоритм вырезал и где.
+    // Расхождение между его итогом и записанным числом видно в отчёте.
+    try{ if(m&&m.measure) await writeFactTrack(tid,m.measure); }
+    catch(e2){ console.warn('Разбор трека не сохранился:',e2); }
+  }
   catch(e){ notify('Одометр не записался: '+(e.message||e),'err'); return false; }
   finally{ busyDone(); }
   showToast('Факт: '+od.km+' км по одометру');
@@ -4515,7 +4530,7 @@ function mapPanelRows(){
     if(d.trackKm) R.push({key:'track',style:'border-top:4px dotted '+TRACK_C,name:'видели по трекеру',km:d.trackKm});
     if(d.roadKm)  R.push({key:'road', style:'border-top:5px solid '+ROAD_C, name:'посчитано по дорогам',km:d.roadKm});
     if(d.lineKm)  R.push({key:'line', style:'border-top:3px dotted '+GAP_C, name:'прямая, маршрут не строился',km:d.lineKm});
-    if(d.dropped.length) R.push({key:'drop',dot:DROP_C,name:'выброшено точек',val:d.dropped.length});
+    if(d.dropped.length) R.push({key:'drop',dot:DROP_C,name:'выброшено точек',val:d.droppedTotal||d.dropped.length});
     R.push({key:'stay',dot:STAY_C,name:'стоянки'});
   }
   return R;
@@ -4601,8 +4616,13 @@ async function showTripFact(tid){
     // без маршрутизатора: показ трека не должен стоить квоты. Отрезки, для
     // которых маршрут не строился, честно помечены.
     const t=trips.find(x=>x.id==tid)||null;
-    const m=lastMeasure[tid]||await measureTrip(raw,trackOpts(),tripEnds(t),null);
-    if(!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
+    // Порядок важен. Свежий разбор этой вкладки — самый верный. Дальше
+    // сохранённый: он посчитан с маршрутизатором, и это ровно то, что ушло
+    // в деньги. И только если ни того ни другого нет — считаем на месте,
+    // без запросов, помечая отрезки как непостроенные.
+    const m=lastMeasure[tid]||await readFactTrack(tid)
+      ||await measureTrip(raw,trackOpts(),tripEnds(t),null);
+    if(!m.segments.length&&!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
     factTripId=tid;
 
     m.segments.forEach(g=>{
@@ -4642,11 +4662,17 @@ async function showTripFact(tid){
     });
 
     factApplyVis();
-    setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(m.points.map(p=>[p.lat,p.lng])).getBounds(),{padding:[40,40]}); },60);
+    // Границы считаем по отрезкам: у сохранённого разбора отдельных точек
+    // почти нет, там только опоры и стоянки, и по ним карта уехала бы мимо.
+    const bpts=[];
+    m.segments.forEach(g=>{ bpts.push([g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]); });
+    (m.points||[]).forEach(p=>bpts.push([p.lat,p.lng]));
+    if(bpts.length) setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(bpts).getBounds(),{padding:[40,40]}); },60);
     showFactLegend(m);
     const bits=['Факт: '+Math.round(m.km)+' км по '+m.points.length+' точкам'];
-    if(m.dropped.length) bits.push('вырезано '+m.dropped.length);
+    if(m.dropped.length) bits.push('вырезано '+(m.droppedTotal||m.dropped.length));
     if(m.jitterKm>=0.5) bits.push('дрожание '+m.jitterKm.toFixed(1)+' км');
+    if(m.stored) bits.push('разбор от '+new Date(m.at).toLocaleString('ru'));
     if(t&&t.fact_km!=null) bits.push('записано '+Math.round(t.fact_km)+' км'+factSrcRu(t.fact_km_source));
     showToast(bits.join(' · '));
   }catch(e){ notify('Трек не загрузился: '+(e.message||e),'err'); }
@@ -4788,6 +4814,55 @@ async function writeFactKm(tid,km,src,note){
     fact_km:km, fact_km_source:src, fact_km_note:note||null
   }).eq('id',tid);
   if(error) throw error;
+}
+
+// РАЗБОР СОХРАНЯЕМ ЦЕЛИКОМ, а не только итог.
+//
+// Пересчёт вырезает аномалии и достраивает куски по дорогам — и всё это
+// жило в памяти вкладки. Обновил страницу: число в карточке осталось, а
+// карта пересобралась заново и без маршрутизатора, достроенные отрезки
+// превратились обратно в прямые, и километраж на карте разошёлся с
+// записанным. Тот самый разрыв «карта про одно, деньги про другое»,
+// зашедший с другой стороны.
+//
+// Линии маршрутов прореживаем: ORS отдаёт их с шагом в единицы метров,
+// а на карте разница неразличима. Иначе один выезд с четырьмя достройками
+// весит сотни килобайт.
+function slimMeasure(m){
+  return {
+    km:m.km, trackKm:m.trackKm, roadKm:m.roadKm, lineKm:m.lineKm, jitterKm:m.jitterKm,
+    checks:m.checks, weakChecks:m.weakChecks, verdict:m.verdict, reasons:m.reasons,
+    at:new Date().toISOString(),
+    segments:(m.segments||[]).map(g=>({
+      kind:g.kind, km:g.km, minutes:g.minutes, why:g.why||null,
+      fromTs:g.fromTs, toTs:g.toTs, fromPt:g.fromPt, toPt:g.toPt,
+      line:(g.line&&g.line.length>2)?simplifyLine(g.line,0.0002):(g.line||null)
+    })),
+    // Выброшенные нужны на карте красными кружками. Их может быть много —
+    // держим потолок: сотня точек показывает картину, тысяча только весит.
+    dropped:(m.dropped||[]).slice(0,200).map(p=>({lat:p.lat,lng:p.lng,ts:p.ts,why:p.why})),
+    droppedTotal:(m.dropped||[]).length,
+    points:(m.points||[]).filter(p=>p.anchor||p.status==='idle')
+      .map(p=>({lat:p.lat,lng:p.lng,ts:p.ts,anchor:p.anchor||null,status:p.status||null}))
+  };
+}
+
+async function writeFactTrack(tid,m){
+  const {error}=await sb.from('trip_tracks')
+    .upsert({trip_id:tid,km:m.km,data:slimMeasure(m),updated_at:new Date().toISOString()},
+            {onConflict:'trip_id'});
+  if(error) throw error;
+}
+
+// Читаем сохранённый разбор. Пустой ответ — это не ошибка: у выездов,
+// сведённых до появления таблицы, его просто нет.
+async function readFactTrack(tid){
+  try{
+    const {data,error}=await sb.from('trip_tracks').select('data').eq('trip_id',tid).maybeSingle();
+    if(error||!data||!data.data) return null;
+    const d=data.data;
+    return Object.assign({points:[],dropped:[],segments:[]},d,{stored:true});
+  }catch(e){ return null; }
 }
 
 // ---------- машины на карте (трекинг Wialon) ----------
@@ -5576,7 +5651,8 @@ async function drawTripMap(t){
       .eq('trip_id',t.id).order('ts',{ascending:true}).limit(3000);
     const raw=(data||[]).filter(r=>r.lat!=null&&r.lng!=null);
     if(raw.length>1){
-      const m=lastMeasure[t.id]||await measureTrip(raw,trackOpts(),tripEnds(t),null);
+      const m=lastMeasure[t.id]||await readFactTrack(t.id)
+        ||await measureTrip(raw,trackOpts(),tripEnds(t),null);
       // Отрезками, а не одной ломаной: достроенный по дорогам кусок имеет
       // свою геометрию, и прямая через него соврала бы.
       d.factSegs=m.segments.map(g=>(g.kind==='road'&&g.line&&g.line.length>1)
