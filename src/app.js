@@ -113,7 +113,12 @@ const THEMES={
     // Поэтому токена два.
     '--accent-line':'#ffe100', '--focus':'#ffe100',
     '--nav-bg':'#24262b', '--nav-ink':'#ffe100',
-    '--shadow-sm':'0 4px 12px rgba(0,0,0,0.2)', '--shadow-md':'0 8px 22px rgba(0,0,0,0.35)', '--shadow-lg':'0 12px 32px rgba(0,0,0,0.5)'
+    '--shadow-sm':'0 4px 12px rgba(0,0,0,0.2)', '--shadow-md':'0 8px 22px rgba(0,0,0,0.35)', '--shadow-lg':'0 12px 32px rgba(0,0,0,0.5)',
+    // Матовое стекло. Полупрозрачность без размытия читалась бы как грязь:
+    // сквозь неё лезет текст. Размытие превращает то, что за панелью, в фон:
+    // видно, что там что-то есть, но читается только сама панель.
+    '--glass':'rgba(26,28,32,0.72)', '--glass-2':'rgba(36,38,43,0.80)',
+    '--glass-line':'rgba(255,255,255,0.10)'
   },
   light:{
     // Светлая тема была вдвое площе тёмной: bg → panel-2 давали контраст
@@ -134,7 +139,11 @@ const THEMES={
     '--accent':'#ffe100', '--accent-ink':'#1a1d22', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)', // бренд-жёлтый для заливок/границ, тёмный текст-акцент для читаемости
     '--shadow-sm':'0 1px 2px rgba(15,20,27,.07), 0 2px 8px rgba(15,20,27,.07)',
     '--shadow-md':'0 4px 8px rgba(15,20,27,.07), 0 8px 20px rgba(15,20,27,.09)',
-    '--shadow-lg':'0 8px 16px rgba(15,20,27,.07), 0 18px 40px rgba(15,20,27,.14)'
+    '--shadow-lg':'0 8px 16px rgba(15,20,27,.07), 0 18px 40px rgba(15,20,27,.14)',
+    // В светлой теме стекло плотнее: на белой карте тонкая плёнка не
+    // отделяет панель от подложки, и текст под ней просвечивает пятнами.
+    '--glass':'rgba(255,255,255,0.78)', '--glass-2':'rgba(248,250,252,0.86)',
+    '--glass-line':'rgba(15,20,27,0.08)'
   }
 };
 function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
@@ -4501,7 +4510,57 @@ const TRACK_C='#22c55e';   // измерено приёмником
 const ROAD_C ='#7c3aed';   // достроено маршрутом по дорогам
 const GAP_C  ='#9aa1ad';   // прямая через дыру: где ехали — неизвестно
 const DROP_C ='#dc2626';   // выброшено как ошибка приёмника
-const STAY_C ='#f59e0b';   // стоянка
+const STAY_C ='#dc2626';   // стоянка — знак «стоп», он красный
+
+// СКОРОСТЬ ЦВЕТОМ. Один тон, разная светлота: трек остаётся узнаваемо
+// «зелёным слоем», а внутри него видно, где машина ползла, а где летела.
+// Разные тона тут были бы вторым языком поверх первого — цвет уже занят
+// под вид отрезка (видели / достроили / не знаем).
+const SPEED_MAX=110;                       // выше — цвет уже не меняется
+const SPEED_RAMP=['#a7f3d0','#4ade80','#16a34a','#15803d','#064e3b'];
+function segKmh(g){
+  if(!g||!g.km) return 0;
+  const ms=(g.ms!=null)?g.ms:((g.minutes||0)*60000);
+  if(!ms) return 0;
+  return g.km/(ms/3600000);
+}
+function speedColor(kmh){
+  const t=Math.max(0,Math.min(1,(kmh||0)/SPEED_MAX));
+  const i=Math.min(SPEED_RAMP.length-1,Math.floor(t*(SPEED_RAMP.length-1)+0.5));
+  return SPEED_RAMP[i];
+}
+function atTime(ts){ try{ return new Date(ts).toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return '—'; } }
+function dhm(ms){
+  if(!ms||ms<0) return '—';
+  const m=Math.round(ms/60000);
+  return m<60?(m+' мин'):(Math.floor(m/60)+' ч '+String(m%60).padStart(2,'0')+' мин');
+}
+// Подпись к отрезку: когда, сколько, как быстро. Одинаковая у всех видов,
+// чтобы сравнивать их между собой можно было не думая.
+function segPopup(g,extra){
+  const kmh=segKmh(g);
+  return '<b>'+atTime(g.fromTs)+' → '+atTime(g.toTs)+'</b>'
+    +'<br>'+g.km.toFixed(2)+' км за '+dhm(g.ms!=null?g.ms:(g.minutes||0)*60000)
+    +(kmh?('<br>средняя <b>'+Math.round(kmh)+' км/ч</b>'):'')
+    +(extra?('<br>'+extra):'');
+}
+
+// ИКОНКИ. Плоские, одноцветные, без обводок и теней — под остальной
+// интерфейс. Рисуем разметкой, а не картинками: они должны менять цвет
+// вместе с темой и не тянуть за собой файлы.
+// Фигуры общие для карты и легенды: образец в подписи обязан быть тем же
+// значком, что и на карте, иначе легенда объясняет не то, что видно.
+function stopSvg(px){
+  return '<svg viewBox="0 0 24 24" width="'+px+'" height="'+px+'" aria-hidden="true">'
+    +'<polygon points="8,2 16,2 22,8 22,16 16,22 8,22 2,16 2,8" fill="'+STAY_C+'"/></svg>';
+}
+function dropSvg(px){
+  return '<svg viewBox="0 0 24 24" width="'+px+'" height="'+px+'" aria-hidden="true">'
+    +'<path d="M5 5 L19 19 M19 5 L5 19" stroke="'+DROP_C+'" stroke-width="4.5" '
+    +'stroke-linecap="round" fill="none"/></svg>';
+}
+function stopIcon(){ return L.divIcon({className:'',iconSize:[16,16],iconAnchor:[8,8],html:stopSvg(16)}); }
+function dropIcon(){ return L.divIcon({className:'',iconSize:[14,14],iconAnchor:[7,7],html:dropSvg(14)}); }
 
 // ПАНЕЛЬ КАРТЫ: легенда, слои, цифры и выход — одно место.
 //
@@ -4530,8 +4589,8 @@ function mapPanelRows(){
     if(d.trackKm) R.push({key:'track',style:'border-top:4px dotted '+TRACK_C,name:'видели по трекеру',km:d.trackKm});
     if(d.roadKm)  R.push({key:'road', style:'border-top:5px solid '+ROAD_C, name:'посчитано по дорогам',km:d.roadKm});
     if(d.lineKm)  R.push({key:'line', style:'border-top:3px dotted '+GAP_C, name:'прямая, маршрут не строился',km:d.lineKm});
-    if(d.dropped.length) R.push({key:'drop',dot:DROP_C,name:'выброшено точек',val:d.droppedTotal||d.dropped.length});
-    R.push({key:'stay',dot:STAY_C,name:'стоянки'});
+    if(d.dropped.length) R.push({key:'drop',icon:dropSvg(13),name:'выброшено точек',val:d.droppedTotal||d.dropped.length});
+    R.push({key:'stay',icon:stopSvg(13),name:'стоянки'});
   }
   return R;
 }
@@ -4549,20 +4608,72 @@ function renderMapPanel(){
     factLegend.addTo(map);
   }
   if(!factLegendEl) return;
+  const bb=factLast?factBounds(factLast):null;
   factLegendEl.innerHTML='<button class="mleg-x" title="Убрать всё с карты">×</button>'
+    +(bb?timeFilterHtml(bb):'')
     +rows.map(r=>'<label><input type="checkbox" data-fl="'+r.key+'"'+(factVis[r.key]?' checked':'')+'>'
-      +(r.dot?('<span class="dot" style="color:'+r.dot+'"></span>'):('<i style="'+r.style+'"></i>'))
+      +(r.icon?('<span class="mleg-i">'+r.icon+'</span>'):('<i style="'+r.style+'"></i>'))
       +r.name
       +(r.km!=null?(' <b>'+Math.round(r.km)+' км</b>'):'')
       +(r.val!=null?(' <b>'+r.val+'</b>'):'')
       +'</label>'
-      +(r.sub?('<div class="mleg-s">'+esc(r.sub)+'</div>'):'')).join('')
+      +(r.sub?('<div class="mleg-s">'+esc(r.sub)+'</div>'):'')
+      +(r.key==='track'?speedScaleHtml():'')).join('')
     +(factLast?('<div class="mleg-t">факт <b>'+Math.round(factLast.km)+'</b> км</div>'):'');
   factLegendEl.querySelectorAll('[data-fl]').forEach(cb=>{
     cb.onchange=()=>{ factVis[cb.dataset.fl]=cb.checked; factApplyVis(); };
   });
+  wireTimeFilter(bb);
   const x=factLegendEl.querySelector('.mleg-x');
   if(x) x.onclick=clearMapAll;
+}
+
+// Окно времени. Два ползунка по собственной шкале выезда: не «часы», а
+// «сколько минут от начала до конца». Так не важно, сколько дней он длился
+// и в каком часовом поясе смотрят — крайние положения всегда означают
+// начало и конец, а подпись показывает настоящие дату и время.
+function timeFilterHtml(bb){
+  const total=Math.max(1,Math.round((bb[1]-bb[0])/60000));
+  const f=factFrom==null?0:Math.round((factFrom-bb[0])/60000);
+  const t=factTo==null?total:Math.round((factTo-bb[0])/60000);
+  return '<div class="mleg-tf">'
+    +'<div class="mleg-tfh"><span id="tfLbl">'+esc(tfLabel(bb,f,t))+'</span>'
+    +'<button type="button" id="tfAll" title="Показать весь выезд">весь</button></div>'
+    +'<input type="range" id="tfA" min="0" max="'+total+'" value="'+f+'">'
+    +'<input type="range" id="tfB" min="0" max="'+total+'" value="'+t+'">'
+    +'</div>';
+}
+function tfLabel(bb,f,t){
+  const d=x=>new Date(bb[0]+x*60000);
+  const one=new Date(bb[0]).toDateString()===new Date(bb[1]).toDateString();
+  const fmt=x=>one?atTime(d(x)):d(x).toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  return fmt(f)+' → '+fmt(t);
+}
+function wireTimeFilter(bb){
+  if(!bb||!factLegendEl) return;
+  const A=factLegendEl.querySelector('#tfA'), B=factLegendEl.querySelector('#tfB');
+  const L2=factLegendEl.querySelector('#tfLbl'), all=factLegendEl.querySelector('#tfAll');
+  if(!A||!B) return;
+  const apply=()=>{
+    let f=+A.value, t=+B.value;
+    // Ползунки могут перехлестнуться — тогда меняем их местами, а не
+    // показываем пустую карту.
+    if(f>t){ const q=f; f=t; t=q; }
+    factFrom=bb[0]+f*60000; factTo=bb[0]+t*60000;
+    if(L2) L2.textContent=tfLabel(bb,f,t);
+    if(factLast) drawFact(factLast);
+  };
+  A.oninput=apply; B.oninput=apply;
+  if(all) all.onclick=()=>{ factFrom=null; factTo=null; A.value=A.min; B.value=B.max;
+    if(L2) L2.textContent=tfLabel(bb,+A.min,+B.max);
+    if(factLast) drawFact(factLast); };
+}
+// Шкала скорости под строкой измеренного трека: без неё градиент — просто
+// разноцветная линия.
+function speedScaleHtml(){
+  return '<div class="mleg-sp"><span>0</span>'
+    +'<i style="background:linear-gradient(90deg,'+SPEED_RAMP.join(',')+')"></i>'
+    +'<span>'+SPEED_MAX+'+ км/ч</span></div>';
 }
 
 function hideMapPanel(){
@@ -4603,6 +4714,69 @@ async function showTripOnMap(tid){
   await showTripFact(tid);
 }
 
+// Отрисовка факта. Отдельно от загрузки, потому что её зовёт ещё и фильтр
+// времени: там данные те же, меняется только окно.
+function drawFact(m){
+  FACT_LAYERS.forEach(k=>factG[k].clearLayers());
+  const [a,b]=factWindow(m);
+  const inWin=(from,to)=>{
+    const t1=+new Date(from), t2=+new Date(to||from);
+    return !(t2<a||t1>b);
+  };
+  (m.segments||[]).forEach(g=>{
+    if(!inWin(g.fromTs,g.toTs)) return;
+    const ab=[[g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]];
+    if(g.kind==='road'){
+      const line=(g.line&&g.line.length>1)?g.line.map(p=>[p[1],p[0]]):ab;
+      factG.road.addLayer(L.polyline(line,{color:ROAD_C,weight:5,opacity:.9})
+        .bindPopup(segPopup(g,'достроено по дорогам'+(g.why?(' · '+esc(g.why)):''))));
+      return;
+    }
+    if(g.kind==='line'){
+      factG.line.addLayer(L.polyline(ab,{color:GAP_C,weight:3,opacity:.85,dashArray:'2 9'})
+        .bindPopup(segPopup(g,esc(g.why||'маршрут не строился')+' — цифра занижена')));
+      return;
+    }
+    // Измеренный кусок красим скоростью. Кликается он же: отдельные точки
+    // ставить незачем, отрезок И ЕСТЬ переход между двумя соседними.
+    const kmh=segKmh(g);
+    factG.track.addLayer(L.polyline(ab,{color:speedColor(kmh),weight:5,opacity:.95,lineCap:'round'})
+      .bindPopup(segPopup(g)));
+  });
+  // Выброшенное показываем, а не прячем: если приёмник врёт постоянно,
+  // это видно на карте, и разговор с поставщиком трекера предметный.
+  (m.dropped||[]).forEach(p=>{
+    if(!inWin(p.ts)) return;
+    factG.drop.addLayer(L.marker([p.lat,p.lng],{icon:dropIcon()})
+      .bindPopup('<b>'+atTime(p.ts)+'</b><br>отброшено: '+esc(p.why)));
+  });
+  (m.points||[]).filter(p=>p.status==='idle').forEach(p=>{
+    if(!inWin(p.ts)) return;
+    factG.stay.addLayer(L.marker([p.lat,p.lng],{icon:stopIcon()})
+      .bindPopup('<b>'+atTime(p.ts)+'</b><br>стоянка'));
+  });
+  // Опоры выезда — старт и финиш, если их пришлось подставить.
+  (m.points||[]).filter(p=>p.anchor).forEach(p=>{
+    factG.road.addLayer(L.circleMarker([p.lat,p.lng],{radius:7,color:ROAD_C,fillColor:'#fff',fillOpacity:1,weight:3})
+      .bindPopup('<b>'+esc(p.anchor)+'</b><br>трек сюда не дошёл, дорога достроена'));
+  });
+  factApplyVis();
+}
+
+// Окно времени: [от, до] в миллисекундах. Пусто — весь выезд.
+let factFrom=null, factTo=null;
+function factBounds(m){
+  let a=Infinity,b=-Infinity;
+  (m.segments||[]).forEach(g=>{ a=Math.min(a,+new Date(g.fromTs)); b=Math.max(b,+new Date(g.toTs||g.fromTs)); });
+  (m.points||[]).forEach(p=>{ a=Math.min(a,+new Date(p.ts)); b=Math.max(b,+new Date(p.ts)); });
+  if(!isFinite(a)||!isFinite(b)||b<=a) return null;
+  return [a,b];
+}
+function factWindow(m){
+  const bb=factBounds(m); if(!bb) return [-Infinity,Infinity];
+  return [factFrom==null?bb[0]:factFrom, factTo==null?bb[1]:factTo];
+}
+
 async function showTripFact(tid){
   factClear();
   try{
@@ -4623,45 +4797,10 @@ async function showTripFact(tid){
     const m=lastMeasure[tid]||await readFactTrack(tid)
       ||await measureTrip(raw,trackOpts(),tripEnds(t),null);
     if(!m.segments.length&&!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
-    factTripId=tid;
+    factTripId=tid; factFrom=null; factTo=null;
 
-    m.segments.forEach(g=>{
-      const ab=[[g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]];
-      if(g.kind==='road'){
-        const line=(g.line&&g.line.length>1)?g.line.map(p=>[p[1],p[0]]):ab;
-        factG.road.addLayer(L.polyline(line,{color:ROAD_C,weight:5,opacity:.9})
-          .bindPopup('По дорогам <b>'+g.km.toFixed(1)+' км</b>'
-            +(g.minutes!=null?(' за '+g.minutes+' мин'):'')
-            +(g.why?('<br>'+esc(g.why)):'')));
-        return;
-      }
-      if(g.kind==='line'){
-        factG.line.addLayer(L.polyline(ab,{color:GAP_C,weight:3,opacity:.85,dashArray:'2 9'})
-          .bindPopup('Прямая <b>'+g.km.toFixed(1)+' км</b>'
-            +(g.minutes!=null?(' за '+g.minutes+' мин'):'')
-            +'<br>'+esc(g.why||'маршрут не строился')+' — цифра занижена.'));
-        return;
-      }
-      factG.track.addLayer(L.polyline(ab,{color:TRACK_C,weight:4,opacity:.85,dashArray:'1 7',lineCap:'round'}));
-    });
+    drawFact(m);
 
-    // Выброшенное показываем, а не прячем: если приёмник врёт постоянно,
-    // это видно на карте, и разговор с поставщиком трекера предметный.
-    m.dropped.forEach(p=>{
-      factG.drop.addLayer(L.circleMarker([p.lat,p.lng],{radius:4,color:DROP_C,fillColor:DROP_C,fillOpacity:.6,weight:1})
-        .bindPopup('Отброшено: '+esc(p.why)+'<br>'+new Date(p.ts).toLocaleString('ru')));
-    });
-    m.points.filter(p=>p.status==='idle').forEach(p=>{
-      factG.stay.addLayer(L.circleMarker([p.lat,p.lng],{radius:5,color:STAY_C,fillColor:STAY_C,fillOpacity:.9,weight:2})
-        .bindPopup('Стоянка с '+new Date(p.ts).toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'})));
-    });
-    // Опоры выезда — старт и финиш, если их пришлось подставить.
-    m.points.filter(p=>p.anchor).forEach(p=>{
-      factG.road.addLayer(L.circleMarker([p.lat,p.lng],{radius:7,color:ROAD_C,fillColor:'#fff',fillOpacity:1,weight:3})
-        .bindPopup(esc(p.anchor)+': трек сюда не дошёл, дорога достроена'));
-    });
-
-    factApplyVis();
     // Границы считаем по отрезкам: у сохранённого разбора отдельных точек
     // почти нет, там только опоры и стоянки, и по ним карта уехала бы мимо.
     const bpts=[];
@@ -4911,6 +5050,17 @@ async function loadVehState(){
 
 
 
+// Машина на карте. Была эмодзи 🚚: на каждой платформе своя, цвет чужой,
+// на тёмной теме светится, размер не подчиняется. Теперь плоский силуэт
+// разметкой — красится токенами вместе с остальным интерфейсом, состояние
+// («едет», «молчит») задаётся цветом, а не подбором картинки.
+const VEH_SVG='<svg viewBox="0 0 34 20" width="30" height="18" aria-hidden="true">'
+  +'<path d="M1 3.5a1.5 1.5 0 0 1 1.5-1.5h14a1.5 1.5 0 0 1 1.5 1.5V14H1z"/>'
+  +'<path d="M18 6.5h5.6a2 2 0 0 1 1.5.7l3.4 3.9a2 2 0 0 1 .5 1.3V14H18z"/>'
+  +'<circle class="w" cx="8" cy="14.6" r="3.2"/><circle class="w" cx="24" cy="14.6" r="3.2"/>'
+  +'<circle class="h" cx="8" cy="14.6" r="1.3"/><circle class="h" cx="24" cy="14.6" r="1.3"/>'
+  +'</svg>';
+
 function renderVehState(){
   // Лента «в работе» показывает машины, поэтому обновляется вместе с ними.
   const wf=$('workFeed');
@@ -4926,7 +5076,7 @@ function renderVehState(){
     const rot = bear!=null
       ? '<div class="veh-rot" style="transform:rotate('+bear.toFixed(0)+'deg)"><div class="veh-dir"></div></div>' : '';
     const icon=L.divIcon({className:'', iconSize:[70,44], iconAnchor:[35,14],
-      html:'<div class="veh-mk '+cls+'">'+rot+'<div class="veh-ico">🚚</div><div class="veh-lbl '+cls+'">'+esc(vehLabel(v))+'</div></div>'});
+      html:'<div class="veh-mk '+cls+'">'+rot+'<div class="veh-ico">'+VEH_SVG+'</div><div class="veh-lbl '+cls+'">'+esc(vehLabel(v))+'</div></div>'});
     const m=L.marker([r.lat,r.lng],{icon,zIndexOffset:800});
     m.__bear=bear;
     m.on('click',()=>showVehModal(r.vehicle_id));
@@ -5060,24 +5210,90 @@ function updateRouteActions(){
 function drawStops(){ routeLayer.clearLayers(); const stops=routeStopsAll();
   drawRouteLine(routeLayer, rRoute.geometry);
   stops.forEach((s,i)=>{ const ic=L.divIcon({className:'',html:'<div style="background:var(--accent);color:var(--on-accent);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font:600 11px var(--mono);border:2.5px solid '+ringColor()+';pointer-events:none">'+(i+1)+'</div>',iconSize:[20,20],iconAnchor:[10,10]}); L.marker([s.lat,s.lng],{icon:ic,interactive:false}).addTo(routeLayer); }); updateMapSummary(); updateRouteActions(); }
-function routePtCard(tag,s,idx,num,movable){ const d=document.createElement('div'); d.className='pt';
-  d.innerHTML='<div class="nm"><span class="pill">'+num+'</span> '+esc(s.name||'точка')+' <span class="pill">'+tag+'</span></div>'+(s.description?'<div class="ds">'+esc(s.description)+'</div>':'')+'<div class="meta">'+(+s.lat).toFixed(4)+', '+(+s.lng).toFixed(4)+'</div>'+'<div class="acts">'+(movable?('<button class="btn sm ghost" data-rup="'+idx+'">↑</button><button class="btn sm ghost" data-rdn="'+idx+'">↓</button><button class="btn sm ghost" data-rrm="'+idx+'">×</button>'):('<button class="btn sm ghost" data-brm="'+idx+'">×</button>'))+'</div>'; return d; }
-function renderEndpoints(){ const box=$('rEndpoints'); if(!box) return;
-  const endStop=(rStops.length&&rStops[rStops.length-1].type==='place')?rStops[rStops.length-1]:null;
-  const slot=(lbl,val,empty,act,canRm)=>'<div class="ep"><span class="ep-l">'+lbl+'</span><span class="ep-v'+(empty?' empty':'')+'">'+esc(val)+'</span><button class="btn sm ghost" data-ep="'+act+'">'+(empty?'выбрать':'сменить')+'</button>'+(canRm?'<button class="btn sm ghost" data-eprm="'+act+'" title="Убрать">×</button>':'')+'</div>';
-  box.innerHTML=slot('Старт', rStart?rStart.name:'первая точка', !rStart, 'start', !!rStart)+slot('Финиш', endStop?endStop.name:'не задан', !endStop, 'end', !!endStop);
-  box.querySelectorAll('[data-ep]').forEach(b=>b.onclick=()=>openBasePicker(b.dataset.ep,()=>{}));
-  box.querySelectorAll('[data-eprm]').forEach(b=>b.onclick=()=>{ if(b.dataset.eprm==='start'){ rStart=null; } else if(rStops.length&&rStops[rStops.length-1].type==='place'){ rStops.pop(); } renderRoutePanel(); resetBuilt(); }); }
-function renderRoutePanel(){ renderEndpoints(); $('rCount').textContent=routeStopsAll().length; const box=$('rStops'); box.innerHTML='';
+// Карточка точки маршрута.
+//
+// Отдельных полей «старт» и «финиш» над списком больше нет: они дублировали
+// то, что и так стоит в списке по порядку, и заставляли держать в голове
+// две картины одного маршрута. Роль теперь просто чип в своей строке, а
+// сменить точку можно там же.
+//
+// Стрелки видны всегда. Раньше их прятало общее правило «действия только у
+// выбранной карточки» — оно писалось для справочника на восемьдесят строк,
+// а в маршруте их четыре, выделения нет вовсе, и порядок оказался
+// неизменяемым: кнопки были в разметке, но добраться до них было нельзя.
+function routePtCard(tag,s,idx,num,movable,role){
+  const d=document.createElement('div');
+  d.className='pt route-pt'+(role?(' role-'+role):'');
+  if(movable){ d.dataset.ri=idx; d.setAttribute('draggable','true'); }
+  const acts=movable
+    ? '<button class="btn sm ghost" data-rup="'+idx+'" title="Выше">↑</button>'
+     +'<button class="btn sm ghost" data-rdn="'+idx+'" title="Ниже">↓</button>'
+     +(role==='finish'?'<button class="btn sm ghost" data-ep="end">сменить</button>':'')
+     +'<button class="btn sm ghost" data-rrm="'+idx+'" title="Убрать">×</button>'
+    : '<button class="btn sm ghost" data-ep="start">сменить</button>'
+     +'<button class="btn sm ghost" data-brm="'+idx+'" title="Убрать">×</button>';
+  d.innerHTML='<span class="rp-num">'+num+'</span>'
+    +'<div class="nm">'+esc(s.name||'точка')+' <span class="pill">'+esc(tag)+'</span></div>'
+    +(s.description?'<div class="ds">'+esc(s.description)+'</div>':'')
+    +'<div class="meta">'+(+s.lat).toFixed(4)+', '+(+s.lng).toFixed(4)+'</div>'
+    +'<div class="acts">'+acts+'</div>';
+  return d;
+}
+function renderRoutePanel(){ $('rCount').textContent=routeStopsAll().length; const box=$('rStops'); box.innerHTML='';
   if(!rStart && !rStops.length){ box.innerHTML='<div class="hint">Точек нет. Добавь точку на карте, по адресу, из существующих или через «+ маршрут» в попапах.</div>'; drawStops(); return; }
   let n=0;
-  if(rStart){ n++; box.appendChild(routePtCard('старт',rStart,-1,n,false)); }
-  rStops.forEach((s,i)=>{ n++; const tag=(s.type==='place'?'депо':(s.type==='wp'?'пром.':(s.type==='equip'?'техника':'клиент'))); box.appendChild(routePtCard(tag,s,i,n,true)); });
-  box.querySelectorAll('[data-rup]').forEach(b=>b.onclick=()=>rMove(+b.dataset.rup,-1));
-  box.querySelectorAll('[data-rdn]').forEach(b=>b.onclick=()=>rMove(+b.dataset.rdn,1));
-  box.querySelectorAll('[data-rrm]').forEach(b=>b.onclick=()=>{ rStops.splice(+b.dataset.rrm,1); renderRoutePanel(); resetBuilt(); });
-  box.querySelectorAll('[data-brm]').forEach(b=>b.onclick=()=>{ rStart=null; renderRoutePanel(); resetBuilt(); });
+  // Старт стоит первым и не перетаскивается: он не «одна из точек», а
+  // начало отсчёта. Финиш — последняя остановка-депо, её кнопка «сменить»
+  // заменяет прежнее отдельное поле.
+  const lastIdx=rStops.length-1;
+  const finIdx=(rStops.length&&rStops[lastIdx].type==='place')?lastIdx:-1;
+  if(rStart){ n++; box.appendChild(routePtCard('старт',rStart,-1,n,false,'start')); }
+  rStops.forEach((s,i)=>{ n++;
+    const tag=(i===finIdx)?'финиш':(s.type==='place'?'депо':(s.type==='wp'?'пром.':(s.type==='equip'?'техника':'клиент')));
+    box.appendChild(routePtCard(tag,s,i,n,true,i===finIdx?'finish':null)); });
+  box.querySelectorAll('[data-rup]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); rMove(+b.dataset.rup,-1); });
+  box.querySelectorAll('[data-rdn]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); rMove(+b.dataset.rdn,1); });
+  box.querySelectorAll('[data-rrm]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); rStops.splice(+b.dataset.rrm,1); renderRoutePanel(); resetBuilt(); });
+  box.querySelectorAll('[data-brm]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); rStart=null; renderRoutePanel(); resetBuilt(); });
+  box.querySelectorAll('[data-ep]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openBasePicker(b.dataset.ep,()=>{}); });
+  wireRouteDrag(box);
   drawStops(); }
+
+// Перетаскивание точек мышью — тем же приёмом, что карточки в диспетчере.
+// Стрелки при этом остаются: на телефоне перетаскивания по стандарту
+// браузера нет вовсе, и без них порядок снова стал бы неизменяемым.
+function wireRouteDrag(box){
+  let from=null;
+  const clear=()=>box.querySelectorAll('.route-pt').forEach(c=>c.classList.remove('drag-over','drag-under','dragging'));
+  box.querySelectorAll('.route-pt[draggable=true]').forEach(card=>{
+    card.addEventListener('dragstart',e=>{ from=+card.dataset.ri; card.classList.add('dragging');
+      try{ e.dataTransfer.setData('text/plain',String(from)); e.dataTransfer.effectAllowed='move'; }catch(err){} });
+    card.addEventListener('dragend',clear);
+    card.addEventListener('dragover',e=>{
+      if(from==null) return;
+      e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(err){}
+      // Половина карточки решает, встанет точка до неё или после: без этого
+      // непонятно, куда именно упадёт, и порядок приходится угадывать.
+      const r=card.getBoundingClientRect(), up=(e.clientY-r.top)<r.height/2;
+      card.classList.toggle('drag-over',up); card.classList.toggle('drag-under',!up);
+    });
+    card.addEventListener('dragleave',()=>card.classList.remove('drag-over','drag-under'));
+    card.addEventListener('drop',e=>{
+      e.preventDefault();
+      const to=+card.dataset.ri, r=card.getBoundingClientRect();
+      const up=(e.clientY-r.top)<r.height/2;
+      clear();
+      if(from==null||isNaN(to)) return;
+      let dest=up?to:to+1;
+      if(from<dest) dest--;
+      if(dest===from){ from=null; return; }
+      const it=rStops.splice(from,1)[0];
+      rStops.splice(Math.max(0,Math.min(rStops.length,dest)),0,it);
+      from=null;
+      renderRoutePanel(); resetBuilt();
+    });
+  });
+}
 function rMove(i,dir){ const j=i+dir; if(j<0||j>=rStops.length) return; const t=rStops[i]; rStops[i]=rStops[j]; rStops[j]=t; renderRoutePanel(); resetBuilt(); }
 $('rWpMode').onclick=()=>{ wpModeOn=!wpModeOn; $('rWpMode').classList.toggle('active',wpModeOn); $('rWpHint').style.display=wpModeOn?'block':'none'; if(wpModeOn&&addModeOn) toggleAdd(false); map.getContainer().style.cursor=wpModeOn?'crosshair':''; };
 if($('rMoreToggle')) $('rMoreToggle').onclick=()=>{
