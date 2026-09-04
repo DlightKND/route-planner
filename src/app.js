@@ -4457,8 +4457,7 @@ let factTripId=null;
 function factClear(){
   FACT_LAYERS.forEach(k=>factG[k].clearLayers());
   factTripId=null; factLast=null;
-  try{ updateMapSummary(); }catch(e){}
-  if(factLegend){ try{ map.removeControl(factLegend); }catch(e){} factLegend=null; }
+  try{ renderMapPanel(); }catch(e){}
 }
 // Слой либо на карте, либо нет. Очистка слоя тут не годится: при следующем
 // включении рисовать было бы нечего, пришлось бы пересчитывать трек.
@@ -4489,51 +4488,90 @@ const GAP_C  ='#9aa1ad';   // прямая через дыру: где ехал�
 const DROP_C ='#dc2626';   // выброшено как ошибка приёмника
 const STAY_C ='#f59e0b';   // стоянка
 
-// Легенда. Она же управление слоями и она же выход.
+// ПАНЕЛЬ КАРТЫ: легенда, слои, цифры и выход — одно место.
 //
-// Три вида линий без подписи читаются как «какие-то линии», и главный
-// вопрос — что тут достроено, а что мы правда видели — остаётся без
-// ответа. Поэтому рядом с каждым видом стоит его километраж.
+// Раньше их было две. Сводка с километражом плана висела сверху по центру,
+// легенда факта — снизу справа, и человеку приходилось держать в голове,
+// что где: маршрут стирается в одной панели, факт — в другой. При этом обе
+// говорят про одну карту и про одни и те же линии.
 //
-// Переключатели тут же, а не в отдельной панели: слой и его название —
-// одна строка, и выключать его логично там же, где на него смотришь.
-// Крестик закрывает факт целиком — раньше выхода не было вовсе, и уйти
-// с карты можно было только перезагрузкой.
-let factLegend=null;
+// Теперь строка = слой: образец слева повторяет то, чем слой нарисован,
+// флажок его включает, цифра справа говорит, сколько в нём километров.
+// Крестик убирает с карты всё сразу.
+let factLegend=null, factLegendEl=null;
 let factLast=null;
-function showFactLegend(m){
-  factLast=m||factLast;
-  if(!factLast) return;
+
+function mapPanelRows(){
+  const R=[];
+  const stops=routeStopsAll().length;
+  if(stops||(rRoute&&rRoute.km>0)){
+    R.push({key:'plan',style:'border-top:3px dashed var(--ink-faint)',name:'плановый маршрут',
+      sub:(rRoute&&rRoute.km>0)
+        ? (rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч · '+stops+' точ.')
+        : (stops+' '+plural(stops,'точка','точки','точек')+', маршрут не построен')});
+  }
   const d=factLast;
-  if(factLegend){ try{ map.removeControl(factLegend); }catch(e){} factLegend=null; }
-  // Образец слева повторяет то, чем слой нарисован на карте: линия — своей
-  // линией, точки — своим цветом. Красная точка напротив стоянок сводила бы
-  // на нет весь смысл легенды.
-  const row=(key,style,name,km,dot)=>'<label><input type="checkbox" data-fl="'+key+'"'
-    +(factVis[key]?' checked':'')+'>'
-    +(dot?('<span class="dot" style="color:'+dot+'"></span>'):('<i style="'+style+'"></i>'))+name
-    +(km!=null?(' <b>'+Math.round(km)+' км</b>'):'')+'</label>';
-  factLegend=L.control({position:'bottomright'});
-  factLegend.onAdd=function(){
-    const el=L.DomUtil.create('div','mleg');
-    el.innerHTML='<button class="mleg-x" title="Убрать факт с карты">×</button>'
-      +row('plan','border-top:3px dashed var(--ink-faint)','плановый маршрут',null)
-      +(d.trackKm?row('track','border-top:4px dotted '+TRACK_C,'видели по трекеру',d.trackKm):'')
-      +(d.roadKm?row('road','border-top:5px solid '+ROAD_C,'посчитано по дорогам',d.roadKm):'')
-      +(d.lineKm?row('line','border-top:3px dotted '+GAP_C,'прямая, маршрут не строился',d.lineKm):'')
-      +(d.dropped.length?row('drop',null,'выброшено точек: '+d.dropped.length,null,DROP_C):'')
-      +row('stay',null,'стоянки',null,STAY_C);
-    L.DomEvent.disableClickPropagation(el);
-    el.querySelectorAll('[data-fl]').forEach(cb=>{
-      cb.onchange=()=>{ factVis[cb.dataset.fl]=cb.checked; factApplyVis(); };
-    });
-    const x=el.querySelector('.mleg-x');
-    if(x) x.onclick=()=>{ factClear(); showToast('Факт убран с карты'); };
-    return el;
-  };
-  factLegend.addTo(map);
-  updateMapSummary();
+  if(d){
+    if(d.trackKm) R.push({key:'track',style:'border-top:4px dotted '+TRACK_C,name:'видели по трекеру',km:d.trackKm});
+    if(d.roadKm)  R.push({key:'road', style:'border-top:5px solid '+ROAD_C, name:'посчитано по дорогам',km:d.roadKm});
+    if(d.lineKm)  R.push({key:'line', style:'border-top:3px dotted '+GAP_C, name:'прямая, маршрут не строился',km:d.lineKm});
+    if(d.dropped.length) R.push({key:'drop',dot:DROP_C,name:'выброшено точек',val:d.dropped.length});
+    R.push({key:'stay',dot:STAY_C,name:'стоянки'});
+  }
+  return R;
 }
+
+function renderMapPanel(){
+  const rows=mapPanelRows();
+  if(!rows.length){ hideMapPanel(); return; }
+  if(!factLegend){
+    factLegend=L.control({position:'bottomright'});
+    factLegend.onAdd=function(){
+      factLegendEl=L.DomUtil.create('div','mleg');
+      L.DomEvent.disableClickPropagation(factLegendEl);
+      return factLegendEl;
+    };
+    factLegend.addTo(map);
+  }
+  if(!factLegendEl) return;
+  factLegendEl.innerHTML='<button class="mleg-x" title="Убрать всё с карты">×</button>'
+    +rows.map(r=>'<label><input type="checkbox" data-fl="'+r.key+'"'+(factVis[r.key]?' checked':'')+'>'
+      +(r.dot?('<span class="dot" style="color:'+r.dot+'"></span>'):('<i style="'+r.style+'"></i>'))
+      +r.name
+      +(r.km!=null?(' <b>'+Math.round(r.km)+' км</b>'):'')
+      +(r.val!=null?(' <b>'+r.val+'</b>'):'')
+      +'</label>'
+      +(r.sub?('<div class="mleg-s">'+esc(r.sub)+'</div>'):'')).join('')
+    +(factLast?('<div class="mleg-t">факт <b>'+Math.round(factLast.km)+'</b> км</div>'):'');
+  factLegendEl.querySelectorAll('[data-fl]').forEach(cb=>{
+    cb.onchange=()=>{ factVis[cb.dataset.fl]=cb.checked; factApplyVis(); };
+  });
+  const x=factLegendEl.querySelector('.mleg-x');
+  if(x) x.onclick=clearMapAll;
+}
+
+function hideMapPanel(){
+  if(factLegend){ try{ map.removeControl(factLegend); }catch(e){} }
+  factLegend=null; factLegendEl=null;
+}
+
+// Крестик убирает с карты всё. Факт — просто показ, его не жалко. А вот
+// точки планового маршрута это работа, и молча их стирать нельзя: спросим,
+// и только если они есть.
+async function clearMapAll(){
+  const hasRoute=routeStopsAll().length>0;
+  if(hasRoute && !await confirmDialog('Убрать с карты факт и плановый маршрут? Точки маршрута будут очищены.',
+      {okText:'Убрать всё',cancelText:'Отмена'})) return;
+  factClear();
+  if(hasRoute && $('rClear')) $('rClear').click();
+  renderMapPanel();
+  showToast('Карта очищена');
+}
+
+// Старое имя оставлено: его зовёт всё, что перерисовывает маршрут.
+function updateMapSummary(){ renderMapPanel(); }
+
+function showFactLegend(m){ if(m) factLast=m; renderMapPanel(); }
 
 // Показ выезда на карте: план и факт вместе.
 //
@@ -4947,20 +4985,6 @@ function updateRouteActions(){
 function drawStops(){ routeLayer.clearLayers(); const stops=routeStopsAll();
   drawRouteLine(routeLayer, rRoute.geometry);
   stops.forEach((s,i)=>{ const ic=L.divIcon({className:'',html:'<div style="background:var(--accent);color:var(--on-accent);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font:600 11px var(--mono);border:2.5px solid '+ringColor()+';pointer-events:none">'+(i+1)+'</div>',iconSize:[20,20],iconAnchor:[10,10]}); L.marker([s.lat,s.lng],{icon:ic,interactive:false}).addTo(routeLayer); }); updateMapSummary(); updateRouteActions(); }
-// Сводка над картой. План был здесь всегда, факт переехал сюда из легенды:
-// в легенде он стоял отдельной строчкой под чертой и читался как ещё один
-// вид линии, хотя это итог. Рядом с плановым километражом он на своём
-// месте — их и сравнивают друг с другом.
-function updateMapSummary(){
-  const el=$('mapSummary'); if(!el) return;
-  const n=routeStopsAll().length;
-  let h='';
-  if(rRoute.km>0&&n) h+='<span><b>'+rRoute.km.toFixed(1)+'</b> км</span>'
-    +'<span><b>'+rRoute.driveH.toFixed(1)+'</b> ч</span>'
-    +'<span><b>'+n+'</b> точек</span>';
-  if(factTripId&&factLast) h+='<span class="ms-f"><b>'+Math.round(factLast.km)+'</b> км факт</span>';
-  if(h){ el.innerHTML=h; el.classList.add('on'); } else el.classList.remove('on');
-}
 function routePtCard(tag,s,idx,num,movable){ const d=document.createElement('div'); d.className='pt';
   d.innerHTML='<div class="nm"><span class="pill">'+num+'</span> '+esc(s.name||'точка')+' <span class="pill">'+tag+'</span></div>'+(s.description?'<div class="ds">'+esc(s.description)+'</div>':'')+'<div class="meta">'+(+s.lat).toFixed(4)+', '+(+s.lng).toFixed(4)+'</div>'+'<div class="acts">'+(movable?('<button class="btn sm ghost" data-rup="'+idx+'">↑</button><button class="btn sm ghost" data-rdn="'+idx+'">↓</button><button class="btn sm ghost" data-rrm="'+idx+'">×</button>'):('<button class="btn sm ghost" data-brm="'+idx+'">×</button>'))+'</div>'; return d; }
 function renderEndpoints(){ const box=$('rEndpoints'); if(!box) return;
