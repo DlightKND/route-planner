@@ -360,173 +360,208 @@ export const RESOLVE_DEFAULTS = {
 export async function resolveAnomalies(points, opts, reach) {
   const o = Object.assign({}, TRACK_DEFAULTS, RESOLVE_DEFAULTS, opts || {});
   const pts = sane(points);
-  if (pts.length < 2) return { points: pts, dropped: [], checks: 0, verdict: 'мало точек' };
+  if (pts.length < 2) return { points: pts, dropped: [], bridges: [], checks: 0, reasons: {}, verdict: 'мало точек' };
 
-  // ЯКОРЬ. Проход отталкивается от последней достоверной точки, и первая
-  // берётся на веру — больше не от чего. Но именно первая и портится чаще
-  // всего: холодный старт приёмника даёт первый отсчёт где угодно, и тогда
-  // круг строится вокруг чужого места, а весь настоящий трек летит в мусор,
-  // пока Δt не разрастётся достаточно, чтобы его принять. Один плохой отсчёт
-  // съедает начало выезда целиком.
-  //
-  // Отвергаем стартовую точку только при показаниях двух свидетелей: она
-  // не сходится со следующей, а следующая со своей следующей — сходится.
-  // Тогда лишняя здесь именно она. Если же не сходятся обе пары, виновата
-  // как раз вторая точка — стартовую не трогаем, её выбросит обычный ход.
-  const dropped = [];
-  const bridges = [];
-  let s0 = 0;
   const fits = (a, b) => { const dt = b.t - a.t; return dt > 0 && haversineKm(a, b) <= (o.hardSpeedKmh * dt) / 3600000; };
-  while (s0 + 2 < pts.length && !fits(pts[s0], pts[s0 + 1]) && fits(pts[s0 + 1], pts[s0 + 2])) {
-    dropped.push(Object.assign({ why: 'старт не подтверждён' }, pts[s0]));
-    s0++;
-  }
-  const keep = [pts[s0]];
-  let checks = 0, weak = 0;
-  let i = s0 + 1;
-  let minDt = 0;          // порог отката: кандидатов ближе по времени пропускаем
-  // Пока трек не рвался, круга достаточно: соседние точки подтверждают друг
-  // друга даром, и спокойный выезд не стоит НИ ОДНОГО внешнего запроса —
-  // проход по нему линейный и заканчивается словом «чисто». Изохрону зовём
-  // только на выходе из сбоя: там круг успел разрастись до сотен километров
-  // и перестал что-либо значить, а вернуть в трек можно только точку,
-  // до которой машина реально могла доехать по дорогам.
-  let broken = false;
 
-  while (i < pts.length) {
-    const a = keep[keep.length - 1], p = pts[i];
-    const dt = p.t - a.t;
-    const d = haversineKm(a, p);
-
-    // 1. Круг. Бесплатно и решает почти всё.
-    if (dt <= 0 || d > (o.hardSpeedKmh * dt) / 3600000) {
-      dropped.push(Object.assign({ why: 'вне круга ' + Math.round(d) + ' км за ' + Math.round(dt / 60000) + ' мин' }, p));
-      broken = true;
-      i++; continue;
-    }
-    // 2. Сбоя не было — точка подтверждена соседством, и на этом всё.
-    if (!broken) { keep.push(p); i++; continue; }
-    // 3. Откат: этот кандидат слишком близко по времени к отвергнутому.
-    if (dt < minDt) {
-      dropped.push(Object.assign({ why: 'пропущен по откату' }, p));
-      i++; continue;
-    }
-    // 4. Дороги — только для кандидата на возвращение в трек.
-    let ok = true, roadKm = null, roadLine = null;
-    if (reach && checks < o.maxChecks) {
-      checks++;
-      const r = await reach(a, p, dt);
-      const v = (r && typeof r === 'object') ? r.ok : r;
-      if (r && typeof r === 'object' && isFinite(r.km)) { roadKm = +r.km; roadLine = r.line || null; }
-      if (v === false) ok = false;
-      else if (v == null) weak++;          // не проверили — верим кругу, но помечаем
-    } else {
-      weak++;                              // проверять нечем: судим по кругу
-    }
-    if (ok) {
-      keep.push(p);
-      // Мост через вырезанное: от последней достоверной точки до этой машина
-      // ехала, а трека нет. Если проверявший назвал длину по дорогам —
-      // запоминаем, второй раз спрашивать то же самое незачем.
-      if (roadKm != null) bridges.push({ from: a.ts, to: p.ts, km: roadKm, line: roadLine });
-      broken = false;
-      minDt = 0;
-      i++;
-    } else {
-      dropped.push(Object.assign({ why: 'по дорогам не доехал бы' }, p));
-      minDt = dt * o.backoff;              // следующего кандидата ищем вдвое дальше
-      i++;
-    }
-  }
-
-  // Отложенные: точки, пропущенные откатом. Откат — экономия запросов, а не
-  // приговор, и он умеет перескакивать через хорошие точки: трек мог
-  // восстановиться раньше, чем истёк удвоенный интервал. Вернуть такую точку
-  // можно даром, но НЕ кругом: круг за час разрастается до трёхсот километров
-  // и вернул бы вместе с ней соседей отвергнутой аномалии — то есть тихо
-  // отменил бы решение, принятое по дорогам. Правильный вопрос к отложенной точке другой:
-  // лежит ли она ПО ПУТИ между двумя достоверными. Если крюк через неё почти
-  // равен прямой между соседями — лежит; если втрое длиннее — это чужая
-  // точка, и её место в мусоре.
-  const back = [];
-  for (let k = dropped.length - 1; k >= 0; k--) {
-    const p = dropped[k];
-    if (p.why !== 'пропущен по откату') continue;
-    const before = lastBefore(keep, p.t), after = firstAfter(keep, p.t);
-    if (!before || !after) continue;
-    const direct = haversineKm(before, after);
-    const detour = haversineKm(before, p) + haversineKm(p, after);
-    if (detour <= o.spikeRatio * direct + o.spikeMinKm) {
-      back.push(Object.assign({}, p, { why: 'восстановлена: лежит по пути' }));
-      dropped.splice(k, 1);
-    }
-  }
-  if (back.length) {
-    keep.push(...back);
-    keep.sort((x, y) => x.t - y.t);
-  }
-
-  // Итог и защита.
+  // ОПОРА. Проход отталкивается от последней достоверной точки, а самую
+  // первую брать неоткуда — она принимается на веру. Обычно это безобидно
+  // и ничего не стоит, поэтому по умолчанию так и делаем: опора — первая
+  // точка, и весь разбор идёт как задумано, с проверкой по дорогам.
   //
-  // Мерить долю выброшенного В КИЛОМЕТРАХ нельзя, хотя соблазн есть: телепорт
-  // даёт девяносто девять процентов «пробега», и правило по километрам
-  // осудило бы ровно тот выезд, который мы только что починили. Считать
-  // в точках (как договаривались) уже честно, но точка — не единица ущерба:
-  // ущерб в том, СКОЛЬКО ВРЕМЕНИ выезда осталось без достоверного положения.
+  // Но допущение бывает и ложным. Приёмник, включившийся в чужом месте,
+  // выдаёт там не одну точку, а пачку; пачка согласована сама с собой,
+  // круг строится вокруг неё, и весь настоящий трек оказывается снаружи —
+  // выезд объявляется недостоверным целиком. На карте при этом всё видно:
+  // cleanTrack рисует трек без опоры и такой пачкой не обманывается.
   //
-  // И считать это время надо ПО САМИМ ВЫБРОШЕННЫМ ТОЧКАМ, а не по промежутку
-  // между достоверными соседями. Разница видна на живом выезде: связь
-  // пропала на два часа, и внутри этой тишины приёмник успел выдать одну
-  // дурную точку. Промежуток между достоверными соседями — два часа; наша
-  // потеря — одна точка. Эти два часа мы не наблюдали НИКАК: ни правильно,
-  // ни неправильно, — и они не «испорчены аномалией», а просто разрыв,
-  // который достраивается маршрутом по дорогам. Записывать их в ущерб
-  // значило бы объявлять недостоверным любой выезд с плохой связью — то
-  // есть ровно тот случай, ради которого всё и затевалось.
-  const step = medianStepMs(pts) || 60000;
-  const totalMs = pts[pts.length - 1].t - pts[0].t;
-  const keptT = new Set(keep.map(p => p.t));
-  let unknownMs = 0, runFrom = null, runTo = null;
-  for (const p of pts) {
-    if (keptT.has(p.t)) {
-      if (runFrom != null) { unknownMs += (runTo - runFrom) + step; runFrom = null; }
-    } else {
-      if (runFrom == null) runFrom = p.t;
-      runTo = p.t;
-    }
+  // Отсюда правило второго мнения. Если проход от первой точки сказал
+  // «выезд недостоверен» — это приговор настолько крупный, что вероятнее
+  // он обвиняет НАШЕ ДОПУЩЕНИЕ, а не выезд. Тогда переспрашиваем, опершись
+  // на начало самого большого связного куска: пачка из десяти точек против
+  // двухсот тридцати пяти проигрывает. Берём тот ответ, который потерял
+  // меньше. Второй проход бывает редко — ровно в тех случаях, когда первый
+  // и так собирался отправить человека к одометру.
+  const runs = [[0]];
+  for (let k = 1; k < pts.length; k++) {
+    if (fits(pts[k - 1], pts[k])) runs[runs.length - 1].push(k);
+    else runs.push([k]);
   }
-  if (runFrom != null) unknownMs += (runTo - runFrom) + step;
+  let big = 0;
+  for (let k = 1; k < runs.length; k++) {
+    const a = runs[k], b = runs[big];
+    if (a.length > b.length) big = k;
+    else if (a.length === b.length &&
+             (pts[a[a.length - 1]].t - pts[a[0]].t) > (pts[b[b.length - 1]].t - pts[b[0]].t)) big = k;
+  }
+  const bigStart = runs[big][0];
 
-  const unknownShare = totalMs > 0 ? unknownMs / totalMs : 0;
-  const dropShare = pts.length ? dropped.length / pts.length : 0;
-  const droppedKm = Math.max(0, pathKm(pts) - pathKm(keep));   // сколько мусора вырезано
-  const keptKm = pathKm(keep);
+  let res = await walkFrom(0);
+  if (res.condemned && bigStart > 0) {
+    const alt = await walkFrom(bigStart);
+    if (alt.unknownShare < res.unknownShare) res = alt;
+  }
+  delete res.condemned;
+  return res;
 
-  let verdict = 'чисто';
-  if (dropped.length) verdict = 'аномалии вырезаны';
-  if (unknownShare > o.maxDropShare || dropShare > o.maxDropShare) {
-    // Приговор всегда с цифрами: «недостоверен» без них невозможно ни
-    // оспорить, ни проверить, а человека он отправляет лезть под капот
-    // за одометром.
-    verdict = 'трек недостоверен: снять пробег с одометра машины'
-      + ' (приёмник врал ' + Math.round(unknownShare * 100) + '% времени выезда,'
-      + ' выброшено ' + dropped.length + ' точек из ' + pts.length + ')';
-  } else if (weak) verdict = 'аномалии вырезаны, часть проверок не прошла (судили по кругу)';
+  // s0 — с какой точки опираться. Точки ДО неё не выбрасываем скопом: судим
+  // каждую кругом от опоры. Настоящий кусок, отрезанный долгим молчанием,
+  // пройдёт — за час круг разрастается до трёхсот километров; стартовый
+  // мусор не пройдёт.
+  async function walkFrom(s0) {
+    const dropped = [];
+    const bridges = [];
+    const head = [];
+    for (let k = 0; k < s0; k++) {
+      if (fits(pts[k], pts[s0])) head.push(pts[k]);
+      else dropped.push(Object.assign({ why: 'старт не подтверждён' }, pts[k]));
+    }
+    const keep = head.concat([pts[s0]]);
+    let checks = 0, weak = 0;
+    let i = s0 + 1;
+    let minDt = 0;          // порог отката: кандидатов ближе по времени пропускаем
+    // Пока трек не рвался, круга достаточно: соседние точки подтверждают друг
+    // друга даром, и спокойный выезд не стоит НИ ОДНОГО внешнего запроса —
+    // проход по нему линейный и заканчивается словом «чисто». Дороги зовём
+    // только на выходе из сбоя: там круг успел разрастись до сотен
+    // километров и перестал что-либо значить, а вернуть в трек можно только
+    // точку, до которой машина реально могла доехать.
+    let broken = false;
 
-  // Разбор по причинам. Когда выезд признан недостоверным, человеку нужно
-  // не слово, а что именно случилось: сто точек «вне круга» и сто «старт не
-  // подтверждён» — это две совершенно разные поломки.
-  const reasons = {};
-  dropped.forEach(d => {
-    const key = String(d.why || '').replace(/\s+\d+.*$/, '');   // «вне круга 389 км за 1 мин» → «вне круга»
-    reasons[key] = (reasons[key] || 0) + 1;
-  });
+    while (i < pts.length) {
+      const a = keep[keep.length - 1], p = pts[i];
+      const dt = p.t - a.t;
+      const d = haversineKm(a, p);
 
-  return {
-    points: keep, dropped, bridges, checks, weakChecks: weak,
-    droppedKm, keptKm, unknownMs, unknownShare, dropShare, verdict, reasons,
-    restored: back.length
-  };
+      // 1. Круг. Бесплатно и решает почти всё.
+      if (dt <= 0 || d > (o.hardSpeedKmh * dt) / 3600000) {
+        dropped.push(Object.assign({ why: 'вне круга ' + Math.round(d) + ' км за ' + Math.round(dt / 60000) + ' мин' }, p));
+        broken = true;
+        i++; continue;
+      }
+      // 2. Сбоя не было — точка подтверждена соседством, и на этом всё.
+      if (!broken) { keep.push(p); i++; continue; }
+      // 3. Откат: этот кандидат слишком близко по времени к отвергнутому.
+      if (dt < minDt) {
+        dropped.push(Object.assign({ why: 'пропущен по откату' }, p));
+        i++; continue;
+      }
+      // 4. Дороги — только для кандидата на возвращение в трек.
+      let ok = true, roadKm = null, roadLine = null;
+      if (reach && checks < o.maxChecks) {
+        checks++;
+        const r = await reach(a, p, dt);
+        const v = (r && typeof r === 'object') ? r.ok : r;
+        if (r && typeof r === 'object' && isFinite(r.km)) { roadKm = +r.km; roadLine = r.line || null; }
+        if (v === false) ok = false;
+        else if (v == null) weak++;          // не проверили — верим кругу, но помечаем
+      } else {
+        weak++;                              // проверять нечем: судим по кругу
+      }
+      if (ok) {
+        keep.push(p);
+        // Мост через вырезанное: от последней достоверной точки до этой машина
+        // ехала, а трека нет. Если проверявший назвал длину по дорогам —
+        // запоминаем, второй раз спрашивать то же самое незачем.
+        if (roadKm != null) bridges.push({ from: a.ts, to: p.ts, km: roadKm, line: roadLine });
+        broken = false;
+        minDt = 0;
+        i++;
+      } else {
+        dropped.push(Object.assign({ why: 'по дорогам не доехал бы' }, p));
+        minDt = dt * o.backoff;              // следующего кандидата ищем вдвое дальше
+        i++;
+      }
+    }
+
+    // Отложенные: точки, пропущенные откатом. Откат — экономия запросов, а не
+    // приговор, и он умеет перескакивать через хорошие точки: трек мог
+    // восстановиться раньше, чем истёк удвоенный интервал. Вернуть такую точку
+    // можно даром, но НЕ кругом: круг за час разрастается до трёхсот километров
+    // и вернул бы вместе с ней соседей отвергнутой аномалии — то есть тихо
+    // отменил бы решение, принятое по дорогам. Правильный вопрос к отложенной
+    // точке другой: лежит ли она ПО ПУТИ между двумя достоверными. Если крюк
+    // через неё почти равен прямой между соседями — лежит; если втрое длиннее —
+    // это чужая точка, и её место в мусоре.
+    const back = [];
+    for (let k = dropped.length - 1; k >= 0; k--) {
+      const p = dropped[k];
+      if (p.why !== 'пропущен по откату') continue;
+      const before = lastBefore(keep, p.t), after = firstAfter(keep, p.t);
+      if (!before || !after) continue;
+      const direct = haversineKm(before, after);
+      const detour = haversineKm(before, p) + haversineKm(p, after);
+      if (detour <= o.spikeRatio * direct + o.spikeMinKm) {
+        back.push(Object.assign({}, p, { why: 'восстановлена: лежит по пути' }));
+        dropped.splice(k, 1);
+      }
+    }
+    if (back.length) {
+      keep.push(...back);
+      keep.sort((x, y) => x.t - y.t);
+    }
+
+    // Итог и защита.
+    //
+    // Мерить долю выброшенного В КИЛОМЕТРАХ нельзя, хотя соблазн есть: телепорт
+    // даёт девяносто девять процентов «пробега», и правило по километрам
+    // осудило бы ровно тот выезд, который мы только что починили. Считать
+    // в точках (как договаривались) уже честно, но точка — не единица ущерба:
+    // ущерб в том, СКОЛЬКО ВРЕМЕНИ выезда осталось без достоверного положения.
+    //
+    // И считать это время надо ПО САМИМ ВЫБРОШЕННЫМ ТОЧКАМ, а не по промежутку
+    // между достоверными соседями. Разница видна на живом выезде: связь
+    // пропала на два часа, и внутри этой тишины приёмник успел выдать одну
+    // дурную точку. Промежуток между достоверными соседями — два часа; наша
+    // потеря — одна точка. Эти два часа мы не наблюдали НИКАК: ни правильно,
+    // ни неправильно, — и они не «испорчены аномалией», а просто разрыв,
+    // который достраивается маршрутом по дорогам.
+    const step = medianStepMs(pts) || 60000;
+    const totalMs = pts[pts.length - 1].t - pts[0].t;
+    const keptT = new Set(keep.map(p => p.t));
+    let unknownMs = 0, runFrom = null, runTo = null;
+    for (const p of pts) {
+      if (keptT.has(p.t)) {
+        if (runFrom != null) { unknownMs += (runTo - runFrom) + step; runFrom = null; }
+      } else {
+        if (runFrom == null) runFrom = p.t;
+        runTo = p.t;
+      }
+    }
+    if (runFrom != null) unknownMs += (runTo - runFrom) + step;
+
+    const unknownShare = totalMs > 0 ? unknownMs / totalMs : 0;
+    const dropShare = pts.length ? dropped.length / pts.length : 0;
+    const droppedKm = Math.max(0, pathKm(pts) - pathKm(keep));   // сколько мусора вырезано
+    const keptKm = pathKm(keep);
+    const condemned = unknownShare > o.maxDropShare || dropShare > o.maxDropShare;
+
+    let verdict = 'чисто';
+    if (dropped.length) verdict = 'аномалии вырезаны';
+    if (condemned) {
+      // Приговор всегда с цифрами: «недостоверен» без них невозможно ни
+      // оспорить, ни проверить, а человека он отправляет лезть под капот
+      // за одометром.
+      verdict = 'трек недостоверен: снять пробег с одометра машины'
+        + ' (приёмник врал ' + Math.round(unknownShare * 100) + '% времени выезда,'
+        + ' выброшено ' + dropped.length + ' точек из ' + pts.length + ')';
+    } else if (weak) verdict = 'аномалии вырезаны, часть проверок не прошла (судили по кругу)';
+
+    // Разбор по причинам. Когда выезд признан недостоверным, человеку нужно
+    // не слово, а что именно случилось: сто точек «вне круга» и сто «старт не
+    // подтверждён» — это две совершенно разные поломки.
+    const reasons = {};
+    dropped.forEach(d => {
+      const key = String(d.why || '').replace(/\s+\d+.*$/, '');   // «вне круга 389 км за 1 мин» → «вне круга»
+      reasons[key] = (reasons[key] || 0) + 1;
+    });
+
+    return {
+      points: keep, dropped, bridges, checks, weakChecks: weak,
+      droppedKm, keptKm, unknownMs, unknownShare, dropShare, verdict, reasons,
+      restored: back.length, condemned
+    };
+  }
 }
 
 function pathKm(arr) {
