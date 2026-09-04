@@ -145,6 +145,18 @@ function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
   setBaseLayer(theme.mode==='dark'?'dark':'light'); }
 async function saveTheme(){ if(!sb||!session) return; try{ await sb.from('profiles').update({theme}).eq('id',session.user.id); }catch(e){} }
 let toastT=null; function showToast(msg){ const t=$('toast'); if(!t) return; t.textContent=msg; t.classList.remove('err','warn'); t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),2500); }
+// Индикатор долгой работы. Пересчёт трека ходит в сеть и занимает секунды:
+// без него человек видит замершую кнопку и решает, что сломалось. Доля
+// известна не всегда — тогда крутилка без полосы.
+let busyOn=false;
+function busy(text,frac){
+  const b=$('busy'); if(!b) return;
+  busyOn=true; b.classList.add('on');
+  if($('busyText')) $('busyText').textContent=text||'Работаю…';
+  const bar=$('busyBar');
+  if(bar) bar.style.width=(frac==null?0:Math.max(0,Math.min(1,frac))*100)+'%';
+}
+function busyDone(){ busyOn=false; const b=$('busy'); if(b) b.classList.remove('on'); }
 function notify(msg,kind){ const t=$('toast'); if(!t) return; t.textContent=msg; t.classList.remove('err','warn'); if(kind==='err'||kind==='warn') t.classList.add(kind); t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>{ t.classList.remove('on','err','warn'); }, kind==='err'?4200:2800); }
 let undoT=null, undoFn=null;
 function undoToast(msg,fn){ undoFn=fn; const t=$('undoToast'); if(!t){ showToast(msg); return; } $('undoMsg').textContent=msg; t.classList.add('on'); clearTimeout(undoT); undoT=setTimeout(()=>{ t.classList.remove('on'); undoFn=null; },9000); }
@@ -3743,6 +3755,8 @@ function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; con
 // [сборка] Удалено мёртвое определение showTripOnMap(id)=>loadTripIntoPlanner:
 // из-за подъёма функций в браузере всегда побеждала вторая версия ниже
 // (показ фактического трека), а эта была недостижима с самого начала.
+// Одна кнопка на оба занятия: открывает плановый маршрут в редакторе (точки
+// можно двигать) и поверх — факт, если он есть. Слои переключаются в легенде.
 $('tpEditMap').onclick=()=>{ if(tripEditId){ showTripOnMap(tripEditId); } else { notify('Сначала сохрани выезд — потом правь маршрут на карте.','warn'); } };
 function loadTripIntoPlanner(id){ const t=trips.find(x=>x.id==id); if(!t) return; switchTab('map'); tripLayer.clearLayers(); plannerTripId=id;
   const saved=t.route_stops||[]; const st=saved.find(x=>x.type==='start'); rStart=st?{name:st.name,lat:st.lat,lng:st.lng,description:st.description||''}:null;
@@ -4294,12 +4308,21 @@ async function remeasureTrip(tid){
         ? 'Пересчитать факт-пробег по треку? Выезд уже подтверждён: деньги пересоберутся, а одометр машины менялся в момент подтверждения — сверь его показания вручную.'
         : 'Пересчитать факт-пробег по треку?',
       {okText:'Пересчитать'})) return;
+  if(busyOn){ showToast('Уже считаю — подожди'); return; }
   delete lastMeasure[tid];
   if(!await settleFactKm(tid)) return;
-  if(wasDone) await refreshTripEcon(tid);
-  await loadAll();
-  if(plannerCur==='mine') renderMine(); else renderTripsView();
-  renderTrips();
+  // Цифра в карточке живёт не в памяти, а в базе: пока выезды не
+  // перечитаны, человек видит старое число и думает, что пересчёт не
+  // засчитался. Поэтому обновление тоже под индикатором.
+  try{
+    busy('Обновляю карточку…',1);
+    if(wasDone) await refreshTripEcon(tid);
+    await loadAll();
+    if(plannerCur==='mine') renderMine(); else renderTripsView();
+    renderTrips();
+    if(tripEditId===tid) renderTpFactKm();
+  } finally { busyDone(); }
+  showToast('Готово');
 }
 
 // Сведение факта по выезду. Возвращает false, если закрывать рано:
@@ -4307,12 +4330,14 @@ async function remeasureTrip(tid){
 // станем — лучше выезд повисит на проверке, чем в отчёт уедет выдумка.
 async function settleFactKm(tid){
   let m;
-  try{ showToast('Считаю фактический пробег…'); m=await measureTripKm(tid); }
+  try{ busy('Читаю трек…'); m=await measureTripKm(tid); }
   catch(e){ notify('Пробег посчитать не вышло: '+(e.message||e),'err'); m=null; }
+  finally{ busyDone(); }
 
   if(m&&m.ok){
-    try{ await writeFactKm(tid,m.km,'track',m.note); }
+    try{ busy('Записываю пробег…',1); await writeFactKm(tid,m.km,'track',m.note); }
     catch(e){ notify('Пробег посчитан, но не записался: '+(e.message||e),'err'); return false; }
+    finally{ busyDone(); }
     showToast('Факт: '+m.km+' км по треку'+(m.note?(' · '+m.note):''));
     return true;
   }
@@ -4324,8 +4349,9 @@ async function settleFactKm(tid){
   if(!ok) return false;
   const od=await askOdometer();
   if(!od) return false;
-  try{ await writeFactKm(tid,od.km,'odometer','по одометру '+od.a+' → '+od.b+'; '+why); }
+  try{ busy('Записываю пробег…',1); await writeFactKm(tid,od.km,'odometer','по одометру '+od.a+' → '+od.b+'; '+why); }
   catch(e){ notify('Одометр не записался: '+(e.message||e),'err'); return false; }
+  finally{ busyDone(); }
   showToast('Факт: '+od.km+' км по одометру');
   return true;
 }
@@ -4418,7 +4444,32 @@ async function checkTodayTrip(){
 if($('todayLater')) $('todayLater').onclick=()=>$('todayOverlay').classList.remove('on');
 
 // ---------- факт-трек на карте ----------
-let factLayer=L.layerGroup().addTo(map);
+// Факт-трек живёт не одним слоем, а пятью: иначе их нельзя включать и
+// выключать по отдельности, а именно это и нужно — посмотреть план без
+// факта, или факт без выброшенных точек.
+const FACT_LAYERS=['track','road','line','drop','stay'];
+let factG={}; FACT_LAYERS.forEach(k=>{ factG[k]=L.layerGroup().addTo(map); });
+// Что показано. Переживает перерисовку: человек выключил выброшенные —
+// они не должны вернуться сами при следующем открытии трека.
+let factVis={plan:true,track:true,road:true,line:true,drop:true,stay:true};
+let factTripId=null;
+
+function factClear(){
+  FACT_LAYERS.forEach(k=>factG[k].clearLayers());
+  factTripId=null;
+  if(factLegend){ try{ map.removeControl(factLegend); }catch(e){} factLegend=null; }
+}
+// Слой либо на карте, либо нет. Очистка слоя тут не годится: при следующем
+// включении рисовать было бы нечего, пришлось бы пересчитывать трек.
+function factApplyVis(){
+  FACT_LAYERS.forEach(k=>{
+    const on=factVis[k];
+    if(on&&!map.hasLayer(factG[k])) map.addLayer(factG[k]);
+    if(!on&&map.hasLayer(factG[k])) map.removeLayer(factG[k]);
+  });
+  if(factVis.plan&&!map.hasLayer(routeLayer)) map.addLayer(routeLayer);
+  if(!factVis.plan&&map.hasLayer(routeLayer)) map.removeLayer(routeLayer);
+}
 // Трек рисуется НЕ сырым. Приёмник ошибается тремя разными способами, и
 // сплошная линия по всем точкам подряд врёт по-разному в каждом случае:
 // телепорт добавляет две длины выброса, дрожание на стоянке — километры
@@ -4435,33 +4486,71 @@ const TRACK_C='#22c55e';   // измерено приёмником
 const ROAD_C ='#7c3aed';   // достроено маршрутом по дорогам
 const GAP_C  ='#9aa1ad';   // прямая через дыру: где ехали — неизвестно
 const DROP_C ='#dc2626';   // выброшено как ошибка приёмника
+const STAY_C ='#f59e0b';   // стоянка
 
-// Легенда. Без неё три вида линий читаются как «какие-то линии», и главный
-// вопрос — «что тут достроено, а что мы правда видели» — остаётся без
-// ответа. Числа рядом с образцами: сколько километров каждым способом.
+// Легенда. Она же управление слоями и она же выход.
+//
+// Три вида линий без подписи читаются как «какие-то линии», и главный
+// вопрос — что тут достроено, а что мы правда видели — остаётся без
+// ответа. Поэтому рядом с каждым видом стоит его километраж.
+//
+// Переключатели тут же, а не в отдельной панели: слой и его название —
+// одна строка, и выключать его логично там же, где на него смотришь.
+// Крестик закрывает факт целиком — раньше выхода не было вовсе, и уйти
+// с карты можно было только перезагрузкой.
 let factLegend=null;
+let factLast=null;
 function showFactLegend(m){
+  factLast=m||factLast;
+  if(!factLast) return;
+  const d=factLast;
   if(factLegend){ try{ map.removeControl(factLegend); }catch(e){} factLegend=null; }
-  const row=(style,name,km)=>'<div><i style="'+style+'"></i>'+name
-    +(km!=null?(' <b style="color:var(--ink)">'+Math.round(km)+' км</b>'):'')+'</div>';
+  // Образец слева повторяет то, чем слой нарисован на карте: линия — своей
+  // линией, точки — своим цветом. Красная точка напротив стоянок сводила бы
+  // на нет весь смысл легенды.
+  const row=(key,style,name,km,dot)=>'<label><input type="checkbox" data-fl="'+key+'"'
+    +(factVis[key]?' checked':'')+'>'
+    +(dot?('<span class="dot" style="color:'+dot+'"></span>'):('<i style="'+style+'"></i>'))+name
+    +(km!=null?(' <b>'+Math.round(km)+' км</b>'):'')+'</label>';
   factLegend=L.control({position:'bottomright'});
   factLegend.onAdd=function(){
-    const d=L.DomUtil.create('div','mleg');
-    d.innerHTML=(m.trackKm?row('border-top:4px dotted '+TRACK_C,'видели по трекеру',m.trackKm):'')
-      +(m.roadKm?row('border-top:5px solid '+ROAD_C,'посчитано по дорогам',m.roadKm):'')
-      +(m.lineKm?row('border-top:3px dotted '+GAP_C,'прямая, маршрут не строился',m.lineKm):'')
-      +(m.dropped.length?('<div><span class="dot"></span>выброшено точек: <b style="color:var(--ink)">'+m.dropped.length+'</b></div>'):'')
-      +'<div style="margin-top:4px;color:var(--ink-faint)">итого '+Math.round(m.km)+' км</div>';
-    L.DomEvent.disableClickPropagation(d);
-    return d;
+    const el=L.DomUtil.create('div','mleg');
+    el.innerHTML='<button class="mleg-x" title="Убрать факт с карты">×</button>'
+      +row('plan','border-top:3px dashed var(--ink-faint)','плановый маршрут',null)
+      +(d.trackKm?row('track','border-top:4px dotted '+TRACK_C,'видели по трекеру',d.trackKm):'')
+      +(d.roadKm?row('road','border-top:5px solid '+ROAD_C,'посчитано по дорогам',d.roadKm):'')
+      +(d.lineKm?row('line','border-top:3px dotted '+GAP_C,'прямая, маршрут не строился',d.lineKm):'')
+      +(d.dropped.length?row('drop',null,'выброшено точек: '+d.dropped.length,null,DROP_C):'')
+      +row('stay',null,'стоянки',null,STAY_C)
+      +'<div class="mleg-t">итого '+Math.round(d.km)+' км</div>';
+    L.DomEvent.disableClickPropagation(el);
+    el.querySelectorAll('[data-fl]').forEach(cb=>{
+      cb.onchange=()=>{ factVis[cb.dataset.fl]=cb.checked; factApplyVis(); };
+    });
+    const x=el.querySelector('.mleg-x');
+    if(x) x.onclick=()=>{ factClear(); showToast('Факт убран с карты'); };
+    return el;
   };
   factLegend.addTo(map);
 }
 
+// Показ выезда на карте: план и факт вместе.
+//
+// Кнопка «карта» и кнопка «редактировать маршрут» ведут в одно и то же
+// место, потому что это одно и то же занятие. Раньше они расходились:
+// вторая открывала факт-трек и запирала человека на карте — плановые точки
+// в редактор не загружались, закрыть слой было нечем, и выход был один,
+// перезагрузить страницу.
 async function showTripOnMap(tid){
   switchTab('map');
-  factLayer.clearLayers();
-  if(factLegend){ try{ map.removeControl(factLegend); }catch(e){} factLegend=null; }
+  // План — в редактор, чтобы точки можно было двигать. Наличие факта этому
+  // не мешает: факт про то, как съездили, план про то, как поедут ещё раз.
+  if(canWrite()) loadTripIntoPlanner(tid);
+  await showTripFact(tid);
+}
+
+async function showTripFact(tid){
+  factClear();
   try{
     const { data }=await sb.from('vehicle_positions').select('lat,lng,ts,status')
       .eq('trip_id',tid).order('ts');
@@ -4475,43 +4564,45 @@ async function showTripOnMap(tid){
     const t=trips.find(x=>x.id==tid)||null;
     const m=lastMeasure[tid]||await measureTrip(raw,trackOpts(),tripEnds(t),null);
     if(!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
+    factTripId=tid;
 
     m.segments.forEach(g=>{
       const ab=[[g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]];
       if(g.kind==='road'){
         const line=(g.line&&g.line.length>1)?g.line.map(p=>[p[1],p[0]]):ab;
-        factLayer.addLayer(L.polyline(line,{color:ROAD_C,weight:5,opacity:.9})
+        factG.road.addLayer(L.polyline(line,{color:ROAD_C,weight:5,opacity:.9})
           .bindPopup('По дорогам <b>'+g.km.toFixed(1)+' км</b>'
             +(g.minutes!=null?(' за '+g.minutes+' мин'):'')
             +(g.why?('<br>'+esc(g.why)):'')));
         return;
       }
       if(g.kind==='line'){
-        factLayer.addLayer(L.polyline(ab,{color:GAP_C,weight:3,opacity:.85,dashArray:'2 9'})
+        factG.line.addLayer(L.polyline(ab,{color:GAP_C,weight:3,opacity:.85,dashArray:'2 9'})
           .bindPopup('Прямая <b>'+g.km.toFixed(1)+' км</b>'
             +(g.minutes!=null?(' за '+g.minutes+' мин'):'')
             +'<br>'+esc(g.why||'маршрут не строился')+' — цифра занижена.'));
         return;
       }
-      factLayer.addLayer(L.polyline(ab,{color:TRACK_C,weight:4,opacity:.85,dashArray:'1 7',lineCap:'round'}));
+      factG.track.addLayer(L.polyline(ab,{color:TRACK_C,weight:4,opacity:.85,dashArray:'1 7',lineCap:'round'}));
     });
 
     // Выброшенное показываем, а не прячем: если приёмник врёт постоянно,
     // это видно на карте, и разговор с поставщиком трекера предметный.
     m.dropped.forEach(p=>{
-      factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:4,color:DROP_C,fillColor:DROP_C,fillOpacity:.6,weight:1})
+      factG.drop.addLayer(L.circleMarker([p.lat,p.lng],{radius:4,color:DROP_C,fillColor:DROP_C,fillOpacity:.6,weight:1})
         .bindPopup('Отброшено: '+esc(p.why)+'<br>'+new Date(p.ts).toLocaleString('ru')));
     });
     m.points.filter(p=>p.status==='idle').forEach(p=>{
-      factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:5,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:.9,weight:2})
+      factG.stay.addLayer(L.circleMarker([p.lat,p.lng],{radius:5,color:STAY_C,fillColor:STAY_C,fillOpacity:.9,weight:2})
         .bindPopup('Стоянка с '+new Date(p.ts).toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'})));
     });
     // Опоры выезда — старт и финиш, если их пришлось подставить.
     m.points.filter(p=>p.anchor).forEach(p=>{
-      factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:7,color:ROAD_C,fillColor:'#fff',fillOpacity:1,weight:3})
+      factG.road.addLayer(L.circleMarker([p.lat,p.lng],{radius:7,color:ROAD_C,fillColor:'#fff',fillOpacity:1,weight:3})
         .bindPopup(esc(p.anchor)+': трек сюда не дошёл, дорога достроена'));
     });
 
+    factApplyVis();
     setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(m.points.map(p=>[p.lat,p.lng])).getBounds(),{padding:[40,40]}); },60);
     showFactLegend(m);
     const bits=['Факт: '+Math.round(m.km)+' км по '+m.points.length+' точкам'];
@@ -4610,7 +4701,14 @@ async function measureTripKm(tid){
   if(raw.length<2) return {ok:false,why:'трека нет'};
 
   const t=trips.find(x=>x.id==tid)||null;
-  const m=await measureTrip(raw,trackOpts(),tripEnds(t),makeReach());
+  // Ход прохода наружу: точки идут быстро, а вот запрос к дорогам занимает
+  // секунды, и именно на нём кажется, что всё зависло. Поэтому в подписи
+  // отдельно видно, сколько маршрутов уже спросили.
+  const opts=Object.assign(trackOpts(),{ onStep:(st)=>{
+    busy('Считаю пробег: точка '+st.i+' из '+st.total
+      +(st.checks?(' · маршрутов: '+st.checks):''), st.total?st.i/st.total:null);
+  }});
+  const m=await measureTrip(raw,opts,tripEnds(t),makeReach());
   lastMeasure[tid]=m;
   if(m.verdict.indexOf('трек недостоверен')===0){
     const by=Object.keys(m.reasons||{}).map(k=>k+': '+m.reasons[k]).join('; ');
@@ -5418,7 +5516,7 @@ async function drawTripMap(t){
   const wrap=$('tpMapWrap'); if(!wrap) return;
   wrap.style.display='none';
   if(!t) return;
-  const d={geoPlan:null,geoFact:null};
+  const d={geoPlan:null,geoFact:null,factSegs:null};
   // План: геометрия маршрута, как её вернул роутер.
   const g=t.route_geometry;
   if(g&&g.coordinates&&g.coordinates.length) d.geoPlan=g.coordinates.map(c=>[c[1],c[0]]);
@@ -5427,22 +5525,45 @@ async function drawTripMap(t){
     const st=(t.route_stops||[]).filter(x=>x&&x.lat!=null&&x.lng!=null);
     if(st.length>1) d.geoPlan=st.map(x=>[+x.lat,+x.lng]);
   }
-  // Факт: трек машины за дни выезда, если он есть.
+  // Факт: ИСПРАВЛЕННЫЙ трек, а не сырые точки. Раньше сюда шла выгрузка как
+  // есть, и врезка показывала ту самую белиберду с телепортами, ради
+  // которой всё и затевалось: на большой карте аномалии вырезаны, а в
+  // карточке выезда они по-прежнему торчали.
+  //
+  // Считаем тем же проходом и без маршрутизатора: врезка рисуется при
+  // каждом открытии выезда, и платить за неё запросами нельзя. Если выезд
+  // только что сводили, берём готовый результат.
   try{
-    const {data}=await sb.from('vehicle_positions').select('lat,lng,ts')
-      .eq('trip_id',t.id).order('ts',{ascending:true}).limit(2000);
-    if(data&&data.length>1) d.geoFact=data.map(r=>[+r.lat,+r.lng]);
+    const {data}=await sb.from('vehicle_positions').select('lat,lng,ts,status')
+      .eq('trip_id',t.id).order('ts',{ascending:true}).limit(3000);
+    const raw=(data||[]).filter(r=>r.lat!=null&&r.lng!=null);
+    if(raw.length>1){
+      const m=lastMeasure[t.id]||await measureTrip(raw,trackOpts(),tripEnds(t),null);
+      // Отрезками, а не одной ломаной: достроенный по дорогам кусок имеет
+      // свою геометрию, и прямая через него соврала бы.
+      d.factSegs=m.segments.map(g=>(g.kind==='road'&&g.line&&g.line.length>1)
+        ? g.line.map(c=>[c[1],c[0]])
+        : [[g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]]);
+      if(!d.factSegs.length&&m.points.length>1) d.factSegs=[m.points.map(p=>[p.lat,p.lng])];
+    }
   }catch(e){}
-  if(!d.geoPlan&&!d.geoFact) return;
-  drawEconMap(d,'tpMap');
+  if(!d.geoPlan&&!(d.factSegs&&d.factSegs.length)) return;
+  // Врезка — не самостоятельная карта, а превью: по ней хочется ткнуть и
+  // увидеть то же самое в полный размер. Открывает она ровно то же, что
+  // кнопка рядом, — план в редакторе и факт поверх.
+  drawEconMap(d,'tpMap',()=>{ if(tripEditId) showTripOnMap(tripEditId); });
 }
 
-// Мини-карта: плановый маршрут пунктиром, реально пройденный — сплошной.
-// Данные кладёт drawTripMap в d.geoPlan / d.geoFact; если их нет, блок скрыт.
-function drawEconMap(d, mapId){
+// Мини-карта: плановый маршрут пунктиром, реально пройденный — сплошным.
+// Факт приходит отрезками (d.factSegs), потому что достроенный по дорогам
+// кусок имеет свою геометрию. Одна ломаная (d.geoFact) осталась для врезки
+// экономики, где отрезков нет.
+function drawEconMap(d, mapId, onOpen){
   mapId=mapId||'econMap';
   const wrap=$(mapId+'Wrap'); if(!wrap) return;
-  const hasPlan=d.geoPlan&&d.geoPlan.length, hasFact=d.geoFact&&d.geoFact.length;
+  const hasPlan=d.geoPlan&&d.geoPlan.length;
+  const segs=(d.factSegs&&d.factSegs.length)?d.factSegs:((d.geoFact&&d.geoFact.length)?[d.geoFact]:[]);
+  const hasFact=segs.length;
   if(!hasPlan&&!hasFact) return;
   wrap.style.display='';
   try{
@@ -5464,8 +5585,25 @@ function drawEconMap(d, mapId){
     if(mb) mb.addTo(m);
     const layers=[];
     if(hasPlan) layers.push(L.polyline(d.geoPlan,{color:'#9aa1ad',weight:3,dashArray:'6,6',opacity:.9}).addTo(m));
-    if(hasFact) layers.push(L.polyline(d.geoFact,{color:'#ffe100',weight:3,opacity:.95}).addTo(m));
+    segs.forEach(seg=>{ if(seg&&seg.length>1) layers.push(L.polyline(seg,{color:'#ffe100',weight:3,opacity:.95}).addTo(m)); });
     const g=L.featureGroup(layers); m.fitBounds(g.getBounds(),{padding:[16,16]});
+    // Превью не таскают и не зумят: любое движение внутри — это попытка
+    // рассмотреть, а рассматривать надо на большой карте. Поэтому всю
+    // возню отключаем, а клик уводит туда.
+    if(onOpen){
+      ['dragging','scrollWheelZoom','doubleClickZoom','boxZoom','keyboard','touchZoom','tap']
+        .forEach(k=>{ try{ m[k]&&m[k].disable&&m[k].disable(); }catch(e){} });
+      // Клик вешаем на сам элемент, а не через карту: так он сработает,
+      // даже если карта не поднялась, и не задвоится с обработчиком Leaflet.
+      const cont=$(mapId);
+      if(cont){ cont.style.cursor='pointer'; cont.onclick=onOpen; }
+      const w=$(mapId+'Wrap');
+      if(w&&!w.querySelector('.emap-open')){
+        const tag=document.createElement('div');
+        tag.className='emap-open'; tag.textContent='открыть на карте';
+        w.appendChild(tag);
+      }
+    }
     setTimeout(()=>{ try{ m.invalidateSize(); }catch(e){} },60);
   }catch(e){ wrap.style.display='none'; }
 }
