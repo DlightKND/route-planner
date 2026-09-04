@@ -118,8 +118,9 @@
     box-shadow: var(--shadow-sm); line-height: 1.9; }
   .mleg i { width: 20px; height: 0; display: inline-block; vertical-align: middle;
     margin-right: var(--sp-3); flex: none; }
-  .mleg .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor;
-    display: inline-block; vertical-align: middle; margin: 0 8px 0 6px; flex: none; }
+  .mleg .mleg-i { width: 20px; margin-right: var(--sp-3); flex: none;
+    display: inline-flex; align-items: center; justify-content: center; }
+  .mleg .mleg-i svg { display: block; }
   /* Общий стиль форм делает подписи заглавными и разрядочными — в легенде
      это нечитаемо, и она не форма. Сбрасываем явно. */
   .mleg label { display: flex; align-items: center; gap: 0; cursor: pointer;
@@ -134,6 +135,22 @@
   /* Цифры плана — отдельной строкой под своим слоем: в строку они делают
      панель вдвое шире, а на телефоне она и так впритык. */
   .mleg-s { margin: -2px 0 2px 26px; color: var(--ink-faint); }
+  /* Окно времени. Два ползунка вплотную: это один диапазон, а не две
+     независимые настройки. */
+  .mleg-tf { margin: 0 0 var(--sp-3); padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--line); }
+  .mleg-tfh { display: flex; align-items: center; justify-content: space-between;
+    gap: var(--sp-3); color: var(--ink); }
+  .mleg-tfh button { border: none; background: none; cursor: pointer; padding: 0;
+    font-family: var(--mono); font-size: var(--fs-1); color: var(--ink-faint);
+    text-decoration: underline; }
+  .mleg-tfh button:hover { color: var(--ink); }
+  .mleg-tf input[type=range] { width: 100%; margin: 3px 0 0; height: 12px;
+    accent-color: var(--accent); }
+  /* Шкала скорости: полоса градиента и два конца подписи. */
+  .mleg-sp { display: flex; align-items: center; gap: var(--sp-2);
+    margin: 0 0 3px 26px; color: var(--ink-faint); font-size: var(--fs-1); }
+  .mleg-sp i { flex: 1; height: 5px; border-radius: 3px; display: block; }
   .mleg-x { position: absolute; top: 2px; right: 4px; width: 20px; height: 20px;
     border: none; background: none; cursor: pointer; color: var(--ink-faint);
     font-size: var(--fs-5); line-height: 1; padding: 0; }
@@ -327,6 +344,35 @@
      восьмидесяти строк — это и была «духота» в панели. */
   .pt .acts { display: none; gap: var(--sp-3); margin-top: var(--sp-3); flex-wrap: wrap; }
   .pt.sel .acts { display: flex; }
+  /* СПИСОК ТОЧЕК МАРШРУТА.
+     Правило «действия только у выбранной карточки» писалось для справочника
+     на восемьдесят строк. В маршруте их четыре, выделения нет вовсе — и
+     кнопки порядка оказались в разметке, но недостижимы. Здесь они всегда. */
+  #rStops .pt .acts { display: flex; }
+  /* Точки соединены линией по левой кромке: маршрут — это последовательность,
+     и её видно, а не приходится вычитывать из номеров. Линия рисуется на
+     контейнере, кружки с номерами сидят на ней. */
+  #rStops { position: relative; padding-left: 26px; }
+  /* Отрезок рисует каждая карточка, кроме последней: так линия идёт ровно
+     от кружка до кружка и кончается на последнем, а не обрывается посреди
+     карточки, как было бы при одной линии на весь контейнер. */
+  .route-pt { position: relative; }
+  .route-pt::after { content: ''; position: absolute; left: -15px; top: 32px;
+    bottom: calc(-1 * var(--sp-3) - 2px); width: 2px; background: var(--line); }
+  .route-pt:last-child::after { content: none; }
+  .rp-num { position: absolute; left: -24px; top: 12px; width: 20px; height: 20px;
+    border-radius: 50%; background: var(--panel-2); border: 2px solid var(--line);
+    color: var(--ink-dim); display: flex; align-items: center; justify-content: center;
+    font: 600 11px var(--mono); }
+  /* Начало и конец — заливкой: по ним взгляд находит края маршрута. */
+  .route-pt.role-start .rp-num, .route-pt.role-finish .rp-num {
+    background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .route-pt[draggable=true] { cursor: grab; }
+  .route-pt.dragging { opacity: .45; cursor: grabbing; }
+  /* Куда именно встанет точка — половина карточки под курсором. Без этого
+     место падения приходится угадывать. */
+  .route-pt.drag-over { box-shadow: inset 0 3px 0 -1px var(--accent); }
+  .route-pt.drag-under { box-shadow: inset 0 -3px 0 -1px var(--accent); }
   .pt { cursor: pointer; }
   .pt.sel { border-color: var(--focus); box-shadow: var(--ring); }
   
@@ -562,6 +608,39 @@
   .stickyhead .subtabs { margin-bottom: var(--sp-4); }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--accent); color: var(--ink); padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm); font-family: var(--mono); font-size: var(--fs-3); box-shadow: var(--shadow-lg); z-index: 99999; opacity: 0; pointer-events: none; transition: opacity var(--t), transform var(--t); }
   .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── МАТОВОЕ СТЕКЛО ──────────────────────────────────────────────────
+     Полупрозрачность без размытия читалась бы как грязь: сквозь неё лезет
+     текст, и панель перестаёт быть панелью. Размытие превращает то, что за
+     ней, в фон — видно, что там что-то есть, но читается только сама
+     панель. Поэтому прозрачность и размытие идут только вместе.
+     Стекло получают ТОЛЬКО плавающие поверхности: шапки, модалки, панели
+     карты. Обычные карточки содержимого остаются сплошными — под ними
+     ничего нет, размывать нечего, а расход на видеокарту реальный.
+     backdrop-filter поддерживают не все: там, где его нет, остаётся тот же
+     фон, только плотнее — вид проще, но ничего не ломается. */
+  .topbar, .rail, .modal, .sheet, .map-pop, .mleg, .busy, .toast,
+  .pop, .ctxmenu {
+    background: var(--glass);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    backdrop-filter: saturate(180%) blur(16px);
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .topbar, .rail, .modal, .sheet, .map-pop, .mleg, .busy, .toast,
+    .pop, .ctxmenu { background: var(--panel); }
+  }
+  /* Липкая шапка — особый случай: её фон рисует псевдоэлемент, вытянутый
+     за боковые отступы панели. Размытие вешаем на него же, иначе стекло
+     кончалось бы там, где начинается вылет. */
+  .stickyhead { background: transparent; }
+  .stickyhead::before {
+    background: var(--glass);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    backdrop-filter: saturate(180%) blur(16px);
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .stickyhead::before { background: var(--bg); }
+  }
   /* Индикатор долгой работы. Пересчёт трека ходит в сеть и занимает
      секунды: без него человек видит замершую кнопку и решает, что
      сломалось. Стоит выше тоста, чтобы они не наезжали друг на друга. */
@@ -630,8 +709,15 @@
   .lay-legend span { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
   .lay-legend i { width: 8px; height: 8px; border-radius: var(--r-pill); flex: none; font-style: normal; }
   .veh-mk { position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
-  .veh-ico { font-size: var(--fs-8); line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.55)); }
-  .veh-mk.stale .veh-ico { filter: grayscale(1) drop-shadow(0 2px 4px rgba(0,0,0,.55)); opacity: .55; }
+  /* Плоский силуэт вместо эмодзи: красится токенами, состояние задаётся
+     цветом. Тень оставлена лёгкой — на пёстрой подложке без неё силуэт
+     теряется, но это не объём, а только отрыв от карты. */
+  .veh-ico { line-height: 0; color: var(--ink); filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+  .veh-ico svg { display: block; fill: currentColor; }
+  .veh-ico svg .w { fill: var(--ink); }
+  .veh-ico svg .h { fill: var(--panel); }
+  .veh-mk.moving .veh-ico { color: var(--accent); }
+  .veh-mk.stale .veh-ico { color: var(--ink-faint); opacity: .6; }
   .veh-lbl { margin-top: var(--sp-1); font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .3px; white-space: nowrap; padding: var(--sp-1) var(--sp-2); border-radius: var(--r-pill); background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
   .veh-lbl.moving { border-color: #22c55e; color: #22c55e; }
   .veh-lbl.idle { border-color: #f59e0b; color: #f59e0b; }
@@ -1509,7 +1595,6 @@
              управления в столбик — это и была «духота»: всё выглядело
              одинаково важным. Редкое (объезды, оптимизация, коридор)
              ушло под раскрытие. -->
-        <div id="rEndpoints" class="endpoints"></div>
         <div id="rStops" style="margin-top: var(--sp-3)"></div>
 
         <div class="row" style="margin-top: var(--sp-3)">
