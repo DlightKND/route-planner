@@ -57,6 +57,10 @@ export const TRACK_DEFAULTS = {
   dayStartHour: 6,
   // Сколько времени выезда можно потерять молча.
   maxDropShare: 0.5
+  // Ещё в opts можно передать onStep({i, total, checks}) — его зовут на
+  // каждой точке. Проход ходит в сеть и занимает секунды; без обратной
+  // связи человек видит замершую кнопку и решает, что сломалось. Модуль
+  // при этом ничего не знает про интерфейс: он просто сообщает, где идёт.
 };
 
 export function haversineKm(a, b) {
@@ -160,6 +164,7 @@ export async function measureTrip(points, opts, ctx, reach) {
     const dt = p.t - trusted.t;
     const d = haversineKm(trusted, p);
     i++;
+    if (o.onStep) o.onStep({ i, total: pts.length, checks });
 
     if (dt <= 0) { dropped.push(Object.assign({ why: 'время не идёт вперёд' }, p)); suspect = true; continue; }
 
