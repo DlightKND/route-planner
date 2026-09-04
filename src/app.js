@@ -5566,6 +5566,87 @@ if($('tpJobsRoute')) $('tpJobsRoute').onchange=renderTripJobs;
 // показывает ту же разбивку врезкой, а карту план/факт — в карточке маршрута.
 
 
+// ---------- из чего собрана эта версия ----------
+//
+// Файлы ходят между нами по одному, кладутся в репозиторий по одному, и рано
+// или поздно один остаётся не заменённым. Ошибка получается тихая: код новый,
+// модуль ядра старый, поведение не сходится ни с одной из версий, и на её
+// поиск уходит вечер. Отпечаток по содержимому закрывает этот класс ошибок
+// целиком — соврать он не может и обновляться руками не просит.
+//
+// Второй половиной сверяется база. Схему я не вижу и увидеть не могу: SQL
+// выполняется вручную, и пропущенный файл миграции даёт ту же тихую ошибку
+// с другой стороны. Поэтому здесь же проверяется, на месте ли то, чего
+// приложение ждёт от базы. Проверка идёт при ОТКРЫТИИ окна, а не при
+// загрузке: это диагностика, и платить за неё запросами на каждом входе
+// незачем.
+const BUILD = (typeof __DL_BUILD__ !== 'undefined')
+  ? __DL_BUILD__
+  : { id: 'не собрано', at: null, parts: [] };
+
+// Что приложение ждёт от базы. Столбец или таблица, которых нет, роняют
+// не себя, а весь запрос целиком — так и пропала бы вся страница настроек,
+// если бы sql/24 не был применён.
+const SCHEMA_MARKS = [
+  { sql: 'sql/16', table: 'job_visits', col: 'id',            what: 'отметки приезда' },
+  { sql: 'sql/17', table: 'job_parts',  col: 'id',            what: 'запчасти' },
+  { sql: 'sql/23', table: 'trips',      col: 'fact_km_source', what: 'источник факт-пробега' },
+  { sql: 'sql/24', table: 'settings',   col: 'track_slack',    what: 'пороги проверки трека' }
+];
+
+async function checkSchema(){
+  const out=[];
+  for(const m of SCHEMA_MARKS){
+    try{
+      const {error}=await sb.from(m.table).select(m.col).limit(1);
+      // Отказ по правам — это не «нет столбца». Инженеру половина таблиц
+      // не видна, и записывать это в непринятые миграции было бы враньём.
+      const code=(error&&error.code)||'';
+      if(!error) out.push({...m, state:'есть'});
+      else if(code==='42501'||/permission|denied/i.test(error.message||'')) out.push({...m, state:'не видно (права)'});
+      else out.push({...m, state:'НЕТ', err:(error.message||'').slice(0,80)});
+    }catch(e){ out.push({...m, state:'не проверено'}); }
+  }
+  return out;
+}
+
+function verText(schema){
+  const L=['DLIGHT · сборка '+BUILD.id+(BUILD.at?(' от '+new Date(BUILD.at).toLocaleString('ru')):'')];
+  BUILD.parts.forEach(p=>L.push('  '+p.hash+'  '+String(p.lines).padStart(5)+'  '+p.name));
+  if(schema) { L.push('база:'); schema.forEach(m=>L.push('  '+m.sql+'  '+m.state+'  '+m.what)); }
+  return L.join('\n');
+}
+
+let verSchema=null;
+async function openVersion(){
+  $('verOverlay').classList.add('on');
+  const box=$('verBody');
+  const rows=BUILD.parts.map(p=>'<tr><td class="h">'+esc(p.hash)+'</td><td>'+esc(p.name)
+    +'</td><td class="n">'+p.lines+'</td></tr>').join('');
+  box.innerHTML='<div class="meta" style="margin-bottom: var(--sp-3)">Отпечаток сборки <b style="color:var(--ink)">'+esc(BUILD.id)+'</b>'
+    +(BUILD.at?(' · '+esc(new Date(BUILD.at).toLocaleString('ru'))):'')+'</div>'
+    +'<table class="vt">'+rows+'</table>'
+    +'<div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">База данных</div>'
+    +'<div id="verSchema" class="hint">проверяю…</div>';
+  if(!sb){ $('verSchema').textContent='нет подключения'; return; }
+  verSchema=await checkSchema();
+  const bad=verSchema.filter(m=>m.state==='НЕТ');
+  $('verSchema').innerHTML='<table class="vt">'+verSchema.map(m=>{
+    const c=m.state==='НЕТ'?'var(--red)':(m.state==='есть'?'var(--green)':'var(--ink-faint)');
+    return '<tr><td class="h">'+esc(m.sql)+'</td><td>'+esc(m.what)+'</td><td class="n" style="color:'+c+'">'+esc(m.state)+'</td></tr>';
+  }).join('')+'</table>'
+    +(bad.length?('<div class="err" style="margin-top: var(--sp-3)">Не применено файлов: '+bad.length
+      +'. Пока они не выполнены, приложение работает не полностью.</div>'):'');
+}
+
+if($('verId')) $('verId').textContent=BUILD.id;
+if($('verBtn')) $('verBtn').onclick=openVersion;
+if($('verClose')) $('verClose').onclick=()=>$('verOverlay').classList.remove('on');
+if($('verCopy')) $('verCopy').onclick=async()=>{
+  try{ await navigator.clipboard.writeText(verText(verSchema)); showToast('Скопировано'); }
+  catch(e){ notify('Скопировать не вышло — выдели текст руками','warn'); }
+};
+
 // ---------- boot ----------
 (async function boot(){ const c=loadCfg(); if(!c.url||!c.key){ $('cfgOverlay').classList.add('on'); return; }
   try{ sb=window.supabase.createClient(c.url,c.key); }catch(e){ $('cfgOverlay').classList.add('on'); return; }
