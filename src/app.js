@@ -3846,7 +3846,7 @@ function renderSettings(){ const s=appSettings; $('stShift').value=s.shift_hours
   if($('stTrkKmh')) $('stTrkKmh').value=(s.track_max_kmh==null?300:s.track_max_kmh);
   if($('stTrkSlack')) $('stTrkSlack').value=(s.track_slack==null?1.5:s.track_slack);
   const dt=s.default_theme||{}; $('dtMode').value=dt.mode||'dark'; $('orsProxy').value=s.ors_proxy||''; $('stWarrDays').value=(s.repair_warranty_days==null?90:s.repair_warranty_days); $('stContact').value=s.contact_period_days||0;
-  renderProfiles(); renderVehicles(); renderUsersAdmin(); }
+  renderProfiles(); renderVehicles(); renderUsersAdmin(); renderVersionLine(); }
 let profEditId=null;
 function tpProfiles(){ return appSettings.tariff_profiles||[]; }
 function renderProfiles(){ const box=$('tpList'); if(!box) return; const list=tpProfiles();
@@ -4429,9 +4429,39 @@ let factLayer=L.layerGroup().addTo(map);
 // как разрывы — отдельной пунктирной линией другого цвета. Дорисовать их
 // маршрутом по дорогам можно и нужно, но пока этого не сделано, честнее
 // нарисовать «здесь мы не знаем», чем провести прямую и промолчать.
+// Цвета факт-трека. Три разных утверждения о выезде — три разных вида:
+// что мы видели, что достроили по дорогам и чего не знаем вовсе.
+const TRACK_C='#22c55e';   // измерено приёмником
+const ROAD_C ='#7c3aed';   // достроено маршрутом по дорогам
+const GAP_C  ='#9aa1ad';   // прямая через дыру: где ехали — неизвестно
+const DROP_C ='#dc2626';   // выброшено как ошибка приёмника
+
+// Легенда. Без неё три вида линий читаются как «какие-то линии», и главный
+// вопрос — «что тут достроено, а что мы правда видели» — остаётся без
+// ответа. Числа рядом с образцами: сколько километров каждым способом.
+let factLegend=null;
+function showFactLegend(t,dropCount){
+  if(factLegend){ try{ map.removeControl(factLegend); }catch(e){} factLegend=null; }
+  const row=(style,name,km)=>'<div><i style="'+style+'"></i>'+name
+    +(km!=null?(' <b style="color:var(--ink)">'+Math.round(km)+' км</b>'):'')+'</div>';
+  factLegend=L.control({position:'bottomright'});
+  factLegend.onAdd=function(){
+    const d=L.DomUtil.create('div','mleg');
+    d.innerHTML=row('border-top:4px dotted '+TRACK_C,'видели по трекеру',t.measuredKm)
+      +(t.routeKm?row('border-top:5px solid '+ROAD_C,'достроено по дорогам',t.routeKm):'')
+      +(t.straightKm?row('border-top:3px dotted '+GAP_C,'прямая через дыру',t.straightKm):'')
+      +(dropCount?('<div><span class="dot"></span>выброшено точек: <b style="color:var(--ink)">'+dropCount+'</b></div>'):'')
+      +'<div style="margin-top:4px;color:var(--ink-faint)">итого '+Math.round(t.km)+' км</div>';
+    L.DomEvent.disableClickPropagation(d);
+    return d;
+  };
+  factLegend.addTo(map);
+}
+
 async function showTripOnMap(tid){
   switchTab('map');
   factLayer.clearLayers();
+  if(factLegend){ try{ map.removeControl(factLegend); }catch(e){} factLegend=null; }
   try{
     const { data }=await sb.from('vehicle_positions').select('lat,lng,ts,status')
       .eq('trip_id',tid).order('ts');
@@ -4452,7 +4482,7 @@ async function showTripOnMap(tid){
     }
     segs.push(seg);
     segs.filter(s2=>s2.length>1).forEach(s2=>factLayer.addLayer(
-      L.polyline(s2.map(p=>[p.lat,p.lng]),{color:'#22c55e',weight:4,opacity:.85,dashArray:'1 7',lineCap:'round'})));
+      L.polyline(s2.map(p=>[p.lat,p.lng]),{color:TRACK_C,weight:4,opacity:.85,dashArray:'1 7',lineCap:'round'})));
 
     // Разрывы: короткие достраиваем прямой прямо сейчас, длинные —
     // маршрутом по дорогам. Порог в пяти километрах не про точность ради
@@ -4465,41 +4495,55 @@ async function showTripOnMap(tid){
       // Отрезок, посчитанный при сведении выезда, уже лежит у нас целиком —
       // и линией, и километрами. Рисуем его, а не серую прямую, и ничего
       // не спрашиваем заново.
+      // Достроенный по дорогам кусок и кусок, которого просто нет, — вещи
+      // противоположные, а рисовались одинаковым серым пунктиром. Дорога
+      // сплошная и цветная: это знание. Прямая через дыру — серая и рваная:
+      // это признание, что мы не знаем, где машина ехала.
       const line=known[g.from];
       if(line&&line.length>1){
         factLayer.addLayer(L.polyline(line.map(pt=>[pt[1],pt[0]]),
-          {color:'#9aa1ad',weight:3,opacity:.9,dashArray:'10 8'})
-          .bindPopup('Связи не было '+g.minutes+' мин. По дорогам '
-            +(knownKm[g.from]!=null?(+knownKm[g.from]).toFixed(1):'?')+' км.'));
+          {color:ROAD_C,weight:5,opacity:.9})
+          .bindPopup('Связи не было '+g.minutes+' мин. Достроено по дорогам: <b>'
+            +(knownKm[g.from]!=null?(+knownKm[g.from]).toFixed(1):'?')+' км</b>.'));
         return;
       }
       const straight=[[g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]];
       const why=(g.fill==='ors')
         ? 'Связи не было '+g.minutes+' мин. Достраиваю маршрутом по дорогам…'
-        : 'Связи не было '+g.minutes+' мин. По прямой '+g.straightKm.toFixed(1)+' км'
+        : 'Связи не было '+g.minutes+' мин. Взята прямая '+g.straightKm.toFixed(1)+' км'
           +(g.why==='короткий'?' — на таком куске дорога от прямой почти не отличается.'
                               :' — маршрут не строился: '+g.why+'.');
-      factLayer.addLayer(L.polyline(straight,{color:'#9aa1ad',weight:3,opacity:.8,dashArray:'10 8'}).bindPopup(why));
+      factLayer.addLayer(L.polyline(straight,{color:GAP_C,weight:3,opacity:.85,dashArray:'2 9'}).bindPopup(why));
     });
+    // Выброшенное показываем, а не прячем: если приёмник врёт постоянно, это
+    // видно на карте, и разговор с поставщиком трекера предметный. Сюда же
+    // идут точки, вырезанные проверкой при сведении выезда, — иначе карта
+    // показывала бы одну картину, а записанный километраж считался по другой.
+    // Кружки рисуем ПОСЛЕ линий: точка поверх линии читается, линия поверх
+    // точки её прячет.
+    const shown=new Set();
+    const drawDrop=(p,why)=>{
+      if(shown.has(p.ts)) return; shown.add(p.ts);
+      factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:4,color:DROP_C,fillColor:DROP_C,fillOpacity:.6,weight:1})
+        .bindPopup('Отброшено: '+esc(why)+'<br>'+new Date(p.ts).toLocaleString('ru')));
+    };
+    const lr=lastResolve[tid];
+    if(lr&&lr.dropped) lr.dropped.forEach(p=>drawDrop(p,p.why));
+    c.dropped.forEach(p=>drawDrop(p,p.why));
     // Маршруты по дорогам — после отрисовки, чтобы карта не ждала сеть.
     const need=plan.filter(g=>g.fill==='ors'&&known[g.from]==null);
-    if(need.length) fillGapsByRoad(tid,need,c);
-    // Вырезанное показываем, а не прячем: если приёмник врёт постоянно,
-    // это видно на карте, и разговор с поставщиком трекера предметный.
-    c.dropped.forEach(p=>{
-      factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:4,color:'#dc2626',fillColor:'#dc2626',fillOpacity:.6,weight:1})
-        .bindPopup('Отброшено: '+esc(p.why)+'<br>'+new Date(p.ts).toLocaleString('ru')));
-    });
+    if(need.length) fillGapsByRoad(tid,need,c,shown.size);
     pts.filter(p=>p.status==='idle').forEach(p=>{
       factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:5,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:.9,weight:2})
         .bindPopup('Стоянка с '+new Date(p.ts).toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'})));
     });
     setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(pts.map(p=>[p.lat,p.lng])).getBounds(),{padding:[40,40]}); },60);
     const tot=trackTotalKm(c,gapRoutes[tid]||null);
+    showFactLegend(tot,shown.size);
     const bits=['Факт: '+Math.round(tot.km)+' км по '+c.keptCount+' точкам'];
     if(c.gaps.length) bits.push(c.gaps.length+' '+plural(c.gaps.length,'разрыв','разрыва','разрывов')
       +' (+'+Math.round(tot.straightKm+tot.routeKm)+' км)');
-    if(c.dropped.length) bits.push('вырезано '+c.dropped.length);
+    if(shown.size) bits.push('вырезано '+shown.size);
     if(c.jitterKm>=0.5) bits.push('дрожание '+c.jitterKm.toFixed(1)+' км');
     // Число на карте — это то, что видно сейчас. Записанный факт мог быть
     // сведён иначе (по одометру, при другой доступности ORS), и путать их
@@ -4521,11 +4565,17 @@ async function showTripOnMap(tid){
 // подтверждении, — иначе у одной цифры заведётся два источника, ровно то,
 // от чего мы уже лечили econ_snapshot.
 let gapRoutes={};
+// Что показала проверка при сведении выезда. Карта рисует бесплатным
+// разбором (cleanTrack) и внешних запросов не делает — иначе каждый показ
+// трека стоил бы квоты. Но если выезд только что сводили, результат уже
+// посчитан, и показывать вместо него другую картинку нечестно: человек
+// сверяет глазами именно то число, которое ушло в деньги.
+let lastResolve={};
 // Геометрия достроенных отрезков: рисуется на карте, второй раз у ORS не
 // запрашивается. Живёт рядом с километрами, но отдельно от них — считает
 // пробег trackTotalKm, а он про линии ничего не знает и знать не должен.
 let gapLines={};
-async function fillGapsByRoad(tid,need,c){
+async function fillGapsByRoad(tid,need,c,dropCount){
   if(orsKeyMissing()) return;
   const got=Object.assign({},gapRoutes[tid]||{});
   for(const g of need){
@@ -4540,14 +4590,15 @@ async function fillGapsByRoad(tid,need,c){
       if(line.length>1){
         gapLines[tid]=Object.assign({},gapLines[tid]||{},{[g.from]:line});
         factLayer.addLayer(L.polyline(line.map(p=>[p[1],p[0]]),
-          {color:'#9aa1ad',weight:3,opacity:.9,dashArray:'10 8'})
-          .bindPopup('Связи не было '+g.minutes+' мин. По дорогам '+km.toFixed(1)+
-                     ' км (по прямой было бы '+g.straightKm.toFixed(1)+').'));
+          {color:ROAD_C,weight:5,opacity:.9})
+          .bindPopup('Связи не было '+g.minutes+' мин. Достроено по дорогам: <b>'+km.toFixed(1)+
+                     ' км</b> (по прямой было бы '+g.straightKm.toFixed(1)+').'));
       }
     }catch(e){ /* один разрыв не достроился — остальные не отменяем */ }
   }
   gapRoutes[tid]=got;
   const t=trackTotalKm(c,got);
+  if(factLegend) showFactLegend(t,dropCount||0);
   const bits=['Факт: '+Math.round(t.km)+' км'];
   if(t.routeKm) bits.push('из них '+Math.round(t.routeKm)+' достроено по дорогам');
   if(t.pendingRoutes) bits.push(t.pendingRoutes+' '+plural(t.pendingRoutes,'разрыв','разрыва','разрывов')+' не достроено');
@@ -4672,6 +4723,7 @@ async function measureTripKm(tid){
 
   const hard=+appSettings.track_max_kmh>0?+appSettings.track_max_kmh:300;
   const res=await resolveAnomalies(raw,{hardSpeedKmh:hard},makeReach());
+  lastResolve[tid]={dropped:res.dropped,reasons:res.reasons,verdict:res.verdict};
   if(res.verdict.indexOf('трек недостоверен')===0){
     // К приговору прикладываем разбор по причинам: сто точек «вне круга» и
     // сто «старт не подтверждён» — разные поломки, и лечатся по-разному.
@@ -5580,9 +5632,11 @@ if($('tpJobsRoute')) $('tpJobsRoute').onchange=renderTripJobs;
 // приложение ждёт от базы. Проверка идёт при ОТКРЫТИИ окна, а не при
 // загрузке: это диагностика, и платить за неё запросами на каждом входе
 // незачем.
+// Если штампа нет, значит сборка шла со старым vite.config.js — говорим это
+// словами, а не прочерком: прочерк человек читает как «ещё не загрузилось».
 const BUILD = (typeof __DL_BUILD__ !== 'undefined')
   ? __DL_BUILD__
-  : { id: 'не собрано', at: null, parts: [] };
+  : { id: 'без штампа', at: null, parts: [], nostamp: true };
 
 // Что приложение ждёт от базы. Столбец или таблица, которых нет, роняют
 // не себя, а весь запрос целиком — так и пропала бы вся страница настроек,
@@ -5639,7 +5693,15 @@ async function openVersion(){
       +'. Пока они не выполнены, приложение работает не полностью.</div>'):'');
 }
 
-if($('verId')) $('verId').textContent=BUILD.id;
+// Рисуем при открытии настроек, а не один раз на старте: так метка не
+// зависит от того, в каком порядке сошлись разметка и скрипт. Прочерк на
+// месте версии как раз и означал, что они разошлись — новый index.html
+// при старом app.js. Ровно тот случай, ради которого всё это и заведено.
+function renderVersionLine(){
+  const el=$('verId'); if(!el) return;
+  el.textContent=BUILD.id+(BUILD.nostamp?' (соберите с новым vite.config.js)':'');
+}
+renderVersionLine();
 if($('verBtn')) $('verBtn').onclick=openVersion;
 if($('verClose')) $('verClose').onclick=()=>$('verOverlay').classList.remove('on');
 if($('verCopy')) $('verCopy').onclick=async()=>{
