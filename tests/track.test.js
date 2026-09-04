@@ -294,7 +294,7 @@ describe('resolveAnomalies: одиночный телепорт', () => {
     const r = await resolveAnomalies(track, null, spy(true));
     expect(r.droppedKm).toBeGreaterThan(700);
     expect(r.keptKm).toBeCloseTo(30, 0);
-    expect(r.unknownMs).toBe(2 * 60000);        // две минуты из тридцати одной
+    expect(r.unknownMs).toBe(60000);            // одна минута из тридцати одной
     expect(r.verdict).toBe('аномалии вырезаны');
   });
   it('километры выброшенного мусора выезд НЕ порочат', async () => {
@@ -370,19 +370,26 @@ describe('resolveAnomalies: откат перескочил через хоро�
 });
 
 describe('resolveAnomalies: приёмник врал полвыезда', () => {
-  // Полчаса нормально, час бреда, полчаса нормально. Тут не «вырезать
-  // аномалию», тут нечего считать: половина выезда без положения.
+  // Полчаса нормально, полтора часа бреда, полчаса нормально. Тут не
+  // «вырезать аномалию», тут нечего считать: большей части выезда нет.
   const track = []; for (let i = 0; i <= 30; i++) track.push(at(i, i));
-  for (let i = 0; i < 60; i++) track.push(at(500 + (i % 7) * 40, 31 + i));
-  for (let i = 0; i <= 30; i++) track.push(at(31 + i, 91 + i));
+  for (let i = 0; i < 90; i++) track.push(at(500 + (i % 7) * 40, 31 + i));
+  for (let i = 0; i <= 30; i++) track.push(at(31 + i, 121 + i));
 
   it('вердикт — снимать пробег с одометра', async () => {
     const r = await resolveAnomalies(track, null, spy(true));
-    expect(r.verdict).toBe('трек недостоверен: снять пробег с одометра машины');
+    expect(r.verdict).toMatch(/^трек недостоверен: снять пробег с одометра машины/);
+  });
+  it('в приговоре стоят цифры, а не одно слово', async () => {
+    // «Недостоверен» без чисел нельзя ни оспорить, ни проверить, а человека
+    // он отправляет лезть под капот за одометром.
+    const r = await resolveAnomalies(track, null, spy(true));
+    expect(r.verdict).toMatch(/врал \d+% времени/);
+    expect(r.verdict).toMatch(/выброшено \d+ точек из \d+/);
   });
   it('это решение по ВРЕМЕНИ без трека, а не по числу точек', async () => {
     const r = await resolveAnomalies(track, null, spy(true));
-    expect(r.unknownShare).toBeGreaterThan(0.4);
+    expect(r.unknownShare).toBeGreaterThan(0.5);
   });
   it('порог вынесен наружу', async () => {
     const r = await resolveAnomalies(track, { maxDropShare: 0.95 }, spy(true));
@@ -510,5 +517,92 @@ describe('resolveAnomalies: отказ маршрутизатора', () => {
       async (a, b) => haversineKm(a, b) > 50 ? { ok: false } : { ok: true, km: 1 });
     const kept = await resolveAnomalies(track, null, async () => null);
     expect(kept.keptKm).toBeGreaterThan(cut.keptKm + 100);
+  });
+});
+
+describe('resolveAnomalies: плохая связь — это НЕ аномалия', () => {
+  // Живой случай, на котором правило сорвалось. Связь пропадала надолго, и
+  // внутри тишины приёмник успевал выдать одну дурную точку. Промежуток
+  // между достоверными соседями — часы; наша потеря — одна точка.
+  //
+  // Эти часы мы не наблюдали НИКАК: ни правильно, ни неправильно. Они не
+  // испорчены аномалией, а просто разрыв — его достраивает маршрут по
+  // дорогам. Записывать их в ущерб значит объявлять недостоверным любой
+  // выезд с плохой связью, то есть ровно тот случай, ради которого всё
+  // и затевалось.
+  //
+  // Трек: три часа езды, из них два больших молчания, и в каждом по одной
+  // выброшенной точке.
+  const track = [];
+  for (let i = 0; i <= 30; i++) track.push(at(i, i));         // 30 мин езды
+  track.push(at(900, 45));                                   // дурная точка в тишине
+  for (let i = 0; i <= 30; i++) track.push(at(60 + i, 75 + i));
+  track.push(at(1200, 130));                                 // ещё одна
+  for (let i = 0; i <= 30; i++) track.push(at(140 + i, 160 + i));
+
+  it('выезд НЕ объявлен недостоверным', async () => {
+    const r = await resolveAnomalies(track, null, spy(true));
+    expect(r.verdict).not.toMatch(/недостовер/);
+    expect(r.dropped.length).toBe(2);
+  });
+  it('в потерю записаны минуты, а не часы молчания', async () => {
+    const r = await resolveAnomalies(track, null, spy(true));
+    expect(r.unknownMs).toBe(2 * 60000);         // две выброшенные точки
+    expect(r.unknownShare).toBeLessThan(0.05);
+  });
+  it('молчание осталось разрывом — его достраивают, а не хоронят', async () => {
+    const r = await resolveAnomalies(track, null, spy(true));
+    const c = cleanTrack(r.points);
+    expect(c.gaps.length).toBe(2);
+    expect(planGapFills(c).every(g => g.fill === 'ors')).toBe(true);
+  });
+});
+
+describe('resolveAnomalies: первая точка тоже проверяется', () => {
+  // Холодный старт приёмника: первый отсчёт улетел за триста километров.
+  // Раньше он становился якорем, круг строился вокруг чужого места, и
+  // начало выезда вырезалось целиком, пока Δt не разрастётся.
+  const bad = [at(300, 0)];
+  for (let i = 0; i <= 60; i++) bad.push(at(i, i + 1));
+
+  it('дурной старт выброшен, а не принят за якорь', async () => {
+    const r = await resolveAnomalies(bad, null, spy(true));
+    expect(r.dropped.length).toBe(1);
+    expect(r.dropped[0].why).toBe('старт не подтверждён');
+    expect(r.points.length).toBe(61);
+    expect(r.keptKm).toBeCloseTo(60, 0);
+  });
+  it('и выезд от этого не становится недостоверным', async () => {
+    const r = await resolveAnomalies(bad, null, spy(true));
+    expect(r.verdict).toBe('аномалии вырезаны');
+  });
+  it('но хорошую первую точку из-за плохой второй не выбрасываем', async () => {
+    // Свидетелей двое: если и вторая пара не сходится, лишняя — вторая
+    // точка, а не первая. Её выбросит обычный ход.
+    const good = [at(0, 0), at(300, 1)];
+    for (let i = 0; i <= 60; i++) good.push(at(1 + i, 2 + i));
+    const r = await resolveAnomalies(good, null, spy(true));
+    expect(r.dropped.length).toBe(1);
+    expect(r.dropped[0].why).toMatch(/вне круга/);
+    expect(r.points[0].ts).toBe(at(0, 0).ts);
+  });
+});
+
+describe('resolveAnomalies: разбор по причинам', () => {
+  it('приговор сопровождается разбором, а не одним словом', async () => {
+    const t = [at(900, 0)];
+    for (let i = 0; i <= 20; i++) t.push(at(i, i + 1));
+    t.push(at(700, 22));
+    for (let i = 0; i <= 20; i++) t.push(at(21 + i, 23 + i));
+    const r = await resolveAnomalies(t, null, spy(true));
+    expect(r.reasons['старт не подтверждён']).toBe(1);
+    expect(r.reasons['вне круга']).toBeGreaterThan(0);
+  });
+  it('счётчик причин сходится с числом выброшенных', async () => {
+    const t = [at(900, 0)];
+    for (let i = 0; i <= 20; i++) t.push(at(i, i + 1));
+    const r = await resolveAnomalies(t, null, spy(true));
+    const sum = Object.values(r.reasons).reduce((a, b) => a + b, 0);
+    expect(sum).toBe(r.dropped.length);
   });
 });
