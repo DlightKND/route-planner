@@ -677,7 +677,7 @@ function closeMore(){ $('moreSheet').classList.remove('on'); $('moreBack').class
 if($('moreBtn')) $('moreBtn').onclick=openMore;
 if($('moreBack')) $('moreBack').onclick=closeMore;
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeMore(); });
-// В рельсе «Сегодня» и «Диспетчер» — разные пункты, но ведут в один и тот
+// В рельсе «График» и «Диспетчер» — разные пункты, но ведут в один и тот
 // же view-planner. Поэтому у них есть data-sub, и подсветка идёт по паре
 // (tab, sub), а не по одному tab.
 //
@@ -1204,7 +1204,13 @@ function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('li
     if(c.description) meta.push(String(c.description).replace(/\s+/g,' ').trim());
     // Действия показываются только у выбранной точки: четыре кнопки под
     // каждой из восьмидесяти строк — это и есть та самая «духота».
-    d.innerHTML='<div class="nm" title="'+tip+'"><span class="dot" style="background:'+esc(c.color||'#9aa1ad')+'"></span><span class="nm-t">'+esc(c.name)+'</span></div>'+
+    // Цвет точки несёт левая кромка карточки, а не кружок внутри неё.
+    // Кружок стоял в строке имени и отбирал у него место — при том что
+    // цвет и так виден на карте; кромка отвечает на «что это за точка»
+    // до чтения, и карточка становится ровно такой же, как строки ленты
+    // «в работе», где кромка была всегда.
+    d.style.borderLeftColor=c.color||'var(--line)';
+    d.innerHTML='<div class="nm" title="'+tip+'"><span class="nm-t">'+esc(c.name)+'</span></div>'+
       '<div class="meta">'+esc(meta.join(' · '))+'</div>'+
       '<div class="acts">'+(canWrite()?'<button class="btn sm amber" data-rt="'+c.id+'">+ маршрут</button>':'')+(c.is_base?'':'<button class="btn sm" data-eq="'+c.id+'">техника</button>')+
       (canWrite()?'<button class="btn sm ghost" data-edit="'+c.id+'">ред.</button><button class="btn sm ghost" data-del="'+c.id+'" title="Удалить точку">×</button>':'')+'</div>';
@@ -1617,6 +1623,35 @@ function urgHue(u){
   return rampColor(u.left);
 }
 const WD_RU=['вс','пн','вт','ср','чт','пт','сб'];
+// ── Рабочие недели ──────────────────────────────────────────────────────
+//
+// Неделя считается по ISO: с понедельника по воскресенье, номер недели
+// определяет четверг (он решает, к какому году неделя относится, — иначе
+// первые дни января попадали бы в 53-ю неделю прошлого).
+//
+// Все вычисления в UTC и по частям даты, а не через локальный Date:
+// перевод часов весной сдвигает полночь, и «понедельник» уезжает на день.
+const DAY_MS=86400000;
+function utcOf(iso){ const p=String(iso).split('-'); return Date.UTC(+p[0],+p[1]-1,+p[2]); }
+function isoOf(ms){ const d=new Date(ms);
+  return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0'); }
+function weekOf(iso){
+  const t=utcOf(iso); if(isNaN(t)) return null;
+  const dow=(new Date(t).getUTCDay()+6)%7;              // пн = 0
+  const mon=t-dow*DAY_MS, thu=mon+3*DAY_MS;
+  const y=new Date(thu).getUTCFullYear();
+  const jan4=Date.UTC(y,0,4), j4dow=(new Date(jan4).getUTCDay()+6)%7;
+  const week1=jan4-j4dow*DAY_MS;
+  return { key:y+'-'+String(Math.round((mon-week1)/(7*DAY_MS))+1).padStart(2,'0'),
+           n:Math.round((mon-week1)/(7*DAY_MS))+1, mon, from:isoOf(mon), to:isoOf(mon+6*DAY_MS) };
+}
+// «8–14 сен» — без года и без повтора месяца, когда он один.
+function weekSpan(w){
+  const a=new Date(w.mon), b=new Date(w.mon+6*DAY_MS);
+  const ma=MON_RU_SHORT[a.getUTCMonth()], mb=MON_RU_SHORT[b.getUTCMonth()];
+  return a.getUTCDate()+(ma===mb?'':(' '+ma))+'–'+b.getUTCDate()+' '+mb;
+}
+const MON_RU_SHORT=['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
 function dayLabel(iso){
   const d=new Date(String(iso)+'T00:00:00'); if(isNaN(d)) return String(iso||'');
   return WD_RU[d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+' '+MON_RU[d.getMonth()];
@@ -1628,7 +1663,7 @@ function shortDate(iso){
 
 // ── Лента «что горит» ───────────────────────────────────────────────────────
 //
-// Одна и та же лента в сводке у менеджера и в «Сегодня» у инженера.
+// Одна и та же лента в сводке у менеджера и в «Графике» у инженера.
 // Различий ровно два: чьи заявки в неё попадают и есть ли под ней холодные
 // потребности. Двух похожих лент быть не должно — через месяц они разойдутся,
 // и человек, глядя на два экрана одного приложения, будет считать сроки
@@ -1740,6 +1775,70 @@ async function renderFeed(box,o){
     const overH=over.reduce((a,g)=>a+g.h,0);
     const oldest=over.length?Math.max.apply(null,over.map(g=>-g.left)):0;
 
+    // ── Загрузка по рабочим неделям ──────────────────────────────────────
+    //
+    // Часы считаем так же, как карточка «Загрузка инженеров»: работы плюс
+    // дорога. Дорога берётся из снимка выезда и делится по его дням, а не
+    // приписывается одному — иначе выезд с 4 по 11 сентября отдавал бы все
+    // свои 14 часов одному дню.
+    //
+    // Ёмкость недели — пять смен. У менеджера в ленте заявки ВСЕХ
+    // инженеров, поэтому и ёмкость общая: пять смен на каждого действующего.
+    // Мерить командную неделю одной сменой значило бы показывать 400 %
+    // на ровном месте.
+    const dayH={};
+    groups.forEach(g=>{ dayH[g.date]=(dayH[g.date]||0)+g.h; });
+    Object.values(tripById).forEach(t=>{
+      if(!t||t.status==='cancelled'||!t.date_from) return;
+      if(o.mine&&t.lead_engineer!==session.user.id) return;
+      const d=+((t.econ_snapshot||{}).driveH)||0; if(!d) return;
+      const a=utcOf(t.date_from), b=utcOf(t.date_to||t.date_from);
+      const n=Math.max(1,Math.round((b-a)/DAY_MS)+1), per=d/n;
+      for(let i=0;i<n;i++) { const k=isoOf(a+i*DAY_MS); dayH[k]=(dayH[k]||0)+per; }
+    });
+    const engN=o.mine?1:Math.max(1,(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false).length);
+    const dayCap=shift*engN, weekCap=dayCap*5;
+    // День в полоске горит по ЗАЯВКАМ, а не по часам. Дорога делится на
+    // все дни выезда, и выезд с 10 августа по 11 сентября раздаёт по
+    // полчаса каждому из тридцати трёх дней — по часам «занятыми»
+    // оказывались и суббота, и воскресенье, и вся неделя целиком.
+    // Полоска отвечает на «когда я работаю», а это дни со сроками;
+    // часы и процент считаются по-прежнему со всей дорогой.
+    const dayJobs={};
+    groups.forEach(g=>{ dayJobs[g.date]=(dayJobs[g.date]||0)+g.jobs.length; });
+    const weeks={};
+    Object.keys(dayH).forEach(d=>{ const w=weekOf(d); if(!w) return;
+      const it=weeks[w.key]||(weeks[w.key]={w,h:0,n:0,days:{}});
+      it.h+=dayH[d]; it.days[d]=(it.days[d]||0)+dayH[d]; });
+    groups.forEach(g=>{ const w=weekOf(g.date); if(!w) return;
+      const it=weeks[w.key]||(weeks[w.key]={w,h:0,n:0,days:{}});
+      it.n+=g.jobs.length; });
+    function weekHtml(key){
+      const it=weeks[key]; if(!it) return '';
+      const pct=weekCap>0?Math.round(it.h/weekCap*100):0;
+      const col=pct>100?'var(--red)':pct>85?'#f59e0b':'var(--green)';
+      // Инженеру — факты, не оценка. Процент и шкала — это суждение о его
+      // неделе, на которое он не может повлиять: заявки ставит диспетчер.
+      // Ему важно «сколько работы и в какие дни», а перегруз разгребает тот,
+      // кто её раздаёт.
+      // Часы недели — целыми: десятая доля часа берётся из деления дороги
+      // по дням и на недельном итоге означает только ложную точность.
+      const wh=Math.round(it.h);
+      const right=o.mine
+        ? ('<span class="wk-v">'+it.n+' '+plural(it.n,'заявка','заявки','заявок')+' · '+wh+' ч</span>')
+        : ('<span class="wk-bar"><i style="width:'+Math.min(100,pct)+'%;background:'+col+'"></i></span>'
+           +'<span class="wk-v'+(pct>100?' bad':'')+'">'+pct+'%</span>');
+      let dh='';
+      for(let i=0;i<7;i++){
+        const iso=isoOf(it.w.mon+i*DAY_MS), h=it.days[iso]||0, jn=dayJobs[iso]||0;
+        const cls=jn?(h>=dayCap?'full':'on'):(i>4?'we':'');
+        dh+='<span class="wk-d'+(cls?(' '+cls):'')+'"'+(jn?(' title="'+esc(WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+jn+' '+plural(jn,'заявка','заявки','заявок')+' · '+h.toFixed(h%1?1:0)+' ч')+'"'):'')
+          +'>'+WD_RU[(i+1)%7]+'</span>';
+      }
+      return '<div class="wkrow"><div class="wk-h"><span class="wk-n">Неделя '+it.w.n+' · '+esc(weekSpan(it.w))+'</span>'
+        +'<span class="wk-ln"></span>'+right+'</div><div class="wk-days">'+dh+'</div></div>';
+    }
+
     // ── Группы ───────────────────────────────────────────────────────────
     let prevLeft=0;
     const shownTrips=new Set();
@@ -1833,8 +1932,15 @@ async function renderFeed(box,o){
       return h;
     };
 
-    let restH='';
-    rest.forEach((g,gi)=>{ restH+=groupHtml(g,gi,!!o.lead&&gi===0); });
+    // Разделитель ставится перед первой группой каждой новой недели —
+    // включая самую первую: без подписи у верхней недели пришлось бы
+    // догадываться, к какой из них относится ближайший срок.
+    let restH='', lastWk=null;
+    rest.forEach((g,gi)=>{
+      const w=weekOf(g.date);
+      if(w&&w.key!==lastWk){ restH+=weekHtml(w.key); lastWk=w.key; }
+      restH+=groupHtml(g,gi,!!o.lead&&gi===0);
+    });
     prevLeft=0;
     let overH2='';
     over.forEach((g,gi)=>{ overH2+=groupHtml(g,gi,false); });
@@ -1936,7 +2042,7 @@ async function renderFeed(box,o){
 function renderAttention(){ return renderFeed($('attnBody'),{cold:true}); }
 
 // Обработчики кнопок выезда. Отдельной функцией: их вешают и лента
-// «Сегодня», и всё, что перерисовывает её кусками.
+// «График», и всё, что перерисовывает её кусками.
 function wireTripActs(box,offline){
   // Без связи гасим только то, что офлайн действительно не работает:
   // «открыть» и «Стоянки» тянут данные с сервера, «Перенести» пишет
@@ -2123,7 +2229,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   if(role==='engineer'){
     if(grid) grid.classList.add('one-col');
     if(box) box.style.display='none';
-    if(attnCaps) attnCaps.textContent='Сегодня';
+    if(attnCaps) attnCaps.textContent='График';
     return;   // правую колонку инженеру не строим вовсе
   }
   // Через класс, а не инлайном: инлайновый grid-template-columns перебивал
@@ -2325,7 +2431,7 @@ function tripActs(t){
   return a;
 }
 
-// «Сегодня» у инженера — та же лента, что «Требует внимания» у менеджера.
+// «График» у инженера — та же лента, что «Требует внимания» у менеджера.
 //
 // Раньше здесь был свой экран: карточка текущего выезда, свёрнутые строки
 // «просрочено / ещё сегодня / дальше», отдельная карточка «в депо» и
@@ -2353,7 +2459,7 @@ $('jbClient').onchange=()=>{ populateEquip(); jobHead(); };
 // Сменили исполнителя или статус — меняются и права на действия внутри
 // страницы: отметка приезда и правка запчастей смотрят на то же самое.
 ['jbEng','jbStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',()=>{ paintVisit(); renderJobParts(); }); });
-// Заявку открывают и из «Сегодня», где без связи список jobs пуст.
+// Заявку открывают и из «Графика», где без связи список jobs пуст.
 // Тогда берём строку из снимка — она там полная, вместе с работами.
 async function snapFindJob(id){
   const s=await snapGet('mine'); if(!s||!s.val||!s.val.list) return null;
@@ -3345,7 +3451,7 @@ function partTouch(p){
   partT[p.id]=setTimeout(()=>partSave(p),800);
   jobSaveState('изменено');
 }
-// Тот же приём, что и с работами: заявка внутри «Сегодня» берётся из
+// Тот же приём, что и с работами: заявка внутри «Графика» берётся из
 // снимка, и без правки снимка инженер, вернувшись на заявку без связи,
 // увидел бы прежний список запчастей вместо своего.
 async function snapPartsPatch(jobId){
@@ -3533,7 +3639,7 @@ function jobWorkRow(w){
     revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)};
 }
 // Правка местного снимка после постановки в очередь: заявка внутри
-// «Сегодня» должна показывать то, что инженер только что ввёл.
+// «График» должен показывать то, что инженер только что ввёл.
 async function snapJobPatch(jobId,rec,works){
   const s=await snapGet('mine'); if(!s||!s.val||!s.val.byTrip) return;
   let touched=false;
