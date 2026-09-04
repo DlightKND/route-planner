@@ -606,3 +606,56 @@ describe('resolveAnomalies: разбор по причинам', () => {
     expect(sum).toBe(r.dropped.length);
   });
 });
+
+describe('resolveAnomalies: приёмник включился в чужом месте', () => {
+  // Живой случай. Приёмник выдал в чужом месте не одну точку, а пачку;
+  // пачка согласована сама с собой, круг строится вокруг неё, и весь
+  // настоящий выезд оказывается снаружи. На карте при этом всё видно:
+  // cleanTrack работает без опоры и такой пачкой не обманывается.
+  const track = [];
+  for (let i = 0; i < 10; i++) track.push(at(2800 + i * 0.01, i));   // мусор, 10 точек
+  for (let i = 0; i < 235; i++) track.push(at(i * 1.1, 12 + i * 2)); // выезд, 235 точек
+
+  it('без второго мнения выезд гибнет целиком', async () => {
+    // Порог поднят до потолка, чтобы приговор не сработал и второе мнение
+    // не включилось: так виден результат одного прохода от первой точки.
+    const r = await resolveAnomalies(track, { maxDropShare: 0.99 }, spy(true));
+    expect(r.dropped.length).toBe(235);
+    expect(r.reasons['вне круга']).toBe(235);
+  });
+  it('второе мнение возвращает выезд', async () => {
+    const r = await resolveAnomalies(track, null, spy(true));
+    expect(r.dropped.length).toBe(10);
+    expect(r.reasons['старт не подтверждён']).toBe(10);
+    expect(r.verdict).not.toMatch(/недостовер/);
+  });
+  it('и километраж получается настоящий', async () => {
+    const r = await resolveAnomalies(track, null, spy(true));
+    expect(r.keptKm).toBeCloseTo(257, 0);      // 235 точек по 1.1 км
+    expect(r.unknownShare).toBeLessThan(0.05);
+  });
+  it('пачка в КОНЦЕ трека ловится так же', async () => {
+    // Опора выбирается по величине куска, а не по его месту в треке.
+    const tail = [];
+    for (let i = 0; i < 235; i++) tail.push(at(i * 1.1, i * 2));
+    for (let i = 0; i < 10; i++) tail.push(at(2800 + i * 0.01, 480 + i));
+    const r = await resolveAnomalies(tail, null, spy(true));
+    expect(r.dropped.length).toBe(10);
+    expect(r.verdict).not.toMatch(/недостовер/);
+  });
+});
+
+describe('resolveAnomalies: второе мнение не обеляет плохой трек', () => {
+  // Механизм пересмотра опасен ровно одним: соблазном оправдать любой
+  // выезд. Приёмник, вравший полвыезда, обязан остаться недостоверным —
+  // никакая опора этого не исправит, потому что большого честного куска
+  // там просто нет.
+  const track = []; for (let i = 0; i <= 30; i++) track.push(at(i, i));
+  for (let i = 0; i < 90; i++) track.push(at(500 + (i % 7) * 40, 31 + i));
+  for (let i = 0; i <= 30; i++) track.push(at(31 + i, 121 + i));
+
+  it('приговор остаётся приговором', async () => {
+    const r = await resolveAnomalies(track, null, spy(true));
+    expect(r.verdict).toMatch(/^трек недостоверен/);
+  });
+});
