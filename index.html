@@ -112,9 +112,35 @@
     --gap-row: var(--sp-3);
     --gap-block: var(--sp-4);
     --gap-card: var(--sp-5);
+    /* Ползунок — тень содержимого, а не орган управления: виден, когда
+       ищешь его глазами, и не спорит с текстом, когда не ищешь. */
+    --sb: color-mix(in srgb, var(--ink-faint) 45%, transparent);
+    --sb-hi: var(--ink-faint);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* ── Полосы прокрутки ────────────────────────────────────────────────
+     Их в приложении полтора десятка — панель карты, страницы, модалки,
+     списки внутри окон, — а оформлены были две. Остальные брали
+     системную: широкую, со стрелками на концах и вплотную к содержимому.
+     Правило одно на все и записано дважды. Стандартные
+     scrollbar-width/-color понимают Firefox и Chrome начиная со 121-го,
+     и они же ГЛАВНЫЕ: при заданном scrollbar-width современный Chrome
+     перестаёт применять ::-webkit-* вовсе. Вебкитный блок остаётся ради
+     старых Chrome и Safari — без него они вернулись бы к системной.
+     Отступ ползунка от края даёт не поле, а прозрачная рамка на нём
+     самом (background-clip: content-box): дорожка остаётся во всю
+     ширину, а видимая полоска — вчетверо тоньше и не липнет к тексту.
+     Стрелки убраны: ими не пользуются с тех пор, как появилось колесо,
+     а места они занимают больше самого ползунка. */
+  * { scrollbar-width: thin; scrollbar-color: var(--sb) transparent; }
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--sb); border-radius: var(--r-pill);
+    border: 4px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--sb-hi); background-clip: content-box; }
+  ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+  ::-webkit-scrollbar-corner { background: transparent; }
   html, body { height: 100%; max-width: 100%; overflow-x: hidden; }
   body { font-family: var(--sans); background: var(--bg); color: var(--ink); overflow: hidden; -webkit-font-smoothing: antialiased; }
 
@@ -368,6 +394,11 @@
      сорок точек высоты. */
   .chiprow { display: flex; align-items: center; flex-wrap: wrap;
     gap: var(--gap-tight); margin-top: var(--sp-3); padding-bottom: 2px; }
+  /* Скрыть полосу мало сказать ::-webkit-*: современный Chrome при
+     заданном scrollbar-width эти псевдоэлементы игнорирует вовсе.
+     Говорим обоими способами, иначе лента чипов получит тонкую полосу
+     там, где её быть не должно. */
+  .chiprow { scrollbar-width: none; }
   .chiprow::-webkit-scrollbar { display: none; }
   .chipsep { flex: none; width: 1px; height: 18px; background: var(--line); margin: 0 var(--sp-2); }
   .seg.chipseg { display: flex; flex: none; gap: var(--gap-tight); border: 0; background: none;
@@ -429,8 +460,6 @@
      украинские названия выглядели сломанными. break-word переносит по
      словам и лезет внутрь слова только когда оно одно шире колонки. */
   .scroll, .pane.scrollp { overflow-wrap: break-word; word-break: normal; }
-  .scroll::-webkit-scrollbar { width: 6px; } 
-  .scroll::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: var(--r-pill); }
   
   .block { border-bottom: 1px solid var(--line); padding: var(--pad-card); }
   .block h2 { 
@@ -507,37 +536,31 @@
      восьмидесяти строк — это и была «духота» в панели. */
   .pt .acts { display: none; gap: var(--gap-row); margin-top: var(--sp-3); flex-wrap: wrap; }
   .pt.sel .acts { display: flex; }
-  /* ── Тонкая карточка точки ───────────────────────────────────────────
-     Карточка на 81 px — это роскошь окна, а не шторки: в неё помещалась
-     ровно одна точка, а в справочнике их два десятка. Но и строка
-     с разделителем вместо рамки выбивалась из остального приложения,
-     где всё карточками. Значит карточка, только тонкая: имя и мета
-     в одну строку вместо трёх этажей — 40 px вместо 93 с промежутком.
-     Полный текст остаётся в подсказке, действия по-прежнему появляются
-     у выбранной. Маршрута это не касается — там карточки в полный рост,
-     они несут кнопки порядка. */
+  /* ── Карточка точки в справочнике ────────────────────────────────────
+     Ровно та же анатомия, что у строк ленты «в работе»: имя, под ним
+     мета, слева жирная кромка. Кромку красит цвет клиента — тот самый,
+     что был кружком внутри карточки. Кружок стоял в строке имени и
+     отбирал у него место при том, что цвет и так виден на карте;
+     кромка отвечает на «что это за точка» раньше, чем начнёшь читать,
+     и ничего не занимает. Два списка одного экрана — «в работе» и
+     «весь справочник» — снова выглядят одним списком.
+     Маршрута это не касается: там карточки в полный рост, они несут
+     кнопки порядка. */
   #pointsBox .pt, #pointsBox .wf-row {
-    margin: 0 0 var(--sp-2); padding: var(--pad-row); }
-  #pointsBox .pt { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--gap-row); }
+    margin: 0 0 var(--sp-2); padding: var(--pad-row);
+    border-left: 3px solid var(--line); }
+  #pointsBox .pt { display: block; }
   #pointsBox .pt:last-child, #pointsBox .wf-row:last-child { margin-bottom: 0; }
-  /* Имя ужимается, мета — нет. Наоборот было бы вредно: у меты («без
-     техники») содержимое короткое и постоянное, а имя длинное и всё
-     равно не поместится целиком. Когда сжимались оба, от «Військова
-     частина Т0950» на строке оставалась одна буква. */
-  /* Основа 0, а не auto: при auto ширина названия участвует в раскладке
-     строки, длинное имя выталкивало мету на второй этаж, и высоты строк
-     снова разъезжались. */
-  #pointsBox .pt .nm { flex: 1 1 0; min-width: 0; align-items: center; }
-  #pointsBox .pt .nm .dot { margin-top: 0; }
+  #pointsBox .pt .nm { min-width: 0; }
+  /* Имя — одна строка с многоточием: у «Димерського надлісництва Філії
+     "Столичний лісовий офіс"» второй и третий этажи ничего не добавляют,
+     а ритм списка ломают. Полное название остаётся в подсказке. */
   #pointsBox .pt .nm-t, #pointsBox .wf-t {
     min-height: 0; display: block; -webkit-line-clamp: none;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #pointsBox .pt .meta {
-    flex: 0 0 auto; margin: 0; max-width: 45%;
-    font-size: var(--fs-1); text-align: right; }
-  #pointsBox .wf-s { margin-top: 0; font-size: var(--fs-1); }
-  #pointsBox .pt .ds { flex: 1 0 100%; }
-  #pointsBox .pt .acts { flex: 1 0 100%; margin-top: var(--sp-3); }
+  #pointsBox .pt .meta, #pointsBox .wf-s {
+    margin-top: 2px; font-size: var(--fs-1); }
+  #pointsBox .pt .acts { margin-top: var(--sp-3); }
   /* СПИСОК ТОЧЕК МАРШРУТА.
      Правило «действия только у выбранной карточки» писалось для справочника
      на восемьдесят строк. В маршруте их четыре, выделения нет вовсе — и
@@ -580,10 +603,8 @@
      flex-ребёнка без min-width:0 — нерушимая строка не давала ему сжаться.
      Вертикальному нужен жёлоб, иначе ползунок ложится на карточки. */
   .listbox { max-height: 42vh; overflow-y: auto; overflow-x: hidden;
-    margin-top: var(--sp-3); scrollbar-gutter: stable; }
+    margin-top: var(--sp-3); }
   .listbox.folded { display: none; }
-  .listbox::-webkit-scrollbar { width: 5px; }
-  .listbox::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: var(--r-pill); }
 
   /* ── Подсказка по «?» ─────────────────────────────────────────────────
      Длинные пояснения стояли в интерфейсе постоянно, хотя нужны один раз —
@@ -1108,7 +1129,7 @@
     /* Два класса, а не один: базовое `.nav-more{display:none}` объявлено
        ниже по файлу, и при равной силе побеждало бы оно. */
     .nav-i.nav-more { display: flex; }
-    /* «Сегодня» — первый пункт у инженера: с него начинается смена.
+    /* «График» — первый пункт у инженера: с него начинается смена.
        У менеджера пункт скрыт ролью, и порядок ни на что не влияет. */
     .nav-i[data-sub="mine"] { order: -1; }
     /* Диаграмма Ганта существует, чтобы показать много дорожек в широком
@@ -1121,6 +1142,7 @@
     /* Через тег, а не только класс: базовое `.chips{flex-wrap:wrap}`
        объявлено ниже по файлу и при равной силе побеждало бы. */
     div.chips { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    div.chips { scrollbar-width: none; }
     div.chips::-webkit-scrollbar { display: none; }
     div.chips .chip { flex: none; }
     /* Панель больше не прокручивается: пунктов ровно столько, сколько
@@ -1134,6 +1156,7 @@
     .brand { flex: none; }
     .brand h1 { font-size: var(--fs-4); }
     .tabs { margin-left: var(--sp-2); flex: 1; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .tabs { scrollbar-width: none; }
     .tabs::-webkit-scrollbar { display: none; }
     .tab { padding: 0 var(--sp-3); font-size: var(--fs-2); flex: none; white-space: nowrap; }
     .spacer, .who { display: none; }
@@ -1328,6 +1351,7 @@
     .settings-navwrap::before { content: ''; }
     .settings-navwrap.stuck::after { content: ''; opacity: 1; }
     .settings-nav { flex-direction: row; overflow-x: auto; gap: var(--gap-row); }
+    .settings-nav { scrollbar-width: none; }
     .settings-nav::-webkit-scrollbar { display: none; }
     .son { white-space: nowrap; flex: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: var(--pad-row); }
     /* Строка пользователя: имя во всю ширину, роль и «сохранить» — под ним.
@@ -1352,6 +1376,40 @@
 .a-stem{position:absolute;top:19px;height:2px;background:var(--line)}
 /* Шапка без списка под ней — нижняя граница не нужна. */
 .agrp-h-solo{border-bottom:0}
+/* ── Разделитель рабочей недели ──────────────────────────────────────
+   Между группами дат — пробел, в котором написано, что это за неделя и
+   сколько в ней работы. Семь клеток Пн–Вс показывают форму недели: где
+   занято, где забито под завязку, где дырка. Раздел у инженера
+   называется «График», и это единственное место, где он выглядит
+   графиком, а не списком.
+   Процент и шкала — только менеджеру. Вывешивать инженеру оценку его же
+   недели, на которую он не может повлиять (заявки ставит диспетчер), —
+   это тревога без рычага; ему остаются факты: сколько заявок и часов. */
+.wkrow{position:relative;margin: var(--gap-card) 0 var(--gap-row)}
+.wkrow::before{content:'';position:absolute;left:-26px;top:8px;width:14px;height:14px;background:var(--bg)}
+.wk-h{display:flex;align-items:center;gap: var(--gap-row);margin-bottom: var(--sp-2)}
+.wk-n{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.8px;text-transform:uppercase;
+  color:var(--ink-faint);white-space:nowrap}
+.wk-ln{flex:1;height:1px;background:var(--line)}
+.wk-v{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-dim);white-space:nowrap}
+.wk-v.bad{color:var(--red);font-weight:600}
+.wk-bar{flex:none;width:52px;height:5px;border-radius: var(--r-pill);
+  background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
+.wk-bar i{display:block;height:100%;border-radius: var(--r-pill)}
+.wk-days{display:flex;gap: var(--sp-2)}
+.wk-d{flex:1;height:22px;border-radius: var(--r-sm);border:1px solid transparent;
+  background:color-mix(in srgb,var(--ink-faint) 14%,var(--panel));
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:9px;color:var(--ink-faint)}
+/* Занятый день — фирменным, забитый — красным. Выходной без работы
+   приглушён, а с работой светится наравне с буднями: суббота на объекте
+   — это ровно то, что нужно заметить. */
+.wk-d.on{background:color-mix(in srgb,var(--accent) 30%,var(--panel));color:var(--ink);
+  border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.wk-d.full{background:color-mix(in srgb,var(--red) 26%,var(--panel));color:var(--ink);
+  border-color:color-mix(in srgb,var(--red) 50%,var(--line))}
+.wk-d.we{opacity:.45}
+
 .a-break{position:relative;height:30px;display:flex;align-items:center}
 .a-break span{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint)}
 .a-break::before{content:'';position:absolute;left:-26px;top:8px;width:14px;height:14px;background:var(--bg)}
@@ -1827,7 +1885,7 @@
   .qbadge{bottom: calc(74px + env(safe-area-inset-bottom, 0px))}
 }
 
-/* Экран «Сегодня» больше не имеет своей вёрстки: он показывает ту же
+/* Экран «График» больше не имеет своей вёрстки: он показывает ту же
    ленту, что и «Требует внимания» в сводке (см. renderFeed). Стили
    прежнего экрана — карточка текущего выезда, свёрнутые строки,
    отдельные карточки «в депо» и «без выезда» — удалены целиком: мёртвый
@@ -1880,7 +1938,7 @@
   <div class="rail-items">
     <button class="nav-i" data-tab="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 9h8V3h-8z"/></svg><span>Сводка</span></button>
     <button class="nav-i" data-tab="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3z"/><path d="M9 3v15M15 6v15"/></svg><span>Карта</span></button>
-    <button class="nav-i" data-tab="planner" data-sub="mine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><span>Сегодня</span></button>
+    <button class="nav-i" data-tab="planner" data-sub="mine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><span>График</span></button>
     <!-- Заявки и выезды — две очереди одной работы: заявка попадает в выезд,
          выезд состоит из заявок. Раздельными пунктами меню они заставляли
          прыгать туда-обратно и занимали два места в нижней панели, где их
@@ -2302,16 +2360,16 @@
          подчёркнут жёлтым, как везде в приложении.
          Копий две, но список один: plannerSub() красит все .subtab по
          data-sub, а видна всегда только одна панель.
-         «Сегодня» подразделом не является — это отдельный пункт меню
+         «График» подразделом не является — это отдельный пункт меню
          и домашний экран инженера. Он остаётся в разметке скрытым, чтобы
          plannerSub() было что подсвечивать. -->
     <div id="plMine" style="display:none">
-      <div class="pane-head"><h2>Сегодня</h2><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim)"><input type="checkbox" id="mineDone" style="width:auto">показать завершённые</label></div>
+      <div class="pane-head"><h2>График</h2><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim)"><input type="checkbox" id="mineDone" style="width:auto">показать завершённые</label></div>
       <div id="mineList"></div>
     </div>
     <div id="plJobs">
       <div class="stickyhead">
-        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">Сегодня</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
+        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
         <div class="pane-head">
           <select id="jobEngFilter" style="width:150px"><option value="">все инженеры</option></select>
           <div class="searchbox"><input type="search" id="jobSearch" placeholder="поиск по клиенту…"></div>
@@ -2322,7 +2380,7 @@
     </div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
-        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">Сегодня</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
+        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
         <div class="pane-head"><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
         <div class="chips" id="tripStatusChips"></div>
       </div>
