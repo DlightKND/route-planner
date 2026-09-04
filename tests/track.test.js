@@ -409,3 +409,21 @@ describe('маршрут: где линейка, а где судья', () => {
     expect(m.dropped[0].why).toMatch(/^скорость/);
   });
 });
+
+describe('ход прохода наружу', () => {
+  it('onStep зовут на каждой точке и он знает, сколько уже спрошено дорог', async () => {
+    const p = [at(0, 0), at(3, 3), at(60, 60), at(63, 63)];
+    const steps = [];
+    await measureTrip(p, { onStep: (st) => steps.push(st) }, {}, roads({ ok: true, km: 74 }));
+    expect(steps.length).toBe(3);                    // три перехода
+    // i — сколько точек уже разобрано, поэтому первая опорная не считается,
+    // а последний шаг равен total: полоса доходит до края, а не замирает.
+    expect(steps[0]).toEqual({ i: 2, total: 4, checks: 0 });
+    expect(steps[2].i).toBe(4);
+    expect(steps[2].checks).toBe(1);                 // маршрут уже спросили
+  });
+  it('без onStep всё работает как раньше', async () => {
+    const m = await measureTrip([at(0, 0), at(3, 3)], null, {}, null);
+    expect(m.km).toBeCloseTo(3, 1);
+  });
+});
