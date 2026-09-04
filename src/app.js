@@ -121,7 +121,13 @@ const THEMES={
     //   --glass-panel — для того, что раньше было --panel (рельс, модалки,
     //                   всплывашки, тосты, панель карты);
     //   --glass-bg    — для того, что было --bg (липкие шапки разделов).
-    '--glass-panel':'rgba(26,28,32,0.58)', '--glass-bg':'rgba(16,17,20,0.58)'
+    //
+    // Плотность ОДНА на всё приложение: 0.76. Раньше её было две — 0.58
+    // у рельса и модалок и 0.90 у панели карты, — и рядом на одном экране
+    // они читались как разный материал: панель почти сплошная, рельс рядом
+    // с ней заметно темнее. Стекло, у которого плотность зависит от места,
+    // перестаёт быть стеклом. 0.76 — середина между этими двумя.
+    '--glass-panel':'rgba(26,28,32,0.76)', '--glass-bg':'rgba(16,17,20,0.76)'
   },
   light:{
     // Светлая тема была вдвое площе тёмной: bg → panel-2 давали контраст
@@ -146,7 +152,7 @@ const THEMES={
     // Те же цвета, что у сплошных поверхностей светлой темы: #ffffff и
     // #e2e6ec. Плотность чуть выше тёмной — на светлом фоне тонкая плёнка
     // слабее отделяет панель от подложки.
-    '--glass-panel':'rgba(255,255,255,0.62)', '--glass-bg':'rgba(226,230,236,0.62)'
+    '--glass-panel':'rgba(255,255,255,0.76)', '--glass-bg':'rgba(226,230,236,0.76)'
   }
 };
 function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
@@ -387,16 +393,19 @@ function flashPending(){ if(pendingMarker) map.removeLayer(pendingMarker); if(!p
 function hlMarker(id,on){ const m=markerById[id]; if(!m||!m.getElement) return; const el=m.getElement(); if(!el) return; const b=el.querySelector('.cbub'); if(b) b.classList.toggle('hl',on); }
 function hlCard(id,on){ const c=document.querySelector('#list .pt[data-cid="'+id+'"]'); if(c) c.classList.toggle('hl',on); }
 let ctxLatLng=null;
+// Меню по правой кнопке — три пункта, и это все, ради которых по пустому
+// месту карты вообще щёлкают: поставить здесь точку, довести сюда маршрут,
+// забрать координаты. «Сделать стартом» ушло: старт меняется в самой
+// карточке маршрута, где он и написан. Объезды ушли тоже — они больше
+// не режим карты, а настройка построения (см. панель «Маршрут»).
 function showCtxMenu(e){ ctxLatLng=e.latlng; const m=$('ctxMenu'); let h='';
-  if(canWrite()){ h+='<button data-cx="add">📍 Добавить точку здесь</button><button data-cx="wp">↳ В маршрут: промежуточная</button><button data-cx="start">▶ Сделать стартом маршрута</button><button data-cx="avoid">🚫 Объезд здесь (плохая дорога)</button>'; }
-  h+='<button data-cx="copy">⧉ Копировать координаты</button>'; m.innerHTML=h;
+  if(canWrite()){ h+='<button data-cx="add">Добавить точку здесь</button><button data-cx="wp">В маршрут</button>'; }
+  h+='<button data-cx="copy">Копировать координаты</button>'; m.innerHTML=h;
   const x=e.originalEvent.clientX, y=e.originalEvent.clientY; m.style.left=Math.min(x,window.innerWidth-230)+'px'; m.style.top=Math.min(y,window.innerHeight-180)+'px'; m.classList.add('on');
   m.querySelectorAll('[data-cx]').forEach(b=>b.onclick=()=>{ ctxAction(b.dataset.cx); m.classList.remove('on'); }); }
 function ctxAction(a){ if(!ctxLatLng) return; const ll=ctxLatLng;
   if(a==='add'){ if(addModeOn) toggleAdd(false); $('fName').value=''; $('fDesc').value=''; $('formErr').textContent=''; pendingLatLng={lat:ll.lat,lng:ll.lng}; flashPending(); openPointModal(); }
-  else if(a==='avoid'){ addAvoidZone(ll); }
   else if(a==='wp'){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:ll.lat,lng:ll.lng}); showRouteTab(); renderRoutePanel(); resetBuilt(); }
-  else if(a==='start'){ rStart={name:'Старт',lat:ll.lat,lng:ll.lng}; showRouteTab(); renderRoutePanel(); resetBuilt(); }
   else if(a==='copy'){ const t=ll.lat.toFixed(6)+', '+ll.lng.toFixed(6); try{ navigator.clipboard.writeText(t); }catch(e){} showToast('Координаты: '+t); } }
 map.on('contextmenu',e=>{ if(e.originalEvent) e.originalEvent.preventDefault(); showCtxMenu(e); });
 map.on('click',()=>$('ctxMenu').classList.remove('on'));
@@ -834,7 +843,8 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   $('whoLabel').innerHTML=esc(short)+'<b>'+esc(role)+'</b>';
   $('whoLabel').title=em+' · '+role;
   $('logoutBtn').style.display=''; $('appRoot').style.display='block'; document.querySelector('.view-map').classList.add('active');
-  if($('pointTools')) $('pointTools').style.display=canWrite()?'':'none'; $('routeBlock').style.display=canWrite()?'':'none';
+  ['pointTools','pointToolsFab'].forEach(id=>{ const el=$(id); if(el) el.style.display=canWrite()?'':'none'; });
+  $('routeBlock').style.display=canWrite()?'':'none';
   // Вкладка «Маршрут» уходит вместе со своим блоком: инженер маршруты
   // не собирает, и пустая вкладка была бы обещанием без содержимого.
   // Тогда у панели остаётся одна вкладка — заголовок вместо переключателя.
@@ -991,7 +1001,10 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
       html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3);flex-wrap:wrap">'
         +(telHref(c.phone)?('<a href="'+esc(telHref(c.phone))+'" style="'+ab+';text-decoration:none">Позвонить</a>'):'')
         +'<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" style="'+lb+';text-decoration:none">Проехать</a></span>';
-      if(canWrite()){ html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3)"><button onclick="addBaseStart(\''+c.id+'\')" style="'+ab+'">▶ старт</button><button onclick="addBaseStop(\''+c.id+'\')" style="'+lb+'">⏹ финиш</button><button onclick="editClient(\''+c.id+'\')" style="'+lb+'">ред.</button></span>'; }
+      // Депо добавляется в маршрут той же кнопкой, что и всё остальное.
+      // Двух — «старт» и «финиш» — не нужно: и то и другое это точка
+      // в списке маршрута, а её место в нём меняется перетаскиванием.
+      if(canWrite()){ html+='<br><span style="display:inline-flex;gap: var(--gap-row);margin-top: var(--gap-row)"><button onclick="addBaseStop(\''+c.id+'\')" style="'+ab+'">в маршрут</button><button onclick="editClient(\''+c.id+'\')" style="'+lb+'">ред.</button></span>'; }
       m.bindPopup(html); markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); return;
     }
     const list=eqByClient[c.id]||[]; const count=list.length; const withCoords=list.filter(e=>e.lat!=null&&e.lng!=null).length; const d=Math.min(46,20+count*4);
@@ -1222,19 +1235,64 @@ $('search').oninput=renderList;
 
 // ---------- client add/edit ----------
 $('addMode').onclick=()=>{ $('pointOverlay').classList.remove('on'); toggleAdd(true); };
-if($('pointCreate')) $('pointCreate').onclick=()=>{ resetForm(); openPointModal(); };
+// Создание точки живёт в двух местах разом: кнопкой в панели на широком
+// экране и кругом над картой на телефоне. Действие одно, поэтому и
+// обработчик один — по классу, а не по идентификатору.
+document.querySelectorAll('.js-point-create').forEach(b=>b.onclick=()=>{ resetForm(); openPointModal(); });
 function toggleAdd(on){ addModeOn=on; $('addMode').classList.toggle('active',on); $('modeTag').classList.toggle('on',on); $('addHint').style.display=on?'block':'none'; map.getContainer().style.cursor=on?'crosshair':''; }
-function avoidBtnStyle(){ return 'cursor:pointer;font-family:var(--mono);font-size: var(--fs-1);border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius: var(--r-pill);padding: var(--sp-2) var(--sp-3)'; }
-function renderAvoidZones(){ if(!avoidLayer) return; avoidLayer.clearLayers(); (appSettings.avoid_zones||[]).forEach(z=>{ const circ=L.circle([z.lat,z.lng],{radius:z.r||150,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.12,weight:2,dashArray:'5 5'}); const bs=avoidBtnStyle(); let html='<strong>🚫 Объезд</strong> <span style="color:var(--ink-dim)">· '+(z.r||150)+' м</span>'; if(canWrite()) html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3)"><button onclick="avoidRadius(\''+z.id+'\',-50)" style="'+bs+'">– радиус</button><button onclick="avoidRadius(\''+z.id+'\',50)" style="'+bs+'">+ радиус</button><button onclick="avoidDel(\''+z.id+'\')" style="'+bs+'">удалить</button></span>'; circ.bindPopup(html); avoidLayer.addLayer(circ); }); }
+// Кружок на карте только показывает объезд. Правят его в панели «Маршрут»:
+// три кнопки в каждой всплывашке — это тот же орган в двух местах, и они
+// неизбежно разъедутся.
+function renderAvoidZones(){ if(!avoidLayer) return; avoidLayer.clearLayers(); (appSettings.avoid_zones||[]).forEach((z,i)=>{ const circ=L.circle([z.lat,z.lng],{radius:z.r||150,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.12,weight:2,dashArray:'5 5'}); circ.bindPopup('<strong>Объезд '+(i+1)+'</strong> <span style="color:var(--ink-dim)">· '+(z.r||150)+' м</span><br><span style="color:var(--ink-faint);font-size:12px">радиус меняется в панели «Маршрут»</span>'); avoidLayer.addLayer(circ); }); }
 async function saveAvoidZones(){ try{ const {error}=await sb.from('settings').update({avoid_zones:appSettings.avoid_zones||[]}).eq('id',true); if(error) notify('Не удалось сохранить объезды: '+error.message,'err'); }catch(e){ notify('Не удалось сохранить объезды','err'); } }
-function addAvoidZone(ll){ if(!canWrite()) return; appSettings.avoid_zones=appSettings.avoid_zones||[]; appSettings.avoid_zones.push({id:'az'+Date.now().toString(36),lat:ll.lat,lng:ll.lng,r:150}); saveAvoidZones(); renderAvoidZones(); if(avoidAreaKm2()>180) notify('Объездов много (суммарно ~'+avoidAreaKm2().toFixed(0)+' км²). Сервер ORS может отклонить запрос — уменьши радиусы.','warn'); else showToast('Объезд добавлен'); }
-window.avoidRadius=function(id,delta){ if(!canWrite()) return; const z=(appSettings.avoid_zones||[]).find(x=>x.id===id); if(!z) return; z.r=Math.max(50,Math.min(3000,(z.r||150)+delta)); saveAvoidZones(); renderAvoidZones(); };
-window.avoidDel=function(id){ if(!canWrite()) return; appSettings.avoid_zones=(appSettings.avoid_zones||[]).filter(x=>x.id!==id); saveAvoidZones(); renderAvoidZones(); map.closePopup(); };
+function addAvoidZone(ll){ if(!canWrite()) return; appSettings.avoid_zones=appSettings.avoid_zones||[]; appSettings.avoid_zones.push({id:'az'+Date.now().toString(36),lat:ll.lat,lng:ll.lng,r:150}); saveAvoidZones(); renderAvoidZones(); renderAvoidList(); toggleAvoid(false); if(avoidAreaKm2()>180) notify('Объездов много (суммарно ~'+avoidAreaKm2().toFixed(0)+' км²). Сервер ORS может отклонить запрос — уменьши радиусы.','warn'); else showToast('Объезд добавлен'); }
+function avoidRadius(id,delta){ if(!canWrite()) return; const z=(appSettings.avoid_zones||[]).find(x=>x.id===id); if(!z) return; z.r=Math.max(50,Math.min(3000,(z.r||150)+delta)); saveAvoidZones(); renderAvoidZones(); renderAvoidList(); }
+function avoidDel(id){ if(!canWrite()) return; appSettings.avoid_zones=(appSettings.avoid_zones||[]).filter(x=>x.id!==id); saveAvoidZones(); renderAvoidZones(); renderAvoidList(); map.closePopup(); }
 function avoidPolygons(){ const zs=appSettings.avoid_zones||[]; if(!zs.length||typeof turf==='undefined') return null; const coords=[]; zs.forEach(z=>{ try{ const c=turf.circle([z.lng,z.lat],(z.r||150)/1000,{units:'kilometers',steps:20}); if(c&&c.geometry) coords.push(c.geometry.coordinates); }catch(e){} }); return coords.length?{type:'MultiPolygon',coordinates:coords}:null; }
-function toggleAvoid(on){ avoidModeOn=on; const b=$('avoidMode'); if(b) b.checked=on; const h=$('avoidHint'); if(h) h.style.display=on?'block':'none'; if(on&&addModeOn) toggleAdd(false); if(on&&wpModeOn){ wpModeOn=false; const w=$('rWpMode'); if(w) w.classList.remove('active'); } map.getContainer().style.cursor=on?'crosshair':''; }
-// Объезды переехали в меню слоёв и стали флажком: это режим карты,
-// а не однократное действие, и флажок честнее кнопки.
-if($('avoidMode')) $('avoidMode').onchange=()=>toggleAvoid($('avoidMode').checked);
+// Постановка объезда — ОДИНОЧНОЕ действие, а не режим.
+//
+// Раньше это был флажок: включил — и каждый клик по карте ставил «кирпич»,
+// пока не вспомнишь выключить. Забытый режим ставил их пачками, а каждый
+// лишний объезд удорожает расчёт у ORS (полигоны уходят в запрос) и может
+// вовсе завалить его по площади. Теперь: нажал «отметить», ткнул в одно
+// место — режим сам погас.
+function toggleAvoid(on){
+  avoidModeOn=on;
+  const h=$('avoidHint'); if(h) h.style.display=on?'block':'none';
+  const b=$('avoidAdd'); if(b){ b.classList.toggle('active',on); b.textContent=on?'Отмена':'+ Отметить на карте'; }
+  if(on&&addModeOn) toggleAdd(false);
+  if(on&&wpModeOn){ wpModeOn=false; const w=$('rWpMode'); if(w) w.classList.remove('active'); }
+  map.getContainer().style.cursor=on?'crosshair':'';
+}
+if($('avoidAdd')) $('avoidAdd').onclick=()=>toggleAvoid(!avoidModeOn);
+
+// Список объездов в панели. Радиус меняется здесь же, а не во всплывашке
+// на карте: чтобы попасть в неё, надо сперва найти кружок глазами.
+function renderAvoidList(){
+  const box=$('avoidList'); const n=(appSettings.avoid_zones||[]).length;
+  const cnt=$('avoidN'); if(cnt) cnt.textContent=n?String(n):'';
+  const chip=$('chipAvoid'); if(chip) chip.classList.toggle('has',n>0);
+  if(!box) return;
+  if(!n){ box.innerHTML='<div class="hint" style="margin:0">Объездов нет. Маршрут пойдёт как проложит роутер.</div>'; return; }
+  box.innerHTML=(appSettings.avoid_zones||[]).map((z,i)=>
+    '<div class="avrow" data-az="'+esc(z.id)+'">'
+    +'<span class="nm">Объезд '+(i+1)+'</span>'
+    +'<span class="r">'+(z.r||150)+' м</span>'
+    +'<span class="avstep"><button type="button" data-azr="'+esc(z.id)+'" data-d="-50">−</button>'
+    +'<button type="button" data-azr="'+esc(z.id)+'" data-d="50">+</button></span>'
+    +'<button type="button" class="avx" data-azd="'+esc(z.id)+'" title="Убрать">×</button></div>').join('');
+  const area=avoidAreaKm2();
+  if(area>180) box.innerHTML+='<div class="err">Суммарная площадь ~'+area.toFixed(0)+' км². Сервер маршрутов может отклонить запрос — уменьши радиусы.</div>';
+  box.querySelectorAll('[data-azr]').forEach(b=>b.onclick=()=>avoidRadius(b.dataset.azr,+b.dataset.d));
+  box.querySelectorAll('[data-azd]').forEach(b=>b.onclick=()=>avoidDel(b.dataset.azd));
+  // Нажатие по строке — показать этот объезд на карте: иначе среди
+  // десятка кружков не понять, какой из них правишь.
+  box.querySelectorAll('[data-az]').forEach(r=>r.onclick=e=>{
+    if(e.target.closest('button')) return;
+    const z=(appSettings.avoid_zones||[]).find(x=>x.id===r.dataset.az); if(!z) return;
+    map.setView([z.lat,z.lng],Math.max(map.getZoom(),14));
+  });
+}
 if($('layersBtn')) $('layersBtn').onclick=(e)=>{ e.stopPropagation();
   const p=$('layersPop'); if(!p) return; const on=p.classList.toggle('on');
   $('layersBtn').classList.toggle('on',on); };
@@ -5444,7 +5502,6 @@ function routeStopsAll(){ return (rStart?[{type:'start',name:rStart.name,lat:rSt
 function routeHasClient(cid){ return rStops.some(s=>s.clientId===cid); }
 function resetBuilt(){ rRoute={km:0,driveH:0,geometry:null}; rVariants=[]; $('rVariants').innerHTML=''; $('rStatus').textContent='маршрут не построен'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; endDeclined=false; drawStops(); }
 function pushClientStop(c){ rStops.push({type:'client',name:c.name,lat:c.lat,lng:c.lng,clientId:c.id}); }
-window.addBaseStart=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); rStart={name:c.name,lat:c.lat,lng:c.lng,placeId:c.id,description:c.description||''}; renderRoutePanel(); resetBuilt(); };
 window.addBaseStop=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); rStops.push({type:'place',name:c.name,lat:c.lat,lng:c.lng,placeId:c.id,description:c.description||''}); showRouteTab(); renderRoutePanel(); resetBuilt(); };
 window.addClientToRoute=function(cid){ const c=clients.find(x=>x.id==cid); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); pushClientStop(c); showRouteTab(); renderRoutePanel(); resetBuilt(); maybePromptJob(cid); };
 window.addEquipToRoute=function(cid,eid){ const c=clients.find(x=>x.id==cid); const e=(eqByClient[cid]||[]).find(x=>x.id==eid); if(!c||!e||!canWrite()) return; map.closePopup(); switchTab('map');
@@ -5469,8 +5526,9 @@ function updateRouteActions(){
     b.classList.toggle('amber',!!amber); b.disabled=!!disabled; };
   set('rWpMode',   !enough,        false);
   set('rBuild',    enough&&!built, !enough);
-  set('rOpt',      false,          !enough);
   set('rSaveTrip', built,          !built);
+  // Оптимизатору нужно, что переставлять: на двух точках порядок один.
+  const co=$('chipOpt'); if(co) co.disabled=!enough;
 }
 
 function drawStops(){ routeLayer.clearLayers(); const stops=routeStopsAll();
@@ -5562,12 +5620,39 @@ function wireRouteDrag(box){
 }
 function rMove(i,dir){ const j=i+dir; if(j<0||j>=rStops.length) return; const t=rStops[i]; rStops[i]=rStops[j]; rStops[j]=t; renderRoutePanel(); resetBuilt(); }
 $('rWpMode').onclick=()=>{ wpModeOn=!wpModeOn; $('rWpMode').classList.toggle('active',wpModeOn); $('rWpHint').style.display=wpModeOn?'block':'none'; if(wpModeOn&&addModeOn) toggleAdd(false); map.getContainer().style.cursor=wpModeOn?'crosshair':''; };
-if($('rMoreToggle')) $('rMoreToggle').onclick=()=>{
-  const closed=$('rMore').style.display==='none';
-  $('rMore').style.display=closed?'':'none';
-  $('rMoreToggle').textContent=(closed?'▾':'▸')+' Ещё: объезды, оптимизация, коридор';
+// ---------- параметры построения ----------
+//
+// Три чипа под кнопкой «Построить». «Объезды» и «Коридор» открывают свои
+// списки — одновременно не бывает, второй закрывает первый: панель узкая,
+// и два раскрытых блока выталкивают саму кнопку за экран.
+// «Оптимизировать» — залипающий: он не открывает ничего, а меняет то,
+// что сделает «Построить». Раньше это была отдельная кнопка
+// «Оптимизировать и построить», то есть второй способ запустить то же
+// самое — и человек каждый раз выбирал между двумя кнопками вместо того,
+// чтобы выбрать порядок точек.
+let optOn=false;
+function rParam(name){
+  const bodies={avoid:'avoidBody',cor:'corBody'};
+  const open=(name&&$(bodies[name])&&$(bodies[name]).style.display==='none')?name:null;
+  Object.keys(bodies).forEach(k=>{ const b=$(bodies[k]); if(b) b.style.display=(k===open)?'':'none'; });
+  const ca=$('chipAvoid'), cc=$('chipCor');
+  if(ca) ca.classList.toggle('on',open==='avoid');
+  if(cc) cc.classList.toggle('on',open==='cor');
+  if(open==='avoid') renderAvoidList();
+  // Уходя с объездов — гасим постановку: иначе следующий клик по карте
+  // поставит кирпич из закрытого блока.
+  if(open!=='avoid'&&avoidModeOn) toggleAvoid(false);
+}
+if($('chipAvoid')) $('chipAvoid').onclick=()=>rParam('avoid');
+if($('chipCor')) $('chipCor').onclick=()=>rParam('cor');
+if($('chipOpt')) $('chipOpt').onclick=()=>{
+  optOn=!optOn;
+  $('chipOpt').classList.toggle('on',optOn);
+  $('chipOpt').setAttribute('aria-pressed',optOn?'true':'false');
+  $('rStatus').textContent=optOn
+    ? 'Порядок точек подберёт оптимизатор при построении.'
+    : 'Порядок точек — как в списке.';
 };
-$('corToggle').onclick=()=>{ const closed=$('corBody').style.display==='none'; $('corBody').style.display=closed?'':'none'; $('corToggle').textContent=(closed?'▾':'▸')+' Коридор: найти попутных клиентов'; };
 $('rWpAdd').onclick=async ()=>{ const q=$('rWp').value.trim(); const box=$('rWpRes'); if(!q) return; box.innerHTML='<div class="hint">Ищу…</div>';
   try{ const data=await geoSearch(q,5); if(!data.length){ box.innerHTML='<div class="hint">Не найдено.</div>'; return; } box.innerHTML='';
     data.forEach(it=>{ const d=document.createElement('div'); d.className='pt'; d.style.cursor='pointer'; d.innerHTML='<div class="nm" style="font-size: var(--fs-3);font-weight:500">'+esc(it.display_name)+'</div>'; d.onclick=()=>{ rStops.push({type:'wp',name:it.display_name.split(',')[0],lat:+it.lat,lng:+it.lon}); $('rWp').value=''; box.innerHTML=''; renderRoutePanel(); resetBuilt(); }; box.appendChild(d); }); }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||'Ошибка геокодера.')+'</div>'; } };
@@ -5585,8 +5670,10 @@ $('baseNewAdd').onclick=async ()=>{ const q=$('baseNew').value.trim(); if(!q){ $
     const ins=await sb.from('clients').insert({name:nm,description:ds,lat:+it.lat,lng:+it.lon,is_base:true,color:'#27d3c4'}).select().single(); if(ins.error){ $('baseNewRes').innerHTML='<div class="err">'+esc(ins.error.message)+'</div>'; return; }
     $('baseNew').value='';$('baseNewName').value='';$('baseNewDesc').value=''; await loadAll(); chooseBase(ins.data);
   }catch(e){ $('baseNewRes').innerHTML='<div class="err">Ошибка: '+esc(e.message||e)+'</div>'; } finally{ $('baseNewAdd').disabled=false; } };
-$('rBuild').onclick=()=>{ const stops=routeStopsAll(); if(stops.length<2){ $('rStatus').textContent='Нужно минимум 2 точки.'; return; } if(orsKeyMissing()){ orsMissing($('rStatus')); return; } doBuildRoute(); };
-$('rOpt').onclick=optimizeOrder;
+$('rBuild').onclick=()=>{ const stops=routeStopsAll(); if(stops.length<2){ $('rStatus').textContent='Нужно минимум 2 точки.'; return; } if(orsKeyMissing()){ orsMissing($('rStatus')); return; }
+  // Одна кнопка на два пути: с включённым чипом она сперва подбирает
+  // порядок, потом строит (optimizeOrder сам вызывает doBuildRoute).
+  if(optOn) optimizeOrder(); else doBuildRoute(); };
 async function avoidMatrix(pts,onProg){ await ensureTurf();
   const n=pts.length, ap=avoidPolygons(), pref=$('rPref').value;
   const M=Array.from({length:n},()=>new Array(n).fill(0)); let done=0, total=n*(n-1)/2;
@@ -5619,7 +5706,7 @@ async function optimizeOrder(){ if(rBusy) return; if(orsKeyMissing()){ orsMissin
     let endIdx=null; if(endBase){ pts.push({lat:endBase.lat,lng:endBase.lng}); endIdx=pts.length-1; }
     const pairs=pts.length*(pts.length-1)/2;
     if(pairs>28){ $('rStatus').innerHTML='<span class="err">Точек многовато ('+pts.length+') для оптимизации с объездами: понадобилось бы '+pairs+' запросов к ORS. Убери часть точек или оптимизируй без объездов.</span>'; return; }
-    rBusy=true; $('rOpt').disabled=true; $('rBuild').disabled=true;
+    rBusy=true; $('rBuild').disabled=true;
     try{ $('rStatus').textContent='Считаю расстояния с учётом объездов…';
       const M=await avoidMatrix(pts,(d,t)=>{ $('rStatus').textContent='Считаю расстояния с учётом объездов… '+d+'/'+t; });
       const res=tspOrder(M,endIdx);
@@ -5630,7 +5717,7 @@ async function optimizeOrder(){ if(rBusy) return; if(orsKeyMissing()){ orsMissin
       rBusy=false; updateRouteActions(); await doBuildRoute(); return;
     }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка оптимизации: '+esc(e.message||e)+'</span>'; return; }
     finally{ rBusy=false; updateRouteActions(); } }
-  $('rStatus').textContent='Оптимизирую порядок…'; rBusy=true; $('rOpt').disabled=true; $('rBuild').disabled=true;
+  $('rStatus').textContent='Оптимизирую порядок…'; rBusy=true; $('rBuild').disabled=true;
   try{ const data=await orsPost('https://api.openrouteservice.org/optimization',body); const route=data.routes&&data.routes[0]; if(!route) throw new Error('оптимизатор не нашёл решения');
     const orderIds=route.steps.filter(st=>st.type==='job').map(st=>st.job); const orderedVisit=orderIds.map(id=>rStops[id]).filter(Boolean); const fixedStart=(fixedStartIdx!=null)?rStops[fixedStartIdx]:null;
     rStops=[].concat(fixedStart?[fixedStart]:[], orderedVisit, placeStops); renderRoutePanel(); resetBuilt(); $('rStatus').textContent='Порядок оптимизирован, строю маршрут…';
@@ -5897,7 +5984,7 @@ async function doBuildRoute(){ if(rBusy) return; const stops=dedupeStops(routeSt
   // ничего об этом не сказав. Поэтому ждём явно, а не надеемся на прогрев.
   try{ await ensureTurf(); }catch(e){ $('rStatus').innerHTML='<span class="err">'+esc(e.message)+'</span>'; return; }
   const hits=avoidHits(stops); if(hits.length){ $('rStatus').innerHTML='<span class="err">В зоне объезда: '+esc(hits.join(', '))+'. ORS не построит маршрут к точке внутри «кирпича» — уменьши радиус или убери зону.</span>'; return; }
-  rBusy=true; $('rBuild').disabled=true; if($('rOpt')) $('rOpt').disabled=true; $('rStatus').textContent='Считаю…';
+  rBusy=true; $('rBuild').disabled=true; $('rStatus').textContent='Считаю…';
   const pref=$('rPref').value; const coords=stops.map(s=>[s.lng,s.lat]); const ap=avoidPolygons();
   try{
     if(!ap){ const body={coordinates:coords,preference:pref}; if(stops.length===2) body.alternative_routes={target_count:3,weight_factor:1.6,share_factor:0.6};
