@@ -16,10 +16,9 @@ export default [{
       // Функции, объявленные как window.X=... и вызываемые из onclick в строках
       // разметки. Линтер объявления не видит, но в браузере они разрешаются
       // через глобальную область — это не ошибки.
-      addBaseStart:"readonly",addBaseStop:"readonly",addClientToRoute:"readonly",
+      addBaseStop:"readonly",addClientToRoute:"readonly",
       addEquipToRoute:"readonly",openEquip:"readonly",editClient:"readonly",
-      newJobForClient:"readonly",newJobForEquip:"readonly",gotoSettings:"readonly",
-      avoidRadius:"readonly",avoidDel:"readonly" }
+      newJobForClient:"readonly",newJobForEquip:"readonly",gotoSettings:"readonly" }
   },
   rules: { "no-undef":"error" }
 }];
