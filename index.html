@@ -314,8 +314,9 @@
     height: auto; max-height: calc(100% - 32px);
     border: 1px solid var(--line); border-radius: var(--r-lg);
     box-shadow: var(--shadow-lg); overflow: hidden;
-    background: color-mix(in srgb, var(--panel) 90%, transparent);
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    /* Стекло у панели карты — общее, из блока ниже: своя плотность 90%
+       делала её почти сплошной, и стоящий рядом рельс на 0.58 читался
+       как другой материал. */
   }
   .view-map .side-handle { display: flex; }
   .view-map .side > .scroll { flex: 0 1 auto; }
@@ -377,6 +378,35 @@
     white-space: nowrap; min-height: 0; }
   .seg.chipseg button.on { background: var(--ink); color: var(--panel); border-color: var(--ink);
     font-weight: 600; }
+  /* ── Параметры построения ────────────────────────────────────────────
+     Объезды, оптимизация и коридор — редкие настройки одного действия,
+     и стоят они рядом с ним, а не под общей подписью «Ещё». Вид общий,
+     поведение разное: «оптимизировать» залипает (меняет то, что сделает
+     «Построить»), два других открывают свои списки. */
+  .chiprow.rparams { margin-top: var(--gap-block); }
+  .rchip { flex: none; border: 1px solid var(--line); border-radius: var(--r-pill);
+    background: var(--panel); color: var(--ink-dim); padding: var(--pad-chip);
+    font-family: var(--mono); font-size: var(--fs-1); letter-spacing: .3px;
+    white-space: nowrap; cursor: pointer; display: inline-flex; align-items: center;
+    gap: var(--gap-tight); transition: border-color var(--t), background var(--t), color var(--t); }
+  .rchip.on { background: var(--ink); color: var(--panel); border-color: var(--ink); font-weight: 600; }
+  .rchip .n { font-size: var(--fs-1); opacity: .75; }
+  .rchip .n:empty { display: none; }
+  /* Список объездов: те же тонкие строки, что у точек. */
+  .avrow { display: flex; align-items: center; gap: var(--gap-row);
+    padding: var(--pad-row); background: var(--panel-2); border: 1px solid var(--line);
+    border-left: 3px solid var(--red); border-radius: var(--r-sm); margin-bottom: var(--gap-tight); }
+  .avrow .nm { flex: 1 1 0; min-width: 0; font-size: var(--fs-4); }
+  .avrow .r { font-family: var(--mono); font-size: var(--fs-2); color: var(--ink-faint); }
+  .avstep { display: flex; align-items: center; border: 1px solid var(--line);
+    border-radius: var(--r-pill); overflow: hidden; flex: none; }
+  .avstep button { background: var(--panel); border: 0; color: var(--ink-dim); cursor: pointer;
+    font-family: var(--mono); font-size: var(--fs-3); padding: 2px var(--sp-3); }
+  .avstep button:hover { color: var(--ink); }
+  .avx { background: none; border: 0; color: var(--ink-faint); cursor: pointer;
+    font-size: var(--fs-6); line-height: 1; padding: 0 var(--sp-1); flex: none; }
+  .avx:hover { color: var(--red); }
+
   /* Сноска под списком: «на карте: 24». Раньше это была отдельная строка
      в конце панели — целый блок ради числа, которое смотрят раз в день. */
   .datachip { margin: var(--sp-4) 0 var(--sp-2); font-family: var(--mono);
@@ -384,6 +414,10 @@
   .datachip .ok { color: var(--ink-faint); }
   /* Круглая кнопка создания точки — над картой, у правого края, выше
      панели слоёв по стеку, но ниже самой шторки. */
+  /* Круглая кнопка — только телефон (см. медиазапрос). На широком экране
+     её место в панели: там до неё столько же движения, а карта остаётся
+     чистой. */
+  #pointToolsFab { display: none; }
   .fab-add { position: absolute; right: 16px;
     bottom: calc(16px + var(--sheet-h) + var(--rail-h)); width: 48px; height: 48px;
     border-radius: 50%; border: 0; cursor: pointer; z-index: 640;
@@ -610,7 +644,18 @@
   .mode-tag.on { display: block; animation: dropIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
   @keyframes dropIn { from { transform: translate(-50%, -20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
   
-  .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow-lg); }
+  /* Всплывашка точки — такая же плавающая поверхность над картой, как
+     панель и меню слоёв, и материал у неё тот же. Хвостик оставляем
+     сплошным: размывать треугольник в 12 px нечего, а на стыке с телом
+     видна была бы полоса другой плотности. */
+  .leaflet-popup-content-wrapper { background: var(--glass-panel); color: var(--ink);
+    border: 1px solid var(--line); box-shadow: var(--shadow-lg);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px); }
+  .leaflet-popup-tip { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow-lg); }
+  @supports not (backdrop-filter: blur(1px)) {
+    .leaflet-popup-content-wrapper { background: var(--panel); }
+  }
   .leaflet-popup-content { font-family: var(--sans); font-size: var(--fs-4); line-height: 1.5; margin: var(--sp-4); }
   
   .pane { flex: 1; display: flex; flex-direction: column; padding: var(--pad-window); overflow: hidden; background: var(--bg); }
@@ -792,15 +837,24 @@
      backdrop-filter поддерживают не все: там, где его нет, остаётся тот же
      фон, только плотнее — вид проще, но ничего не ломается. */
   .topbar, .rail, .modal, .sheet, .map-pop, .mleg, .busy, .toast,
-  .pop, .ctxmenu {
+  .pop, .ctxmenu, .view-map .side {
     background: var(--glass-panel);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
     backdrop-filter: saturate(180%) blur(20px);
   }
   @supports not (backdrop-filter: blur(1px)) {
     .topbar, .rail, .modal, .sheet, .map-pop, .mleg, .busy, .toast,
-    .pop, .ctxmenu { background: var(--panel); }
+    .pop, .ctxmenu, .view-map .side { background: var(--panel); }
   }
+  /* Поверх затемнения стекло вредно. Стекло показывает то, что за ним,
+     а за модалкой лежит собственная затемняющая подложка — просвечивает
+     не содержимое, а чёрное, и окно выходит темнее любой карточки под
+     ним. Там, где есть подложка, поверхность сплошная. */
+  .overlay .modal, .sheet-back ~ .sheet, .ph-view {
+    background: var(--panel);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .ph-view { background: rgba(0,0,0,.92); }
   /* Рельсу нужно, чтобы позади него что-то БЫЛО, иначе прозрачность
      просвечивает подложку страницы и колонка просто выходит темнее
      панелей — стекла не получается. Поэтому на вкладке карты карта
@@ -838,7 +892,7 @@
     border-radius: 2px; overflow: hidden; }
   .busy-bar i { display: block; height: 100%; width: 0; background: var(--accent);
     transition: width .2s linear; }
-  .ctxmenu { position: fixed; z-index: 9998; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: var(--gap-row); display: none; min-width: 210px; }
+  .ctxmenu { position: fixed; z-index: 9998; border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: var(--gap-row); display: none; min-width: 210px; }
   .ctxmenu.on { display: block; animation: popIn 0.12s ease; }
   .ctxmenu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); font-family: var(--sans); font-size: var(--fs-4); padding: var(--pad-row); border-radius: var(--r-sm); cursor: pointer; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--gap-block); }
@@ -864,8 +918,12 @@
   .chip-check:has(input:checked) { color: var(--accent-ink); border-color: var(--accent); }
   /* Всплывающее меню слоёв — привязано к карте, а не к окну,
      чтобы на узком экране не улетало за край. */
+  /* Фон не задаём: он приходит из общего блока стекла выше. Своё
+     `background: var(--panel)` здесь объявлено НИЖЕ него и перебивало
+     общее правило — меню слоёв оставалось единственной сплошной
+     поверхностью среди прозрачных. */
   .map-pop { position: absolute; top: 56px; right: 16px; z-index: 660; display: none;
-    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
+    border: 1px solid var(--line); border-radius: var(--r-md);
     padding: var(--pad-card); width: 270px; max-width: calc(100% - 32px); box-shadow: var(--shadow-lg); }
   .map-pop.on { display: block; }
   .map-pop h4 { font-family: var(--mono); font-size: var(--fs-1); letter-spacing: 1px;
@@ -956,25 +1014,30 @@
        в одно из трёх положений (см. wireSheetDrag). Переход выключается
        на время самого перетаскивания, иначе шторка едет за пальцем
        с отставанием. */
+    /* Минус пиксель — не суеверие: высота рельса приходит из
+       getBoundingClientRect и бывает дробной (59.5 при безопасной зоне),
+       а --rail-h целое. Полпикселя разницы — и между шторкой и навигацией
+       светится полоска карты. Заводим край на пиксель под рельс: он выше
+       по стеку и накрывает стык.
+       z-index выше элементов карты (её кнопки 650, элементы Leaflet 1000):
+       вытянутая на весь экран шторка иначе получала поверх себя «Слои»,
+       «Машины» и кнопки масштаба. Ниже рельса (1100) — он главнее. */
     .view-map .side { position: absolute; left: 0; right: 0; top: auto;
-      bottom: var(--rail-h); z-index: 500;
+      bottom: calc(var(--rail-h) - 1px); z-index: 1050;
       width: 100%; height: var(--sheet-snap, 52vh); max-height: none;
       transition: height var(--t); border: none; border-top: 1px solid var(--line);
-      border-radius: 0; background: var(--panel);
+      /* Фон — из общего блока стекла. Своё `background: var(--panel)`
+         здесь объявлено ниже и делало шторку сплошной именно на телефоне,
+         где стекло видно лучше всего: под ней карта. */
+      border-radius: 0;
       /* Тень плавающей карточки светит вниз на 40 px и ложилась прямо на
          навигацию. Пришвартованной снизу шторке низ не нужен вовсе:
          отрицательное растекание срезает его, сверху тень остаётся. */
       box-shadow: 0 -8px 18px -8px rgba(0,0,0,0.28); }
-    /* Шторка лежит на карте — значит, ей положено то же стекло, что
-       и рельсу под ней: две пришвартованные друг к другу поверхности,
-       разный материал у них читался бы как разные слои. */
-    .view-map .side, .view-map .side > .scroll { background: transparent; }
-    .view-map .side { background: var(--glass-panel);
-      -webkit-backdrop-filter: saturate(180%) blur(20px);
-      backdrop-filter: saturate(180%) blur(20px); }
-    @supports not (backdrop-filter: blur(1px)) {
-      .view-map .side { background: var(--panel); }
-    }
+    /* Стекло у шторки общее (см. блок выше). Здесь остаётся только снять
+       собственный фон с прокручиваемой части: иначе она перекрыла бы
+       стекло изнутри. */
+    .view-map .side > .scroll { background: transparent; }
     /* Один прокручиваемый слой вместо двух. Своя прокрутка у списка внутри
        прокручиваемой шторки — это два жеста, различить которые пальцем
        нельзя: список «залипает», когда доезжает до края. Высоту задаёт
@@ -984,6 +1047,9 @@
     .listbox { max-height: none; overflow: visible; padding-right: 0; }
     .view-map .side > .scroll { flex: 1 1 auto; min-height: 0; }
     .chiprow { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    /* Телефон: наоборот — кнопка на карте, а не в панели. */
+    #pointToolsFab { display: block; }
+    #pointTools { display: none !important; }
     .view-map .map-wrap { position: absolute; inset: 0; flex: none; }
     .view-map .leaflet-top.leaflet-left { margin-left: 0; }
     /* Подпись об источнике карты обязана быть видна (этого требуют
@@ -1900,6 +1966,10 @@
             <span class="chipsep"></span>
             <div class="seg chipseg" id="typeFilter"><button class="on" data-tf="all">все</button><button data-tf="client">клиенты</button><button data-tf="base">депо</button></div>
           </div>
+          <!-- На широком экране создание точки живёт в панели: круглая
+               кнопка поверх карты нужна там, где панель занимает пол-экрана
+               и до неё не дотянуться, — то есть на телефоне. -->
+          <div id="pointTools"><button class="btn amber js-point-create" type="button" style="width:100%;margin-top: var(--gap-block)">+ Создать точку</button></div>
           </div>
           <!-- Свернуть список — не то же самое, что свернуть панель.
                Шторкой прячут всё сразу; здесь остаются поиск и фильтры,
@@ -1943,20 +2013,33 @@
         </div>
         <div id="rVariants" style="margin-top: var(--sp-3)"></div>
 
-        <button class="btn sm ghost" id="rMoreToggle" style="width:100%;margin-top: var(--sp-4)">▸ Ещё: объезды, оптимизация, коридор</button>
-        <div id="rMore" style="display:none;margin-top: var(--sp-3)">
-          <!-- Объезды живут здесь, а не среди фильтров точек: «кирпич» нужен
-               ровно для одного — чтобы маршрут обошёл плохую дорогу. -->
-          <label class="chip-check" id="avoidWrap" style="width:100%;justify-content:center"><input type="checkbox" id="avoidMode"><span>🚫 Ставить объезды</span></label>
-          <div class="hint" id="avoidHint" style="display:none">Кликай по карте, где объезжать. Радиус меняется в попапе «кирпича». Быстрее — правый клик по карте.</div>
-          <button class="btn sm" id="rOpt" style="width:100%;margin-top: var(--sp-3)">Оптимизировать и построить</button>
-          <button class="btn sm ghost" id="corToggle" style="width:100%;margin-top: var(--sp-3)">▸ Коридор: найти попутных клиентов</button>
-          <div id="corBody" style="display:none;margin-top: var(--sp-3)">
+        <!-- Три редкие настройки построения — одним рядом чипов под кнопкой,
+             а не тремя разными органами под подписью «Ещё: объезды,
+             оптимизация, коридор». Они и правда разные: «оптимизировать» —
+             переключатель (меняет то, что сделает «Построить»), «объезды»
+             и «коридор» открывают свои списки. Разницу несёт поведение,
+             а вид у них общий: это всё параметры одного действия. -->
+        <div class="chiprow rparams">
+          <button type="button" class="rchip" id="chipAvoid">Объезды <span class="n" id="avoidN">0</span></button>
+          <button type="button" class="rchip" id="chipOpt" aria-pressed="false">Оптимизировать</button>
+          <button type="button" class="rchip" id="chipCor">Коридор</button>
+        </div>
+        <!-- Объезды. Раньше это был режим карты: включил флажок — и каждый
+             клик по карте ставил «кирпич», пока не вспомнишь выключить.
+             Каждый лишний кирпич — это дороже расчёт у ORS, а забытый режим
+             ставил их пачками. Теперь это одиночное действие: нажал
+             «отметить», ткнул в одно место — режим сам погас. -->
+        <div id="avoidBody" style="display:none;margin-top: var(--gap-row)">
+          <div id="avoidList"></div>
+          <button class="btn sm" id="avoidAdd" style="width:100%;margin-top: var(--gap-row)">+ Отметить на карте</button>
+          <div class="hint" id="avoidHint" style="display:none">Ткни по карте, где объезжать. Одно нажатие — один объезд.</div>
+          <div class="hint" id="avoidNote">Учитываются при построении маршрута.</div>
+        </div>
+        <div id="corBody" style="display:none;margin-top: var(--gap-row)">
             <div class="seg"><button id="corDist" class="on">по км</button><button id="corTime">по времени</button></div>
             <div id="corDistBox" style="margin-top: var(--sp-3)"><div class="row" style="align-items:center"><input type="range" id="rBuf" min="0" max="50" step="1" value="0" class="grow"><span class="hint" id="rBufVal" style="margin: 0">0 км</span></div></div>
             <div id="corTimeBox" style="margin-top: var(--sp-3);display:none"><div class="row" style="align-items:center"><input type="range" id="rIso" min="0" max="60" step="5" value="0" class="grow"><span class="hint" id="rIsoVal" style="margin: 0">0 мин</span><button class="btn sm" id="rIsoBuild">изохрона</button></div></div>
-            <div id="rCorridor" style="margin-top: var(--sp-3);max-height:200px;overflow:auto"></div>
-          </div>
+          <div id="rCorridor" style="margin-top: var(--sp-3);max-height:200px;overflow:auto"></div>
         </div>
 
         <button class="btn amber" id="rSaveTrip" style="width:100%;margin-top: var(--sp-4)">Сохранить как выезд</button>
@@ -1983,7 +2066,7 @@
            жёлтая кнопка во всю ширину панели весила больше самого списка
            и стояла ровно между фильтрами и результатом. Живёт у правого
            нижнего края и поднимается над шторкой ровно на её высоту. -->
-      <div id="pointTools"><button class="fab-add" id="pointCreate" type="button" title="Создать точку" aria-label="Создать точку">+</button></div>
+      <div id="pointToolsFab"><button class="fab-add js-point-create" type="button" title="Создать точку" aria-label="Создать точку">+</button></div>
       <!-- Легенда шла сплошной строкой в пять пунктов через точку и рвалась
            по словам, а пояснение под флажком висело постоянно. Легенда стала
            столбиком, пояснение уехало под «?». -->
