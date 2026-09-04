@@ -55,6 +55,13 @@
        что размер подбирали на глаз. Осталось девять ступеней. */
     --fs-1: 10px; --fs-2: 11px; --fs-3: 12px; --fs-4: 13px; --fs-5: 14px;
     --fs-6: 16px; --fs-7: 20px; --fs-8: 24px; --fs-9: 32px;
+    /* Высота нижней навигации. На широком экране рельс стоит слева и
+       ничего не загораживает — ноль. На телефоне он ложится НА содержимое
+       (иначе стекло нечего размывать: под панелью в потоке пусто), и это
+       значение — та полоса, которую содержимое должно уметь под собой
+       прокрутить. Точное число ставит railHeight() по факту вёрстки;
+       здесь запасное, чтобы до первого замера ничего не пряталось. */
+    --rail-h: 0px;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -502,12 +509,20 @@
      3. Текстовая цель — светлеет текст.
      У .card наведения нет вовсе: карточка настроек не кликается, и её
      подъём под курсором обещал действие, которого не существует. */
-  .pt:hover, .wf-row:hover, .chip:hover, .stat.nav:hover, .kcard:hover,
-  .icobtn:hover, .btn:hover:not(:disabled) { border-color: var(--ink-dim); }
-  .arow:hover, .arow2:hover, .emrow:hover, .son:hover,
-  .ctxmenu button:hover, .btn.ghost:hover { background: var(--panel-2); }
-  .nav-i:hover, .tab:hover, .seg button:hover, .subtab:hover, .listhead:hover,
-  .side-tabs .stab:hover, .chip-check:hover, .map-pop .lay:hover { color: var(--ink); }
+  /* Наведение существует только там, где есть чем наводить. На тач-экране
+     :hover ЗАЛИПАЕТ после касания — палец убрали, состояние осталось до
+     следующего касания в другом месте. На выбранной кнопке .seg это красило
+     чёрный текст по чёрному фону: подпись пропадала до тех пор, пока не
+     нажмёшь куда-нибудь ещё. Медиазапрос убирает наведение с пальца
+     целиком, а не латает один случай. */
+  @media (hover: hover) {
+    .pt:hover, .wf-row:hover, .chip:hover, .stat.nav:hover, .kcard:hover,
+    .icobtn:hover, .btn:hover:not(:disabled) { border-color: var(--ink-dim); }
+    .arow:hover, .arow2:hover, .emrow:hover, .son:hover,
+    .ctxmenu button:hover, .btn.ghost:hover { background: var(--panel-2); }
+    .nav-i:hover, .tab:hover, .seg button:not(.on):hover, .subtab:hover, .listhead:hover,
+    .side-tabs .stab:hover, .chip-check:hover, .map-pop .lay:hover { color: var(--ink); }
+  }
   .card h3 { font-size: var(--fs-6); font-weight: 600; margin-bottom: var(--sp-3); display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
   .card .meta { font-family: var(--mono); font-size: var(--fs-2); color: var(--ink-faint); margin-bottom: var(--sp-4); line-height: 1.5; }
   .card .acts { display: flex; gap: var(--sp-3); flex-wrap: wrap; }
@@ -674,6 +689,7 @@
     justify-content: flex-end; max-width: calc(100% - 32px); }
   .veh-btn { z-index: 650; cursor: pointer; font-family: var(--mono); font-size: var(--fs-2); letter-spacing: .5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-dim); border-radius: var(--r-sm); padding: var(--sp-3) var(--sp-3); box-shadow: var(--shadow-lg); }
   .veh-btn.on { color: var(--accent-ink); border-color: var(--accent); }
+  .veh-btn .vb-ic { vertical-align: -1px; }
   /* Ряд фильтров: сегмент типа и чип «внимание» в одну строку —
      раньше это были две строки плюс абзац подсказки между ними. */
   .filter-row { display: flex; gap: var(--sp-3); align-items: center; margin-top: var(--sp-3); flex-wrap: wrap; }
@@ -768,18 +784,32 @@
        мобильные 58vh: селектор .view-map .side специфичнее, чем .side,
        и шторка забирала весь экран — карты на вкладке карты не было видно.
        Половина экрана шторке, половина карте. */
-    .view-map .side { position: static; left: auto; top: auto; bottom: auto;
+    /* Карта на телефоне — во весь экран, шторка лежит на ней снизу.
+       Раньше они делили высоту пополам, и под навигацией оставалась
+       полоса пустого фона: размывать нечего, стекло рельса выглядело
+       как сплошная заливка. Теперь под рельсом карта — он и стал
+       стеклом. Шторка пришвартована НАД рельсом: её содержимое
+       нажимают, прятать его под навигацию нельзя. */
+    .view-map .side { position: absolute; left: 0; right: 0; top: auto;
+      bottom: var(--rail-h); z-index: 500;
       width: 100%; max-height: 52vh; border: none; border-top: 1px solid var(--line);
       border-radius: 0; background: var(--panel);
+      /* Тень плавающей карточки светит вниз на 40 px и ложилась прямо на
+         навигацию. Пришвартованной снизу шторке низ не нужен вовсе:
+         отрицательное растекание срезает его, сверху тень остаётся. */
+      box-shadow: 0 -8px 18px -8px rgba(0,0,0,0.28);
       backdrop-filter: none; -webkit-backdrop-filter: none; }
     .listbox { max-height: 30vh; }
-    .view-map .map-wrap { position: relative; inset: auto; flex: 1; }
+    .view-map .map-wrap { position: absolute; inset: 0; flex: none; }
     .view-map .leaflet-top.leaflet-left { margin-left: 0; }
-    .side { width: 100%; min-width: 0; height: auto; flex: none; order: 2; border-right: none; border-top: 1px solid var(--line); box-shadow: 0 -2px 14px rgba(0,0,0,0.2); max-height: 58vh; min-height: 0; } 
+    /* Тень шторки светила вниз и ложилась на навигацию. Отрицательное
+       растекание убирает нижний край: сверху тень осталась, снизу её
+       больше нет. */
+    .side { width: 100%; min-width: 0; height: auto; flex: none; order: 2; border-right: none; border-top: 1px solid var(--line); box-shadow: 0 -8px 18px -8px rgba(0,0,0,0.28); max-height: 58vh; min-height: 0; } 
     .side-handle { display: flex; } .view-map .side-handle::before { content: ''; } 
     .side.sheet-collapsed { max-height: 46px; } 
     .side.sheet-collapsed .scroll { display: none; } 
-    .pane { padding: var(--sp-5); } 
+    .pane { padding: var(--sp-5); padding-bottom: calc(var(--sp-5) + var(--rail-h)); } 
     .modal { padding: var(--sp-5); max-height: 95vh; width: 100%; border-radius: var(--r-md); } 
     .pop { right: 8px; left: 8px; width: auto; } 
     .btn, input[type=text], input[type=number], input[type=tel], input[type=email], input[type=password], select { padding: var(--sp-4) var(--sp-5); }
@@ -787,8 +817,14 @@
     /* Рельс слева на телефоне — ошибка: приложение стоит как PWA,
        инженер держит его одной рукой, левый край недосягаем большим
        пальцем. Уводим навигацию вниз. */
-    .app { flex-direction: column; }
+    .app { flex-direction: column; position: relative; }
+    /* Рельс вынут из потока и лежит НА содержимом. В потоке под ним
+       ничего нет — размывать нечего, и стекло, о котором договорились
+       для шапок и модалок, на нём не работало вовсе. Содержимое
+       прокручивается под ним; полосу в --rail-h ему возвращают
+       нижними отступами прокручиваемых областей. */
     .rail { width: 100%; height: auto; flex-direction: row; order: 2;
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 600;
       border-right: none; border-top: 1px solid var(--line);
       padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); overflow-x: auto; }
     .rail-brand { display: none; }
@@ -1264,6 +1300,27 @@
 .view-job.job-task .job-works{order:1}
 .view-job.job-task .job-parts{order:2}
 .view-job.job-task .job-photos{order:3}
+/* ── Сворачиваемые карточки заявки ───────────────────────────────────
+   На телефоне «Работы», «Запчасти» и «Фото» идут одна под другой, и
+   заполненная первая уводит две другие за нижний край: до фотографий
+   инженер прокручивает половину экрана. Свёрнутая карточка оставляет от
+   себя заголовок с числом строк — видно, что там есть, и не надо
+   разворачивать, чтобы это узнать. На широком экране складывать нечего:
+   карточки стоят рядом. */
+.foldsum{display:none}
+@media (max-width: 760px){
+  .card.foldable > h3{cursor:pointer;padding-right: var(--sp-6);position:relative;
+    -webkit-tap-highlight-color:transparent}
+  .card.foldable > h3::after{content:'';position:absolute;right:2px;top:50%;
+    width:8px;height:8px;margin-top:-6px;border-right:2px solid var(--ink-faint);
+    border-bottom:2px solid var(--ink-faint);transform:rotate(45deg);
+    transition:transform var(--t)}
+  .card.foldable.folded > h3::after{transform:rotate(-45deg);margin-top:-3px}
+  .card.foldable.folded > *:not(h3){display:none}
+  .card.foldable.folded > h3{margin-bottom:0}
+  .card.foldable.folded .foldsum{display:inline;font-family:var(--mono);
+    font-size: var(--fs-2);font-weight:400;color:var(--ink-faint);margin-left: var(--sp-2)}
+}
 .job-ref-read{display:none}
 .view-job.job-task .job-ref-read{display:block;grid-column:1/-1;order:4}
 .view-job.job-task .job-ref-read[hidden]{display:none}
@@ -1374,7 +1431,12 @@
   opacity:1;background:transparent;border-color:transparent;
   padding-left:0;color:var(--ink);cursor:default}
 .view-job.job-task .job-ref .card{box-shadow:none}
-.job-foot{position:sticky;bottom:0;z-index:5;display:flex;align-items:center;
+/* Липкий край считается от края ПРОКРУТКИ, но не может выйти за поле
+   содержимого страницы — то есть за её нижний внутренний отступ. При
+   bottom:0 полоса вставала на высоту этого отступа выше низа экрана и
+   висела над пустотой. Отрицательное смещение ровно на отступ возвращает
+   её к краю. */
+.job-foot{position:sticky;bottom:calc(var(--sp-6) * -1);z-index:5;display:flex;align-items:center;
   justify-content:flex-end;gap: var(--sp-4);
   margin: var(--sp-5) calc(var(--sp-6) * -1) calc(var(--sp-6) * -1);
   padding: var(--sp-4) var(--sp-6) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
@@ -1384,7 +1446,12 @@
   margin-right:auto}
 .job-foot .btn{min-width:180px;justify-content:center}
 @media (max-width: 760px){
+  /* Полоса действия должна упираться в навигацию, а не висеть над
+     пустотой: снизу у страницы теперь отступ под рельс, и липкий край
+     нужно опустить ровно на него, иначе между кнопкой и навигацией
+     остаётся полоса содержимого — кнопка выглядит подвешенной. */
   .job-foot{margin: var(--sp-5) calc(var(--sp-5) * -1) calc(var(--sp-5) * -1);
+    bottom: calc(var(--sp-5) * -1);
     padding: var(--sp-4) var(--sp-5) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px))}
   .job-foot .btn{flex:1;min-width:0}
   .job-foot-h{display:none}
@@ -1441,7 +1508,12 @@
 .mine-pt-main:hover{background:var(--panel)}
 .mp-name{font-weight:600;min-width:0;overflow-wrap:break-word}
 .mp-eq{font-weight:400;color:var(--ink-dim);font-size: var(--fs-3)}
-.mp-st{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
+/* flex:none обязателен. Названия у нас длиной в строку («Димерське
+   надлісництво Філії …»), и без запрета на сжатие статус ужимался до
+   нуля: «открыта ›» разваливалась по буквам в столбик или уезжала под
+   обрез. Статус — короткий и постоянный, место ему положено целиком,
+   переносится пусть название. */
+.mp-st{flex:none;font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
 /* Позвонить и проехать — по одной точке, а не по выезду целиком:
    на маршруте их несколько, и звонить надо тому, к кому едешь сейчас. */
 .mine-pt-acts{display:flex;gap: var(--sp-3);padding: 0 var(--sp-4) var(--sp-4);flex-wrap:wrap}
@@ -1456,11 +1528,23 @@
 .mr-main{display:flex;flex-direction:column;gap:2px;min-width:0}
 .mr-name{font-weight:600;font-size: var(--fs-5);overflow-wrap:break-word}
 .mr-sub{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-faint)}
-.mr-st{font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
+.mr-st{flex:none;font-family:var(--mono);font-size: var(--fs-2);color:var(--ink-dim);white-space:nowrap}
 .mine-det[open] .mine-row{background:var(--panel-2)}
 .mine-hero .acts{margin-top: var(--sp-5)}
 .mine-body{padding: var(--sp-4) var(--sp-3) var(--sp-5);border-top:1px solid var(--line)}
 .mine-body h3{font-size: var(--fs-6)}
+/* Телефон. Названия точек здесь во всю ширину, поэтому статус встаёт
+   к ВЕРХНЕЙ строке названия, а не к его середине: у названия в три
+   строки центрированный статус висел напротив пустого места. Кнопки
+   делят строку поровну — «Позвонить» и «Проехать» жмут на ходу, и
+   промахнуться по ним не должно быть возможности. */
+@media (max-width: 760px){
+  .mine-hero h3{font-size: var(--fs-6)}
+  .mine-pt-main{align-items:flex-start;gap: var(--sp-3)}
+  .mine-pt-acts .btn{flex:1 1 0;min-width:0;justify-content:center}
+  .mine-hero .acts .btn{flex:1 1 auto;justify-content:center}
+  .mine-row{align-items:flex-start}
+}
 
 /* ── Шторка «Ещё» ────────────────────────────────────────────────────
    Нижнее меню держит только РАЗДЕЛЫ — 3–5 штук, как и предписывают
@@ -1647,7 +1731,11 @@
            Это переключатели способа СМОТРЕТЬ на карту, поэтому живут они
            на карте, а не над списком точек. -->
       <button class="veh-btn" id="layersBtn" title="Слои и режимы карты">◍ Слои</button>
-      <button class="veh-btn on" id="vehBtn" title="Показать машины службы">🚚 Машины</button>
+      <!-- Силуэт разметкой, а не эмодзи 🚚: у эмодзи на каждой платформе
+           свой рисунок и свой цвет, на тёмной теме он светится, и рядом
+           с плоским «◍ Слои» это выглядело как чужая наклейка. Тот же
+           силуэт стоит на самих машинах на карте. -->
+      <button class="veh-btn on" id="vehBtn" title="Показать машины службы"><svg class="vb-ic" viewBox="0 0 34 20" width="17" height="10" aria-hidden="true" fill="currentColor"><path d="M1 3.5a1.5 1.5 0 0 1 1.5-1.5h14a1.5 1.5 0 0 1 1.5 1.5V14H1z"/><path d="M18 6.5h5.6a2 2 0 0 1 1.5.7l3.4 3.9a2 2 0 0 1 .5 1.3V14H18z"/><circle cx="8" cy="14.6" r="3.2"/><circle cx="24" cy="14.6" r="3.2"/></svg> Машины</button>
       </div>
       <!-- Легенда шла сплошной строкой в пять пунктов через точку и рвалась
            по словам, а пояснение под флажком висело постоянно. Легенда стала
@@ -1714,7 +1802,7 @@
       </div>
       </div>
 
-      <div class="card trip-wide job-works"><h3>Работы</h3>
+      <div class="card trip-wide job-works foldable" data-fold="jbWorks" data-fold-word="работа|работы|работ"><h3>Работы<span class="foldsum"></span></h3>
         <!-- Отметка присутствия — рядом с часами, а не отдельной карточкой:
              это одно и то же действие, разнесённое во времени. -->
         <div class="visit-row" id="jbVisit"></div>
@@ -1723,7 +1811,7 @@
         <div class="hint" id="jbTotals" style="margin-top: var(--sp-3)"></div>
       </div>
 
-      <div class="card trip-wide job-parts"><h3 class="cardhead">Запчасти и материалы <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Что поставили на машину. Две причины вести: без этого прибыль выезда считается без проданного узла — то есть занижена и по выручке, и по закупке; и через два года это единственное место, где будет ответ на «когда меняли».</span></span></h3>
+      <div class="card trip-wide job-parts foldable" data-fold="jbParts" data-fold-word="позиция|позиции|позиций"><h3 class="cardhead">Запчасти и материалы <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Что поставили на машину. Две причины вести: без этого прибыль выезда считается без проданного узла — то есть занижена и по выручке, и по закупке; и через два года это единственное место, где будет ответ на «когда меняли».</span></span><span class="foldsum"></span></h3>
         <div class="pt-add" id="jbPartAdd">
           <button class="btn sm" type="button" id="jbPartNew">+ запчасть</button>
           <span class="pt-sug" id="jbPartSug"></span>
@@ -1732,7 +1820,7 @@
         <div class="hint" id="jbPartTotals" style="margin-top: var(--sp-3)"></div>
       </div>
 
-      <div class="card trip-wide job-photos"><h3 class="cardhead">Фото <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Снимок «до» отвечает на «оно уже было сломано», «после» — на «вы не сделали», «дефект» — на «деталь была бракованной». Это доказательная база к гарантии на ремонт, а не украшение. Снимок ужимается перед отправкой, чтобы уходил и на слабой связи.</span></span></h3>
+      <div class="card trip-wide job-photos foldable" data-fold="jbPhotoList" data-fold-word="снимок|снимка|снимков"><h3 class="cardhead">Фото <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Снимок «до» отвечает на «оно уже было сломано», «после» — на «вы не сделали», «дефект» — на «деталь была бракованной». Это доказательная база к гарантии на ремонт, а не украшение. Снимок ужимается перед отправкой, чтобы уходил и на слабой связи.</span></span><span class="foldsum"></span></h3>
         <div class="ph-add" id="jbPhotoAdd">
           <button class="btn sm" type="button" data-ph="before">+ до</button>
           <button class="btn sm" type="button" data-ph="after">+ после</button>
