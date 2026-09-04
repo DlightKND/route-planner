@@ -4673,7 +4673,10 @@ async function measureTripKm(tid){
   const hard=+appSettings.track_max_kmh>0?+appSettings.track_max_kmh:300;
   const res=await resolveAnomalies(raw,{hardSpeedKmh:hard},makeReach());
   if(res.verdict.indexOf('трек недостоверен')===0){
-    return {ok:false,why:res.verdict,resolve:res};
+    // К приговору прикладываем разбор по причинам: сто точек «вне круга» и
+    // сто «старт не подтверждён» — разные поломки, и лечатся по-разному.
+    const by=Object.keys(res.reasons||{}).map(k=>k+': '+res.reasons[k]).join('; ');
+    return {ok:false,why:res.verdict+(by?('. Причины — '+by):''),resolve:res};
   }
   // Дальше — обычная чистка по уже достоверным точкам: дрожание на стоянке
   // и разрывы. Аномалий там уже нет, и вторая проверка скорости их не ищет.
@@ -4704,7 +4707,8 @@ async function measureTripKm(tid){
   }
   const tot=trackTotalKm(c,got);
   const note=[];
-  if(res.dropped.length) note.push('вырезано аномалий: '+res.dropped.length);
+  if(res.dropped.length) note.push('вырезано аномалий: '+res.dropped.length
+    +' из '+(res.dropped.length+res.points.length)+' точек');
   if(res.restored) note.push('возвращено по пути: '+res.restored);
   if(res.bridges&&res.bridges.length) note.push('мостов по дорогам: '+res.bridges.length);
   if(res.weakChecks) note.push('дороги не проверились '+res.weakChecks+' раз, судили по кругу');
