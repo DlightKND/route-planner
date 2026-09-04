@@ -326,7 +326,18 @@ function fitPad(p){
   }catch(e){}
   return out;
 }
-function fitUkraine(){ map.fitBounds(UA_BOUNDS,fitPad(20)); }
+// То же самое по левому краю: на широком экране карта продолжается под
+// рельсом (иначе ему нечего размывать), и эта полоса не видна.
+function fitPadL(o){
+  try{
+    const mw=document.querySelector('.view-map .map-wrap'), vw=mw&&mw.parentElement;
+    if(!mw||!vw) return o;
+    const hide=Math.round(vw.getBoundingClientRect().left-mw.getBoundingClientRect().left);
+    if(hide>0) o.paddingTopLeft=[o.paddingTopLeft[0]+hide,o.paddingTopLeft[1]];
+  }catch(e){}
+  return o;
+}
+function fitUkraine(){ map.fitBounds(UA_BOUNDS,fitPadL(fitPad(20))); }
 
 // ---------- связь с точкой ----------
 //
@@ -384,8 +395,8 @@ function showCtxMenu(e){ ctxLatLng=e.latlng; const m=$('ctxMenu'); let h='';
 function ctxAction(a){ if(!ctxLatLng) return; const ll=ctxLatLng;
   if(a==='add'){ if(addModeOn) toggleAdd(false); $('fName').value=''; $('fDesc').value=''; $('formErr').textContent=''; pendingLatLng={lat:ll.lat,lng:ll.lng}; flashPending(); openPointModal(); }
   else if(a==='avoid'){ addAvoidZone(ll); }
-  else if(a==='wp'){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:ll.lat,lng:ll.lng}); const b=$('routeBlock'); if(b) b.classList.remove('collapsed'); renderRoutePanel(); resetBuilt(); }
-  else if(a==='start'){ rStart={name:'Старт',lat:ll.lat,lng:ll.lng}; const b=$('routeBlock'); if(b) b.classList.remove('collapsed'); renderRoutePanel(); resetBuilt(); }
+  else if(a==='wp'){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:ll.lat,lng:ll.lng}); showRouteTab(); renderRoutePanel(); resetBuilt(); }
+  else if(a==='start'){ rStart={name:'Старт',lat:ll.lat,lng:ll.lng}; showRouteTab(); renderRoutePanel(); resetBuilt(); }
   else if(a==='copy'){ const t=ll.lat.toFixed(6)+', '+ll.lng.toFixed(6); try{ navigator.clipboard.writeText(t); }catch(e){} showToast('Координаты: '+t); } }
 map.on('contextmenu',e=>{ if(e.originalEvent) e.originalEvent.preventDefault(); showCtxMenu(e); });
 map.on('click',()=>$('ctxMenu').classList.remove('on'));
@@ -405,7 +416,108 @@ function personLabel(p){
 // ---------- tabs ----------
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
 document.querySelectorAll('.block.collapsible > h2.ch').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('collapsed'));
-if($('sideHandle')) $('sideHandle').onclick=()=>{ const sd=document.querySelector('.side'); if(sd) sd.classList.toggle('sheet-collapsed'); setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} },220); };
+
+// ---------- панель карты: вкладки и перетаскивание ----------
+//
+// «Точки» и «Маршрут» были двумя сворачиваемыми блоками друг под другом.
+// На телефоне это значило, что маршрут живёт ниже экрана: чтобы до него
+// добраться, надо было сперва свернуть точки. Это не два раздела подряд,
+// а два режима одной панели — значит вкладки.
+function sideTab(name){
+  document.querySelectorAll('#sideTabs button').forEach(b=>b.classList.toggle('on',b.dataset.sb===name));
+  const p=$('pointsBlock'), r=$('routeBlock');
+  if(p) p.classList.toggle('collapsed',name!=='points');
+  if(r) r.classList.toggle('collapsed',name!=='route');
+  // Шторка, свёрнутая в черту, по нажатию на вкладку обязана открыться:
+  // иначе нажатие ничего не делает и выглядит сломанным.
+  const sd=document.querySelector('.view-map .side');
+  if(sd&&sd.classList.contains('sheet-collapsed')) sheetSnapTo(1);
+}
+document.querySelectorAll('#sideTabs button').forEach(b=>b.onclick=()=>sideTab(b.dataset.sb));
+// Маршрут собирают кликами по карте — тогда панель обязана показать его
+// сама. Раньше это делал `classList.remove('collapsed')` в семи местах;
+// теперь у них одна дверь.
+function showRouteTab(){
+  if($('sideTabs')){ sideTab('route'); return; }
+  const b=$('routeBlock'); if(b) b.classList.remove('collapsed');
+}
+
+// Шторка встаёт в одно из трёх положений: черта, половина, почти весь
+// экран. Промежуточных нет намеренно — попасть пальцем в «примерно
+// столько» нельзя, а три понятных состояния запоминаются.
+//
+// Доли, а не пиксели: экран у всех разный, а «половина» на любом экране
+// половина.
+const SHEET_SNAPS=[0, 0.52, 0.88];
+let sheetSnap=1;
+function sheetHost(){ return document.querySelector('.view-map .side'); }
+function sheetIsSheet(){ const sd=sheetHost(); return !!sd&&window.innerWidth<=760; }
+// Высота вкладки, а не окна: под шторкой ещё навигация. Пока вкладка
+// скрыта (до входа), её высота ноль — тогда считаем от окна, иначе
+// шторка родилась бы нулевой и открылась пустой полоской.
+function sheetViewH(){
+  const view=document.querySelector('.view-map');
+  const h=view?view.getBoundingClientRect().height:0;
+  return h>200?h:window.innerHeight;
+}
+function sheetSnapTo(i){
+  const sd=sheetHost(); if(!sd) return;
+  sheetSnap=Math.max(0,Math.min(SHEET_SNAPS.length-1,i));
+  sd.classList.toggle('sheet-collapsed',sheetSnap===0);
+  sd.style.setProperty('--sheet-snap',Math.round(sheetViewH()*SHEET_SNAPS[sheetSnap])+'px');
+  // Карта сменила видимую высоту — Leaflet об этом надо сказать, иначе
+  // центр уезжает и клики попадают мимо.
+  setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} railHeight(); },220);
+}
+function wireSheetDrag(){
+  const h=$('sideHandle'); if(!h) return;
+  let y0=null, h0=0, moved=false, sd=null;
+  h.addEventListener('pointerdown',e=>{
+    sd=sheetHost(); if(!sd) return;
+    if(!sheetIsSheet()){ return; }   // на широком экране шторку не тянут
+    y0=e.clientY; h0=sd.getBoundingClientRect().height; moved=false;
+    sd.classList.add('dragging');
+    try{ h.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  h.addEventListener('pointermove',e=>{
+    if(y0==null||!sd) return;
+    const dy=y0-e.clientY;
+    // Свёрнутая шторка держит высоту классом, а не переменной, — иначе
+    // её нельзя было бы вытянуть обратно: класс перебивал бы палец.
+    if(Math.abs(dy)>4&&!moved){ moved=true; sd.classList.remove('sheet-collapsed'); }
+    const max=sheetViewH()*0.92;
+    sd.style.setProperty('--sheet-snap',Math.round(Math.max(27,Math.min(max,h0+dy)))+'px');
+  });
+  const end=()=>{
+    if(y0==null||!sd) return;
+    sd.classList.remove('dragging');
+    const frac=sd.getBoundingClientRect().height/sheetViewH();
+    if(!moved){
+      // Просто нажатие — следующее положение по кругу. Свёрнутая
+      // открывается, открытая сворачивается: одно и то же движение
+      // и туда, и обратно.
+      sheetSnapTo(sheetSnap===0?1:(sheetSnap===1?2:0));
+    }else{
+      let best=0, bd=1e9;
+      SHEET_SNAPS.forEach((s,i)=>{ const d=Math.abs(s-frac); if(d<bd){ bd=d; best=i; } });
+      sheetSnapTo(best);
+    }
+    y0=null; sd=null;
+  };
+  h.addEventListener('pointerup',end);
+  h.addEventListener('pointercancel',end);
+  // На широком экране шторку не тянут — карточка плавает и просто
+  // складывается в черту.
+  h.addEventListener('click',()=>{ if(sheetIsSheet()) return;
+    const sd2=sheetHost(); if(!sd2) return;
+    sd2.classList.toggle('sheet-collapsed');
+    setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} },220); });
+  h.addEventListener('keydown',e=>{ if(e.key!=='Enter'&&e.key!==' ') return; e.preventDefault();
+    if(sheetIsSheet()) sheetSnapTo(sheetSnap===0?1:0); else h.click(); });
+  window.addEventListener('resize',()=>{ if(sheetIsSheet()) sheetSnapTo(sheetSnap); });
+  if(sheetIsSheet()) sheetSnapTo(1);
+}
+wireSheetDrag();
 function tabAllowed(name){ if(name==='catalog'||name==='dash') return canWrite(); if(name==='settings') return role==='admin'; return true; }
 // Пункт «Мой день» нужен инженеру; менеджеру он дублирует сводку.
 function navAllowed(el){
@@ -462,10 +574,26 @@ function railHeight(){
   const over=getComputedStyle(rail).position==='absolute';
   const px=over?Math.round(rail.getBoundingClientRect().height):0;
   document.documentElement.style.setProperty('--rail-h',px+'px');
+  // Высота пришвартованной снизу шторки карты — по той же причине.
+  // Карта идёт под неё и под рельс, значит подпись об источнике карты
+  // (её требует лицензия MapTiler и OSM) оказывалась ровно под ними и
+  // не читалась. Поднимаем её ровно на то, что её закрывает.
+  let sh=0;
+  const sd=document.querySelector('.view-map .side'), mw=document.querySelector('.view-map .map-wrap');
+  if(sd&&mw){
+    const cs=getComputedStyle(sd), r=sd.getBoundingClientRect(), m=mw.getBoundingClientRect();
+    // Только когда шторка действительно лежит понизу во всю ширину:
+    // на широком экране она карточкой слева вверху и низ карты не занимает.
+    if(cs.position==='absolute'&&r.width>m.width*0.9&&r.height>0) sh=Math.round(m.bottom-r.top);
+  }
+  document.documentElement.style.setProperty('--sheet-h',Math.max(0,sh-px)+'px');
 }
 if(typeof ResizeObserver!=='undefined'){
   const ro=new ResizeObserver(()=>railHeight());
-  const startRailWatch=()=>{ const r=document.querySelector('.rail'); if(r) ro.observe(r); railHeight(); };
+  const startRailWatch=()=>{
+    ['.rail','.view-map .side'].forEach(q=>{ const el=document.querySelector(q); if(el) ro.observe(el); });
+    railHeight();
+  };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',startRailWatch);
   else startRailWatch();
 }
@@ -560,7 +688,9 @@ function switchTab(name, sub){ if(!tabAllowed(name)) return;
   // У страницы выезда нет своего пункта в рельсе: она — вложенный экран
   // «Выездов», и подсветка должна остаться на них, иначе непонятно, где ты.
   if(name==='trip'||name==='job') document.querySelectorAll('.nav-i[data-sub="disp"]').forEach(t=>t.classList.add('active'));
-  if(name==='map'){ setTimeout(()=>map.invalidateSize(),60); }
+  // Высота шторки считается от высоты вкладки, а вкладка получает высоту
+  // только когда становится активной: пересчитываем при каждом заходе.
+  if(name==='map'){ if(sheetIsSheet()) sheetSnapTo(sheetSnap); setTimeout(()=>map.invalidateSize(),60); }
   if(name==='catalog') catSub(catCur);
   // Клик по «Диспетчеру» возвращает в тот подраздел, где человек был
   // в прошлый раз: уводить его каждый раз на «Заявки» значило бы терять
@@ -704,7 +834,15 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   $('whoLabel').innerHTML=esc(short)+'<b>'+esc(role)+'</b>';
   $('whoLabel').title=em+' · '+role;
   $('logoutBtn').style.display=''; $('appRoot').style.display='block'; document.querySelector('.view-map').classList.add('active');
-  if($('pointTools')) $('pointTools').style.display=canWrite()?'':'none'; $('routeBlock').style.display=canWrite()?'':'none'; if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
+  if($('pointTools')) $('pointTools').style.display=canWrite()?'':'none'; $('routeBlock').style.display=canWrite()?'':'none';
+  // Вкладка «Маршрут» уходит вместе со своим блоком: инженер маршруты
+  // не собирает, и пустая вкладка была бы обещанием без содержимого.
+  // Тогда у панели остаётся одна вкладка — заголовок вместо переключателя.
+  { const rt=document.querySelector('#sideTabs [data-sb="route"]'), tb=$('sideTabs');
+    if(rt) rt.style.display=canWrite()?'':'none';
+    if(tb) tb.classList.toggle('solo',!canWrite());
+    if(!canWrite()) sideTab('points'); }
+  if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
   setTimeout(()=>{ map.invalidateSize(); fitUkraine(); },80);
   await loadAll(); await loadPlaces(); await loadVehicles(); await loadEqModels();
   await loadVehState(); subscribeVeh(); await loadFactHours(); await loadRescheds();
@@ -731,7 +869,7 @@ async function loadAll(){ $('dataStatus').textContent='Загрузка…';
   snapSet('refs',{clients,eqByClient});
   $('dataStatus').innerHTML='<span class="ok">На карте: '+clients.length+'</span>';
   await loadReadings(); await loadClientStats();
-  render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),fitPad(40)); else fitUkraine(); }
+  render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),fitPadL(fitPad(40))); else fitUkraine(); }
 async function refreshStats(){ if(!canWrite()) return; await loadClientStats(); renderMarkers(); }
 async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
   // due_date и created_at добавлены к тому же запросу: по ним считается
@@ -924,17 +1062,27 @@ function renderEqMarkers(){ eqMarkers.clearLayers(); if(!revealedClient) return;
 let pointFilter='all';
 // Панель слева показывает разное в зависимости от режима карты:
 // в «работе» — что происходит сегодня, в «справочнике» — список точек.
-// Список живёт в коробке ограниченной высоты: восемьдесят точек утаскивали
-// «Маршрут» и «Сохранить как выезд» за нижний край плавающей карточки.
+// Свернуть список — не то же самое, что свернуть панель. Шторкой прячут
+// всё сразу; здесь остаются поиск и фильтры, а список уходит — и под
+// панелью открывается карта, по которой в этот момент и работают.
 if($('listHead')) $('listHead').onclick=()=>{
   const h=$('listHead'), b=$('pointsBox');
   const folded=!h.classList.contains('folded');
   h.classList.toggle('folded',folded); b.classList.toggle('folded',folded);
   $('listHeadT').textContent=folded?'показать список':'свернуть список';
+  // На телефоне высота шторки задана положением, а не содержимым: без
+  // этого свёрнутый список оставлял бы под собой пустую половину экрана
+  // вместо карты, ради которой его и свернули.
+  const sd=sheetHost(); if(sd) sd.classList.toggle('list-folded',folded);
+  // Панель стала ниже — карте об этом надо сказать, иначе её центр
+  // и попадания кликов разъезжаются.
+  setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} railHeight(); },220);
 };
 function renderSide(){
   const work=(mapScope==='work');
-  const t=$('sideTools'); if(t) t.style.display=work?'none':'';
+  // Поиск и фильтры нужны обоим режимам: в «работе» их прятали, потому что
+  // лента и так короткая, но искать по ней приходится ровно так же.
+  const t=$('sideTools'); if(t) t.style.display='';
   const f=$('workFeed');  if(f) f.style.display=work?'':'none';
   const l=$('list');      if(l) l.style.display=work?'none':'';
   if(work) renderWorkFeed(); else renderList();
@@ -1420,33 +1568,74 @@ function shortDate(iso){
   return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0');
 }
 
-async function renderAttention(){
-  const box=$('attnBody'); if(!box) return;
+// ── Лента «что горит» ───────────────────────────────────────────────────────
+//
+// Одна и та же лента в сводке у менеджера и в «Сегодня» у инженера.
+// Различий ровно два: чьи заявки в неё попадают и есть ли под ней холодные
+// потребности. Двух похожих лент быть не должно — через месяц они разойдутся,
+// и человек, глядя на два экрана одного приложения, будет считать сроки
+// по-разному.
+//
+// Порядок задаёт СРОК, а не наличие выезда. Раньше «в депо» и «без выезда»
+// жили отдельными карточками внизу — то есть заявка, которая горит сегодня,
+// пряталась под той, что через неделю, только потому что её ещё не собрали
+// в маршрут. Признак «с выездом / без выезда / в депо» никуда не делся, он
+// стал меткой в самой строке: это свойство заявки, а не раздел списка.
+function tripTagHtml(j,tripOf,tripById){
+  if(j.at_depot) return '<span class="a-tag dep">в депо</span>';
+  const tid=tripOf[j.id];
+  if(!tid) return '<span class="a-tag none">без выезда</span>';
+  const t=tripById[tid];
+  // Короткие даты: полное «10 августа–11 сентября» в пилюле шириной
+  // в треть экрана переносится и рвёт строку.
+  const per=t&&t.date_from?(shortDate(t.date_from)+(t.date_to&&t.date_to!==t.date_from?('–'+shortDate(t.date_to)):'')):'';
+  return '<span class="a-tag has">с выездом'+(per?(' · '+esc(per)):'')+'</span>';
+}
+
+async function renderFeed(box,o){
+  o=o||{};
+  if(!box) return;
   box.innerHTML='<div class="hint">Считаю…</div>';
   try{
     await ensureRefs();
     // Заявки со сроком, клиентом, техникой и работами — всё, что нужно ленте.
-    const { data, error }=await sb.from('jobs')
-      .select('id,status,due_date,created_at,assigned_engineer,at_depot, clients(name), equipment(model), job_works(hours,billable)')
-      .is('deleted_at',null);
-    if(error) throw error;
-    let list=data||[];
+    let list=null, tripOf={}, tripById={}, offline=false, snapAt=0;
+    try{
+      const { data, error }=await sb.from('jobs')
+        .select('id,status,due_date,created_at,assigned_engineer,at_depot, clients(name,lat,lng,phone), equipment(model), job_works(hours,billable)')
+        .is('deleted_at',null);
+      if(error) throw error;
+      list=data||[];
+      // Какая заявка в каком выезде. Нужно и для метки, и для кнопок:
+      // «Начать выезд» относится к выезду, а виден он через его заявки.
+      const { data:tj }=await sb.from('trip_jobs').select('job_id,trip_id');
+      (tj||[]).forEach(r=>{ tripOf[r.job_id]=r.trip_id; });
+      const { data:tr }=await sb.from('trips').select('*, vehicles(name,plate)').is('deleted_at',null);
+      (tr||[]).forEach(t=>{ tripById[t.id]=t; tripCache[t.id]=t; });
+      await loadRescheds();
+      if(o.mine) snapSet('mine',{list,tripOf,tripById});
+    }catch(e){
+      // Инженер открывает этот экран первым и нередко без связи.
+      const s=o.mine?await snapGet('mine'):null;
+      if(s&&s.val&&s.val.list){ list=s.val.list; tripOf=s.val.tripOf||{}; tripById=s.val.tripById||{};
+        Object.values(tripById).forEach(t=>{ tripCache[t.id]=t; }); snapAt=s.at; offline=true; }
+      else { box.innerHTML='<div class="err">'+esc((e&&e.message)||e)+'</div>'; return; }
+    }
 
     // Инженер видит только свои заявки — как в канбане (см. renderJobs).
-    if(role==='engineer') list=list.filter(j=>j.assigned_engineer===session.user.id);
+    if(o.mine||role==='engineer') list=list.filter(j=>j.assigned_engineer===session.user.id);
 
     const { dated, cold }=attentionBuckets(list, new Date());
 
     // Поле называется full_name — так его читают все остальные восемь мест
-    // в файле. Здесь стояли p.name и p.email, которых в выборке нет вовсе,
-    // поэтому имя инженера не показывалось никогда, а разделитель ' · '
-    // оставался висеть в конце строки.
+    // в файле.
     const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||''):''; };
     const hours=j=>(j.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
     const shift=(+appSettings.shift_hours)||8;
 
-    if(!dated.length && !cold.length){
-      box.innerHTML='<div class="aempty">На сегодня заявок нет.</div>';
+    if(!dated.length && !(o.cold&&cold.length)){
+      box.innerHTML=(offline?offlineBanner(snapAt):'')
+        +'<div class="aempty">'+(o.mine?'Заявок со сроком на тебе нет.':'На сегодня заявок нет.')+'</div>';
       return;
     }
 
@@ -1471,32 +1660,36 @@ async function renderAttention(){
     groups.forEach((g,i)=>stops.push(urgHue(g.u)+' '+((i+0.5)/N*100).toFixed(1)+'%'));
     stops.push(urgHue(groups[N-1].u)+' 100%');
 
-    let h='<div class="afeed">'
+    let h=(offline?offlineBanner(snapAt):'')
+      +'<div class="afeed">'
       +'<div class="afeed-line" style="background:linear-gradient(180deg,'+stops.join(',')+')"></div>';
 
-    // ── Сегодня ──────────────────────────────────────────────────────────
-    // Такая же карточка, как у групп, а не голая строка над ними. Иначе
-    // первая карточка ленты начиналась на 34 px ниже первой карточки правой
-    // колонки, и две колонки дашборда стояли вразнобой.
+    // ── Просрочка: колода ────────────────────────────────────────────────
+    //
+    // Просроченное важно, но это ФОН, а не работа на сегодня: его нельзя
+    // сделать вовремя, оно уже опоздало. Развёрнутым списком оно занимало
+    // верх экрана и каждое утро отодвигало вниз то, что человек ещё может
+    // успеть. Поэтому просрочка лежит колодой: одна карточка со сводкой,
+    // из-под неё выглядывают края остальных — видно, что там не одна.
+    // Нажатие раскрывает её в обычные группы, те же, что ниже.
+    //
+    // Пульсация — та же, что у восклицательного знака на карте: ровно
+    // один элемент на экране имеет право двигаться, и это тот, мимо
+    // которого нельзя пройти.
     const over=groups.filter(g=>g.left<0);
+    const rest=groups.filter(g=>g.left>=0);
     const overN=over.reduce((a,g)=>a+g.jobs.length,0);
     const overH=over.reduce((a,g)=>a+g.h,0);
-    h+='<div class="agrp">'
-      +'<div class="a-ax"><b style="color:var(--red)">'+shortDate(todayISO())+'</b><i>сегодня</i></div>'
-      +'<span class="a-dot" style="width:20px;height:20px;left:-31px;top:10px;background:#dc2626;box-shadow:0 0 0 1px #dc2626"></span>'
-      +'<span class="a-stem" style="left:-11px;width:11px"></span>'
-      +'<div class="agrp-card" style="border-left-color:#dc2626">'
-      +'<div class="agrp-h agrp-h-solo" style="background:color-mix(in srgb,#dc2626 '+(overN?'12':'7')+'%,var(--panel))">'
-        +'<span class="agrp-n">Сегодня</span>'
-        +'<span class="agrp-hint" style="flex:1">'+(overN
-            ? '<b style="color:var(--red)">просрочено '+overN+' '+plural(overN,'заявка','заявки','заявок')
-              +' · '+overH.toFixed(overH%1?1:0)+' ч</b>'
-            : 'просроченного нет')+'</span>'
-      +'</div></div></div>';
+    const oldest=over.length?Math.max.apply(null,over.map(g=>-g.left)):0;
 
     // ── Группы ───────────────────────────────────────────────────────────
     let prevLeft=0;
-    groups.forEach(g=>{
+    const shownTrips=new Set();
+    // Кнопки выезда достаются ближайшей ВИДИМОЙ группе, поэтому сперва
+    // собираем то, что впереди, и только потом просрочку: иначе выезд,
+    // задевающий обе части, спрятал бы свои кнопки в закрытой колоде.
+    const groupHtml=(g,gi,lead)=>{
+      let h='';
       // Разрыв шкалы: пустые недели схлопываем в подпись, иначе ближние
       // сроки слиплись бы в верхней трети, а дальний уехал бы в одиночестве.
       // Пустые недели считаем только вперёд: окно между просроченной
@@ -1506,9 +1699,17 @@ async function renderAttention(){
       if(gapW>=3) h+='<div class="a-break"><span>'+gapW+' '+plural(gapW,'неделя','недели','недель')+' без сроков</span></div>';
       prevLeft=g.left;
 
+      // Первая группа — ближайшая по сроку, и ей отдаётся высота.
+      //
+      // Экран читают на ходу, одной рукой, не всегда глядя. Если все
+      // карточки одного роста, глаз каждый раз заново ищет, с чего начать,
+      // — а начинать всегда надо с верхней. Крупный кегль, техника и часы
+      // в строке, кнопки выезда прямо здесь: первое дело видно целиком,
+      // не разворачивая. Остальное ниже — теми же строками, что в сводке,
+      // и добирается прокруткой.
       const col=urgHue(g.u);
       const n=g.jobs.length;
-      const dia=Math.round(13+Math.min(1,g.h/24)*11);
+      const dia=Math.round((lead?17:13)+Math.min(1,g.h/24)*11);
       const engs=[...new Set(g.jobs.map(j=>j.assigned_engineer).filter(Boolean))];
       const engTxt=!engs.length ? '<span class="a-noeng">без инженера</span>'
         : (engs.length===1 ? esc(engName(engs[0])||'—') : engs.length+' инженера');
@@ -1517,32 +1718,131 @@ async function renderAttention(){
         ? esc(g.h.toFixed(g.h%1?1:0))+' ч · '+Math.ceil(shifts)+' '+plural(Math.ceil(shifts),'смена','смены','смен')
         : esc(g.h.toFixed(g.h%1?1:0))+' ч';
       const leftTxt=g.left<0?('−'+(-g.left)+' дн'):(g.left+' дн');
+      const nearTxt=g.left<0?('просрочено на '+(-g.left)+' '+plural(-g.left,'день','дня','дней'))
+        :(g.left===0?'сегодня':('через '+g.left+' '+plural(g.left,'день','дня','дней')));
 
-      h+='<div class="agrp">'
+      h+='<div class="agrp'+(lead?' agrp-lead':'')+'">'
         +'<div class="a-ax"><b>'+shortDate(g.date)+'</b><i>'+leftTxt+'</i></div>'
         +'<span class="a-dot" style="width:'+dia+'px;height:'+dia+'px;left:'+(-21-dia/2)+'px;top:'+(20-dia/2)+'px;'
           +'background:'+col+';box-shadow:0 0 0 1px '+col+'">'+(n>1?n:'')+'</span>'
         +'<span class="a-stem" style="left:'+(-21+dia/2)+'px;width:'+(21-dia/2)+'px"></span>'
         +'<div class="agrp-card" style="border-left-color:'+col+'">'
-        +'<div class="agrp-h" style="background:color-mix(in srgb,'+col+' 9%,var(--panel))">'
+        +'<div class="agrp-h" style="background:color-mix(in srgb,'+col+' '+(lead?'14':'9')+'%,var(--panel))">'
           +'<span class="agrp-n">'+dayLabel(g.date)+'</span>'
+          +(lead?('<span class="agrp-hint" style="color:'+col+'">'+esc(nearTxt)+'</span>'):'')
           +'<span class="agrp-track"><i style="width:'+Math.min(100,g.h/(shift*5)*100).toFixed(0)+'%;background:'+col+'"></i></span>'
           +'<span class="agrp-hint">'+load+(n>1?(' · '+n+' '+plural(n,'точка','точки','точек')):'')+'</span>'
-          +'<span class="agrp-eng">'+engTxt+'</span>'
+          +(o.mine?'':('<span class="agrp-eng">'+engTxt+'</span>'))
         +'</div>';
       g.jobs.forEach(j=>{
         const mdl=(j.equipment&&j.equipment.model)||'';
-        h+='<div class="arow2" data-ajob="'+j.id+'">'
-          +'<div class="a-main"><div class="a-name">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
-          +(mdl?('<div class="a-sub">'+esc(mdl)+'</div>'):'')+'</div>'
+        const c=j.clients||{};
+        const tel=lead?telHref(c.phone):null, nav=lead?navHref(c.lat,c.lng):null;
+        h+='<div class="arow2'+(lead?' arow2-lead':'')+'" data-ajob="'+j.id+'">'
+          +'<div class="a-main"><div class="a-name">'+esc(c.name||'—')+'</div>'
+          +(mdl?('<div class="a-sub">'+esc(mdl)+'</div>'):'')
+          +'<div class="a-tags">'+tripTagHtml(j,tripOf,tripById)
+            // Статус — только инженеру: на его экране это ответ на «я это
+            // уже начал?». В сводке менеджер смотрит на сроки и загрузку,
+            // и вторая пилюля в каждой строке была бы шумом.
+            +(o.mine?('<span class="a-tag st">'+esc(ST[j.status]||j.status)+'</span>'):'')+'</div></div>'
           +'<span class="a-h">'+esc(hours(j).toFixed(hours(j)%1?1:0))+' ч</span></div>';
+        // Позвонить и проехать — только у первой, самой срочной группы:
+        // ниже это шум, а здесь ровно те две кнопки, которые нужны
+        // на подъезде.
+        if(lead&&(tel||nav)) h+='<div class="a-acts">'
+          +(tel?('<a class="btn sm" href="'+esc(tel)+'">Позвонить</a>'):'')
+          +(nav?('<a class="btn sm" href="'+esc(nav)+'" target="_blank" rel="noopener">Проехать</a>'):'')
+          +'</div>';
       });
+      // Кнопки выезда — в подвале группы, а не отдельной карточкой.
+      // Инженер не может открыть страницу выезда (это право менеджера),
+      // и «Начать выезд» доступно ему ТОЛЬКО отсюда: убрать эти кнопки
+      // значит отнять у смены начало и конец.
+      if(o.mine){
+        // Выезд длится несколько дней и попадает в несколько групп сразу.
+        // Кнопки ему нужны ОДНИ: показываем их там, где выезд встретился
+        // первым, то есть у самого раннего его срока. Иначе «Начать выезд»
+        // стоит на экране трижды и трижды спрашивает одно и то же.
+        const tids=[...new Set(g.jobs.map(j=>tripOf[j.id]).filter(Boolean))];
+        tids.forEach(tid=>{ const t=tripById[tid]; if(!t||shownTrips.has(tid)) return;
+          shownTrips.add(tid);
+          h+='<div class="a-foot"><span class="a-foot-n">выезд · '+esc(ST_TRIP[t.status]||t.status)+'</span>'
+            +'<span class="acts">'+tripActs(t)+'</span></div>'
+            +reschedBanner(t); });
+      }
       h+='</div></div>';
-    });
+      return h;
+    };
+
+    let restH='';
+    rest.forEach((g,gi)=>{ restH+=groupHtml(g,gi,!!o.lead&&gi===0); });
+    prevLeft=0;
+    let overH2='';
+    over.forEach((g,gi)=>{ overH2+=groupHtml(g,gi,false); });
+
+    if(over.length){
+      const layers=Math.min(3,Math.max(1,over.length-1));
+      let lay=''; for(let i=1;i<=layers;i++) lay+='<span class="odeck-l" style="left:'+(i*7)+'px;right:'+(i*7)+'px;bottom:'+(-i*6)+'px;z-index:'+(3-i)+'"></span>';
+      h+='<div class="agrp odeck-wrap">'
+        // На оси — дата САМОГО СТАРОГО долга, а не сегодняшняя: колода
+        // стоит в ленте там, где начинается просрочка, и ось должна
+        // говорить то же самое.
+        // Под датой — та же мера, что у остальных групп: на сколько дней
+        // опоздали. Слово «просрочено» в колонку 62 px не влезает и
+        // ломалось пополам, а шкала должна читаться шкалой.
+        +'<div class="a-ax"><b style="color:var(--red)">'+shortDate(over[0].date)+'</b><i>−'+oldest+' дн</i></div>'
+        +'<span class="a-dot a-dot-pulse" style="width:22px;height:22px;left:-32px;top:9px;background:#dc2626;box-shadow:0 0 0 1px #dc2626">'+overN+'</span>'
+        +'<span class="a-stem" style="left:-10px;width:10px"></span>'
+        +'<div class="odeck" data-odeck>'+lay
+          +'<button class="odeck-face" type="button" aria-expanded="false">'
+            +'<span class="odeck-t">Просрочено '+overN+' '+plural(overN,'заявка','заявки','заявок')
+              +' · '+esc(overH.toFixed(overH%1?1:0))+' ч</span>'
+            +'<span class="odeck-s">самая старая — '+oldest+' '+plural(oldest,'день','дня','дней')
+              +' назад · нажми, чтобы раскрыть</span>'
+          +'</button>'
+        +'</div></div>'
+        +'<div class="odeck-body" hidden>'+overH2
+          +'<div class="odeck-fold"><button class="odeck-hide" type="button">Свернуть просрочку</button></div>'
+        +'</div>';
+    }
+    // Шапка «сегодня» остаётся только у менеджера и только когда
+    // просрочки нет: иначе то же самое уже написано на колоде.
+    else if(!o.mine) h+='<div class="agrp">'
+      +'<div class="a-ax"><b>'+shortDate(todayISO())+'</b><i>сегодня</i></div>'
+      +'<span class="a-dot" style="width:20px;height:20px;left:-31px;top:10px;background:var(--green);box-shadow:0 0 0 1px var(--green)"></span>'
+      +'<span class="a-stem" style="left:-11px;width:11px"></span>'
+      +'<div class="agrp-card" style="border-left-color:var(--green)">'
+      +'<div class="agrp-h agrp-h-solo" style="background:color-mix(in srgb,var(--green) 7%,var(--panel))">'
+        +'<span class="agrp-n">Сегодня</span>'
+        +'<span class="agrp-hint" style="flex:1">просроченного нет</span>'
+      +'</div></div></div>';
+
+    h+=restH;
     h+='</div>';
 
+    // ── Завершённые ──────────────────────────────────────────────────────
+    // Галочка «показать завершённые» осталась при своём смысле: закрытое
+    // и отменённое не участвует в сроках и потому лежит отдельным
+    // свёрнутым списком в самом низу, а не подмешивается в ленту.
+    if(o.done){
+      const fin=list.filter(j=>j.status==='done'||j.status==='cancelled');
+      if(fin.length){
+        h+='<details class="acold"><summary><span class="achev">▸</span>'
+          +'Завершённые <span class="acount">'+fin.length+'</span></summary><div>'
+          +fin.map(j=>'<div class="arow gray" data-ajob="'+j.id+'"><span class="astripe"></span>'
+            +'<div class="amain"><div class="aname">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
+            +'<div class="asub">'+esc((j.equipment&&j.equipment.model)||'')+'</div></div>'
+            +'<span class="abadge gray">'+esc(ST[j.status]||j.status)+'</span></div>').join('')
+          +'</div></details>';
+      }
+    }
+
     // ── Холодные ─────────────────────────────────────────────────────────
-    if(cold.length){
+    // Только в сводке. Холодная потребность — это работа продажи, а не
+    // инженера: у него она каждый день говорила бы «у тебя ещё дела»,
+    // которых он не может ни начать, ни закрыть.
+    if(o.cold&&cold.length){
       let ch='';
       cold.forEach(j=>{
         ch+='<div class="arow gray" data-ajob="'+j.id+'"><span class="astripe"></span>'
@@ -1556,8 +1856,53 @@ async function renderAttention(){
     }
 
     box.innerHTML=h;
-    box.querySelectorAll('[data-ajob]').forEach(el=>el.onclick=()=>openJob(el.dataset.ajob));
+    // Строка ведёт в заявку; кнопки внутри строки — к себе, поэтому клик
+    // по ним до строки не доходит.
+    box.querySelectorAll('[data-ajob]').forEach(el=>el.onclick=e=>{
+      if(e.target.closest('.a-acts')||e.target.closest('.a-foot')) return;
+      openJob(el.dataset.ajob); });
+    // Колода раскрывается и закрывается на месте: перерисовывать ленту
+    // ради этого не нужно, а состояние живёт ровно до следующего
+    // обновления списка — просрочка не то, что стоит помнить открытой.
+    const deck=box.querySelector('[data-odeck]'), dbody=box.querySelector('.odeck-body');
+    if(deck&&dbody){
+      const wrap=deck.closest('.odeck-wrap');
+      const set=open=>{ dbody.hidden=!open; if(wrap) wrap.hidden=open;
+        const f=deck.querySelector('.odeck-face'); if(f) f.setAttribute('aria-expanded',open?'true':'false'); };
+      deck.onclick=()=>set(true);
+      const hide=dbody.querySelector('.odeck-hide'); if(hide) hide.onclick=()=>set(false);
+    }
+    if(o.mine) wireTripActs(box,offline);
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; }
+}
+function renderAttention(){ return renderFeed($('attnBody'),{cold:true}); }
+
+// Обработчики кнопок выезда. Отдельной функцией: их вешают и лента
+// «Сегодня», и всё, что перерисовывает её кусками.
+function wireTripActs(box,offline){
+  // Без связи гасим только то, что офлайн действительно не работает:
+  // «открыть» и «Стоянки» тянут данные с сервера, «Перенести» пишет
+  // отдельную запись мимо очереди. Старт, финиш и подтверждение теперь
+  // не падают, а становятся в очередь, поэтому остаются живыми —
+  // ради них офлайн и затевался.
+  if(offline){
+    box.querySelectorAll('[data-topen],[data-tstay],[data-tresched]').forEach(b=>{
+      b.disabled=true;
+      b.title='Нет связи. Действие станет доступно, когда появится сеть.';
+    });
+  }
+  box.querySelectorAll('[data-tstart]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tstart,'start'));
+  box.querySelectorAll('[data-tfin]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tfin,'finish'));
+  box.querySelectorAll('[data-tconf]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tconf,'confirm'));
+  box.querySelectorAll('[data-topen]').forEach(b=>b.onclick=()=>openTrip(b.dataset.topen));
+  box.querySelectorAll('[data-mopen]').forEach(b=>b.onclick=()=>openJob(b.dataset.mopen));
+  box.querySelectorAll('[data-tmap]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.tmap));
+  box.querySelectorAll('[data-tstay]').forEach(b=>b.onclick=()=>openStaysModal(b.dataset.tstay));
+  box.querySelectorAll('[data-tkm]').forEach(b=>b.onclick=()=>remeasureTrip(b.dataset.tkm));
+  box.querySelectorAll('[data-tresched]').forEach(b=>b.onclick=()=>openReschedModal(b.dataset.tresched));
+  box.querySelectorAll('[data-rok]').forEach(b=>b.onclick=()=>reschedDecide(b.dataset.rok,true));
+  box.querySelectorAll('[data-rno]').forEach(b=>b.onclick=()=>reschedDecide(b.dataset.rno,false));
+  box.querySelectorAll('[data-rcancel]').forEach(b=>b.onclick=()=>reschedCancel(b.dataset.rcancel));
 }
 
 // ── Загрузка инженеров ──────────────────────────────────────────────────────
@@ -1900,13 +2245,6 @@ function dashNav(k){ if(k==='points'){ switchTab('map'); return; } if(k==='trips
 // Заявки без выезда всё же выводим отдельным блоком — иначе назначенная,
 // но ещё не спланированная работа просто исчезла бы с глаз.
 
-function tripDayLabel(t){
-  const today=todayISO();
-  if(t.date_from===today) return '<span class="pill" style="border-color:var(--accent);color:var(--accent-ink)">сегодня</span>';
-  if(t.date_from<today && (t.date_to||t.date_from)>=today) return '<span class="pill" style="border-color:var(--accent);color:var(--accent-ink)">идёт</span>';
-  if(t.date_from<today) return '<span class="pill" style="border-color:var(--red);color:var(--red)">просрочен</span>';
-  return '';
-}
 
 function tripActs(t){
   let a='';
@@ -1929,214 +2267,24 @@ function tripActs(t){
   return a;
 }
 
+// «Сегодня» у инженера — та же лента, что «Требует внимания» у менеджера.
+//
+// Раньше здесь был свой экран: карточка текущего выезда, свёрнутые строки
+// «просрочено / ещё сегодня / дальше», отдельная карточка «в депо» и
+// отдельная — «заявки без выезда». Пять разных способов показать одно и то
+// же, и порядок в них задавал не срок, а то, собрал ли уже диспетчер
+// маршрут. Заявка, которая горит сегодня, оказывалась ниже той, что через
+// неделю, — просто потому что её ещё не положили в выезд.
+//
+// Теперь порядок один и он тот же, что у менеджера: срок. Признак
+// «с выездом / без выезда / в депо» стал меткой в строке. Первая группа —
+// самая срочная — крупная, с телефоном, проездом и кнопками выезда;
+// остальное добирается прокруткой.
 async function renderMine(){
   const box=$('mineList'); if(!box) return;
-  box.innerHTML='<div class="hint">Загрузка…</div>';
-  const showDone=$('mineDone')&&$('mineDone').checked;
-  const mgr=canWrite();
-
-  // Сеть, а если её нет — снимок с устройства. Именно этот экран инженер
-  // открывает первым, и именно он раньше встречал его пустотой.
-  let list=null, byTrip=null, snapAt=0, offline=false;
-  try{
-    // Менеджеру — все выезды, инженеру — только свои. Фильтр на сервере,
-    // а не в браузере: RLS инженеру чужие всё равно не отдаст.
-    let q=sb.from('trips').select('*, vehicles(name,plate)').is('deleted_at',null);
-    if(!mgr) q=q.eq('lead_engineer',session.user.id);
-    const { data, error }=await q.order('date_from',{ascending:true});
-    if(error) throw error;
-    list=data||[];
-    byTrip=await mineTripJobs(list.map(t=>t.id));
-    await loadRescheds();
-    // Кладём ДО фильтра «показать завершённые»: снимок не должен зависеть
-    // от того, какая галочка стояла в момент последней загрузки.
-    snapSet('mine',{list,byTrip});
-  }catch(e){
-    const s=await snapGet('mine');
-    if(s&&s.val&&s.val.list){ list=s.val.list; byTrip=s.val.byTrip||{}; snapAt=s.at; offline=true; }
-    else { box.innerHTML='<div class="err">'+esc((e&&e.message)||e)+'</div>'; return; }
-  }
-
-  if(!showDone) list=list.filter(t=>t.status!=='done'&&t.status!=='cancelled');
-  list.forEach(t=>{ tripCache[t.id]=t; });
-
-  // Раскладка по времени, а не по статусу.
-  //
-  // Раздел называется «Сегодня», а показывал все выезды подряд,
-  // отсортированные по статусу: сегодняшний ничем не отличался от
-  // сентябрьского. Инженер каждый раз сам вычислял, что у него сейчас, —
-  // на морозе, одной рукой.
-  //
-  // Теперь порядок задаёт время: идущий выезд → сегодняшние → будущие →
-  // остальное. Первый занимает экран целиком, дальше идут строки.
-  const today=todayISO();
-  const from=t=>t.date_from||'9999-99-99';
-  const to=t=>t.date_to||t.date_from||'0000-00-00';
-  const running=t=>t.status==='in_progress';
-  const isToday=t=>from(t)<=today&&to(t)>=today;
-  const isPast=t=>to(t)<today;
-  const byDate=(a,b)=>from(a)<from(b)?-1:(from(a)>from(b)?1:0);
-
-  const now=list.filter(t=>running(t)||isToday(t)).sort(byDate);
-  const hero=now[0]||null;
-  const alsoToday=now.slice(1);
-  const ahead=list.filter(t=>t!==hero&&alsoToday.indexOf(t)<0&&!isPast(t)&&from(t)>today).sort(byDate);
-  // Просроченное — не «позже», это долг. Отдельной группой и наверху,
-  // сразу под текущим.
-  const overdue=list.filter(t=>t!==hero&&alsoToday.indexOf(t)<0&&isPast(t)).sort(byDate);
-
-  box.innerHTML=offline?offlineBanner(snapAt):'';
-  if(!list.length) box.innerHTML+='<div class="hint">Выездов нет. Как только диспетчер назначит выезд, он появится здесь.</div>';
-
-  // Тело выезда одинаково и для текущего, и для развёрнутой строки —
-  // одна функция, чтобы они не разошлись.
-  function tripBody(t){
-    const jl=byTrip[t.id]||[];
-    const veh=t.vehicles?(t.vehicles.name+(t.vehicles.plate?(' · '+t.vehicles.plate):'')):(t.vehicle_label||'машина не назначена');
-    // Пилюль было две: статус выезда и метка дня. Рядом они спорили —
-    // «план» и «идёт» на одной строке читаются как два разных состояния
-    // одного и того же. Метка дня важнее: она отвечает на «мне сегодня
-    // ехать?», а статус переезжает в строку под ней, к остальным фактам.
-    const day=tripDayLabel(t);
-    const per=esc(tripPeriod(t.date_from,t.date_to));
-    // Заголовок не пересказывает список под собой. Раньше он склеивал
-    // названия точек — те самые, что строкой ниже стоят отдельными
-    // кнопками: на телефоне это две строки повтора вместо ответа на
-    // «когда». Есть точки — в заголовке период, а имена читаются в
-    // списке. Нет точек — заголовку остаются имена (или тот же период,
-    // если и их нет), и тогда строка ниже дату не повторяет.
-    const nm=esc(tripTitle(t,jl));
-    const head=jl.length?per:nm;
-    let h='<h3>'+head+(day?(' '+day):'')+'</h3>';
-    h+='<div class="meta">'+esc(ST_TRIP[t.status]||t.status)+(head===per?'':(' · '+per))+' · '+esc(veh)+' · точек: '+jl.length+(t.fact_km?(' · факт '+Math.round(t.fact_km)+' км'+factSrcRu(t.fact_km_source)):'')+(factHByTrip[t.id]?(' · '+factHByTrip[t.id].toFixed(1)+' ч на точках'):'')+'</div>';
-    if(jl.length){
-      h+='<div class="mine-pts">'+jl.map(j=>{
-        const c=j.clients||{}; const tel=telHref(c.phone); const nav=navHref(c.lat,c.lng);
-        return '<div class="mine-pt">'
-          +'<button class="mine-pt-main" type="button" data-mopen="'+j.id+'">'
-          +'<span class="mp-name">'+esc(c.name||'—')+(j.equipment?(' <span class="mp-eq">'+esc(j.equipment.model)+'</span>'):'')+'</span>'
-          +'<span class="mp-st">'+esc(ST[j.status]||j.status)+' ›</span></button>'
-          +'<span class="mine-pt-acts">'
-          +(tel?('<a class="btn sm" href="'+esc(tel)+'" title="Позвонить">Позвонить</a>'):'')
-          +(nav?('<a class="btn sm" href="'+esc(nav)+'" target="_blank" rel="noopener" title="Проехать">Проехать</a>'):'')
-          +'</span></div>'; }).join('')+'</div>';
-    } else {
-      h+='<div class="hint" style="margin-top: var(--sp-3)">Точек к выезду не привязано — диспетчер ещё не собрал маршрут.</div>';
-    }
-    if(t.notes) h+='<div class="ds">'+esc(t.notes)+'</div>';
-    h+=reschedBanner(t);
-    h+='<div class="acts">'+tripActs(t)+'</div>';
-    return h;
-  }
-  function heroCard(t){
-    const d=document.createElement('div'); d.className='card mine-hero';
-    // Подпись только у идущего выезда: «Сегодня» над карточкой в разделе
-    // «Сегодня» — это повтор, а не информация.
-    d.innerHTML=(running(t)?'<div class="mine-cap">Сейчас в работе</div>':'')+tripBody(t);
-    return d;
-  }
-  // Остальные выезды — строкой. Раскрываются на месте через <details>:
-  // никакого состояния и никакой перерисовки, а внутри та же карточка
-  // со всеми кнопками.
-  function rowsCard(title,arr,tone){
-    if(!arr.length) return null;
-    const d=document.createElement('div'); d.className='card mine-group';
-    let h='<div class="mine-cap'+(tone?(' '+tone):'')+'">'+esc(title)+' <span class="acount">'+arr.length+'</span></div>';
-    h+=arr.map(t=>{ const jl=byTrip[t.id]||[];
-      // У выезда без привязанных точек заголовком становится сам период —
-      // и тогда строка под ним печатала ту же дату второй раз подряд.
-      const nm=esc(tripTitle(t,jl)), per=esc(tripPeriod(t.date_from,t.date_to));
-      return '<details class="mine-det"><summary class="mine-row">'
-        +'<span class="mr-main"><span class="mr-name">'+nm+'</span>'
-        +'<span class="mr-sub">'+(nm===per?'':(per+' · '))+'точек: '+jl.length+'</span></span>'
-        +'<span class="mr-st">'+esc(ST_TRIP[t.status]||t.status)+'</span></summary>'
-        +'<div class="mine-body">'+tripBody(t)+'</div></details>'; }).join('');
-    d.innerHTML=h; return d;
-  }
-  if(hero) box.appendChild(heroCard(hero));
-  [rowsCard('Просрочено',overdue,'bad'),
-   rowsCard('Ещё сегодня',alsoToday),
-   rowsCard('Дальше',ahead)].forEach(c=>{ if(c) box.appendChild(c); });
-
-  // Заявки, назначенные лично, но не попавшие ни в один выезд.
-  if(!mgr){
-    const { data:orphans }=await sb.from('jobs').select('*, at_depot, depot_id, clients(name,lat,lng), equipment(model)')
-      .is('deleted_at',null).eq('assigned_engineer',session.user.id)
-      .not('status','in','("done","cancelled")');
-    const inTrip=new Set(); Object.values(byTrip).forEach(a=>a.forEach(j=>inTrip.add(j.id)));
-
-    // Депо — ОТДЕЛЬНЫМ блоком. В «без выезда» их нельзя: там написано
-    // «не привязаны ни к одному выезду», и депо-заявка висела бы там
-    // вечно, выглядя как ошибка планирования. Она и не должна быть в выезде.
-    const dep=(orphans||[]).filter(j=>j.at_depot);
-    if(dep.length){
-      const w=document.createElement('div'); w.className='card';
-      w.innerHTML='<h3>В депо <span class="pill">'+dep.length+'</span></h3>'+
-        '<div class="meta">Технику привозит клиент. Выезд не нужен.</div>'+
-        dep.map(j=>{ const d=clients.find(c=>c.id==j.depot_id);
-          return '<div class="ds" data-mopen="'+j.id+'" style="display:flex;justify-content:space-between;gap: var(--sp-3);cursor:pointer">'+
-          '<span>'+esc(j.clients?j.clients.name:'—')+(j.equipment?(' · '+esc(j.equipment.model)):'')+
-          (d?(' <span class="pill">'+esc(d.name)+'</span>'):'')+'</span>'+
-          '<span style="color:var(--ink-dim)">'+esc(ST[j.status]||j.status)+' ›</span></div>'; }).join('');
-      box.appendChild(w);
-    }
-
-    const loose=(orphans||[]).filter(j=>!inTrip.has(j.id) && !j.at_depot);
-    if(loose.length){
-      // Нераспределённые заявки — очередь ДИСПЕТЧЕРА, а не работа инженера:
-      // он не может их распланировать. Раскрытым блоком на треть экрана
-      // они каждый день говорили ему «у тебя 31 дело», и это неправда.
-      // Оставляем доступ, но закрытым и в самом низу.
-      // Вся строка кликабельна — отдельная кнопка «открыть» отнимала
-      // у строки её собственную цель нажатия.
-      const w=document.createElement('div'); w.className='card';
-      w.innerHTML='<details class="acold"><summary><span class="achev">▸</span>'+
-        'Заявки без выезда <span class="acount">'+loose.length+'</span></summary>'+
-        '<div class="meta">Назначены на тебя, но не привязаны ни к одному выезду. Планирует их диспетчер.</div>'+
-        loose.map(j=>'<div class="ds" data-mopen="'+j.id+'" style="display:flex;justify-content:space-between;gap: var(--sp-3);cursor:pointer">'+
-          '<span>'+esc(j.clients?j.clients.name:'—')+(j.scheduled_date?(' · '+esc(tripPeriod(j.scheduled_date,null))):'')+'</span>'+
-          '<span style="color:var(--ink-dim)">'+esc(ST[j.status]||j.status)+' ›</span></div>').join('')+
-        '</details>';
-      box.appendChild(w);
-    }
-  }
-
-  // Без связи гасим только то, что офлайн действительно не работает:
-  // «открыть» и «Стоянки» тянут данные с сервера, «Перенести» пишет
-  // отдельную запись мимо очереди. Старт, финиш и подтверждение теперь
-  // не падают, а становятся в очередь, поэтому остаются живыми —
-  // ради них офлайн и затевался. Точки открываются из снимка.
-  if(offline){
-    box.querySelectorAll('[data-topen],[data-tstay],[data-tresched]').forEach(b=>{
-      b.disabled=true;
-      b.title='Нет связи. Действие станет доступно, когда появится сеть.';
-    });
-  }
-  box.querySelectorAll('[data-tstart]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tstart,'start'));
-  box.querySelectorAll('[data-tfin]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tfin,'finish'));
-  box.querySelectorAll('[data-tconf]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tconf,'confirm'));
-  box.querySelectorAll('[data-topen]').forEach(b=>b.onclick=()=>openTrip(b.dataset.topen));
-  box.querySelectorAll('[data-mopen]').forEach(b=>b.onclick=()=>openJob(b.dataset.mopen));
-  box.querySelectorAll('[data-tmap]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.tmap));
-  box.querySelectorAll('[data-tstay]').forEach(b=>b.onclick=()=>openStaysModal(b.dataset.tstay));
-  box.querySelectorAll('[data-tkm]').forEach(b=>b.onclick=()=>remeasureTrip(b.dataset.tkm));
-  box.querySelectorAll('[data-tresched]').forEach(b=>b.onclick=()=>openReschedModal(b.dataset.tresched));
-  box.querySelectorAll('[data-rok]').forEach(b=>b.onclick=()=>reschedDecide(b.dataset.rok,true));
-  box.querySelectorAll('[data-rno]').forEach(b=>b.onclick=()=>reschedDecide(b.dataset.rno,false));
-  box.querySelectorAll('[data-rcancel]').forEach(b=>b.onclick=()=>reschedCancel(b.dataset.rcancel));
+  await renderFeed(box,{mine:true,lead:true,done:!!($('mineDone')&&$('mineDone').checked)});
 }
 
-async function mineTripJobs(ids){
-  const out={}; if(!ids.length) return out;
-  const { data }=await sb.from('trip_jobs')
-    // Полная строка заявки, а не только имя и статус: этот же набор
-    // ложится в снимок, и по нему инженер должен уметь открыть заявку
-    // и внести часы без связи.
-    .select('trip_id, ord, jobs(*, clients(name,lat,lng,phone), equipment(model), job_works(*), job_parts(id,name,sku,qty,unit,billable), job_visits(id,started_at,ended_at,created_by))')
-    .in('trip_id',ids).order('ord');
-  (data||[]).forEach(r=>{ if(!r.jobs) return; (out[r.trip_id]=out[r.trip_id]||[]).push(r.jobs); });
-  return out;
-}
 
 async function jobSetStatus(id,st){ const j=jobs.find(x=>x.id==id);
   const {error}=await sb.from('jobs').update({status:st}).eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; }
@@ -2150,10 +2298,8 @@ $('jbClient').onchange=()=>{ populateEquip(); jobHead(); };
 // Заявку открывают и из «Сегодня», где без связи список jobs пуст.
 // Тогда берём строку из снимка — она там полная, вместе с работами.
 async function snapFindJob(id){
-  const s=await snapGet('mine'); if(!s||!s.val||!s.val.byTrip) return null;
-  let hit=null;
-  Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{ if(j.id===id) hit=j; }));
-  return hit;
+  const s=await snapGet('mine'); if(!s||!s.val||!s.val.list) return null;
+  return s.val.list.find(j=>j&&j.id===id)||null;
 }
 async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEditId=id;
   const j=id?(jobs.find(x=>x.id==id)||await snapFindJob(id)):null;
@@ -3874,7 +4020,7 @@ function loadTripIntoPlanner(id){ const t=trips.find(x=>x.id==id); if(!t) return
   rStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'client',name:x.name,lat:x.lat,lng:x.lng,clientId:x.clientId||null,equipId:x.equipId||null,description:x.description||''}));
   const es=t.econ_snapshot||{}; rRoute={km:es.km||0,driveH:es.driveH||0,geometry:t.route_geometry||null}; rVariants=[]; if($('rVariants')) $('rVariants').innerHTML='';
   renderRoutePanel(); $('rStatus').innerHTML=rRoute.km?('<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'):'';
-  if(rStops.length) map.fitBounds(routeStopsAll().map(s=>[s.lat,s.lng]),fitPad(60)); return;
+  if(rStops.length) map.fitBounds(routeStopsAll().map(s=>[s.lat,s.lng]),fitPadL(fitPad(60))); return;
 }
 $('tripCancel').onclick=()=>switchTab('planner','trips');
 ['tpFrom','tpTo','tpEng','tpStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',tripEcon); });
@@ -4926,7 +5072,7 @@ async function showTripFact(tid){
     const bpts=[];
     m.segments.forEach(g=>{ bpts.push([g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]); });
     (m.points||[]).forEach(p=>bpts.push([p.lat,p.lng]));
-    if(bpts.length) setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(bpts).getBounds(),fitPad(40)); },60);
+    if(bpts.length) setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(bpts).getBounds(),fitPadL(fitPad(40))); },60);
     showFactLegend(m);
     const bits=['Факт: '+Math.round(m.km)+' км по '+m.points.length+' точкам'];
     if(m.dropped.length) bits.push('вырезано '+(m.droppedTotal||m.dropped.length));
@@ -5299,10 +5445,10 @@ function routeHasClient(cid){ return rStops.some(s=>s.clientId===cid); }
 function resetBuilt(){ rRoute={km:0,driveH:0,geometry:null}; rVariants=[]; $('rVariants').innerHTML=''; $('rStatus').textContent='маршрут не построен'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; endDeclined=false; drawStops(); }
 function pushClientStop(c){ rStops.push({type:'client',name:c.name,lat:c.lat,lng:c.lng,clientId:c.id}); }
 window.addBaseStart=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); rStart={name:c.name,lat:c.lat,lng:c.lng,placeId:c.id,description:c.description||''}; renderRoutePanel(); resetBuilt(); };
-window.addBaseStop=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); rStops.push({type:'place',name:c.name,lat:c.lat,lng:c.lng,placeId:c.id,description:c.description||''}); const b=$('routeBlock'); if(b) b.classList.remove('collapsed'); renderRoutePanel(); resetBuilt(); };
-window.addClientToRoute=function(cid){ const c=clients.find(x=>x.id==cid); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); pushClientStop(c); const b=$('routeBlock'); if(b) b.classList.remove('collapsed'); renderRoutePanel(); resetBuilt(); maybePromptJob(cid); };
+window.addBaseStop=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); rStops.push({type:'place',name:c.name,lat:c.lat,lng:c.lng,placeId:c.id,description:c.description||''}); showRouteTab(); renderRoutePanel(); resetBuilt(); };
+window.addClientToRoute=function(cid){ const c=clients.find(x=>x.id==cid); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); pushClientStop(c); showRouteTab(); renderRoutePanel(); resetBuilt(); maybePromptJob(cid); };
 window.addEquipToRoute=function(cid,eid){ const c=clients.find(x=>x.id==cid); const e=(eqByClient[cid]||[]).find(x=>x.id==eid); if(!c||!e||!canWrite()) return; map.closePopup(); switchTab('map');
-  const lat=(e.lat!=null)?e.lat:c.lat, lng=(e.lng!=null)?e.lng:c.lng; rStops.push({type:'equip',name:c.name+' · '+(e.model||''),lat,lng,clientId:c.id,equipId:e.id}); const b=$('routeBlock'); if(b) b.classList.remove('collapsed'); renderRoutePanel(); resetBuilt(); maybePromptJob(c.id); };
+  const lat=(e.lat!=null)?e.lat:c.lat, lng=(e.lng!=null)?e.lng:c.lng; rStops.push({type:'equip',name:c.name+' · '+(e.model||''),lat,lng,clientId:c.id,equipId:e.id}); showRouteTab(); renderRoutePanel(); resetBuilt(); maybePromptJob(c.id); };
 async function maybePromptJob(cid){ try{ const {data}=await sb.from('jobs').select('id').is('deleted_at',null).eq('client_id',cid).not('status','in','(done,cancelled)'); if(data&&data.length) return; }catch(e){ return; } pendingLinkClient=cid; const c=clients.find(x=>x.id==cid); $('linkText').textContent='У клиента «'+(c?c.name:'')+'» нет открытых заявок. Создать заявку как основание выезда?'; $('linkOverlay').classList.add('on'); }
 function ringColor(){ return theme.mode==='light'?'rgba(0,0,0,0.6)':'rgba(255,255,255,0.85)'; }
 function drawRouteLine(layer,geometry){ if(!geometry||!geometry.coordinates) return; const ll=geometry.coordinates.map(c=>[c[1],c[0]]); L.polyline(ll,{color:ringColor(),weight:5,opacity:1,lineJoin:'round',lineCap:'round'}).addTo(layer); }
