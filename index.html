@@ -117,9 +117,24 @@
     padding: var(--sp-3) var(--sp-4); font-size: var(--fs-2); color: var(--ink-dim);
     box-shadow: var(--shadow-sm); line-height: 1.9; }
   .mleg i { width: 20px; height: 0; display: inline-block; vertical-align: middle;
-    margin-right: var(--sp-3); }
-  .mleg .dot { width: 9px; height: 9px; border-radius: 50%; background: #dc2626;
-    display: inline-block; vertical-align: middle; margin: 0 8px 0 6px; }
+    margin-right: var(--sp-3); flex: none; }
+  .mleg .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor;
+    display: inline-block; vertical-align: middle; margin: 0 8px 0 6px; flex: none; }
+  /* Общий стиль форм делает подписи заглавными и разрядочными — в легенде
+     это нечитаемо, и она не форма. Сбрасываем явно. */
+  .mleg label { display: flex; align-items: center; gap: 0; cursor: pointer;
+    padding: 1px 0; white-space: nowrap; text-transform: none;
+    letter-spacing: normal; font-size: inherit; font-weight: 400;
+    color: inherit; margin: 0; }
+  .mleg label input { width: auto; margin: 0 var(--sp-3) 0 0; flex: none; cursor: pointer; }
+  .mleg label b { color: var(--ink); margin-left: 6px; }
+  .mleg-t { margin-top: var(--sp-2); padding-top: var(--sp-2);
+    border-top: 1px solid var(--line); color: var(--ink-faint); }
+  .mleg-x { position: absolute; top: 2px; right: 4px; width: 20px; height: 20px;
+    border: none; background: none; cursor: pointer; color: var(--ink-faint);
+    font-size: var(--fs-5); line-height: 1; padding: 0; }
+  .mleg-x:hover { color: var(--ink); }
+  .mleg { position: relative; padding-right: var(--sp-5); }
   /* Таблица составляющих: моноширинная, чтобы хеши и числа строк стояли
      столбиком и сверялись взглядом, а не чтением. */
   .vt { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: var(--fs-2); }
@@ -400,9 +415,14 @@
     padding-bottom: var(--sp-4); }
   /* Липкая шапка встаёт не в самый верх, а под верхний отступ .pane —
      и в этой полоске карточки продолжали проезжать поверх. Закрываем её
-     фоном, вытянутым вверх; за край панели он не вылезет, её overflow режет. */
-  .stickyhead::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%;
-    height: var(--sp-7); background: var(--bg); }
+     фоном, вытянутым вверх; за край панели он не вылезет, её overflow режет.
+     Тянем его и ВБОК, за боковые отступы панели. Причина не в красоте:
+     шапка шириной с содержимое, а тень карточки выходит за её края —
+     и в этих полях по бокам она рисовалась поверх шапки, потому что
+     закрывать её там было нечем. Со стороны это выглядит как размазанная
+     по шапке тень, и заметно именно на телефоне, где отступы узкие. */
+  .stickyhead::before { content: ''; position: absolute; left: -40px; right: -40px;
+    top: calc(-1 * var(--sp-7)); bottom: 0; background: var(--bg); z-index: -1; }
   .stickyhead::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0;
     height: 1px; background: var(--line); opacity: 0; transition: opacity var(--t); }
   .stickyhead.stuck::after { opacity: 1; }
@@ -531,6 +551,25 @@
   .stickyhead .subtabs { margin-bottom: var(--sp-4); }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--accent); color: var(--ink); padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm); font-family: var(--mono); font-size: var(--fs-3); box-shadow: var(--shadow-lg); z-index: 99999; opacity: 0; pointer-events: none; transition: opacity var(--t), transform var(--t); }
   .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+  /* Индикатор долгой работы. Пересчёт трека ходит в сеть и занимает
+     секунды: без него человек видит замершую кнопку и решает, что
+     сломалось. Стоит выше тоста, чтобы они не наезжали друг на друга. */
+  .busy { position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm);
+    box-shadow: var(--shadow-lg); padding: var(--sp-4) var(--sp-5); min-width: 260px;
+    z-index: 99999; opacity: 0; pointer-events: none;
+    transition: opacity var(--t), transform var(--t); }
+  .busy.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .busy-t { font-family: var(--mono); font-size: var(--fs-2); color: var(--ink-dim);
+    display: flex; align-items: center; gap: var(--sp-3); }
+  .busy-s { width: 12px; height: 12px; flex: none; border-radius: 50%;
+    border: 2px solid var(--line); border-top-color: var(--accent);
+    animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .busy-bar { height: 3px; margin-top: var(--sp-3); background: var(--line);
+    border-radius: 2px; overflow: hidden; }
+  .busy-bar i { display: block; height: 100%; width: 0; background: var(--accent);
+    transition: width .2s linear; }
   .ctxmenu { position: fixed; z-index: 9998; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: var(--sp-3); display: none; min-width: 210px; }
   .ctxmenu.on { display: block; animation: popIn 0.12s ease; }
   .ctxmenu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); font-family: var(--sans); font-size: var(--fs-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-sm); cursor: pointer; }
@@ -1095,6 +1134,12 @@
 .etotal{display:flex;justify-content:space-between;align-items:center;border-top:2px solid var(--line);margin-top: var(--sp-3);padding-top: var(--sp-3);font-size: var(--fs-5)}
 .ehint{color:var(--ink-faint);font-size: var(--fs-3);padding: var(--sp-3) 0}
 .emap{height:200px;border:1px solid var(--line);border-radius: var(--r-sm);overflow:hidden;background:#111}
+/* Подсказка на превью: без неё непонятно, что по карте можно ткнуть. */
+#tpMapWrap{position:relative}
+.emap-open{position:absolute;right:8px;top:8px;z-index:500;pointer-events:none;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:2px 8px;font-family:var(--mono);font-size:var(--fs-1);color:var(--ink-dim);
+  box-shadow:var(--shadow-sm)}
 .eleg{display:flex;gap: var(--sp-5);font-size: var(--fs-2);color:var(--ink-dim);padding-top: var(--sp-3)}
 .eleg span{display:flex;align-items:center;gap: var(--sp-3)}
 .edash{width:18px;height:0;border-top:3px dashed #9aa1ad;display:inline-block}
@@ -2042,6 +2087,7 @@
 <meta name="theme-color" content="#0f1115">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <div class="toast" id="toast"></div>
+<div class="busy" id="busy"><div class="busy-t"><span class="busy-s"></span><span id="busyText">Работаю…</span></div><div class="busy-bar"><i id="busyBar"></i></div></div>
 <div class="toast undo" id="undoToast"><span id="undoMsg"></span><button class="btn sm amber" id="undoBtn">Отменить</button></div>
 <div class="ctxmenu" id="ctxMenu"></div>
 <!-- Сколько изменений ещё не уехало. Видно на любом экране: инженер должен
