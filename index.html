@@ -135,18 +135,19 @@
   /* Цифры плана — отдельной строкой под своим слоем: в строку они делают
      панель вдвое шире, а на телефоне она и так впритык. */
   .mleg-s { margin: -2px 0 2px 26px; color: var(--ink-faint); }
-  /* Окно времени. Два ползунка вплотную: это один диапазон, а не две
-     независимые настройки. */
-  .mleg-tf { margin: 0 0 var(--sp-3); padding-bottom: var(--sp-3);
+  /* Окно времени: два поля в строку через тире — как период на сводке. */
+  .mleg-tf { display: flex; align-items: center; gap: var(--sp-2);
+    margin: 0 0 var(--sp-3); padding-bottom: var(--sp-3);
     border-bottom: 1px solid var(--line); }
-  .mleg-tfh { display: flex; align-items: center; justify-content: space-between;
-    gap: var(--sp-3); color: var(--ink); }
-  .mleg-tfh button { border: none; background: none; cursor: pointer; padding: 0;
-    font-family: var(--mono); font-size: var(--fs-1); color: var(--ink-faint);
-    text-decoration: underline; }
-  .mleg-tfh button:hover { color: var(--ink); }
-  .mleg-tf input[type=range] { width: 100%; margin: 3px 0 0; height: 12px;
-    accent-color: var(--accent); }
+  .mleg-tf input { width: auto; flex: 1 1 auto; min-width: 0; margin: 0;
+    padding: 2px var(--sp-2); font-family: var(--mono); font-size: var(--fs-2);
+    background: var(--panel-2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: var(--r-sm); }
+  .mleg-dash { color: var(--ink-faint); flex: none; }
+  .mleg-tf button { flex: none; border: none; background: none; cursor: pointer;
+    padding: 0 0 0 var(--sp-2); font-family: var(--mono); font-size: var(--fs-1);
+    color: var(--ink-faint); text-decoration: underline; }
+  .mleg-tf button:hover { color: var(--ink); }
   /* Шкала скорости: полоса градиента и два конца подписи. */
   .mleg-sp { display: flex; align-items: center; gap: var(--sp-2);
     margin: 0 0 3px 26px; color: var(--ink-faint); font-size: var(--fs-1); }
@@ -621,9 +622,9 @@
      фон, только плотнее — вид проще, но ничего не ломается. */
   .topbar, .rail, .modal, .sheet, .map-pop, .mleg, .busy, .toast,
   .pop, .ctxmenu {
-    background: var(--glass);
-    -webkit-backdrop-filter: saturate(180%) blur(16px);
-    backdrop-filter: saturate(180%) blur(16px);
+    background: var(--glass-panel);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
   }
   @supports not (backdrop-filter: blur(1px)) {
     .topbar, .rail, .modal, .sheet, .map-pop, .mleg, .busy, .toast,
@@ -634,9 +635,9 @@
      кончалось бы там, где начинается вылет. */
   .stickyhead { background: transparent; }
   .stickyhead::before {
-    background: var(--glass);
-    -webkit-backdrop-filter: saturate(180%) blur(16px);
-    backdrop-filter: saturate(180%) blur(16px);
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
   }
   @supports not (backdrop-filter: blur(1px)) {
     .stickyhead::before { background: var(--bg); }
