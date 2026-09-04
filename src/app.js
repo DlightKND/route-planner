@@ -32,7 +32,7 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
-        cleanTrack, trackTotalKm, planGapFills, resolveAnomalies } = core;
+        measureTrip } = core;
 
 
 const $=id=>document.getElementById(id);
@@ -4294,7 +4294,7 @@ async function remeasureTrip(tid){
         ? 'Пересчитать факт-пробег по треку? Выезд уже подтверждён: деньги пересоберутся, а одометр машины менялся в момент подтверждения — сверь его показания вручную.'
         : 'Пересчитать факт-пробег по треку?',
       {okText:'Пересчитать'})) return;
-  delete gapRoutes[tid]; delete gapLines[tid];
+  delete lastMeasure[tid];
   if(!await settleFactKm(tid)) return;
   if(wasDone) await refreshTripEcon(tid);
   await loadAll();
@@ -4322,7 +4322,7 @@ async function settleFactKm(tid){
     why+'. Свести пробег по навигации нельзя — впиши два числа с одометра машины.',
     {title:'Трек недостоверен',okText:'Ввести одометр',cancelText:'Отложить'});
   if(!ok) return false;
-  const od=await askOdometer(tid);
+  const od=await askOdometer();
   if(!od) return false;
   try{ await writeFactKm(tid,od.km,'odometer','по одометру '+od.a+' → '+od.b+'; '+why); }
   catch(e){ notify('Одометр не записался: '+(e.message||e),'err'); return false; }
@@ -4440,18 +4440,18 @@ const DROP_C ='#dc2626';   // выброшено как ошибка приём�
 // вопрос — «что тут достроено, а что мы правда видели» — остаётся без
 // ответа. Числа рядом с образцами: сколько километров каждым способом.
 let factLegend=null;
-function showFactLegend(t,dropCount){
+function showFactLegend(m){
   if(factLegend){ try{ map.removeControl(factLegend); }catch(e){} factLegend=null; }
   const row=(style,name,km)=>'<div><i style="'+style+'"></i>'+name
     +(km!=null?(' <b style="color:var(--ink)">'+Math.round(km)+' км</b>'):'')+'</div>';
   factLegend=L.control({position:'bottomright'});
   factLegend.onAdd=function(){
     const d=L.DomUtil.create('div','mleg');
-    d.innerHTML=row('border-top:4px dotted '+TRACK_C,'видели по трекеру',t.measuredKm)
-      +(t.routeKm?row('border-top:5px solid '+ROAD_C,'достроено по дорогам',t.routeKm):'')
-      +(t.straightKm?row('border-top:3px dotted '+GAP_C,'прямая через дыру',t.straightKm):'')
-      +(dropCount?('<div><span class="dot"></span>выброшено точек: <b style="color:var(--ink)">'+dropCount+'</b></div>'):'')
-      +'<div style="margin-top:4px;color:var(--ink-faint)">итого '+Math.round(t.km)+' км</div>';
+    d.innerHTML=(m.trackKm?row('border-top:4px dotted '+TRACK_C,'видели по трекеру',m.trackKm):'')
+      +(m.roadKm?row('border-top:5px solid '+ROAD_C,'посчитано по дорогам',m.roadKm):'')
+      +(m.lineKm?row('border-top:3px dotted '+GAP_C,'прямая, маршрут не строился',m.lineKm):'')
+      +(m.dropped.length?('<div><span class="dot"></span>выброшено точек: <b style="color:var(--ink)">'+m.dropped.length+'</b></div>'):'')
+      +'<div style="margin-top:4px;color:var(--ink-faint)">итого '+Math.round(m.km)+' км</div>';
     L.DomEvent.disableClickPropagation(d);
     return d;
   };
@@ -4467,325 +4467,181 @@ async function showTripOnMap(tid){
       .eq('trip_id',tid).order('ts');
     const raw=(data||[]).filter(p=>p.lat!=null&&p.lng!=null);
     if(!raw.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Фактического трека нет'); return; }
-    const c=cleanTrack(raw);
-    const pts=c.points;
-    if(!pts.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
 
-    // Рвём линию на кусках-разрывах: одна сплошная через дыру нарисовала бы
-    // проезд, которого мы не видели.
-    const gapAt=new Set(c.gaps.map(g=>g.from));
-    let seg=[pts[0]];
-    const segs=[];
-    for(let i=1;i<pts.length;i++){
-      if(gapAt.has(pts[i-1].ts)){ segs.push(seg); seg=[pts[i]]; }
-      else seg.push(pts[i]);
-    }
-    segs.push(seg);
-    segs.filter(s2=>s2.length>1).forEach(s2=>factLayer.addLayer(
-      L.polyline(s2.map(p=>[p.lat,p.lng]),{color:TRACK_C,weight:4,opacity:.85,dashArray:'1 7',lineCap:'round'})));
+    // Если выезд только что сводили, показываем ТОТ ЖЕ результат: карта и
+    // деньги обязаны быть про одно. Если нет — считаем тем же проходом, но
+    // без маршрутизатора: показ трека не должен стоить квоты. Отрезки, для
+    // которых маршрут не строился, честно помечены.
+    const t=trips.find(x=>x.id==tid)||null;
+    const m=lastMeasure[tid]||await measureTrip(raw,trackOpts(),tripEnds(t),null);
+    if(!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
 
-    // Разрывы: короткие достраиваем прямой прямо сейчас, длинные —
-    // маршрутом по дорогам. Порог в пяти километрах не про точность ради
-    // точности: ниже него прямая отличается от дороги на сотни метров,
-    // и внешний запрос за такой разницей не окупается, а выше — ошибка
-    // уже в километрах, и это прямо себестоимость выезда.
-    const plan=planGapFills(c);
-    const known=gapLines[tid]||{}, knownKm=gapRoutes[tid]||{};
-    plan.forEach(g=>{
-      // Отрезок, посчитанный при сведении выезда, уже лежит у нас целиком —
-      // и линией, и километрами. Рисуем его, а не серую прямую, и ничего
-      // не спрашиваем заново.
-      // Достроенный по дорогам кусок и кусок, которого просто нет, — вещи
-      // противоположные, а рисовались одинаковым серым пунктиром. Дорога
-      // сплошная и цветная: это знание. Прямая через дыру — серая и рваная:
-      // это признание, что мы не знаем, где машина ехала.
-      const line=known[g.from];
-      if(line&&line.length>1){
-        factLayer.addLayer(L.polyline(line.map(pt=>[pt[1],pt[0]]),
-          {color:ROAD_C,weight:5,opacity:.9})
-          .bindPopup('Связи не было '+g.minutes+' мин. Достроено по дорогам: <b>'
-            +(knownKm[g.from]!=null?(+knownKm[g.from]).toFixed(1):'?')+' км</b>.'));
+    m.segments.forEach(g=>{
+      const ab=[[g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]];
+      if(g.kind==='road'){
+        const line=(g.line&&g.line.length>1)?g.line.map(p=>[p[1],p[0]]):ab;
+        factLayer.addLayer(L.polyline(line,{color:ROAD_C,weight:5,opacity:.9})
+          .bindPopup('По дорогам <b>'+g.km.toFixed(1)+' км</b>'
+            +(g.minutes!=null?(' за '+g.minutes+' мин'):'')
+            +(g.why?('<br>'+esc(g.why)):'')));
         return;
       }
-      const straight=[[g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]];
-      const why=(g.fill==='ors')
-        ? 'Связи не было '+g.minutes+' мин. Достраиваю маршрутом по дорогам…'
-        : 'Связи не было '+g.minutes+' мин. Взята прямая '+g.straightKm.toFixed(1)+' км'
-          +(g.why==='короткий'?' — на таком куске дорога от прямой почти не отличается.'
-                              :' — маршрут не строился: '+g.why+'.');
-      factLayer.addLayer(L.polyline(straight,{color:GAP_C,weight:3,opacity:.85,dashArray:'2 9'}).bindPopup(why));
+      if(g.kind==='line'){
+        factLayer.addLayer(L.polyline(ab,{color:GAP_C,weight:3,opacity:.85,dashArray:'2 9'})
+          .bindPopup('Прямая <b>'+g.km.toFixed(1)+' км</b>'
+            +(g.minutes!=null?(' за '+g.minutes+' мин'):'')
+            +'<br>'+esc(g.why||'маршрут не строился')+' — цифра занижена.'));
+        return;
+      }
+      factLayer.addLayer(L.polyline(ab,{color:TRACK_C,weight:4,opacity:.85,dashArray:'1 7',lineCap:'round'}));
     });
-    // Выброшенное показываем, а не прячем: если приёмник врёт постоянно, это
-    // видно на карте, и разговор с поставщиком трекера предметный. Сюда же
-    // идут точки, вырезанные проверкой при сведении выезда, — иначе карта
-    // показывала бы одну картину, а записанный километраж считался по другой.
-    // Кружки рисуем ПОСЛЕ линий: точка поверх линии читается, линия поверх
-    // точки её прячет.
-    const shown=new Set();
-    const drawDrop=(p,why)=>{
-      if(shown.has(p.ts)) return; shown.add(p.ts);
+
+    // Выброшенное показываем, а не прячем: если приёмник врёт постоянно,
+    // это видно на карте, и разговор с поставщиком трекера предметный.
+    m.dropped.forEach(p=>{
       factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:4,color:DROP_C,fillColor:DROP_C,fillOpacity:.6,weight:1})
-        .bindPopup('Отброшено: '+esc(why)+'<br>'+new Date(p.ts).toLocaleString('ru')));
-    };
-    const lr=lastResolve[tid];
-    if(lr&&lr.dropped) lr.dropped.forEach(p=>drawDrop(p,p.why));
-    c.dropped.forEach(p=>drawDrop(p,p.why));
-    // Маршруты по дорогам — после отрисовки, чтобы карта не ждала сеть.
-    const need=plan.filter(g=>g.fill==='ors'&&known[g.from]==null);
-    if(need.length) fillGapsByRoad(tid,need,c,shown.size);
-    pts.filter(p=>p.status==='idle').forEach(p=>{
+        .bindPopup('Отброшено: '+esc(p.why)+'<br>'+new Date(p.ts).toLocaleString('ru')));
+    });
+    m.points.filter(p=>p.status==='idle').forEach(p=>{
       factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:5,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:.9,weight:2})
         .bindPopup('Стоянка с '+new Date(p.ts).toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'})));
     });
-    setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(pts.map(p=>[p.lat,p.lng])).getBounds(),{padding:[40,40]}); },60);
-    const tot=trackTotalKm(c,gapRoutes[tid]||null);
-    showFactLegend(tot,shown.size);
-    const bits=['Факт: '+Math.round(tot.km)+' км по '+c.keptCount+' точкам'];
-    if(c.gaps.length) bits.push(c.gaps.length+' '+plural(c.gaps.length,'разрыв','разрыва','разрывов')
-      +' (+'+Math.round(tot.straightKm+tot.routeKm)+' км)');
-    if(shown.size) bits.push('вырезано '+shown.size);
-    if(c.jitterKm>=0.5) bits.push('дрожание '+c.jitterKm.toFixed(1)+' км');
-    // Число на карте — это то, что видно сейчас. Записанный факт мог быть
-    // сведён иначе (по одометру, при другой доступности ORS), и путать их
-    // нельзя: в деньги идёт записанный.
-    const tr=trips.find(x=>x.id==tid);
-    if(tr&&tr.fact_km!=null) bits.push('записано '+Math.round(tr.fact_km)+' км'+factSrcRu(tr.fact_km_source));
+    // Опоры выезда — старт и финиш, если их пришлось подставить.
+    m.points.filter(p=>p.anchor).forEach(p=>{
+      factLayer.addLayer(L.circleMarker([p.lat,p.lng],{radius:7,color:ROAD_C,fillColor:'#fff',fillOpacity:1,weight:3})
+        .bindPopup(esc(p.anchor)+': трек сюда не дошёл, дорога достроена'));
+    });
+
+    setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(m.points.map(p=>[p.lat,p.lng])).getBounds(),{padding:[40,40]}); },60);
+    showFactLegend(m);
+    const bits=['Факт: '+Math.round(m.km)+' км по '+m.points.length+' точкам'];
+    if(m.dropped.length) bits.push('вырезано '+m.dropped.length);
+    if(m.jitterKm>=0.5) bits.push('дрожание '+m.jitterKm.toFixed(1)+' км');
+    if(t&&t.fact_km!=null) bits.push('записано '+Math.round(t.fact_km)+' км'+factSrcRu(t.fact_km_source));
     showToast(bits.join(' · '));
   }catch(e){ notify('Трек не загрузился: '+(e.message||e),'err'); }
 }
 
-// Достройка длинных разрывов маршрутом по дорогам.
-//
-// Отдельной функцией и после отрисовки: сеть может отвечать секунды, а
-// трек человек должен увидеть сразу. Каждый посчитанный кусок заменяет
-// свою серую прямую линией по дорогам и уточняет цифру в подписи.
-//
-// Результат отсюда в fact_km НЕ пишется: это просмотр карты, а не сведение
-// выезда. Факт считается один раз и в одном месте — в settleFactKm при
-// подтверждении, — иначе у одной цифры заведётся два источника, ровно то,
-// от чего мы уже лечили econ_snapshot.
-let gapRoutes={};
-// Что показала проверка при сведении выезда. Карта рисует бесплатным
-// разбором (cleanTrack) и внешних запросов не делает — иначе каждый показ
-// трека стоил бы квоты. Но если выезд только что сводили, результат уже
-// посчитан, и показывать вместо него другую картинку нечестно: человек
-// сверяет глазами именно то число, которое ушло в деньги.
-let lastResolve={};
-// Геометрия достроенных отрезков: рисуется на карте, второй раз у ORS не
-// запрашивается. Живёт рядом с километрами, но отдельно от них — считает
-// пробег trackTotalKm, а он про линии ничего не знает и знать не должен.
-let gapLines={};
-async function fillGapsByRoad(tid,need,c,dropCount){
-  if(orsKeyMissing()) return;
-  const got=Object.assign({},gapRoutes[tid]||{});
-  for(const g of need){
-    if(got[g.from]!=null) continue;
-    try{
-      const gj=await orsPost(ORS_DIR,{coordinates:[[g.fromPt.lng,g.fromPt.lat],[g.toPt.lng,g.toPt.lat]]});
-      const f=(gj.features||[])[0]; if(!f) continue;
-      const km=(+(((f.properties||{}).summary||{}).distance)||0)/1000;
-      if(!km) continue;
-      got[g.from]=km;
-      const line=(f.geometry&&f.geometry.coordinates)||[];
-      if(line.length>1){
-        gapLines[tid]=Object.assign({},gapLines[tid]||{},{[g.from]:line});
-        factLayer.addLayer(L.polyline(line.map(p=>[p[1],p[0]]),
-          {color:ROAD_C,weight:5,opacity:.9})
-          .bindPopup('Связи не было '+g.minutes+' мин. Достроено по дорогам: <b>'+km.toFixed(1)+
-                     ' км</b> (по прямой было бы '+g.straightKm.toFixed(1)+').'));
-      }
-    }catch(e){ /* один разрыв не достроился — остальные не отменяем */ }
-  }
-  gapRoutes[tid]=got;
-  const t=trackTotalKm(c,got);
-  if(factLegend) showFactLegend(t,dropCount||0);
-  const bits=['Факт: '+Math.round(t.km)+' км'];
-  if(t.routeKm) bits.push('из них '+Math.round(t.routeKm)+' достроено по дорогам');
-  if(t.pendingRoutes) bits.push(t.pendingRoutes+' '+plural(t.pendingRoutes,'разрыв','разрыва','разрывов')+' не достроено');
-  showToast(bits.join(' · '));
-}
+// Что показала проверка при сведении выезда. Держим, чтобы карта рисовала
+// ровно то, что ушло в деньги, а не пересчитывала по-своему.
+let lastMeasure={};
 
-// ---------- достоверность факт-трека и наш собственный пробег ----------
-//
-// ЗАЧЕМ. Пробег выезда до сих пор приходил числом от Wialon. Проверка на
-// живом выезде показала, что верить ему нельзя: сумма прямых по точкам дала
-// 12 500 км, Wialon записал 200, физический одометр показал 303. То есть
-// в треке была аномалия, Wialon её по-своему вырезал — вместе с настоящим
-// куском дороги, — и отдал заниженное число. Два разных детектора, две
-// разные ошибки и ни одного способа узнать, какая цифра верна.
-//
-// Поэтому факт считаем сами и по своим правилам. Проверяем КАЖДЫЙ выезд:
-// когда аномалий нет, проход стоит один цикл по точкам и ни одного внешнего
-// запроса — он просто попарно подтверждает точки и заканчивается словом
-// «чисто». Платим только там, где трек действительно рвался.
-//
-// ДВА ИНСТРУМЕНТА ОДНОГО ПРАВИЛА. Круг радиусом 300 км/ч × Δt — грубая
-// форма: бесплатная, и на срыве отвечает сразу. Изохрона по дорогам —
-// точная: она строже круга и нужна ровно в одном месте — когда после срыва
-// круг разросся до сотен километров и перестал что-либо значить, а решить
-// надо, вернулась ли машина в трек. За это и платим запросом.
+// ---------- откуда берётся факт-пробег ----------
 //
 // ЧЕМ СПРАШИВАТЬ ПРО ДОРОГИ. Сначала это была изохрона: строим от последней
 // достоверной точки область «куда успел бы за Δt» и смотрим, попал ли
-// кандидат внутрь. Идея правильная, инструмент — нет. У изохрон везде
-// потолок около часа (ORS — 3600 секунд для машины, у Mapbox и GraphHopper
-// то же самое), и это не жадность бесплатного тарифа: область растёт по
-// площади, и час — предел, за которым её честный расчёт дорожает обвально.
-// А нам нужен ровно противоположный случай: длинный сбой, когда трека нет
-// два-три часа. Именно там круг уже бесполезен, а изохрона отвечать
-// отказывается.
+// кандидат внутрь. Идея верная, инструмент — нет. У изохрон везде потолок
+// около часа (ORS 3600 секунд, у Mapbox и GraphHopper то же), и это не
+// жадность бесплатного тарифа: область растёт по площади. А нужен ровно
+// обратный случай — сбой на два-три часа, где круг уже бесполезен.
 //
-// Обходить потолок цепочкой изохрон — считать вторую от края первой — плохо
-// вдвойне. Область от дуги приближается несколькими точками на ней, и союз
-// таких кусков ВСЕГДА меньше настоящей области. Ошибка копится с каждым
-// шагом и работает в самую опасную сторону: мы объявляли бы недостижимыми
-// точки, до которых машина доезжала, и удаляли бы настоящий трек.
-//
-// Вопрос был поставлен сложнее, чем нужно. Изохрона отвечает «куда успел бы»
-// — это ответ для СОТНИ кандидатов сразу. Кандидат у нас один: после каждой
-// принятой точки якорь переезжает. Для одного кандидата есть прямой вопрос:
-// СКОЛЬКО ЕХАТЬ ПО ДОРОГАМ от a до b. Маршрут отвечает и временем, и
-// расстоянием, никакого потолка у него нет, эндпоинт уже разрешён в прокси
-// и уже используется приложением.
-//
-// И ответ строже. Изохрона — это дискретная оценка того же самого: областью
-// с конечным числом углов. Маршрут даёт время САМОГО БЫСТРОГО пути, то есть
-// точную нижнюю границу. Если ORS говорит «три часа», а у нас было сорок
-// минут, — это не «вероятно нет», это нет.
-//
-// ЗАПАС (настройка «Запас времени»). ORS считает по разрешённым скоростям и
-// без пробок; техника с краном едет медленнее, а не быстрее. Значит запас
-// нужен в одну сторону — в сторону «не удалять»: пропускаем, если по
-// дорогам выходит не больше чем в track_slack раз дольше доступного
-// времени. Водитель мог гнать, ORS мог переоценить город. Не мог он только
-// телепортироваться.
-//
-// КОРОТКИЕ РАЗРЫВЫ НЕ СПРАШИВАЕМ ВООБЩЕ. Множитель без нижней границы сам
-// порождает ложные срабатывания: молчание шесть минут, машина прошла десять
-// километров по трассе, ORS насчитал на них десять минут — шесть на полтора
-// это девять, и нормальная точка объявлена невозможной. Дело не в величине
-// множителя, а в том, что на коротком интервале ошибка самого расчёта
-// времени сравнима с интервалом. Поэтому ниже REACH_MIN_MS решает круг —
-// это не третья настройка, а граница применимости второй.
-const REACH_MIN_MS = 10 * 60000;
-
-// reach(a, b, ms) → {ok, km, line} | null.
-// null — «спросить не удалось», решает круг. НЕ путать с {ok:false}.
+// Вопрос был поставлен сложнее, чем нужно. Изохрона отвечает про сотню
+// кандидатов сразу; кандидат у нас один. Для одного есть прямой вопрос:
+// СКОЛЬКО ЕХАТЬ ПО ДОРОГАМ от a до b. Потолка нет, эндпоинт уже разрешён
+// в прокси, ответ строже (время самого быстрого пути — точная нижняя
+// граница), и вместе с ним приходит расстояние по дорогам — ровно то,
+// которое идёт в пробег вместо хорды.
 function makeReach(){
   if(orsKeyMissing()) return null;
   const slack=+appSettings.track_slack>0?+appSettings.track_slack:1.5;
   return async function(a,b,ms){
-    if(ms<REACH_MIN_MS) return null;
     try{
       const gj=await orsPost(ORS_DIR,{coordinates:[[a.lng,a.lat],[b.lng,b.lat]]});
       const f=(gj.features||[])[0];
       const sm=(f&&f.properties&&f.properties.summary)||{};
       const sec=+sm.duration, km=(+sm.distance||0)/1000;
-      if(!isFinite(sec)||sec<=0) return null;
-      // Маршрут пригодится дважды: решить судьбу точки и закрыть им же
-      // разрыв в треке. Второй раз то же самое не спрашиваем — ни линию,
-      // ни километры.
-      return {ok:sec<=(ms/1000)*slack, km, line:(f.geometry&&f.geometry.coordinates)||null};
+      if(!km) return null;
+      // ms не задан — это достройка до финиша: там проверять нечего,
+      // выезд закончился там, где закончился. Отдаём одно расстояние.
+      const ok=(ms==null)||!isFinite(sec)||sec<=(ms/1000)*slack;
+      return {ok,km,line:(f.geometry&&f.geometry.coordinates)||null};
     }catch(e){
-      // ОШИБКА МАРШРУТИЗАЦИИ — ЭТО ДОВОД ПРОТИВ ТОЧКИ. Если ORS не может
-      // доехать до координаты, значит её выбросило в поле, в лес или в море:
-      // сама по себе такая точка уже аномальна. Отвечаем «нет».
-      //
-      // Но только если отказал МАРШРУТ, а не связь. Кончилась квота, упала
-      // сеть, прокси вернул 500 — это ничего не говорит о точке, и считать
-      // такое подтверждением аномалии нельзя: на исчерпанной квоте мы бы
-      // вырезали весь трек целиком и объявили выезд недостоверным.
-      // Отвечаем «не знаю» и оставляем решение кругу.
-      return orsSaysNoRoute(e)?{ok:false}:null;
+      // ОТКАЗ МАРШРУТИЗАЦИИ — ДОВОД ПРОТИВ ТОЧКИ, но только если отказал
+      // маршрут, а не связь. Кончилась квота, упала сеть, прокси вернул
+      // 500 — это ничего не говорит о точке, и на исчерпанной квоте мы бы
+      // вырезали весь трек. Такое — «не знаю», решает первый гейт.
+      return orsSaysNoRoute(e)?{ok:false,km:0}:null;
     }
   };
 }
 
 // ORS кодирует причину в теле ответа. Про саму точку говорят ровно два кода:
 // 2009 — маршрут между точками не найден, 2010 — рядом с координатой нет
-// дороги. Остальные коды — про наш запрос (2003 неверное значение, 2012
-// незнакомый параметр) или про сервис (403, 429, 5xx, обрыв связи), и
-// принимать их за приговор точке нельзя: сломанный запрос вырезал бы весь
-// трек до последней точки.
+// дороги. Остальное — про наш запрос (2003, 2012) или про сервис.
 function orsSaysNoRoute(e){
   if(!e||e.status==null) return false;
   if(e.status===403||e.status===429||e.status>=500) return false;
   return /"code"\s*:\s*20(09|10)\b/.test(String(e.raw||''));
 }
 
-// Полный расчёт факта по выезду: вырезать аномалии → почистить дрожание →
-// достроить разрывы → отдать одно число и объяснение к нему.
+// Откуда выезд начался и где закончился. Стартовая остановка помечена
+// типом, финишная — просто последняя остановка маршрута: кнопка «финиш»
+// в карточке точки кладёт её в конец списка. Путевые точки без клиента
+// опорой быть не могут — у них нет смысла «мы тут были».
+function tripEnds(t){
+  const stops=(t&&t.route_stops)||[];
+  const start=stops.find(x=>x&&x.type==='start'&&x.lat!=null)||null;
+  const real=stops.filter(x=>x&&x.lat!=null&&x.type!=='wp'&&x.type!=='start');
+  const finish=real.length?real[real.length-1]:null;
+  return {
+    start:start?{lat:+start.lat,lng:+start.lng,name:start.name||'старт'}:null,
+    finish:finish?{lat:+finish.lat,lng:+finish.lng,name:finish.name||'финиш'}:null
+  };
+}
+
+// Пороги проверки из настроек.
+function trackOpts(){
+  const o={};
+  if(+appSettings.track_max_kmh>0) o.hardSpeedKmh=+appSettings.track_max_kmh;
+  if(+appSettings.track_slack>0) o.slack=+appSettings.track_slack;
+  return o;
+}
+
+// Полный расчёт факта по выезду: один проход по точкам. Он же вырезает
+// аномалии, он же меряет километры, он же строит отрезки для карты.
+//
+// Прошлая версия делала это двумя разными механизмами — проверкой и
+// «достройкой разрывов», — и они расходились: карта показывала одно, а
+// в деньги уходило другое. Теперь источник один.
 async function measureTripKm(tid){
   const { data }=await sb.from('vehicle_positions').select('lat,lng,ts,status')
     .eq('trip_id',tid).order('ts');
   const raw=(data||[]).filter(p=>p.lat!=null&&p.lng!=null);
   if(raw.length<2) return {ok:false,why:'трека нет'};
 
-  const hard=+appSettings.track_max_kmh>0?+appSettings.track_max_kmh:300;
-  const res=await resolveAnomalies(raw,{hardSpeedKmh:hard},makeReach());
-  lastResolve[tid]={dropped:res.dropped,reasons:res.reasons,verdict:res.verdict};
-  if(res.verdict.indexOf('трек недостоверен')===0){
-    // К приговору прикладываем разбор по причинам: сто точек «вне круга» и
-    // сто «старт не подтверждён» — разные поломки, и лечатся по-разному.
-    const by=Object.keys(res.reasons||{}).map(k=>k+': '+res.reasons[k]).join('; ');
-    return {ok:false,why:res.verdict+(by?('. Причины — '+by):''),resolve:res};
+  const t=trips.find(x=>x.id==tid)||null;
+  const m=await measureTrip(raw,trackOpts(),tripEnds(t),makeReach());
+  lastMeasure[tid]=m;
+  if(m.verdict.indexOf('трек недостоверен')===0){
+    const by=Object.keys(m.reasons||{}).map(k=>k+': '+m.reasons[k]).join('; ');
+    return {ok:false,why:m.verdict+(by?('. Причины — '+by):''),measure:m};
   }
-  // Дальше — обычная чистка по уже достоверным точкам: дрожание на стоянке
-  // и разрывы. Аномалий там уже нет, и вторая проверка скорости их не ищет.
-  const c=cleanTrack(res.points);
-  const plan=planGapFills(c);
-  // Мосты, посчитанные при проверке: та же пара точек, тот же маршрут по
-  // дорогам. Спрашивать ORS второй раз про уже известный отрезок — платить
-  // дважды за один ответ.
-  const got=Object.assign({},gapRoutes[tid]||{});
-  const lines=Object.assign({},gapLines[tid]||{});
-  (res.bridges||[]).forEach(b=>{
-    if(got[b.from]==null) got[b.from]=b.km;
-    if(b.line&&b.line.length>1) lines[b.from]=b.line;
-  });
-  gapLines[tid]=lines;
-  const need=plan.filter(g=>g.fill==='ors'&&got[g.from]==null);
-  if(need.length&&!orsKeyMissing()){
-    for(const g of need){
-      if(got[g.from]!=null) continue;
-      try{
-        const gj=await orsPost(ORS_DIR,{coordinates:[[g.fromPt.lng,g.fromPt.lat],[g.toPt.lng,g.toPt.lat]]});
-        const f=(gj.features||[])[0]; if(!f) continue;
-        const km=(+(((f.properties||{}).summary||{}).distance)||0)/1000;
-        if(km) got[g.from]=km;
-      }catch(e){ /* один разрыв не достроился — счёт не отменяем */ }
-    }
-    gapRoutes[tid]=got;
-  }
-  const tot=trackTotalKm(c,got);
+
   const note=[];
-  if(res.dropped.length) note.push('вырезано аномалий: '+res.dropped.length
-    +' из '+(res.dropped.length+res.points.length)+' точек');
-  if(res.restored) note.push('возвращено по пути: '+res.restored);
-  if(res.bridges&&res.bridges.length) note.push('мостов по дорогам: '+res.bridges.length);
-  if(res.weakChecks) note.push('дороги не проверились '+res.weakChecks+' раз, судили по кругу');
-  if(c.jitterKm>=0.5) note.push('дрожание на стоянке: '+c.jitterKm.toFixed(1)+' км');
-  if(tot.routeKm) note.push('достроено по дорогам: '+Math.round(tot.routeKm)+' км');
-  if(tot.straightKm) note.push('достроено прямыми: '+Math.round(tot.straightKm)+' км');
-  if(tot.pendingRoutes) note.push('не достроено разрывов: '+tot.pendingRoutes);
-  return {ok:true,km:Math.round(tot.km*10)/10,note:note.join('; '),resolve:res,clean:c,total:tot};
+  if(m.dropped.length) note.push('вырезано аномалий: '+m.dropped.length
+    +' из '+(m.dropped.length+m.points.length)+' точек');
+  if(m.roadKm) note.push('по дорогам: '+Math.round(m.roadKm)+' км');
+  if(m.lineKm) note.push('прямыми, маршрут не строился: '+Math.round(m.lineKm)+' км');
+  if(m.jitterKm>=0.5) note.push('дрожание на стоянке: '+m.jitterKm.toFixed(1)+' км');
+  return {ok:true,km:Math.round(m.km*10)/10,note:note.join('; '),measure:m};
 }
 
 // Ручной ввод одометра — фолбэк, когда треку верить нельзя. Человек читает
 // с панели два числа, разницу считаем мы: складывать в уме на морозе он
 // не обязан, а ошибка в этом месте уходит прямо в себестоимость.
-async function askOdometer(tid){
+async function askOdometer(){
   const v=await promptDialog('Пробег по одометру машины',[
     {key:'a',label:'Одометр на старте выезда, км'},
     {key:'b',label:'Одометр на финише, км'}
   ]);
   if(!v) return null;
-  const a=+String(v.a).replace(',','.').replace(/\s/g,''), b=+String(v.b).replace(',','.').replace(/\s/g,'');
+  const num=x=>+String(x==null?'':x).replace(',','.').replace(/\s/g,'');
+  const a=num(v.a), b=num(v.b);
   if(!isFinite(a)||!isFinite(b)){ notify('Одометр не разобрал: нужны два числа.','err'); return null; }
   if(b<a){ notify('Финиш меньше старта — числа перепутаны местами.','err'); return null; }
   const km=Math.round((b-a)*10)/10;
   if(km<=0){ notify('Разница нулевая — выезд без пробега так не закрывают.','err'); return null; }
-  return {km,a,b,tid};
+  return {km,a,b};
 }
 
 // Записываем факт ДО подтверждения: trip_confirm гонит fact_km в одометр
