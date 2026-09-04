@@ -114,11 +114,14 @@ const THEMES={
     '--accent-line':'#ffe100', '--focus':'#ffe100',
     '--nav-bg':'#24262b', '--nav-ink':'#ffe100',
     '--shadow-sm':'0 4px 12px rgba(0,0,0,0.2)', '--shadow-md':'0 8px 22px rgba(0,0,0,0.35)', '--shadow-lg':'0 12px 32px rgba(0,0,0,0.5)',
-    // Матовое стекло. Полупрозрачность без размытия читалась бы как грязь:
-    // сквозь неё лезет текст. Размытие превращает то, что за панелью, в фон:
-    // видно, что там что-то есть, но читается только сама панель.
-    '--glass':'rgba(26,28,32,0.72)', '--glass-2':'rgba(36,38,43,0.80)',
-    '--glass-line':'rgba(255,255,255,0.10)'
+    // Матовое стекло. Тон СВОЙ У КАЖДОЙ поверхности и равен её же сплошному
+    // цвету: стекло делает панель прозрачной, а не перекрашивает её. Общий
+    // тон на всё выглядел бы как смена темы — где-то светлее, где-то темнее,
+    // чего никто не просил.
+    //   --glass-panel — для того, что раньше было --panel (рельс, модалки,
+    //                   всплывашки, тосты, панель карты);
+    //   --glass-bg    — для того, что было --bg (липкие шапки разделов).
+    '--glass-panel':'rgba(26,28,32,0.58)', '--glass-bg':'rgba(16,17,20,0.58)'
   },
   light:{
     // Светлая тема была вдвое площе тёмной: bg → panel-2 давали контраст
@@ -140,10 +143,10 @@ const THEMES={
     '--shadow-sm':'0 1px 2px rgba(15,20,27,.07), 0 2px 8px rgba(15,20,27,.07)',
     '--shadow-md':'0 4px 8px rgba(15,20,27,.07), 0 8px 20px rgba(15,20,27,.09)',
     '--shadow-lg':'0 8px 16px rgba(15,20,27,.07), 0 18px 40px rgba(15,20,27,.14)',
-    // В светлой теме стекло плотнее: на белой карте тонкая плёнка не
-    // отделяет панель от подложки, и текст под ней просвечивает пятнами.
-    '--glass':'rgba(255,255,255,0.78)', '--glass-2':'rgba(248,250,252,0.86)',
-    '--glass-line':'rgba(15,20,27,0.08)'
+    // Те же цвета, что у сплошных поверхностей светлой темы: #ffffff и
+    // #e2e6ec. Плотность чуть выше тёмной — на светлом фоне тонкая плёнка
+    // слабее отделяет панель от подложки.
+    '--glass-panel':'rgba(255,255,255,0.62)', '--glass-bg':'rgba(226,230,236,0.62)'
   }
 };
 function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
@@ -4628,46 +4631,64 @@ function renderMapPanel(){
   if(x) x.onclick=clearMapAll;
 }
 
-// Окно времени. Два ползунка по собственной шкале выезда: не «часы», а
-// «сколько минут от начала до конца». Так не важно, сколько дней он длился
-// и в каком часовом поясе смотрят — крайние положения всегда означают
-// начало и конец, а подпись показывает настоящие дату и время.
-function timeFilterHtml(bb){
-  const total=Math.max(1,Math.round((bb[1]-bb[0])/60000));
-  const f=factFrom==null?0:Math.round((factFrom-bb[0])/60000);
-  const t=factTo==null?total:Math.round((factTo-bb[0])/60000);
-  return '<div class="mleg-tf">'
-    +'<div class="mleg-tfh"><span id="tfLbl">'+esc(tfLabel(bb,f,t))+'</span>'
-    +'<button type="button" id="tfAll" title="Показать весь выезд">весь</button></div>'
-    +'<input type="range" id="tfA" min="0" max="'+total+'" value="'+f+'">'
-    +'<input type="range" id="tfB" min="0" max="'+total+'" value="'+t+'">'
-    +'</div>';
+// Окно времени: два поля ввода, как период на сводке. Ползунки тут были
+// хуже: попасть в нужную минуту ими нельзя, а нужна обычно именно она —
+// «покажи, что было между девятью и десятью».
+//
+// Тип поля зависит от выезда. Однодневный — только время: дата в нём одна
+// и повторять её в каждом поле незачем. Многодневный — дата со временем,
+// иначе «09:30» непонятно какого дня.
+const pad2=n=>String(n).padStart(2,'0');
+function tfOneDay(bb){ return new Date(bb[0]).toDateString()===new Date(bb[1]).toDateString(); }
+function tfValue(t,one){
+  const d=new Date(t);
+  const hm=pad2(d.getHours())+':'+pad2(d.getMinutes());
+  return one?hm:(d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+'T'+hm);
 }
-function tfLabel(bb,f,t){
-  const d=x=>new Date(bb[0]+x*60000);
-  const one=new Date(bb[0]).toDateString()===new Date(bb[1]).toDateString();
-  const fmt=x=>one?atTime(d(x)):d(x).toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-  return fmt(f)+' → '+fmt(t);
+function tfParse(v,one,baseT){
+  if(!v) return null;
+  if(one){
+    const m=/^(\d{1,2}):(\d{2})$/.exec(v); if(!m) return null;
+    const d=new Date(baseT); d.setHours(+m[1],+m[2],0,0); return +d;
+  }
+  const t=+new Date(v); return isFinite(t)?t:null;
+}
+function timeFilterHtml(bb){
+  const one=tfOneDay(bb), type=one?'time':'datetime-local';
+  return '<div class="mleg-tf">'
+    +'<input type="'+type+'" id="tfA" value="'+tfValue(factFrom==null?bb[0]:factFrom,one)+'">'
+    +'<span class="mleg-dash">—</span>'
+    +'<input type="'+type+'" id="tfB" value="'+tfValue(factTo==null?bb[1]:factTo,one)+'">'
+    +'<button type="button" id="tfAll" title="Показать весь выезд">весь</button>'
+    +'</div>';
 }
 function wireTimeFilter(bb){
   if(!bb||!factLegendEl) return;
   const A=factLegendEl.querySelector('#tfA'), B=factLegendEl.querySelector('#tfB');
-  const L2=factLegendEl.querySelector('#tfLbl'), all=factLegendEl.querySelector('#tfAll');
+  const all=factLegendEl.querySelector('#tfAll');
   if(!A||!B) return;
+  const one=tfOneDay(bb);
   const apply=()=>{
-    let f=+A.value, t=+B.value;
-    // Ползунки могут перехлестнуться — тогда меняем их местами, а не
-    // показываем пустую карту.
-    if(f>t){ const q=f; f=t; t=q; }
-    factFrom=bb[0]+f*60000; factTo=bb[0]+t*60000;
-    if(L2) L2.textContent=tfLabel(bb,f,t);
+    let f=tfParse(A.value,one,bb[0]), t=tfParse(B.value,one,bb[1]);
+    if(f==null&&t==null){ factFrom=null; factTo=null; }
+    else{
+      if(f==null) f=bb[0];
+      if(t==null) t=bb[1];
+      // Перепутанные местами границы — обычная опечатка, а не повод
+      // показать пустую карту.
+      if(f>t){ const q=f; f=t; t=q; }
+      factFrom=f; factTo=t;
+    }
     if(factLast) drawFact(factLast);
   };
-  A.oninput=apply; B.oninput=apply;
-  if(all) all.onclick=()=>{ factFrom=null; factTo=null; A.value=A.min; B.value=B.max;
-    if(L2) L2.textContent=tfLabel(bb,+A.min,+B.max);
-    if(factLast) drawFact(factLast); };
+  A.onchange=apply; B.onchange=apply;
+  if(all) all.onclick=()=>{
+    factFrom=null; factTo=null;
+    A.value=tfValue(bb[0],one); B.value=tfValue(bb[1],one);
+    if(factLast) drawFact(factLast);
+  };
 }
+
 // Шкала скорости под строкой измеренного трека: без неё градиент — просто
 // разноцветная линия.
 function speedScaleHtml(){
