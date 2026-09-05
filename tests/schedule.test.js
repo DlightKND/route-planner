@@ -173,3 +173,62 @@ describe('driveOfLegs', () => {
     expect(driveOfLegs(null)).toEqual({ toH: 0, backH: 0, midH: 0, km: 0 });
   });
 });
+
+describe('заявки внутри выезда', () => {
+  it('дорога занимает первый день, работа идёт со второго', () => {
+    // Выезд пн 07 — пт 11, 8 ч дороги туда, 8 ч обратно, 16 ч работ.
+    const r = planSchedule([{
+      id: 't', kind: 'trip', engineer: 'ivan', from: '2026-09-07', to: '2026-09-11',
+      workH: 16, driveToH: 8, driveBackH: 8,
+      jobs: [{ id: 'a', workH: 8, sla: '2026-09-08' }, { id: 'b', workH: 8, sla: '2026-09-11' }],
+      jobIds: ['a', 'b']
+    }], S, TODAY);
+    const b = r.blocks[0];
+    expect(cell(b, '2026-09-07').driveH).toBe(8);
+    expect(cell(b, '2026-09-07').workH).toBe(0);
+    expect(cell(b, '2026-09-11').driveH).toBe(8);
+    expect(b.workFrom).toBe('2026-09-08');
+  });
+
+  it('срок в середине выезда не считается просроченным', () => {
+    const r = planSchedule([{
+      id: 't', kind: 'trip', engineer: 'ivan', from: '2026-09-07', to: '2026-09-11',
+      workH: 16, driveToH: 8, driveBackH: 8, sla: '2026-09-08',
+      jobs: [{ id: 'a', workH: 8, sla: '2026-09-08' }, { id: 'b', workH: 8, sla: '2026-09-11' }],
+      jobIds: ['a', 'b']
+    }], S, TODAY);
+    const b = r.blocks[0];
+    expect(b.jobDays.a).toBe('2026-09-08');   // первая заявка — вторым днём
+    expect(b.jobDays.b).toBe('2026-09-09');
+    expect(b.ok).toBe(true);
+    expect(r.warnings.filter(w => w.kind === 'late')).toEqual([]);
+  });
+
+  it('опоздавшей считается та заявка, которая правда опоздала', () => {
+    const r = planSchedule([{
+      id: 't', kind: 'trip', engineer: 'ivan', from: '2026-09-07', to: '2026-09-11',
+      workH: 24, driveToH: 8, driveBackH: 8,
+      jobs: [{ id: 'a', workH: 8, sla: '2026-09-09' }, { id: 'b', workH: 16, sla: '2026-09-08' }],
+      jobIds: ['a', 'b']
+    }], S, TODAY);
+    const b = r.blocks[0];
+    expect(b.jobDays.a).toBe('2026-09-08');
+    expect(b.ok).toBe(false);
+    const late = r.warnings.filter(w => w.kind === 'late');
+    expect(late.length).toBe(1);
+    expect(late[0].jobId).toBe('b');
+  });
+
+  it('порядок заявок — порядок маршрута, а не сроков', () => {
+    const r = planSchedule([{
+      id: 't', kind: 'trip', engineer: 'ivan', from: '2026-09-07', to: '2026-09-09',
+      workH: 16,
+      jobs: [{ id: 'дальняя', workH: 8, sla: '2026-09-30' }, { id: 'срочная', workH: 8, sla: '2026-09-07' }],
+      jobIds: ['дальняя', 'срочная']
+    }], S, TODAY);
+    const b = r.blocks[0];
+    expect(b.jobDays['дальняя']).toBe('2026-09-07');
+    expect(b.jobDays['срочная']).toBe('2026-09-08');
+    expect(r.warnings.some(w => w.kind === 'late' && w.jobId === 'срочная')).toBe(true);
+  });
+});
