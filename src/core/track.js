@@ -187,7 +187,10 @@ export async function measureTrip(points, opts, ctx, reach) {
       trackKm += d;
       segments.push({ kind: 'track', km: d, fromTs: trusted.ts, toTs: p.ts,
         fromPt: { lat: trusted.lat, lng: trusted.lng }, toPt: { lat: p.lat, lng: p.lng },
-        minutes: Math.round(dt / 60000) });
+        // ms рядом с minutes нарочно: минуты округлены и годятся для подписи,
+        // а скорость по ним на коротком шаге врёт в разы — вплоть до деления
+        // на ноль. Для расчёта берут ms.
+        minutes: Math.round(dt / 60000), ms: dt });
       keep.push(p); trusted = p; suspect = false;
       continue;
     }
@@ -213,7 +216,7 @@ export async function measureTrip(points, opts, ctx, reach) {
       roadKm += r.km;
       segments.push({ kind: 'road', km: r.km, line: r.line || null, fromTs: trusted.ts, toTs: p.ts,
         fromPt: { lat: trusted.lat, lng: trusted.lng }, toPt: { lat: p.lat, lng: p.lng },
-        minutes: Math.round(dt / 60000) });
+        minutes: Math.round(dt / 60000), ms: dt });
     } else {
       // Спросить не удалось: сети нет, квота кончилась, или это бесплатный
       // показ на карте. Точку принимаем по первому гейту, но расстояние
@@ -222,7 +225,7 @@ export async function measureTrip(points, opts, ctx, reach) {
       lineKm += d;
       segments.push({ kind: 'line', km: d, fromTs: trusted.ts, toTs: p.ts,
         fromPt: { lat: trusted.lat, lng: trusted.lng }, toPt: { lat: p.lat, lng: p.lng },
-        minutes: Math.round(dt / 60000), why: 'маршрут не строился' });
+        minutes: Math.round(dt / 60000), ms: dt, why: 'маршрут не строился' });
     }
     keep.push(p); trusted = p; suspect = false;
   }
