@@ -1683,12 +1683,16 @@ function shortDate(iso){
 // считать по одному и тому же. Пока это было в двух местах, «график» и
 // «загрузка инженеров» показывали разные часы на одни и те же дни.
 function jobHours(j){ return ((j&&j.job_works)||[]).reduce((a,w)=>a+(+w.hours||0),0); }
-function buildBlocks(list,tripOf,tripById){
+function buildBlocks(list,tripOf,tripById,tripOrd){
   const blockOf={}, tripJobs={}, blocks=[];
+  const ord=tripOrd||{};
   const alive=(list||[]).filter(j=>j.status!=='done'&&j.status!=='cancelled');
   alive.forEach(j=>{ const tid=tripOf[j.id]; const t=tid?tripById[tid]:null;
     if(t&&t.status!=='cancelled') (tripJobs[tid]||(tripJobs[tid]=[])).push(j); });
   Object.keys(tripJobs).forEach(tid=>{
+    // Порядок внутри выезда — порядок маршрута (trip_jobs.ord), а не сроков:
+    // заявки делаются в том порядке, в котором к ним подъезжают.
+    tripJobs[tid].sort((a,b)=>(ord[a.id]||0)-(ord[b.id]||0));
     const t=tripById[tid], js=tripJobs[tid], es=t.econ_snapshot||{};
     // Плечи знают, сколько ехать ДО первой точки и сколько обратно. У
     // выездов, сохранённых до появления плеч, дорога делится пополам.
@@ -1697,17 +1701,44 @@ function buildBlocks(list,tripOf,tripById){
     blocks.push({id:'t'+tid,kind:'trip',engineer:t.lead_engineer||js[0].assigned_engineer||null,
       sla:slas[0]||null,workH:js.reduce((a,j)=>a+jobHours(j),0),
       driveToH:d.toH||dh/2,driveBackH:d.backH||dh/2,driveMidH:d.midH||0,
-      from:t.date_from||null,to:t.date_to||t.date_from||null,jobIds:js.map(j=>j.id)});
+      from:t.date_from||null,to:t.date_to||t.date_from||null,jobIds:js.map(j=>j.id),
+      jobs:js.map(j=>({id:j.id,workH:jobHours(j),sla:j.due_date||null}))});
     js.forEach(j=>{ blockOf[j.id]='t'+tid; });
   });
   alive.forEach(j=>{ if(blockOf[j.id]||!j.due_date) return;
     blocks.push({id:'j'+j.id,kind:'job',engineer:j.assigned_engineer||null,
-      sla:j.due_date,workH:jobHours(j),jobIds:[j.id]});
+      sla:j.due_date,workH:jobHours(j),jobIds:[j.id],
+      jobs:[{id:j.id,workH:jobHours(j),sla:j.due_date}]});
     blockOf[j.id]='j'+j.id; });
   return {blocks:blocks,blockOf:blockOf};
 }
-function planOfData(list,tripOf,tripById){
-  const bb=buildBlocks(list,tripOf,tripById);
+// ── Одна арифметика загрузки на всё приложение ──────────────────────────
+// Полоска недели в ленте, подсказки на днях и карточка «Загрузка отдела»
+// обязаны считать одним и тем же. Пока у каждой был свой знаменатель —
+// у ленты «пять смен всегда» и все инженеры из справочника, у карточки
+// рабочие дни окна и только те, на ком есть работа, — одна и та же неделя
+// показывала 108 % в ленте и 70 % в карточке. Спорить с собой на одном
+// экране приложение не должно.
+function dayHours(plan){
+  const out={};
+  Object.keys((plan&&plan.load)||{}).forEach(k=>{ const l=plan.load[k];
+    const d=out[l.date]||(out[l.date]={workH:0,driveH:0,h:0});
+    d.workH+=l.workH; d.driveH+=l.driveH; d.h+=l.workH+l.driveH; });
+  return out;
+}
+// Сколько инженеров считать фондом. Справочник — источник правды; если роли
+// ещё не расставлены, берём тех, на ком реально висит работа, иначе фонд
+// оказался бы нулевым и любые часы давали бы бесконечный процент.
+function engineersCount(plan){
+  const n=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false).length;
+  if(n) return n;
+  const lanes={};
+  Object.keys((plan&&plan.load)||{}).forEach(k=>{ const e=k.split('|')[0]; if(e!==' free') lanes[e]=1; });
+  return Math.max(1,Object.keys(lanes).length);
+}
+
+function planOfData(list,tripOf,tripById,tripOrd){
+  const bb=buildBlocks(list,tripOf,tripById,tripOrd);
   const plan=planSchedule(bb.blocks,{shiftH:(+appSettings.shift_hours)||8,
     deviationPct:(+appSettings.deviation_pct||0)},{today:todayISO()});
   return {plan:plan,blockOf:bb.blockOf};
@@ -1731,7 +1762,7 @@ async function renderFeed(box,o){
   try{
     await ensureRefs();
     // Заявки со сроком, клиентом, техникой и работами — всё, что нужно ленте.
-    let list=null, tripOf={}, tripById={}, offline=false, snapAt=0, orphanLinks=0;
+    let list=null, tripOf={}, tripById={}, tripOrd={}, offline=false, snapAt=0, orphanLinks=0;
     try{
       const { data, error }=await sb.from('jobs')
         .select('id,status,due_date,created_at,assigned_engineer,at_depot, clients(name,lat,lng,phone), equipment(model), job_works(hours,billable)')
@@ -1749,16 +1780,17 @@ async function renderFeed(box,o){
       const { data:tr, error:trErr }=await sb.from('trips').select('*, vehicles(name,plate)').is('deleted_at',null);
       if(trErr) throw trErr;
       (tr||[]).forEach(t=>{ tripById[t.id]=t; tripCache[t.id]=t; });
-      const { data:tj, error:tjErr }=await sb.from('trip_jobs').select('job_id,trip_id');
+      const { data:tj, error:tjErr }=await sb.from('trip_jobs').select('job_id,trip_id,ord');
       if(tjErr) throw tjErr;
       (tj||[]).forEach(r=>{ const t=tripById[r.trip_id];
-        if(t&&t.status!=='cancelled') tripOf[r.job_id]=r.trip_id; else orphanLinks++; });
+        if(t&&t.status!=='cancelled'){ tripOf[r.job_id]=r.trip_id; tripOrd[r.job_id]=(+r.ord||0); }
+        else orphanLinks++; });
       await loadRescheds();
-      if(o.mine) snapSet('mine',{list,tripOf,tripById});
+      if(o.mine) snapSet('mine',{list,tripOf,tripById,tripOrd});
     }catch(e){
       // Инженер открывает этот экран первым и нередко без связи.
       const s=o.mine?await snapGet('mine'):null;
-      if(s&&s.val&&s.val.list){ list=s.val.list; tripOf=s.val.tripOf||{}; tripById=s.val.tripById||{};
+      if(s&&s.val&&s.val.list){ list=s.val.list; tripOf=s.val.tripOf||{}; tripById=s.val.tripById||{}; tripOrd=s.val.tripOrd||{};
         Object.values(tripById).forEach(t=>{ tripCache[t.id]=t; }); snapAt=s.at; offline=true; }
       else { box.innerHTML='<div class="err">'+esc((e&&e.message)||e)+'</div>'; return; }
     }
@@ -1795,7 +1827,7 @@ async function renderFeed(box,o){
     // подбирает дни от срока назад — по часам работ, смене и допуску, с
     // дорогой по плечам маршрута. На карточке стоит эта дата с меткой
     // «план» (руками) или «авто» (подобрано), а срок — рядом.
-    const pd=planOfData(list,tripOf,tripById);
+    const pd=planOfData(list,tripOf,tripById,tripOrd);
     const plan=pd.plan, blockOf=pd.blockOf;
 
     // ── Группы = БЛОКИ ───────────────────────────────────────────────────
@@ -1821,6 +1853,7 @@ async function renderFeed(box,o){
         if(j.due_date){ if(!sla||j.due_date<sla) sla=j.due_date;
           if(!slaMax||j.due_date>slaMax) slaMax=j.due_date; } });
       return {id:b.id,kind:b.kind,date:b.from,to:b.to,workFrom:b.workFrom,workTo:b.workTo,
+        jobDays:b.jobDays||{},lateSet:new Set((b.lateJobs||[]).map(x=>String(x.id))),
         fixed:b.fixed,why:b.ok?'':b.why,trip:b.kind==='trip'?tripById[b.id.slice(1)]:null,
         jobs:jobs,h:jobs.reduce((x,j)=>x+hours(j),0),
         drive:(b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0),
@@ -1939,22 +1972,29 @@ async function renderFeed(box,o){
     // по тем дням, в которые их делают. Прежняя раскладка делила дорогу
     // поровну на все дни выезда и приписывала работу дню срока — то есть
     // показывала загрузку не тех дней.
-    const dayH={}, dayJobs={};
-    Object.keys(plan.load).forEach(k=>{ const l=plan.load[k];
-      dayH[l.date]=(dayH[l.date]||0)+l.workH+l.driveH; });
-    plan.blocks.forEach(b=>{ const wd=b.days.filter(c=>c.workH>0.001);
-      wd.forEach(c=>{ dayJobs[c.iso]=(dayJobs[c.iso]||0)+b.jobIds.length; }); });
-    const engN=o.mine?1:Math.max(1,(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false).length);
-    const dayCap=shift*engN, weekCap=dayCap*5;
+    const dayH=dayHours(plan);
+    // Заявка считается в тот день, в который её ДОДЕЛЫВАЮТ. Раньше она
+    // считалась в каждый рабочий день своего блока, и у выезда на неделю
+    // все пять дней показывали одни и те же «2 заявки».
+    const dayJobs={};
+    plan.blocks.forEach(b=>{ const jd=b.jobDays||{};
+      (b.jobIds||[]).forEach(id=>{ const d=jd[id]||b.workTo; if(d) dayJobs[d]=(dayJobs[d]||0)+1; }); });
+    const engN=o.mine?1:engineersCount(plan);
+    const dayCap=shift*engN;
     const weeks={};
     Object.keys(dayH).forEach(d=>{ const w=weekOf(d); if(!w) return;
       const it=weeks[w.key]||(weeks[w.key]={w,h:0,n:0,days:{}});
-      it.h+=dayH[d]; it.days[d]=(it.days[d]||0)+dayH[d]; });
-    groups.forEach(g=>{ const w=weekOf(g.date); if(!w) return;
+      it.h+=dayH[d].h; it.days[d]=(it.days[d]||0)+dayH[d].h; });
+    Object.keys(dayJobs).forEach(d=>{ const w=weekOf(d); if(!w) return;
       const it=weeks[w.key]||(weeks[w.key]={w,h:0,n:0,days:{}});
-      it.n+=g.jobs.length; });
+      it.n+=dayJobs[d]; });
     function weekHtml(key){
       const it=weeks[key]; if(!it) return '';
+      // Ёмкость недели — по её РАБОЧИМ дням, а не по «пяти всегда»: та же
+      // формула, что в карточке «Загрузка отдела», иначе одна и та же неделя
+      // показывает в двух местах два разных процента.
+      const wdN=workDaysBetween(isoOf(it.w.mon),isoOf(it.w.mon+6*DAY_MS));
+      const weekCap=shift*engN*Math.max(1,wdN);
       const pct=weekCap>0?Math.round(it.h/weekCap*100):0;
       const col=pct>100?'var(--red)':pct>85?'#f59e0b':'var(--green)';
       // Инженеру — факты, не оценка. Процент и шкала — это суждение о его
@@ -1964,15 +2004,25 @@ async function renderFeed(box,o){
       // Часы недели — целыми: десятая доля часа берётся из деления дороги
       // по дням и на недельном итоге означает только ложную точность.
       const wh=Math.round(it.h);
+      // Основание процента — в подсказке. Без него «108 %» и «70 %» в двух
+      // карточках выглядят как спор двух чисел, хотя это просто разные окна.
+      const capTip=wh+' ч из '+Math.round(weekCap)+' ('+wdN+' '+plural(wdN,'смена','смены','смен')
+        +' × '+engN+' '+plural(engN,'инженер','инженера','инженеров')+')';
       const right=o.mine
-        ? ('<span class="wk-v">'+it.n+' '+plural(it.n,'заявка','заявки','заявок')+' · '+wh+' ч</span>')
-        : ('<span class="wk-bar"><i style="width:'+Math.min(100,pct)+'%;background:'+col+'"></i></span>'
-           +'<span class="wk-v'+(pct>100?' bad':'')+'">'+pct+'%</span>');
+        ? ('<span class="wk-v" title="'+esc(capTip)+'">'+it.n+' '+plural(it.n,'заявка','заявки','заявок')+' · '+wh+' ч</span>')
+        : ('<span class="wk-bar" title="'+esc(capTip)+'"><i style="width:'+Math.min(100,pct)+'%;background:'+col+'"></i></span>'
+           +'<span class="wk-v'+(pct>100?' bad':'')+'" title="'+esc(capTip)+'">'+pct+'%</span>');
       let dh='';
       for(let i=0;i<7;i++){
         const iso=isoOf(it.w.mon+i*DAY_MS), h=it.days[iso]||0, jn=dayJobs[iso]||0;
-        const cls=jn?(h>=dayCap?'full':'on'):(i>4?'we':'');
-        dh+='<span class="wk-d'+(cls?(' '+cls):'')+'"'+(jn?(' title="'+esc(WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+jn+' '+plural(jn,'заявка','заявки','заявок')+' · '+h.toFixed(h%1?1:0)+' ч')+'"'):'')
+        // День горит по ЧАСАМ — тем же, что в графике загрузки. Раньше он
+        // горел по числу заявок, и день, забитый одной дорогой, выглядел
+        // свободным.
+        const busyDay=h>0.05;
+        const cls=busyDay?(h>=dayCap-1e-6?'full':'on'):(i>4?'we':'');
+        const tip=WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+h.toFixed(h%1?1:0)+' из '+Math.round(dayCap)+' ч'
+          +(jn?(' · сдаём '+jn+' '+plural(jn,'заявку','заявки','заявок')):'');
+        dh+='<span class="wk-d'+(cls?(' '+cls):'')+'"'+(busyDay?(' title="'+esc(tip)+'"'):'')
           +'>'+WD_RU[(i+1)%7]+'</span>';
       }
       return '<div class="wkrow"><div class="wk-h"><span class="wk-n">Неделя '+it.w.n+' · '+esc(weekSpan(it.w))+'</span>'
@@ -2069,7 +2119,11 @@ async function renderFeed(box,o){
           +'<div class="a-tags">'+tripTagHtml(j,tripOf,tripById)
             // Срок строки. В шапке стоит день работы, и без этой метки
             // заявка с более поздним сроком выглядела бы как соседняя.
-            +(j.due_date?('<span class="a-tag'+(u2(j)<0?' bad':'')+'">срок '+shortDate(j.due_date)+'</span>'):'')
+            // День, в который эту заявку доделают, и её собственный срок.
+            // Внутри выезда заявки идут по порядку маршрута, поэтому «не
+            // успеваем» относится к конкретной строке, а не ко всему выезду.
+            +((g.jobDays[j.id]&&n>1)?('<span class="a-tag">делаем '+shortDate(g.jobDays[j.id])+'</span>'):'')
+            +(j.due_date?('<span class="a-tag'+(g.lateSet.has(String(j.id))?' bad':'')+'">срок '+shortDate(j.due_date)+'</span>'):'')
             // Статус — только инженеру: на его экране это ответ на «я это
             // уже начал?». В сводке менеджер смотрит на сроки и загрузку,
             // и вторая пилюля в каждой строке была бы шумом.
@@ -2099,7 +2153,7 @@ async function renderFeed(box,o){
         h+='<div class="a-foot"><span class="a-foot-n">выезд · '+esc(ST_TRIP[t.status]||t.status)+'</span>'
           +'<span class="acts">'+(o.mine?tripActs(t)
             :('<button class="btn sm" data-tmap="'+t.id+'">карта</button>'
-              +'<button class="btn sm" data-tgm="'+t.id+'">⌖ GMaps</button>'
+              +'<button class="btn sm" data-tgm="'+t.id+'">⌖ Google Maps</button>'
               +(canWrite()?('<button class="btn sm" data-topen="'+t.id+'">открыть</button>'):'')))
           +'</span></div>'
           +(o.mine?reschedBanner(t):'');
@@ -2619,7 +2673,7 @@ function worksCard(jb,trips){
 // Фонд отдела — все действующие инженеры: смена × рабочие дни периода ×
 // число инженеров. Отдельной строкой сверху, потому что вопрос «можем ли
 // мы взять ещё работу» задаётся отделу, а не человеку.
-function loadCard(list,tripOf,tripById){
+function loadCard(list,tripOf,tripById,tripOrd){
   if(!canWrite()) return '';
   const shift=(+appSettings.shift_hours)||8;
   let fromIso,toIso;
@@ -2629,7 +2683,7 @@ function loadCard(list,tripOf,tripById){
   const engs=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false);
   const capEach=shift*wd;
 
-  const plan=planOfData(list,tripOf,tripById).plan;
+  const plan=planOfData(list,tripOf,tripById,tripOrd).plan;
   const lane={}, day={};
   Object.keys(plan.load).forEach(k=>{ const l=plan.load[k];
     if(l.date<fromIso||l.date>toIso) return;
@@ -2662,10 +2716,12 @@ function loadCard(list,tripOf,tripById){
   let people=engs.map(p=>({id:p.id,name:p.full_name||'без имени'}));
   if(!people.length) people=Object.keys(lane).filter(k=>k!==' free')
     .map(id=>({id:id,name:name(id)}));
-  const fund=capEach*Math.max(1,people.length);
+  // Знаменатель — тот же, что у полоски недель в ленте.
+  const engN=engineersCount(plan);
+  const fund=capEach*engN;
   const tot={w:0,d:0,n:0};
   Object.keys(lane).forEach(k=>{ tot.w+=lane[k].w; tot.d+=lane[k].d; tot.n+=lane[k].n; });
-  let body=rowHtml('Отдел'+(people.length?(' · '+people.length+' '+plural(people.length,'инженер','инженера','инженеров')):''),
+  let body=rowHtml('Отдел · '+engN+' '+plural(engN,'инженер','инженера','инженеров'),
     tot,fund,'el-dep');
   people.slice().sort((a,b)=>{ const ra=lane[a.id]||{w:0,d:0}, rb=lane[b.id]||{w:0,d:0};
     return (rb.w+rb.d)-(ra.w+ra.d); })
@@ -2674,7 +2730,7 @@ function loadCard(list,tripOf,tripById){
 
   // График загрузки по дням периода. Длинный период рисуется неделями:
   // сорок столбиков шириной в волос не читаются.
-  const dayCap=shift*Math.max(1,people.length);
+  const dayCap=shift*engN;
   // Днями рисуем до полутора месяцев, дальше — неделями: сорок столбиков
   // шириной в волос не читаются. Числа над столбиками убираем раньше — они
   // начинают переноситься в две строки и превращаются в кашу; значение
@@ -2707,8 +2763,9 @@ function loadCard(list,tripOf,tripById){
   chart+='<div class="cap-note">пунктир — 100% загрузки: '+num(dayCap)+' ч в день'
     +(long?(' · столбик — неделя'):'')+'</div>';
 
-  const hzTxt=loadRange?tripPeriod(loadRange.from,loadRange.to)
-    :(loadDays===7?'неделя вперёд':loadDays===14?'две недели вперёд':'месяц вперёд');
+  const hzTxt=(loadRange?tripPeriod(loadRange.from,loadRange.to)
+    :(loadDays===7?'неделя вперёд':loadDays===14?'две недели вперёд':'месяц вперёд'))
+    +' · '+shortDate(fromIso)+'–'+shortDate(toIso);
   return '<div class="card elcard foldable f-any" data-fold="dashLoad" data-dcard="load">'
     +'<h3 class="cardhead">'+dashGrip('load')+'Загрузка отдела <span class="el-hz">'+esc(hzTxt)+'</span>'
     +periodSeg('load',LOAD_PERIODS,loadDays,loadRange,loadOpen,'date')+'</h3>'
@@ -2749,12 +2806,13 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
     const trips=tr||[];
     // Кто в каком выезде — планировщику: без этого выезд рассыпается на
     // отдельные заявки, и дорога исчезает из загрузки.
-    const tripOf={}, tripById={};
-    const {data:tj}=await sb.from('trip_jobs').select('job_id,trip_id');
-    (tj||[]).forEach(r=>{ tripOf[r.job_id]=r.trip_id; });
+    const tripOf={}, tripById={}, tripOrd={};
     trips.forEach(t=>{ tripById[t.id]=t; });
+    const {data:tj}=await sb.from('trip_jobs').select('job_id,trip_id,ord');
+    (tj||[]).forEach(r=>{ const t=tripById[r.trip_id];
+      if(t&&t.status!=='cancelled'){ tripOf[r.job_id]=r.trip_id; tripOrd[r.job_id]=(+r.ord||0); } });
 
-    const made={fin:financeCard(jb,trips),work:worksCard(jb,trips),load:loadCard(jb,tripOf,tripById)};
+    const made={fin:financeCard(jb,trips),work:worksCard(jb,trips),load:loadCard(jb,tripOf,tripById,tripOrd)};
     box.innerHTML=dashOrder.map(k=>made[k]||'').join('');
     wirePeriodSeg(box);
     wireDashDrag(box);
@@ -2798,7 +2856,7 @@ function tripActs(t){
     a+='<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ Пробег</button>';
   if(canWrite()) a+='<button class="btn sm" data-topen="'+t.id+'">открыть</button>';
   a+='<button class="btn sm ghost" data-tmap="'+t.id+'">на карте</button>';
-  a+='<button class="btn sm ghost" data-tgm="'+t.id+'">GMaps</button>';
+  a+='<button class="btn sm ghost" data-tgm="'+t.id+'">Google Maps</button>';
   return a;
 }
 
@@ -4551,7 +4609,7 @@ function tripCard(t){ const e=t.econ_snapshot||{}; const eng=profilesList.find(p
     ? '<div class="acts">'+mv+'<button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tmap="'+t.id+'" title="На карте">карта</button>'
       +((t.status==='finished'||t.status==='done')?('<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ км</button>'):'')
       +'<button class="btn sm" data-tgm="'+t.id+'" title="Google Maps">⌖</button><button class="btn sm ghost" data-tdel="'+t.id+'" title="Удалить выезд">×</button></div>'
-    : '<div class="acts"><button class="btn sm" data-tmap="'+t.id+'">карта</button><button class="btn sm" data-tgm="'+t.id+'">⌖ GMaps</button></div>';
+    : '<div class="acts"><button class="btn sm" data-tmap="'+t.id+'">карта</button><button class="btn sm" data-tgm="'+t.id+'">⌖ Google Maps</button></div>';
   return '<div class="kcard" data-kid="'+t.id+'">'+head+meta+acts+'</div>'; }
 function wireTripCards(box){
   box.querySelectorAll('[data-tedit]').forEach(b=>b.onclick=()=>openTrip(b.dataset.tedit));
@@ -4753,12 +4811,13 @@ function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; con
 // Одна кнопка на оба занятия: открывает плановый маршрут в редакторе (точки
 // можно двигать) и поверх — факт, если он есть. Слои переключаются в легенде.
 $('tpEditMap').onclick=()=>{ if(tripEditId){ showTripOnMap(tripEditId); } else { notify('Сначала сохрани выезд — потом правь маршрут на карте.','warn'); } };
-function loadTripIntoPlanner(id){ const t=trips.find(x=>x.id==id); if(!t) return; switchTab('map'); tripLayer.clearLayers(); plannerTripId=id;
+function loadTripIntoPlanner(id,known){ const t=known||trips.find(x=>x.id==id)||tripCache[id]; if(!t) return false; switchTab('map'); tripLayer.clearLayers(); plannerTripId=id;
   const saved=t.route_stops||[]; const st=saved.find(x=>x.type==='start'); rStart=st?{name:st.name,lat:st.lat,lng:st.lng,description:st.description||''}:null;
   rStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'client',name:x.name,lat:x.lat,lng:x.lng,clientId:x.clientId||null,equipId:x.equipId||null,description:x.description||''}));
   const es=t.econ_snapshot||{}; rRoute={km:es.km||0,driveH:es.driveH||0,geometry:t.route_geometry||null,legs:es.legs||[]}; rVariants=[]; if($('rVariants')) $('rVariants').innerHTML='';
   renderRoutePanel(); $('rStatus').innerHTML=rRoute.km?('<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'):'';
-  if(rStops.length) map.fitBounds(routeStopsAll().map(s=>[s.lat,s.lng]),fitPadL(fitPad(60))); return;
+  if(rStops.length) map.fitBounds(routeStopsAll().map(s=>[s.lat,s.lng]),fitPadL(fitPad(60)));
+  return !!(rStops.length||rStart||rRoute.geometry);
 }
 $('tripCancel').onclick=()=>switchTab('planner','trips');
 ['tpFrom','tpTo','tpEng','tpStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',tripEcon); });
@@ -5719,12 +5778,46 @@ function showFactLegend(m){ if(m) factLast=m; renderMapPanel(); }
 // вторая открывала факт-трек и запирала человека на карте — плановые точки
 // в редактор не загружались, закрыть слой было нечем, и выход был один,
 // перезагрузить страницу.
+// Нарисовать ПЛАН выезда на карте: линия маршрута и его точки.
+// Нужен тому, у кого нет планировщика, — инженеру: ему «на карте» должно
+// показывать, куда ехать, а не пустую карту.
+function drawTripPlan(t){
+  tripLayer.clearLayers();
+  const stops=(t&&t.route_stops)||[];
+  drawRouteLine(tripLayer, t&&t.route_geometry);
+  const pts=[];
+  stops.forEach((x,i)=>{
+    if(x.lat==null||x.lng==null) return;
+    pts.push([x.lat,x.lng]);
+    L.marker([x.lat,x.lng],{icon:L.divIcon({className:'',
+      html:'<div class="cbub" style="background:var(--accent);color:var(--on-accent);'
+        +'text-shadow:none;border:2px solid '+ringColor()+'">'+(i+1)+'</div>',
+      iconSize:[24,24],iconAnchor:[12,12]})})
+      .bindPopup(esc(x.name||('точка '+(i+1)))).addTo(tripLayer);
+  });
+  if(!pts.length&&t&&t.route_geometry&&t.route_geometry.coordinates)
+    t.route_geometry.coordinates.forEach(c=>pts.push([c[1],c[0]]));
+  if(pts.length) map.fitBounds(pts,fitPadL(fitPad(60)));
+  return pts.length>0;
+}
 async function showTripOnMap(tid){
   switchTab('map');
+  // Выезд может быть не в памяти: из сводки список выездов ещё не грузили.
+  // Раньше в этом случае «на карте» молча не делала ничего.
+  let t=trips.find(x=>x.id==tid)||tripCache[tid]||null;
+  if(!t){
+    try{ const {data}=await sb.from('trips').select('*').eq('id',tid).maybeSingle();
+      if(data){ t=data; tripCache[tid]=data; } }catch(e){}
+  }
+  if(!t){ notify('Выезд не найден.','warn'); return; }
   // План — в редактор, чтобы точки можно было двигать. Наличие факта этому
   // не мешает: факт про то, как съездили, план про то, как поедут ещё раз.
-  if(canWrite()) loadTripIntoPlanner(tid);
-  await showTripFact(tid);
+  const shown=canWrite()?loadTripIntoPlanner(tid,t):drawTripPlan(t);
+  // Факт — сверху плана и только если он есть. Отсутствие факта больше не
+  // повод показать пустую карту: у запланированного выезда факта нет по
+  // определению, а посмотреть маршрут нужно именно до поездки.
+  const fact=await showTripFact(tid,{quiet:true});
+  if(!fact) showToast(shown?'Факта нет — показан плановый маршрут':'У выезда нет ни маршрута, ни трека');
 }
 
 // Отрисовка факта. Отдельно от загрузки, потому что её зовёт ещё и фильтр
@@ -5790,13 +5883,14 @@ function factWindow(m){
   return [factFrom==null?bb[0]:factFrom, factTo==null?bb[1]:factTo];
 }
 
-async function showTripFact(tid){
+async function showTripFact(tid,opt){
+  const quiet=!!(opt&&opt.quiet);
   factClear();
   try{
     const { data }=await sb.from('vehicle_positions').select('lat,lng,ts,status')
       .eq('trip_id',tid).order('ts');
     const raw=(data||[]).filter(p=>p.lat!=null&&p.lng!=null);
-    if(!raw.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Фактического трека нет'); return; }
+    if(!raw.length){ setTimeout(()=>map.invalidateSize(),60); if(!quiet) showToast('Фактического трека нет'); return false; }
 
     // Если выезд только что сводили, показываем ТОТ ЖЕ результат: карта и
     // деньги обязаны быть про одно. Если нет — считаем тем же проходом, но
