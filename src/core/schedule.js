@@ -114,6 +114,79 @@ function layout(block, workDays, s) {
   return Array.from(cells.values()).sort((a, b) => a.ms - b.ms);
 }
 
+// Заливка часов по дням в одну сторону, по свободной ёмкости дня.
+// Дорога туда занимает первые дни, дорога обратно — последние, работа
+// садится в то, что осталось между ними. Так выезд 07–11 с восемью часами
+// дороги — это день пути, а не «по полтора часа дороги каждый день».
+function spillDir(cells, startIdx, dir, hours, kind, eff) {
+  let left = hours, i = startIdx, guard = 0;
+  while (left > 0.001 && i >= 0 && i < cells.length && guard++ < 400) {
+    const free = Math.max(0, eff - (cells[i].workH + cells[i].driveH));
+    const take = Math.min(left, free);
+    cells[i][kind] += take; left -= take;
+    if (left > 0.001) i += dir;
+  }
+  // Не влезло — остаток кладём на крайний день. Это перегруз, и его увидит
+  // проверка: прятать часы, чтобы сошлось, нельзя.
+  if (left > 0.001 && cells.length) {
+    const j = Math.max(0, Math.min(cells.length - 1, i - dir));
+    cells[j][kind] += left;
+  }
+}
+
+// Какая заявка в какой день закончена.
+//
+// Внутри выезда заявки делаются ПО ПОРЯДКУ маршрута, а не все сразу в
+// последний день. Без этого заявка со сроком в середине выезда считалась
+// просроченной по дате возвращения: «выезд 07–11, срок 08 — не успеваем»,
+// хотя её делают вторым днём. Идём по дням, вычитая часы каждой заявки из
+// дневной ёмкости; день, в который часы кончились, и есть день сдачи.
+function assignJobs(block, cells) {
+  const out = {};
+  const list = (block.jobs || []).filter(j => j && j.id);
+  if (!list.length) return out;
+  const days = cells.filter(c => c.workH > 0.0001);
+  if (!days.length) {
+    const last = cells.length ? cells[cells.length - 1].iso : null;
+    list.forEach(j => { out[j.id] = last; });
+    return out;
+  }
+  let di = 0, left = days[0].workH;
+  list.forEach(j => {
+    let need = +j.workH || 0, guard = 0;
+    while (need > 0.0001 && guard++ < 400) {
+      const take = Math.min(need, left);
+      need -= take; left -= take;
+      if (need > 0.0001) {                       // день кончился, заявка — нет
+        if (di < days.length - 1) { di++; left = days[di].workH; }
+        else { left = Infinity; }                // не влезло — доделываем в последний
+      }
+    }
+    // День СДАЧИ — тот, в котором часы кончились, а не следующий.
+    out[j.id] = days[Math.min(di, days.length - 1)].iso;
+    // День исчерпан — следующая заявка начинается со следующего дня.
+    if (left <= 0.0001 && di < days.length - 1) { di++; left = days[di].workH; }
+  });
+  return out;
+}
+
+// Какие заявки блока не успевают. Если разбивки по заявкам нет (у блока одна
+// заявка или порядок неизвестен), меряем одним сроком блока по дню окончания.
+function lateJobs(block, jobDays, workTo) {
+  const list = (block.jobs || []).filter(j => j && j.sla);
+  const out = [];
+  if (list.length) {
+    list.forEach(j => {
+      const day = (jobDays && jobDays[j.id]) || workTo;
+      if (day && dayMs(day) > dayMs(j.sla)) out.push({ id: j.id, sla: j.sla, day: day });
+    });
+    return out;
+  }
+  if (block.sla && workTo && dayMs(workTo) > dayMs(block.sla))
+    out.push({ id: block.id, sla: block.sla, day: workTo });
+  return out;
+}
+
 // Разорван ли блок выходными: работа и дорога должны идти подряд.
 // У блока длиннее рабочей недели выходные внутри неизбежны — там не проверяем.
 function contiguous(cells) {
@@ -186,17 +259,25 @@ export function planSchedule(blocks, settings, opts) {
     for (let x = a; x <= z; x += DAY) list.push(x);
     const wd = list.filter(x => isWorkday(x, s.weekend));
     const days = wd.length ? wd : list;             // выезд на выходные — воля диспетчера
-    const total = (b.workH || 0) + (b.driveToH || 0) + (b.driveBackH || 0) + (b.driveMidH || 0);
-    const per = total / days.length;
-    const wPer = (b.workH || 0) / days.length;
-    const cells = days.map(ms => ({ iso: dayIso(ms), ms: ms, workH: wPer, driveH: per - wPer }));
+    const cells = days.map(ms => ({ iso: dayIso(ms), ms: ms, workH: 0, driveH: 0 }));
+    // Порядок раскладки повторяет порядок поездки: сперва дорога туда с
+    // первого дня, потом дорога обратно с последнего, и только затем работа
+    // в оставшееся. Раньше всё делилось поровну на все дни, и первый день
+    // выезда — день пути — выглядел рабочим.
+    spillDir(cells, 0, 1, b.driveToH || 0, 'driveH', eff);
+    spillDir(cells, cells.length - 1, -1, b.driveBackH || 0, 'driveH', eff);
+    spillDir(cells, 0, 1, (b.workH || 0) + (b.driveMidH || 0), 'workH', eff);
     const key = laneOf(b);
-    const over = cells.filter(c => (busy.get(key + '|' + c.iso) || 0) + per > eff + 1e-6);
+    const over = cells.filter(c => (busy.get(key + '|' + c.iso) || 0) + c.workH + c.driveH > eff + 1e-6);
     occupy(cells, busy, key); put(key, cells);
+    const wDays = cells.filter(c => c.workH > 0.0001);
+    const jobDays = assignJobs(b, cells);
     const rec = Object.assign({}, b, {
       days: cells, fixed: true, ok: !over.length, why: over.length ? 'overflow' : '',
+      jobDays: jobDays,
       from: dayIso(days[0]), to: dayIso(days[days.length - 1]),
-      workFrom: dayIso(days[0]), workTo: dayIso(days[days.length - 1])
+      workFrom: (wDays[0] || cells[0]).iso,
+      workTo: (wDays[wDays.length - 1] || cells[cells.length - 1]).iso
     });
     out.push(rec);
     if (over.length) warnings.push({
@@ -205,12 +286,16 @@ export function planSchedule(blocks, settings, opts) {
       text: 'Даты выставлены вручную, но работа в них не помещается: перегружено '
         + over.length + ' дн. (с ' + over[0].iso + ').'
     });
-    if (dayMs(b.sla) != null && dayMs(rec.workTo) > dayMs(b.sla)) {
-      rec.ok = false; rec.why = rec.why || 'late';
+    // Опоздание считается по КАЖДОЙ заявке в её собственный день сдачи, а не
+    // по дате возвращения. Выезд 07–11 с заявкой на срок 08, которую делают
+    // вторым днём, не опаздывает — а раньше считался опоздавшим.
+    const lateJ = lateJobs(b, rec.jobDays, rec.workTo);
+    if (lateJ.length) {
+      rec.ok = false; rec.why = rec.why || 'late'; rec.lateJobs = lateJ;
       warnings.push({
-        kind: 'late', blockId: b.id, engineer: b.engineer || null, date: rec.workTo,
-        fixed: true, sla: b.sla,
-        text: 'Выезд заканчивается ' + rec.workTo + ', позже срока ' + b.sla + '.'
+        kind: 'late', blockId: b.id, engineer: b.engineer || null, date: lateJ[0].day,
+        fixed: true, sla: lateJ[0].sla, jobId: lateJ[0].id, jobs: lateJ.length,
+        text: 'Срок ' + lateJ[0].sla + ', а работа по ней заканчивается ' + lateJ[0].day + '.'
       });
     }
   });
@@ -256,23 +341,25 @@ export function planSchedule(blocks, settings, opts) {
     if (!best) { best = tryAt(anchor); why = 'overflow'; }   // места нет вовсе
     const days = best.days, cells = best.cells;
     let ok = why !== 'overflow';
-    if (sla != null && days[days.length - 1] > sla) { ok = false; why = why || 'late'; }
     occupy(cells, busy, key); put(key, cells);
+    const jobDays = assignJobs(b, cells);
     const rec = Object.assign({}, b, {
-      days: cells, fixed: false, ok: ok, why: why,
+      days: cells, fixed: false, ok: ok, why: why, jobDays: jobDays,
       from: cells[0].iso, to: cells[cells.length - 1].iso,
       workFrom: dayIso(days[0]), workTo: dayIso(days[days.length - 1])
     });
+    const lateJ = lateJobs(b, jobDays, rec.workTo);
+    if (lateJ.length) { rec.ok = false; rec.why = why || 'late'; rec.lateJobs = lateJ; }
     out.push(rec);
     if (why === 'overflow') warnings.push({
       kind: 'overflow', blockId: b.id, engineer: b.engineer || null, date: rec.workFrom,
       fixed: false, days: days.length, sla: b.sla || null,
       text: 'Свободных дней нет — работа поставлена поверх занятых.'
     });
-    else if (why === 'late') warnings.push({
-      kind: 'late', blockId: b.id, engineer: b.engineer || null, date: rec.workTo,
-      fixed: false, sla: b.sla,
-      text: 'К сроку ' + b.sla + ' не успеваем: работа заканчивается ' + rec.workTo + '.'
+    else if (lateJ.length) warnings.push({
+      kind: 'late', blockId: b.id, engineer: b.engineer || null, date: lateJ[0].day,
+      fixed: false, sla: lateJ[0].sla, jobId: lateJ[0].id, jobs: lateJ.length,
+      text: 'К сроку ' + lateJ[0].sla + ' не успеваем: работа заканчивается ' + lateJ[0].day + '.'
     });
   });
 
