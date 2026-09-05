@@ -1731,7 +1731,7 @@ async function renderFeed(box,o){
   try{
     await ensureRefs();
     // Заявки со сроком, клиентом, техникой и работами — всё, что нужно ленте.
-    let list=null, tripOf={}, tripById={}, offline=false, snapAt=0;
+    let list=null, tripOf={}, tripById={}, offline=false, snapAt=0, orphanLinks=0;
     try{
       const { data, error }=await sb.from('jobs')
         .select('id,status,due_date,created_at,assigned_engineer,at_depot, clients(name,lat,lng,phone), equipment(model), job_works(hours,billable)')
@@ -1740,10 +1740,19 @@ async function renderFeed(box,o){
       list=data||[];
       // Какая заявка в каком выезде. Нужно и для метки, и для кнопок:
       // «Начать выезд» относится к выезду, а виден он через его заявки.
-      const { data:tj }=await sb.from('trip_jobs').select('job_id,trip_id');
-      (tj||[]).forEach(r=>{ tripOf[r.job_id]=r.trip_id; });
-      const { data:tr }=await sb.from('trips').select('*, vehicles(name,plate)').is('deleted_at',null);
+      //
+      // Выезды читаем ПЕРВЫМИ, а связи — только те, чей выезд действительно
+      // есть. Связь в trip_jobs переживает удаление выезда (там мягкое
+      // удаление, строки связей остаются), и заявка продолжала носить метку
+      // «с выездом», указывающую в никуда: в одну карточку такие заявки не
+      // собирались — собирать было не во что, — а метка обещала обратное.
+      const { data:tr, error:trErr }=await sb.from('trips').select('*, vehicles(name,plate)').is('deleted_at',null);
+      if(trErr) throw trErr;
       (tr||[]).forEach(t=>{ tripById[t.id]=t; tripCache[t.id]=t; });
+      const { data:tj, error:tjErr }=await sb.from('trip_jobs').select('job_id,trip_id');
+      if(tjErr) throw tjErr;
+      (tj||[]).forEach(r=>{ const t=tripById[r.trip_id];
+        if(t&&t.status!=='cancelled') tripOf[r.job_id]=r.trip_id; else orphanLinks++; });
       await loadRescheds();
       if(o.mine) snapSet('mine',{list,tripOf,tripById});
     }catch(e){
@@ -1856,7 +1865,44 @@ async function renderFeed(box,o){
       return '<div class="planwarn"><b>График не сходится</b><ul>'+items+'</ul>'+more+tips+'</div>';
     })():'';
 
-    let h=(offline?offlineBanner(snapAt):'')+planWarn
+    // Очередь проверки. Менеджер должен видеть, что внесённое инженером
+    // ждёт его, не открывая заявки по одной. Считаем ТОЛЬКО числа: список
+    // здесь был бы вторым списком заявок на экране, где уже есть один.
+    let pendParts=0,pendWorks=0,openFix=0;
+    if(!o.mine){
+      try{
+        const q=async (tbl,col,val)=>{ const r=val===null
+            ? await sb.from(tbl).select('id',{count:'exact',head:true}).is(col,null)
+            : await sb.from(tbl).select('id',{count:'exact',head:true}).eq(col,val);
+          if(r.error) throw r.error; return r.count||0; };
+        pendParts=await q('job_parts','approved_at',null);
+        pendWorks=await q('job_works','approved_at',null);
+        openFix  =await q('job_change_requests','status','open');
+      }catch(e){ /* миграция ещё не накатана — о ней скажет слепок сборки */ }
+    }
+    const pendNote=(pendParts+pendWorks+openFix)
+      ? ('<div class="planwarn soft"><b>Ждёт вашей проверки</b><ul>'
+         +((pendParts+pendWorks)?('<li>'+(pendParts+pendWorks)+' '
+             +plural(pendParts+pendWorks,'строка от инженера ждёт','строки от инженера ждут','строк от инженера ждут')
+             +' подтверждения'
+             +(pendParts?(' · запчастей '+pendParts):'')
+             +(pendWorks?(' · работ '+pendWorks):'')+'</li>'):'')
+         +(openFix?('<li>'+openFix+' '+plural(openFix,'предложение правки','предложения правок','предложений правок')
+             +' ждёт решения</li>'):'')
+         +'</ul></div>')
+      : '';
+
+    // Висячие связи: заявка числится в выезде, которого больше нет. Молча
+    // это выглядит как «лента развалила выезд на отдельные карточки», хотя
+    // разваливать нечего — выезд удалён, а строка связи осталась.
+    const orphanNote=(!o.mine&&orphanLinks)
+      ? ('<div class="planwarn"><b>Связи без выезда</b><ul><li>'+orphanLinks+' '
+         +plural(orphanLinks,'заявка числится','заявки числятся','заявок числятся')
+         +' в удалённых или отменённых выездах — показаны как «без выезда» '
+         +'и в графике стоят порознь. Собрать их обратно можно только новым выездом.</li></ul></div>')
+      : '';
+
+    let h=(offline?offlineBanner(snapAt):'')+planWarn+orphanNote+pendNote
       +'<div class="afeed">'
       +'<div class="afeed-line" style="background:linear-gradient(180deg,'+stops.join(',')+')"></div>';
 
@@ -2166,7 +2212,10 @@ async function renderFeed(box,o){
       deck.onclick=()=>set(true);
       const hide=dbody.querySelector('.odeck-hide'); if(hide) hide.onclick=()=>set(false);
     }
-    if(o.mine) wireTripActs(box,offline);
+    // Кнопки выезда вешаются ОБЕИМ ролям. Раньше стояло if(o.mine), и в
+    // сводке у менеджера «карта», «GMaps» и «открыть» были нарисованы, но
+    // ни на что не отвечали: обработчики им никто не назначал.
+    wireTripActs(box,offline);
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; }
 }
 function renderAttention(){ return renderFeed($('attnBody'),{cold:true}); }
@@ -2391,23 +2440,30 @@ function financeCard(jb,trips){
   const per=dashPeriod(), cur=appSettings.currency||'';
   const inP=d=>d&&d>=per.from&&d<=per.to;
   const ch=(appSettings.costs&&+appSettings.costs.hour)||0;
-  const sum=pred=>{ let r=0,p=0,n=0;
+  // Деньги считаются с разбивкой на работы и запчасти. Это разные бизнесы:
+  // у работ маржа своя и растёт от выработки, у запчастей своя и зависит от
+  // закупки. В одной цифре они друг друга маскируют — месяц с хорошей
+  // выручкой может оказаться месяцем, где заработала только перепродажа.
+  // Запчасти берём напрямую (rParts/cParts), работы — вычитанием: тогда
+  // ручная правка выручки или себестоимости не теряется, она сидит в итоге.
+  const sum=pred=>{ let r=0,p=0,pr=0,pp=0,n=0;
     trips.forEach(t=>{ if(!pred(t)||!inP(t.date_from)) return; const e=t.econ_snapshot||{};
-      r+=+e.revenue||0; p+=+e.profit||0; n++; });
-    return {rev:r,profit:p,n:n}; };
+      r+=+e.revenue||0; p+=+e.profit||0;
+      pr+=+e.rParts||0; pp+=(+e.rParts||0)-(+e.cParts||0); n++; });
+    return {rev:r,profit:p,pRev:pr,pProfit:pp,n:n}; };
   // Депо-заявки в выезды не попадают (сервер запрещает триггером), и в
   // снимках выездов их денег нет вовсе. Без этого куска целый класс работ
   // давал бы в отчёте ноль. Дороги и суточных у депо нет физически,
   // себестоимость — только труд по норме: трекера в цеху нет.
-  const depot=pred=>{ let r=0,c=0;
+  const depot=pred=>{ let r=0,c=0,pr=0,pc=0;
     jb.forEach(j=>{ if(!j.at_depot||!pred(j)||!inP(jobDate(j))) return;
       (j.job_works||[]).forEach(w=>{ r+=+w.revenue||0; c+=(+w.hours||0)*ch; });
-      const pm=partsMoney(j); r+=pm.rev; c+=pm.cost; });
-    return {rev:r,profit:r-c}; };
-  const eT=sum(TRIP_EARNED), eD=depot(JOB_EARNED);
-  const aT=sum(TRIP_AHEAD),  aD=depot(JOB_AHEAD);
-  const got={rev:eT.rev+eD.rev,profit:eT.profit+eD.profit};
-  const pl ={rev:aT.rev+aD.rev,profit:aT.profit+aD.profit};
+      const pm=partsMoney(j); r+=pm.rev; c+=pm.cost; pr+=pm.rev; pc+=pm.cost; });
+    return {rev:r,profit:r-c,pRev:pr,pProfit:pr-pc}; };
+  const add=(x,y)=>({rev:x.rev+y.rev,profit:x.profit+y.profit,
+    pRev:x.pRev+y.pRev,pProfit:x.pProfit+y.pProfit});
+  const got=add(sum(TRIP_EARNED),depot(JOB_EARNED));
+  const pl =add(sum(TRIP_AHEAD), depot(JOB_AHEAD));
   const warr=pred=>{ let tot=0,w=0;
     jb.forEach(j=>{ if(!pred(j)||!inP(jobDate(j))) return;
       (j.job_works||[]).forEach(x=>{ const h=+x.hours||0; tot+=h; if(!x.billable) w+=h; }); });
@@ -2415,9 +2471,35 @@ function financeCard(jb,trips){
 
   const m=v=>Math.round(v).toLocaleString('ru-RU');
   const pcCol=v=>v>=0?'var(--green)':'var(--red)';
-  const marg=x=>x.rev>0?(x.profit/x.rev*100).toFixed(0)+'%':'—';
+  const marg=(rev,profit)=>rev>0?(profit/rev*100).toFixed(0)+'%':'—';
   const cell=(k,v,col)=>'<div class="fin-c"><span class="fin-k">'+esc(k)+'</span>'
     +'<span class="fin-v"'+(col?(' style="color:'+col+'"'):'')+'>'+v+'</span></div>';
+  // Доля работ и запчастей — соотношением, а не двумя суммами: вопрос здесь
+  // «чем мы зарабатываем», а не «сколько».
+  const share=(part,total)=>{ const t=Math.abs(total);
+    if(!(t>0)) return '—';
+    const b=Math.round(Math.abs(part)/t*100);
+    return (100-b)+'% : '+b+'%'; };
+  // Раскрывающаяся разбивка строки. Ключ свой на каждую строку — «получено»
+  // и «план» разворачиваются независимо.
+  const breakdown=(key,x)=>{
+    const wRev=x.rev-x.pRev, wProfit=x.profit-x.pProfit;
+    return '<div class="fin-sub">'+foldxBtn(key,'разбивка')+'</div>'
+      +foldxBox(key,
+        '<div class="fin-row fin-in"><span class="fin-tag">работы</span>'
+          +cell('Выручка',m(wRev)+' '+esc(cur))
+          +cell('Прибыль',m(wProfit)+' '+esc(cur),pcCol(wProfit))
+          +cell('Маржа',marg(wRev,wProfit))+'</div>'
+        +'<div class="fin-row fin-in"><span class="fin-tag">запчасти</span>'
+          +cell('Выручка',m(x.pRev)+' '+esc(cur))
+          +cell('Прибыль',m(x.pProfit)+' '+esc(cur),pcCol(x.pProfit))
+          +cell('Маржа',marg(x.pRev,x.pProfit))+'</div>'
+        +'<div class="fin-row fin-in"><span class="fin-tag">доли</span>'
+          +cell('Выручка',share(x.pRev,x.rev))
+          +cell('Прибыль',share(x.pProfit,x.profit))
+          +'<div class="fin-c"><span class="fin-k">&nbsp;</span>'
+            +'<span class="fin-note">слева работы, справа запчасти</span></div></div>');
+  };
 
   // График по месяцам периода. Один месяц сравнивать не с чем — тогда вместо
   // пустой рамки честнее предложить взять период шире.
@@ -2428,17 +2510,33 @@ function financeCard(jb,trips){
     const mm=months.find(x=>x.key===String(t.date_from).slice(0,7));
     if(mm){ const e=t.econ_snapshot||{}; mm.rev+=+e.revenue||0; mm.profit+=+e.profit||0; } });
   const filled=months.filter(x=>x.rev>0).length;
-  const maxRev=Math.max(1,...months.map(x=>x.rev));
+  // Столбик — это выручка, разложенная на себестоимость и прибыль: снизу
+  // жёлтым то, что месяц стоил, сверху зелёным то, что осталось. Убыточный
+  // месяц выше своей выручки — красным виден перерасход, и это честнее, чем
+  // рисовать его столбиком нормальной высоты.
+  const maxV=Math.max(1,...months.map(x=>Math.max(x.rev,x.rev-x.profit)));
   const short=v=>v>=1000?Math.round(v/1000)+'к':String(Math.round(v));
   let chart='';
   if(filled>=2){
-    chart='<div class="revbars">';
-    months.forEach(x=>{ const hR=x.rev>0?Math.max(4,Math.round(x.rev/maxRev*100)):0;
-      chart+='<div class="revbar" title="'+x.key+': '+m(x.rev)+' '+esc(cur)+'">'
+    chart='<div class="revbars profbars">';
+    months.forEach(x=>{
+      const cost=x.rev-x.profit;
+      const yellow=Math.max(0,Math.min(cost,x.rev)), red=Math.max(0,cost-x.rev), green=Math.max(0,x.profit);
+      const seg=[];
+      if(green>0) seg.push(['rb-p',green]);
+      if(red>0)   seg.push(['rb-o',red]);
+      if(yellow>0)seg.push(['rb-cst',yellow]);
+      let stack='';
+      seg.forEach(([cl,v],i)=>{ stack+='<div class="'+cl+(i===0?' rb-top':'')
+        +'" style="height:'+Math.max(2,Math.round(v/maxV*100))+'%"></div>'; });
+      if(!stack) stack='<div class="rb-cst" style="height:0"></div>';
+      chart+='<div class="revbar" title="'+esc(x.key+': выручка '+m(x.rev)+' '+cur
+          +' · себестоимость '+m(cost)+' · прибыль '+m(x.profit))+'">'
         +'<div class="rb-v">'+(x.rev>0?short(x.rev):'')+'</div>'
-        +'<div class="rb-c"><div class="rb-f" style="height:'+hR+'%"></div></div>'
+        +'<div class="rb-c"><div class="rb-stack">'+stack+'</div></div>'
         +'<div class="rb-l">'+x.key.slice(5)+'</div></div>'; });
-    chart+='</div>';
+    chart+='</div>'
+      +'<div class="cap-note">столбик — выручка: снизу себестоимость, сверху прибыль; красное — перерасход</div>';
   } else {
     chart='<div class="hint">'+(filled?'В периоде заполнен один месяц — сравнивать не с чем.'
       :'За период выручки нет ни в одном месяце.')+' Возьми период шире.</div>';
@@ -2450,11 +2548,13 @@ function financeCard(jb,trips){
     +'<div class="fin-row"><span class="fin-tag">получено</span>'
       +cell('Выручка',m(got.rev)+' '+esc(cur))
       +cell('Прибыль',m(got.profit)+' '+esc(cur),pcCol(got.profit))
-      +cell('Маржа',marg(got))+'</div>'
+      +cell('Маржа',marg(got.rev,got.profit))+'</div>'
+    +breakdown('dashFinGot',got)
     +'<div class="fin-row"><span class="fin-tag">план</span>'
       +cell('Выручка',m(pl.rev)+' '+esc(cur))
       +cell('Прибыль',m(pl.profit)+' '+esc(cur),pcCol(pl.profit))
-      +cell('Маржа',marg(pl))+'</div>'
+      +cell('Маржа',marg(pl.rev,pl.profit))+'</div>'
+    +breakdown('dashFinPlan',pl)
     +'<div class="fin-row"><span class="fin-tag">гарантия</span>'
       +cell('Отработано',warr(JOB_EARNED)+'%')
       +cell('В плане',warr(JOB_AHEAD)+'%')
@@ -2469,36 +2569,43 @@ function worksCard(jb,trips){
   if(!canWrite()) return '';
   const per=dashPeriod();
   const inP=d=>d&&d>=per.from&&d<=per.to;
+  // Считаем НОРМОЧАСЫ, а не строки. Строка «замена шланга» и строка
+  // «капремонт» — обе одна работа, но одна на полчаса, а другая на три дня:
+  // сумма таких строк не говорит ни о загрузке, ни о выработке.
   let wDone=0,wPlan=0,wField=0,wAll=0,nJobs=0;
   jb.forEach(j=>{ if(j.status==='cancelled'||!inP(jobDate(j))) return;
-    const n=((j.job_works)||[]).length; nJobs++;
+    const n=jobHours(j); nJobs++;
     wAll+=n; if(!j.at_depot) wField+=n;
     if(JOB_EARNED(j)) wDone+=n; else wPlan+=n; });
   const nTrips=trips.filter(t=>t.status!=='cancelled'&&inP(t.date_from)).length;
   const fieldPct=wAll?Math.round(wField/wAll*100):0;
 
-  // Полоса живых статусов. Закрытые и отменённые копятся без конца: через
-  // год они заняли бы всю ширину, и три активных сегмента стали бы
-  // полоской у края. Сколько закрыто — отдельной строкой под полосой.
+  // Полоса считает ТО ЖЕ, что цифра «Заявок» над ней: заявки периода, кроме
+  // отменённых. Раньше полоса брала все заявки за всё время и только живые
+  // статусы — и под цифрой «10 заявок» рисовалось одиннадцать. Две цифры об
+  // одном на одной карточке обязаны сходиться, иначе не верят обеим.
+  // Закрытые теперь сегмент, а не отдельная строка: в границах периода они
+  // ширину не съедают, зато сумма сегментов сходится с «Заявок».
   const byst={open:0,planned:0,in_progress:0,done:0,cancelled:0};
-  jb.forEach(j=>{ byst[j.status]=(byst[j.status]||0)+1; });
-  const stClosed=(byst.done||0)+(byst.cancelled||0);
-  const stTotal=Math.max(1,(byst.open||0)+(byst.planned||0)+(byst.in_progress||0));
+  jb.forEach(j=>{ if(!inP(jobDate(j))) return; byst[j.status]=(byst[j.status]||0)+1; });
+  const stTotal=Math.max(1,nJobs);
   let bar='',leg='';
   [['Открыта','var(--cyan)',byst.open||0],
    ['Запланирована','#5b9bd5',byst.planned||0],
-   ['В работе','#f5b23d',byst.in_progress||0]].filter(x=>x[2]>0).forEach(([lbl,col,n])=>{
+   ['В работе','#f5b23d',byst.in_progress||0],
+   ['Готова','var(--green)',byst.done||0]].filter(x=>x[2]>0).forEach(([lbl,col,n])=>{
     bar+='<i style="width:'+(n/stTotal*100)+'%;background:'+col+'"></i>';
     leg+='<span><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</span>'; });
 
   const cell=(k,v)=>'<div class="fin-c"><span class="fin-k">'+esc(k)+'</span><span class="fin-v">'+v+'</span></div>';
+  const hnum=v=>v.toFixed(v%1?1:0);
   return '<div class="card foldable f-any statuscard" data-fold="dashWork" data-dcard="work">'
     +'<h3 class="cardhead">'+dashGrip('work')+'Работы <span class="mc-note">'+esc(shortDate(per.from)+' — '+shortDate(per.to))+'</span></h3>'
-    +'<div class="fin-row nolab">'+cell('Работ отработано',wDone)+cell('Работ в плане',wPlan)+cell('На выезде',fieldPct+'%')+'</div>'
-    +'<div class="fin-row nolab">'+cell('Заявок',nJobs)+cell('Выездов',nTrips)+'<div class="fin-c"></div></div>'
+    +'<div class="fin-row nolab">'+cell('Отработано',hnum(wDone)+' ч')+cell('В плане',hnum(wPlan)+' ч')+'<div class="fin-c"></div></div>'
+    +'<div class="fin-row nolab">'+cell('Заявок',nJobs)+cell('Выездов',nTrips)+cell('На выезде',fieldPct+'%')+'</div>'
     +'<div class="statbar">'+(bar||'<i style="width:100%;background:var(--line)"></i>')+'</div>'
     +'<div class="statleg">'+(leg||'<span class="dim">Активных заявок нет</span>')+'</div>'
-    +(stClosed?('<div class="stat-closed">закрыто и отменено за всё время: '+stClosed+'</div>'):'')
+    +(byst.cancelled?('<div class="stat-closed">отменено за период: '+byst.cancelled+'</div>'):'')
     +'</div>';
 }
 
@@ -2729,8 +2836,30 @@ async function snapFindJob(id){
   const s=await snapGet('mine'); if(!s||!s.val||!s.val.list) return null;
   return s.val.list.find(j=>j&&j.id===id)||null;
 }
+// Полная строка заявки из базы.
+//
+// Лента грузит заявки СВОИМ, тонким запросом: ей нужны срок, клиент, часы —
+// и всё. В этом ответе нет ни client_id, ни техники, ни примечаний. Открыв
+// заявку из ленты, форма получала такую тонкую строку и заполнялась пустотой,
+// а список клиентов, которому нечего было выбрать, вставал на первый пункт —
+// то есть показывал ЧУЖОГО клиента. Поэтому при открытии заявку всегда
+// дочитываем целиком, если в руках оказалась тонкая или её нет вовсе.
+async function fetchJobFull(id){
+  try{
+    const {data,error}=await sb.from('jobs')
+      .select('*, clients(name), equipment(model,kind), job_works(*), job_parts(qty,price,cost,billable)')
+      .eq('id',id).is('deleted_at',null).maybeSingle();
+    if(error) throw error;
+    return data||null;
+  }catch(e){ console.warn('Заявка не дочитана:',e); return null; }
+}
 async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEditId=id;
-  const j=id?(jobs.find(x=>x.id==id)||await snapFindJob(id)):null;
+  let j=null;
+  if(id){
+    j=jobs.find(x=>x.id==id)||null;
+    // client_id — признак полной строки: в тонком ответе ленты его нет.
+    if(!j||j.client_id==null){ const full=await fetchJobFull(id); if(full) j=full; else if(!j) j=await snapFindJob(id); }
+  }
   $('jbClient').innerHTML=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   $('jbEng').innerHTML='<option value="">— не назначен —</option>'+profilesList.map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
   $('jbWorkPick').innerHTML='<option value="">— выбрать работу —</option>'+catalog.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join('');
@@ -2744,7 +2873,7 @@ async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEdit
     :'<option value="">— депо не заведено —</option>';
   if(j&&j.depot_id) $('jbDepotSel').value=j.depot_id; else if(dl.length) $('jbDepotSel').value=dl[0].id;
   renderDepotUi();
-  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {work_id:w.work_id||null,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id}; });
+  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {work_id:w.work_id||null,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at}; });
   renderJobWorks();
   const ro=!canWrite() && !(j&&j.assigned_engineer===session.user.id);
   jobRO=ro;
@@ -2770,7 +2899,7 @@ async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEdit
   if($('jobSaveState')){ $('jobSaveState').style.display=(jobEditId&&!ro)?'':'none'; jobSaveState('сохранено'); }
   if($('jobRefToggle')) $('jobRefToggle').textContent='Подробности заявки';
   $('jobErr').textContent=''; jobHead(); jobFootUpdate();
-  loadJobPhotos(); loadJobVisits(); loadJobParts();
+  loadJobPhotos(); loadJobVisits(); loadJobParts(); loadFixes();
   // Куда вернёт хлебная крошка. Заявку открывают из пяти мест — со сводки,
   // с карты, из канбана, из выезда, — и возвращать всегда в канбан значит
   // выкидывать человека из того места, где он работал.
@@ -2979,6 +3108,7 @@ function workRevenue(w){ if(w.override!==''&&w.override!=null) return +w.overrid
   const wr=p?(+((p.work_warr||{}).rate)||0):0; return (+w.hours||0)*wr; }
 
 function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
+  const mayW=canEditWorks();
   curWorks.forEach((w,i)=>{ const d=document.createElement('div'); d.className='eqitem';
     const head=w.custom?('<input type="text" placeholder="название работы" value="'+esc(w.name)+'" data-wn="'+i+'" style="width:100%">'):('<div class="t">'+esc(w.name)+'</div>');
     const rev=workRevenue(w);
@@ -2998,7 +3128,25 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
       '<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button></div>'+
       ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top: var(--sp-2)">'+esc(w.reasons.join(' · '))+'</div>':'')+
       (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
+    if(!mayW) d.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
     box.appendChild(d); });
+  // Добавлять работы можно ровно там же, где и править: иначе кнопка «+ из
+  // каталога» обещала бы то, что сервер не примет.
+  ['jbWorkPick','jbWorkAdd','jbCustomAdd'].forEach(id=>{ const el=$(id); if(el) el.disabled=!mayW; });
+  const wrap=$('jbWorksApp');
+  if(wrap){
+    const pend=jobEditId&&worksPending()&&curWorks.length;
+    const st=$('jbWorksState'), acts=$('jbWorksActs');
+    wrap.style.display=(pend||(!mayW&&jobEditId&&!canWrite()))?'':'none';
+    if(st){ st.textContent=pend?'работы ждут подтверждения':'работы подтверждены';
+      st.className=pend?'pt-wait':'pt-ok'; }
+    if(acts){ acts.innerHTML=(pend&&canWrite())
+        ? '<button class="btn sm amber" id="jbWorksOk">Подтвердить работы</button>'
+        : ((!mayW&&!canWrite())?'<button class="btn sm ghost" id="jbWorksFix">Предложить правку</button>':'');
+      const ok=$('jbWorksOk'); if(ok) ok.onclick=worksApprove;
+      const fx=$('jbWorksFix'); if(fx) fx.onclick=()=>openFixModal('work',null);
+    }
+  }
   box.querySelectorAll('[data-wn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wn].name=inp.value; });
   box.querySelectorAll('[data-wo]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wo].override=inp.value; jobTotals(); });
   box.querySelectorAll('[data-wh]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wh].hours=parseFloat(inp.value)||0; jobTotals(); });
@@ -3625,11 +3773,37 @@ function partSuggest(){
 // упиралась в отказ сервера уже ПОСЛЕ нажатия. Правило должно быть видно
 // до действия, а не после.
 let jobRO=false;
+// ── Подтверждение внесённого ────────────────────────────────────────────
+//
+// Часы и запчасти — это деньги. Цены инженеру закрыты триггерами на сервере,
+// но сами строки он мог и добавить, и переписать, и удалить задним числом.
+// Теперь так: вносить — да, переписывать подтверждённое — нет. Отметку
+// подтверждения ставит менеджер, и ставит её база (sql/26), а не экран.
+//
+// Работы приложение переписывает БЛОКОМ (удалить всё по заявке и вставить
+// заново), поэтому и право на них даётся блоком: пока менеджер не подтвердил
+// ни одной строки, исполнитель волен переписывать свой отчёт.
+function worksPending(){ return curWorks.some(w=>!w.approved); }
+function worksLocked(){ return curWorks.some(w=>w.approved); }
+function canEditWorks(){
+  if(jobRO) return false;
+  if(canWrite()) return true;
+  if(!jobEditId) return true;                       // новую заявку заводит менеджер
+  if(($('jbStatus')?$('jbStatus').value:'')==='done') return false;
+  return !worksLocked();
+}
 function canEditParts(){
   if(!jobEditId||jobRO) return false;
   if(canWrite()) return true;
   return ($('jbStatus')?$('jbStatus').value:'')!=='done';
 }
+// Отдельная строка запчасти: своя, ещё не подтверждённая, заявка открыта.
+function canEditPart(p){
+  if(canWrite()) return !jobRO;
+  return canEditParts() && !p.approved_at
+    && (!p.created_by || p.created_by===session.user.id);
+}
+function personName(id){ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'—'):'—'; }
 function renderJobParts(){
   const box=$('jbParts'); if(!box) return;
   const may=canEditParts(), money=canWrite();
@@ -3637,6 +3811,7 @@ function renderJobParts(){
   box.innerHTML='';
   jobParts.forEach((p,i)=>{
     const d=document.createElement('div'); d.className='eqitem pt-row';
+    const mine=canEditPart(p);
     const unitOpts=PART_UNITS.concat(PART_UNITS.indexOf(p.unit)<0&&p.unit?[p.unit]:[])
       .map(u=>'<option'+(u===p.unit?' selected':'')+'>'+esc(u)+'</option>').join('');
     const cash=money
@@ -3656,8 +3831,24 @@ function renderJobParts(){
         +'<button class="btn sm '+(p.billable===false?'ghost':'amber')+'" data-pb="'+i+'">'+(p.billable===false?'гарантия':'платно')+'</button>'
         +cash
       +'</div>'
-      +'<div class="m pt-warn" style="margin-top: var(--sp-2)'+(partReady(p)?';display:none':'')+'">Без наименования строка не сохранится.</div>';
-    if(!may) d.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
+      +'<div class="m pt-warn" style="margin-top: var(--sp-2)'+(partReady(p)?';display:none':'')+'">Без наименования строка не сохранится.</div>'
+      // Кто внёс и проверено ли. Автор виден только тому, кто распоряжается
+      // деньгами: это инструмент разбора апсейла, а не публичная подпись.
+      +(p.id?('<div class="pt-foot">'
+        +(money&&p.created_by?('<span class="pt-who">добавил: '+esc(personName(p.created_by))+'</span>'):'')
+        +(p.approved_at
+            ? '<span class="pt-ok">проверено</span>'
+            : '<span class="pt-wait">ждёт подтверждения</span>')
+        +(money&&!p.approved_at?('<span class="pt-acts">'
+            +'<button class="btn sm amber" data-pok="'+i+'">Подтвердить</button>'
+            +'<button class="btn sm ghost" data-pno="'+i+'">Отклонить</button></span>'):'')
+        +((!money&&p.approved_at&&jobEditId)?('<span class="pt-acts">'
+            +'<button class="btn sm ghost" data-pfix="'+i+'">Предложить правку</button></span>'):'')
+      +'</div>'):'');
+    // Заперта не вся карточка, а строка: подтверждённое инженер не трогает,
+    // своё непроверенное правит как раньше.
+    if(!mine) d.querySelectorAll('.pt-top input,.pt-bot input,.pt-bot select,[data-pb],[data-prm]')
+      .forEach(el=>el.disabled=true);
     box.appendChild(d);
   });
   const bind=(attr,f,ev)=>box.querySelectorAll('['+attr+']').forEach(el=>el[ev||'oninput']=()=>{ f(jobParts[el.dataset[attr.replace('data-','')]],el); });
@@ -3670,6 +3861,9 @@ function renderJobParts(){
   box.querySelectorAll('[data-pb]').forEach(b=>b.onclick=()=>{ const p=jobParts[b.dataset.pb];
     p.billable=(p.billable===false); partTouch(p); renderJobParts(); });
   box.querySelectorAll('[data-prm]').forEach(b=>b.onclick=()=>partDel(jobParts[b.dataset.prm]));
+  box.querySelectorAll('[data-pok]').forEach(b=>b.onclick=()=>partApprove(jobParts[b.dataset.pok],true));
+  box.querySelectorAll('[data-pno]').forEach(b=>b.onclick=()=>partApprove(jobParts[b.dataset.pno],false));
+  box.querySelectorAll('[data-pfix]').forEach(b=>b.onclick=()=>openFixModal('part',jobParts[b.dataset.pfix]));
   partTotals(); partSuggest();
 }
 // Пересчёт чисел БЕЗ пересборки полей: перерисовка на каждую цифру
@@ -3763,6 +3957,116 @@ async function partSave(p){
     } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
   }
 }
+// Подтверждение и отклонение строки запчасти. Отклонить — значит убрать:
+// строка, которую менеджер не признал, не должна остаться в счёте «просто
+// непроверенной». Причину он скажет инженеру словами, для этого есть
+// предложения правок.
+async function partApprove(p,ok){
+  if(!p||!p.id||!canWrite()) return;
+  if(!ok){
+    if(!await confirmDialog('Отклонить «'+String(p.name||'').trim()+'»? Строка будет убрана из заявки.',
+      {danger:true,okText:'Отклонить'})) return;
+    await partDel(p); return;
+  }
+  try{
+    const {error}=await sb.from('job_parts')
+      .update({approved_at:new Date().toISOString(),approved_by:session.user.id}).eq('id',p.id);
+    if(error) throw error;
+    p.approved_at=new Date().toISOString(); p.approved_by=session.user.id;
+    renderJobParts(); jobSaveState('сохранено');
+  }catch(e){ notify('Не подтвердилось: '+((e&&e.message)||e),'err'); }
+}
+// Подтверждение работ — блоком: приложение и пишет их блоком.
+async function worksApprove(){
+  if(!canWrite()||!jobEditId) return;
+  try{
+    const {error}=await sb.from('job_works')
+      .update({approved_at:new Date().toISOString(),approved_by:session.user.id})
+      .eq('job_id',jobEditId).is('approved_at',null);
+    if(error) throw error;
+    curWorks.forEach(w=>{ w.approved=true; });
+    renderJobWorks(); jobSaveState('сохранено'); showToast('Работы подтверждены');
+  }catch(e){ notify('Не подтвердилось: '+((e&&e.message)||e),'err'); }
+}
+
+// ── Предложение правки ──────────────────────────────────────────────────
+// Подтверждённое инженер не меняет. Но и молчать ему нельзя: ошибка в часах
+// или в артикуле стоит денег. Предложение — письмо менеджеру, привязанное к
+// заявке и к строке, о которой речь.
+let fixTarget=null;
+function openFixModal(kind,row){
+  if(!jobEditId) return;
+  fixTarget={target:kind,target_id:(row&&row.id)||null,
+    label:kind==='part'?('запчасть «'+String((row&&row.name)||'').trim()+'»')
+      :(kind==='work'?'работы по заявке':'заявка')};
+  const el=$('fixWhat'); if(el) el.value='';
+  const t=$('fixSubj'); if(t) t.textContent=fixTarget.label;
+  $('fixOverlay').classList.add('on');
+}
+async function fixSend(){
+  const what=($('fixWhat')?$('fixWhat').value:'').trim();
+  if(!what){ notify('Напиши, что нужно изменить.','warn'); return; }
+  if(!fixTarget||!jobEditId) return;
+  try{
+    const {error}=await sb.from('job_change_requests').insert({
+      job_id:jobEditId,target:fixTarget.target,target_id:fixTarget.target_id,what:what});
+    if(error) throw error;
+    $('fixOverlay').classList.remove('on'); showToast('Отправлено менеджеру');
+    await loadFixes();
+  }catch(e){ notify('Не отправилось: '+((e&&e.message)||e),'err'); }
+}
+let jobFixes=[];
+async function loadFixes(){
+  jobFixes=[];
+  if(jobEditId){
+    try{
+      const {data}=await sb.from('job_change_requests').select('*')
+        .eq('job_id',jobEditId).order('created_at',{ascending:false});
+      jobFixes=data||[];
+    }catch(e){ jobFixes=[]; }
+  }
+  renderFixes();
+}
+function renderFixes(){
+  const box=$('jbFixes'); if(!box) return;
+  const card=$('jbFixCard');
+  const open=jobFixes.filter(f=>f.status==='open');
+  const show=canWrite()?jobFixes:open;
+  // Инженеру карточка нужна и пустой — когда правка ему уже закрыта, это
+  // единственный способ сказать, что в заявке ошибка.
+  const frozen=!canWrite()&&!!jobEditId&&(!canEditWorks()||!canEditParts());
+  if(card) card.style.display=(show.length||frozen)?'':'none';
+  box.innerHTML='';
+  if(frozen){
+    const a=document.createElement('div'); a.className='fix-a';
+    a.innerHTML='<button class="btn sm ghost" id="jbFixNew">Предложить правку</button>';
+    box.appendChild(a);
+    const nb=$('jbFixNew'); if(nb) nb.onclick=()=>openFixModal('job',null);
+  }
+  show.slice(0,20).forEach(f=>{
+    const d=document.createElement('div'); d.className='fixrow'+(f.status!=='open'?' done':'');
+    d.innerHTML='<div class="fix-h"><span class="fix-who">'+esc(personName(f.created_by))+'</span>'
+      +'<span class="fix-d">'+esc(shortDate(String(f.created_at).slice(0,10)))+'</span>'
+      +(f.status==='open'?'':('<span class="fix-st">'+(f.status==='accepted'?'принято':'отклонено')+'</span>'))+'</div>'
+      +'<div class="fix-w">'+esc(f.what)+'</div>'
+      +((canWrite()&&f.status==='open')?('<div class="fix-a">'
+        +'<button class="btn sm amber" data-fok="'+f.id+'">Принято</button>'
+        +'<button class="btn sm ghost" data-fno="'+f.id+'">Отклонить</button></div>'):'');
+    box.appendChild(d);
+  });
+  box.querySelectorAll('[data-fok]').forEach(b=>b.onclick=()=>fixDecide(b.dataset.fok,'accepted'));
+  box.querySelectorAll('[data-fno]').forEach(b=>b.onclick=()=>fixDecide(b.dataset.fno,'declined'));
+}
+async function fixDecide(id,st){
+  if(!canWrite()) return;
+  try{
+    const {error}=await sb.from('job_change_requests')
+      .update({status:st,decided_by:session.user.id,decided_at:new Date().toISOString()}).eq('id',id);
+    if(error) throw error;
+    await loadFixes();
+  }catch(e){ notify('Не записалось: '+((e&&e.message)||e),'err'); }
+}
+
 async function partDel(p){
   if(!p) return;
   const what=String(p.name||'').trim();
@@ -3923,8 +4227,14 @@ async function persistJob(rec){
   // Порядок важен и без политики: если что-то оборвётся посередине, лучше
   // сохранённые работы при старом статусе, чем закрытая заявка без работ.
   if(jobEditId){
-    await sb.from('job_works').delete().eq('job_id',jobId);
-    if(curWorks.length){ const rows=curWorks.map(w=>Object.assign({job_id:jobId},jobWorkRow(w))); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
+    // Работы переписываются блоком — и только тем, кому это позволено.
+    // Инженер, у которого работы уже подтверждены, всё равно сохраняет
+    // заметки и статус: без этой проверки автосохранение падало бы на
+    // запрете удаления и он не мог бы даже закрыть заявку.
+    if(canEditWorks()){
+      await sb.from('job_works').delete().eq('job_id',jobId);
+      if(curWorks.length){ const rows=curWorks.map(w=>Object.assign({job_id:jobId},jobWorkRow(w))); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
+    }
     const {error}=await sb.from('jobs').update(rec).eq('id',jobEditId); if(error) throw error;
   } else {
     rec.created_by=session.user.id;
@@ -4730,6 +5040,8 @@ function openReschedModal(tid){
   $('reschedOverlay').classList.add('on');
 }
 if($('rsCancel')) $('rsCancel').onclick=()=>$('reschedOverlay').classList.remove('on');
+if($('fixCancel')) $('fixCancel').onclick=()=>$('fixOverlay').classList.remove('on');
+if($('fixSend')) $('fixSend').onclick=fixSend;
 
 if($('rsSend')) $('rsSend').onclick=async ()=>{
   const from=$('rsFrom').value; const to=$('rsTo').value||null;
@@ -6737,7 +7049,13 @@ const SCHEMA_MARKS = [
   { sql: 'sql/16', table: 'job_visits', col: 'id',            what: 'отметки приезда' },
   { sql: 'sql/17', table: 'job_parts',  col: 'id',            what: 'запчасти' },
   { sql: 'sql/23', table: 'trips',      col: 'fact_km_source', what: 'источник факт-пробега' },
-  { sql: 'sql/24', table: 'settings',   col: 'track_slack',    what: 'пороги проверки трека' }
+  { sql: 'sql/24', table: 'settings',   col: 'track_slack',    what: 'пороги проверки трека' },
+  // Разбор факт-трека пишется в отдельную таблицу и падает молча (console.warn):
+  // без этой строки слепок сборки говорил «всё есть», а карта после
+  // перезагрузки продолжала рисовать прямые вместо дорог.
+  { sql: 'sql/25', table: 'trip_tracks', col: 'trip_id',        what: 'сохранённый разбор трека' },
+  { sql: 'sql/26', table: 'job_parts',   col: 'approved_at',    what: 'подтверждение внесённого' },
+  { sql: 'sql/26', table: 'job_change_requests', col: 'id',     what: 'предложения правок' }
 ];
 
 async function checkSchema(){
