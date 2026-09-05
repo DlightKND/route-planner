@@ -1417,7 +1417,7 @@
 .agrp:last-child{margin-bottom: 0}
 .agrp-card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line);
   border-radius: var(--r-md);box-shadow:var(--shadow-sm);overflow:hidden}
-.agrp-h{display:flex;align-items:center;gap: var(--gap-block);padding: var(--pad-row);border-bottom:1px solid var(--line)}
+.agrp-h{display:flex;align-items:center;flex-wrap:wrap;gap: var(--sp-2) var(--gap-block);padding: var(--pad-row);border-bottom:1px solid var(--line)}
 .agrp-n{font-family:var(--mono);font-size: var(--fs-2);font-weight:600;letter-spacing:.4px;color:var(--ink);white-space:nowrap}
 .agrp-track{flex:1;min-width:40px;height:6px;border-radius: var(--r-pill);background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
 .agrp-track i{display:block;height:100%;border-radius: var(--r-pill)}
@@ -1444,6 +1444,7 @@
    график. Читается как свойство даты, поэтому стоит вплотную к ней. */
 .a-tag.plan{color:var(--cyan);border-color:color-mix(in srgb,var(--cyan) 40%,var(--line))}
 .a-tag.auto{color:var(--ink-faint);border-style:dashed}
+.a-tag.trip{color:var(--ink);border-color:var(--accent-line);background:color-mix(in srgb,var(--accent-line) 14%,transparent);letter-spacing:.6px}
 .a-tag.bad{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,var(--line))}
 .agrp-hint.bad{color:var(--red)}
 /* Перегруз — сигнал тому, кто ставит даты. Инженер его не видит: чинить
@@ -1575,6 +1576,85 @@
 .dash-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap: var(--gap-card);align-items:start}
 .dash-grid>*{min-width:0}
 .dash-grid.one-col{grid-template-columns:minmax(0,1fr)}
+/* Колонки прокручиваются по отдельности. Пока прокрутка была общая, длинная
+   лента уносила инфокарты за экран: чтобы посмотреть деньги, приходилось
+   пролистывать чужой список до конца. */
+@media(min-width:901px){
+  .view-dash .pane.scrollp{display:flex;flex-direction:column;overflow:hidden}
+  .view-dash .dash-grid{flex:1 1 auto;min-height:0}
+  .view-dash .dash-grid>*{max-height:100%;overflow:auto;padding-right: var(--sp-2);
+    scrollbar-gutter:stable}
+}
+.dashseg{display:none}
+@media(max-width:900px){
+  .dashseg{display:inline-flex;margin-left:auto}
+  .dash-grid.show-feed>#dashBody{display:none}
+  .dash-grid.show-cards>.dash-attn{display:none}
+  .dash-grid.one-col .dashseg{display:none}
+}
+/* ── Инфокарты сводки ─────────────────────────────────────────────────
+   Строка показателей: подпись слева, три величины в ряд. Величины стоят
+   в minmax(0,1fr), а не в 1fr: длинная сумма с валютой иначе расширяет
+   свою колонку и выдавливает соседние за край карточки. */
+.fin-row{display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));
+  gap: var(--gap-tight) var(--gap-block);align-items:start;padding: var(--sp-3) 0}
+.fin-row.nolab{grid-template-columns:repeat(3,minmax(0,1fr))}
+.fin-row+.fin-row{border-top:1px solid var(--line)}
+.fin-tag{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.6px;
+  text-transform:uppercase;color:var(--ink-faint);align-self:center;
+  min-width:62px}
+.fin-c{min-width:0}
+.fin-k{display:block;font-size: var(--fs-1);color:var(--ink-dim);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.fin-v{display:block;font-family:var(--mono);font-size: var(--fs-4);font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:420px){
+  .fin-row{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .fin-tag{grid-column:1/-1;min-width:0}
+}
+/* Ручка и стрелки перестановки — как у точек маршрута. Ручка армирует
+   перетаскивание, стрелки работают там, где перетаскивания нет вовсе,
+   то есть на телефоне. */
+.dgrip{font-family:var(--mono);font-size: var(--fs-4);line-height:1;color:var(--ink-faint);
+  cursor:grab;user-select:none;-webkit-user-select:none;padding: 0 var(--sp-1);flex:none}
+.dgrip:active{cursor:grabbing}
+.dmoves{display:inline-flex;gap:2px;flex:none}
+.dmove{background:none;border:0;padding:0 var(--sp-1);cursor:pointer;line-height:1;
+  font-size: var(--fs-3);color:var(--ink-faint)}
+.dmove:hover:not(:disabled){color:var(--ink)}
+.dmove:disabled{opacity:.3;cursor:default}
+.card[data-dcard][draggable=true]{cursor:grab}
+.card[data-dcard].dragging{opacity:.45}
+/* Куда именно встанет карточка — половина под курсором, как у точек. */
+.card[data-dcard].drag-over{box-shadow:inset 0 3px 0 -1px var(--accent)}
+.card[data-dcard].drag-under{box-shadow:inset 0 -3px 0 -1px var(--accent)}
+/* Складной кусок карточки: график прячется, заголовок остаётся. */
+.foldx-h{margin-top: var(--sp-4);padding-top: var(--sp-3);border-top:1px solid var(--line)}
+.foldx-btn{background:none;border:0;padding:0;cursor:pointer;
+  font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.6px;text-transform:uppercase;
+  color:var(--ink-dim)}
+.foldx-btn::after{content:'';display:inline-block;width:6px;height:6px;margin-left: var(--sp-2);
+  border-right:2px solid currentColor;border-bottom:2px solid currentColor;
+  transform:rotate(45deg) translateY(-2px);transition:transform var(--t)}
+.foldx-btn.off::after{transform:rotate(-45deg) translateY(1px)}
+.foldx-btn:hover{color:var(--ink)}
+.foldx{margin-top: var(--sp-3)}
+/* Загрузка по дням: ёмкость дня — светлая подложка, часы — столбик. */
+.loadbars .rb-c{position:relative}
+/* Черта 100% загрузки. Столбик без неё отвечает только на «много или мало
+   по сравнению с соседним днём», а вопрос всегда один: влезаем или нет.
+   Черта рисуется поверх столбика — иначе перегруженный день закрывал бы
+   собой ровно ту линию, из-за которой он и интересен. */
+.loadbars .rb-cap{position:absolute;left:0;right:0;bottom:0;z-index:2;
+  border-top:1px dashed color-mix(in srgb,var(--ink-faint) 75%,transparent)}
+.loadbars .rb-f{position:relative}
+.loadbars .rb-f.bad{background:var(--red)}
+.loadbars .revbar.we{opacity:.45}
+.loadbars.novals{gap: var(--sp-1)}
+.loadbars.novals .rb-l{font-size:9px}
+.cap-note{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint);margin-top: var(--sp-3)}
+.el-dep .el-n{font-family:var(--mono);text-transform:uppercase;letter-spacing:.6px;font-size: var(--fs-2)}
+.el-dep{border-bottom:2px solid var(--line)}
 @media(max-width:900px){.dash-grid{grid-template-columns:minmax(0,1fr)}}
 .dash-attn .acaps{text-transform:uppercase;letter-spacing:.12em;font-size: var(--fs-3);line-height:14px;margin: 0 0 var(--sp-3)}
 /* Подпись «Требует внимания» стоит только над ЛЕВОЙ колонкой и сдвигает её
@@ -1739,6 +1819,20 @@
   .card.foldable.folded .foldsum{display:inline;font-family:var(--mono);
     font-size: var(--fs-2);font-weight:400;color:var(--ink-faint);margin-left: var(--sp-2)}
 }
+/* Карточки сводки складываются на любой ширине: на широком экране их три,
+   и та, что сейчас не нужна, не должна занимать высоту. */
+.card.foldable.f-any > h3{cursor:pointer;padding-right: var(--sp-6);position:relative;
+  -webkit-tap-highlight-color:transparent}
+.card.foldable.f-any > h3::after{content:'';position:absolute;right:2px;top:50%;
+  width:8px;height:8px;margin-top:-6px;border-right:2px solid var(--ink-faint);
+  border-bottom:2px solid var(--ink-faint);transform:rotate(45deg);transition:transform var(--t)}
+.card.foldable.f-any.folded > h3::after{transform:rotate(-45deg);margin-top:-3px}
+.card.foldable.f-any.folded > *:not(h3){display:none}
+.card.foldable.f-any.folded > h3{margin-bottom:0}
+/* Переключатель периода внутри свёрнутого заголовка нажимать нельзя:
+   заголовок ловит клик и складывает карточку. Ставим его выше по слою и
+   гасим всплытие в JS. */
+.card.foldable.f-any > h3 .perseg{position:relative;z-index:2}
 .job-ref-read{display:none}
 .view-job.job-task .job-ref-read{display:block;grid-column:1/-1;order:4}
 .view-job.job-task .job-ref-read[hidden]{display:none}
@@ -2002,8 +2096,16 @@
 
   <!-- MAP / CLIENTS -->
   <div class="view view-dash"><div class="pane scrollp">
-    <div class="pane-head"><h2>Сводка</h2></div>
-    <div class="dash-grid"><div class="dash-attn"><h3 class="acaps">Требует внимания</h3><div id="attnBody"></div></div><div id="dashBody"></div></div>
+    <!-- Чипы «График / Инфокарты» — только на узком экране: там две колонки
+         не помещаются, и вместо того чтобы гнать инфокарты в подвал ленты,
+         показываем одну из двух. Шапка липкая, как в настройках: чипы всегда
+         вверху, куда бы ни уехала прокрутка. -->
+    <div class="stickyhead">
+      <div class="pane-head"><h2>Сводка</h2>
+        <span class="seg dashseg" id="dashSeg"><button class="on" data-dv="feed">График</button><button data-dv="cards">Инфокарты</button></span>
+      </div>
+    </div>
+    <div class="dash-grid show-feed"><div class="dash-attn"><h3 class="acaps">Требует внимания</h3><div id="attnBody"></div></div><div id="dashBody"></div></div>
   </div></div>
   <div class="view view-map active">
     <aside class="side">
@@ -2464,10 +2566,9 @@
       <div class="row"><div class="grow"><label>Режим</label><select id="dtMode"><option value="dark">Тёмная</option><option value="light">Светлая</option></select></div></div>
       <button class="btn sm amber" id="dtSave" style="margin-top: var(--sp-3)">Сохранить тему по умолчанию</button><span class="hint" id="dtStatus" style="margin-left: var(--sp-3)"></span>
     </div>
-    <div class="card" data-sec-panel="fleet" style="display:none"><h3 class="cardhead">Автопарк <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Машины для выбора в выездах. Пробег растёт при завершении выезда, ТО отслеживается по интервалу.</span></span></h3>
+    <div class="card" data-sec-panel="fleet" style="display:none"><h3 class="cardhead">Автопарк <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Машины для выбора в выездах. ID объекта в Wialon связывает машину с датчиком: по нему рисуется трек и считается факт-пробег выезда. Показания одометра не ведём — датчик их не даёт достоверно.</span></span></h3>
       <div id="vehList" style="margin-top: var(--sp-3)"></div>
       <div class="row" style="margin-top: var(--sp-3)"><input type="text" id="vhName" placeholder="название (Газель)" class="grow"><input type="text" id="vhPlate" placeholder="госномер" class="grow"></div>
-      <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>Пробег, км</label><input type="number" id="vhOdo"></div><div class="grow"><label>Интервал ТО, км</label><input type="number" id="vhInt"></div></div>
       <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>ID объекта в Wialon</label><input type="text" id="vhWialon" placeholder="напр. 28307408"><div class="hint" style="margin-top: var(--sp-2)">Пусто — машина без датчика, на карте её не будет.</div></div></div>
       <div class="row" style="margin-top: var(--sp-3)"><button class="btn sm amber grow" id="vhAdd">Добавить машину</button><button class="btn sm ghost" id="vhCancel" style="display:none">Отмена</button></div>
       <div class="err" id="vhErr"></div>
