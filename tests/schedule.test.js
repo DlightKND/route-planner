@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { planSchedule, driveOfLegs, dayIso, dayMs, isWorkday } from '../src/core/schedule.js';
+import { planSchedule, driveOfLegs, dayIso, dayMs, isWorkday,
+  normPos, addHours, piecesOf, clockOf } from '../src/core/schedule.js';
 
 // Календарь для тестов: 2026-09-07 понедельник, 09-08 вт, 09-09 ср,
 // 09-10 чт, 09-11 пт, 09-12 сб, 09-13 вс.
@@ -116,12 +117,14 @@ describe('ручные даты выезда — закон', () => {
       { id: 't', kind: 'trip', engineer: 'ivan', from: '2026-09-10', to: '2026-09-10', workH: 16, driveToH: 4, driveBackH: 4 }
     ], S, TODAY);
     const b = r.blocks[0];
+    // Даты — закон: выезд начинается в свой день. Но 24 часа в одни сутки не
+    // влезают, и график не делает вид, что влезли: работа честно уходит
+    // дальше, а админ получает предупреждение.
     expect(b.from).toBe('2026-09-10');
-    expect(b.to).toBe('2026-09-10');
     expect(b.ok).toBe(false);
     expect(b.why).toBe('overflow');
-    expect(r.warnings[0].kind).toBe('overflow');
-    expect(r.warnings[0].blockId).toBe('t');
+    expect(r.warnings.some(w => w.kind === 'overflow' && w.blockId === 't')).toBe(true);
+    expect(r.warnings.some(w => /не помещается в даты выезда/i.test(w.text))).toBe(true);
   });
 
   it('ручной выезд позже срока — предупреждение о сроке', () => {
@@ -186,8 +189,26 @@ describe('заявки внутри выезда', () => {
     const b = r.blocks[0];
     expect(cell(b, '2026-09-07').driveH).toBe(8);
     expect(cell(b, '2026-09-07').workH).toBe(0);
-    expect(cell(b, '2026-09-11').driveH).toBe(8);
     expect(b.workFrom).toBe('2026-09-08');
+    expect(b.workTo).toBe('2026-09-09');
+    // Дорога обратно идёт сразу за работой, а не в последний день выезда:
+    // доделали в среду — в четверг едем. Пятница остаётся свободной.
+    expect(cell(b, '2026-09-10').driveH).toBe(8);
+    expect(cell(b, '2026-09-11')).toBe(undefined);   // пустых дней в раскладке нет
+  });
+
+  it('дорога занимает остаток дня, в котором кончилась работа', () => {
+    // 11 ч работ и 8 ч дороги обратно. Раньше выходило окно: чт — 3 ч работы
+    // и пять часов простоя, пт — целая смена дороги.
+    const r = planSchedule([{
+      id: 't', kind: 'trip', engineer: 'ivan', from: '2026-09-09', to: '2026-09-14',
+      workH: 11, driveBackH: 8, jobs: [{ id: 'a', workH: 11, sla: '2026-09-30' }], jobIds: ['a']
+    }], S, TODAY);
+    const b = r.blocks[0];
+    expect(cell(b, '2026-09-09').workH).toBe(8);
+    expect(cell(b, '2026-09-10').workH).toBe(3);
+    expect(cell(b, '2026-09-10').driveH).toBe(5);   // остаток дня — дорога
+    expect(cell(b, '2026-09-11').driveH).toBe(3);
   });
 
   it('срок в середине выезда не считается просроченным', () => {
@@ -230,5 +251,81 @@ describe('заявки внутри выезда', () => {
     expect(b.jobDays['дальняя']).toBe('2026-09-07');
     expect(b.jobDays['срочная']).toBe('2026-09-08');
     expect(r.warnings.some(w => w.kind === 'late' && w.jobId === 'срочная')).toBe(true);
+  });
+});
+
+describe('часовая шкала', () => {
+  it('час 8 при смене 8 — это утро следующего рабочего дня', () => {
+    expect(normPos({ iso: '2026-09-11', h: 8 }, S)).toEqual({ iso: '2026-09-14', h: 0 });
+    expect(addHours({ iso: '2026-09-11', h: 6 }, 4, S)).toEqual({ iso: '2026-09-14', h: 2 });
+    expect(addHours({ iso: '2026-09-14', h: 1 }, -3, S)).toEqual({ iso: '2026-09-11', h: 6 });
+  });
+  it('этап режется по границам смены', () => {
+    const p = piecesOf({ iso: '2026-09-09', h: 6 }, [{ k: 'd', h: 4 }, { k: 'w', h: 8 }], S);
+    expect(p.map(x => [x.iso, x.from, x.to, x.k])).toEqual([
+      ['2026-09-09', 6, 8, 'd'],
+      ['2026-09-10', 0, 2, 'd'],
+      ['2026-09-10', 2, 8, 'w'],
+      ['2026-09-11', 0, 2, 'w']
+    ]);
+  });
+  it('часы показываются от начала смены', () => {
+    expect(clockOf(0, { dayStart: 8 })).toBe('08:00');
+    expect(clockOf(2.5, { dayStart: 8 })).toBe('10:30');
+  });
+});
+
+describe('ручная расстановка', () => {
+  const TRIP = {
+    id: 't', kind: 'trip', engineer: 'ivan', from: '2026-09-09', to: '2026-09-11',
+    workH: 6, driveToH: 2, driveBackH: 2,
+    jobs: [{ id: 'a', workH: 6, sla: '2026-09-30' }], jobIds: ['a']
+  };
+  it('начало сдвигает этап по часам, сумма не меняется', () => {
+    const auto = planSchedule([TRIP], S, TODAY).blocks[0];
+    expect(auto.start).toEqual({ iso: '2026-09-09', h: 0 });
+    expect(auto.manual).toBe(false);
+
+    const man = planSchedule([Object.assign({}, TRIP, { plan: { start: { d: '2026-09-09', h: 4 } } })], S, TODAY).blocks[0];
+    expect(man.manual).toBe(true);
+    expect(man.start).toEqual({ iso: '2026-09-09', h: 4 });
+    // 2 ч дороги + 6 ч работ + 2 ч дороги = те же 10 ч, просто с 12:00
+    const sum = a => a.pieces.reduce((x, p) => x + p.h, 0);
+    expect(sum(man)).toBeCloseTo(sum(auto), 6);
+    expect(cell(man, '2026-09-09').driveH).toBe(2);
+    expect(cell(man, '2026-09-09').workH).toBe(2);
+    expect(cell(man, '2026-09-10').workH).toBe(4);
+    expect(cell(man, '2026-09-10').driveH).toBe(2);
+  });
+
+  it('изменение часов работ ручную расстановку не ломает', () => {
+    const more = planSchedule([Object.assign({}, TRIP, {
+      workH: 10, jobs: [{ id: 'a', workH: 10, sla: '2026-09-30' }],
+      plan: { start: { d: '2026-09-09', h: 4 } }
+    })], S, TODAY).blocks[0];
+    expect(more.manual).toBe(true);
+    expect(more.start).toEqual({ iso: '2026-09-09', h: 4 });
+  });
+
+  it('начало вне дат выезда отбрасывается с предупреждением', () => {
+    const r = planSchedule([Object.assign({}, TRIP, { plan: { start: { d: '2026-09-21', h: 0 } } })], S, TODAY);
+    const b = r.blocks[0];
+    expect(b.manual).toBe(false);
+    expect(b.start).toEqual({ iso: '2026-09-09', h: 0 });
+    expect(r.warnings.some(w => w.kind === 'stale' && w.blockId === 't')).toBe(true);
+  });
+});
+
+describe('два этапа в одном дне', () => {
+  it('стоят встык и не считаются столкновением', () => {
+    const r = planSchedule([
+      { id: 'a', engineer: 'ivan', sla: '2026-09-10', workH: 4, jobs: [{ id: 'a', workH: 4, sla: '2026-09-10' }] },
+      { id: 'b', engineer: 'ivan', sla: '2026-09-10', workH: 4, jobs: [{ id: 'b', workH: 4, sla: '2026-09-10' }] }
+    ], S, TODAY);
+    const A = r.blocks.find(x => x.id === 'a'), B = r.blocks.find(x => x.id === 'b');
+    expect(A.workFrom).toBe('2026-09-10');
+    expect(B.workFrom).toBe('2026-09-10');          // тот же день — это нормально
+    expect(r.load['ivan|2026-09-10'].workH).toBe(8);
+    expect(r.warnings).toEqual([]);
   });
 });
