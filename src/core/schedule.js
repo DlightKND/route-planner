@@ -1,28 +1,30 @@
-// Календарная раскладка работ по дням. Чистые функции: на входе блоки работ
-// и настройки, на выходе — какой день чем занят. Ни DOM, ни базы, ни сети.
+// Календарная раскладка работ. Чистые функции: на входе блоки работ и
+// настройки, на выходе — когда и чем занят каждый час. Ни DOM, ни базы,
+// ни сети.
 //
 // ПРАВИЛА (согласованы с заказчиком):
 //
 //  1. Единица планирования — БЛОК. Блок это либо выезд (все его заявки едут
-//     вместе), либо отдельная заявка без выезда. Заявки разных блоков по дням
-//     не накладываются: у инженера один день — одна работа.
+//     вместе), либо отдельная заявка без выезда. Блоки одного инженера по
+//     времени не накладываются.
 //
 //  2. Даты выезда, поставленные диспетчером ВРУЧНУЮ, — закон. График их не
 //     двигает, он только раскладывает часы внутри них. Если часы в эти даты
 //     не помещаются — это не повод сдвинуть выезд, это повод сказать админу,
 //     что отрезок перегружен (warnings, kind:'overflow').
 //
-//  3. Блок без своих дат получает их от срока: сколько дней занять, считается
-//     как  часы работ / эффективная смена,  с округлением вверх; эффективная
-//     смена — смена плюс допуск (те же shift_hours и deviation_pct, что и в
-//     экономике). Работа не дробится: если она влезает в допуск, она делается
-//     за один день, а не размазывается на два.
+//  3. Блок без своих дат получает их от срока: сколько дней займёт работа,
+//     считается как  часы работ / эффективная смена,  с округлением вверх;
+//     эффективная смена — смена плюс допуск (те же shift_hours и
+//     deviation_pct, что и в экономике). Работа начинается с начала смены:
+//     влезает в допуск — делается за один день, а не размазывается на два.
 //
-//  4. Дорога — отдельные дни по краям работы, а не «половина от общего».
-//     Плечо ДО первой точки занимает дни перед работой, плечо ОБРАТНО —
-//     после. Промежуточные плечи ложатся на рабочие дни.
-//     8 ч работ + 4 ч туда + 4 ч обратно при сроке в четверг = половина среды
-//     (дорога), четверг (работа), половина пятницы (дорога).
+//  4. Этап идёт СПЛОШНЫМ потоком: дорога туда → работа → дорога обратно.
+//     Что не влезло в смену, переходит на следующий рабочий день с его
+//     начала. Окон внутри этапа не бывает: доделал — поехал.
+//     8 ч работ + 4 ч туда + 4 ч обратно при сроке в четверг = вторая
+//     половина среды (дорога), четверг (работа), первая половина пятницы
+//     (дорога).
 //
 //  5. Работа заканчивается НЕ ПОЗЖЕ срока и не попадает на выходные. Если
 //     из-за выходных или занятости блок не влезает — он сдвигается влево,
@@ -31,13 +33,25 @@
 //
 //  6. Ничья очередь. Неназначенные заявки (без инженера) считаются в общей
 //     загрузке команды, но ни с кем не сталкиваются: у них своя дорожка.
+//
+//  7. РУЧНАЯ РАССТАНОВКА. Человек может подвинуть этап по часам. Тогда он
+//     хранит только НАЧАЛО (день и час от начала смены), а раскладка по дням
+//     считается из него тем же потоком. Начало вне дат выезда — не начало:
+//     диспетчер подвинул даты, и старая расстановка отброшена с
+//     предупреждением ('stale').
+//
+// ВРЕМЯ ЗДЕСЬ — РАБОЧИЕ ЧАСЫ, А НЕ СУТКИ. Позиция это {iso, h}: день и час
+// от начала смены. Час 8 при восьмичасовой смене — это уже начало следующего
+// рабочего дня, и выходные в этом счёте просто не существуют. Поэтому
+// «подвинуть на два часа» — это +2 к h, и никакой особой обработки ночи,
+// субботы и праздников в арифметике не требуется.
 
 const DAY = 86400000;
 
-export const SCHEDULE_DEFAULTS = { shiftH: 8, deviationPct: 0, weekend: [0, 6] };
+export const SCHEDULE_DEFAULTS = { shiftH: 8, deviationPct: 0, weekend: [0, 6], dayStart: 8 };
 
 // ---- Даты -------------------------------------------------------------
-// Внутри всё считается в UTC-полуночах: календарь без часовых поясов.
+// Календарь считается в UTC-полуночах: без часовых поясов.
 export function dayMs(iso) {
   if (!iso) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
@@ -64,114 +78,143 @@ function snapWork(ms, dir, weekend) {
   for (let i = 0; i < 14 && !isWorkday(x, weekend); i++) x += dir * DAY;
   return x;
 }
-// n рабочих дней подряд, заканчивающихся днём end.
-function workRun(end, n, weekend) {
-  const out = [];
-  let x = snapWork(end, -1, weekend);
-  for (let i = 0; i < n; i++) { out.unshift(x); if (i < n - 1) x = stepWork(x, -1, weekend); }
-  return out;
-}
-
-// ---- Раскладка одного блока -------------------------------------------
-// Блок на входе:
-//   { id, kind:'trip'|'job', engineer, sla, workH, driveToH, driveBackH,
-//     driveMidH, from, to, jobIds }
-// from/to заполнены только у выезда с ручными датами.
 function effShift(s) { return (s.shiftH || 8) * (1 + ((s.deviationPct || 0) / 100)); }
 
+// ---- Позиция во времени -----------------------------------------------
+// {iso, h} — рабочий день и час от начала смены. Нормализация переносит
+// переполнение на соседний рабочий день; выходных в этой шкале нет.
+export function normPos(p, s) {
+  const eff = effShift(s), w = s.weekend;
+  let iso = p.iso, h = +p.h || 0;
+  let ms = snapWork(dayMs(iso), 1, w);
+  iso = dayIso(ms);
+  let guard = 0;
+  while (h >= eff - 1e-9 && guard++ < 400) { h -= eff; ms = stepWork(ms, 1, w); iso = dayIso(ms); }
+  guard = 0;
+  while (h < -1e-9 && guard++ < 400) { ms = stepWork(ms, -1, w); iso = dayIso(ms); h += eff; }
+  return { iso: iso, h: +h.toFixed(6) };
+}
+export function addHours(p, dh, s) { return normPos({ iso: p.iso, h: (+p.h || 0) + dh }, s); }
+// Сколько рабочих часов от a до b (b − a). Нужна и для сравнения позиций.
+export function diffHours(a, b, s) {
+  const eff = effShift(s), w = s.weekend;
+  let ms = snapWork(dayMs(a.iso), 1, w), to = snapWork(dayMs(b.iso), 1, w);
+  let n = 0, guard = 0;
+  const dir = ms <= to ? 1 : -1;
+  while (ms !== to && guard++ < 4000) { ms = stepWork(ms, dir, w); n += dir * eff; }
+  return n + ((+b.h || 0) - (+a.h || 0));
+}
+function posLE(a, b, s) { return diffHours(a, b, s) >= -1e-6; }
+
+// ---- Куски этапа по дням ----------------------------------------------
+// segs — отрезки по порядку поездки: [{k:'d'|'w', h}]. Возвращает куски,
+// разрезанные по границам смены: [{iso, from, to, h, k}].
+export function piecesOf(start, segs, s) {
+  const eff = effShift(s);
+  const out = [];
+  let p = normPos(start, s), guard = 0;
+  (segs || []).forEach(seg => {
+    let left = +seg.h || 0;
+    while (left > 1e-9 && guard++ < 2000) {
+      const take = Math.min(left, eff - p.h);
+      if (take > 1e-9) {
+        out.push({ iso: p.iso, from: +p.h.toFixed(6), to: +(p.h + take).toFixed(6), h: +take.toFixed(6), k: seg.k });
+        left -= take;
+      }
+      p = addHours(p, Math.max(take, 1e-9), s);
+    }
+  });
+  return out;
+}
+// Куски → дни: [{iso, ms, workH, driveH}] в порядке календаря.
+function cellsOf(pieces) {
+  const m = new Map();
+  pieces.forEach(p => {
+    const c = m.get(p.iso) || { iso: p.iso, ms: dayMs(p.iso), workH: 0, driveH: 0 };
+    if (p.k === 'w') c.workH += p.h; else c.driveH += p.h;
+    m.set(p.iso, c);
+  });
+  return Array.from(m.values()).sort((a, b) => a.ms - b.ms);
+}
+
+// ---- Отрезки блока ----------------------------------------------------
+// Порядок поездки: дорога туда, работа (с промежуточной дорогой внутри),
+// дорога обратно. Промежуточные плечи считаются работой по времени: они
+// стоят между заявками и занимают тот же день.
+function segsOf(b) {
+  const out = [];
+  if (b.driveToH > 0) out.push({ k: 'd', h: b.driveToH });
+  const work = (+b.workH || 0) + (+b.driveMidH || 0);
+  if (work > 0) out.push({ k: 'w', h: work });
+  if (b.driveBackH > 0) out.push({ k: 'd', h: b.driveBackH });
+  return out.length ? out : [{ k: 'w', h: 0 }];
+}
 function daysNeeded(workH, s) {
   const eff = effShift(s);
   if (!(workH > 0) || !(eff > 0)) return 1;
   return Math.max(1, Math.ceil(+(workH / eff).toFixed(6)));
 }
 
-// Раскладка часов блока по дням: [{iso, ms, workH, driveH}].
-// Дни работы идут подряд, дорога — по дням до и после.
-function layout(block, workDays, s) {
-  const eff = effShift(s);
-  const cells = new Map();
-  const add = (ms, kind, h) => {
-    const iso = dayIso(ms);
-    const c = cells.get(iso) || { iso: iso, ms: ms, workH: 0, driveH: 0 };
-    c[kind] += h; cells.set(iso, c);
-  };
-  const per = workDays.length ? (block.workH || 0) / workDays.length : 0;
-  const mid = workDays.length ? (block.driveMidH || 0) / workDays.length : 0;
-  workDays.forEach(ms => { add(ms, 'workH', per); if (mid) add(ms, 'driveH', mid); });
-
-  // Дорога занимает дни целыми сменами, остаток — часть дня.
-  const spill = (startFrom, dir, hours) => {
-    let left = hours, ms = startFrom, guard = 0;
-    while (left > 0.01 && guard++ < 30) {
-      add(ms, 'driveH', Math.min(left, eff));
-      left -= eff;
-      if (left > 0.01) ms = stepWork(ms, dir, s.weekend);
-    }
-  };
-  if (block.driveToH > 0 && workDays.length) spill(stepWork(workDays[0], -1, s.weekend), -1, block.driveToH);
-  if (block.driveBackH > 0 && workDays.length) spill(stepWork(workDays[workDays.length - 1], 1, s.weekend), 1, block.driveBackH);
-
-  return Array.from(cells.values()).sort((a, b) => a.ms - b.ms);
+// ---- Занятость дорожки ------------------------------------------------
+// Часы занимаются интервалами внутри дня: два этапа могут стоять в одном
+// дне встык, и это правильнее прежнего «один день — одна работа».
+function busyAdd(busy, key, pieces) {
+  pieces.forEach(p => {
+    const k = key + '|' + p.iso;
+    (busy[k] || (busy[k] = [])).push([p.from, p.to]);
+  });
+}
+function busyFree(busy, key, pieces) {
+  return pieces.every(p => {
+    const list = busy[key + '|' + p.iso]; if (!list) return true;
+    return list.every(iv => p.to <= iv[0] + 1e-6 || p.from >= iv[1] - 1e-6);
+  });
 }
 
-// Заливка часов по дням в одну сторону, по свободной ёмкости дня.
-// Дорога туда занимает первые дни, дорога обратно — последние, работа
-// садится в то, что осталось между ними. Так выезд 07–11 с восемью часами
-// дороги — это день пути, а не «по полтора часа дороги каждый день».
-function spillDir(cells, startIdx, dir, hours, kind, eff) {
-  let left = hours, i = startIdx, guard = 0;
-  while (left > 0.001 && i >= 0 && i < cells.length && guard++ < 400) {
-    const free = Math.max(0, eff - (cells[i].workH + cells[i].driveH));
-    const take = Math.min(left, free);
-    cells[i][kind] += take; left -= take;
-    if (left > 0.001) i += dir;
-  }
-  // Не влезло — остаток кладём на крайний день. Это перегруз, и его увидит
-  // проверка: прятать часы, чтобы сошлось, нельзя.
-  if (left > 0.001 && cells.length) {
-    const j = Math.max(0, Math.min(cells.length - 1, i - dir));
-    cells[j][kind] += left;
-  }
+// Разорван ли этап выходными: от первого дня до последнего не должно быть
+// нерабочего дня. Иначе выезд «поработали в пятницу, вернулись в понедельник»
+// выглядит нормальным планом, хотя машина простоит два дня в поле.
+// Этап длиннее рабочей недели проверять бессмысленно — там выходные
+// неизбежны.
+function unbroken(pieces, s) {
+  if (!pieces.length) return true;
+  const days = {}; pieces.forEach(p => { days[p.iso] = 1; });
+  if (Object.keys(days).length > 5) return true;
+  const a = dayMs(pieces[0].iso), z = dayMs(pieces[pieces.length - 1].iso);
+  for (let x = a; x <= z; x += DAY) if (!isWorkday(x, s.weekend)) return false;
+  return true;
 }
 
-// Какая заявка в какой день закончена.
-//
-// Внутри выезда заявки делаются ПО ПОРЯДКУ маршрута, а не все сразу в
-// последний день. Без этого заявка со сроком в середине выезда считалась
-// просроченной по дате возвращения: «выезд 07–11, срок 08 — не успеваем»,
-// хотя её делают вторым днём. Идём по дням, вычитая часы каждой заявки из
-// дневной ёмкости; день, в который часы кончились, и есть день сдачи.
-function assignJobs(block, cells) {
+// ---- Заявки внутри блока ----------------------------------------------
+// Внутри выезда заявки делаются ПО ПОРЯДКУ маршрута. День сдачи — тот, в
+// котором кончились её часы. Без этого заявка со сроком в середине выезда
+// считалась просроченной по дате возвращения.
+function assignJobs(block, pieces) {
   const out = {};
   const list = (block.jobs || []).filter(j => j && j.id);
   if (!list.length) return out;
-  const days = cells.filter(c => c.workH > 0.0001);
-  if (!days.length) {
-    const last = cells.length ? cells[cells.length - 1].iso : null;
+  const work = pieces.filter(p => p.k === 'w');
+  if (!work.length) {
+    const last = pieces.length ? pieces[pieces.length - 1].iso : null;
     list.forEach(j => { out[j.id] = last; });
     return out;
   }
-  let di = 0, left = days[0].workH;
+  let i = 0, left = work[0].h;
   list.forEach(j => {
     let need = +j.workH || 0, guard = 0;
-    while (need > 0.0001 && guard++ < 400) {
+    while (need > 1e-6 && guard++ < 400) {
       const take = Math.min(need, left);
       need -= take; left -= take;
-      if (need > 0.0001) {                       // день кончился, заявка — нет
-        if (di < days.length - 1) { di++; left = days[di].workH; }
-        else { left = Infinity; }                // не влезло — доделываем в последний
+      if (need > 1e-6) {
+        if (i < work.length - 1) { i++; left = work[i].h; }
+        else { left = Infinity; }
       }
     }
-    // День СДАЧИ — тот, в котором часы кончились, а не следующий.
-    out[j.id] = days[Math.min(di, days.length - 1)].iso;
-    // День исчерпан — следующая заявка начинается со следующего дня.
-    if (left <= 0.0001 && di < days.length - 1) { di++; left = days[di].workH; }
+    out[j.id] = work[Math.min(i, work.length - 1)].iso;
+    if (left <= 1e-6 && i < work.length - 1) { i++; left = work[i].h; }
   });
   return out;
 }
-
-// Какие заявки блока не успевают. Если разбивки по заявкам нет (у блока одна
-// заявка или порядок неизвестен), меряем одним сроком блока по дню окончания.
 function lateJobs(block, jobDays, workTo) {
   const list = (block.jobs || []).filter(j => j && j.sla);
   const out = [];
@@ -187,33 +230,28 @@ function lateJobs(block, jobDays, workTo) {
   return out;
 }
 
-// Разорван ли блок выходными: работа и дорога должны идти подряд.
-// У блока длиннее рабочей недели выходные внутри неизбежны — там не проверяем.
-function contiguous(cells) {
-  if (cells.length > 5) return true;
-  const a = cells[0].ms, z = cells[cells.length - 1].ms;
-  for (let x = a; x <= z; x += DAY) if (!isWorkday(x)) return false;
-  return true;
-}
-
-// Влезает ли раскладка в свободную ёмкость дня.
-function fits(cells, busy, key, s) {
-  const eff = effShift(s);
-  return cells.every(c => {
-    const used = busy.get(key + '|' + c.iso) || 0;
-    return used + c.workH + c.driveH <= eff + 1e-6;
-  });
-}
-function occupy(cells, busy, key) {
-  cells.forEach(c => {
-    const k = key + '|' + c.iso;
-    busy.set(k, (busy.get(k) || 0) + c.workH + c.driveH);
-  });
+// ---- Ручная расстановка -----------------------------------------------
+// Хранится одно: начало этапа. Всё остальное — те же отрезки, тот же поток.
+// Поэтому изменение часов работ ручную расстановку НЕ ломает: этап просто
+// станет длиннее или короче от той же точки.
+function manualStart(b, s) {
+  const p = b.plan && b.plan.start;
+  if (!p || !p.d || dayMs(p.d) == null) return null;
+  const pos = normPos({ iso: p.d, h: +p.h || 0 }, s);
+  // У выезда с ручными датами начало обязано лежать внутри них: диспетчер
+  // подвинул даты — старая расстановка больше не про этот выезд.
+  if (b.from) {
+    const a = dayMs(b.from), z = dayMs(b.to || b.from);
+    const x = dayMs(pos.iso);
+    if (x < a || x > z) return { pos: pos, stale: true };
+  }
+  return { pos: pos, stale: false };
 }
 
 // ---- Главная функция --------------------------------------------------
 //   planSchedule(blocks, settings, { today })
-//     -> { blocks: [{...block, days, from, to, workFrom, workTo, fixed, ok, why}],
+//     -> { blocks: [{...block, start, pieces, days, from, to, workFrom, workTo,
+//                    jobDays, manual, ok, why}],
 //          load:  { 'инженер|дата': {engineer, date, workH, driveH, cap} },
 //          warnings: [{kind, blockId, engineer, date, text}] }
 export function planSchedule(blocks, settings, opts) {
@@ -221,31 +259,28 @@ export function planSchedule(blocks, settings, opts) {
   const o = opts || {};
   const eff = effShift(s);
   const today = dayMs(o.today) != null ? dayMs(o.today) : dayMs(dayIso(Date.now()));
-  const busy = new Map();          // 'инженер|дата' -> занятые часы
-  const load = {};                 // то же наружу, с разбивкой
+  const busy = {};
+  const load = {};
   const warnings = [];
   const out = [];
 
-  const put = (key, cells) => {
-    cells.forEach(c => {
-      const k = key + '|' + c.iso;
-      const l = load[k] || (load[k] = { engineer: key, date: c.iso, workH: 0, driveH: 0, cap: eff });
-      l.workH += c.workH; l.driveH += c.driveH;
+  const put = (key, pieces) => {
+    pieces.forEach(p => {
+      const k = key + '|' + p.iso;
+      const l = load[k] || (load[k] = { engineer: key, date: p.iso, workH: 0, driveH: 0, cap: eff });
+      if (p.k === 'w') l.workH += p.h; else l.driveH += p.h;
     });
   };
-  // Неназначенные не сталкиваются ни с кем: своя дорожка, общий счёт.
   const laneOf = b => (b.engineer || ' free');
 
   const norm = (blocks || []).map(b => Object.assign({
     kind: 'job', workH: 0, driveToH: 0, driveBackH: 0, driveMidH: 0, jobIds: []
   }, b));
 
-  // Сначала — блоки с ручными датами: они закон и занимают дни первыми.
   const fixed = norm.filter(b => b.from);
   const free = norm.filter(b => !b.from);
-  // Дальше — выезды, потом одиночные заявки, внутри — по сроку.
-  // Выезд старше заявки не по сроку, а по природе: он уже спланирован как
-  // поездка, и подвинуть проще одиночную работу, чем разобрать выезд.
+  // Выезды раньше одиночных заявок: выезд уже спланирован как поездка, и
+  // подвинуть проще одиночную работу, чем разобрать выезд.
   free.sort((a, b) => {
     const ka = a.kind === 'trip' ? 0 : 1, kb = b.kind === 'trip' ? 0 : 1;
     if (ka !== kb) return ka - kb;
@@ -253,117 +288,141 @@ export function planSchedule(blocks, settings, opts) {
     return (x == null ? 8.64e15 : x) - (y == null ? 8.64e15 : y);
   });
 
-  fixed.forEach(b => {
-    const a = dayMs(b.from), z = dayMs(b.to || b.from);
-    const list = [];
-    for (let x = a; x <= z; x += DAY) list.push(x);
-    const wd = list.filter(x => isWorkday(x, s.weekend));
-    const days = wd.length ? wd : list;             // выезд на выходные — воля диспетчера
-    const cells = days.map(ms => ({ iso: dayIso(ms), ms: ms, workH: 0, driveH: 0 }));
-    // Порядок раскладки повторяет порядок поездки: сперва дорога туда с
-    // первого дня, потом дорога обратно с последнего, и только затем работа
-    // в оставшееся. Раньше всё делилось поровну на все дни, и первый день
-    // выезда — день пути — выглядел рабочим.
-    spillDir(cells, 0, 1, b.driveToH || 0, 'driveH', eff);
-    spillDir(cells, cells.length - 1, -1, b.driveBackH || 0, 'driveH', eff);
-    spillDir(cells, 0, 1, (b.workH || 0) + (b.driveMidH || 0), 'workH', eff);
-    const key = laneOf(b);
-    const over = cells.filter(c => (busy.get(key + '|' + c.iso) || 0) + c.workH + c.driveH > eff + 1e-6);
-    occupy(cells, busy, key); put(key, cells);
-    const wDays = cells.filter(c => c.workH > 0.0001);
-    const jobDays = assignJobs(b, cells);
+  const finish = (b, start, extra) => {
+    const segs = segsOf(b);
+    const pieces = piecesOf(start, segs, s);
+    const days = cellsOf(pieces);
+    const wp = pieces.filter(p => p.k === 'w');
+    const jobDays = assignJobs(b, pieces);
     const rec = Object.assign({}, b, {
-      days: cells, fixed: true, ok: !over.length, why: over.length ? 'overflow' : '',
-      jobDays: jobDays,
-      from: dayIso(days[0]), to: dayIso(days[days.length - 1]),
-      workFrom: (wDays[0] || cells[0]).iso,
-      workTo: (wDays[wDays.length - 1] || cells[cells.length - 1]).iso
+      start: start, segs: segs, pieces: pieces, days: days, jobDays: jobDays,
+      from: days.length ? days[0].iso : start.iso,
+      to: days.length ? days[days.length - 1].iso : start.iso,
+      workFrom: wp.length ? wp[0].iso : (days.length ? days[0].iso : start.iso),
+      workTo: wp.length ? wp[wp.length - 1].iso : (days.length ? days[days.length - 1].iso : start.iso),
+      ok: true, why: ''
+    }, extra || {});
+    const key = laneOf(b);
+    busyAdd(busy, key, pieces); put(key, pieces);
+    // Перегруз: день, в котором сумма всех дорожек этого инженера вышла за
+    // смену. Считается по итогу дня, а не по одному блоку.
+    const over = days.filter(d => {
+      const l = load[key + '|' + d.iso];
+      return l && (l.workH + l.driveH) > eff + 1e-6;
     });
-    out.push(rec);
-    if (over.length) warnings.push({
-      kind: 'overflow', blockId: b.id, engineer: b.engineer || null, date: over[0].iso,
-      fixed: true, days: over.length, sla: b.sla || null,
-      text: 'Даты выставлены вручную, но работа в них не помещается: перегружено '
-        + over.length + ' дн. (с ' + over[0].iso + ').'
-    });
-    // Опоздание считается по КАЖДОЙ заявке в её собственный день сдачи, а не
-    // по дате возвращения. Выезд 07–11 с заявкой на срок 08, которую делают
-    // вторым днём, не опаздывает — а раньше считался опоздавшим.
-    const lateJ = lateJobs(b, rec.jobDays, rec.workTo);
+    if (over.length) {
+      rec.ok = false; rec.why = 'overflow';
+      warnings.push({
+        kind: 'overflow', blockId: b.id, engineer: b.engineer || null, date: over[0].iso,
+        fixed: !!b.from, days: over.length, sla: b.sla || null,
+        text: 'В дне больше часов, чем в смене (с ' + over[0].iso + ').'
+      });
+    }
+    const lateJ = lateJobs(b, jobDays, rec.workTo);
     if (lateJ.length) {
       rec.ok = false; rec.why = rec.why || 'late'; rec.lateJobs = lateJ;
       warnings.push({
         kind: 'late', blockId: b.id, engineer: b.engineer || null, date: lateJ[0].day,
-        fixed: true, sla: lateJ[0].sla, jobId: lateJ[0].id, jobs: lateJ.length,
+        fixed: !!b.from, sla: lateJ[0].sla, jobId: lateJ[0].id, jobs: lateJ.length,
         text: 'Срок ' + lateJ[0].sla + ', а работа по ней заканчивается ' + lateJ[0].day + '.'
       });
     }
+    // Часы не влезли в даты выезда. Даты — закон, двигать их график не
+    // вправе, но и молчать нельзя: работа физически заканчивается позже.
+    if (b.from && b.to && dayMs(rec.to) > dayMs(b.to)) {
+      rec.ok = false; rec.why = rec.why || 'overflow';
+      warnings.push({
+        kind: 'overflow', blockId: b.id, engineer: b.engineer || null, date: rec.to,
+        fixed: true, days: 0, sla: b.sla || null,
+        text: 'Не помещается в даты выезда: работа заканчивается ' + rec.to + ', а выезд стоит по ' + b.to + '.'
+      });
+    }
+    if (rec.stalePlan) warnings.push({
+      kind: 'stale', blockId: b.id, engineer: b.engineer || null, date: rec.from,
+      fixed: !!b.from, sla: b.sla || null,
+      text: 'Ручная расстановка не попадает в даты выезда — этап расставлен заново.'
+    });
+    out.push(rec);
+    return rec;
+  };
+
+  // ── Выезды с ручными датами ──────────────────────────────────────────
+  fixed.forEach(b => {
+    const man = manualStart(b, s);
+    const auto = normPos({ iso: dayIso(snapWork(dayMs(b.from), 1, s.weekend)), h: 0 }, s);
+    const start = (man && !man.stale) ? man.pos : auto;
+    finish(b, start, { fixed: true, manual: !!(man && !man.stale), stalePlan: !!(man && man.stale) });
   });
 
+  // ── Всё остальное ────────────────────────────────────────────────────
   free.forEach(b => {
+    const man = manualStart(b, s);
+    if (man && !man.stale) {
+      finish(b, man.pos, { fixed: false, manual: true, stalePlan: false });
+      return;
+    }
     const key = laneOf(b);
-    const n = daysNeeded(b.workH, s);
+    const segs = segsOf(b);
+    const n = daysNeeded((+b.workH || 0) + (+b.driveMidH || 0), s);
     const sla = dayMs(b.sla);
     const floor = snapWork(today, 1, s.weekend);
-    const tryAt = end => {
-      const days = workRun(end, n, s.weekend);
-      const cells = layout(b, days, s);
-      return { days: days, cells: cells, fit: fits(cells, busy, key, s), cont: contiguous(cells) };
+    // Работа занимает n рабочих дней, последний из которых — день срока, и
+    // начинается с начала смены. Дорога туда встаёт ПЕРЕД работой, дорога
+    // обратно — сразу за ней.
+    const startFor = wEndDayMs => {
+      let d = snapWork(wEndDayMs, -1, s.weekend);
+      for (let i = 1; i < n; i++) d = stepWork(d, -1, s.weekend);
+      const wStart = normPos({ iso: dayIso(d), h: 0 }, s);
+      return addHours(wStart, -(+b.driveToH || 0), s);
     };
-    // Якорь: последний рабочий день не позже срока. Срока нет — от сегодня.
-    let anchor = sla != null ? snapWork(sla, -1, s.weekend) : floor;
-    if (workRun(anchor, n, s.weekend)[0] < floor) {   // в прошлое не планируем
-      let x = floor;
-      for (let i = 1; i < n; i++) x = stepWork(x, 1, s.weekend);
-      anchor = x;
+    const workEnd = pcs => { const w = pcs.filter(p => p.k === 'w'); return w.length ? w[w.length - 1].iso : (pcs.length ? pcs[pcs.length - 1].iso : null); };
+    let endDay = sla != null ? snapWork(sla, -1, s.weekend) : floor;
+    if (dayMs(startFor(endDay).iso) < floor) {           // в прошлое не планируем
+      endDay = floor;
+      for (let i = 1; i < n; i++) endDay = stepWork(endDay, 1, s.weekend);
     }
-    // Сначала — влево от срока: ищем место, где блок и свободен, и не разорван
-    // выходными. Если такого нет, годится просто свободное; если и его нет,
-    // идём вправо за срок — опоздать честнее, чем встать поверх занятого дня.
-    let best = null, loose = null, e = anchor;
+    // Кандидаты одного дня: выровненный по началу смены и сдвинутые на
+    // полчаса вперёд. Второй этап в тот же день должен вставать ЗА первым,
+    // а не уезжать на сутки назад — день делится, если в нём есть место.
+    const slots = Math.round(effShift(s) * 2);
+    const candidates = endDayMs => {
+      const base = startFor(endDayMs), list = [base];
+      for (let k = 1; k <= slots; k++) list.push(addHours(base, k * 0.5, s));
+      return list;
+    };
+    let start = startFor(endDay), best = null, loose = null, anyFree = null;
     for (let i = 0; i < 90; i++) {
-      const t = tryAt(e);
-      if (t.fit && t.cont) { best = t; break; }
-      if (t.fit && !loose) loose = t;
-      if (t.days[0] <= floor) break;
-      e = stepWork(e, -1, s.weekend);
+      const cands = candidates(endDay);
+      for (let c = 0; c < cands.length; c++) {
+        const st = cands[c], pcs = piecesOf(st, segs, s);
+        if (!busyFree(busy, key, pcs)) continue;
+        if (!anyFree) anyFree = st;
+        const inTime = sla == null || dayMs(workEnd(pcs)) <= sla;
+        if (!inTime) continue;
+        if (!loose) loose = st;
+        if (unbroken(pcs, s)) { best = st; break; }
+      }
+      if (best) break;
+      const prev = stepWork(endDay, -1, s.weekend);
+      if (dayMs(startFor(prev).iso) < floor) break;      // левее сегодня некуда
+      endDay = prev;
     }
-    if (!best && loose) best = loose;
-    if (!best) {
-      e = stepWork(anchor, 1, s.weekend);
+    start = best || loose || anyFree || start;
+    if (!best && !loose && !anyFree) {
+      // Свободного часа нет вовсе — ищем вправо: опоздать честнее, чем
+      // встать поверх занятого.
+      let e = stepWork(sla != null ? snapWork(sla, -1, s.weekend) : floor, 1, s.weekend);
       for (let i = 0; i < 90; i++) {
-        const t = tryAt(e);
-        if (t.fit && (t.cont || i > 30)) { best = t; break; }
+        const cands = candidates(e);
+        const ok = cands.find(st => busyFree(busy, key, piecesOf(st, segs, s)));
+        if (ok) { start = ok; break; }
         e = stepWork(e, 1, s.weekend);
       }
     }
-    let why = '';
-    if (!best) { best = tryAt(anchor); why = 'overflow'; }   // места нет вовсе
-    const days = best.days, cells = best.cells;
-    let ok = why !== 'overflow';
-    occupy(cells, busy, key); put(key, cells);
-    const jobDays = assignJobs(b, cells);
-    const rec = Object.assign({}, b, {
-      days: cells, fixed: false, ok: ok, why: why, jobDays: jobDays,
-      from: cells[0].iso, to: cells[cells.length - 1].iso,
-      workFrom: dayIso(days[0]), workTo: dayIso(days[days.length - 1])
-    });
-    const lateJ = lateJobs(b, jobDays, rec.workTo);
-    if (lateJ.length) { rec.ok = false; rec.why = why || 'late'; rec.lateJobs = lateJ; }
-    out.push(rec);
-    if (why === 'overflow') warnings.push({
-      kind: 'overflow', blockId: b.id, engineer: b.engineer || null, date: rec.workFrom,
-      fixed: false, days: days.length, sla: b.sla || null,
-      text: 'Свободных дней нет — работа поставлена поверх занятых.'
-    });
-    else if (lateJ.length) warnings.push({
-      kind: 'late', blockId: b.id, engineer: b.engineer || null, date: lateJ[0].day,
-      fixed: false, sla: lateJ[0].sla, jobId: lateJ[0].id, jobs: lateJ.length,
-      text: 'К сроку ' + lateJ[0].sla + ' не успеваем: работа заканчивается ' + lateJ[0].day + '.'
-    });
+    finish(b, start, { fixed: false, manual: false, stalePlan: false });
   });
 
-  out.sort((a, b) => dayMs(a.from) - dayMs(b.from));
+  out.sort((a, b) => (dayMs(a.from) - dayMs(b.from)) || (a.start.h - b.start.h));
   return { blocks: out, load: load, warnings: warnings };
 }
 
@@ -379,4 +438,12 @@ export function driveOfLegs(legs) {
   const toH = +l[0].h || 0, backH = +l[l.length - 1].h || 0;
   const midH = l.slice(1, -1).reduce((a, x) => a + (+x.h || 0), 0);
   return { toH: toH, backH: backH, midH: midH, km: km };
+}
+
+// Часы в текст: 08:00 при dayStart 8. Нужен ганту и подсказкам.
+export function clockOf(h, s) {
+  const st = (s && s.dayStart != null) ? +s.dayStart : SCHEDULE_DEFAULTS.dayStart;
+  const t = st + (+h || 0);
+  const hh = Math.floor(t), mm = Math.round((t - hh) * 60);
+  return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
 }
