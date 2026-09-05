@@ -1400,6 +1400,7 @@
 .wk-d{flex:1;height:22px;border-radius: var(--r-sm);border:1px solid transparent;
   background:color-mix(in srgb,var(--ink-faint) 14%,var(--panel));
   display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;min-width:0;
   font-family:var(--mono);font-size:9px;color:var(--ink-faint)}
 /* Занятый день — фирменным, забитый — красным. Выходной без работы
    приглушён, а с работой светится наравне с буднями: суббота на объекте
@@ -1409,6 +1410,95 @@
 .wk-d.full{background:color-mix(in srgb,var(--red) 26%,var(--panel));color:var(--ink);
   border-color:color-mix(in srgb,var(--red) 50%,var(--line))}
 .wk-d.we{opacity:.45}
+/* День заполняется слева направо: работа фирменным, дорога штриховкой.
+   Так в одной строке видно и сколько занято, и из чего это состоит. */
+.wk-d{cursor:pointer}
+.wk-f{position:absolute;top:0;bottom:0;left:0}
+.wk-fw{background:color-mix(in srgb,var(--accent-line) 55%,var(--panel))}
+.wk-fd{background:repeating-linear-gradient(135deg,
+  color-mix(in srgb,var(--ink-faint) 28%,var(--panel)) 0 4px,
+  color-mix(in srgb,var(--ink-faint) 12%,var(--panel)) 4px 8px)}
+.wk-d b{position:relative;font-weight:inherit}
+.wk-more{display:block;margin-top: var(--sp-2);background:none;border:0;padding:0;cursor:pointer;
+  font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint)}
+.wk-more:hover{color:var(--ink)}
+.wk-more::before{content:'▾ ';}
+.wk-more.on::before{content:'▴ ';}
+
+/* ── Гант недели и дня ────────────────────────────────────────────────
+   Строки — люди, а не выезды: выездов на неделе бывает шесть, инженеров
+   двое, и таблица не должна расти от числа поездок. */
+.gtwrap{position:relative;margin-top: var(--sp-3);border:1px solid var(--line);
+  border-radius: var(--r-md);background:var(--panel-2);padding: var(--pad-row)}
+.gtop{display:flex;align-items:center;gap: var(--gap-row);margin-bottom: var(--sp-3);flex-wrap:wrap}
+.gback{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.5px;text-transform:uppercase;
+  color:var(--ink-dim);background:var(--panel);border:1px solid var(--line);border-radius: var(--r-sm);
+  padding: var(--pad-tag);cursor:pointer}
+.gback:hover{border-color:var(--accent-line);color:var(--ink)}
+.gttl{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint)}
+.ghead{display:flex;margin-left:96px;margin-bottom: var(--sp-2)}
+.ghead div{flex:1;min-width:0;font-family:var(--mono);font-size:9px;text-align:center;color:var(--ink-faint);
+  line-height:1.25;border-left:1px solid var(--line)}
+.ghead div:first-child{border-left:0}
+.ghead div.gzoom{cursor:zoom-in}
+.ghead div.gzoom:hover{color:var(--ink)}
+.ghead div.we{opacity:.5}
+.grow{display:grid;grid-template-columns:96px 1fr;gap: var(--sp-2);align-items:center;margin-bottom: var(--sp-2)}
+.gwho{font-size: var(--fs-2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gtrack{position:relative;height:32px;border-radius: var(--r-sm);background:var(--panel);
+  border:1px solid var(--line);overflow:hidden}
+.gtick{position:absolute;top:0;bottom:0;width:1px;background:color-mix(in srgb,var(--ink-faint) 10%,transparent)}
+.gtick.day{background:color-mix(in srgb,var(--ink-faint) 26%,transparent)}
+.gwe{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--ink-faint) 12%,transparent)}
+.gpc{position:absolute;top:4px;bottom:4px;cursor:grab;touch-action:none;
+  border-top:1px solid rgba(0,0,0,.10);border-bottom:1px solid rgba(0,0,0,.10)}
+.gpc.gw{background:var(--accent-line)}
+.gpc.gd{background:repeating-linear-gradient(135deg,
+  color-mix(in srgb,var(--ink-faint) 30%,var(--panel)) 0 4px,
+  color-mix(in srgb,var(--ink-faint) 14%,var(--panel)) 4px 8px)}
+.gpc.sel{outline:2px solid var(--accent-line);outline-offset:1px;z-index:3}
+.gpc.man{border-top-color:var(--accent-line);border-bottom-color:var(--accent-line)}
+.gpc:active{cursor:grabbing}
+/* Подпись живёт в границах своего этапа и обрезается по ним: иначе на
+   плотной неделе названия наезжают друг на друга и не читается ни одно. */
+.glbl{position:absolute;top:50%;transform:translateY(-50%);padding-left: var(--sp-2);
+  font-family:var(--mono);font-size:10px;color:var(--ink);pointer-events:none;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 0 rgba(255,255,255,.65);z-index:4}
+.gleg{display:flex;gap: var(--gap-block);margin-top: var(--sp-2);flex-wrap:wrap;
+  font-family:var(--mono);font-size:9px;color:var(--ink-faint)}
+.gleg i{display:inline-block;width:12px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.gleg .gw{background:var(--accent-line)}
+.gleg .gd{background:repeating-linear-gradient(135deg,
+  color-mix(in srgb,var(--ink-faint) 30%,var(--panel)) 0 4px,
+  color-mix(in srgb,var(--ink-faint) 14%,var(--panel)) 4px 8px)}
+/* Контекстная правка — над этапом, а не отдельным экраном: решение
+   принимается глядя на соседей. */
+.gpop{position:absolute;z-index:30;width:min(320px,92vw);background:var(--panel);
+  border:1px solid var(--line);border-radius: var(--r-md);box-shadow:var(--shadow-lg);padding: var(--pad-row)}
+.gp-h{font-size: var(--fs-4);font-weight:600;display:flex;align-items:center;gap: var(--gap-tight);flex-wrap:wrap}
+.gp-s{font-family:var(--mono);font-size:9px;color:var(--ink-faint);margin-bottom: var(--sp-3)}
+.gp-r{display:flex;align-items:center;gap: var(--gap-tight);padding: var(--sp-2) 0;border-top:1px solid var(--line)}
+.gp-k{font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-dim);flex:1}
+.gp-v{font-family:var(--mono);font-size: var(--fs-2);font-weight:600;white-space:nowrap}
+.gp-b{font-family:var(--mono);font-size: var(--fs-1);line-height:1;padding: var(--pad-tag);
+  border:1px solid var(--line);background:var(--panel-2);border-radius: var(--r-sm);cursor:pointer;color:var(--ink-dim)}
+.gp-b:hover{border-color:var(--accent-line);color:var(--ink)}
+.gp-days{margin-top: var(--sp-2);padding-top: var(--sp-2);border-top:1px solid var(--line)}
+.gp-d{display:flex;gap: var(--gap-tight);font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-dim);padding:1px 0}
+.gp-d b{margin-left:auto;color:var(--ink)}
+.gp-n{font-family:var(--mono);font-size:9px;color:var(--ink-faint);margin-top: var(--sp-2)}
+.gp-f{display:flex;gap: var(--gap-tight);margin-top: var(--sp-3);padding-top: var(--sp-3);border-top:1px solid var(--line)}
+@media(max-width:600px){
+  .ghead{margin-left:0}
+  .grow{grid-template-columns:1fr;gap: var(--sp-1)}
+  .gwho{font-size: var(--fs-1);font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px;color:var(--ink-dim)}
+  /* На телефоне модалка над этапом не помещается под островком — уезжает
+     под нижнюю навигацию. Поэтому там это лист снизу: он всегда виден
+     целиком и не зависит от того, в каком углу трека стоит этап. */
+  .gpop{position:fixed;left: var(--sp-3);right: var(--sp-3);width:auto;
+    top:auto !important;bottom:calc(78px + env(safe-area-inset-bottom, 0px));
+    max-height:62vh;overflow:auto;z-index:1200;box-shadow:var(--shadow-lg)}
+}
 
 .a-break{position:relative;height:30px;display:flex;align-items:center}
 .a-break span{font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint)}
@@ -1485,6 +1575,9 @@
    Пульсация — та же, что у восклицательного знака на карте (pulseA).
    Двигаться на экране имеет право ровно один элемент, и это тот, мимо
    которого нельзя пройти. */
+/* Края карт выступают вниз (6 px на карту). Без этого запаса они съедали
+   зазор между карточками и ложились на следующий блок. */
+.odeck-wrap{padding-bottom:12px}
 .odeck{position:relative;z-index:3}
 .odeck-l{position:absolute;top:10px;border:1px solid var(--line);border-radius: var(--r-md);
   background:var(--panel);box-shadow: var(--shadow-sm)}
@@ -1745,7 +1838,7 @@
 .asubhead{font-size: var(--fs-1);color:var(--ink-faint);letter-spacing:.14em;text-transform:uppercase;padding: var(--sp-4) var(--sp-4) var(--sp-2);border-bottom:1px solid var(--line)}
 /* холодный блок внутри той же тарелки, не отдельной плашкой */
 .acold{background:var(--panel);border:1px solid var(--line);border-radius: var(--r-md);
-  box-shadow:var(--shadow-sm);overflow:hidden;margin-top: var(--sp-4)}
+  box-shadow:var(--shadow-sm);overflow:hidden;margin-top: var(--gap-card)}
 .acold summary{padding: var(--sp-4) var(--sp-4)}
 .acold>div .arow:last-child{border-bottom:0}
 /* Правая колонка дашборда: деньги крупно + компактные счётчики */
@@ -2588,7 +2681,7 @@
       </div>
       <div class="settings-body">
     <div class="card" data-sec-panel="tariffs"><h3 class="cardhead">Общие параметры</h3>
-      <div class="row"><div class="grow"><label>Валюта</label><input type="text" id="stCur"></div><div class="grow"><label>Смена, ч</label><input type="number" id="stShift" step="0.5"></div><div class="grow"><label>Допуск, %</label><input type="number" id="stDev" step="1"></div></div>
+      <div class="row"><div class="grow"><label>Валюта</label><input type="text" id="stCur"></div><div class="grow"><label>Смена, ч</label><input type="number" id="stShift" step="0.5"></div><div class="grow"><label>Допуск, %</label><input type="number" id="stDev" step="1"></div><div class="grow"><label>Начало смены, ч</label><input type="number" id="stDayStart" step="0.5" min="0" max="23"></div></div>
       <div class="meta" style="margin-top: var(--sp-4)">Себестоимость по умолчанию <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">За км, час, день и ночь. Профиль тарифа может переопределить эти значения своими.</span></span></div>
       <div class="row"><div class="grow"><label>за км</label><input type="number" id="csKm" step="0.01"></div><div class="grow"><label>за час</label><input type="number" id="csHour" step="0.01"></div><div class="grow"><label>за день</label><input type="number" id="csDay" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="csNight" step="0.01"></div></div>
       <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Стоянки → факт-часы <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Стоянка засчитывается в работу, только если попала в радиус точки заявки. Обед на трассе и ночёвка не попадут. Идёт только в себестоимость — нормочасы не трогаются.</span></span></div>
