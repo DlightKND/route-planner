@@ -645,6 +645,9 @@ document.addEventListener('click',e=>{
   // Кружок «?» внутри заголовка — своё действие. Складывать карточку по
   // нажатию на пояснение значит прятать ответ вместе с вопросом.
   if(e.target.closest('.q')) return;
+  // Переключатель периода живёт в том же заголовке. Клик по нему — выбор
+  // периода, а не «сложить карточку»: иначе выбрать период невозможно.
+  if(e.target.closest('.perseg,.perpop,.foldx-btn,.dgrip,.dmoves')) return;
   const card=h.parentElement, k=foldKey(card);
   if(folded.has(k)) folded.delete(k); else folded.add(k);
   foldApply();
@@ -1675,6 +1678,41 @@ function shortDate(iso){
 // пряталась под той, что через неделю, только потому что её ещё не собрали
 // в маршрут. Признак «с выездом / без выезда / в депо» никуда не делся, он
 // стал меткой в самой строке: это свойство заявки, а не раздел списка.
+// ── Блоки планирования ──────────────────────────────────────────────────
+// Одна функция на всю программу: и лента, и загрузка в сводке обязаны
+// считать по одному и тому же. Пока это было в двух местах, «график» и
+// «загрузка инженеров» показывали разные часы на одни и те же дни.
+function jobHours(j){ return ((j&&j.job_works)||[]).reduce((a,w)=>a+(+w.hours||0),0); }
+function buildBlocks(list,tripOf,tripById){
+  const blockOf={}, tripJobs={}, blocks=[];
+  const alive=(list||[]).filter(j=>j.status!=='done'&&j.status!=='cancelled');
+  alive.forEach(j=>{ const tid=tripOf[j.id]; const t=tid?tripById[tid]:null;
+    if(t&&t.status!=='cancelled') (tripJobs[tid]||(tripJobs[tid]=[])).push(j); });
+  Object.keys(tripJobs).forEach(tid=>{
+    const t=tripById[tid], js=tripJobs[tid], es=t.econ_snapshot||{};
+    // Плечи знают, сколько ехать ДО первой точки и сколько обратно. У
+    // выездов, сохранённых до появления плеч, дорога делится пополам.
+    const d=driveOfLegs(es.legs), dh=+es.driveH||0;
+    const slas=js.map(j=>j.due_date).filter(Boolean).sort();
+    blocks.push({id:'t'+tid,kind:'trip',engineer:t.lead_engineer||js[0].assigned_engineer||null,
+      sla:slas[0]||null,workH:js.reduce((a,j)=>a+jobHours(j),0),
+      driveToH:d.toH||dh/2,driveBackH:d.backH||dh/2,driveMidH:d.midH||0,
+      from:t.date_from||null,to:t.date_to||t.date_from||null,jobIds:js.map(j=>j.id)});
+    js.forEach(j=>{ blockOf[j.id]='t'+tid; });
+  });
+  alive.forEach(j=>{ if(blockOf[j.id]||!j.due_date) return;
+    blocks.push({id:'j'+j.id,kind:'job',engineer:j.assigned_engineer||null,
+      sla:j.due_date,workH:jobHours(j),jobIds:[j.id]});
+    blockOf[j.id]='j'+j.id; });
+  return {blocks:blocks,blockOf:blockOf};
+}
+function planOfData(list,tripOf,tripById){
+  const bb=buildBlocks(list,tripOf,tripById);
+  const plan=planSchedule(bb.blocks,{shiftH:(+appSettings.shift_hours)||8,
+    deviationPct:(+appSettings.deviation_pct||0)},{today:todayISO()});
+  return {plan:plan,blockOf:bb.blockOf};
+}
+
 function tripTagHtml(j,tripOf,tripById){
   if(j.at_depot) return '<span class="a-tag dep">в депо</span>';
   const tid=tripOf[j.id];
@@ -1719,13 +1757,14 @@ async function renderFeed(box,o){
     // Инженер видит только свои заявки — как в канбане (см. renderJobs).
     if(o.mine||role==='engineer') list=list.filter(j=>j.assigned_engineer===session.user.id);
 
-    const { dated, cold }=attentionBuckets(list, new Date());
+    const b0=attentionBuckets(list, new Date());
+    const dated=b0.dated; let cold=b0.cold;
 
     // Поле называется full_name — так его читают все остальные восемь мест
     // в файле.
     const u2=j=>Math.round((utcOf(j.due_date)-utcOf(todayISO()))/DAY_MS);
     const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||''):''; };
-    const hours=j=>(j.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
+    const hours=jobHours;
     const shift=(+appSettings.shift_hours)||8;
 
     if(!dated.length && !(o.cold&&cold.length)){
@@ -1747,51 +1786,45 @@ async function renderFeed(box,o){
     // подбирает дни от срока назад — по часам работ, смене и допуску, с
     // дорогой по плечам маршрута. На карточке стоит эта дата с меткой
     // «план» (руками) или «авто» (подобрано), а срок — рядом.
-    const blockOf={}, tripJobs={};
-    dated.forEach(({job})=>{ const tid=tripOf[job.id];
-      if(tid&&tripById[tid]&&tripById[tid].status!=='cancelled') (tripJobs[tid]||(tripJobs[tid]=[])).push(job); });
-    const blocks=[];
-    Object.keys(tripJobs).forEach(tid=>{
-      const t=tripById[tid], js=tripJobs[tid], es=t.econ_snapshot||{};
-      // Плечи знают, сколько ехать ДО первой точки и сколько обратно.
-      // Их нет у выездов, сохранённых до появления плеч, — там дорога
-      // делится пополам, как делили раньше.
-      const d=driveOfLegs(es.legs), dh=+es.driveH||0;
-      const slas=js.map(j=>j.due_date).filter(Boolean).sort();
-      blocks.push({id:'t'+tid,kind:'trip',engineer:t.lead_engineer||js[0].assigned_engineer||null,
-        sla:slas[0]||null,workH:js.reduce((a,j)=>a+hours(j),0),
-        driveToH:d.toH||dh/2,driveBackH:d.backH||dh/2,driveMidH:d.midH||0,
-        from:t.date_from||null,to:t.date_to||t.date_from||null,jobIds:js.map(j=>j.id)});
-      js.forEach(j=>{ blockOf[j.id]='t'+tid; });
-    });
-    dated.forEach(({job})=>{ if(blockOf[job.id]) return;
-      blocks.push({id:'j'+job.id,kind:'job',engineer:job.assigned_engineer||null,
-        sla:job.due_date||null,workH:hours(job),jobIds:[job.id]});
-      blockOf[job.id]='j'+job.id; });
-    const plan=planSchedule(blocks,{shiftH:shift,deviationPct:(+appSettings.deviation_pct||0)},{today:todayISO()});
-    const planOf={}; plan.blocks.forEach(b=>{ planOf[b.id]=b; });
-    const planJob=j=>planOf[blockOf[j.id]]||null;
+    const pd=planOfData(list,tripOf,tripById);
+    const plan=pd.plan, blockOf=pd.blockOf;
 
-    // ── Группировка по дню работы ────────────────────────────────────────
-    const gmap=new Map();
-    dated.forEach(({job,u})=>{
-      const pb=planJob(job);
-      const k=String((pb&&pb.workFrom)||job.due_date);
-      if(!gmap.has(k)) gmap.set(k,{date:k,to:k,left:u.left,u:u,jobs:[],h:0,sla:job.due_date,fixedN:0,autoN:0,why:''});
-      const g=gmap.get(k); g.jobs.push(job); g.h+=hours(job);
-      if(pb){ if(pb.fixed) g.fixedN++; else g.autoN++;
-        if(pb.workTo>g.to) g.to=pb.workTo;
-        if(!pb.ok&&!g.why) g.why=pb.why; }
-      if(job.due_date&&job.due_date<g.sla) g.sla=job.due_date;
-      // У группы берём самый острый уровень: если хоть одна заявка горит,
-      // горит вся дата.
-      if(urgencyRank(u.level)<urgencyRank(g.u.level)) g.u=u;
-      if(u.left<g.left) g.left=u.left;
-    });
+    // ── Группы = БЛОКИ ───────────────────────────────────────────────────
+    //
+    // Одна карточка — одна единица планирования. Выезд едет целиком: его
+    // заявки нельзя развести по разным дням, как нельзя разрезать машину.
+    // Раньше группа собиралась по дате, и две точки одного выезда с разными
+    // сроками оказывались в двух карточках на расстоянии двух недель.
+    // Если выезд не помещается, это не повод его порвать — это повод сказать
+    // админу, что его надо перекомпоновать (см. плашку «График не сходится»).
+    const jobById={}; list.forEach(j=>{ jobById[j.id]=j; });
+    const uOf={}; dated.forEach(({job,u})=>{ uOf[job.id]=u; });
+    const coldU={level:'cold',left:null};
     const today0=utcOf(todayISO());
-    const groups=[...gmap.values()].sort((a,b)=>utcOf(a.date)-utcOf(b.date));
-    // Сколько дней до дня работы: ось ленты идёт по нему, а не по сроку.
-    groups.forEach(g=>{ g.dleft=Math.round((utcOf(g.date)-today0)/DAY_MS); });
+    const groups=plan.blocks.map(b=>{
+      const jobs=b.jobIds.map(id=>jobById[id]).filter(Boolean);
+      // Острота группы — самая острая из её заявок; у выезда без сроков
+      // острота холодная, но день работы у него всё равно есть.
+      let u=null, sla=null, slaMax=null, left=null;
+      jobs.forEach(j=>{ const x=uOf[j.id]; if(!x) return;
+        if(!u||urgencyRank(x.level)<urgencyRank(u.level)) u=x;
+        if(x.left!=null&&(left==null||x.left<left)) left=x.left;
+        if(j.due_date){ if(!sla||j.due_date<sla) sla=j.due_date;
+          if(!slaMax||j.due_date>slaMax) slaMax=j.due_date; } });
+      return {id:b.id,kind:b.kind,date:b.from,to:b.to,workFrom:b.workFrom,workTo:b.workTo,
+        fixed:b.fixed,why:b.ok?'':b.why,trip:b.kind==='trip'?tripById[b.id.slice(1)]:null,
+        jobs:jobs,h:jobs.reduce((x,j)=>x+hours(j),0),
+        drive:(b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0),
+        u:u||coldU,left:left==null?9999:left,sla:sla,slaMax:slaMax,
+        dleft:Math.round((utcOf(b.from)-today0)/DAY_MS)};
+    }).filter(g=>g.jobs.length).sort((a,b)=>utcOf(a.date)-utcOf(b.date));
+    // Холодные, попавшие в выезд, из холодных уходят: они уже запланированы.
+    cold=cold.filter(j=>!blockOf[j.id]);
+    if(!groups.length && !(o.cold&&cold.length)){
+      box.innerHTML=(offline?offlineBanner(snapAt):'')
+        +'<div class="aempty">'+(o.mine?'Работы на тебе нет.':'Заявок нет.')+'</div>';
+      return;
+    }
 
     // ── Лента: градиент по остроте групп сверху вниз ─────────────────────
     // Остановки ставим в процентах, а не в пикселях: высота карточек
@@ -1805,8 +1838,8 @@ async function renderFeed(box,o){
     // Перегруз и опоздание — сигнал тому, кто ставит даты. Инженеру его не
     // показываем: разложить график не в его власти.
     const planWarn=(!o.mine&&plan.warnings.length)?(function(){
-      const nameOf=id=>{ const b=planOf[id]; const raw=String(id).slice(1);
-        if(b&&b.kind==='trip'){ const t=tripById[raw]; return 'Выезд'+(t&&t.date_from?(' '+shortDate(t.date_from)):''); }
+      const nameOf=id=>{ const raw=String(id).slice(1);
+        if(String(id)[0]==='t'){ const t=tripById[raw]; return 'Выезд'+(t&&t.date_from?(' '+shortDate(t.date_from)):''); }
         const j=list.find(x=>String(x.id)===raw); return (j&&j.clients&&j.clients.name)||'Заявка'; };
       const wText=w=>w.kind==='overflow'
         ? (w.fixed
@@ -1816,7 +1849,11 @@ async function renderFeed(box,o){
         : ('к сроку '+shortDate(w.sla)+' не успеваем: работа заканчивается '+shortDate(w.date));
       const items=plan.warnings.slice(0,4).map(w=>'<li>'+esc(nameOf(w.blockId))+' — '+esc(wText(w))+'</li>').join('');
       const more=plan.warnings.length>4?('<div class="hint">и ещё '+(plan.warnings.length-4)+'</div>'):'';
-      return '<div class="planwarn"><b>График не сходится</b><ul>'+items+'</ul>'+more+'</div>';
+      // Выезд — одна единица: сам график его не разрежет. Что с ним делать,
+      // решает человек, и подсказка называет ровно те два способа.
+      const tips=plan.warnings.some(w=>String(w.blockId)[0]==='t')
+        ? '<div class="hint">Выезд едет целиком — раздвинь его даты или разбей на два выезда.</div>' : '';
+      return '<div class="planwarn"><b>График не сходится</b><ul>'+items+'</ul>'+more+tips+'</div>';
     })():'';
 
     let h=(offline?offlineBanner(snapAt):'')+planWarn
@@ -1942,17 +1979,21 @@ async function renderFeed(box,o){
         :(dl===0?'сегодня':('через '+dl+' '+plural(dl,'день','дня','дней'))));
       // «план» — даты выставил диспетчер, «авто» — подобрал график.
       // Смешанной группе метка не нужна: она соврала бы про половину строк.
-      const mode=g.fixedN&&g.autoN?'':(g.fixedN?'plan':'auto');
+      const mode=g.fixed?'plan':'auto';
       // День работы: один день — с днём недели («чт 10 сентября»), несколько —
       // диапазоном в одном формате. Смешивать «10 августа – 11.09» нельзя:
       // это читается как две разные величины.
       const dateTxt=(g.to&&g.to!==g.date)?(shortDate(g.date)+' – '+shortDate(g.to)):dayLabel(g.date);
       // Сроки группы: один — «срок 10.09», разные — «сроки 04.09–10.09».
       // Один срок за всю группу врал бы про остальные строки.
-      const slaMax=g.jobs.reduce((a,j)=>(j.due_date&&j.due_date>a?j.due_date:a),g.sla||'');
-      const slaTxt=!g.sla?'':(slaMax&&slaMax!==g.sla
-        ? ('сроки '+shortDate(g.sla)+'–'+shortDate(slaMax))
+      const slaTxt=!g.sla?'':(g.slaMax&&g.slaMax!==g.sla
+        ? ('сроки '+shortDate(g.sla)+'–'+shortDate(g.slaMax))
         : ('срок '+shortDate(g.sla)));
+      // Выезд подписан выездом, и дорога у него своя строка: это половина
+      // его дней, и прятать её за общими часами работ значит показывать
+      // выезд легче, чем он есть.
+      const isTrip=g.kind==='trip';
+      const driveTxt=g.drive>0.05?('дорога '+g.drive.toFixed(g.drive%1?1:0)+' ч'):'';
 
       h+='<div class="agrp'+(lead?' agrp-lead':'')+'">'
         +'<div class="a-ax"><b>'+shortDate(g.date)+'</b><i>'+leftTxt+'</i></div>'
@@ -1962,12 +2003,14 @@ async function renderFeed(box,o){
         +'<div class="agrp-card" style="border-left-color:'+col+'">'
         +'<div class="agrp-h" style="background:color-mix(in srgb,'+col+' '+(lead?'14':'9')+'%,var(--panel))">'
           +'<span class="agrp-n">'+esc(dateTxt)+'</span>'
-          +(mode?('<span class="a-tag '+mode+'">'+(mode==='plan'?'план':'авто')+'</span>'):'')
+          +(isTrip?'<span class="a-tag trip">выезд</span>':'')
+          +('<span class="a-tag '+mode+'">'+(mode==='plan'?'план':'авто')+'</span>')
           +(slaTxt?('<span class="agrp-hint'+(g.left<0?' bad':'')+'">'+esc(slaTxt)+'</span>'):'')
           +(g.why&&!o.mine?('<span class="a-tag bad">'+(g.why==='overflow'?'перегруз':'не успеваем')+'</span>'):'')
           +(lead?('<span class="agrp-hint" style="color:'+col+'">'+esc(nearTxt)+'</span>'):'')
           +'<span class="agrp-track"><i style="width:'+Math.min(100,g.h/(shift*5)*100).toFixed(0)+'%;background:'+col+'"></i></span>'
-          +'<span class="agrp-hint">'+load+(n>1?(' · '+n+' '+plural(n,'точка','точки','точек')):'')+'</span>'
+          +'<span class="agrp-hint">'+load+(n>1?(' · '+n+' '+plural(n,'точка','точки','точек')):'')
+            +(driveTxt?(' · '+driveTxt):'')+'</span>'
           +(o.mine?'':('<span class="agrp-eng">'+engTxt+'</span>'))
         +'</div>';
       g.jobs.forEach(j=>{
@@ -1991,24 +2034,29 @@ async function renderFeed(box,o){
         // на подъезде.
         if(lead&&(tel||nav)) h+='<div class="a-acts">'
           +(tel?('<a class="btn sm" href="'+esc(tel)+'">Позвонить</a>'):'')
-          +(nav?('<a class="btn sm" href="'+esc(nav)+'" target="_blank" rel="noopener">Проехать</a>'):'')
+          // «Проехать» ведёт в одну точку. У выезда точек несколько, и вести
+          // в первую из них — врать: маршрут там свой, с депо и порядком.
+          // Поэтому у выезда вместо неё карта и GMaps на всю поездку, как
+          // в карточке выезда у диспетчера.
+          +((nav&&!isTrip)?('<a class="btn sm" href="'+esc(nav)+'" target="_blank" rel="noopener">Проехать</a>'):'')
           +'</div>';
       });
       // Кнопки выезда — в подвале группы, а не отдельной карточкой.
       // Инженер не может открыть страницу выезда (это право менеджера),
       // и «Начать выезд» доступно ему ТОЛЬКО отсюда: убрать эти кнопки
       // значит отнять у смены начало и конец.
-      if(o.mine){
-        // Выезд длится несколько дней и попадает в несколько групп сразу.
-        // Кнопки ему нужны ОДНИ: показываем их там, где выезд встретился
-        // первым, то есть у самого раннего его срока. Иначе «Начать выезд»
-        // стоит на экране трижды и трижды спрашивает одно и то же.
-        const tids=[...new Set(g.jobs.map(j=>tripOf[j.id]).filter(Boolean))];
-        tids.forEach(tid=>{ const t=tripById[tid]; if(!t||shownTrips.has(tid)) return;
-          shownTrips.add(tid);
-          h+='<div class="a-foot"><span class="a-foot-n">выезд · '+esc(ST_TRIP[t.status]||t.status)+'</span>'
-            +'<span class="acts">'+tripActs(t)+'</span></div>'
-            +reschedBanner(t); });
+      // Кнопки выезда — в подвале карточки. Карточка выезда одна на выезд,
+      // поэтому и кнопки ровно одни: shownTrips больше ничего не сторожит,
+      // но остаётся страховкой на случай двух карточек одного выезда.
+      if(isTrip&&g.trip&&!shownTrips.has(g.trip.id)){
+        const t=g.trip; shownTrips.add(t.id);
+        h+='<div class="a-foot"><span class="a-foot-n">выезд · '+esc(ST_TRIP[t.status]||t.status)+'</span>'
+          +'<span class="acts">'+(o.mine?tripActs(t)
+            :('<button class="btn sm" data-tmap="'+t.id+'">карта</button>'
+              +'<button class="btn sm" data-tgm="'+t.id+'">⌖ GMaps</button>'
+              +(canWrite()?('<button class="btn sm" data-topen="'+t.id+'">открыть</button>'):'')))
+          +'</span></div>'
+          +(o.mine?reschedBanner(t):'');
       }
       h+='</div></div>';
       return h;
@@ -2143,6 +2191,7 @@ function wireTripActs(box,offline){
   box.querySelectorAll('[data-topen]').forEach(b=>b.onclick=()=>openTrip(b.dataset.topen));
   box.querySelectorAll('[data-mopen]').forEach(b=>b.onclick=()=>openJob(b.dataset.mopen));
   box.querySelectorAll('[data-tmap]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.tmap));
+  box.querySelectorAll('[data-tgm]').forEach(b=>b.onclick=()=>tripGmaps(b.dataset.tgm));
   box.querySelectorAll('[data-tstay]').forEach(b=>b.onclick=()=>openStaysModal(b.dataset.tstay));
   box.querySelectorAll('[data-tkm]').forEach(b=>b.onclick=()=>remeasureTrip(b.dataset.tkm));
   box.querySelectorAll('[data-tresched]').forEach(b=>b.onclick=()=>openReschedModal(b.dataset.tresched));
@@ -2166,9 +2215,9 @@ function wireTripActs(box,offline){
 // Периоды выбираются, а не прибиты. Готовые ступени закрывают девять
 // случаев из десяти, произвольный диапазон — десятый.
 const LOAD_PERIODS=[[7,'неделя'],[14,'2 недели'],[30,'месяц']];
-const REV_PERIODS_N=[[3,'3 мес'],[6,'6 мес'],[12,'год']];
+const REV_PERIODS_N=[[1,'месяц'],[3,'3 мес'],[6,'6 мес'],[12,'год']];
 let loadDays=14, loadRange=null, loadOpen=false;
-let revMonthsN=6, revRange=null, revOpen=false;
+let revMonthsN=1, revRange=null, revOpen=false;
 // Общая отрисовка переключателя: ступени, «свой» и окошко с двумя датами.
 // Карточки перерисовываются целиком, поэтому открытость окна живёт
 // в состоянии, а не в DOM — иначе оно закрывалось бы на каждый пересчёт.
@@ -2209,108 +2258,370 @@ function wirePeriodSeg(box){
     renderDashboard();
   });
 }
-function engineerLoadCard(jobs, trips){
+// ── Порядок карточек сводки ─────────────────────────────────────────────
+// Что важнее — деньги, работы или загрузка, — зависит от дня и от человека.
+// Порядок переставляется теми же двумя способами, что точки в маршруте:
+// мышью за ручку и стрелками (на телефоне перетаскивания по стандарту
+// браузера нет вовсе, и без стрелок порядок стал бы неизменяемым).
+// Живёт в браузере: это положение рук, а не данные компании.
+const DASH_CARDS=['fin','work','load'];
+const DASH_TITLE={fin:'Финансы',work:'Работы',load:'Загрузка отдела'};
+let dashOrder=(function(){
+  try{ const v=JSON.parse(localStorage.getItem('dl_dash_order')||'null');
+    if(Array.isArray(v)){ const o=v.filter(k=>DASH_CARDS.indexOf(k)>=0);
+      DASH_CARDS.forEach(k=>{ if(o.indexOf(k)<0) o.push(k); }); return o; } }catch(e){}
+  return DASH_CARDS.slice();
+})();
+function dashOrderSave(){ try{ localStorage.setItem('dl_dash_order',JSON.stringify(dashOrder)); }catch(e){} }
+// Переставляем УЗЛЫ, а не перерисовываем сводку: перерисовка — это три
+// запроса в базу ради того, что уже посчитано и лежит на экране.
+function dashPaint(){ const box=$('dashBody'); if(!box) return;
+  dashOrder.forEach(k=>{ const el=box.querySelector('[data-dcard="'+k+'"]'); if(el) box.appendChild(el); }); }
+function dashMove(k,dir){
+  const i=dashOrder.indexOf(k), j=i+dir;
+  if(i<0||j<0||j>=dashOrder.length) return;
+  dashOrder[i]=dashOrder[j]; dashOrder[j]=k; dashOrderSave(); dashPaint();
+}
+// Ручка и стрелки — в шапке карточки, слева от названия.
+function dashGrip(k){
+  const i=dashOrder.indexOf(k);
+  return '<span class="dgrip" data-dgrip title="Перетащить">⠿</span>'
+    +'<span class="dmoves">'
+    +'<button class="dmove" type="button" data-dup="'+k+'" title="Выше"'+(i<=0?' disabled':'')+'>↑</button>'
+    +'<button class="dmove" type="button" data-ddn="'+k+'" title="Ниже"'+(i>=DASH_CARDS.length-1?' disabled':'')+'>↓</button>'
+    +'</span>';
+}
+function wireDashDrag(box){
+  let from=null;
+  const cards=Array.prototype.slice.call(box.querySelectorAll('[data-dcard]'));
+  const clear=()=>cards.forEach(c=>c.classList.remove('drag-over','drag-under','dragging'));
+  box.querySelectorAll('[data-dup]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); dashMove(b.dataset.dup,-1); });
+  box.querySelectorAll('[data-ddn]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); dashMove(b.dataset.ddn,1); });
+  cards.forEach(card=>{
+    // draggable включается только на время удержания ручки: иначе карточка
+    // перестаёт давать выделять в себе текст и мешает своим же кнопкам.
+    const grip=card.querySelector('[data-dgrip]');
+    if(grip){
+      grip.addEventListener('mousedown',()=>{ card.setAttribute('draggable','true'); });
+      grip.addEventListener('click',e=>e.stopPropagation());
+      document.addEventListener('mouseup',()=>{ if(!card.classList.contains('dragging')) card.removeAttribute('draggable'); });
+    }
+    card.addEventListener('dragstart',e=>{ from=card.dataset.dcard; card.classList.add('dragging');
+      try{ e.dataTransfer.setData('text/plain',from); e.dataTransfer.effectAllowed='move'; }catch(err){} });
+    card.addEventListener('dragend',()=>{ card.removeAttribute('draggable'); clear(); from=null; });
+    card.addEventListener('dragover',e=>{
+      if(from==null||card.dataset.dcard===from) return;
+      e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(err){}
+      // Половина карточки под курсором решает, встанет она до или после.
+      const r=card.getBoundingClientRect(), up=(e.clientY-r.top)<r.height/2;
+      card.classList.toggle('drag-over',up); card.classList.toggle('drag-under',!up);
+    });
+    card.addEventListener('dragleave',()=>card.classList.remove('drag-over','drag-under'));
+    card.addEventListener('drop',e=>{
+      e.preventDefault();
+      const to=card.dataset.dcard, r=card.getBoundingClientRect();
+      const up=(e.clientY-r.top)<r.height/2;
+      clear();
+      if(from==null||to===from){ from=null; return; }
+      const rest=dashOrder.filter(k=>k!==from);
+      let dest=rest.indexOf(to); if(!up) dest++;
+      rest.splice(Math.max(0,Math.min(rest.length,dest)),0,from);
+      dashOrder=rest; from=null; dashOrderSave(); dashPaint();
+      // Стрелки на краях гаснут — после перестановки края другие.
+      const b=$('dashBody'); if(b){ b.querySelectorAll('[data-dup]').forEach(x=>{ x.disabled=dashOrder.indexOf(x.dataset.dup)<=0; });
+        b.querySelectorAll('[data-ddn]').forEach(x=>{ x.disabled=dashOrder.indexOf(x.dataset.ddn)>=dashOrder.length-1; }); }
+    });
+  });
+}
+
+// ── Свёртывание кусков карточки ─────────────────────────────────────────
+// Карточку целиком складывает общий механизм (.card.foldable), а здесь
+// складываются куски ВНУТРИ неё — графики. Правило простое: всё, что может
+// вырасти в высоту, должно уметь закрыться, иначе одна карточка съедает
+// экран, а остальные приходится искать прокруткой. Состояние живёт в том же
+// наборе folded: это положение рук, а не данные.
+function foldxBtn(key,label){
+  return '<button class="foldx-btn'+(folded.has(key)?' off':'')+'" type="button" data-foldx="'+esc(key)+'">'
+    +esc(label)+'</button>';
+}
+function foldxBox(key,html){
+  return '<div class="foldx" data-foldxk="'+esc(key)+'"'+(folded.has(key)?' hidden':'')+'>'+html+'</div>';
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-foldx]'); if(!b) return;
+  const k=b.dataset.foldx;
+  const box=document.querySelector('.foldx[data-foldxk="'+k+'"]');
+  if(folded.has(k)){ folded.delete(k); b.classList.remove('off'); if(box) box.hidden=false; }
+  else { folded.add(k); b.classList.add('off'); if(box) box.hidden=true; }
+});
+
+// ── Календарь периода ───────────────────────────────────────────────────
+function workDaysBetween(fromIso,toIso){
+  let n=0; const a=utcOf(fromIso), b=utcOf(toIso);
+  if(!(a<=b)) return 0;
+  for(let x=a;x<=b;x+=DAY_MS){ const d=new Date(x).getUTCDay(); if(d!==0&&d!==6) n++; }
+  return n;
+}
+function monthEndIso(key){ const a=String(key).split('-').map(Number);
+  return isoOf(Date.UTC(a[0],a[1],0)); }
+// Период сводки: денежные и штучные итоги считаются в тех же границах, что
+// и график под ними. Одна карточка — один период, иначе цифра и столбик
+// рядом говорят о разном.
+function dashPeriod(){
+  const now=new Date();
+  if(revRange) return {from:revRange.from+'-01',to:monthEndIso(revRange.to)};
+  const st=new Date(now.getFullYear(),now.getMonth()-(revMonthsN-1),1);
+  return {from:isoOf(Date.UTC(st.getFullYear(),st.getMonth(),1)),to:monthEndIso(monthKey(now))};
+}
+
+// ── Финансы ─────────────────────────────────────────────────────────────
+// Состоявшееся и запланированное — две разные строки и ни разу не одна
+// сумма. Выезд на будущий четверг это не выручка, а намерение; смешивать
+// их значит отчитываться деньгами, которых нет.
+const TRIP_EARNED=t=>t.status==='finished'||t.status==='done';
+const TRIP_AHEAD=t=>t.status==='planned'||t.status==='assigned'||t.status==='in_progress';
+const JOB_EARNED=j=>j.status==='done';
+const JOB_AHEAD=j=>j.status==='open'||j.status==='planned'||j.status==='in_progress';
+// У депо-заявки нет дат выезда — она в цеху. Датой считаем срок, а если
+// его нет — день заведения: другой у нас просто не записан.
+const jobDate=j=>j.due_date||String(j.created_at||'').slice(0,10);
+
+function financeCard(jb,trips){
+  if(!canWrite()) return '';
+  const per=dashPeriod(), cur=appSettings.currency||'';
+  const inP=d=>d&&d>=per.from&&d<=per.to;
+  const ch=(appSettings.costs&&+appSettings.costs.hour)||0;
+  const sum=pred=>{ let r=0,p=0,n=0;
+    trips.forEach(t=>{ if(!pred(t)||!inP(t.date_from)) return; const e=t.econ_snapshot||{};
+      r+=+e.revenue||0; p+=+e.profit||0; n++; });
+    return {rev:r,profit:p,n:n}; };
+  // Депо-заявки в выезды не попадают (сервер запрещает триггером), и в
+  // снимках выездов их денег нет вовсе. Без этого куска целый класс работ
+  // давал бы в отчёте ноль. Дороги и суточных у депо нет физически,
+  // себестоимость — только труд по норме: трекера в цеху нет.
+  const depot=pred=>{ let r=0,c=0;
+    jb.forEach(j=>{ if(!j.at_depot||!pred(j)||!inP(jobDate(j))) return;
+      (j.job_works||[]).forEach(w=>{ r+=+w.revenue||0; c+=(+w.hours||0)*ch; });
+      const pm=partsMoney(j); r+=pm.rev; c+=pm.cost; });
+    return {rev:r,profit:r-c}; };
+  const eT=sum(TRIP_EARNED), eD=depot(JOB_EARNED);
+  const aT=sum(TRIP_AHEAD),  aD=depot(JOB_AHEAD);
+  const got={rev:eT.rev+eD.rev,profit:eT.profit+eD.profit};
+  const pl ={rev:aT.rev+aD.rev,profit:aT.profit+aD.profit};
+  const warr=pred=>{ let tot=0,w=0;
+    jb.forEach(j=>{ if(!pred(j)||!inP(jobDate(j))) return;
+      (j.job_works||[]).forEach(x=>{ const h=+x.hours||0; tot+=h; if(!x.billable) w+=h; }); });
+    return tot?Math.round(w/tot*100):0; };
+
+  const m=v=>Math.round(v).toLocaleString('ru-RU');
+  const pcCol=v=>v>=0?'var(--green)':'var(--red)';
+  const marg=x=>x.rev>0?(x.profit/x.rev*100).toFixed(0)+'%':'—';
+  const cell=(k,v,col)=>'<div class="fin-c"><span class="fin-k">'+esc(k)+'</span>'
+    +'<span class="fin-v"'+(col?(' style="color:'+col+'"'):'')+'>'+v+'</span></div>';
+
+  // График по месяцам периода. Один месяц сравнивать не с чем — тогда вместо
+  // пустой рамки честнее предложить взять период шире.
+  const months=[]; { const a=per.from.split('-').map(Number), b=per.to.split('-').map(Number);
+    let d=new Date(a[0],a[1]-1,1); const end=new Date(b[0],b[1]-1,1);
+    while(d<=end&&months.length<48){ months.push({key:monthKey(d),rev:0,profit:0}); d=new Date(d.getFullYear(),d.getMonth()+1,1); } }
+  trips.filter(TRIP_EARNED).forEach(t=>{ if(!t.date_from) return;
+    const mm=months.find(x=>x.key===String(t.date_from).slice(0,7));
+    if(mm){ const e=t.econ_snapshot||{}; mm.rev+=+e.revenue||0; mm.profit+=+e.profit||0; } });
+  const filled=months.filter(x=>x.rev>0).length;
+  const maxRev=Math.max(1,...months.map(x=>x.rev));
+  const short=v=>v>=1000?Math.round(v/1000)+'к':String(Math.round(v));
+  let chart='';
+  if(filled>=2){
+    chart='<div class="revbars">';
+    months.forEach(x=>{ const hR=x.rev>0?Math.max(4,Math.round(x.rev/maxRev*100)):0;
+      chart+='<div class="revbar" title="'+x.key+': '+m(x.rev)+' '+esc(cur)+'">'
+        +'<div class="rb-v">'+(x.rev>0?short(x.rev):'')+'</div>'
+        +'<div class="rb-c"><div class="rb-f" style="height:'+hR+'%"></div></div>'
+        +'<div class="rb-l">'+x.key.slice(5)+'</div></div>'; });
+    chart+='</div>';
+  } else {
+    chart='<div class="hint">'+(filled?'В периоде заполнен один месяц — сравнивать не с чем.'
+      :'За период выручки нет ни в одном месяце.')+' Возьми период шире.</div>';
+  }
+
+  return '<div class="card foldable f-any" data-fold="dashFin" data-dcard="fin">'
+    +'<h3 class="cardhead">'+dashGrip('fin')+'Финансы <span class="mc-note">'+esc(shortDate(per.from)+' — '+shortDate(per.to))+'</span>'
+      +periodSeg('rev',REV_PERIODS_N,revMonthsN,revRange,revOpen,'month')+'</h3>'
+    +'<div class="fin-row"><span class="fin-tag">получено</span>'
+      +cell('Выручка',m(got.rev)+' '+esc(cur))
+      +cell('Прибыль',m(got.profit)+' '+esc(cur),pcCol(got.profit))
+      +cell('Маржа',marg(got))+'</div>'
+    +'<div class="fin-row"><span class="fin-tag">план</span>'
+      +cell('Выручка',m(pl.rev)+' '+esc(cur))
+      +cell('Прибыль',m(pl.profit)+' '+esc(cur),pcCol(pl.profit))
+      +cell('Маржа',marg(pl))+'</div>'
+    +'<div class="fin-row"><span class="fin-tag">гарантия</span>'
+      +cell('Отработано',warr(JOB_EARNED)+'%')
+      +cell('В плане',warr(JOB_AHEAD)+'%')
+      +'<div class="fin-c"></div></div>'
+    +'<div class="foldx-h">'+foldxBtn('dashFinChart','Выручка по месяцам')+'</div>'
+    +foldxBox('dashFinChart',chart)
+    +'</div>';
+}
+
+// ── Работы ──────────────────────────────────────────────────────────────
+function worksCard(jb,trips){
+  if(!canWrite()) return '';
+  const per=dashPeriod();
+  const inP=d=>d&&d>=per.from&&d<=per.to;
+  let wDone=0,wPlan=0,wField=0,wAll=0,nJobs=0;
+  jb.forEach(j=>{ if(j.status==='cancelled'||!inP(jobDate(j))) return;
+    const n=((j.job_works)||[]).length; nJobs++;
+    wAll+=n; if(!j.at_depot) wField+=n;
+    if(JOB_EARNED(j)) wDone+=n; else wPlan+=n; });
+  const nTrips=trips.filter(t=>t.status!=='cancelled'&&inP(t.date_from)).length;
+  const fieldPct=wAll?Math.round(wField/wAll*100):0;
+
+  // Полоса живых статусов. Закрытые и отменённые копятся без конца: через
+  // год они заняли бы всю ширину, и три активных сегмента стали бы
+  // полоской у края. Сколько закрыто — отдельной строкой под полосой.
+  const byst={open:0,planned:0,in_progress:0,done:0,cancelled:0};
+  jb.forEach(j=>{ byst[j.status]=(byst[j.status]||0)+1; });
+  const stClosed=(byst.done||0)+(byst.cancelled||0);
+  const stTotal=Math.max(1,(byst.open||0)+(byst.planned||0)+(byst.in_progress||0));
+  let bar='',leg='';
+  [['Открыта','var(--cyan)',byst.open||0],
+   ['Запланирована','#5b9bd5',byst.planned||0],
+   ['В работе','#f5b23d',byst.in_progress||0]].filter(x=>x[2]>0).forEach(([lbl,col,n])=>{
+    bar+='<i style="width:'+(n/stTotal*100)+'%;background:'+col+'"></i>';
+    leg+='<span><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</span>'; });
+
+  const cell=(k,v)=>'<div class="fin-c"><span class="fin-k">'+esc(k)+'</span><span class="fin-v">'+v+'</span></div>';
+  return '<div class="card foldable f-any statuscard" data-fold="dashWork" data-dcard="work">'
+    +'<h3 class="cardhead">'+dashGrip('work')+'Работы <span class="mc-note">'+esc(shortDate(per.from)+' — '+shortDate(per.to))+'</span></h3>'
+    +'<div class="fin-row nolab">'+cell('Работ отработано',wDone)+cell('Работ в плане',wPlan)+cell('На выезде',fieldPct+'%')+'</div>'
+    +'<div class="fin-row nolab">'+cell('Заявок',nJobs)+cell('Выездов',nTrips)+'<div class="fin-c"></div></div>'
+    +'<div class="statbar">'+(bar||'<i style="width:100%;background:var(--line)"></i>')+'</div>'
+    +'<div class="statleg">'+(leg||'<span class="dim">Активных заявок нет</span>')+'</div>'
+    +(stClosed?('<div class="stat-closed">закрыто и отменено за всё время: '+stClosed+'</div>'):'')
+    +'</div>';
+}
+
+// ── Загрузка отдела ─────────────────────────────────────────────────────
+//
+// Считается тем же планировщиком, что рисует ленту: часы лежат в тех днях,
+// в которые их будут делать, вместе с дорогой по плечам. Пока эта карточка
+// считала по-своему — по датам сроков и дороге, размазанной на все дни
+// выезда, — она показывала одни числа, а лента рядом другие.
+//
+// Фонд отдела — все действующие инженеры: смена × рабочие дни периода ×
+// число инженеров. Отдельной строкой сверху, потому что вопрос «можем ли
+// мы взять ещё работу» задаётся отделу, а не человеку.
+function loadCard(list,tripOf,tripById){
   if(!canWrite()) return '';
   const shift=(+appSettings.shift_hours)||8;
-  // Горизонт: либо ступень от сегодня, либо заданный руками диапазон.
-  let tIso, hIso, days;
-  if(loadRange){ tIso=loadRange.from; hIso=loadRange.to;
-    days=Math.round((new Date(hIso+'T00:00:00')-new Date(tIso+'T00:00:00'))/86400000)+1; }
-  else { tIso=todayISO(); const hz=new Date(); hz.setDate(hz.getDate()+loadDays-1); hIso=todayISO(hz); days=loadDays; }
-  // Ёмкость — рабочие дни периода по длине смены: пять дней из семи.
-  const cap=shift*Math.max(1,Math.round(days*5/7));
-  const hours=j=>(j.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
-  // Считаем всё, что не отменено. Раньше отбирались только open/planned/
-  // in_progress, а у выездов вдобавок отбрасывались done — и это ломало
-  // произвольный период: стоило выбрать прошедший месяц, как закрытые
-  // заявки и завершённые выезды выпадали, дорога исчезала, а по краям
-  // окна оставались дыры. Для окна вперёд это план, для прошедшего —
-  // факт, и в обоих случаях верно: работа в этих днях была.
-  const counts=j=>j.status!=='cancelled';
+  let fromIso,toIso;
+  if(loadRange){ fromIso=loadRange.from; toIso=loadRange.to; }
+  else { fromIso=todayISO(); const hz=new Date(); hz.setDate(hz.getDate()+loadDays-1); toIso=todayISO(hz); }
+  const wd=Math.max(1,workDaysBetween(fromIso,toIso));
+  const engs=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false);
+  const capEach=shift*wd;
 
-  const rows=new Map();   // id инженера → {w, d, n}
-  const row=k=>{ let r=rows.get(k); if(!r){ r={w:0,d:0,n:0}; rows.set(k,r); } return r; };
-  let later=0, nodue=0, planned=0;
-
-  (jobs||[]).filter(counts).forEach(j=>{
-    const h=hours(j); if(!h) return;
-    if(!j.due_date){ nodue+=h; return; }
-    if(String(j.due_date)>hIso||String(j.due_date)<tIso){ later+=h; return; }
-    row(j.assigned_engineer||'__none').w+=h; row(j.assigned_engineer||'__none').n++;
-  });
-
-  // Дорога — по выездам, которые задевают горизонт и ещё не закрыты.
-  (trips||[]).forEach(t=>{
-    if(t.status==='cancelled') return;
-    const from=t.date_from||null; if(!from) return;
-    const to=t.date_to||from;
-    if(to<tIso || from>hIso) return;             // выезд не пересекает горизонт
-    const d=+((t.econ_snapshot||{}).driveH)||0; if(!d) return;
-    // Дорога делится по дням пересечения, а не отдаётся окну целиком.
-    // Иначе выезд с 4 по 11 сентября приписывал все свои 14.5 ч даже
-    // окну в один день — и загрузка одного дня выходила 596%.
-    const dayMs=86400000, D=x=>new Date(x+'T00:00:00').getTime();
-    const trip=Math.round((D(to)-D(from))/dayMs)+1;
-    const ovFrom=from>tIso?from:tIso, ovTo=to<hIso?to:hIso;
-    const ov=Math.max(0,Math.round((D(ovTo)-D(ovFrom))/dayMs)+1);
-    const share=trip>0?Math.min(1,ov/trip):1;
-    row(t.lead_engineer||'__none').d+=d*share;
-    planned+=d*share;
-  });
-
-  const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
-  const list=[...rows.entries()]
-    .map(([id,r])=>({id,w:r.w,d:r.d,n:r.n,t:r.w+r.d,name:id==='__none'?'Без инженера':name(id)}))
-    .filter(r=>r.t>0)
-    .sort((a,b)=>b.t-a.t);
+  const plan=planOfData(list,tripOf,tripById).plan;
+  const lane={}, day={};
+  Object.keys(plan.load).forEach(k=>{ const l=plan.load[k];
+    if(l.date<fromIso||l.date>toIso) return;
+    const r=lane[l.engineer]||(lane[l.engineer]={w:0,d:0,n:0});
+    r.w+=l.workH; r.d+=l.driveH;
+    day[l.date]=(day[l.date]||0)+l.workH+l.driveH; });
+  plan.blocks.forEach(b=>{ const k=b.engineer||' free';
+    if(b.to<fromIso||b.from>toIso) return;
+    const r=lane[k]||(lane[k]={w:0,d:0,n:0}); r.n+=b.jobIds.length; });
 
   const num=v=>v.toFixed(v%1?1:0);
-  let body='';
-  if(!list.length){
-    body='<div class="hint">На ближайшие две недели работ не поставлено.</div>';
+  const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
+  const rowHtml=(nm,r,cap,cls)=>{
+    const t=r.w+r.d, pct=cap>0?t/cap*100:0;
+    const col=pct>100?'var(--red)':pct>70?'#f59e0b':'var(--green)';
+    const wPct=Math.min(100,cap?r.w/cap*100:0), dPct=Math.min(100-wPct,cap?r.d/cap*100:0);
+    const parts=[num(r.w)+' ч работ']; if(r.d) parts.push(num(r.d)+' ч дороги');
+    parts.push(r.n+' '+plural(r.n,'заявка','заявки','заявок'));
+    return '<div class="elrow'+(cls?(' '+cls):'')+'">'
+      +'<div class="el-n">'+esc(nm)+'</div>'
+      +'<div class="el-v" style="color:'+col+'">'+num(t)+' / '+num(cap)+' ч · '+Math.round(pct)+'%</div>'
+      +'<div class="el-t"><i style="width:'+wPct.toFixed(0)+'%;background:'+col+'"></i>'
+        +(r.d?('<i class="el-drive" style="width:'+dPct.toFixed(0)+'%;background:'+col+'"></i>'):'')+'</div>'
+      +'<div class="el-s">'+esc(parts.join(' · '))+'</div></div>';
+  };
+
+  // Фонд отдела — по инженерам из справочника. Если ролей ещё не расставили,
+  // берём тех, на ком реально висит работа: иначе карточка показывала бы
+  // загрузку отдела из нуля человек.
+  let people=engs.map(p=>({id:p.id,name:p.full_name||'без имени'}));
+  if(!people.length) people=Object.keys(lane).filter(k=>k!==' free')
+    .map(id=>({id:id,name:name(id)}));
+  const fund=capEach*Math.max(1,people.length);
+  const tot={w:0,d:0,n:0};
+  Object.keys(lane).forEach(k=>{ tot.w+=lane[k].w; tot.d+=lane[k].d; tot.n+=lane[k].n; });
+  let body=rowHtml('Отдел'+(people.length?(' · '+people.length+' '+plural(people.length,'инженер','инженера','инженеров')):''),
+    tot,fund,'el-dep');
+  people.slice().sort((a,b)=>{ const ra=lane[a.id]||{w:0,d:0}, rb=lane[b.id]||{w:0,d:0};
+    return (rb.w+rb.d)-(ra.w+ra.d); })
+    .forEach(p=>{ body+=rowHtml(p.name,lane[p.id]||{w:0,d:0,n:0},capEach); });
+  if(lane[' free']) body+=rowHtml('Без инженера',lane[' free'],capEach,'none');
+
+  // График загрузки по дням периода. Длинный период рисуется неделями:
+  // сорок столбиков шириной в волос не читаются.
+  const dayCap=shift*Math.max(1,people.length);
+  // Днями рисуем до полутора месяцев, дальше — неделями: сорок столбиков
+  // шириной в волос не читаются. Числа над столбиками убираем раньше — они
+  // начинают переноситься в две строки и превращаются в кашу; значение
+  // остаётся в подсказке.
+  const spanD=Math.round((utcOf(toIso)-utcOf(fromIso))/DAY_MS)+1;
+  const cells=[]; const long=spanD>45;
+  if(long){
+    let cur=null;
+    for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){ const iso=isoOf(x);
+      const w=weekOf(iso); if(!w) continue;
+      if(!cur||cur.key!==w.key){ cur={key:w.key,label:'н'+w.n,v:0,cap:0}; cells.push(cur); }
+      const d=new Date(x).getUTCDay(); if(d!==0&&d!==6) cur.cap+=dayCap;
+      cur.v+=day[iso]||0; }
   } else {
-    list.forEach(r=>{
-      const pct=r.t/cap*100;
-      const col=pct>100?'var(--red)':pct>70?'#f59e0b':'var(--green)';
-      const none=(r.id==='__none');
-      const wPct=Math.min(100,r.w/cap*100), dPct=Math.min(100-wPct,r.d/cap*100);
-      const parts=[num(r.w)+' ч работ'];
-      if(r.d) parts.push(num(r.d)+' ч дороги');
-      parts.push(r.n+' '+plural(r.n,'заявка','заявки','заявок'));
-      body+='<div class="elrow'+(none?' none':'')+'">'
-        +'<div class="el-n">'+esc(r.name)+'</div>'
-        +'<div class="el-v" style="color:'+col+'">'+num(r.t)+' / '+cap+' ч · '+Math.round(pct)+'%</div>'
-        +'<div class="el-t"><i style="width:'+wPct.toFixed(0)+'%;background:'+col+'"></i>'
-          +(r.d?('<i class="el-drive" style="width:'+dPct.toFixed(0)+'%;background:'+col+'"></i>'):'')+'</div>'
-        +'<div class="el-s">'+esc(parts.join(' · '))+'</div>'
-        +'</div>';
-    });
+    for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){ const iso=isoOf(x);
+      const d=new Date(x).getUTCDay();
+      cells.push({key:iso,label:String(iso.slice(8)),v:day[iso]||0,cap:(d===0||d===6)?0:dayCap,we:(d===0||d===6)}); }
   }
-  const tail=[];
-  if(later) tail.push('вне периода '+num(later)+' ч');
-  if(nodue) tail.push('без срока '+num(nodue)+' ч');
-  tail.push(planned
-    ? 'дорога — доля выездов, попавшая в период'
-    : 'дорога не в счёт: выездов в этот период нет');
+  const maxV=Math.max(1,...cells.map(c=>Math.max(c.v,c.cap)));
+  const showVals=cells.length<=16;
+  let chart='<div class="revbars loadbars'+(showVals?'':' novals')+'">';
+  cells.forEach(c=>{ const hR=c.v>0?Math.max(4,Math.round(c.v/maxV*100)):0;
+    const over=c.cap>0&&c.v>c.cap+1e-6;
+    chart+='<div class="revbar'+(c.we?' we':'')+'" title="'+esc(c.key+' · '+num(c.v)+' ч'+(c.cap?(' из '+num(c.cap)):''))+'">'
+      +(showVals?('<div class="rb-v">'+(c.v>0?num(c.v):'')+'</div>'):'')
+      +'<div class="rb-c">'+(c.cap>0?('<div class="rb-cap" style="height:'+Math.round(c.cap/maxV*100)+'%"></div>'):'')
+        +'<div class="rb-f'+(over?' bad':'')+'" style="height:'+hR+'%"></div></div>'
+      +'<div class="rb-l">'+esc(c.label)+'</div></div>'; });
+  chart+='</div>';
+  chart+='<div class="cap-note">пунктир — 100% загрузки: '+num(dayCap)+' ч в день'
+    +(long?(' · столбик — неделя'):'')+'</div>';
 
   const hzTxt=loadRange?tripPeriod(loadRange.from,loadRange.to)
     :(loadDays===7?'неделя вперёд':loadDays===14?'две недели вперёд':'месяц вперёд');
-  return '<div class="card elcard"><h3 class="cardhead">Загрузка инженеров <span class="el-hz">'+esc(hzTxt)+'</span>'
+  return '<div class="card elcard foldable f-any" data-fold="dashLoad" data-dcard="load">'
+    +'<h3 class="cardhead">'+dashGrip('load')+'Загрузка отдела <span class="el-hz">'+esc(hzTxt)+'</span>'
     +periodSeg('load',LOAD_PERIODS,loadDays,loadRange,loadOpen,'date')+'</h3>'
     +body
-    +'<div class="el-tail">'+esc(tail.join(' · '))+'</div>'
+    +'<div class="foldx-h">'+foldxBtn('dashLoadChart',long?'По неделям':'По дням')+'</div>'
+    +foldxBox('dashLoadChart',chart)
     +'</div>';
 }
 
 async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   renderAttention();
-  // Ролевая раскладка. Инженер видит только «Мой день» — ленту на всю ширину,
+  // Ролевая раскладка. Инженер видит только «График» — ленту на всю ширину,
   // без денег и без правой колонки. Менеджер и админ — двухколоночно.
   const grid=document.querySelector('.dash-grid');
   const attnCaps=document.querySelector('.dash-attn .acaps');
+  const seg=$('dashSeg');
   if(role==='engineer'){
     if(grid) grid.classList.add('one-col');
     if(box) box.style.display='none';
+    if(seg) seg.style.display='none';
     if(attnCaps) attnCaps.textContent='График';
     return;   // правую колонку инженеру не строим вовсе
   }
@@ -2318,172 +2629,42 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   // медиазапрос, и на телефоне сводка оставалась в две колонки по 190 px.
   if(grid) grid.classList.remove('one-col');
   if(box) box.style.display='';
+  if(seg) seg.style.display='';
   if(attnCaps) attnCaps.textContent='Требует внимания';
   box.innerHTML='<div class="hint">Считаю…</div>';
   try{
-    const cl=clients.filter(c=>!c.is_base).length, dp=clients.filter(c=>c.is_base).length;
     await ensureRefs();
-    const {data:js}=await sb.from('jobs').select('status,at_depot,due_date,assigned_engineer, job_works(hours,billable,revenue), job_parts(qty,price,cost,billable)').is('deleted_at',null); const jb=js||[];
-    const byst={open:0,planned:0,in_progress:0,done:0,cancelled:0}; let wh=0,totH=0;
-    jb.forEach(j=>{ byst[j.status]=(byst[j.status]||0)+1; (j.job_works||[]).forEach(w=>{ const h=+w.hours||0; totH+=h; if(!w.billable) wh+=h; }); });
-    const {data:tr}=await sb.from('trips').select('econ_snapshot,date_from,date_to,lead_engineer,status').is('deleted_at',null); const trips=tr||[];
-    // ВЫРУЧКА — только по состоявшемуся.
-    //
-    // Здесь суммировались снимки ВСЕХ выездов подряд, включая запланированные
-    // на будущее. В «выручке за месяц» и «за всё время» лежали деньги,
-    // которых ещё нет: выезд на 18 сентября уже увеличивал август. Отчётность
-    // так не считают — и никакая цифра, посчитанная так, не годится
-    // для решений.
-    //
-    // Состоявшийся выезд — это finished (машина вернулась, ждёт менеджера)
-    // и done (принят). planned/assigned — будущее, in_progress — ещё идёт,
-    // cancelled — не было вовсе. Запланированное считаем отдельно и называем
-    // планом, а не выручкой.
-    const TRIP_EARNED=t=>t.status==='finished'||t.status==='done';
-    const TRIP_AHEAD=t=>t.status==='planned'||t.status==='assigned'||t.status==='in_progress';
-    let rev=0,cost=0,profit=0,planRev=0,planN=0;
-    trips.forEach(t=>{ const e=t.econ_snapshot||{};
-      if(TRIP_EARNED(t)){ rev+=+e.revenue||0; cost+=+e.cost||0; profit+=+e.profit||0; }
-      else if(TRIP_AHEAD(t)){ planRev+=+e.revenue||0; planN++; } });
-    // Депо-заявки в выезды не попадают (сервер это запрещает триггером),
-    // поэтому в снимках выездов их денег нет вовсе — без этого куска целый
-    // класс работ давал бы в аналитике ноль. Тихо: плитки показывали бы
-    // цифры, просто неполные.
-    // Дороги и суточных у депо нет физически, себестоимость — только труд,
-    // и только по норме: трекера в цеху нет, факт брать неоткуда.
-    const ch=(appSettings.costs&&+appSettings.costs.hour)||0;
-    // Та же оговорка, что и по выездам: считаем только ЗАКРЫТЫЕ депо-заявки.
-    // Открытая заявка в цеху — это ещё не выручка.
-    let dRev=0,dCost=0;
-    jb.filter(j=>j.at_depot&&j.status==='done').forEach(j=>{ (j.job_works||[]).forEach(w=>{ dRev+=+w.revenue||0; dCost+=(+w.hours||0)*ch; });
-      const pm=partsMoney(j); dRev+=pm.rev; dCost+=pm.cost; });
-    rev+=dRev; cost+=dCost; profit+=(dRev-dCost);
-    const margin=rev>0?(profit/rev*100):0, warrShare=totH?Math.round(wh/totH*100):0, cur=appSettings.currency||'';
-    const overdue=vehicles.filter(v=>{ const iv=+v.service_interval||0; return iv>0 && ((+v.odometer||0)-(+v.last_service||0))>=iv; }).length;
-    const pc=profit>=0?'var(--green)':'var(--red)';
-    const tile=(l,v,sub,col,nav)=>'<div class="stat'+(nav?' nav':'')+'"'+(nav?(' data-nav="'+nav+'"'):'')+'><div class="stat-v"'+(col?(' style="color:'+col+'"'):'')+'>'+v+'</div><div class="stat-l">'+esc(l)+'</div>'+(sub?'<div class="stat-s">'+esc(sub)+'</div>':'')+(nav?'<div class="stat-go">Открыть →</div>':'')+'</div>';
-    // Крупным кеглем — то, что меняется и требует решения.
-    //
-    // Раньше здесь без всякой подписи стояла сумма выручки ЗА ВСЁ ВРЕМЯ.
-    // Такое число только растёт и не говорит ни о хорошем месяце, ни о
-    // плохом; вдобавок график под ним показывал шесть месяцев, то есть
-    // в одной карточке жили два разных периода и ни один не был назван.
-    // Теперь наверху текущий месяц с прошлым для сравнения, а накопленное
-    // за всё время ушло вниз отдельной строкой.
-    const MON=['январь','февраль','март','апрель','май','июнь','июль',
-               'август','сентябрь','октябрь','ноябрь','декабрь'];
-    const now2=new Date();
-    const kNow=monthKey(now2);
-    const kPrev=monthKey(new Date(now2.getFullYear(), now2.getMonth()-1, 1));
-    let mRev=0, mProfit=0, pRev=0;
-    trips.filter(TRIP_EARNED).forEach(t=>{ if(!t.date_from) return;
-      const k=String(t.date_from).slice(0,7); const e=t.econ_snapshot||{};
-      if(k===kNow){ mRev+=+e.revenue||0; mProfit+=+e.profit||0; }
-      else if(k===kPrev){ pRev+=+e.revenue||0; } });
-    // Депо-заявки не привязаны к выезду и не имеют даты выезда — они входят
-    // только в накопленный итог, и приписывать их текущему месяцу было бы
-    // враньём.
-    const mMargin=mRev>0?(mProfit/mRev*100):0;
-    const mpc=mProfit>=0?'var(--green)':'var(--red)';
-    const delta=pRev>0?Math.round((mRev-pRev)/pRev*100):null;
-    const deltaTxt=delta==null?'нет данных за прошлый месяц'
-      :((delta>=0?'+':'')+delta+'% к '+MON[(now2.getMonth()+11)%12]);
+    const {data:js}=await sb.from('jobs')
+      .select('id,status,at_depot,due_date,created_at,assigned_engineer, job_works(hours,billable,revenue), job_parts(qty,price,cost,billable)')
+      .is('deleted_at',null);
+    const jb=js||[];
+    const {data:tr}=await sb.from('trips').select('id,econ_snapshot,date_from,date_to,lead_engineer,status').is('deleted_at',null);
+    const trips=tr||[];
+    // Кто в каком выезде — планировщику: без этого выезд рассыпается на
+    // отдельные заявки, и дорога исчезает из загрузки.
+    const tripOf={}, tripById={};
+    const {data:tj}=await sb.from('trip_jobs').select('job_id,trip_id');
+    (tj||[]).forEach(r=>{ tripOf[r.job_id]=r.trip_id; });
+    trips.forEach(t=>{ tripById[t.id]=t; });
 
-    const moneyCard = canWrite()
-      ? '<div class="card money-card">'
-        +'<div class="mc-per">Выручка · '+MON[now2.getMonth()]+' '+now2.getFullYear()+' <span class="mc-note">по состоявшимся выездам</span></div>'
-        +'<div class="mc-big">'+Math.round(mRev).toLocaleString('ru-RU')+' <span class="mc-cur">'+cur+'</span></div>'
-        +'<div class="mc-delta'+(delta!=null&&delta<0?' down':'')+'">'+esc(deltaTxt)+'</div>'
-        +'<div class="mc-row"><span class="mc-k">Прибыль за месяц</span><span class="mc-v" style="color:'+mpc+'">'+Math.round(mProfit).toLocaleString('ru-RU')+' '+cur+'</span></div>'
-        +'<div class="mc-row"><span class="mc-k">Маржа за месяц</span><span class="mc-v">'+mMargin.toFixed(0)+'%</span></div>'
-        +'<div class="mc-row mc-all"><span class="mc-k">Всего за всё время</span><span class="mc-v">'+Math.round(rev).toLocaleString('ru-RU')+' '+cur+'</span></div>'
-        +'<div class="mc-row"><span class="mc-k">Прибыль за всё время</span><span class="mc-v" style="color:'+pc+'">'+Math.round(profit).toLocaleString('ru-RU')+' '+cur+'</span></div>'
-        +'<div class="mc-row"><span class="mc-k">Доля гарантии</span><span class="mc-v">'+warrShare+'%</span></div>'
-        // Запланированное отделено от заработанного и названо планом.
-        // Раньше эти деньги молча лежали в выручке, хотя выезда ещё не было.
-        +(planN?('<div class="mc-row mc-plan"><span class="mc-k">В плане · '+planN+' '
-            +plural(planN,'выезд','выезда','выездов')+'</span><span class="mc-v">'
-            +Math.round(planRev).toLocaleString('ru-RU')+' '+cur+'</span></div>'):'')
-        +'</div>'
-      : '';
-
-    // Четыре плитки-перехода («Точки», «Заявки в работе», «Выезды», «Машины»)
-    // убраны. Числа в них почти не менялись, а решения не требовали ни одно:
-    // переход в раздел уже есть в рельсе слева, и он на два клика короче.
-    // Освободившееся место занимает загрузка инженеров — она меняется каждый
-    // день и прямо говорит, кому уже некуда ставить.
-    let h=moneyCard;
-    // Заявки по статусам — компактная стек-полоса + легенда (как в мокапе),
-    // вместо списка с нулями. Открыта — синий, в работе — янтарь,
-    // готова — зелёный, отменена — серый.
-    // Полоса показывает только ЖИВЫЕ статусы. Закрытые и отменённые копятся
-    // без конца: через год они займут почти всю ширину, и три активных
-    // сегмента станут неразличимой полоской у края. Сколько всего закрыто —
-    // отдельной строкой под полосой, где это число никому не мешает.
-    const stClosed=(byst.done||0)+(byst.cancelled||0);
-    const stTotal=Math.max(1,(byst.open||0)+(byst.planned||0)+(byst.in_progress||0));
-    const seg=[
-      ['open','Открыта','var(--cyan)',byst.open||0],
-      ['planned','Запланирована','#5b9bd5',byst.planned||0],
-      ['in_progress','В работе','#f5b23d',byst.in_progress||0],
-    ].filter(x=>x[3]>0);
-    let bar='', leg='';
-    seg.forEach(([k,lbl,col,n])=>{
-      bar+='<i style="width:'+(n/stTotal*100)+'%;background:'+col+'"></i>';
-      leg+='<span><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</span>';
-    });
-    const statusCard='<div class="card statuscard"><h3>Заявки в работе</h3>'
-      +'<div class="statbar">'+(bar||'<i style="width:100%;background:var(--line)"></i>')+'</div>'
-      +'<div class="statleg">'+(leg||'<span class="dim">Активных заявок нет</span>')+'</div>'
-      +(stClosed?('<div class="stat-closed">закрыто и отменено за всё время: '+stClosed+'</div>'):'')
-      +'</div>';
-    // Глубина графика выбирается, а не прибита к шести месяцам.
-    const months=[]; const now=new Date();
-    if(revRange){
-      // Произвольный диапазон задаётся месяцами, поэтому шагаем по месяцам.
-      const a=revRange.from.split('-').map(Number), b=revRange.to.split('-').map(Number);
-      let d=new Date(a[0],a[1]-1,1); const end=new Date(b[0],b[1]-1,1);
-      while(d<=end && months.length<48){ months.push({key:monthKey(d),rev:0,profit:0}); d=new Date(d.getFullYear(),d.getMonth()+1,1); }
-    } else {
-      for(let i=revMonthsN-1;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:monthKey(d),rev:0,profit:0}); }
-    }
-    // Тот же принцип, что и в итогах: в график идут только состоявшиеся
-    // выезды. Иначе столбик будущего месяца стоял бы наравне с прошедшими.
-    trips.filter(TRIP_EARNED).forEach(t=>{ if(!t.date_from) return; const m=months.find(x=>x.key===String(t.date_from).slice(0,7)); if(m){ const e=t.econ_snapshot||{}; m.rev+=+e.revenue||0; m.profit+=+e.profit||0; } });
-    const filled=months.filter(m=>m.rev>0).length;
-    let chartCard='';
-    if(canWrite()){
-      const maxRev=Math.max(1,...months.map(m=>m.rev));
-      const short=v=>v>=1000?Math.round(v/1000)+'к':String(Math.round(v));
-      chartCard='<div class="card"><h3 class="cardhead">Выручка по месяцам'
-        +periodSeg('rev',REV_PERIODS_N,revMonthsN,revRange,revOpen,'month')+'</h3>';
-      // Один заполненный месяц — это не тренд, а столбик среди пустых мест.
-      // «Этот месяц против прошлого» уже сказано крупным числом выше;
-      // здесь честнее предложить расширить окно, чем рисовать пустоту.
-      if(filled>=2){
-        chartCard+='<div class="revbars">';
-        months.forEach(m=>{ const hR=m.rev>0?Math.max(4,Math.round(m.rev/maxRev*100)):0;
-          chartCard+='<div class="revbar" title="'+m.key+': '+Math.round(m.rev).toLocaleString('ru-RU')+' '+esc(cur)+'">'
-            +'<div class="rb-v">'+(m.rev>0?short(m.rev):'')+'</div>'
-            +'<div class="rb-c"><div class="rb-f" style="height:'+hR+'%"></div></div>'
-            +'<div class="rb-l">'+m.key.slice(5)+'</div></div>'; });
-        chartCard+='</div>';
-      } else {
-        chartCard+='<div class="hint">'+(filled
-          ? 'За выбранный период выручка есть только в одном месяце — сравнивать не с чем.'
-          : 'За выбранный период выручки нет ни в одном месяце.')
-          +' Возьмите период шире.</div>';
-      }
-      chartCard+='</div>';
-    }
-
-    // Порядок правой колонки: деньги, их динамика, кем это делается,
-    // и только потом состояние очереди.
-    h += chartCard + engineerLoadCard(jb, trips) + statusCard;
-    box.innerHTML=h;
+    const made={fin:financeCard(jb,trips),work:worksCard(jb,trips),load:loadCard(jb,tripOf,tripById)};
+    box.innerHTML=dashOrder.map(k=>made[k]||'').join('');
     wirePeriodSeg(box);
+    wireDashDrag(box);
+    foldApply();
     box.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>dashNav(el.dataset.nav));
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; } }
+// Чипы сводки на узком экране: две колонки туда не помещаются, и вместо
+// того чтобы гнать инфокарты в подвал ленты, показываем одну из двух.
+(function(){
+  const seg=$('dashSeg'); if(!seg) return;
+  seg.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return;
+    const grid=document.querySelector('.dash-grid'); if(!grid) return;
+    seg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    grid.classList.toggle('show-feed',b.dataset.dv==='feed');
+    grid.classList.toggle('show-cards',b.dataset.dv==='cards');
+  });
+})();
 function dashNav(k){ if(k==='points'){ switchTab('map'); return; } if(k==='trips'){ switchTab('planner'); plannerSub('trips'); return; } if(k==='vehicles'){ switchTab('settings'); return; } switchTab('planner'); plannerSub('jobs'); if(k==='jobs-done'){ jobVisible={open:false,planned:false,in_progress:false,done:true,cancelled:false}; } else { jobVisible={open:true,planned:true,in_progress:true,done:false,cancelled:false}; } renderJobs(); }
 // ---------- Мой день ----------
 // Инженер живёт выездами, а не заявками: выезд — это его день, машина,
@@ -2510,6 +2691,7 @@ function tripActs(t){
     a+='<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ Пробег</button>';
   if(canWrite()) a+='<button class="btn sm" data-topen="'+t.id+'">открыть</button>';
   a+='<button class="btn sm ghost" data-tmap="'+t.id+'">на карте</button>';
+  a+='<button class="btn sm ghost" data-tgm="'+t.id+'">GMaps</button>';
   return a;
 }
 
@@ -4307,32 +4489,39 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
   }catch(err){ console.error('Сохранение выезда не прошло:', err, '| детали:', err&&(err.details||err.hint||err.code)); $('tripErr').textContent='Ошибка: '+(err.message||err); } finally{ $('tpSave').disabled=false; } };
 async function delTrip(id){ if(!await confirmDialog('Удалить выезд?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('trips').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderTrips();
   undoToast('Выезд удалён', async ()=>{ const {error:e2}=await sb.from('trips').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Восстановлено'); }); }
-function tripGmaps(id){ const t=trips.find(x=>x.id==id); const stops=(t&&t.route_stops)||[]; if(stops.length<2){ notify('Нужно минимум 2 точки в выезде (по клиентам заявок).','warn'); return; }
+function tripGmaps(id){ const t=trips.find(x=>x.id==id)||tripCache[id]; const stops=(t&&t.route_stops)||[]; if(stops.length<2){ notify('Нужно минимум 2 точки в выезде (по клиентам заявок).','warn'); return; }
   const pts=stops.map(s=>(+s.lat).toFixed(6)+','+(+s.lng).toFixed(6)); const url='https://www.google.com/maps/dir/?api=1&origin='+pts[0]+'&destination='+pts[pts.length-1]+(pts.length>2?'&waypoints='+encodeURIComponent(pts.slice(1,-1).join('|')):'')+'&travelmode=driving'; window.open(url,'_blank'); }
 
 // ---------- settings ----------
 let appSettings={shift_hours:8,deviation_pct:10,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,avoid_zones:[],tariff_profiles:[],ors_proxy:''};
 let vehicles=[], vhEditId=null;
 async function loadVehicles(){ try{ const {data}=await sb.from('vehicles').select('*').order('name'); vehicles=data||[]; renderVehicles(); }catch(e){ loadFail('список машин',e); } }
+// ── Одометр убран ───────────────────────────────────────────────────────
+// Пробег машины приходил от Wialon и рос как придётся: датчик врал, а
+// триггер прибавлял к нему факт-километраж выездов, посчитанный по тому же
+// треку. Ни одна цифра из этой пары не была проверяемой, а «до ТО 1240 км»
+// выглядело точным знанием — и на него смотрели. Убираем и число, и
+// построенный на нём срок ТО: лучше пусто, чем правдоподобно неверно.
+// Колонки в базе не трогаем — миграция ради удаления мусора того не стоит,
+// а старые значения никому не мешают, пока их никто не показывает.
 function renderVehicles(){ const box=$('vehList'); if(!box) return; box.innerHTML=vehicles.length?'':'<div class="hint">Машин нет. Добавь ниже.</div>';
-  vehicles.forEach(v=>{ const since=(+v.odometer||0)-(+v.last_service||0); const interval=(+v.service_interval||0); const left=interval>0?(interval-since):null; const overdue=left!=null&&left<=0;
+  vehicles.forEach(v=>{
     const d=document.createElement('div'); d.className='pt';
     d.innerHTML='<div class="nm">'+esc(v.name)+(v.plate?' <span class="pill">'+esc(v.plate)+'</span>':'')+(v.wialon_id?' <span class="pill">GPS</span>':'')+'</div>'+
-      '<div class="meta">пробег '+Math.round(+v.odometer||0)+' км'+(left!=null?(' · до ТО '+(overdue?'<span style="color:var(--red)">просрочено</span>':Math.round(left)+' км')):'')+'</div>'+
-      '<div class="acts"><button class="btn sm" data-vhedit="'+v.id+'">ред.</button><button class="btn sm" data-vhto="'+v.id+'">отметить ТО</button><button class="btn sm ghost" data-vhdel="'+v.id+'">×</button></div>';
+      '<div class="meta">'+(v.wialon_id?('датчик '+esc(v.wialon_id)):'без датчика')+'</div>'+
+      '<div class="acts"><button class="btn sm" data-vhedit="'+v.id+'">ред.</button><button class="btn sm ghost" data-vhdel="'+v.id+'">×</button></div>';
     box.appendChild(d); });
   box.querySelectorAll('[data-vhedit]').forEach(b=>b.onclick=()=>editVehicle(b.dataset.vhedit));
-  box.querySelectorAll('[data-vhto]').forEach(b=>b.onclick=()=>markService(b.dataset.vhto));
   box.querySelectorAll('[data-vhdel]').forEach(b=>b.onclick=()=>delVehicle(b.dataset.vhdel)); }
-function vhReset(){ vhEditId=null; $('vhCancel').style.display='none'; $('vhAdd').textContent='Добавить машину'; $('vhName').value='';$('vhPlate').value='';$('vhOdo').value='';$('vhInt').value='';$('vhWialon').value='';$('vhErr').textContent=''; }
-$('vhAdd').onclick=async ()=>{ const name=$('vhName').value.trim(); if(!name){ $('vhErr').textContent='Введи название.'; return; } const odo=+$('vhOdo').value||0, intv=+$('vhInt').value||0; const rec={name,plate:$('vhPlate').value.trim(),odometer:odo,service_interval:intv,wialon_id:($('vhWialon').value.trim()||null)};
-  let error; if(vhEditId){ ({error}=await sb.from('vehicles').update(rec).eq('id',vhEditId)); } else { rec.last_service=odo; ({error}=await sb.from('vehicles').insert(rec)); }
+function vhReset(){ vhEditId=null; $('vhCancel').style.display='none'; $('vhAdd').textContent='Добавить машину'; $('vhName').value='';$('vhPlate').value='';$('vhWialon').value='';$('vhErr').textContent=''; }
+$('vhAdd').onclick=async ()=>{ const name=$('vhName').value.trim(); if(!name){ $('vhErr').textContent='Введи название.'; return; } const rec={name,plate:$('vhPlate').value.trim(),wialon_id:($('vhWialon').value.trim()||null)};
+  let error; if(vhEditId){ ({error}=await sb.from('vehicles').update(rec).eq('id',vhEditId)); } else { ({error}=await sb.from('vehicles').insert(rec)); }
   if(error){ $('vhErr').textContent=error.message; return; } vhReset(); await loadVehicles(); showToast('Автопарк обновлён'); };
 $('vhCancel').onclick=vhReset;
-function editVehicle(id){ const v=vehicles.find(x=>x.id==id); if(!v) return; vhEditId=id; $('vhName').value=v.name;$('vhPlate').value=v.plate||'';$('vhOdo').value=v.odometer||0;$('vhInt').value=v.service_interval||0;$('vhWialon').value=v.wialon_id||''; $('vhAdd').textContent='Сохранить'; $('vhCancel').style.display=''; }
+function editVehicle(id){ const v=vehicles.find(x=>x.id==id); if(!v) return; vhEditId=id; $('vhName').value=v.name;$('vhPlate').value=v.plate||'';$('vhWialon').value=v.wialon_id||''; $('vhAdd').textContent='Сохранить'; $('vhCancel').style.display=''; }
 async function delVehicle(id){ if(!await confirmDialog('Удалить машину?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('vehicles').delete().eq('id',id); if(error){ notify(error.message,'err'); return; } await loadVehicles(); }
-async function markService(id){ const v=vehicles.find(x=>x.id==id); if(!v) return; if(!await confirmDialog('Отметить ТО при пробеге '+Math.round(+v.odometer||0)+' км?',{okText:'Отметить ТО'})) return; const {error}=await sb.from('vehicles').update({last_service:+v.odometer||0}).eq('id',id); if(error){ notify(error.message,'err'); return; } await loadVehicles(); showToast('ТО отмечено'); }
-function updateVehInfo(){ const el=$('tpVehInfo'); if(!el) return; const v=vehicles.find(x=>x.id==$('tpVeh').value); if(!v){ el.textContent=''; return; } const since=(+v.odometer||0)-(+v.last_service||0); const interval=(+v.service_interval||0); const left=interval>0?(interval-since):null; let t='Пробег '+Math.round(+v.odometer||0)+' км'+(left!=null?(' · до ТО '+(left>0?Math.round(left)+' км':'просрочено')):''); el.textContent=t; }
+function updateVehInfo(){ const el=$('tpVehInfo'); if(!el) return; const v=vehicles.find(x=>x.id==$('tpVeh').value);
+  el.textContent=v?(v.wialon_id?'С датчиком — трек и факт-пробег считаются по нему.':'Без датчика — факт-пробег вводится вручную.'):''; }
 async function loadSettings(){ try{
   // Управленческая часть настроек (себестоимости, тарифы, профили, реквизиты)
   // читается только менеджером. Инженеру политика settings_read её не отдаёт,
