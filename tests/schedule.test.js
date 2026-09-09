@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planSchedule, driveOfLegs, dayIso, dayMs, isWorkday,
-  normPos, addHours, piecesOf, clockOf, scheduleJobIncluded } from '../src/core/schedule.js';
+  normPos, addHours, piecesOf, clockOf, scheduleJobIncluded, tripRouteSegments } from '../src/core/schedule.js';
 
 // Календарь для тестов: 2026-09-07 понедельник, 09-08 вт, 09-09 ср,
 // 09-10 чт, 09-11 пт, 09-12 сб, 09-13 вс.
@@ -16,6 +16,16 @@ describe('состав рабочего графика', () => {
     expect(scheduleJobIncluded('done','done')).toBe(false);
     expect(scheduleJobIncluded('done',null)).toBe(false);
     expect(scheduleJobIncluded('cancelled','in_progress')).toBe(false);
+  });
+
+  it('раскладывает legacy-выезд с промежуточными точками и без legs', () => {
+    const stops=['depot','wp1','job-a','job-b','wp2','depot'].map(key=>({key}));
+    const segs=tripRouteSegments(stops,[
+      {id:'a',key:'job-a',h:5}, {id:'b',key:'job-b',h:16}
+    ],[],27.643194444444443);
+    expect(segs.map(x=>x.k)).toEqual(['d','d','w','d','w','d','d']);
+    expect(segs.filter(x=>x.k==='d').reduce((n,x)=>n+x.h,0)).toBeCloseTo(27.643194444444443);
+    expect(segs.filter(x=>x.k==='w').map(x=>[x.jobId,x.h])).toEqual([['a',5],['b',16]]);
   });
 });
 

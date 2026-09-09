@@ -32,7 +32,7 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
-        planSchedule, scheduleJobIncluded, driveOfLegs, piecesOf, normPos, addHours, clockOf,
+        planSchedule, scheduleJobIncluded, tripRouteSegments, driveOfLegs, piecesOf, normPos, addHours, clockOf,
         measureTrip } = core;
 
 
@@ -1755,24 +1755,10 @@ function scheduleJobKey(j){
 // собираем реальный порядок дня: доехали до точки → сделали её работы →
 // поехали к следующей. Старый расчёт складывал все промежуточные плечи в
 // один «рабочий островок», из-за чего недельный гант врал о ходе выезда.
-function scheduleRouteSegs(t,jobs,legs){
-  const stops=(t&&t.route_stops)||[], byStop={};
-  jobs.forEach(j=>{ const k=scheduleJobKey(j); if(k) (byStop[k]||(byStop[k]=[])).push(j); });
-  const remaining=new Set(jobs.map(j=>j.id)), out=[];
-  const add=(k,h,jobId)=>{ if(+h>0) out.push({k,h:+h,jobId:jobId||null}); };
-  if(stops.length>1 && Array.isArray(legs) && legs.length){
-    for(let i=1;i<stops.length;i++){
-      const a=schedulePtKey(stops[i-1]), b=schedulePtKey(stops[i]);
-      const leg=legs.find(x=>x&&x.a===a&&x.b===b)||legs[i-1];
-      add('d',leg&&leg.h);
-      (byStop[b]||[]).forEach(j=>{ add('w',jobHours(j),j.id); remaining.delete(j.id); });
-    }
-  }
-  // Точка заявки могла не попасть в сохранённый маршрут (старый выезд,
-  // заявка без координат). Её часы не исчезают: ставим их в конце, как это
-  // делал прежний агрегированный план.
-  jobs.forEach(j=>{ if(remaining.has(j.id)){ add('w',jobHours(j),j.id); remaining.delete(j.id); } });
-  return out;
+function scheduleRouteSegs(t,jobs,legs,totalDriveH){
+  const stops=((t&&t.route_stops)||[]).map(s=>({key:schedulePtKey(s),type:s&&s.type}));
+  const work=jobs.map(j=>({id:j.id,key:scheduleJobKey(j),h:jobHours(j)}));
+  return tripRouteSegments(stops,work,legs,totalDriveH);
 }
 function buildBlocks(list,tripOf,tripById,tripOrd){
   const blockOf={}, tripJobs={}, blocks=[];
@@ -1795,7 +1781,7 @@ function buildBlocks(list,tripOf,tripById,tripOrd){
     // Плечи знают, сколько ехать ДО первой точки и сколько обратно. У
     // выездов, сохранённых до появления плеч, дорога делится пополам.
     const d=driveOfLegs(es.legs), dh=+es.driveH||0;
-    const routeSegs=scheduleRouteSegs(t,js,es.legs||[]);
+    const routeSegs=scheduleRouteSegs(t,js,es.legs||[],dh);
     const slas=js.map(j=>j.due_date).filter(Boolean).sort();
     blocks.push({id:'t'+tid,kind:'trip',engineer:t.lead_engineer||js[0].assigned_engineer||null,
       sla:slas[0]||null,workH:js.reduce((a,j)=>a+jobHours(j),0),
