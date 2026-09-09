@@ -195,7 +195,7 @@ describe('заявки внутри выезда', () => {
     const r = planSchedule([{
       id: 't', kind: 'trip', engineer: 'ivan', from: '2026-09-07', to: '2026-09-11',
       workH: 16, driveToH: 8, driveMidH: 8, driveBackH: 8,
-      routeSegs: [{ k: 'd', h: 8 }, { k: 'w', h: 8 }, { k: 'd', h: 8 }, { k: 'w', h: 8 }, { k: 'd', h: 8 }],
+      routeSegs: [{ k: 'd', h: 8 }, { k: 'w', h: 8, jobId: 'a' }, { k: 'd', h: 8 }, { k: 'w', h: 8, jobId: 'b' }, { k: 'd', h: 8 }],
       jobs: [{ id: 'a', workH: 8, sla: '2026-09-30' }, { id: 'b', workH: 8, sla: '2026-09-30' }], jobIds: ['a', 'b']
     }], S, TODAY);
     const b = r.blocks[0];
@@ -203,6 +203,7 @@ describe('заявки внутри выезда', () => {
       ['2026-09-07', 'd', 8], ['2026-09-08', 'w', 8], ['2026-09-09', 'd', 8],
       ['2026-09-10', 'w', 8], ['2026-09-11', 'd', 8]
     ]);
+    expect(b.pieces.filter(p => p.k === 'w').map(p => p.jobId)).toEqual(['a', 'b']);
     expect(b.jobDays).toEqual({ a: '2026-09-08', b: '2026-09-10' });
   });
   it('дорога занимает первый день, работа идёт со второго', () => {

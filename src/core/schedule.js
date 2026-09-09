@@ -174,7 +174,7 @@ function cellsOf(pieces) {
 function segsOf(b) {
   if (Array.isArray(b.routeSegs) && b.routeSegs.length)
     return b.routeSegs.filter(x => x && (+x.h || 0) > 0)
-      .map(x => ({ k: x.k === 'd' ? 'd' : 'w', h: +x.h || 0 }));
+      .map(x => ({ k: x.k === 'd' ? 'd' : 'w', h: +x.h || 0, jobId: x.jobId || null }));
   const out = [];
   if (b.driveToH > 0) out.push({ k: 'd', h: b.driveToH });
   const work = (+b.workH || 0) + (+b.driveMidH || 0);
