@@ -1683,6 +1683,34 @@ function shortDate(iso){
 // считать по одному и тому же. Пока это было в двух местах, «график» и
 // «загрузка инженеров» показывали разные часы на одни и те же дни.
 function jobHours(j){ return ((j&&j.job_works)||[]).reduce((a,w)=>a+(+w.hours||0),0); }
+const schedulePtKey=p=>p&&p.lat!=null&&p.lng!=null?((+p.lat).toFixed(5)+','+(+p.lng).toFixed(5)):'';
+function scheduleJobKey(j){
+  const e=j&&j.equipment, c=j&&j.clients;
+  return schedulePtKey(e&&e.lat!=null?e:c);
+}
+// Снимок маршрута хранит каждое плечо с ключами его концов. По ним снова
+// собираем реальный порядок дня: доехали до точки → сделали её работы →
+// поехали к следующей. Старый расчёт складывал все промежуточные плечи в
+// один «рабочий островок», из-за чего недельный гант врал о ходе выезда.
+function scheduleRouteSegs(t,jobs,legs){
+  const stops=(t&&t.route_stops)||[], byStop={};
+  jobs.forEach(j=>{ const k=scheduleJobKey(j); if(k) (byStop[k]||(byStop[k]=[])).push(j); });
+  const remaining=new Set(jobs.map(j=>j.id)), out=[];
+  const add=(k,h)=>{ if(+h>0) out.push({k,h:+h}); };
+  if(stops.length>1 && Array.isArray(legs) && legs.length){
+    for(let i=1;i<stops.length;i++){
+      const a=schedulePtKey(stops[i-1]), b=schedulePtKey(stops[i]);
+      const leg=legs.find(x=>x&&x.a===a&&x.b===b)||legs[i-1];
+      add('d',leg&&leg.h);
+      (byStop[b]||[]).forEach(j=>{ add('w',jobHours(j)); remaining.delete(j.id); });
+    }
+  }
+  // Точка заявки могла не попасть в сохранённый маршрут (старый выезд,
+  // заявка без координат). Её часы не исчезают: ставим их в конце, как это
+  // делал прежний агрегированный план.
+  jobs.forEach(j=>{ if(remaining.has(j.id)){ add('w',jobHours(j)); remaining.delete(j.id); } });
+  return out;
+}
 function buildBlocks(list,tripOf,tripById,tripOrd){
   const blockOf={}, tripJobs={}, blocks=[];
   const ord=tripOrd||{};
@@ -1697,11 +1725,13 @@ function buildBlocks(list,tripOf,tripById,tripOrd){
     // Плечи знают, сколько ехать ДО первой точки и сколько обратно. У
     // выездов, сохранённых до появления плеч, дорога делится пополам.
     const d=driveOfLegs(es.legs), dh=+es.driveH||0;
+    const routeSegs=scheduleRouteSegs(t,js,es.legs||[]);
     const slas=js.map(j=>j.due_date).filter(Boolean).sort();
     blocks.push({id:'t'+tid,kind:'trip',engineer:t.lead_engineer||js[0].assigned_engineer||null,
       sla:slas[0]||null,workH:js.reduce((a,j)=>a+jobHours(j),0),
       driveToH:d.toH||dh/2,driveBackH:d.backH||dh/2,driveMidH:d.midH||0,
       from:t.date_from||null,to:t.date_to||t.date_from||null,jobIds:js.map(j=>j.id),
+      routeSegs:routeSegs.length?routeSegs:null,
       plan:t.day_plan||null,
       jobs:js.map(j=>({id:j.id,workH:jobHours(j),sla:j.due_date||null}))});
     js.forEach(j=>{ blockOf[j.id]='t'+tid; });
@@ -2011,7 +2041,7 @@ async function renderFeed(box,o){
     let list=null, tripOf={}, tripById={}, tripOrd={}, offline=false, snapAt=0, orphanLinks=0;
     try{
       const { data, error }=await sb.from('jobs')
-        .select('id,status,due_date,created_at,assigned_engineer,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model), job_works(hours,billable)')
+        .select('id,status,due_date,created_at,assigned_engineer,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), job_works(hours,billable)')
         .is('deleted_at',null);
       if(error) throw error;
       list=data||[];
@@ -2227,6 +2257,17 @@ async function renderFeed(box,o){
       (b.jobIds||[]).forEach(id=>{ const d=jd[id]||b.workTo; if(d) dayJobs[d]=(dayJobs[d]||0)+1; }); });
     const engN=o.mine?1:engineersCount(plan);
     const dayCap=shift*engN;
+    // В личном графике дорожка одна, поэтому чип может честно показать
+    // порядок внутри смены (дорога → работа → дорога), а не только суммы
+    // двух цветов. Для отдела с несколькими инженерами оставляем сводную
+    // шкалу: их параллельные часы в одну временную ось складывать нельзя.
+    const dayPieces={};
+    if(engN===1){
+      plan.blocks.forEach(b=>(b.pieces||[]).forEach(p=>{
+        (dayPieces[p.iso]||(dayPieces[p.iso]=[])).push(p);
+      }));
+      Object.keys(dayPieces).forEach(d=>dayPieces[d].sort((a,b)=>a.from-b.from));
+    }
     const weeks={};
     Object.keys(dayH).forEach(d=>{ const w=weekOf(d); if(!w) return;
       const it=weeks[w.key]||(weeks[w.key]={w,h:0,n:0,days:{}});
@@ -2273,9 +2314,14 @@ async function renderFeed(box,o){
           +(dd.driveH>0.05?(' · дорога '+dd.driveH.toFixed(dd.driveH%1?1:0)):'')
           +(jn?(' · сдаём '+jn+' '+plural(jn,'заявку','заявки','заявок')):'')
           +' · нажми, чтобы открыть день';
+        const ordered=(dayPieces[iso]||[]).map(p=>{
+          const left=Math.max(0,Math.min(100,p.from/dayCap*100));
+          const width=Math.max(0,Math.min(100-left,p.h/dayCap*100));
+          return '<i class="wk-f '+(p.k==='w'?'wk-fw':'wk-fd')+'" style="left:'+left+'%;width:'+width+'%"></i>';
+        }).join('');
         dh+='<span class="wk-d'+cls+'" data-gday="'+iso+'" title="'+esc(tip)+'">'
-          +(dd.workH>0.001?('<i class="wk-f wk-fw" style="width:'+wPc+'%"></i>'):'')
-          +(dd.driveH>0.001?('<i class="wk-f wk-fd" style="left:'+wPc+'%;width:'+dPc+'%"></i>'):'')
+          +(ordered || (dd.workH>0.001?('<i class="wk-f wk-fw" style="width:'+wPc+'%"></i>'):'')
+            +(dd.driveH>0.001?('<i class="wk-f wk-fd" style="left:'+wPc+'%;width:'+dPc+'%"></i>'):''))
           +'<b>'+WD_RU[(i+1)%7]+'</b></span>';
       }
       return '<div class="wkrow" data-wk="'+esc(key)+'"><div class="wk-h"><span class="wk-n">Неделя '+it.w.n+' · '+esc(weekSpan(it.w))+'</span>'
@@ -5799,16 +5845,17 @@ if($('todayLater')) $('todayLater').onclick=()=>$('todayOverlay').classList.remo
 // Факт-трек живёт не одним слоем, а пятью: иначе их нельзя включать и
 // выключать по отдельности, а именно это и нужно — посмотреть план без
 // факта, или факт без выброшенных точек.
-const FACT_LAYERS=['track','road','line','drop','stay'];
+const FACT_LAYERS=['track','road','line','live','drop','stay'];
 let factG={}; FACT_LAYERS.forEach(k=>{ factG[k]=L.layerGroup().addTo(map); });
 // Что показано. Переживает перерисовку: человек выключил выброшенные —
 // они не должны вернуться сами при следующем открытии трека.
-let factVis={plan:true,track:true,road:true,line:true,drop:true,stay:true};
+let factVis={plan:true,track:true,road:true,line:true,live:true,drop:true,stay:true};
 let factTripId=null;
+let factTrip=null, factRaw=[], factLiveBusy=false;
 
 function factClear(){
   FACT_LAYERS.forEach(k=>factG[k].clearLayers());
-  factTripId=null; factLast=null;
+  factTripId=null; factTrip=null; factRaw=[]; factLast=null;
   try{ renderMapPanel(); }catch(e){}
 }
 // Слой либо на карте, либо нет. Очистка слоя тут не годится: при следующем
@@ -5837,6 +5884,7 @@ function factApplyVis(){
 const TRACK_C='#22c55e';   // измерено приёмником
 const ROAD_C ='#7c3aed';   // достроено маршрутом по дорогам
 const GAP_C  ='#9aa1ad';   // прямая через дыру: где ехали — неизвестно
+const LIVE_C ='#38bdf8';   // последняя телеметрия, ещё не попавшая в историю
 const DROP_C ='#dc2626';   // выброшено как ошибка приёмника
 const STAY_C ='#dc2626';   // стоянка — знак «стоп», он красный
 
@@ -5917,6 +5965,7 @@ function mapPanelRows(){
     if(d.trackKm) R.push({key:'track',style:'border-top:4px dotted '+TRACK_C,name:'видели по трекеру',km:d.trackKm});
     if(d.roadKm)  R.push({key:'road', style:'border-top:5px solid '+ROAD_C, name:'посчитано по дорогам',km:d.roadKm});
     if(d.lineKm)  R.push({key:'line', style:'border-top:3px dotted '+GAP_C, name:'прямая, маршрут не строился',km:d.lineKm});
+    if(factLiveTail(d)) R.push({key:'live',style:'border-top:3px dashed '+LIVE_C,name:'текущая позиция · ждёт истории'});
     if(d.dropped.length) R.push({key:'drop',icon:dropSvg(13),name:'выброшено точек',val:d.droppedTotal||d.dropped.length});
     R.push({key:'stay',icon:stopSvg(13),name:'стоянки'});
   }
@@ -6090,7 +6139,7 @@ async function showTripOnMap(tid){
   // Факт — сверху плана и только если он есть. Отсутствие факта больше не
   // повод показать пустую карту: у запланированного выезда факта нет по
   // определению, а посмотреть маршрут нужно именно до поездки.
-  const fact=await showTripFact(tid,{quiet:true});
+  const fact=await showTripFact(tid,{quiet:true,trip:t});
   if(!fact) showToast(shown?'Факта нет — показан плановый маршрут':'У выезда нет ни маршрута, ни трека');
 }
 
@@ -6103,26 +6152,38 @@ function drawFact(m){
     const t1=+new Date(from), t2=+new Date(to||from);
     return !(t2<a||t1>b);
   };
+  // Тысяча точек не должна превращаться в тысячу Leaflet-слоёв. Для трека
+  // склеиваем соседние отрезки одинаковой ступени скорости в одну polyline:
+  // цвет скорости остаётся, а DOM/SVG на длинном выезде не разрастается.
+  const runs=[]; let run=null;
+  const flushRun=()=>{ if(run){ runs.push(run); run=null; } };
   (m.segments||[]).forEach(g=>{
-    if(!inWin(g.fromTs,g.toTs)) return;
+    if(!inWin(g.fromTs,g.toTs)){ flushRun(); return; }
     const ab=[[g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]];
     if(g.kind==='road'){
+      flushRun();
       const line=(g.line&&g.line.length>1)?g.line.map(p=>[p[1],p[0]]):ab;
       factG.road.addLayer(L.polyline(line,{color:ROAD_C,weight:5,opacity:.9})
         .bindPopup(segPopup(g,'достроено по дорогам'+(g.why?(' · '+esc(g.why)):''))));
       return;
     }
     if(g.kind==='line'){
+      flushRun();
       factG.line.addLayer(L.polyline(ab,{color:GAP_C,weight:3,opacity:.85,dashArray:'2 9'})
         .bindPopup(segPopup(g,esc(g.why||'маршрут не строился')+' — цифра занижена')));
       return;
     }
-    // Измеренный кусок красим скоростью. Кликается он же: отдельные точки
-    // ставить незачем, отрезок И ЕСТЬ переход между двумя соседними.
-    const kmh=segKmh(g);
-    factG.track.addLayer(L.polyline(ab,{color:speedColor(kmh),weight:5,opacity:.95,lineCap:'round'})
-      .bindPopup(segPopup(g)));
+    const kmh=segKmh(g), color=speedColor(kmh);
+    if(!run || run.color!==color || run.toTs!==g.fromTs){
+      flushRun();
+      run={color,points:ab.slice(),km:g.km,ms:g.ms||0,fromTs:g.fromTs,toTs:g.toTs};
+    }else{
+      run.points.push(ab[1]); run.km+=g.km; run.ms+=(g.ms||0); run.toTs=g.toTs;
+    }
   });
+  flushRun();
+  runs.forEach(g=>factG.track.addLayer(L.polyline(g.points,{color:g.color,weight:5,opacity:.95,lineCap:'round'})
+    .bindPopup(segPopup(g))));
   // Выброшенное показываем, а не прячем: если приёмник врёт постоянно,
   // это видно на карте, и разговор с поставщиком трекера предметный.
   (m.dropped||[]).forEach(p=>{
@@ -6140,6 +6201,7 @@ function drawFact(m){
     factG.road.addLayer(L.circleMarker([p.lat,p.lng],{radius:7,color:ROAD_C,fillColor:'#fff',fillOpacity:1,weight:3})
       .bindPopup('<b>'+esc(p.anchor)+'</b><br>трек сюда не дошёл, дорога достроена'));
   });
+  drawFactLiveTail(m);
   factApplyVis();
 }
 
@@ -6157,28 +6219,72 @@ function factWindow(m){
   return [factFrom==null?bb[0]:factFrom, factTo==null?bb[1]:factTo];
 }
 
+// PostgREST у проекта отдаёт не больше 1000 строк за запрос. У длинного
+// рейса первая страница выглядела как «факт застыл на 821 км», хотя точки
+// продолжали приходить. Курсор времени грузит весь трек, а затем — только
+// хвост после уже увиденной точки.
+async function loadTripPositions(tid,afterTs){
+  const out=[]; let cursor=afterTs||null;
+  for(;;){
+    let q=sb.from('vehicle_positions').select('lat,lng,ts,status')
+      .eq('trip_id',tid).order('ts',{ascending:true}).limit(1000);
+    if(cursor) q=q.gt('ts',cursor);
+    const {data,error}=await q; if(error) throw error;
+    const page=data||[]; out.push(...page);
+    if(page.length<1000) return out;
+    cursor=page[page.length-1].ts;
+  }
+}
+function factLiveTail(m){
+  if(!factTrip||factTrip.status!=='in_progress'||!factRaw.length) return null;
+  const r=vehState.find(x=>x.trip_id===factTripId || x.vehicle_id===factTrip.vehicle_id);
+  const last=factRaw[factRaw.length-1];
+  if(!r||r.lat==null||r.lng==null||!r.ts||+new Date(r.ts)<=+new Date(last.ts)) return null;
+  return {from:last,to:r};
+}
+function drawFactLiveTail(m){
+  factG.live.clearLayers();
+  const tail=factLiveTail(m); if(!tail) return;
+  factG.live.addLayer(L.polyline([[tail.from.lat,tail.from.lng],[tail.to.lat,tail.to.lng]],
+    {color:LIVE_C,weight:4,opacity:.95,dashArray:'8 8',lineCap:'round'})
+    .bindPopup('<b>Текущая позиция</b><br>ещё не записана в историю выезда'));
+}
+async function refreshFactLive(){
+  if(factLiveBusy||!factTripId||!factTrip||factTrip.status!=='in_progress'||document.hidden) return;
+  factLiveBusy=true;
+  try{
+    const last=factRaw.length?factRaw[factRaw.length-1].ts:null;
+    const fresh=await loadTripPositions(factTripId,last);
+    if(fresh.length){
+      factRaw.push(...fresh);
+      const m=await measureTrip(factRaw,trackOpts(),tripEnds(factTrip),null);
+      factLast=m; drawFact(m); showFactLegend(m);
+    }else if(factLast) drawFact(factLast); // обновить короткий live-хвост
+  }catch(e){ console.warn('Не удалось догрузить факт-трек:',e); }
+  finally{ factLiveBusy=false; }
+}
 async function showTripFact(tid,opt){
   const quiet=!!(opt&&opt.quiet);
   factClear();
   try{
-    const { data }=await sb.from('vehicle_positions').select('lat,lng,ts,status')
-      .eq('trip_id',tid).order('ts');
-    const raw=(data||[]).filter(p=>p.lat!=null&&p.lng!=null);
+    const raw=(await loadTripPositions(tid)).filter(p=>p.lat!=null&&p.lng!=null);
     if(!raw.length){ setTimeout(()=>map.invalidateSize(),60); if(!quiet) showToast('Фактического трека нет'); return false; }
 
     // Если выезд только что сводили, показываем ТОТ ЖЕ результат: карта и
     // деньги обязаны быть про одно. Если нет — считаем тем же проходом, но
     // без маршрутизатора: показ трека не должен стоить квоты. Отрезки, для
     // которых маршрут не строился, честно помечены.
-    const t=trips.find(x=>x.id==tid)||null;
+    const t=(opt&&opt.trip)||trips.find(x=>x.id==tid)||tripCache[tid]||null;
     // Порядок важен. Свежий разбор этой вкладки — самый верный. Дальше
     // сохранённый: он посчитан с маршрутизатором, и это ровно то, что ушло
     // в деньги. И только если ни того ни другого нет — считаем на месте,
     // без запросов, помечая отрезки как непостроенные.
-    const m=lastMeasure[tid]||await readFactTrack(tid)
-      ||await measureTrip(raw,trackOpts(),tripEnds(t),null);
+    // Активный выезд всегда строим из свежего raw: сохранённый разбор — это
+    // снимок прошлого и он не должен останавливать live-линию.
+    const m=(t&&t.status==='in_progress') ? await measureTrip(raw,trackOpts(),tripEnds(t),null)
+      : (lastMeasure[tid]||await readFactTrack(tid)||await measureTrip(raw,trackOpts(),tripEnds(t),null));
     if(!m.segments.length&&!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
-    factTripId=tid; factFrom=null; factTo=null;
+    factTripId=tid; factTrip=t; factRaw=raw; factFrom=null; factTo=null;
 
     drawFact(m);
 
@@ -6280,9 +6386,7 @@ function trackOpts(){
 // «достройкой разрывов», — и они расходились: карта показывала одно, а
 // в деньги уходило другое. Теперь источник один.
 async function measureTripKm(tid){
-  const { data }=await sb.from('vehicle_positions').select('lat,lng,ts,status')
-    .eq('trip_id',tid).order('ts');
-  const raw=(data||[]).filter(p=>p.lat!=null&&p.lng!=null);
+  const raw=(await loadTripPositions(tid)).filter(p=>p.lat!=null&&p.lng!=null);
   if(raw.length<2) return {ok:false,why:'трека нет'};
 
   const t=trips.find(x=>x.id==tid)||null;
@@ -6423,6 +6527,10 @@ async function loadVehState(){
       const bear=(o && (o.lat!==r.lat || o.lng!==r.lng)) ? vehBearing(o,r) : (vehMk[r.vehicle_id]||{}).__bear;
       return Object.assign({},r,{__bear:bear}); });
     renderVehState();
+    // Открытый факт живёт тем же 30-секундным пульсом, что и маркер машины:
+    // догружаем только новые исторические точки и соединяем коротким
+    // пунктиром последнюю подтверждённую с текущей телеметрией.
+    refreshFactLive();
     // Открытая модалка должна ехать вместе с картой, а не застывать на
     // цифрах момента открытия — иначе она врёт тем убедительнее, чем дольше висит.
     if(vehModalId && $('vehOverlay') && $('vehOverlay').classList.contains('on')) showVehModal(vehModalId);
@@ -7311,9 +7419,7 @@ async function drawTripMap(t){
   // каждом открытии выезда, и платить за неё запросами нельзя. Если выезд
   // только что сводили, берём готовый результат.
   try{
-    const {data}=await sb.from('vehicle_positions').select('lat,lng,ts,status')
-      .eq('trip_id',t.id).order('ts',{ascending:true}).limit(3000);
-    const raw=(data||[]).filter(r=>r.lat!=null&&r.lng!=null);
+    const raw=(await loadTripPositions(t.id)).filter(r=>r.lat!=null&&r.lng!=null);
     if(raw.length>1){
       const m=lastMeasure[t.id]||await readFactTrack(t.id)
         ||await measureTrip(raw,trackOpts(),tripEnds(t),null);
