@@ -79,14 +79,6 @@ export function scheduleJobIncluded(status, tripStatus) {
   return !!tripStatus && tripStatus !== 'done' && tripStatus !== 'cancelled';
 }
 
-// Закрытая заявка остаётся частью хронологии, пока жив её выезд: работа уже
-// сделана, но дорога до следующей точки от этого не переносится назад.
-export function scheduleJobIncluded(status, tripStatus) {
-  if (status === 'cancelled') return false;
-  if (status !== 'done') return true;
-  return !!tripStatus && tripStatus !== 'done' && tripStatus !== 'cancelled';
-}
-
 // ---- Даты -------------------------------------------------------------
 // Календарь считается в UTC-полуночах: без часовых поясов.
 export function dayMs(iso) {
