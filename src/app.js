@@ -1909,8 +1909,10 @@ function gtHtml(key){
         const w=(p.h/span*100);
         if(first==null) first=x;
         last=x+w;
-        bars+='<div class="gpc '+(p.k==='w'?'gw':'gd')+(String(gtSel)===String(b.id)?' sel':'')
-          +(b.manual?' man':'')+'" style="left:'+x+'%;width:'+w+'%" data-gb="'+esc(b.id)+'"></div>';
+        const task=p.jobId&&feedCtx.jobName(p.jobId);
+        bars+='<div class="gpc '+(p.k==='w'?'gw':'gd')+(p.jobId?' job-cut':'')+(String(gtSel)===String(b.id)?' sel':'')
+          +(b.manual?' man':'')+'" style="left:'+x+'%;width:'+w+'%" data-gb="'+esc(b.id)+'"'
+          +(task?' title="'+esc(task)+'"':'')+'></div>';
       });
       if(first!=null){
         const nm=b.kind==='trip'?('Выезд '+shortDate(b.from)):((feedCtx.jobName(b.jobIds[0])||'Заявка'));
@@ -3197,10 +3199,10 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   try{
     await ensureRefs();
     const {data:js}=await sb.from('jobs')
-      .select('id,status,at_depot,due_date,created_at,assigned_engineer,day_plan, job_works(hours,billable,revenue), job_parts(qty,price,cost,billable)')
+      .select('id,status,at_depot,due_date,created_at,assigned_engineer,day_plan, clients(lat,lng), equipment(lat,lng), job_works(hours,billable,revenue), job_parts(qty,price,cost,billable)')
       .is('deleted_at',null);
     const jb=js||[];
-    const {data:tr}=await sb.from('trips').select('id,econ_snapshot,date_from,date_to,lead_engineer,status,day_plan').is('deleted_at',null);
+    const {data:tr}=await sb.from('trips').select('id,econ_snapshot,route_stops,date_from,date_to,lead_engineer,status,day_plan').is('deleted_at',null);
     const trips=tr||[];
     // Кто в каком выезде — планировщику: без этого выезд рассыпается на
     // отдельные заявки, и дорога исчезает из загрузки.
