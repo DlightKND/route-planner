@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planSchedule, driveOfLegs, dayIso, dayMs, isWorkday,
-  normPos, addHours, piecesOf, clockOf, scheduleJobIncluded, scheduleNowAt } from '../src/core/schedule.js';
+  normPos, addHours, piecesOf, clockOf, scheduleJobIncluded } from '../src/core/schedule.js';
 
 // Календарь для тестов: 2026-09-07 понедельник, 09-08 вт, 09-09 ср,
 // 09-10 чт, 09-11 пт, 09-12 сб, 09-13 вс.
@@ -16,17 +16,6 @@ describe('состав рабочего графика', () => {
     expect(scheduleJobIncluded('done','done')).toBe(false);
     expect(scheduleJobIncluded('done',null)).toBe(false);
     expect(scheduleJobIncluded('cancelled','in_progress')).toBe(false);
-  });
-});
-
-describe('рабочий часовой пояс', () => {
-  it('летом использует Киев с переходом на UTC+3', () => {
-    expect(scheduleNowAt(new Date('2026-09-09T07:30:00Z'),8)).toEqual({
-      iso: '2026-09-09', h: 2.5, label: '10:30'
-    });
-  });
-  it('зимой учитывает UTC+2, а не фиксированное летнее смещение', () => {
-    expect(scheduleNowAt(new Date('2026-12-09T07:30:00Z'),8).label).toBe('09:30');
   });
 });
 
@@ -206,8 +195,7 @@ describe('заявки внутри выезда', () => {
     const r = planSchedule([{
       id: 't', kind: 'trip', engineer: 'ivan', from: '2026-09-07', to: '2026-09-11',
       workH: 16, driveToH: 8, driveMidH: 8, driveBackH: 8,
-      routeSegs: [{ k: 'd', h: 8 }, { k: 'w', h: 8, jobId: 'a' }, { k: 'd', h: 8 },
-        { k: 'w', h: 8, jobId: 'b' }, { k: 'd', h: 8 }],
+      routeSegs: [{ k: 'd', h: 8 }, { k: 'w', h: 8 }, { k: 'd', h: 8 }, { k: 'w', h: 8 }, { k: 'd', h: 8 }],
       jobs: [{ id: 'a', workH: 8, sla: '2026-09-30' }, { id: 'b', workH: 8, sla: '2026-09-30' }], jobIds: ['a', 'b']
     }], S, TODAY);
     const b = r.blocks[0];

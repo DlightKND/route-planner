@@ -73,11 +73,19 @@ export function scheduleNowAt(date, dayStart, timeZone) {
 
 // Закрытая заявка остаётся частью хронологии, пока жив её выезд: работа уже
 // сделана, но дорога до следующей точки от этого не переносится назад.
-export const scheduleJobIncluded = (status, tripStatus) => {
+export function scheduleJobIncluded(status, tripStatus) {
   if (status === 'cancelled') return false;
   if (status !== 'done') return true;
   return !!tripStatus && tripStatus !== 'done' && tripStatus !== 'cancelled';
-};
+}
+
+// Закрытая заявка остаётся частью хронологии, пока жив её выезд: работа уже
+// сделана, но дорога до следующей точки от этого не переносится назад.
+export function scheduleJobIncluded(status, tripStatus) {
+  if (status === 'cancelled') return false;
+  if (status !== 'done') return true;
+  return !!tripStatus && tripStatus !== 'done' && tripStatus !== 'cancelled';
+}
 
 // ---- Даты -------------------------------------------------------------
 // Календарь считается в UTC-полуночах: без часовых поясов.
@@ -174,7 +182,7 @@ function cellsOf(pieces) {
 function segsOf(b) {
   if (Array.isArray(b.routeSegs) && b.routeSegs.length)
     return b.routeSegs.filter(x => x && (+x.h || 0) > 0)
-      .map(x => ({ k: x.k === 'd' ? 'd' : 'w', h: +x.h || 0, jobId: x.jobId || null }));
+      .map(x => ({ k: x.k === 'd' ? 'd' : 'w', h: +x.h || 0 }));
   const out = [];
   if (b.driveToH > 0) out.push({ k: 'd', h: b.driveToH });
   const work = (+b.workH || 0) + (+b.driveMidH || 0);
