@@ -1410,15 +1410,18 @@
 .wk-d.full{background:color-mix(in srgb,var(--red) 26%,var(--panel));color:var(--ink);
   border-color:color-mix(in srgb,var(--red) 50%,var(--line))}
 .wk-d.we{opacity:.45}
-/* День заполняется слева направо: работа фирменным, дорога штриховкой.
-   Так в одной строке видно и сколько занято, и из чего это состоит. */
+/* В личном графике день идёт по времени: работа фирменным, дорога
+   штриховкой. В командной сводке это суммы параллельных дорожек. */
 .wk-d{cursor:pointer}
 .wk-f{position:absolute;top:0;bottom:0;left:0}
 .wk-fw{background:color-mix(in srgb,var(--accent-line) 55%,var(--panel))}
+.wk-f.job-cut{border-left:2px solid color-mix(in srgb,var(--panel) 80%,transparent)}
 .wk-fd{background:repeating-linear-gradient(135deg,
   color-mix(in srgb,var(--ink-faint) 28%,var(--panel)) 0 4px,
   color-mix(in srgb,var(--ink-faint) 12%,var(--panel)) 4px 8px)}
-.wk-d b{position:relative;font-weight:inherit}
+.wk-now{position:absolute;top:0;bottom:0;width:2px;background:var(--cyan);z-index:3;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--panel) 55%,transparent);pointer-events:none}
+.wk-d b{position:relative;z-index:4;font-weight:inherit}
 .wk-more{display:block;margin-top: var(--sp-2);background:none;border:0;padding:0;cursor:pointer;
   font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint)}
 .wk-more:hover{color:var(--ink)}
@@ -1450,9 +1453,14 @@
 .gtick{position:absolute;top:0;bottom:0;width:1px;background:color-mix(in srgb,var(--ink-faint) 10%,transparent)}
 .gtick.day{background:color-mix(in srgb,var(--ink-faint) 26%,transparent)}
 .gwe{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--ink-faint) 12%,transparent)}
+.gnow{position:absolute;top:0;bottom:0;width:2px;background:var(--cyan);z-index:6;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--panel) 55%,transparent);pointer-events:none}
+.gnow::before{content:'';position:absolute;left:-3px;top:0;border-left:4px solid transparent;
+  border-right:4px solid transparent;border-top:5px solid var(--cyan)}
 .gpc{position:absolute;top:4px;bottom:4px;cursor:grab;touch-action:none;
   border-top:1px solid rgba(0,0,0,.10);border-bottom:1px solid rgba(0,0,0,.10)}
 .gpc.gw{background:var(--accent-line)}
+.gpc.job-cut{border-left:2px solid color-mix(in srgb,var(--panel) 80%,transparent)}
 .gpc.gd{background:repeating-linear-gradient(135deg,
   color-mix(in srgb,var(--ink-faint) 30%,var(--panel)) 0 4px,
   color-mix(in srgb,var(--ink-faint) 14%,var(--panel)) 4px 8px)}
@@ -2832,10 +2840,18 @@
 <div class="overlay" id="authOverlay"><div class="modal s">
   <h3>Вход</h3>
   <div class="sub">Войди под учётной записью. Первого пользователя зарегистрируй, затем назначь ему роль admin в Supabase.</div>
-  <label>Email</label><input type="email" id="auEmail" autocomplete="username">
-  <label>Пароль</label><input type="password" id="auPass" autocomplete="current-password">
-  <div class="err" id="authErr"></div>
-  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="authBtn">Войти</button></div>
+  <!-- Настоящая form и стандартные autocomplete дают пароль системному
+       менеджеру браузера, а не складывают его открытым текстом в localStorage. -->
+  <form id="authForm">
+    <label for="auEmail">Email</label><input type="email" id="auEmail" name="username" autocomplete="username">
+    <label for="auPass">Пароль</label><input type="password" id="auPass" name="password" autocomplete="current-password">
+    <label style="display:flex;align-items:center;gap: var(--sp-3);margin-top: var(--sp-3);cursor:pointer">
+      <input type="checkbox" id="auRemember" style="width:auto">Запомнить email на этом устройстве
+    </label>
+    <div class="hint">Пароль может безопасно сохранить менеджер паролей браузера.</div>
+    <div class="err" id="authErr"></div>
+    <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="authBtn" type="submit">Войти</button></div>
+  </form>
   <!-- Саморегистрация убрана (аудит, пункт К2): signUp выдавал роль engineer
        автоматически, а читающие политики пускали любого залогиненного
        к клиентам, технике и себестоимостям. Регистрация отключена

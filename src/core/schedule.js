@@ -49,6 +49,35 @@
 const DAY = 86400000;
 
 export const SCHEDULE_DEFAULTS = { shiftH: 8, deviationPct: 0, weekend: [0, 6], dayStart: 8 };
+export const SCHEDULE_TIME_ZONE = 'Europe/Kyiv';
+
+// График относится к рабочему часовому поясу компании, а не к часовому
+// поясу браузера. Это особенно важно для планшетов/терминалов, где системная
+// зона нередко остаётся UTC или фиксированным GMT+2 и отстаёт летом на час.
+export function scheduleNowAt(date, dayStart, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timeZone || SCHEDULE_TIME_ZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(date || new Date()).reduce((out, p) => {
+    if (p.type !== 'literal') out[p.type] = p.value;
+    return out;
+  }, {});
+  const hour = +parts.hour, minute = +parts.minute;
+  return {
+    iso: parts.year + '-' + parts.month + '-' + parts.day,
+    h: hour + minute / 60 - (+dayStart || 8),
+    label: String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0')
+  };
+}
+
+// Закрытая заявка остаётся частью хронологии, пока жив её выезд: работа уже
+// сделана, но дорога до следующей точки от этого не переносится назад.
+export function scheduleJobIncluded(status, tripStatus) {
+  if (status === 'cancelled') return false;
+  if (status !== 'done') return true;
+  return !!tripStatus && tripStatus !== 'done' && tripStatus !== 'cancelled';
+}
 
 // ---- Даты -------------------------------------------------------------
 // Календарь считается в UTC-полуночах: без часовых поясов.
@@ -118,7 +147,8 @@ export function piecesOf(start, segs, s) {
     while (left > 1e-9 && guard++ < 2000) {
       const take = Math.min(left, eff - p.h);
       if (take > 1e-9) {
-        out.push({ iso: p.iso, from: +p.h.toFixed(6), to: +(p.h + take).toFixed(6), h: +take.toFixed(6), k: seg.k });
+        out.push({ iso: p.iso, from: +p.h.toFixed(6), to: +(p.h + take).toFixed(6), h: +take.toFixed(6), k: seg.k,
+          jobId: seg.jobId || null });
         left -= take;
       }
       p = addHours(p, Math.max(take, 1e-9), s);
@@ -138,10 +168,13 @@ function cellsOf(pieces) {
 }
 
 // ---- Отрезки блока ----------------------------------------------------
-// Порядок поездки: дорога туда, работа (с промежуточной дорогой внутри),
-// дорога обратно. Промежуточные плечи считаются работой по времени: они
-// стоят между заявками и занимают тот же день.
+// Порядок поездки: дорога туда, работа у точки, дорога к следующей точке,
+// работа у неё и так до возвращения. Старые снимки знают только три суммы,
+// поэтому для них остаётся прежний запасной порядок.
 function segsOf(b) {
+  if (Array.isArray(b.routeSegs) && b.routeSegs.length)
+    return b.routeSegs.filter(x => x && (+x.h || 0) > 0)
+      .map(x => ({ k: x.k === 'd' ? 'd' : 'w', h: +x.h || 0 }));
   const out = [];
   if (b.driveToH > 0) out.push({ k: 'd', h: b.driveToH });
   const work = (+b.workH || 0) + (+b.driveMidH || 0);
@@ -199,8 +232,13 @@ function assignJobs(block, pieces) {
     list.forEach(j => { out[j.id] = last; });
     return out;
   }
+  // Новые снимки несут id заявки прямо в отрезке маршрута. Тогда закрытие
+  // или изменение часов соседней заявки не может перепривязать день сдачи.
+  work.forEach(p => { if (p.jobId) out[p.jobId] = p.iso; });
+  if (list.every(j => out[j.id])) return out;
   let i = 0, left = work[0].h;
   list.forEach(j => {
+    if (out[j.id]) return;
     let need = +j.workH || 0, guard = 0;
     while (need > 1e-6 && guard++ < 400) {
       const take = Math.min(need, left);
