@@ -79,6 +79,37 @@ export function scheduleJobIncluded(status, tripStatus) {
   return !!tripStatus && tripStatus !== 'done' && tripStatus !== 'cancelled';
 }
 
+// Строит хронологию старого маршрута, у которого сохранено только общее
+// время дороги, но ещё нет econ_snapshot.legs. Дорога распределяется между
+// фактическими соседними точками (включая промежуточные), а работы вставляются
+// непосредственно после соответствующей клиентской точки.
+export function tripRouteSegments(stops, jobs, legs, totalDriveH) {
+  const points = stops || [], work = jobs || [], road = legs || [];
+  const remaining = new Set(work.map(j => j.id));
+  const at = points.map(p => work.filter(j => j.key && j.key === p.key));
+  at.forEach(list => list.forEach(j => remaining.delete(j.id)));
+  const found = [];
+  let known = 0, missing = 0;
+  for (let i = 1; i < points.length; i++) {
+    const leg = road.find(x => x && x.a === points[i - 1].key && x.b === points[i].key) || road[i - 1];
+    const h = +(leg && leg.h) || 0;
+    found.push(h);
+    if (h > 0) known += h; else missing++;
+  }
+  const fallback = missing ? Math.max(0, (+totalDriveH || 0) - known) / missing : 0;
+  const out = [];
+  for (let i = 1; i < points.length; i++) {
+    const h = found[i - 1] || fallback;
+    if (h > 0) out.push({ k: 'd', h, jobId: null });
+    at[i].forEach(j => {
+      if (+j.h > 0) out.push({ k: 'w', h: +j.h, jobId: j.id || null });
+    });
+  }
+  work.filter(j => remaining.has(j.id) && +j.h > 0)
+    .forEach(j => out.push({ k: 'w', h: +j.h, jobId: j.id || null }));
+  return out;
+}
+
 // ---- Даты -------------------------------------------------------------
 // Календарь считается в UTC-полуночах: без часовых поясов.
 export function dayMs(iso) {
