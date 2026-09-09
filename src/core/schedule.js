@@ -50,6 +50,14 @@ const DAY = 86400000;
 
 export const SCHEDULE_DEFAULTS = { shiftH: 8, deviationPct: 0, weekend: [0, 6], dayStart: 8 };
 
+// Закрытая заявка остаётся частью хронологии, пока жив её выезд: работа уже
+// сделана, но дорога до следующей точки от этого не переносится назад.
+export function scheduleJobIncluded(status, tripStatus) {
+  if (status === 'cancelled') return false;
+  if (status !== 'done') return true;
+  return !!tripStatus && tripStatus !== 'done' && tripStatus !== 'cancelled';
+}
+
 // ---- Даты -------------------------------------------------------------
 // Календарь считается в UTC-полуночах: без часовых поясов.
 export function dayMs(iso) {
@@ -138,10 +146,13 @@ function cellsOf(pieces) {
 }
 
 // ---- Отрезки блока ----------------------------------------------------
-// Порядок поездки: дорога туда, работа (с промежуточной дорогой внутри),
-// дорога обратно. Промежуточные плечи считаются работой по времени: они
-// стоят между заявками и занимают тот же день.
+// Порядок поездки: дорога туда, работа у точки, дорога к следующей точке,
+// работа у неё и так до возвращения. Старые снимки знают только три суммы,
+// поэтому для них остаётся прежний запасной порядок.
 function segsOf(b) {
+  if (Array.isArray(b.routeSegs) && b.routeSegs.length)
+    return b.routeSegs.filter(x => x && (+x.h || 0) > 0)
+      .map(x => ({ k: x.k === 'd' ? 'd' : 'w', h: +x.h || 0 }));
   const out = [];
   if (b.driveToH > 0) out.push({ k: 'd', h: b.driveToH });
   const work = (+b.workH || 0) + (+b.driveMidH || 0);
