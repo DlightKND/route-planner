@@ -32,7 +32,7 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
-        planSchedule, includeJobInSchedule, scheduleNowAt, driveOfLegs, piecesOf, normPos, addHours, clockOf,
+        planSchedule, scheduleJobIncluded, driveOfLegs, piecesOf, normPos, addHours, clockOf,
         measureTrip } = core;
 
 
@@ -1755,32 +1755,23 @@ function scheduleJobKey(j){
 // собираем реальный порядок дня: доехали до точки → сделали её работы →
 // поехали к следующей. Старый расчёт складывал все промежуточные плечи в
 // один «рабочий островок», из-за чего недельный гант врал о ходе выезда.
-function scheduleRouteSegs(t,jobs,legs,totalDriveH){
+function scheduleRouteSegs(t,jobs,legs){
   const stops=(t&&t.route_stops)||[], byStop={};
   jobs.forEach(j=>{ const k=scheduleJobKey(j); if(k) (byStop[k]||(byStop[k]=[])).push(j); });
   const remaining=new Set(jobs.map(j=>j.id)), out=[];
-  const add=(k,h,jobId)=>{ if(+h>0) out.push({k,h:+h,jobId:jobId||null}); };
-  if(stops.length>1){
-    const saved=Array.isArray(legs)?legs:[];
-    // Старые выезды хранят только общую длительность дороги. Нулевой массив
-    // legs раньше давал work-only routeSegs и дорога целиком исчезала и из
-    // таймлайна, и из загрузки отдела. Восстанавливаем плечи пропорционально
-    // прямым расстояниям между сохранёнными точками маршрута.
-    const weights=[];
-    for(let i=1;i<stops.length;i++) weights.push(Math.max(.001,kmBetween(stops[i-1],stops[i])||0));
-    const weightSum=weights.reduce((a,x)=>a+x,0)||weights.length;
+  const add=(k,h)=>{ if(+h>0) out.push({k,h:+h}); };
+  if(stops.length>1 && Array.isArray(legs) && legs.length){
     for(let i=1;i<stops.length;i++){
       const a=schedulePtKey(stops[i-1]), b=schedulePtKey(stops[i]);
-      const leg=saved.find(x=>x&&x.a===a&&x.b===b)||saved[i-1];
-      const legH=saved.length>=stops.length-1 ? +(leg&&leg.h)||0 : (+totalDriveH||0)*weights[i-1]/weightSum;
-      add('d',legH);
-      (byStop[b]||[]).forEach(j=>{ add('w',jobHours(j),j.id); remaining.delete(j.id); });
+      const leg=legs.find(x=>x&&x.a===a&&x.b===b)||legs[i-1];
+      add('d',leg&&leg.h);
+      (byStop[b]||[]).forEach(j=>{ add('w',jobHours(j)); remaining.delete(j.id); });
     }
   }
   // Точка заявки могла не попасть в сохранённый маршрут (старый выезд,
   // заявка без координат). Её часы не исчезают: ставим их в конце, как это
   // делал прежний агрегированный план.
-  jobs.forEach(j=>{ if(remaining.has(j.id)){ add('w',jobHours(j),j.id); remaining.delete(j.id); } });
+  jobs.forEach(j=>{ if(remaining.has(j.id)){ add('w',jobHours(j)); remaining.delete(j.id); } });
   return out;
 }
 function buildBlocks(list,tripOf,tripById,tripOrd){
@@ -1792,7 +1783,7 @@ function buildBlocks(list,tripOf,tripById,tripOrd){
   // снова уходит из рабочего графика целиком.
   const scheduled=(list||[]).filter(j=>{
     const t=tripById[tripOf[j.id]];
-    return includeJobInSchedule(j.status,t&&t.status);
+    return scheduleJobIncluded(j.status,t&&t.status);
   });
   scheduled.forEach(j=>{ const tid=tripOf[j.id]; const t=tid?tripById[tid]:null;
     if(t&&t.status!=='cancelled') (tripJobs[tid]||(tripJobs[tid]=[])).push(j); });
@@ -1804,7 +1795,7 @@ function buildBlocks(list,tripOf,tripById,tripOrd){
     // Плечи знают, сколько ехать ДО первой точки и сколько обратно. У
     // выездов, сохранённых до появления плеч, дорога делится пополам.
     const d=driveOfLegs(es.legs), dh=+es.driveH||0;
-    const routeSegs=scheduleRouteSegs(t,js,es.legs||[],dh);
+    const routeSegs=scheduleRouteSegs(t,js,es.legs||[]);
     const slas=js.map(j=>j.due_date).filter(Boolean).sort();
     blocks.push({id:'t'+tid,kind:'trip',engineer:t.lead_engineer||js[0].assigned_engineer||null,
       sla:slas[0]||null,workH:js.reduce((a,j)=>a+jobHours(j),0),
@@ -1865,7 +1856,8 @@ function gtStart(b){
 }
 
 function scheduleNow(){
-  return scheduleNowAt(new Date(),(+appSettings.day_start||8));
+  const d=new Date(), iso=todayISO(d), st=(+appSettings.day_start||8);
+  return {iso,h:d.getHours()+d.getMinutes()/60-st,label:String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
 }
 function gtNowLine(cols,eff){
   const n=scheduleNow(), i=cols.indexOf(n.iso), on=i>=0&&n.h>=0&&n.h<=eff;
@@ -2416,13 +2408,11 @@ async function renderFeed(box,o){
         const ordered=(dayPieces[iso]||[]).map(p=>{
           const left=Math.max(0,Math.min(100,p.from/dayCap*100));
           const width=Math.max(0,Math.min(100-left,p.h/dayCap*100));
-          return '<i class="wk-f '+(p.k==='w'?'wk-fw':'wk-fd')+(p.jobId?' job-cut':'')+'" style="left:'+left+'%;width:'+width+'%"></i>';
+          return '<i class="wk-f '+(p.k==='w'?'wk-fw':'wk-fd')+'" style="left:'+left+'%;width:'+width+'%"></i>';
         }).join('');
-        const now=scheduleNow(), nowOn=iso===now.iso&&now.h>=0&&now.h<=shift;
         dh+='<span class="wk-d'+cls+'" data-gday="'+iso+'" title="'+esc(tip)+'">'
           +(ordered || (dd.workH>0.001?('<i class="wk-f wk-fw" style="width:'+wPc+'%"></i>'):'')
             +(dd.driveH>0.001?('<i class="wk-f wk-fd" style="left:'+wPc+'%;width:'+dPc+'%"></i>'):''))
-          +'<i class="wk-now" data-wknow="'+iso+'" title="Сейчас · '+esc(now.label)+'" style="left:'+(nowOn?(now.h/shift*100):0)+'%;'+(nowOn?'':'display:none')+'"></i>'
           +'<b>'+WD_RU[(i+1)%7]+'</b></span>';
       }
       return '<div class="wkrow" data-wk="'+esc(key)+'"><div class="wk-h"><span class="wk-n">Неделя '+it.w.n+' · '+esc(weekSpan(it.w))+'</span>'
