@@ -93,6 +93,7 @@ const SB_URL_BUILTIN='https://anqfbljgfimoaziztdxe.supabase.co';
 const SB_KEY_BUILTIN='sb_publishable_bKDfkSk7f2uUnV80ei_3qA_5AfJCa7B';
 
 const LS_URL='dl_sb_url', LS_KEY='dl_sb_key';
+const LS_LOGIN_EMAIL='dl_login_email';
 const UA_BOUNDS=[[44.0,22.0],[52.4,40.3]];
 
 let sb=null, session=null, role=null, profile=null;
@@ -690,6 +691,59 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeMore(); });
 // страницы в ключ пункта меню. Без этого перехода на «Выездах» не
 // подсвечивалось бы ничего.
 function navSub(s){ return (s==='jobs'||s==='trips')?'disp':s; }
+// URL живёт в hash, чтобы прямые ссылки работали и на GitHub Pages: серверу
+// не приходится знать маршруты SPA. Пароль/сессия в ссылку не попадают.
+let routeReady=false, routeApplying=false;
+function routeUrl(path){ return location.pathname+location.search+'#/'+String(path||'dash').replace(/^\/+/, ''); }
+function routeSet(path,replace){
+  if(!routeReady||routeApplying) return;
+  const hash='#/'+String(path||'dash').replace(/^\/+/,''), url=routeUrl(path);
+  if(location.hash===hash) return;
+  history[replace?'replaceState':'pushState'](null,'',url);
+}
+function routeForView(name,sub){
+  if(name==='job'&&jobEditId) return 'job/'+encodeURIComponent(jobEditId);
+  if(name==='trip'&&tripEditId) return 'trip/'+encodeURIComponent(tripEditId);
+  if(name==='planner') return 'planner/'+(sub==='disp'?dispCur:(sub||plannerCur));
+  return name;
+}
+async function routeTrip(id){
+  let t=(trips||[]).find(x=>x.id==id)||tripCache[id]||null;
+  if(t) return t;
+  try{ const {data,error}=await sb.from('trips').select('*').eq('id',id).is('deleted_at',null).maybeSingle();
+    if(error) throw error; if(data){ tripCache[id]=data; return data; } }
+  catch(e){ loadFail('выезд по ссылке',e); }
+  return null;
+}
+async function applyRoute(){
+  if(!routeReady||routeApplying) return;
+  routeApplying=true;
+  try{
+    const raw=location.hash.replace(/^#\/?/,'');
+    const p=raw.split('/').filter(Boolean).map(x=>{ try{ return decodeURIComponent(x); }catch(e){ return x; } });
+    if(!p.length){ const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
+      switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
+    if(p[0]==='job'&&p[1]){
+      const j=await fetchJobFull(p[1]);
+      if(!j){ notify('Заявка по ссылке не найдена.','warn'); switchTab('planner','jobs'); return; }
+      if(!jobs.some(x=>x.id===j.id)) jobs.push(j);
+      await openJob(p[1]); return;
+    }
+    if(p[0]==='trip'&&p[1]){
+      const t=await routeTrip(p[1]);
+      if(!t){ notify('Выезд по ссылке не найден.','warn'); switchTab('planner','trips'); return; }
+      if(p[2]==='map') await showTripOnMap(p[1]); else await openTrip(p[1]);
+      return;
+    }
+    if(p[0]==='planner'&&['mine','jobs','trips'].includes(p[1])){ switchTab('planner',p[1]); return; }
+    if(['dash','map','catalog','settings'].includes(p[0])){ switchTab(p[0]); return; }
+    notify('Ссылка не распознана. Открыта сводка.','warn');
+    const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
+    switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub)));
+  } finally { routeApplying=false; }
+}
+window.addEventListener('popstate',applyRoute);
+window.addEventListener('hashchange',applyRoute);
 function switchTab(name, sub){ if(!tabAllowed(name)) return;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
   document.querySelectorAll('.nav-i[data-tab]').forEach(t=>{
@@ -709,7 +763,8 @@ function switchTab(name, sub){ if(!tabAllowed(name)) return;
   // в прошлый раз: уводить его каждый раз на «Заявки» значило бы терять
   // место в работе на ровном месте.
   if(name==='planner') plannerSub(sub==='disp'?dispCur:(sub||plannerCur));
-  if(name==='dash') renderDashboard(); if(name==='settings') renderSettings(); }
+  if(name==='dash') renderDashboard(); if(name==='settings') renderSettings();
+  routeSet(routeForView(name,sub)); }
 document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
   el.onclick=()=>switchTab(el.dataset.tab, el.dataset.sub||null);
 });
@@ -726,7 +781,8 @@ function plannerSub(name){ plannerCur=name;
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
   document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name));
-  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView(); }
+  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView();
+  routeSet('planner/'+name); }
 document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.onclick=()=>setTripsView(b.dataset.tv));
 // Поворот телефона и открытие на планшете меняют раскладку списков —
 // перерисовываем, когда пересекли границу, а не на каждый пиксель.
@@ -792,9 +848,13 @@ $('cfgSave').onclick=()=>{ const url=$('cfgUrl').value.trim(), key=$('cfgKey').v
   if(!url||!key){ $('cfgErr').textContent=SB_KEY_BUILTIN?'Заполни оба поля или очисти оба, чтобы вернуться к встроенным.':'Заполни оба поля.'; return; } try{ localStorage.setItem(LS_URL,url); localStorage.setItem(LS_KEY,key); }catch(e){} location.reload(); };
 
 // ---------- auth ----------
-$('authBtn').onclick=doAuth; $('auPass').addEventListener('keydown',e=>{ if(e.key==='Enter') doAuth(); });
+try{ const saved=localStorage.getItem(LS_LOGIN_EMAIL)||'';
+  if(saved){ $('auEmail').value=saved; $('auRemember').checked=true; } }catch(e){}
+$('authForm').onsubmit=e=>{ e.preventDefault(); doAuth(); };
 async function doAuth(){ const email=$('auEmail').value.trim(), password=$('auPass').value; if(!email||!password){ $('authErr').textContent='Введи email и пароль.'; return; } $('authErr').textContent='…';
   try{ const res=await sb.auth.signInWithPassword({email,password}); if(res.error) throw res.error;
+    try{ if($('auRemember').checked) localStorage.setItem(LS_LOGIN_EMAIL,email);
+      else localStorage.removeItem(LS_LOGIN_EMAIL); }catch(e){}
     await onSignedIn();
   }catch(err){ $('authErr').textContent='Ошибка: '+(err.message||err); } }
 // Наш собственный выход не должен считаться потерей сессии.
@@ -863,7 +923,10 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   // Очередь: показать, сколько лежит, и сразу попробовать отправить —
   // приложение чаще всего открывают уже вернувшись в зону связи.
   await qRefresh(); qFlush();
-  checkTodayTrip(); initPush(); }
+  checkTodayTrip(); initPush();
+  // Сначала поднимаем все формы, справочники и права, и только потом
+  // открываем deep link: /trip/:id без этого выглядел бы пустым выездом.
+  routeReady=true; await applyRoute(); }
 
 // ---------- data load ----------
 async function loadAll(){ $('dataStatus').textContent='Загрузка…';
@@ -6150,7 +6213,9 @@ function drawTripPlan(t){
   return pts.length>0;
 }
 async function showTripOnMap(tid){
-  switchTab('map');
+  // Не записываем промежуточный #/map: одна кнопка должна давать одну запись
+  // истории, чтобы Back возвращал туда, откуда открыли выезд.
+  const wasApplying=routeApplying; routeApplying=true; switchTab('map'); routeApplying=wasApplying;
   // Выезд может быть не в памяти: из сводки список выездов ещё не грузили.
   // Раньше в этом случае «на карте» молча не делала ничего.
   let t=trips.find(x=>x.id==tid)||tripCache[tid]||null;
@@ -6167,6 +6232,7 @@ async function showTripOnMap(tid){
   // определению, а посмотреть маршрут нужно именно до поездки.
   const fact=await showTripFact(tid,{quiet:true,trip:t});
   if(!fact) showToast(shown?'Факта нет — показан плановый маршрут':'У выезда нет ни маршрута, ни трека');
+  routeSet('trip/'+encodeURIComponent(tid)+'/map');
 }
 
 // Отрисовка факта. Отдельно от загрузки, потому что её зовёт ещё и фильтр
