@@ -1683,6 +1683,34 @@ function shortDate(iso){
 // считать по одному и тому же. Пока это было в двух местах, «график» и
 // «загрузка инженеров» показывали разные часы на одни и те же дни.
 function jobHours(j){ return ((j&&j.job_works)||[]).reduce((a,w)=>a+(+w.hours||0),0); }
+const schedulePtKey=p=>p&&p.lat!=null&&p.lng!=null?((+p.lat).toFixed(5)+','+(+p.lng).toFixed(5)):'';
+function scheduleJobKey(j){
+  const e=j&&j.equipment, c=j&&j.clients;
+  return schedulePtKey(e&&e.lat!=null?e:c);
+}
+// Снимок маршрута хранит каждое плечо с ключами его концов. По ним снова
+// собираем реальный порядок дня: доехали до точки → сделали её работы →
+// поехали к следующей. Старый расчёт складывал все промежуточные плечи в
+// один «рабочий островок», из-за чего недельный гант врал о ходе выезда.
+function scheduleRouteSegs(t,jobs,legs){
+  const stops=(t&&t.route_stops)||[], byStop={};
+  jobs.forEach(j=>{ const k=scheduleJobKey(j); if(k) (byStop[k]||(byStop[k]=[])).push(j); });
+  const remaining=new Set(jobs.map(j=>j.id)), out=[];
+  const add=(k,h)=>{ if(+h>0) out.push({k,h:+h}); };
+  if(stops.length>1 && Array.isArray(legs) && legs.length){
+    for(let i=1;i<stops.length;i++){
+      const a=schedulePtKey(stops[i-1]), b=schedulePtKey(stops[i]);
+      const leg=legs.find(x=>x&&x.a===a&&x.b===b)||legs[i-1];
+      add('d',leg&&leg.h);
+      (byStop[b]||[]).forEach(j=>{ add('w',jobHours(j)); remaining.delete(j.id); });
+    }
+  }
+  // Точка заявки могла не попасть в сохранённый маршрут (старый выезд,
+  // заявка без координат). Её часы не исчезают: ставим их в конце, как это
+  // делал прежний агрегированный план.
+  jobs.forEach(j=>{ if(remaining.has(j.id)){ add('w',jobHours(j)); remaining.delete(j.id); } });
+  return out;
+}
 function buildBlocks(list,tripOf,tripById,tripOrd){
   const blockOf={}, tripJobs={}, blocks=[];
   const ord=tripOrd||{};
@@ -1697,11 +1725,13 @@ function buildBlocks(list,tripOf,tripById,tripOrd){
     // Плечи знают, сколько ехать ДО первой точки и сколько обратно. У
     // выездов, сохранённых до появления плеч, дорога делится пополам.
     const d=driveOfLegs(es.legs), dh=+es.driveH||0;
+    const routeSegs=scheduleRouteSegs(t,js,es.legs||[]);
     const slas=js.map(j=>j.due_date).filter(Boolean).sort();
     blocks.push({id:'t'+tid,kind:'trip',engineer:t.lead_engineer||js[0].assigned_engineer||null,
       sla:slas[0]||null,workH:js.reduce((a,j)=>a+jobHours(j),0),
       driveToH:d.toH||dh/2,driveBackH:d.backH||dh/2,driveMidH:d.midH||0,
       from:t.date_from||null,to:t.date_to||t.date_from||null,jobIds:js.map(j=>j.id),
+      routeSegs:routeSegs.length?routeSegs:null,
       plan:t.day_plan||null,
       jobs:js.map(j=>({id:j.id,workH:jobHours(j),sla:j.due_date||null}))});
     js.forEach(j=>{ blockOf[j.id]='t'+tid; });
@@ -2011,7 +2041,7 @@ async function renderFeed(box,o){
     let list=null, tripOf={}, tripById={}, tripOrd={}, offline=false, snapAt=0, orphanLinks=0;
     try{
       const { data, error }=await sb.from('jobs')
-        .select('id,status,due_date,created_at,assigned_engineer,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model), job_works(hours,billable)')
+        .select('id,status,due_date,created_at,assigned_engineer,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), job_works(hours,billable)')
         .is('deleted_at',null);
       if(error) throw error;
       list=data||[];
@@ -2227,6 +2257,17 @@ async function renderFeed(box,o){
       (b.jobIds||[]).forEach(id=>{ const d=jd[id]||b.workTo; if(d) dayJobs[d]=(dayJobs[d]||0)+1; }); });
     const engN=o.mine?1:engineersCount(plan);
     const dayCap=shift*engN;
+    // В личном графике дорожка одна, поэтому чип может честно показать
+    // порядок внутри смены (дорога → работа → дорога), а не только суммы
+    // двух цветов. Для отдела с несколькими инженерами оставляем сводную
+    // шкалу: их параллельные часы в одну временную ось складывать нельзя.
+    const dayPieces={};
+    if(engN===1){
+      plan.blocks.forEach(b=>(b.pieces||[]).forEach(p=>{
+        (dayPieces[p.iso]||(dayPieces[p.iso]=[])).push(p);
+      }));
+      Object.keys(dayPieces).forEach(d=>dayPieces[d].sort((a,b)=>a.from-b.from));
+    }
     const weeks={};
     Object.keys(dayH).forEach(d=>{ const w=weekOf(d); if(!w) return;
       const it=weeks[w.key]||(weeks[w.key]={w,h:0,n:0,days:{}});
@@ -2273,9 +2314,14 @@ async function renderFeed(box,o){
           +(dd.driveH>0.05?(' · дорога '+dd.driveH.toFixed(dd.driveH%1?1:0)):'')
           +(jn?(' · сдаём '+jn+' '+plural(jn,'заявку','заявки','заявок')):'')
           +' · нажми, чтобы открыть день';
+        const ordered=(dayPieces[iso]||[]).map(p=>{
+          const left=Math.max(0,Math.min(100,p.from/dayCap*100));
+          const width=Math.max(0,Math.min(100-left,p.h/dayCap*100));
+          return '<i class="wk-f '+(p.k==='w'?'wk-fw':'wk-fd')+'" style="left:'+left+'%;width:'+width+'%"></i>';
+        }).join('');
         dh+='<span class="wk-d'+cls+'" data-gday="'+iso+'" title="'+esc(tip)+'">'
-          +(dd.workH>0.001?('<i class="wk-f wk-fw" style="width:'+wPc+'%"></i>'):'')
-          +(dd.driveH>0.001?('<i class="wk-f wk-fd" style="left:'+wPc+'%;width:'+dPc+'%"></i>'):'')
+          +(ordered || (dd.workH>0.001?('<i class="wk-f wk-fw" style="width:'+wPc+'%"></i>'):'')
+            +(dd.driveH>0.001?('<i class="wk-f wk-fd" style="left:'+wPc+'%;width:'+dPc+'%"></i>'):''))
           +'<b>'+WD_RU[(i+1)%7]+'</b></span>';
       }
       return '<div class="wkrow" data-wk="'+esc(key)+'"><div class="wk-h"><span class="wk-n">Неделя '+it.w.n+' · '+esc(weekSpan(it.w))+'</span>'
