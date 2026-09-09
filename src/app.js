@@ -1759,19 +1759,19 @@ function scheduleRouteSegs(t,jobs,legs){
   const stops=(t&&t.route_stops)||[], byStop={};
   jobs.forEach(j=>{ const k=scheduleJobKey(j); if(k) (byStop[k]||(byStop[k]=[])).push(j); });
   const remaining=new Set(jobs.map(j=>j.id)), out=[];
-  const add=(k,h)=>{ if(+h>0) out.push({k,h:+h}); };
+  const add=(k,h,jobId)=>{ if(+h>0) out.push({k,h:+h,jobId:jobId||null}); };
   if(stops.length>1 && Array.isArray(legs) && legs.length){
     for(let i=1;i<stops.length;i++){
       const a=schedulePtKey(stops[i-1]), b=schedulePtKey(stops[i]);
       const leg=legs.find(x=>x&&x.a===a&&x.b===b)||legs[i-1];
       add('d',leg&&leg.h);
-      (byStop[b]||[]).forEach(j=>{ add('w',jobHours(j)); remaining.delete(j.id); });
+      (byStop[b]||[]).forEach(j=>{ add('w',jobHours(j),j.id); remaining.delete(j.id); });
     }
   }
   // Точка заявки могла не попасть в сохранённый маршрут (старый выезд,
   // заявка без координат). Её часы не исчезают: ставим их в конце, как это
   // делал прежний агрегированный план.
-  jobs.forEach(j=>{ if(remaining.has(j.id)){ add('w',jobHours(j)); remaining.delete(j.id); } });
+  jobs.forEach(j=>{ if(remaining.has(j.id)){ add('w',jobHours(j),j.id); remaining.delete(j.id); } });
   return out;
 }
 function buildBlocks(list,tripOf,tripById,tripOrd){
@@ -3078,7 +3078,15 @@ function loadCard(list,tripOf,tripById,tripOrd){
   const shift=(+appSettings.shift_hours)||8;
   let fromIso,toIso;
   if(loadRange){ fromIso=loadRange.from; toIso=loadRange.to; }
-  else { fromIso=todayISO(); const hz=new Date(); hz.setDate(hz.getDate()+loadDays-1); toIso=todayISO(hz); }
+  else {
+    // Пресеты показывают календарные недели, а не обрезок «с сегодняшнего
+    // дня». Иначе в среду из текущей недели исчезали понедельник и вторник:
+    // выезд был виден в графике, но его уже выполненные часы отсутствовали
+    // в гистограмме и итоговой загрузке.
+    const week=weekOf(todayISO());
+    fromIso=week?week.from:todayISO();
+    toIso=isoOf(utcOf(fromIso)+(loadDays-1)*DAY_MS);
+  }
   const wd=Math.max(1,workDaysBetween(fromIso,toIso));
   const engs=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false);
   const capEach=shift*wd;
