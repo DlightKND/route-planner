@@ -2408,11 +2408,9 @@ async function renderFeed(box,o){
           const width=Math.max(0,Math.min(100-left,p.h/dayCap*100));
           return '<i class="wk-f '+(p.k==='w'?'wk-fw':'wk-fd')+'" style="left:'+left+'%;width:'+width+'%"></i>';
         }).join('');
-        const now=scheduleNow(), nowOn=iso===now.iso&&now.h>=0&&now.h<=shift;
         dh+='<span class="wk-d'+cls+'" data-gday="'+iso+'" title="'+esc(tip)+'">'
           +(ordered || (dd.workH>0.001?('<i class="wk-f wk-fw" style="width:'+wPc+'%"></i>'):'')
             +(dd.driveH>0.001?('<i class="wk-f wk-fd" style="left:'+wPc+'%;width:'+dPc+'%"></i>'):''))
-          +'<i class="wk-now" data-wknow="'+iso+'" title="Сейчас · '+esc(now.label)+'" style="left:'+(nowOn?(now.h/shift*100):0)+'%;'+(nowOn?'':'display:none')+'"></i>'
           +'<b>'+WD_RU[(i+1)%7]+'</b></span>';
       }
       return '<div class="wkrow" data-wk="'+esc(key)+'"><div class="wk-h"><span class="wk-n">Неделя '+it.w.n+' · '+esc(weekSpan(it.w))+'</span>'
