@@ -32,7 +32,7 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
-        planSchedule, driveOfLegs, piecesOf, normPos, addHours, clockOf,
+        planSchedule, scheduleJobIncluded, driveOfLegs, piecesOf, normPos, addHours, clockOf,
         measureTrip } = core;
 
 
@@ -93,6 +93,7 @@ const SB_URL_BUILTIN='https://anqfbljgfimoaziztdxe.supabase.co';
 const SB_KEY_BUILTIN='sb_publishable_bKDfkSk7f2uUnV80ei_3qA_5AfJCa7B';
 
 const LS_URL='dl_sb_url', LS_KEY='dl_sb_key';
+const LS_LOGIN_EMAIL='dl_login_email';
 const UA_BOUNDS=[[44.0,22.0],[52.4,40.3]];
 
 let sb=null, session=null, role=null, profile=null;
@@ -690,6 +691,59 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeMore(); });
 // страницы в ключ пункта меню. Без этого перехода на «Выездах» не
 // подсвечивалось бы ничего.
 function navSub(s){ return (s==='jobs'||s==='trips')?'disp':s; }
+// URL живёт в hash, чтобы прямые ссылки работали и на GitHub Pages: серверу
+// не приходится знать маршруты SPA. Пароль/сессия в ссылку не попадают.
+let routeReady=false, routeApplying=false;
+function routeUrl(path){ return location.pathname+location.search+'#/'+String(path||'dash').replace(/^\/+/, ''); }
+function routeSet(path,replace){
+  if(!routeReady||routeApplying) return;
+  const hash='#/'+String(path||'dash').replace(/^\/+/,''), url=routeUrl(path);
+  if(location.hash===hash) return;
+  history[replace?'replaceState':'pushState'](null,'',url);
+}
+function routeForView(name,sub){
+  if(name==='job'&&jobEditId) return 'job/'+encodeURIComponent(jobEditId);
+  if(name==='trip'&&tripEditId) return 'trip/'+encodeURIComponent(tripEditId);
+  if(name==='planner') return 'planner/'+(sub==='disp'?dispCur:(sub||plannerCur));
+  return name;
+}
+async function routeTrip(id){
+  let t=(trips||[]).find(x=>x.id==id)||tripCache[id]||null;
+  if(t) return t;
+  try{ const {data,error}=await sb.from('trips').select('*').eq('id',id).is('deleted_at',null).maybeSingle();
+    if(error) throw error; if(data){ tripCache[id]=data; return data; } }
+  catch(e){ loadFail('выезд по ссылке',e); }
+  return null;
+}
+async function applyRoute(){
+  if(!routeReady||routeApplying) return;
+  routeApplying=true;
+  try{
+    const raw=location.hash.replace(/^#\/?/,'');
+    const p=raw.split('/').filter(Boolean).map(x=>{ try{ return decodeURIComponent(x); }catch(e){ return x; } });
+    if(!p.length){ const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
+      switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
+    if(p[0]==='job'&&p[1]){
+      const j=await fetchJobFull(p[1]);
+      if(!j){ notify('Заявка по ссылке не найдена.','warn'); switchTab('planner','jobs'); return; }
+      if(!jobs.some(x=>x.id===j.id)) jobs.push(j);
+      await openJob(p[1]); return;
+    }
+    if(p[0]==='trip'&&p[1]){
+      const t=await routeTrip(p[1]);
+      if(!t){ notify('Выезд по ссылке не найден.','warn'); switchTab('planner','trips'); return; }
+      if(p[2]==='map') await showTripOnMap(p[1]); else await openTrip(p[1]);
+      return;
+    }
+    if(p[0]==='planner'&&['mine','jobs','trips'].includes(p[1])){ switchTab('planner',p[1]); return; }
+    if(['dash','map','catalog','settings'].includes(p[0])){ switchTab(p[0]); return; }
+    notify('Ссылка не распознана. Открыта сводка.','warn');
+    const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
+    switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub)));
+  } finally { routeApplying=false; }
+}
+window.addEventListener('popstate',applyRoute);
+window.addEventListener('hashchange',applyRoute);
 function switchTab(name, sub){ if(!tabAllowed(name)) return;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
   document.querySelectorAll('.nav-i[data-tab]').forEach(t=>{
@@ -709,7 +763,8 @@ function switchTab(name, sub){ if(!tabAllowed(name)) return;
   // в прошлый раз: уводить его каждый раз на «Заявки» значило бы терять
   // место в работе на ровном месте.
   if(name==='planner') plannerSub(sub==='disp'?dispCur:(sub||plannerCur));
-  if(name==='dash') renderDashboard(); if(name==='settings') renderSettings(); }
+  if(name==='dash') renderDashboard(); if(name==='settings') renderSettings();
+  routeSet(routeForView(name,sub)); }
 document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
   el.onclick=()=>switchTab(el.dataset.tab, el.dataset.sub||null);
 });
@@ -726,7 +781,8 @@ function plannerSub(name){ plannerCur=name;
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
   document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name));
-  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView(); }
+  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView();
+  routeSet('planner/'+name); }
 document.querySelectorAll('#tripsView [data-tv]').forEach(b=>b.onclick=()=>setTripsView(b.dataset.tv));
 // Поворот телефона и открытие на планшете меняют раскладку списков —
 // перерисовываем, когда пересекли границу, а не на каждый пиксель.
@@ -792,9 +848,13 @@ $('cfgSave').onclick=()=>{ const url=$('cfgUrl').value.trim(), key=$('cfgKey').v
   if(!url||!key){ $('cfgErr').textContent=SB_KEY_BUILTIN?'Заполни оба поля или очисти оба, чтобы вернуться к встроенным.':'Заполни оба поля.'; return; } try{ localStorage.setItem(LS_URL,url); localStorage.setItem(LS_KEY,key); }catch(e){} location.reload(); };
 
 // ---------- auth ----------
-$('authBtn').onclick=doAuth; $('auPass').addEventListener('keydown',e=>{ if(e.key==='Enter') doAuth(); });
+try{ const saved=localStorage.getItem(LS_LOGIN_EMAIL)||'';
+  if(saved){ $('auEmail').value=saved; $('auRemember').checked=true; } }catch(e){}
+$('authForm').onsubmit=e=>{ e.preventDefault(); doAuth(); };
 async function doAuth(){ const email=$('auEmail').value.trim(), password=$('auPass').value; if(!email||!password){ $('authErr').textContent='Введи email и пароль.'; return; } $('authErr').textContent='…';
   try{ const res=await sb.auth.signInWithPassword({email,password}); if(res.error) throw res.error;
+    try{ if($('auRemember').checked) localStorage.setItem(LS_LOGIN_EMAIL,email);
+      else localStorage.removeItem(LS_LOGIN_EMAIL); }catch(e){}
     await onSignedIn();
   }catch(err){ $('authErr').textContent='Ошибка: '+(err.message||err); } }
 // Наш собственный выход не должен считаться потерей сессии.
@@ -863,7 +923,10 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   // Очередь: показать, сколько лежит, и сразу попробовать отправить —
   // приложение чаще всего открывают уже вернувшись в зону связи.
   await qRefresh(); qFlush();
-  checkTodayTrip(); initPush(); }
+  checkTodayTrip(); initPush();
+  // Сначала поднимаем все формы, справочники и права, и только потом
+  // открываем deep link: /trip/:id без этого выглядел бы пустым выездом.
+  routeReady=true; await applyRoute(); }
 
 // ---------- data load ----------
 async function loadAll(){ $('dataStatus').textContent='Загрузка…';
@@ -1683,11 +1746,46 @@ function shortDate(iso){
 // считать по одному и тому же. Пока это было в двух местах, «график» и
 // «загрузка инженеров» показывали разные часы на одни и те же дни.
 function jobHours(j){ return ((j&&j.job_works)||[]).reduce((a,w)=>a+(+w.hours||0),0); }
+const schedulePtKey=p=>p&&p.lat!=null&&p.lng!=null?((+p.lat).toFixed(5)+','+(+p.lng).toFixed(5)):'';
+function scheduleJobKey(j){
+  const e=j&&j.equipment, c=j&&j.clients;
+  return schedulePtKey(e&&e.lat!=null?e:c);
+}
+// Снимок маршрута хранит каждое плечо с ключами его концов. По ним снова
+// собираем реальный порядок дня: доехали до точки → сделали её работы →
+// поехали к следующей. Старый расчёт складывал все промежуточные плечи в
+// один «рабочий островок», из-за чего недельный гант врал о ходе выезда.
+function scheduleRouteSegs(t,jobs,legs){
+  const stops=(t&&t.route_stops)||[], byStop={};
+  jobs.forEach(j=>{ const k=scheduleJobKey(j); if(k) (byStop[k]||(byStop[k]=[])).push(j); });
+  const remaining=new Set(jobs.map(j=>j.id)), out=[];
+  const add=(k,h)=>{ if(+h>0) out.push({k,h:+h}); };
+  if(stops.length>1 && Array.isArray(legs) && legs.length){
+    for(let i=1;i<stops.length;i++){
+      const a=schedulePtKey(stops[i-1]), b=schedulePtKey(stops[i]);
+      const leg=legs.find(x=>x&&x.a===a&&x.b===b)||legs[i-1];
+      add('d',leg&&leg.h);
+      (byStop[b]||[]).forEach(j=>{ add('w',jobHours(j)); remaining.delete(j.id); });
+    }
+  }
+  // Точка заявки могла не попасть в сохранённый маршрут (старый выезд,
+  // заявка без координат). Её часы не исчезают: ставим их в конце, как это
+  // делал прежний агрегированный план.
+  jobs.forEach(j=>{ if(remaining.has(j.id)){ add('w',jobHours(j)); remaining.delete(j.id); } });
+  return out;
+}
 function buildBlocks(list,tripOf,tripById,tripOrd){
   const blockOf={}, tripJobs={}, blocks=[];
   const ord=tripOrd||{};
-  const alive=(list||[]).filter(j=>j.status!=='done'&&j.status!=='cancelled');
-  alive.forEach(j=>{ const tid=tripOf[j.id]; const t=tid?tripById[tid]:null;
+  // Закрытая заявка исчезает из «внимания», но не из ещё идущего выезда:
+  // это уже выполненный кусок его хронологии. Удалив его, мы сдвигали все
+  // следующие плечи и работы влево. После завершения самого выезда история
+  // снова уходит из рабочего графика целиком.
+  const scheduled=(list||[]).filter(j=>{
+    const t=tripById[tripOf[j.id]];
+    return scheduleJobIncluded(j.status,t&&t.status);
+  });
+  scheduled.forEach(j=>{ const tid=tripOf[j.id]; const t=tid?tripById[tid]:null;
     if(t&&t.status!=='cancelled') (tripJobs[tid]||(tripJobs[tid]=[])).push(j); });
   Object.keys(tripJobs).forEach(tid=>{
     // Порядок внутри выезда — порядок маршрута (trip_jobs.ord), а не сроков:
@@ -1697,16 +1795,18 @@ function buildBlocks(list,tripOf,tripById,tripOrd){
     // Плечи знают, сколько ехать ДО первой точки и сколько обратно. У
     // выездов, сохранённых до появления плеч, дорога делится пополам.
     const d=driveOfLegs(es.legs), dh=+es.driveH||0;
+    const routeSegs=scheduleRouteSegs(t,js,es.legs||[]);
     const slas=js.map(j=>j.due_date).filter(Boolean).sort();
     blocks.push({id:'t'+tid,kind:'trip',engineer:t.lead_engineer||js[0].assigned_engineer||null,
       sla:slas[0]||null,workH:js.reduce((a,j)=>a+jobHours(j),0),
       driveToH:d.toH||dh/2,driveBackH:d.backH||dh/2,driveMidH:d.midH||0,
       from:t.date_from||null,to:t.date_to||t.date_from||null,jobIds:js.map(j=>j.id),
+      routeSegs:routeSegs.length?routeSegs:null,
       plan:t.day_plan||null,
       jobs:js.map(j=>({id:j.id,workH:jobHours(j),sla:j.due_date||null}))});
     js.forEach(j=>{ blockOf[j.id]='t'+tid; });
   });
-  alive.forEach(j=>{ if(blockOf[j.id]||!j.due_date) return;
+  scheduled.forEach(j=>{ if(j.status==='done'||blockOf[j.id]||!j.due_date) return;
     blocks.push({id:'j'+j.id,kind:'job',engineer:j.assigned_engineer||null,
       sla:j.due_date,workH:jobHours(j),jobIds:[j.id],plan:j.day_plan||null,
       jobs:[{id:j.id,workH:jobHours(j),sla:j.due_date}]});
@@ -1755,6 +1855,31 @@ function gtStart(b){
   return b.start;
 }
 
+function scheduleNow(){
+  const d=new Date(), iso=todayISO(d), st=(+appSettings.day_start||8);
+  return {iso,h:d.getHours()+d.getMinutes()/60-st,label:String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+}
+function gtNowLine(cols,eff){
+  const n=scheduleNow(), i=cols.indexOf(n.iso), on=i>=0&&n.h>=0&&n.h<=eff;
+  const left=on?((i*eff+n.h)/(cols.length*eff)*100):0;
+  return '<span class="gnow" data-gnow data-cols="'+cols.join('|')+'" title="Сейчас · '+esc(n.label)+'" style="left:'+left+'%;'+(on?'':'display:none')+'"></span>';
+}
+function paintScheduleNow(){
+  const n=scheduleNow(), eff=gtEff(), shift=(+appSettings.shift_hours)||8;
+  document.querySelectorAll('[data-gnow]').forEach(el=>{
+    const cols=String(el.dataset.cols||'').split('|'), i=cols.indexOf(n.iso);
+    const on=i>=0&&n.h>=0&&n.h<=eff;
+    el.style.display=on?'':'none';
+    if(on){ el.style.left=((i*eff+n.h)/(cols.length*eff)*100)+'%'; el.title='Сейчас · '+n.label; }
+  });
+  document.querySelectorAll('[data-wknow]').forEach(el=>{
+    const on=el.dataset.wknow===n.iso&&n.h>=0&&n.h<=shift;
+    el.style.display=on?'':'none';
+    if(on){ el.style.left=(n.h/shift*100)+'%'; el.title='Сейчас · '+n.label; }
+  });
+}
+setInterval(paintScheduleNow,60000);
+
 function gtHtml(key){
   if(!feedCtx) return '';
   const it=feedCtx.weeks[key]; if(!it) return '';
@@ -1795,7 +1920,7 @@ function gtHtml(key){
     });
     lanes+='<div class="grow"><div class="gwho">'+esc(l.name)+'</div><div class="gtrack">'
       +(zoom?'':'<span class="gwe" style="left:'+(5/7*100)+'%;width:'+(2/7*100)+'%"></span>')
-      +gtTicks(cols.length,eff)+bars+'</div></div>';
+      +gtTicks(cols.length,eff)+bars+gtNowLine(cols,eff)+'</div></div>';
   });
   return '<div class="gtop">'
       +(zoom?('<button class="gback" type="button" data-gback="'+esc(key)+'">← неделя</button>'
@@ -2011,7 +2136,7 @@ async function renderFeed(box,o){
     let list=null, tripOf={}, tripById={}, tripOrd={}, offline=false, snapAt=0, orphanLinks=0;
     try{
       const { data, error }=await sb.from('jobs')
-        .select('id,status,due_date,created_at,assigned_engineer,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model), job_works(hours,billable)')
+        .select('id,status,due_date,created_at,assigned_engineer,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), job_works(hours,billable)')
         .is('deleted_at',null);
       if(error) throw error;
       list=data||[];
@@ -2053,12 +2178,6 @@ async function renderFeed(box,o){
     const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||''):''; };
     const hours=jobHours;
     const shift=(+appSettings.shift_hours)||8;
-
-    if(!dated.length && !(o.cold&&cold.length)){
-      box.innerHTML=(offline?offlineBanner(snapAt):'')
-        +'<div class="aempty">'+(o.mine?'Заявок со сроком на тебе нет.':'На сегодня заявок нет.')+'</div>';
-      return;
-    }
 
     // ── Группировка по дате срока ────────────────────────────────────────
     // ── Календарный план ─────────────────────────────────────────────────
@@ -2227,6 +2346,17 @@ async function renderFeed(box,o){
       (b.jobIds||[]).forEach(id=>{ const d=jd[id]||b.workTo; if(d) dayJobs[d]=(dayJobs[d]||0)+1; }); });
     const engN=o.mine?1:engineersCount(plan);
     const dayCap=shift*engN;
+    // В личном графике дорожка одна, поэтому чип может честно показать
+    // порядок внутри смены (дорога → работа → дорога), а не только суммы
+    // двух цветов. Для отдела с несколькими инженерами оставляем сводную
+    // шкалу: их параллельные часы в одну временную ось складывать нельзя.
+    const dayPieces={};
+    if(engN===1){
+      plan.blocks.forEach(b=>(b.pieces||[]).forEach(p=>{
+        (dayPieces[p.iso]||(dayPieces[p.iso]=[])).push(p);
+      }));
+      Object.keys(dayPieces).forEach(d=>dayPieces[d].sort((a,b)=>a.from-b.from));
+    }
     const weeks={};
     Object.keys(dayH).forEach(d=>{ const w=weekOf(d); if(!w) return;
       const it=weeks[w.key]||(weeks[w.key]={w,h:0,n:0,days:{}});
@@ -2273,9 +2403,16 @@ async function renderFeed(box,o){
           +(dd.driveH>0.05?(' · дорога '+dd.driveH.toFixed(dd.driveH%1?1:0)):'')
           +(jn?(' · сдаём '+jn+' '+plural(jn,'заявку','заявки','заявок')):'')
           +' · нажми, чтобы открыть день';
+        const ordered=(dayPieces[iso]||[]).map(p=>{
+          const left=Math.max(0,Math.min(100,p.from/dayCap*100));
+          const width=Math.max(0,Math.min(100-left,p.h/dayCap*100));
+          return '<i class="wk-f '+(p.k==='w'?'wk-fw':'wk-fd')+'" style="left:'+left+'%;width:'+width+'%"></i>';
+        }).join('');
+        const now=scheduleNow(), nowOn=iso===now.iso&&now.h>=0&&now.h<=shift;
         dh+='<span class="wk-d'+cls+'" data-gday="'+iso+'" title="'+esc(tip)+'">'
-          +(dd.workH>0.001?('<i class="wk-f wk-fw" style="width:'+wPc+'%"></i>'):'')
-          +(dd.driveH>0.001?('<i class="wk-f wk-fd" style="left:'+wPc+'%;width:'+dPc+'%"></i>'):'')
+          +(ordered || (dd.workH>0.001?('<i class="wk-f wk-fw" style="width:'+wPc+'%"></i>'):'')
+            +(dd.driveH>0.001?('<i class="wk-f wk-fd" style="left:'+wPc+'%;width:'+dPc+'%"></i>'):''))
+          +'<i class="wk-now" data-wknow="'+iso+'" title="Сейчас · '+esc(now.label)+'" style="left:'+(nowOn?(now.h/shift*100):0)+'%;'+(nowOn?'':'display:none')+'"></i>'
           +'<b>'+WD_RU[(i+1)%7]+'</b></span>';
       }
       return '<div class="wkrow" data-wk="'+esc(key)+'"><div class="wk-h"><span class="wk-n">Неделя '+it.w.n+' · '+esc(weekSpan(it.w))+'</span>'
@@ -5799,16 +5936,17 @@ if($('todayLater')) $('todayLater').onclick=()=>$('todayOverlay').classList.remo
 // Факт-трек живёт не одним слоем, а пятью: иначе их нельзя включать и
 // выключать по отдельности, а именно это и нужно — посмотреть план без
 // факта, или факт без выброшенных точек.
-const FACT_LAYERS=['track','road','line','drop','stay'];
+const FACT_LAYERS=['track','road','line','live','drop','stay'];
 let factG={}; FACT_LAYERS.forEach(k=>{ factG[k]=L.layerGroup().addTo(map); });
 // Что показано. Переживает перерисовку: человек выключил выброшенные —
 // они не должны вернуться сами при следующем открытии трека.
-let factVis={plan:true,track:true,road:true,line:true,drop:true,stay:true};
+let factVis={plan:true,track:true,road:true,line:true,live:true,drop:true,stay:true};
 let factTripId=null;
+let factTrip=null, factRaw=[], factLiveBusy=false;
 
 function factClear(){
   FACT_LAYERS.forEach(k=>factG[k].clearLayers());
-  factTripId=null; factLast=null;
+  factTripId=null; factTrip=null; factRaw=[]; factLast=null;
   try{ renderMapPanel(); }catch(e){}
 }
 // Слой либо на карте, либо нет. Очистка слоя тут не годится: при следующем
@@ -5837,6 +5975,7 @@ function factApplyVis(){
 const TRACK_C='#22c55e';   // измерено приёмником
 const ROAD_C ='#7c3aed';   // достроено маршрутом по дорогам
 const GAP_C  ='#9aa1ad';   // прямая через дыру: где ехали — неизвестно
+const LIVE_C ='#38bdf8';   // последняя телеметрия, ещё не попавшая в историю
 const DROP_C ='#dc2626';   // выброшено как ошибка приёмника
 const STAY_C ='#dc2626';   // стоянка — знак «стоп», он красный
 
@@ -5917,6 +6056,7 @@ function mapPanelRows(){
     if(d.trackKm) R.push({key:'track',style:'border-top:4px dotted '+TRACK_C,name:'видели по трекеру',km:d.trackKm});
     if(d.roadKm)  R.push({key:'road', style:'border-top:5px solid '+ROAD_C, name:'посчитано по дорогам',km:d.roadKm});
     if(d.lineKm)  R.push({key:'line', style:'border-top:3px dotted '+GAP_C, name:'прямая, маршрут не строился',km:d.lineKm});
+    if(factLiveTail(d)) R.push({key:'live',style:'border-top:3px dashed '+LIVE_C,name:'текущая позиция · ждёт истории'});
     if(d.dropped.length) R.push({key:'drop',icon:dropSvg(13),name:'выброшено точек',val:d.droppedTotal||d.dropped.length});
     R.push({key:'stay',icon:stopSvg(13),name:'стоянки'});
   }
@@ -6075,7 +6215,9 @@ function drawTripPlan(t){
   return pts.length>0;
 }
 async function showTripOnMap(tid){
-  switchTab('map');
+  // Не записываем промежуточный #/map: одна кнопка должна давать одну запись
+  // истории, чтобы Back возвращал туда, откуда открыли выезд.
+  const wasApplying=routeApplying; routeApplying=true; switchTab('map'); routeApplying=wasApplying;
   // Выезд может быть не в памяти: из сводки список выездов ещё не грузили.
   // Раньше в этом случае «на карте» молча не делала ничего.
   let t=trips.find(x=>x.id==tid)||tripCache[tid]||null;
@@ -6090,8 +6232,9 @@ async function showTripOnMap(tid){
   // Факт — сверху плана и только если он есть. Отсутствие факта больше не
   // повод показать пустую карту: у запланированного выезда факта нет по
   // определению, а посмотреть маршрут нужно именно до поездки.
-  const fact=await showTripFact(tid,{quiet:true});
+  const fact=await showTripFact(tid,{quiet:true,trip:t});
   if(!fact) showToast(shown?'Факта нет — показан плановый маршрут':'У выезда нет ни маршрута, ни трека');
+  routeSet('trip/'+encodeURIComponent(tid)+'/map');
 }
 
 // Отрисовка факта. Отдельно от загрузки, потому что её зовёт ещё и фильтр
@@ -6103,26 +6246,38 @@ function drawFact(m){
     const t1=+new Date(from), t2=+new Date(to||from);
     return !(t2<a||t1>b);
   };
+  // Тысяча точек не должна превращаться в тысячу Leaflet-слоёв. Для трека
+  // склеиваем соседние отрезки одинаковой ступени скорости в одну polyline:
+  // цвет скорости остаётся, а DOM/SVG на длинном выезде не разрастается.
+  const runs=[]; let run=null;
+  const flushRun=()=>{ if(run){ runs.push(run); run=null; } };
   (m.segments||[]).forEach(g=>{
-    if(!inWin(g.fromTs,g.toTs)) return;
+    if(!inWin(g.fromTs,g.toTs)){ flushRun(); return; }
     const ab=[[g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]];
     if(g.kind==='road'){
+      flushRun();
       const line=(g.line&&g.line.length>1)?g.line.map(p=>[p[1],p[0]]):ab;
       factG.road.addLayer(L.polyline(line,{color:ROAD_C,weight:5,opacity:.9})
         .bindPopup(segPopup(g,'достроено по дорогам'+(g.why?(' · '+esc(g.why)):''))));
       return;
     }
     if(g.kind==='line'){
+      flushRun();
       factG.line.addLayer(L.polyline(ab,{color:GAP_C,weight:3,opacity:.85,dashArray:'2 9'})
         .bindPopup(segPopup(g,esc(g.why||'маршрут не строился')+' — цифра занижена')));
       return;
     }
-    // Измеренный кусок красим скоростью. Кликается он же: отдельные точки
-    // ставить незачем, отрезок И ЕСТЬ переход между двумя соседними.
-    const kmh=segKmh(g);
-    factG.track.addLayer(L.polyline(ab,{color:speedColor(kmh),weight:5,opacity:.95,lineCap:'round'})
-      .bindPopup(segPopup(g)));
+    const kmh=segKmh(g), color=speedColor(kmh);
+    if(!run || run.color!==color || run.toTs!==g.fromTs){
+      flushRun();
+      run={color,points:ab.slice(),km:g.km,ms:g.ms||0,fromTs:g.fromTs,toTs:g.toTs};
+    }else{
+      run.points.push(ab[1]); run.km+=g.km; run.ms+=(g.ms||0); run.toTs=g.toTs;
+    }
   });
+  flushRun();
+  runs.forEach(g=>factG.track.addLayer(L.polyline(g.points,{color:g.color,weight:5,opacity:.95,lineCap:'round'})
+    .bindPopup(segPopup(g))));
   // Выброшенное показываем, а не прячем: если приёмник врёт постоянно,
   // это видно на карте, и разговор с поставщиком трекера предметный.
   (m.dropped||[]).forEach(p=>{
@@ -6140,6 +6295,7 @@ function drawFact(m){
     factG.road.addLayer(L.circleMarker([p.lat,p.lng],{radius:7,color:ROAD_C,fillColor:'#fff',fillOpacity:1,weight:3})
       .bindPopup('<b>'+esc(p.anchor)+'</b><br>трек сюда не дошёл, дорога достроена'));
   });
+  drawFactLiveTail(m);
   factApplyVis();
 }
 
@@ -6157,28 +6313,72 @@ function factWindow(m){
   return [factFrom==null?bb[0]:factFrom, factTo==null?bb[1]:factTo];
 }
 
+// PostgREST у проекта отдаёт не больше 1000 строк за запрос. У длинного
+// рейса первая страница выглядела как «факт застыл на 821 км», хотя точки
+// продолжали приходить. Курсор времени грузит весь трек, а затем — только
+// хвост после уже увиденной точки.
+async function loadTripPositions(tid,afterTs){
+  const out=[]; let cursor=afterTs||null;
+  for(;;){
+    let q=sb.from('vehicle_positions').select('lat,lng,ts,status')
+      .eq('trip_id',tid).order('ts',{ascending:true}).limit(1000);
+    if(cursor) q=q.gt('ts',cursor);
+    const {data,error}=await q; if(error) throw error;
+    const page=data||[]; out.push(...page);
+    if(page.length<1000) return out;
+    cursor=page[page.length-1].ts;
+  }
+}
+function factLiveTail(m){
+  if(!factTrip||factTrip.status!=='in_progress'||!factRaw.length) return null;
+  const r=vehState.find(x=>x.trip_id===factTripId || x.vehicle_id===factTrip.vehicle_id);
+  const last=factRaw[factRaw.length-1];
+  if(!r||r.lat==null||r.lng==null||!r.ts||+new Date(r.ts)<=+new Date(last.ts)) return null;
+  return {from:last,to:r};
+}
+function drawFactLiveTail(m){
+  factG.live.clearLayers();
+  const tail=factLiveTail(m); if(!tail) return;
+  factG.live.addLayer(L.polyline([[tail.from.lat,tail.from.lng],[tail.to.lat,tail.to.lng]],
+    {color:LIVE_C,weight:4,opacity:.95,dashArray:'8 8',lineCap:'round'})
+    .bindPopup('<b>Текущая позиция</b><br>ещё не записана в историю выезда'));
+}
+async function refreshFactLive(){
+  if(factLiveBusy||!factTripId||!factTrip||factTrip.status!=='in_progress'||document.hidden) return;
+  factLiveBusy=true;
+  try{
+    const last=factRaw.length?factRaw[factRaw.length-1].ts:null;
+    const fresh=await loadTripPositions(factTripId,last);
+    if(fresh.length){
+      factRaw.push(...fresh);
+      const m=await measureTrip(factRaw,trackOpts(),tripEnds(factTrip),null);
+      factLast=m; drawFact(m); showFactLegend(m);
+    }else if(factLast) drawFact(factLast); // обновить короткий live-хвост
+  }catch(e){ console.warn('Не удалось догрузить факт-трек:',e); }
+  finally{ factLiveBusy=false; }
+}
 async function showTripFact(tid,opt){
   const quiet=!!(opt&&opt.quiet);
   factClear();
   try{
-    const { data }=await sb.from('vehicle_positions').select('lat,lng,ts,status')
-      .eq('trip_id',tid).order('ts');
-    const raw=(data||[]).filter(p=>p.lat!=null&&p.lng!=null);
+    const raw=(await loadTripPositions(tid)).filter(p=>p.lat!=null&&p.lng!=null);
     if(!raw.length){ setTimeout(()=>map.invalidateSize(),60); if(!quiet) showToast('Фактического трека нет'); return false; }
 
     // Если выезд только что сводили, показываем ТОТ ЖЕ результат: карта и
     // деньги обязаны быть про одно. Если нет — считаем тем же проходом, но
     // без маршрутизатора: показ трека не должен стоить квоты. Отрезки, для
     // которых маршрут не строился, честно помечены.
-    const t=trips.find(x=>x.id==tid)||null;
+    const t=(opt&&opt.trip)||trips.find(x=>x.id==tid)||tripCache[tid]||null;
     // Порядок важен. Свежий разбор этой вкладки — самый верный. Дальше
     // сохранённый: он посчитан с маршрутизатором, и это ровно то, что ушло
     // в деньги. И только если ни того ни другого нет — считаем на месте,
     // без запросов, помечая отрезки как непостроенные.
-    const m=lastMeasure[tid]||await readFactTrack(tid)
-      ||await measureTrip(raw,trackOpts(),tripEnds(t),null);
+    // Активный выезд всегда строим из свежего raw: сохранённый разбор — это
+    // снимок прошлого и он не должен останавливать live-линию.
+    const m=(t&&t.status==='in_progress') ? await measureTrip(raw,trackOpts(),tripEnds(t),null)
+      : (lastMeasure[tid]||await readFactTrack(tid)||await measureTrip(raw,trackOpts(),tripEnds(t),null));
     if(!m.segments.length&&!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
-    factTripId=tid; factFrom=null; factTo=null;
+    factTripId=tid; factTrip=t; factRaw=raw; factFrom=null; factTo=null;
 
     drawFact(m);
 
@@ -6280,9 +6480,7 @@ function trackOpts(){
 // «достройкой разрывов», — и они расходились: карта показывала одно, а
 // в деньги уходило другое. Теперь источник один.
 async function measureTripKm(tid){
-  const { data }=await sb.from('vehicle_positions').select('lat,lng,ts,status')
-    .eq('trip_id',tid).order('ts');
-  const raw=(data||[]).filter(p=>p.lat!=null&&p.lng!=null);
+  const raw=(await loadTripPositions(tid)).filter(p=>p.lat!=null&&p.lng!=null);
   if(raw.length<2) return {ok:false,why:'трека нет'};
 
   const t=trips.find(x=>x.id==tid)||null;
@@ -6423,6 +6621,10 @@ async function loadVehState(){
       const bear=(o && (o.lat!==r.lat || o.lng!==r.lng)) ? vehBearing(o,r) : (vehMk[r.vehicle_id]||{}).__bear;
       return Object.assign({},r,{__bear:bear}); });
     renderVehState();
+    // Открытый факт живёт тем же 30-секундным пульсом, что и маркер машины:
+    // догружаем только новые исторические точки и соединяем коротким
+    // пунктиром последнюю подтверждённую с текущей телеметрией.
+    refreshFactLive();
     // Открытая модалка должна ехать вместе с картой, а не застывать на
     // цифрах момента открытия — иначе она врёт тем убедительнее, чем дольше висит.
     if(vehModalId && $('vehOverlay') && $('vehOverlay').classList.contains('on')) showVehModal(vehModalId);
@@ -7311,9 +7513,7 @@ async function drawTripMap(t){
   // каждом открытии выезда, и платить за неё запросами нельзя. Если выезд
   // только что сводили, берём готовый результат.
   try{
-    const {data}=await sb.from('vehicle_positions').select('lat,lng,ts,status')
-      .eq('trip_id',t.id).order('ts',{ascending:true}).limit(3000);
-    const raw=(data||[]).filter(r=>r.lat!=null&&r.lng!=null);
+    const raw=(await loadTripPositions(t.id)).filter(r=>r.lat!=null&&r.lng!=null);
     if(raw.length>1){
       const m=lastMeasure[t.id]||await readFactTrack(t.id)
         ||await measureTrip(raw,trackOpts(),tripEnds(t),null);
