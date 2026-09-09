@@ -32,7 +32,7 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
-        planSchedule, driveOfLegs, piecesOf, normPos, addHours, clockOf,
+        planSchedule, scheduleJobIncluded, driveOfLegs, piecesOf, normPos, addHours, clockOf,
         measureTrip } = core;
 
 
@@ -1714,8 +1714,15 @@ function scheduleRouteSegs(t,jobs,legs){
 function buildBlocks(list,tripOf,tripById,tripOrd){
   const blockOf={}, tripJobs={}, blocks=[];
   const ord=tripOrd||{};
-  const alive=(list||[]).filter(j=>j.status!=='done'&&j.status!=='cancelled');
-  alive.forEach(j=>{ const tid=tripOf[j.id]; const t=tid?tripById[tid]:null;
+  // Закрытая заявка исчезает из «внимания», но не из ещё идущего выезда:
+  // это уже выполненный кусок его хронологии. Удалив его, мы сдвигали все
+  // следующие плечи и работы влево. После завершения самого выезда история
+  // снова уходит из рабочего графика целиком.
+  const scheduled=(list||[]).filter(j=>{
+    const t=tripById[tripOf[j.id]];
+    return scheduleJobIncluded(j.status,t&&t.status);
+  });
+  scheduled.forEach(j=>{ const tid=tripOf[j.id]; const t=tid?tripById[tid]:null;
     if(t&&t.status!=='cancelled') (tripJobs[tid]||(tripJobs[tid]=[])).push(j); });
   Object.keys(tripJobs).forEach(tid=>{
     // Порядок внутри выезда — порядок маршрута (trip_jobs.ord), а не сроков:
@@ -1736,7 +1743,7 @@ function buildBlocks(list,tripOf,tripById,tripOrd){
       jobs:js.map(j=>({id:j.id,workH:jobHours(j),sla:j.due_date||null}))});
     js.forEach(j=>{ blockOf[j.id]='t'+tid; });
   });
-  alive.forEach(j=>{ if(blockOf[j.id]||!j.due_date) return;
+  scheduled.forEach(j=>{ if(j.status==='done'||blockOf[j.id]||!j.due_date) return;
     blocks.push({id:'j'+j.id,kind:'job',engineer:j.assigned_engineer||null,
       sla:j.due_date,workH:jobHours(j),jobIds:[j.id],plan:j.day_plan||null,
       jobs:[{id:j.id,workH:jobHours(j),sla:j.due_date}]});
@@ -1785,6 +1792,31 @@ function gtStart(b){
   return b.start;
 }
 
+function scheduleNow(){
+  const d=new Date(), iso=todayISO(d), st=(+appSettings.day_start||8);
+  return {iso,h:d.getHours()+d.getMinutes()/60-st,label:String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+}
+function gtNowLine(cols,eff){
+  const n=scheduleNow(), i=cols.indexOf(n.iso), on=i>=0&&n.h>=0&&n.h<=eff;
+  const left=on?((i*eff+n.h)/(cols.length*eff)*100):0;
+  return '<span class="gnow" data-gnow data-cols="'+cols.join('|')+'" title="Сейчас · '+esc(n.label)+'" style="left:'+left+'%;'+(on?'':'display:none')+'"></span>';
+}
+function paintScheduleNow(){
+  const n=scheduleNow(), eff=gtEff(), shift=(+appSettings.shift_hours)||8;
+  document.querySelectorAll('[data-gnow]').forEach(el=>{
+    const cols=String(el.dataset.cols||'').split('|'), i=cols.indexOf(n.iso);
+    const on=i>=0&&n.h>=0&&n.h<=eff;
+    el.style.display=on?'':'none';
+    if(on){ el.style.left=((i*eff+n.h)/(cols.length*eff)*100)+'%'; el.title='Сейчас · '+n.label; }
+  });
+  document.querySelectorAll('[data-wknow]').forEach(el=>{
+    const on=el.dataset.wknow===n.iso&&n.h>=0&&n.h<=shift;
+    el.style.display=on?'':'none';
+    if(on){ el.style.left=(n.h/shift*100)+'%'; el.title='Сейчас · '+n.label; }
+  });
+}
+setInterval(paintScheduleNow,60000);
+
 function gtHtml(key){
   if(!feedCtx) return '';
   const it=feedCtx.weeks[key]; if(!it) return '';
@@ -1825,7 +1857,7 @@ function gtHtml(key){
     });
     lanes+='<div class="grow"><div class="gwho">'+esc(l.name)+'</div><div class="gtrack">'
       +(zoom?'':'<span class="gwe" style="left:'+(5/7*100)+'%;width:'+(2/7*100)+'%"></span>')
-      +gtTicks(cols.length,eff)+bars+'</div></div>';
+      +gtTicks(cols.length,eff)+bars+gtNowLine(cols,eff)+'</div></div>';
   });
   return '<div class="gtop">'
       +(zoom?('<button class="gback" type="button" data-gback="'+esc(key)+'">← неделя</button>'
@@ -2083,12 +2115,6 @@ async function renderFeed(box,o){
     const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||''):''; };
     const hours=jobHours;
     const shift=(+appSettings.shift_hours)||8;
-
-    if(!dated.length && !(o.cold&&cold.length)){
-      box.innerHTML=(offline?offlineBanner(snapAt):'')
-        +'<div class="aempty">'+(o.mine?'Заявок со сроком на тебе нет.':'На сегодня заявок нет.')+'</div>';
-      return;
-    }
 
     // ── Группировка по дате срока ────────────────────────────────────────
     // ── Календарный план ─────────────────────────────────────────────────

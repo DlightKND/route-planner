@@ -1410,15 +1410,17 @@
 .wk-d.full{background:color-mix(in srgb,var(--red) 26%,var(--panel));color:var(--ink);
   border-color:color-mix(in srgb,var(--red) 50%,var(--line))}
 .wk-d.we{opacity:.45}
-/* День заполняется слева направо: работа фирменным, дорога штриховкой.
-   Так в одной строке видно и сколько занято, и из чего это состоит. */
+/* В личном графике день идёт по времени: работа фирменным, дорога
+   штриховкой. В командной сводке это суммы параллельных дорожек. */
 .wk-d{cursor:pointer}
 .wk-f{position:absolute;top:0;bottom:0;left:0}
 .wk-fw{background:color-mix(in srgb,var(--accent-line) 55%,var(--panel))}
 .wk-fd{background:repeating-linear-gradient(135deg,
   color-mix(in srgb,var(--ink-faint) 28%,var(--panel)) 0 4px,
   color-mix(in srgb,var(--ink-faint) 12%,var(--panel)) 4px 8px)}
-.wk-d b{position:relative;font-weight:inherit}
+.wk-now{position:absolute;top:0;bottom:0;width:2px;background:var(--cyan);z-index:3;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--panel) 55%,transparent);pointer-events:none}
+.wk-d b{position:relative;z-index:4;font-weight:inherit}
 .wk-more{display:block;margin-top: var(--sp-2);background:none;border:0;padding:0;cursor:pointer;
   font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint)}
 .wk-more:hover{color:var(--ink)}
@@ -1450,6 +1452,10 @@
 .gtick{position:absolute;top:0;bottom:0;width:1px;background:color-mix(in srgb,var(--ink-faint) 10%,transparent)}
 .gtick.day{background:color-mix(in srgb,var(--ink-faint) 26%,transparent)}
 .gwe{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--ink-faint) 12%,transparent)}
+.gnow{position:absolute;top:0;bottom:0;width:2px;background:var(--cyan);z-index:6;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--panel) 55%,transparent);pointer-events:none}
+.gnow::before{content:'';position:absolute;left:-3px;top:0;border-left:4px solid transparent;
+  border-right:4px solid transparent;border-top:5px solid var(--cyan)}
 .gpc{position:absolute;top:4px;bottom:4px;cursor:grab;touch-action:none;
   border-top:1px solid rgba(0,0,0,.10);border-bottom:1px solid rgba(0,0,0,.10)}
 .gpc.gw{background:var(--accent-line)}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planSchedule, driveOfLegs, dayIso, dayMs, isWorkday,
-  normPos, addHours, piecesOf, clockOf } from '../src/core/schedule.js';
+  normPos, addHours, piecesOf, clockOf, scheduleJobIncluded } from '../src/core/schedule.js';
 
 // Календарь для тестов: 2026-09-07 понедельник, 09-08 вт, 09-09 ср,
 // 09-10 чт, 09-11 пт, 09-12 сб, 09-13 вс.
@@ -8,6 +8,16 @@ const S = { shiftH: 8, deviationPct: 0 };
 const TODAY = { today: '2026-09-01' };
 
 const cell = (r, iso) => r.days.find(d => d.iso === iso);
+
+describe('состав рабочего графика', () => {
+  it('закрытая заявка остаётся в идущем выезде, но не после закрытия выезда', () => {
+    expect(scheduleJobIncluded('done','in_progress')).toBe(true);
+    expect(scheduleJobIncluded('done','finished')).toBe(true);
+    expect(scheduleJobIncluded('done','done')).toBe(false);
+    expect(scheduleJobIncluded('done',null)).toBe(false);
+    expect(scheduleJobIncluded('cancelled','in_progress')).toBe(false);
+  });
+});
 
 describe('дни недели', () => {
   it('суббота и воскресенье — не рабочие', () => {

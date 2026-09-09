@@ -50,6 +50,14 @@ const DAY = 86400000;
 
 export const SCHEDULE_DEFAULTS = { shiftH: 8, deviationPct: 0, weekend: [0, 6], dayStart: 8 };
 
+// Закрытая заявка остаётся частью хронологии, пока жив её выезд: работа уже
+// сделана, но дорога до следующей точки от этого не переносится назад.
+export function scheduleJobIncluded(status, tripStatus) {
+  if (status === 'cancelled') return false;
+  if (status !== 'done') return true;
+  return !!tripStatus && tripStatus !== 'done' && tripStatus !== 'cancelled';
+}
+
 // ---- Даты -------------------------------------------------------------
 // Календарь считается в UTC-полуночах: без часовых поясов.
 export function dayMs(iso) {
