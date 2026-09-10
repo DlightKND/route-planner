@@ -826,6 +826,20 @@
   .eqitem { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--pad-row); margin-bottom: var(--sp-3); }
   .eqitem .t { font-weight: 600; font-size: var(--fs-5); } 
   .eqitem .m { font-family: var(--mono); font-size: var(--fs-2); color: var(--ink-dim); margin-top: var(--sp-2); line-height: 1.4; }
+
+  .trash-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--gap-block);
+    align-items: center; padding: var(--pad-row); border: 1px solid var(--line);
+    border-radius: var(--r-sm); background: var(--panel-2); }
+  .trash-row + .trash-row { margin-top: var(--sp-3); }
+  .trash-name { font-size: var(--fs-5); font-weight: 600; overflow-wrap: break-word; }
+  .trash-meta { margin-top: var(--sp-2); color: var(--ink-faint); font-family: var(--mono);
+    font-size: var(--fs-2); line-height: 1.4; }
+  .trash-actions { display: flex; gap: var(--gap-row); flex-wrap: wrap; justify-content: flex-end; }
+  @media(max-width:600px){
+    .trash-row { grid-template-columns: 1fr; }
+    .trash-actions { justify-content: stretch; }
+    .trash-actions .btn { flex: 1 1 140px; }
+  }
   
   .warn { color: var(--red); border-color: var(--red); } 
   .good { color: var(--green); border-color: var(--green); }
@@ -2670,6 +2684,7 @@
         <div class="pane-head">
           <select id="jobEngFilter" style="width:150px"><option value="">все инженеры</option></select>
           <div class="searchbox"><input type="search" id="jobSearch" placeholder="поиск по клиенту…"></div>
+          <button class="btn sm ghost" id="jobTrash" title="Удалённые заявки">Корзина</button>
           <button class="btn sm amber" id="jobAdd">+ Заявка</button></div>
         <div class="chips" id="jobStatusChips"></div>
       </div>
@@ -2678,7 +2693,7 @@
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
         <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
-        <div class="pane-head"><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
+        <div class="pane-head"><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
         <div class="chips" id="tripStatusChips"></div>
       </div>
       <div id="tripsKanban">
@@ -2914,6 +2929,15 @@
     <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="saveBtn">Сохранить</button><button class="btn ghost" id="cancelBtn">Отмена</button></div>
     <div class="err" id="formErr"></div>
   </div>
+</div></div>
+
+<div class="overlay" id="trashOverlay"><div class="modal l">
+  <h3 id="trashTitle">Корзина</h3>
+  <div class="sub">Удалённые записи хранятся 7 дней. После этого сервер удалит их автоматически вместе со связанными данными.</div>
+  <div class="seg" id="trashTabs"><button class="on" data-trash-kind="jobs">Заявки</button><button data-trash-kind="trips">Выезды</button></div>
+  <div id="trashList"></div>
+  <div class="err" id="trashErr"></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="trashClose">Закрыть</button></div>
 </div></div>
 
 <div class="overlay" id="editOverlay"><div class="modal">
