@@ -1417,7 +1417,6 @@
 .wk-pct{width:38px;text-align:right;font-family:var(--mono);font-size:var(--fs-1);font-weight:600;color:var(--ink-dim)}
 .wk-chev{font-size:18px;color:var(--ink-faint);transition:transform var(--t-fast)}
 .wkrow.open .wk-chev{transform:rotate(180deg)}
-.wkrow.open .wk-mini{display:none}
 .gtwrap{position:relative;border-top:1px solid var(--line);background:var(--panel-2);padding:var(--sp-4);min-width:0}
 .vg-tools{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);margin-bottom:var(--sp-3);font-family:var(--mono);font-size:var(--fs-1);color:var(--ink-faint)}
 .vg-switch{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--panel)}
@@ -1443,8 +1442,6 @@
 .vg-lane-head{min-width:0;padding:5px 9px;border-left:1px solid var(--line);display:flex;align-items:center;gap:6px;font-family:var(--mono)}
 .vg-lane-head b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-1);text-transform:uppercase;letter-spacing:.35px}
 .vg-lane-head>span{margin-left:auto;flex:none;font-size:9px;color:var(--ink-faint);white-space:nowrap}
-.vg-head-mini{flex:none;height:16px;display:flex;align-items:flex-end;gap:1px;font-style:normal}
-.vg-head-mini i{display:block;width:3px;min-height:3px;border-radius:2px 2px 0 0}
 .vg-tracks{grid-column:2;grid-row:2}
 .vg-lane{position:relative;height:280px;border-left:1px solid var(--line);touch-action:pan-x pan-y}
 .vg-cell{position:relative;height:40px;box-sizing:border-box;border-top:1px solid var(--line);background:transparent}
@@ -1905,6 +1902,8 @@
 .statbar i{display:block}
 .statleg{display:flex;flex-wrap:wrap;gap: var(--gap-block);font-size: var(--fs-3);color:var(--ink-dim)}
 .statleg span{display:flex;align-items:center;gap: var(--sp-3)}
+.stat-filter{display:inline-flex;align-items:center;gap:var(--sp-2);max-width:100%;padding:4px 7px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--panel-2);color:var(--ink-dim);font:inherit;cursor:pointer;transition:opacity var(--t-fast),border-color var(--t-fast)}
+.stat-filter.off{opacity:.42;background:transparent}.stat-filter:hover{border-color:var(--ink-faint)}
 .ldot{width:9px;height:9px;border-radius:50%;display:inline-block}
 /* Модалка экономики выезда */
 .ehead{font-size: var(--fs-1);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-5) 0 var(--sp-3);padding-bottom: var(--sp-2);border-bottom:1px solid var(--line)}
