@@ -2081,9 +2081,7 @@ function gtVerticalHtml(key){
   let heads='', tracks='';
   lanes.forEach(l=>{
     const weekH=days.reduce((n,d)=>n+gtLaneLoad(l.id,d),0), pct=Math.round(weekH/(shift*5)*100);
-    const headMini=days.map(iso=>{ const p=gtLaneLoad(l.id,iso)/shift;
-      return '<i style="height:'+Math.max(3,Math.min(14,p*11))+'px;background:'+loadColor(p)+'"></i>'; }).join('');
-    heads+='<div class="vg-lane-head" title="'+esc(l.name)+'"><b>'+esc(l.name)+'</b><span>'+fmtH(weekH)+' · '+pct+'%</span><em class="vg-head-mini">'+headMini+'</em></div>';
+    heads+='<div class="vg-lane-head" title="'+esc(l.name)+'"><b>'+esc(l.name)+'</b><span>'+fmtH(weekH)+' · '+pct+'%</span></div>';
     let cells=''; days.forEach((iso,i)=>{
       const hours=gtLaneLoad(l.id,iso), p=hours/shift;
       const color=loadColor(p), over=Math.max(0,hours-eff);
@@ -2884,6 +2882,17 @@ function wirePeriodSeg(box){
 // Живёт в браузере: это положение рук, а не данные компании.
 const DASH_CARDS=['fin','work','load'];
 const DASH_TITLE={fin:'Финансы',work:'Работы',load:'Загрузка отдела'};
+const WORK_STATUS_META=[
+  ['open','Открыта','var(--cyan)'],['planned','Запланирована','#5b9bd5'],
+  ['in_progress','В работе','#f5b23d'],['done','Готова','var(--green)'],
+  ['cancelled','Отменена','var(--ink-faint)']
+];
+let workStatusVisible=(function(){
+  try{ const v=JSON.parse(localStorage.getItem('dl_dash_work_statuses')||'null');
+    if(Array.isArray(v)){ const valid=v.filter(x=>WORK_STATUS_META.some(s=>s[0]===x)); if(valid.length) return new Set(valid); } }catch(e){}
+  return new Set(['open','planned','in_progress','done']);
+})();
+function workStatusSave(){ try{ localStorage.setItem('dl_dash_work_statuses',JSON.stringify(Array.from(workStatusVisible))); }catch(e){} }
 let dashOrder=(function(){
   try{ const v=JSON.parse(localStorage.getItem('dl_dash_order')||'null');
     if(Array.isArray(v)){ const o=v.filter(k=>DASH_CARDS.indexOf(k)>=0);
@@ -3134,47 +3143,37 @@ function financeCard(jb,trips){
 }
 
 // ── Работы ──────────────────────────────────────────────────────────────
-function worksCard(jb,trips){
+function worksCard(jb,trips,tripOf){
   if(!canWrite()) return '';
   const per=dashPeriod();
   const inP=d=>d&&d>=per.from&&d<=per.to;
-  // Считаем НОРМОЧАСЫ, а не строки. Строка «замена шланга» и строка
-  // «капремонт» — обе одна работа, но одна на полчаса, а другая на три дня:
-  // сумма таких строк не говорит ни о загрузке, ни о выработке.
-  let wDone=0,wPlan=0,wField=0,wAll=0,nJobs=0;
-  jb.forEach(j=>{ if(j.status==='cancelled'||!inP(jobDate(j))) return;
-    const n=jobHours(j); nJobs++;
-    wAll+=n; if(!j.at_depot) wField+=n;
-    if(JOB_EARNED(j)) wDone+=n; else wPlan+=n; });
-  const nTrips=trips.filter(t=>t.status!=='cancelled'&&inP(t.date_from)).length;
-  const fieldPct=wAll?Math.round(wField/wAll*100):0;
-
-  // Полоса считает ТО ЖЕ, что цифра «Заявок» над ней: заявки периода, кроме
-  // отменённых. Раньше полоса брала все заявки за всё время и только живые
-  // статусы — и под цифрой «10 заявок» рисовалось одиннадцать. Две цифры об
-  // одном на одной карточке обязаны сходиться, иначе не верят обеим.
-  // Закрытые теперь сегмент, а не отдельная строка: в границах периода они
-  // ширину не съедают, зато сумма сегментов сходится с «Заявок».
   const byst={open:0,planned:0,in_progress:0,done:0,cancelled:0};
-  jb.forEach(j=>{ if(!inP(jobDate(j))) return; byst[j.status]=(byst[j.status]||0)+1; });
-  const stTotal=Math.max(1,nJobs);
+  jb.forEach(j=>{ if(inP(jobDate(j))) byst[j.status]=(byst[j.status]||0)+1; });
+
+  // Фильтр относится ко всей карточке, а не только к легенде: часы,
+  // заявки и выезды должны описывать один и тот же выбранный набор.
+  const shown=jb.filter(j=>inP(jobDate(j))&&workStatusVisible.has(j.status));
+  let wDone=0,wPlan=0,wField=0,wAll=0;
+  shown.forEach(j=>{ if(j.status==='cancelled') return;
+    const n=jobHours(j); wAll+=n; if(!j.at_depot) wField+=n;
+    if(JOB_EARNED(j)) wDone+=n; else wPlan+=n; });
+  const shownTripIds=new Set(shown.map(j=>tripOf&&tripOf[j.id]).filter(Boolean));
+  const nTrips=trips.filter(t=>shownTripIds.has(t.id)&&t.status!=='cancelled').length;
+  const fieldPct=wAll?Math.round(wField/wAll*100):0;
+  const stTotal=Math.max(1,shown.length);
   let bar='',leg='';
-  [['Открыта','var(--cyan)',byst.open||0],
-   ['Запланирована','#5b9bd5',byst.planned||0],
-   ['В работе','#f5b23d',byst.in_progress||0],
-   ['Готова','var(--green)',byst.done||0]].filter(x=>x[2]>0).forEach(([lbl,col,n])=>{
-    bar+='<i style="width:'+(n/stTotal*100)+'%;background:'+col+'"></i>';
-    leg+='<span><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</span>'; });
+  WORK_STATUS_META.forEach(([status,lbl,col])=>{ const n=byst[status]||0, on=workStatusVisible.has(status);
+    if(on&&n) bar+='<i style="width:'+(n/stTotal*100)+'%;background:'+col+'"></i>';
+    leg+='<button type="button" class="stat-filter'+(on?'':' off')+'" data-work-status="'+status+'" aria-pressed="'+(on?'true':'false')+'" title="Показать или скрыть статус"><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</button>'; });
 
   const cell=(k,v)=>'<div class="fin-c"><span class="fin-k">'+esc(k)+'</span><span class="fin-v">'+v+'</span></div>';
   const hnum=v=>v.toFixed(v%1?1:0);
   return '<div class="card foldable f-any statuscard" data-fold="dashWork" data-dcard="work">'
     +'<h3 class="cardhead">'+dashGrip('work')+'Работы <span class="mc-note">'+esc(shortDate(per.from)+' — '+shortDate(per.to))+'</span></h3>'
     +'<div class="fin-row nolab">'+cell('Отработано',hnum(wDone)+' ч')+cell('В плане',hnum(wPlan)+' ч')+'<div class="fin-c"></div></div>'
-    +'<div class="fin-row nolab">'+cell('Заявок',nJobs)+cell('Выездов',nTrips)+cell('На выезде',fieldPct+'%')+'</div>'
+    +'<div class="fin-row nolab">'+cell('Заявок',shown.length)+cell('Выездов',nTrips)+cell('На выезде',fieldPct+'%')+'</div>'
     +'<div class="statbar">'+(bar||'<i style="width:100%;background:var(--line)"></i>')+'</div>'
-    +'<div class="statleg">'+(leg||'<span class="dim">Активных заявок нет</span>')+'</div>'
-    +(byst.cancelled?('<div class="stat-closed">отменено за период: '+byst.cancelled+'</div>'):'')
+    +'<div class="statleg">'+leg+'</div>'
     +'</div>';
 }
 
@@ -3339,12 +3338,20 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
     (tj||[]).forEach(r=>{ const t=tripById[r.trip_id];
       if(t&&t.status!=='cancelled'){ tripOf[r.job_id]=r.trip_id; tripOrd[r.job_id]=(+r.ord||0); } });
 
-    const made={fin:financeCard(jb,trips),work:worksCard(jb,trips),load:loadCard(jb,tripOf,tripById,tripOrd)};
+    const made={fin:financeCard(jb,trips),work:worksCard(jb,trips,tripOf),load:loadCard(jb,tripOf,tripById,tripOrd)};
     box.innerHTML=dashOrder.map(k=>made[k]||'').join('');
     wirePeriodSeg(box);
     wireDashDrag(box);
     foldApply();
     box.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>dashNav(el.dataset.nav));
+    box.querySelectorAll('[data-work-status]').forEach(el=>el.onclick=()=>{
+      const status=el.dataset.workStatus;
+      if(workStatusVisible.has(status)){
+        if(workStatusVisible.size===1){ notify('Оставь хотя бы один статус.','warn'); return; }
+        workStatusVisible.delete(status);
+      } else workStatusVisible.add(status);
+      workStatusSave(); renderDashboard();
+    });
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; } }
 // Чипы сводки на узком экране: две колонки туда не помещаются, и вместо
 // того чтобы гнать инфокарты в подвал ленты, показываем одну из двух.
