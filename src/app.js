@@ -1984,7 +1984,7 @@ function gtDayHtml(key){
     heads+='<div class="vg-lane-head"><b>'+esc(l.name)+'</b><span>'+fmtH(hours)+' · '+pct+'%</span></div>';
     let ticks=''; for(let h=1;h<rowN;h++) ticks+='<i class="vg-hour-line" style="top:'+(h/rowN*266)+'px"></i>';
     let bars='';
-    if(l.id!==' department') gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
+    gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
       const pcs=gtPieces(b).filter(p=>p.iso===iso); if(!pcs.length) return;
       const points=pcs.map(p=>({p,y:p.from/eff*266,h:Math.max(3,p.h/eff*266)}));
       const top=Math.max(1,Math.min(...points.map(x=>x.y))), bottom=Math.min(265,Math.max(...points.map(x=>x.y+x.h)));
@@ -2007,24 +2007,32 @@ function gtDayHtml(key){
     +(canWrite()?'<span>перетащи — шаг 30 мин</span>':'<span>только просмотр</span>')+'<span>✎ — расставлено вручную</span></div>';
 }
 function gtWeekDays(it){ const out=[]; for(let i=0;i<7;i++) out.push(isoOf(it.w.mon+i*DAY_MS)); return out; }
-function gtWeekLanes(key){
+function gtBusyWeekLanes(key){
   const it=feedCtx.weeks[key], days=gtWeekDays(it), used={};
   gtBlocks().forEach(b=>gtPieces(b).forEach(p=>{ if(days.includes(p.iso)) used[b.engineer||' free']=1; }));
   if(feedCtx.mine) return [{id:session.user.id,name:'Мои работы'}];
-  if(gtLaneMode[key]==='department') return [{id:' department',name:'Отдел'}];
-  if(gtLaneMode[key]==='all'){
-    const all=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim())
-      .map(p=>({id:p.id,name:p.full_name||'—'}));
-    if(used[' free']) all.push({id:' free',name:'Без инженера'}); return all;
-  }
   const named=new Set((profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim()).map(p=>p.id));
   return Object.keys(used).filter(id=>id===' free'||named.has(id))
     .map(id=>({id,name:id===' free'?'Без инженера':feedCtx.nameOf(id)}));
 }
+function gtWeekLanes(key){
+  const busy=gtBusyWeekLanes(key);
+  const selected=String(gtLaneMode[key]||'all');
+  if(selected.startsWith('lane:')){
+    const id=selected.slice(5), lane=busy.find(x=>String(x.id)===id);
+    if(lane) return [lane];
+  }
+  return busy;
+}
 function gtLaneLoad(id,iso){
-  if(id===' department') return Object.keys(feedCtx.plan.load||{}).reduce((n,k)=>{
-    const x=feedCtx.plan.load[k]; return n+(x.date===iso?x.workH+x.driveH:0); },0);
   const x=(feedCtx.plan.load||{})[id+'|'+iso]; return x?(x.workH+x.driveH):0;
+}
+function gtLanePicker(key){
+  if(feedCtx.mine) return '';
+  const current=String(gtLaneMode[key]||'all');
+  const options=['<option value="all"'+(current==='all'?' selected':'')+'>Все занятые</option>'];
+  gtBusyWeekLanes(key).forEach(l=>options.push('<option value="lane:'+esc(l.id)+'"'+(current==='lane:'+l.id?' selected':'')+'>'+esc(l.name)+'</option>'));
+  return '<label class="vg-filter">Инженер <select data-vgmode aria-label="Инженер">'+options.join('')+'</select></label>';
 }
 function gtBlockName(b){
   const names=(b.jobIds||[]).map(id=>feedCtx.jobName(id)).filter(Boolean);
@@ -2032,7 +2040,7 @@ function gtBlockName(b){
 }
 function gtWeekProblem(key,lanes){
   const days=gtWeekDays(feedCtx.weeks[key]), allowance=gtEff(); let worst=null;
-  lanes.filter(l=>l.id!==' department').forEach(l=>days.forEach((iso,i)=>{
+  lanes.forEach(l=>days.forEach((iso,i)=>{
     const over=gtLaneLoad(l.id,iso)-allowance;
     if(over>.01&&(!worst||over>worst.over)) worst={over,l,iso,i};
   }));
@@ -2054,13 +2062,13 @@ function gtVerticalHtml(key){
     const weekH=days.reduce((n,d)=>n+gtLaneLoad(l.id,d),0), pct=Math.round(weekH/(shift*5)*100);
     heads+='<div class="vg-lane-head" title="'+esc(l.name)+'"><b>'+esc(l.name)+'</b><span>'+fmtH(weekH)+' · '+pct+'%</span></div>';
     let cells=''; days.forEach((iso,i)=>{
-      const hours=gtLaneLoad(l.id,iso), p=l.id===' department'?hours/(shift*Math.max(1,engineersCount(feedCtx.plan))):hours/shift;
+      const hours=gtLaneLoad(l.id,iso), p=hours/shift;
       const color=loadColor(p), over=Math.max(0,hours-eff);
       cells+='<div class="vg-cell'+(i>4?' we':'')+'" data-vgday="'+iso+'" style="--load:'+color+';--load-edge:'+loadEdge(color)+'" title="'+esc(WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)+' из '+fmtH(shift))+'">'
         +(over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
     });
     let bars='';
-    if(l.id!==' department') gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
+    gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
       const pcs=gtPieces(b).filter(p=>days.includes(p.iso)); if(!pcs.length) return;
       const points=pcs.map(p=>({p,y:(days.indexOf(p.iso)+(p.from/eff))*38,h:Math.max(2,p.h/eff*38)}));
       const top=Math.max(1,Math.min(...points.map(x=>x.y))), bottom=Math.min(265,Math.max(...points.map(x=>x.y+x.h)));
@@ -2073,10 +2081,10 @@ function gtVerticalHtml(key){
     });
     const now=scheduleNow(), ni=days.indexOf(now.iso), nowLine=ni>=0&&now.h>=0&&now.h<=eff
       ?'<span class="vg-now" title="Сейчас · '+esc(now.label)+'" style="top:'+((ni+now.h/eff)*38)+'px"></span>':'';
-    tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'">'+cells+bars+nowLine+'</div>';
+    tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'">'+cells+bars+nowLine+'<span class="vg-tip" hidden></span></div>';
   });
   return '<div class="vg-tools"><span>Загрузка дня · смена '+fmtH(shift)+' · допуск '+(+appSettings.deviation_pct||0)+'%</span>'
-    +(feedCtx.mine?'':'<div class="vg-switch"><button data-vgmode="busy" class="'+((gtLaneMode[key]||'busy')==='busy'?'on':'')+'">занятые</button><button data-vgmode="all" class="'+(gtLaneMode[key]==='all'?'on':'')+'">все</button><button data-vgmode="department" class="'+(gtLaneMode[key]==='department'?'on':'')+'">свернуть в отдел</button></div>')+'</div>'
+    +gtLanePicker(key)+'</div>'
     +'<div class="vg-scroll" style="--lane-min:'+laneMin+'px"><div class="vg-grid" style="--lanes:'+Math.max(1,lanes.length)+'">'
     +axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
     +'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="urgent-edge"></i>срок горит</span><span><i class="road"></i>дорога внутри бруска</span>'
@@ -2110,14 +2118,17 @@ function gtWire(key,box){
     gtZoom[key]=null; gtSel=null; gtPaint(key); });
   box.querySelectorAll('[data-gday]').forEach(d=>d.onclick=e=>{ e.stopPropagation();
     gtZoom[key]=d.dataset.gday; gtSel=null; gtPaint(key); });
-  box.querySelectorAll('[data-vgmode]').forEach(b=>b.onclick=e=>{ e.stopPropagation();
-    gtLaneMode[key]=b.dataset.vgmode; gtSel=null; gtPaint(key); });
+  box.querySelectorAll('[data-vgmode]').forEach(select=>select.onchange=e=>{ e.stopPropagation();
+    gtLaneMode[key]=select.value; gtSel=null; gtPaint(key); });
   if(!zoom) box.querySelectorAll('.vg-lane').forEach(lane=>{
     lane.onpointermove=e=>{
       const i=Math.max(0,Math.min(6,Math.floor((e.clientY-lane.getBoundingClientRect().top)/38)));
-      const iso=gtWeekDays(feedCtx.weeks[key])[i], hours=gtLaneLoad(lane.dataset.vglane,iso);
-      lane.title=WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)+' из '+fmtH((+appSettings.shift_hours)||8);
+      const iso=gtWeekDays(feedCtx.weeks[key])[i], hours=gtLaneLoad(lane.dataset.vglane,iso), shift=(+appSettings.shift_hours)||8;
+      const tip=lane.querySelector('.vg-tip');
+      if(tip){ tip.hidden=false; tip.style.top=(i*38+19)+'px';
+        tip.textContent=WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)+' / '+fmtH(shift)+' · '+Math.round(hours/shift*100)+'%'; }
     };
+    lane.onpointerleave=()=>{ const tip=lane.querySelector('.vg-tip'); if(tip) tip.hidden=true; };
     lane.onclick=e=>{ if(e.target.closest('.vg-block')) return;
       const i=Math.max(0,Math.min(6,Math.floor((e.clientY-lane.getBoundingClientRect().top)/38)));
       gtZoom[key]=gtWeekDays(feedCtx.weeks[key])[i]; gtSel=null; gtPaint(key);
@@ -2531,9 +2542,8 @@ async function renderFeed(box,o){
       nameOf:engName,jobName:id=>{ const j=jobById[id]; return j&&j.clients?j.clients.name:''; }};
     const weekKeys=Object.keys(weeks).sort();
     if(weekKeys.length&&!weekKeys.some(k=>Object.prototype.hasOwnProperty.call(gtOpen,k))){
-      const now=utcOf(todayISO());
-      const nearest=weekKeys.reduce((best,k)=>Math.abs(utcOf(k)-now)<Math.abs(utcOf(best)-now)?k:best,weekKeys[0]);
-      gtOpen[nearest]=true;
+      const current=weekOf(todayISO());
+      if(current&&weeks[current.key]) gtOpen[current.key]=true;
     }
     function weekHtml(key){
       const it=weeks[key], lanes=gtWeekLanes(key), days=gtWeekDays(it);
@@ -2543,7 +2553,7 @@ async function renderFeed(box,o){
       const pct=Math.round(total/(shift*5*laneCount)*100), problem=gtWeekProblem(key,lanes);
       let mini='';
       days.forEach(iso=>{
-        const maxP=Math.max(0,...lanes.map(l=>gtLaneLoad(l.id,iso)/(l.id===' department'?shift*laneCount:shift)));
+        const maxP=Math.max(0,...lanes.map(l=>gtLaneLoad(l.id,iso)/shift));
         mini+='<i style="background:'+loadColor(maxP)+'"></i>';
       });
       const summary=blocks.length+' '+plural(blocks.length,'блок','блока','блоков')+' · '+fmtH(total);
@@ -3243,10 +3253,11 @@ function loadCard(list,tripOf,tripById,tripOrd){
   let chart='<div class="revbars loadbars'+(showVals?'':' novals')+'">';
   cells.forEach(c=>{ const hR=c.v>0?Math.max(4,Math.round(c.v/maxV*100)):0;
     const over=c.cap>0&&c.v>c.cap+1e-6;
+    const loadFill=loadColor(c.cap>0?c.v/c.cap:(c.v>0?1.75:0));
     chart+='<div class="revbar'+(c.we?' we':'')+'" title="'+esc(c.key+' · '+num(c.v)+' ч'+(c.cap?(' из '+num(c.cap)):''))+'">'
       +(showVals?('<div class="rb-v">'+(c.v>0?num(c.v):'')+'</div>'):'')
       +'<div class="rb-c">'+(c.cap>0?('<div class="rb-cap" style="height:'+Math.round(c.cap/maxV*100)+'%"></div>'):'')
-        +'<div class="rb-f'+(over?' bad':'')+'" style="height:'+hR+'%"></div></div>'
+        +'<div class="rb-f'+(over?' bad':'')+'" style="height:'+hR+'%;background:'+loadFill+'"></div></div>'
       +'<div class="rb-l">'+esc(c.label)+'</div></div>'; });
   chart+='</div>';
   chart+='<div class="cap-note">пунктир — 100% загрузки: '+num(dayCap)+' ч в день'
