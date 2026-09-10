@@ -7,3 +7,4 @@ export * from './vehicle.js';
 export * from './sla.js';
 export * from './track.js';
 export * from './schedule.js';
+export * from './trash.js';

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planSchedule, driveOfLegs, dayIso, dayMs, isWorkday,
-  normPos, addHours, piecesOf, clockOf } from '../src/core/schedule.js';
+  normPos, addHours, piecesOf, clockOf, scheduleJobIncluded, tripRouteSegments } from '../src/core/schedule.js';
 
 // Календарь для тестов: 2026-09-07 понедельник, 09-08 вт, 09-09 ср,
 // 09-10 чт, 09-11 пт, 09-12 сб, 09-13 вс.
@@ -8,6 +8,26 @@ const S = { shiftH: 8, deviationPct: 0 };
 const TODAY = { today: '2026-09-01' };
 
 const cell = (r, iso) => r.days.find(d => d.iso === iso);
+
+describe('состав рабочего графика', () => {
+  it('закрытая заявка остаётся в идущем выезде, но не после закрытия выезда', () => {
+    expect(scheduleJobIncluded('done','in_progress')).toBe(true);
+    expect(scheduleJobIncluded('done','finished')).toBe(true);
+    expect(scheduleJobIncluded('done','done')).toBe(false);
+    expect(scheduleJobIncluded('done',null)).toBe(false);
+    expect(scheduleJobIncluded('cancelled','in_progress')).toBe(false);
+  });
+
+  it('раскладывает legacy-выезд с промежуточными точками и без legs', () => {
+    const stops=['depot','wp1','job-a','job-b','wp2','depot'].map(key=>({key}));
+    const segs=tripRouteSegments(stops,[
+      {id:'a',key:'job-a',h:5}, {id:'b',key:'job-b',h:16}
+    ],[],27.643194444444443);
+    expect(segs.map(x=>x.k)).toEqual(['d','d','w','d','w','d','d']);
+    expect(segs.filter(x=>x.k==='d').reduce((n,x)=>n+x.h,0)).toBeCloseTo(27.643194444444443);
+    expect(segs.filter(x=>x.k==='w').map(x=>[x.jobId,x.h])).toEqual([['a',5],['b',16]]);
+  });
+});
 
 describe('дни недели', () => {
   it('суббота и воскресенье — не рабочие', () => {
@@ -178,6 +198,24 @@ describe('driveOfLegs', () => {
 });
 
 describe('заявки внутри выезда', () => {
+  it('сохраняет чередование плеч и работ по точкам маршрута', () => {
+    // Пн — до первой точки, вт — работа, ср — переезд ко второй,
+    // чт — работа, пт — возвращение. Промежуточная дорога не должна
+    // сливаться с работами в один островок.
+    const r = planSchedule([{
+      id: 't', kind: 'trip', engineer: 'ivan', from: '2026-09-07', to: '2026-09-11',
+      workH: 16, driveToH: 8, driveMidH: 8, driveBackH: 8,
+      routeSegs: [{ k: 'd', h: 8 }, { k: 'w', h: 8, jobId: 'a' }, { k: 'd', h: 8 }, { k: 'w', h: 8, jobId: 'b' }, { k: 'd', h: 8 }],
+      jobs: [{ id: 'a', workH: 8, sla: '2026-09-30' }, { id: 'b', workH: 8, sla: '2026-09-30' }], jobIds: ['a', 'b']
+    }], S, TODAY);
+    const b = r.blocks[0];
+    expect(b.pieces.map(p => [p.iso, p.k, p.h])).toEqual([
+      ['2026-09-07', 'd', 8], ['2026-09-08', 'w', 8], ['2026-09-09', 'd', 8],
+      ['2026-09-10', 'w', 8], ['2026-09-11', 'd', 8]
+    ]);
+    expect(b.pieces.filter(p => p.k === 'w').map(p => p.jobId)).toEqual(['a', 'b']);
+    expect(b.jobDays).toEqual({ a: '2026-09-08', b: '2026-09-10' });
+  });
   it('дорога занимает первый день, работа идёт со второго', () => {
     // Выезд пн 07 — пт 11, 8 ч дороги туда, 8 ч обратно, 16 ч работ.
     const r = planSchedule([{
