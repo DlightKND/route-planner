@@ -1993,7 +1993,7 @@ function gtDayHtml(key){
   let heads='',tracks='';
   lanes.forEach(l=>{
     const hours=gtLaneLoad(l.id,iso), pct=Math.round(hours/shift*100);
-    heads+='<div class="vg-lane-head"><b>'+esc(l.name)+'</b><span>'+fmtH(hours)+' · '+pct+'%</span></div>';
+    heads+='<div class="vg-lane-head"><b>'+esc(l.name)+'</b><span>'+fmtH(hours)+(feedCtx.mine?'':' · '+pct+'%')+'</span></div>';
     let ticks=''; for(let h=1;h<rowN;h++) ticks+='<i class="vg-hour-line" style="top:'+(h/rowN*266)+'px"></i>';
     let bars='';
     gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
@@ -2009,7 +2009,7 @@ function gtDayHtml(key){
     });
     const color=loadColor(hours/shift), over=Math.max(0,hours-gtEff());
     tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'" style="--load:'+color+';--load-edge:'+loadEdge(color)+'">'+ticks+bars
-      +(over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
+      +(!feedCtx.mine&&over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
   });
   return '<div class="gtop"><button class="gback" type="button" data-gback="'+esc(key)+'">← неделя</button>'
     +'<span class="gttl">'+WD_RU[new Date(utcOf(iso)).getUTCDay()]+' '+esc(shortDate(iso))+' · '+esc(clockOf(0,st))+'–'+esc(clockOf(eff,st))+'</span></div>'
@@ -2081,14 +2081,14 @@ function gtVerticalHtml(key){
   let heads='', tracks='';
   lanes.forEach(l=>{
     const weekH=days.reduce((n,d)=>n+gtLaneLoad(l.id,d),0), pct=Math.round(weekH/(shift*5)*100);
-    heads+='<div class="vg-lane-head" title="'+esc(l.name)+'"><b>'+esc(l.name)+'</b><span>'+fmtH(weekH)+' · '+pct+'%</span></div>';
+    heads+='<div class="vg-lane-head" title="'+esc(l.name)+'"><b>'+esc(l.name)+'</b><span>'+fmtH(weekH)+(feedCtx.mine?'':' · '+pct+'%')+'</span></div>';
     let cells=''; days.forEach((iso,i)=>{
       const hours=gtLaneLoad(l.id,iso), p=hours/shift;
       const color=loadColor(p), over=Math.max(0,hours-eff);
       const railH=hours>0?Math.max(12,Math.min(100,p/(1+(+appSettings.deviation_pct||0)/100)*100)):0;
-      cells+='<div class="vg-cell'+(i>4?' we':'')+(iso===today?' today':'')+(hours<=0?' empty':'')+'" data-vgday="'+iso+'" title="'+esc(WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)+' из '+fmtH(shift))+'">'
-        +(hours>0?('<span class="vg-rail'+(over>.01?' over':'')+'"><i style="height:'+railH+'%;--rail-color:'+color+'"></i></span>'):'<span class="vg-empty-ticks"></span>')
-        +(over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
+      cells+='<div class="vg-cell'+(i>4?' we':'')+(iso===today?' today':'')+(hours<=0?' empty':'')+'" data-vgday="'+iso+'" title="'+esc(WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)+(feedCtx.mine?'':(' из '+fmtH(shift))))+'">'
+        +(feedCtx.mine?'':(hours>0?('<span class="vg-rail'+(over>.01?' over':'')+'"><i style="height:'+railH+'%;--rail-color:'+color+'"></i></span>'):'<span class="vg-empty-ticks"></span>'))
+        +(!feedCtx.mine&&over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
     });
     let bars='';
     gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
@@ -2107,11 +2107,11 @@ function gtVerticalHtml(key){
       ?'<span class="vg-now" title="Сейчас · '+esc(now.label)+'" style="top:'+((ni+now.h/eff)*rowH)+'px"></span>':'';
     tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'">'+cells+bars+nowLine+'<span class="vg-tip" hidden></span></div>';
   });
-  return '<div class="vg-tools"><span>Загрузка дня · смена '+fmtH(shift)+' · допуск '+(+appSettings.deviation_pct||0)+'%</span>'
+  return '<div class="vg-tools"><span>'+(feedCtx.mine?'Работы по дням':'Загрузка дня · смена '+fmtH(shift)+' · допуск '+(+appSettings.deviation_pct||0)+'%')+'</span>'
     +gtLanePicker(key)+'</div>'
     +'<div class="vg-scroll" style="--lane-min:'+laneMin+'px"><div class="vg-grid" style="--lanes:'+Math.max(1,lanes.length)+'">'
     +axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
-    +gtLoadScale()
+    +(feedCtx.mine?'':gtLoadScale())
     +'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="urgent-edge"></i>срок горит</span><span><i class="road"></i>дорога внутри бруска</span>'
     +(canWrite()?'<span>перетащи — шаг сутки</span>':'<span>только просмотр</span>')+'</div>';
 }
@@ -2151,7 +2151,8 @@ function gtWire(key,box){
       const iso=gtWeekDays(feedCtx.weeks[key])[i], hours=gtLaneLoad(lane.dataset.vglane,iso), shift=(+appSettings.shift_hours)||8;
       const tip=lane.querySelector('.vg-tip');
       if(tip){ tip.hidden=false; tip.style.top=(i*40+20)+'px';
-        tip.textContent=WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)+' / '+fmtH(shift)+' · '+Math.round(hours/shift*100)+'%'; }
+        tip.textContent=WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)
+          +(feedCtx.mine?'':' / '+fmtH(shift)+' · '+Math.round(hours/shift*100)+'%'); }
     };
     lane.onpointerleave=()=>{ const tip=lane.querySelector('.vg-tip'); if(tip) tip.hidden=true; };
     lane.onclick=e=>{ if(e.target.closest('.vg-block')) return;
@@ -2575,7 +2576,7 @@ async function renderFeed(box,o){
       const blocks=plan.blocks.filter(b=>(b.pieces||[]).some(p=>days.includes(p.iso)));
       const total=blocks.reduce((n,b)=>n+(b.pieces||[]).filter(p=>days.includes(p.iso)).reduce((x,p)=>x+p.h,0),0);
       const laneCount=o.mine?1:engineersCount(plan);
-      const pct=Math.round(total/(shift*5*laneCount)*100), problem=gtWeekProblem(key,lanes);
+      const pct=Math.round(total/(shift*5*laneCount)*100), problem=o.mine?'':gtWeekProblem(key,lanes);
       let mini='';
       days.forEach(iso=>{
         const maxP=Math.max(0,...lanes.map(l=>gtLaneLoad(l.id,iso)/shift));
@@ -2586,7 +2587,7 @@ async function renderFeed(box,o){
         +'<button class="wk-h" type="button" data-gtoggle="'+esc(key)+'" aria-expanded="'+(gtOpen[key]?'true':'false')+'">'
           +'<span class="wk-copy"><b>Неделя '+it.w.n+' · '+esc(weekSpan(it.w))+'</b><span>'+summary
           +(problem?(' · <strong>'+esc(problem)+'</strong>'):'')+'</span></span>'
-          +'<span class="wk-mini" aria-label="Загрузка недели">'+mini+'</span><span class="wk-pct">'+pct+'%</span><span class="wk-chev">⌄</span>'
+          +(o.mine?'':'<span class="wk-mini" aria-label="Загрузка недели">'+mini+'</span><span class="wk-pct">'+pct+'%</span>')+'<span class="wk-chev">⌄</span>'
         +'</button><div class="gtwrap" data-gtbox="'+esc(key)+'" '+(gtOpen[key]?'':'hidden')+'></div></section>';
     }
 
