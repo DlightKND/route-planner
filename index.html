@@ -46,7 +46,11 @@
     --bd: 1px solid var(--line);
     --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
     --ring-solid: 0 0 0 2px var(--focus);
-    --t-fast: .12s ease;  --t: .18s ease;
+    /* Движение короткое и без пружинного отскока: это рабочий интерфейс,
+       а не промо-страница. Один easing делает меню, окна и состояния
+       визуально частью одной системы. */
+    --ease-out: cubic-bezier(.2, .8, .2, 1);
+    --t-fast: .12s var(--ease-out);  --t: .18s var(--ease-out);
     --sp-1: 2px;  --sp-2: 4px;  --sp-3: 8px;  --sp-4: 12px;
     --sp-5: 16px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
     /* Радиусы: мелкий / карточка / плавающая панель / пилюля */
@@ -292,8 +296,8 @@
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); 
     padding: var(--pad-card); width: 260px; box-shadow: var(--shadow-lg); display: none; 
   }
-  .pop.on { display: block; animation: popIn 0.2s ease-out; }
-  @keyframes popIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+  .pop.on { display: block; animation: popIn .16s var(--ease-out); }
+  @keyframes popIn { from { opacity: 0; transform: translateY(-6px) scale(.985); } to { opacity: 1; transform: none; } }
   .pop h4 { font-family: var(--mono); font-size: var(--fs-2); letter-spacing: 1px; text-transform: uppercase; color: var(--ink-faint); margin-bottom: var(--sp-4); }
   
   .seg { display: flex; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; margin-bottom: var(--sp-3); background: var(--panel-2); }
@@ -656,8 +660,8 @@
     font-weight: 600; font-size: var(--fs-3); text-shadow: 0 1px 3px rgba(0,0,0,0.8); 
     box-shadow: var(--shadow-md); cursor: pointer; transition: transform var(--t);
   }
-  .cbub:hover { transform: scale(1.1); }
-  .cbub.hl { transform: scale(1.3); box-shadow: var(--ring-solid), var(--shadow-lg); z-index: 1000; }
+  .cbub:hover { transform: scale(1.05); }
+  .cbub.hl { transform: scale(1.14); box-shadow: var(--ring-solid), var(--shadow-md); z-index: 1000; }
   .eq-alert { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: var(--fs-3); background: var(--panel); border: 2px solid var(--red); border-radius: 50%; animation: pulseA 1.8s infinite; }
   @keyframes pulseA { 0% { box-shadow: 0 0 0 0 rgba(255,93,93,.55); } 70% { box-shadow: 0 0 0 9px rgba(255,93,93,0); } 100% { box-shadow: 0 0 0 0 rgba(255,93,93,0); } }
   .pt.hl { border-color: var(--accent-line); box-shadow: var(--ring); }
@@ -667,8 +671,8 @@
     font-family: var(--mono); font-size: var(--fs-3); background: var(--accent); color: var(--on-accent); 
     padding: var(--pad-btn); border-radius: var(--r-pill); font-weight: 600; box-shadow: var(--shadow-lg); display: none; 
   }
-  .mode-tag.on { display: block; animation: dropIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-  @keyframes dropIn { from { transform: translate(-50%, -20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+  .mode-tag.on { display: block; animation: dropIn .2s var(--ease-out); }
+  @keyframes dropIn { from { transform: translate(-50%, -10px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
   
   /* Всплывашка точки — такая же плавающая поверхность над картой, как
      панель и меню слоёв, и материал у неё тот же. Хвостик оставляем
@@ -759,8 +763,10 @@
     position: fixed; inset: 0; background: rgba(8, 9, 11, 0.85); backdrop-filter: blur(4px); 
     z-index: 2000; display: none; align-items: center; justify-content: center; padding: var(--pad-card); 
   }
-  .overlay.on { display: flex; animation: fadeIn 0.2s ease; }
+  .overlay.on { display: flex; animation: fadeIn .16s var(--ease-out); }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .overlay.on .modal { animation: modalIn .18s var(--ease-out); }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: none; } }
   
   /* Три размера окна вместо девяти.
      Было: 380 · 400 · 420 · 440 · 460 · 480 · 560 · 780 · 920, причём
@@ -919,7 +925,7 @@
   .busy-bar i { display: block; height: 100%; width: 0; background: var(--accent);
     transition: width .2s linear; }
   .ctxmenu { position: fixed; z-index: 9998; border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: var(--gap-row); display: none; min-width: 210px; }
-  .ctxmenu.on { display: block; animation: popIn 0.12s ease; }
+  .ctxmenu.on { display: block; animation: popIn .12s var(--ease-out); }
   .ctxmenu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); font-family: var(--sans); font-size: var(--fs-4); padding: var(--pad-row); border-radius: var(--r-sm); cursor: pointer; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--gap-block); }
   .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--pad-card); }
@@ -2191,6 +2197,18 @@
   border-top:1px solid var(--line);border-radius:0;padding-top: var(--sp-5)}
 .sheet-row.danger svg{color:var(--red)}
 @media (prefers-reduced-motion: reduce){ .sheet, .sheet-back{transition:none} }
+
+/* Системная настройка относится ко всему приложению, а не только к одной
+   шторке и красной точке. Состояния остаются видимыми, но переходят сразу;
+   бесконечные пульсации и вращения не отвлекают пользователя. */
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration:.001ms !important;
+    animation-iteration-count:1 !important;
+    scroll-behavior:auto !important;
+    transition-duration:.001ms !important;
+  }
+}
 </style>
 </head>
 <body>
