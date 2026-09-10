@@ -33,6 +33,7 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
         planSchedule, scheduleJobIncluded, tripRouteSegments, driveOfLegs, piecesOf, normPos, addHours, clockOf,
+        trashDaysLeft,
         measureTrip } = core;
 
 
@@ -918,7 +919,7 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
     if(rt) rt.style.display=canWrite()?'':'none';
     if(tb) tb.classList.toggle('solo',!canWrite());
     if(!canWrite()) sideTab('points'); }
-  if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
+  if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobTrash')) $('jobTrash').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; if($('tripTrash')) $('tripTrash').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
   setTimeout(()=>{ map.invalidateSize(); fitUkraine(); },80);
   await loadAll(); await loadPlaces(); await loadVehicles(); await loadEqModels();
   await loadVehState(); subscribeVeh(); await loadFactHours(); await loadRescheds();
@@ -1662,6 +1663,66 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
   wireJobCards(box); wireKanbanDrag(box,dropJob); }
 $('jobSearch').oninput=renderJobs; if($('jobEngFilter')) $('jobEngFilter').onchange=renderJobs; if($('mineDone')) $('mineDone').onchange=renderMine; $('jobAdd').onclick=()=>{ if(canWrite()) openJob(null); };
+
+// ── Корзина заявок и выездов ───────────────────────────────────────────
+// Обычное удаление остаётся мягким: запись сразу исчезает из рабочих
+// экранов, но семь дней доступна здесь. Окончательное удаление идёт через
+// SECURITY DEFINER RPC, чтобы каскад и проверка роли были едиными для UI и
+// автоматической серверной очистки.
+let trashKind='jobs';
+function trashLabel(row){
+  if(trashKind==='jobs') return (row.clients&&row.clients.name)||'Заявка без клиента';
+  const pts=(row.route_stops||[]).filter(s=>s&&s.name&&!['start','place','wp'].includes(s.type));
+  return pts.length?pts.map(s=>String(s.name).split(' · ')[0]).slice(0,2).join(', '):tripPeriod(row.date_from,row.date_to);
+}
+function trashMeta(row){
+  const left=trashDaysLeft(row.deleted_at), deleted=new Date(row.deleted_at);
+  const when=isNaN(deleted)?'':deleted.toLocaleString('ru-RU',{dateStyle:'short',timeStyle:'short'});
+  const ttl=left===0?'будет удалено при ближайшей очистке':('осталось '+left+' '+plural(left,'день','дня','дней'));
+  if(trashKind==='jobs') return [row.equipment&&row.equipment.model,when,ttl].filter(Boolean).join(' · ');
+  return [tripPeriod(row.date_from,row.date_to),row.vehicle_label,when,ttl].filter(Boolean).join(' · ');
+}
+async function renderTrash(){
+  const box=$('trashList'), err=$('trashErr'); if(!box) return;
+  err.textContent=''; box.innerHTML='<div class="hint">Загружаю…</div>';
+  $('trashTitle').textContent=trashKind==='jobs'?'Корзина заявок':'Корзина выездов';
+  $('trashTabs').querySelectorAll('[data-trash-kind]').forEach(b=>b.classList.toggle('on',b.dataset.trashKind===trashKind));
+  let q=trashKind==='jobs'
+    ? sb.from('jobs').select('id,deleted_at,status,clients(name),equipment(model)').not('deleted_at','is',null)
+    : sb.from('trips').select('id,deleted_at,date_from,date_to,vehicle_label,route_stops').not('deleted_at','is',null);
+  const {data,error}=await q.order('deleted_at',{ascending:false});
+  if(error){ box.innerHTML=''; err.textContent=error.message; return; }
+  const rows=data||[];
+  box.innerHTML=rows.length?rows.map(r=>'<div class="trash-row"><div><div class="trash-name">'+esc(trashLabel(r))+'</div><div class="trash-meta">'+esc(trashMeta(r))+'</div></div><div class="trash-actions"><button class="btn sm" data-trash-restore="'+r.id+'">Восстановить</button><button class="btn sm red" data-trash-purge="'+r.id+'">Удалить навсегда</button></div></div>').join('')
+    : '<div class="hint">Корзина пуста.</div>';
+  box.querySelectorAll('[data-trash-restore]').forEach(b=>b.onclick=()=>restoreTrash(b.dataset.trashRestore));
+  box.querySelectorAll('[data-trash-purge]').forEach(b=>b.onclick=()=>purgeTrash(b.dataset.trashPurge));
+}
+async function openTrash(kind){ if(!canWrite()) return; trashKind=kind||'jobs'; $('trashOverlay').classList.add('on'); await renderTrash(); }
+async function restoreTrash(id){
+  const {error}=await sb.rpc('trash_restore',{p_kind:trashKind,p_id:id});
+  if(error){ $('trashErr').textContent=error.message; return; }
+  showToast(trashKind==='jobs'?'Заявка восстановлена':'Выезд восстановлен');
+  await renderTrash(); if(trashKind==='jobs') await renderJobs(); else await renderTrips();
+}
+async function purgeTrash(id){
+  if(!await confirmDialog('Удалить запись без возможности восстановления? Все связанные данные также будут удалены.',{danger:true,okText:'Удалить навсегда'})) return;
+  $('trashErr').textContent='';
+  if(trashKind==='jobs'){
+    const {data,error}=await sb.from('job_photos').select('path').eq('job_id',id);
+    if(error){ $('trashErr').textContent=error.message; return; }
+    const paths=(data||[]).map(x=>x.path).filter(Boolean);
+    if(paths.length){ const {error:storageError}=await sb.storage.from('job-photos').remove(paths);
+      if(storageError){ $('trashErr').textContent='Не удалось удалить файлы: '+storageError.message; return; } }
+  }
+  const {error}=await sb.rpc('trash_delete_forever',{p_kind:trashKind,p_id:id});
+  if(error){ $('trashErr').textContent=error.message; return; }
+  showToast('Удалено безвозвратно'); await renderTrash();
+}
+$('jobTrash').onclick=()=>openTrash('jobs');
+$('tripTrash').onclick=()=>openTrash('trips');
+$('trashClose').onclick=()=>$('trashOverlay').classList.remove('on');
+$('trashTabs').querySelectorAll('[data-trash-kind]').forEach(b=>b.onclick=()=>{ trashKind=b.dataset.trashKind; renderTrash(); });
 // ── Лента внимания ──────────────────────────────────────────────────────────
 // Плоский список одинаковых строк не выглядит отсортированным: цвет полоски
 // у всех один, а приоритет закодирован числом, которое надо читать и
@@ -4805,8 +4866,8 @@ $('jobSave').onclick=async ()=>{
     // запись в очереди).
     if(e.target.closest('#jobFoot')||e.target.closest('.job-photos')) return;
     queueJobSave(); jobFootUpdate(); })); })();
-async function delJob(id){ if(!await confirmDialog('Удалить заявку?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('jobs').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderJobs(); await refreshStats();
-  undoToast('Заявка удалена', async ()=>{ const {error:e2}=await sb.from('jobs').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Восстановлено'); }); }
+async function delJob(id){ if(!await confirmDialog('Переместить заявку в корзину? Она удалится автоматически через 7 дней.',{danger:true,okText:'В корзину'})) return; const {error}=await sb.from('jobs').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderJobs(); await refreshStats();
+  undoToast('Заявка перемещена в корзину', async ()=>{ const {error:e2}=await sb.rpc('trash_restore',{p_kind:'jobs',p_id:id}); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Восстановлено'); }); }
 
 // ---------- trips ----------
 let trips=[], tripJobsAll=[], curTripJobs=new Set(), tripEditId=null, tripRouteKeys=new Set();
@@ -5252,8 +5313,8 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
     // вызывается вовсе, и пробег молча переставал бы обновляться.
     switchTab('planner','trips'); await renderTrips(); showToast('Выезд сохранён');
   }catch(err){ console.error('Сохранение выезда не прошло:', err, '| детали:', err&&(err.details||err.hint||err.code)); $('tripErr').textContent='Ошибка: '+(err.message||err); } finally{ $('tpSave').disabled=false; } };
-async function delTrip(id){ if(!await confirmDialog('Удалить выезд?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('trips').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderTrips();
-  undoToast('Выезд удалён', async ()=>{ const {error:e2}=await sb.from('trips').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Восстановлено'); }); }
+async function delTrip(id){ if(!await confirmDialog('Переместить выезд в корзину? Он удалится автоматически через 7 дней.',{danger:true,okText:'В корзину'})) return; const {error}=await sb.from('trips').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderTrips();
+  undoToast('Выезд перемещён в корзину', async ()=>{ const {error:e2}=await sb.rpc('trash_restore',{p_kind:'trips',p_id:id}); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Восстановлено'); }); }
 function tripGmaps(id){ const t=trips.find(x=>x.id==id)||tripCache[id]; const stops=(t&&t.route_stops)||[]; if(stops.length<2){ notify('Нужно минимум 2 точки в выезде (по клиентам заявок).','warn'); return; }
   const pts=stops.map(s=>(+s.lat).toFixed(6)+','+(+s.lng).toFixed(6)); const url='https://www.google.com/maps/dir/?api=1&origin='+pts[0]+'&destination='+pts[pts.length-1]+(pts.length>2?'&waypoints='+encodeURIComponent(pts.slice(1,-1).join('|')):'')+'&travelmode=driving'; window.open(url,'_blank'); }
 

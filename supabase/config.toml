@@ -1,0 +1,4 @@
+project_id = "anqfbljgfimoaziztdxe"
+
+[functions.trash-purge]
+verify_jwt = false
