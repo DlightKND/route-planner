@@ -2100,7 +2100,8 @@ function gtVerticalHtml(key){
       const sub=(b.kind==='trip'?'выезд':'заявка')+' · '+fmtH(b.workH||0)+(totalDrive>.01?' + дорога '+fmtH(totalDrive):'');
       const segs=points.map(x=>'<i class="vg-seg '+(x.p.k==='d'?'road':'work')+'" style="--seg-y:'+x.y+'px;top:'+(x.y-top)+'px;height:'+(x.h+.6)+'px"></i>').join('');
       const startIso=points.slice().sort((a,b)=>a.y-b.y)[0].p.iso, startP=gtLaneLoad(l.id,startIso)/shift;
-      bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+((bottom-top)<40?' short':'')+(String(gtSel)===String(b.id)?' sel':'')+'" data-gb="'+esc(b.id)+'" style="--block-tint:'+loadTint(startP)+';--block-tone:'+loadColor(startP)+';top:'+top+'px;height:'+Math.max(12,bottom-top)+'px">'
+      const blockTint=feedCtx.mine?'transparent':loadTint(startP), blockTone=feedCtx.mine?'var(--ink-faint)':loadColor(startP);
+      bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+((bottom-top)<40?' short':'')+(String(gtSel)===String(b.id)?' sel':'')+'" data-gb="'+esc(b.id)+'" style="--block-tint:'+blockTint+';--block-tone:'+blockTone+';top:'+top+'px;height:'+Math.max(12,bottom-top)+'px">'
         +segs+'<span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc(sub)+'</small></span></div>';
     });
     const now=scheduleNow(), ni=days.indexOf(now.iso), nowLine=ni>=0&&now.h>=0&&now.h<=eff
