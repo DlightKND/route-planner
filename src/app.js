@@ -1971,60 +1971,40 @@ setInterval(paintScheduleNow,60000);
 
 function gtDayHtml(key){
   if(!feedCtx) return '';
-  const it=feedCtx.weeks[key]; if(!it) return '';
-  const eff=gtEff(), zoom=gtZoom[key]||null;
-  const days=[]; for(let i=0;i<7;i++) days.push(isoOf(it.w.mon+i*DAY_MS));
-  const cols=zoom?[zoom]:days;
-  const span=cols.length*eff;
-  const pos=(iso,h)=>{ const i=cols.indexOf(iso); return i<0?null:((i*eff+h)/span*100); };
-  // Шапка: недели — дни, дня — часы смены.
-  let head='';
-  if(zoom){
-    for(let h=0;h<Math.round(eff);h++) head+='<div>'+esc(clockOf(h,gtSettings()))+'</div>';
-  } else {
-    days.forEach((iso,i)=>{
-      const dd=feedCtx.dayH[iso]||{h:0};
-      head+='<div class="gzoom'+((i>4&&dd.h<=0.05)?' we':'')+'" data-gday="'+iso+'">'
-        +WD_RU[(i+1)%7]+'<br>'+esc(shortDate(iso))+'</div>';
-    });
-  }
-  let lanes='';
-  gtLanes().forEach(l=>{
+  const it=feedCtx.weeks[key], iso=gtZoom[key]; if(!it||!iso) return '';
+  const eff=gtEff(), shift=(+appSettings.shift_hours)||8, st=gtSettings();
+  const lanes=gtWeekLanes(key), laneMin=window.matchMedia('(max-width:600px)').matches?108:132;
+  const rowN=Math.max(1,Math.ceil(eff));
+  let axis='<span class="vg-axis-head"></span>';
+  for(let h=0;h<rowN;h++) axis+='<span class="vg-hour-label">'+esc(clockOf(h,st))+'</span>';
+  axis='<div class="vg-axis vg-day-axis" style="--hour-rows:'+rowN+'">'+axis+'</div>';
+  let heads='',tracks='';
+  lanes.forEach(l=>{
+    const hours=gtLaneLoad(l.id,iso), pct=Math.round(hours/shift*100);
+    heads+='<div class="vg-lane-head"><b>'+esc(l.name)+'</b><span>'+fmtH(hours)+' · '+pct+'%</span></div>';
+    let ticks=''; for(let h=1;h<rowN;h++) ticks+='<i class="vg-hour-line" style="top:'+(h/rowN*266)+'px"></i>';
     let bars='';
-    gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
-      let first=null,last=null;
-      gtPieces(b).forEach(p=>{
-        const x=pos(p.iso,p.from); if(x==null) return;
-        const w=(p.h/span*100);
-        if(first==null) first=x;
-        last=x+w;
-        const task=p.jobId&&feedCtx.jobName(p.jobId);
-        bars+='<div class="gpc '+(p.k==='w'?'gw':'gd')+(p.jobId?' job-cut':'')+(String(gtSel)===String(b.id)?' sel':'')
-          +(b.manual?' man':'')+'" style="left:'+x+'%;width:'+w+'%" data-gb="'+esc(b.id)+'"'
-          +(task?' title="'+esc(task)+'"':'')+'></div>';
-      });
-      if(first!=null){
-        const nm=b.kind==='trip'?('Выезд '+shortDate(b.from)):((feedCtx.jobName(b.jobIds[0])||'Заявка'));
-        bars+='<span class="glbl" style="left:'+first+'%;width:'+Math.max(0,last-first)+'%">'
-          +esc(nm)+(b.manual?' ✎':'')+'</span>';
-      }
+    if(l.id!==' department') gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
+      const pcs=gtPieces(b).filter(p=>p.iso===iso); if(!pcs.length) return;
+      const points=pcs.map(p=>({p,y:p.from/eff*266,h:Math.max(3,p.h/eff*266)}));
+      const top=Math.max(1,Math.min(...points.map(x=>x.y))), bottom=Math.min(265,Math.max(...points.map(x=>x.y+x.h)));
+      const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late');
+      const totalDrive=(b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0);
+      const sub=(b.kind==='trip'?'выезд':'заявка')+' · '+fmtH(b.workH||0)+(totalDrive>.01?' + дорога '+fmtH(totalDrive):'');
+      const segs=points.map(x=>'<i class="vg-seg '+(x.p.k==='d'?'road':'work')+'" style="--seg-y:'+x.y+'px;top:'+(x.y-top)+'px;height:'+(x.h+.6)+'px"></i>').join('');
+      bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+((bottom-top)<40?' short':'')+(String(gtSel)===String(b.id)?' sel':'')+'" data-gb="'+esc(b.id)+'" style="top:'+top+'px;height:'+Math.max(12,bottom-top)+'px">'
+        +segs+'<span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc(sub)+'</small></span></div>';
     });
-    lanes+='<div class="grow"><div class="gwho">'+esc(l.name)+'</div><div class="gtrack">'
-      +(zoom?'':'<span class="gwe" style="left:'+(5/7*100)+'%;width:'+(2/7*100)+'%"></span>')
-      +gtTicks(cols.length,eff)+bars+gtNowLine(cols,eff)+'</div></div>';
+    const color=loadColor(hours/shift), over=Math.max(0,hours-gtEff());
+    tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'" style="--load:'+color+';--load-edge:'+loadEdge(color)+'">'+ticks+bars
+      +(over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
   });
-  return '<div class="gtop">'
-      +(zoom?('<button class="gback" type="button" data-gback="'+esc(key)+'">← неделя</button>'
-             +'<span class="gttl">'+WD_RU[new Date(utcOf(zoom)).getUTCDay()]+' '+esc(shortDate(zoom))
-             +' · '+esc(clockOf(0,gtSettings()))+'–'+esc(clockOf(eff,gtSettings()))
-             +' (смена '+((+appSettings.shift_hours)||8)+' ч'
-             +((+appSettings.deviation_pct||0)?(' + допуск '+(+appSettings.deviation_pct)+'%'):'')+')</span>')
-        :'<span class="gttl">Неделя целиком · нажми на день, чтобы открыть его крупно</span>')
-    +'</div>'
-    +'<div class="ghead">'+head+'</div>'+lanes
-    +'<div class="gleg"><span><i class="gw"></i>работа</span><span><i class="gd"></i>дорога</span>'
-      +(canWrite()?('<span>тащи этап — шаг '+(zoom?'30 мин':'сутки')+'</span>'):'<span>только просмотр</span>')
-      +'<span>✎ — расставлено вручную</span></div>';
+  return '<div class="gtop"><button class="gback" type="button" data-gback="'+esc(key)+'">← неделя</button>'
+    +'<span class="gttl">'+WD_RU[new Date(utcOf(iso)).getUTCDay()]+' '+esc(shortDate(iso))+' · '+esc(clockOf(0,st))+'–'+esc(clockOf(eff,st))+'</span></div>'
+    +'<div class="vg-scroll"><div class="vg-grid vg-day-grid" style="--lanes:'+Math.max(1,lanes.length)+';--lane-min:'+laneMin+'px">'
+    +axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
+    +'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="road"></i>дорога</span>'
+    +(canWrite()?'<span>перетащи — шаг 30 мин</span>':'<span>только просмотр</span>')+'<span>✎ — расставлено вручную</span></div>';
 }
 function gtWeekDays(it){ const out=[]; for(let i=0;i<7;i++) out.push(isoOf(it.w.mon+i*DAY_MS)); return out; }
 function gtWeekLanes(key){
@@ -2033,11 +2013,13 @@ function gtWeekLanes(key){
   if(feedCtx.mine) return [{id:session.user.id,name:'Мои работы'}];
   if(gtLaneMode[key]==='department') return [{id:' department',name:'Отдел'}];
   if(gtLaneMode[key]==='all'){
-    const all=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false)
+    const all=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim())
       .map(p=>({id:p.id,name:p.full_name||'—'}));
     if(used[' free']) all.push({id:' free',name:'Без инженера'}); return all;
   }
-  return Object.keys(used).map(id=>({id,name:id===' free'?'Без инженера':(feedCtx.nameOf(id)||'—')}));
+  const named=new Set((profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim()).map(p=>p.id));
+  return Object.keys(used).filter(id=>id===' free'||named.has(id))
+    .map(id=>({id,name:id===' free'?'Без инженера':feedCtx.nameOf(id)}));
 }
 function gtLaneLoad(id,iso){
   if(id===' department') return Object.keys(feedCtx.plan.load||{}).reduce((n,k)=>{
@@ -2085,7 +2067,7 @@ function gtVerticalHtml(key){
       const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late');
       const totalDrive=(b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0);
       const sub=(b.kind==='trip'?'выезд':'заявка')+' · '+fmtH(b.workH||0)+(totalDrive>.01?' + дорога '+fmtH(totalDrive):'');
-      const segs=points.map(x=>'<i class="vg-seg '+(x.p.k==='d'?'road':'work')+'" style="top:'+(x.y-top)+'px;height:'+x.h+'px"></i>').join('');
+      const segs=points.map(x=>'<i class="vg-seg '+(x.p.k==='d'?'road':'work')+'" style="--seg-y:'+x.y+'px;top:'+(x.y-top)+'px;height:'+(x.h+.6)+'px"></i>').join('');
       bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+((bottom-top)<40?' short':'')+(String(gtSel)===String(b.id)?' sel':'')+'" data-gb="'+esc(b.id)+'" style="top:'+top+'px;height:'+Math.max(12,bottom-top)+'px">'
         +segs+'<span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc(sub)+'</small></span></div>';
     });
@@ -2130,7 +2112,7 @@ function gtWire(key,box){
     gtZoom[key]=d.dataset.gday; gtSel=null; gtPaint(key); });
   box.querySelectorAll('[data-vgmode]').forEach(b=>b.onclick=e=>{ e.stopPropagation();
     gtLaneMode[key]=b.dataset.vgmode; gtSel=null; gtPaint(key); });
-  box.querySelectorAll('.vg-lane').forEach(lane=>{
+  if(!zoom) box.querySelectorAll('.vg-lane').forEach(lane=>{
     lane.onpointermove=e=>{
       const i=Math.max(0,Math.min(6,Math.floor((e.clientY-lane.getBoundingClientRect().top)/38)));
       const iso=gtWeekDays(feedCtx.weeks[key])[i], hours=gtLaneLoad(lane.dataset.vglane,iso);
@@ -2154,7 +2136,7 @@ function gtWire(key,box){
     el.onpointermove=e=>{
       if(!gtDrag||String(gtDrag.id)!==String(el.dataset.gb)) return;
       const span=gtDrag.cols*eff;
-      const raw=gtDrag.vertical?(e.clientY-gtDrag.y0)/38*eff:(e.clientX-gtDrag.x0)/gtDrag.w*span;
+      const raw=gtDrag.vertical?(e.clientY-gtDrag.y0)/(gtDrag.zoom?266:38)*eff:(e.clientX-gtDrag.x0)/gtDrag.w*span;
       // Неделя узкая: час — это 5–7 пикселей, мышь в них не попадает.
       // Поэтому на неделе тащим сутками, а часы правим в дне и кнопками модалки.
       const step=gtDrag.zoom?0.5:eff;
@@ -2281,7 +2263,7 @@ function dayHours(plan){
 // ещё не расставлены, берём тех, на ком реально висит работа, иначе фонд
 // оказался бы нулевым и любые часы давали бы бесконечный процент.
 function engineersCount(plan){
-  const n=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false).length;
+  const n=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim()).length;
   if(n) return n;
   const lanes={};
   Object.keys((plan&&plan.load)||{}).forEach(k=>{ const e=k.split('|')[0]; if(e!==' free') lanes[e]=1; });
@@ -3184,18 +3166,21 @@ function loadCard(list,tripOf,tripById,tripOrd){
     toIso=isoOf(utcOf(fromIso)+(loadDays-1)*DAY_MS);
   }
   const wd=Math.max(1,workDaysBetween(fromIso,toIso));
-  const engs=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false);
+  const engs=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim());
+  const engIds=new Set(engs.map(p=>p.id));
   const capEach=shift*wd;
 
   const plan=planOfData(list,tripOf,tripById,tripOrd).plan;
   const lane={}, day={};
   Object.keys(plan.load).forEach(k=>{ const l=plan.load[k];
     if(l.date<fromIso||l.date>toIso) return;
+    if(l.engineer!==' free'&&!engIds.has(l.engineer)) return;
     const r=lane[l.engineer]||(lane[l.engineer]={w:0,d:0,n:0});
     r.w+=l.workH; r.d+=l.driveH;
     day[l.date]=(day[l.date]||0)+l.workH+l.driveH; });
   plan.blocks.forEach(b=>{ const k=b.engineer||' free';
     if(b.to<fromIso||b.from>toIso) return;
+    if(k!==' free'&&!engIds.has(k)) return;
     const r=lane[k]||(lane[k]={w:0,d:0,n:0}); r.n+=b.jobIds.length; });
 
   const num=v=>v.toFixed(v%1?1:0);
