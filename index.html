@@ -1422,6 +1422,8 @@
 .vg-switch{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--panel)}
 .vg-switch button{border:0;border-radius:var(--r-pill);padding:4px 8px;background:transparent;color:var(--ink-dim);font:inherit;cursor:pointer;white-space:nowrap}
 .vg-switch button.on{background:var(--ink);color:var(--panel)}
+.vg-filter{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.vg-filter select{width:auto;max-width:min(220px,55vw);padding:4px 26px 4px 8px;border-radius:var(--r-pill);font:inherit;background-color:var(--panel)}
 .vg-scroll{position:relative;max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);scrollbar-width:thin;isolation:isolate}
 .vg-scroll::before,.vg-scroll::after{content:'';position:sticky;z-index:11;top:0;bottom:0;width:12px;pointer-events:none}
 .vg-scroll::before{left:96px;float:left;margin-right:-12px;box-shadow:10px 0 12px -12px rgba(0,0,0,.8)}
@@ -1443,6 +1445,7 @@
 .vg-cell{position:relative;height:38px;box-sizing:border-box;border-top:1px solid var(--line);background:var(--load);box-shadow:inset 3px 0 var(--load-edge);transition:background-color var(--t-fast)}
 .vg-cell.we{filter:saturate(.7)}
 .vg-over{position:absolute;z-index:8;right:3px;top:3px;padding:2px 5px;border-radius:var(--r-pill);background:#c9372c;color:#fff;font:600 9px/1 var(--mono);box-shadow:0 1px 4px rgba(0,0,0,.24)}
+.vg-tip{position:absolute;z-index:12;left:6px;max-width:calc(100% - 12px);padding:3px 6px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--ink);color:var(--panel);font:600 9px/1.2 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:var(--shadow-sm);transform:translateY(-50%)}
 .vg-block{position:absolute;z-index:3;left:13px;right:13px;min-height:12px;border:1px solid var(--line);border-left:3px solid var(--ink-faint);border-radius:var(--r-sm);background:color-mix(in srgb,var(--panel) 94%,transparent);box-shadow:0 2px 8px rgba(0,0,0,.14);overflow:hidden;cursor:grab;touch-action:none}
 .vg-block.trip{border-left-color:var(--accent)}
 .vg-block.urgent{border-left-color:#c9372c}
