@@ -49,8 +49,10 @@
     /* Движение короткое и без пружинного отскока: это рабочий интерфейс,
        а не промо-страница. Один easing делает меню, окна и состояния
        визуально частью одной системы. */
-    --ease-out: cubic-bezier(.2, .8, .2, 1);
-    --t-fast: .12s var(--ease-out);  --t: .18s var(--ease-out);
+    --ease: cubic-bezier(.22, .61, .36, 1);
+    --ease-out: var(--ease); /* compatibility alias: one curve everywhere */
+    --t-fast: .13s var(--ease);  --t: .22s var(--ease);
+    --press: rgba(90,68,0,.45);
     --sp-1: 2px;  --sp-2: 4px;  --sp-3: 8px;  --sp-4: 12px;
     --sp-5: 16px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
     /* Радиусы: мелкий / карточка / плавающая панель / пилюля */
@@ -502,9 +504,17 @@
     color: var(--ink); padding: var(--pad-btn); border-radius: var(--r-sm); cursor: pointer; transition: border-color var(--t), background var(--t), color var(--t), box-shadow var(--t);
     display: inline-flex; align-items: center; justify-content: center; gap: var(--gap-row);
     min-width: 0; max-width: 100%; text-align: center; line-height: 1.25;
+    position:relative;overflow:hidden;isolation:isolate;
   }
+  .btn::before { content:'';position:absolute;inset:0;z-index:-1;transform:scaleY(0);transform-origin:bottom;
+    background:linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,.14));transition:transform var(--t); }
+  .btn:hover:not(:disabled)::before { transform:scaleY(1); }
+  .btn:active:not(:disabled)::before { transform:scaleY(.35); }
+  .btn:active:not(:disabled) { transform:translateY(1px) scale(.995);box-shadow:inset 0 2px 4px var(--press); }
+  .btn.sm::before { opacity:.6; }
+  .btn.ghost::before { display:none; }
   .btn.amber { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
-  .btn.amber:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn.amber:hover:not(:disabled) { filter:none; }
   .btn.ghost { background: transparent; border-color: transparent; }
   .btn.sm { padding: var(--pad-row); font-size: var(--fs-2); } 
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -932,12 +942,12 @@
     display: flex; align-items: center; gap: var(--gap-row); }
   .busy-s { width: 12px; height: 12px; flex: none; border-radius: 50%;
     border: 2px solid var(--line); border-top-color: var(--accent);
-    animation: spin 0.7s linear infinite; }
+    animation: spin 0.7s var(--ease) infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .busy-bar { height: 3px; margin-top: var(--sp-3); background: var(--line);
     border-radius: 2px; overflow: hidden; }
   .busy-bar i { display: block; height: 100%; width: 0; background: var(--accent);
-    transition: width .2s linear; }
+    transition: width .2s var(--ease); }
   .ctxmenu { position: fixed; z-index: 9998; border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-lg); padding: var(--gap-row); display: none; min-width: 210px; }
   .ctxmenu.on { display: block; animation: popIn .12s var(--ease-out); }
   .ctxmenu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--ink); font-family: var(--sans); font-size: var(--fs-4); padding: var(--pad-row); border-radius: var(--r-sm); cursor: pointer; }
@@ -1406,6 +1416,10 @@
    инженера. Горизонтально прокручивается только внутренняя сетка. */
 .vg-feed{display:grid;gap:var(--sp-5);min-width:0}
 .wkrow{min-width:0;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);overflow:hidden;box-shadow:var(--shadow-sm)}
+.wkrow.has-load::after{content:'';display:block;height:3px;width:var(--week-fill,0%);background:var(--week-ramp);animation:weekFill .8s var(--ease) both;transform-origin:left}
+@keyframes weekFill{from{transform:scaleX(0)}}
+.vg-feed.first-enter .wkrow{animation:cardRise .34s var(--ease) both;animation-delay:var(--entry-delay,0ms)}
+@keyframes cardRise{from{opacity:0;transform:translateY(6px)}}
 .wk-h{width:100%;min-width:0;display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);border:0;background:transparent;color:var(--ink);text-align:left;cursor:pointer}
 .wk-h:hover{background:color-mix(in srgb,var(--ink) 3%,transparent)}
 .wk-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px}
@@ -1450,6 +1464,8 @@
 .vg-empty-ticks{position:absolute;left:8px;top:0;width:3px;height:100%;opacity:.7;background:linear-gradient(to bottom,transparent 24%,color-mix(in srgb,var(--ink-faint) 36%,transparent) 24% 26%,transparent 26% 49%,color-mix(in srgb,var(--ink-faint) 36%,transparent) 49% 51%,transparent 51% 74%,color-mix(in srgb,var(--ink-faint) 36%,transparent) 74% 76%,transparent 76%)}
 .vg-rail{position:absolute;z-index:2;left:7px;top:4px;bottom:4px;width:11px;border-radius:999px;background:color-mix(in srgb,var(--ink-faint) 14%,transparent);overflow:hidden}
 .vg-rail>i{position:absolute;left:0;right:0;bottom:0;min-height:12%;border-radius:inherit;background:var(--rail-color)}
+.vg-rail>i{animation:railFill .55s var(--ease) both}
+@keyframes railFill{from{height:0}}
 .vg-rail.over{overflow:visible;box-shadow:0 0 0 1.5px #d5342a}
 .vg-over{position:absolute;z-index:8;right:3px;top:3px;padding:2px 5px;border-radius:var(--r-pill);background:#c9372c;color:#fff;font:600 9px/1 var(--mono);box-shadow:0 1px 4px rgba(0,0,0,.24)}
 .vg-tip{position:absolute;z-index:12;left:6px;max-width:calc(100% - 12px);padding:3px 6px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--ink);color:var(--panel);font:600 9px/1.2 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:var(--shadow-sm);transform:translateY(-50%)}
@@ -1491,6 +1507,7 @@
 [data-theme="dark"] .vg-date.today{background:color-mix(in srgb,#ffe100 8%,#17191d)}
 [data-theme="dark"] .vg-date.today::before{background:#ffe100}
 [data-theme="dark"] .vg-cell.today{box-shadow:inset 0 1px #ffe100}
+[data-theme="light"]{--press:rgba(120,92,0,.32)}
 /* Дневной увеличенный вид сохраняет прежнюю точную часовую механику. */
 .gtop{display:flex;align-items:center;gap:var(--gap-row);margin-bottom:var(--sp-3);flex-wrap:wrap}
 .gback{font-family:var(--mono);font-size:var(--fs-1);color:var(--ink-dim);background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--pad-tag);cursor:pointer}
@@ -1657,6 +1674,8 @@
 .el-t{grid-area:t;height:8px;border-radius: var(--r-pill);background:color-mix(in srgb,var(--ink-faint) 22%,var(--panel));overflow:hidden}
 .el-t{display:flex}
 .el-t i{display:block;height:100%;border-radius: var(--r-pill)}
+.data-fill{animation:dataFill .7s var(--ease) both;transform-origin:left}
+@keyframes dataFill{from{transform:scaleX(0)}}
 .el-t .el-drive{opacity:.4;margin-left: var(--sp-1)}
 .el-s{grid-area:s;font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint)}
 .elrow.none .el-n{color:var(--red)}
@@ -1899,6 +1918,7 @@
 .statuscard{margin-top: var(--sp-5)}
 .statbar{display:flex;height:12px;border-radius: var(--r-sm);overflow:hidden;margin: var(--sp-3) 0}
 .statbar i{display:block}
+.statbar i{animation:dataFill .7s var(--ease) both;transform-origin:left}
 .statleg{display:flex;flex-wrap:wrap;gap: var(--gap-block);font-size: var(--fs-3);color:var(--ink-dim)}
 .statleg span{display:flex;align-items:center;gap: var(--sp-3)}
 .stat-filter{display:inline-flex;align-items:center;gap:var(--sp-2);max-width:100%;padding:4px 7px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--panel-2);color:var(--ink-dim);font:inherit;cursor:pointer;transition:opacity var(--t-fast),border-color var(--t-fast)}
@@ -2209,7 +2229,12 @@
     scroll-behavior:auto !important;
     transition-duration:.001ms !important;
   }
+  .shim::after{animation:none!important;transform:none;opacity:.35}
 }
+.shim{position:relative;overflow:hidden;background:var(--panel-2);min-height:42px;border-radius:var(--r-sm)}
+.shim::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);transform:translateX(-100%);animation:shim 1.4s var(--ease) infinite}
+[data-theme="dark"] .shim::after{background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent)}
+@keyframes shim{to{transform:translateX(100%)}}
 </style>
 </head>
 <body>

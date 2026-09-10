@@ -1945,6 +1945,32 @@ function loadTint(p){
   const rgb=loadHexRgb(loadColor(p)).map(x=>Math.round(x*255));
   return 'rgba('+rgb.join(',')+','+(theme.mode==='dark'?'.22':'.16')+')';
 }
+function rampCss(p){
+  const stops=[];
+  for(let i=0;i<=10;i++) stops.push(loadColor(p*i/10)+' '+(i*10)+'%');
+  return 'linear-gradient(90deg,'+stops.join(',')+')';
+}
+
+/* Numbers animate only when a view first appears; the final value never
+   depends on animation completing. */
+function countTo(el,to,dur=700){
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){ el.textContent=to; return; }
+  const t0=window.performance.now();
+  const step=now=>{ const k=Math.min(1,(now-t0)/dur);
+    el.textContent=Math.round(to*(1-Math.pow(1-k,3)));
+    if(k<1) window.requestAnimationFrame(step); };
+  window.requestAnimationFrame(step);
+}
+const motionPainted=new WeakSet();
+function paintFirstMotion(root){
+  if(!root||motionPainted.has(root)) return;
+  motionPainted.add(root);
+  root.querySelectorAll('[data-count]').forEach(el=>countTo(el,+el.dataset.count||0));
+  root.querySelectorAll('.fin-v').forEach(el=>{
+    const value=String(el.textContent||'').trim();
+    if(/^\d+$/.test(value)) countTo(el,+value);
+  });
+}
 
 // Куски блока с учётом того, что его сейчас тащат.
 function gtPieces(b){
@@ -2330,7 +2356,7 @@ function tripTagHtml(j,tripOf,tripById){
 async function renderFeed(box,o){
   o=o||{};
   if(!box) return;
-  box.innerHTML='<div class="hint">Считаю…</div>';
+  box.innerHTML='<div class="shim" role="status" aria-label="Загрузка данных"></div>';
   try{
     await ensureRefs();
     // Заявки со сроком, клиентом, техникой и работами — всё, что нужно ленте.
@@ -2501,7 +2527,8 @@ async function renderFeed(box,o){
          +'и в графике стоят порознь. Собрать их обратно можно только новым выездом.</li></ul></div>')
       : '';
 
-    let h=(offline?offlineBanner(snapAt):'')+orphanNote+pendNote+'<div class="vg-feed">';
+    const firstMotion=!motionPainted.has(box);
+    let h=(offline?offlineBanner(snapAt):'')+orphanNote+pendNote+'<div class="vg-feed'+(firstMotion?' first-enter':'')+'">';
 
     // ── Просрочка: колода ────────────────────────────────────────────────
     //
@@ -2584,7 +2611,8 @@ async function renderFeed(box,o){
         mini+='<i style="height:'+Math.max(3,Math.min(14,maxP*11))+'px;background:'+loadWash(maxP)+'"></i>';
       });
       const summary=blocks.length+' '+plural(blocks.length,'блок','блока','блоков')+' · '+fmtH(total);
-      return '<section class="wkrow'+(gtOpen[key]?' open':'')+'" data-wk="'+esc(key)+'">'
+      const weekP=total/(shift*5*laneCount), weekStyle=' style="--entry-delay:'+Math.min(3,weekKeys.indexOf(key))*50+'ms'+(o.mine?'':(';--week-fill:'+Math.min(100,weekP/1.75*100).toFixed(1)+'%;--week-ramp:'+rampCss(weekP)))+'"';
+      return '<section class="wkrow'+(gtOpen[key]?' open':'')+(o.mine?'':' has-load')+'" data-wk="'+esc(key)+'"'+weekStyle+'>'
         +'<button class="wk-h" type="button" data-gtoggle="'+esc(key)+'" aria-expanded="'+(gtOpen[key]?'true':'false')+'">'
           +'<span class="wk-copy"><b>Неделя '+it.w.n+' · '+esc(weekSpan(it.w))+'</b><span>'+summary
           +(problem?(' · <strong>'+esc(problem)+'</strong>'):'')+'</span></span>'
@@ -2763,6 +2791,7 @@ async function renderFeed(box,o){
     }
 
     box.innerHTML=h;
+    paintFirstMotion(box);
     // Строка ведёт в заявку; кнопки внутри строки — к себе, поэтому клик
     // по ним до строки не доходит.
     box.querySelectorAll('[data-ajob]').forEach(el=>el.onclick=e=>{
@@ -3224,16 +3253,14 @@ function loadCard(list,tripOf,tripById,tripOrd){
   const num=v=>v.toFixed(v%1?1:0);
   const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
   const rowHtml=(nm,r,cap,cls)=>{
-    const t=r.w+r.d, pct=cap>0?t/cap*100:0;
-    const col=pct>100?'var(--red)':pct>70?'#f59e0b':'var(--green)';
-    const wPct=Math.min(100,cap?r.w/cap*100:0), dPct=Math.min(100-wPct,cap?r.d/cap*100:0);
+    const t=r.w+r.d, p=cap>0?t/cap:0, pct=p*100;
+    const col=loadColor(p), fillPct=Math.min(100,p/1.75*100);
     const parts=[num(r.w)+' ч работ']; if(r.d) parts.push(num(r.d)+' ч дороги');
     parts.push(r.n+' '+plural(r.n,'заявка','заявки','заявок'));
     return '<div class="elrow'+(cls?(' '+cls):'')+'">'
       +'<div class="el-n">'+esc(nm)+'</div>'
       +'<div class="el-v" style="color:'+col+'">'+num(t)+' / '+num(cap)+' ч · '+Math.round(pct)+'%</div>'
-      +'<div class="el-t"><i style="width:'+wPct.toFixed(0)+'%;background:'+col+'"></i>'
-        +(r.d?('<i class="el-drive" style="width:'+dPct.toFixed(0)+'%;background:'+col+'"></i>'):'')+'</div>'
+      +'<div class="el-t"><i class="data-fill" style="width:'+fillPct.toFixed(1)+'%;background:'+rampCss(p)+'"></i></div>'
       +'<div class="el-s">'+esc(parts.join(' · '))+'</div></div>';
   };
 
@@ -3281,11 +3308,10 @@ function loadCard(list,tripOf,tripById,tripOrd){
   let chart='<div class="revbars loadbars'+(showVals?'':' novals')+'">';
   cells.forEach(c=>{ const hR=c.v>0?Math.max(4,Math.round(c.v/maxV*100)):0;
     const over=c.cap>0&&c.v>c.cap+1e-6;
-    const loadFill=loadColor(c.cap>0?c.v/c.cap:(c.v>0?1.75:0));
     chart+='<div class="revbar'+(c.we?' we':'')+'" title="'+esc(c.key+' · '+num(c.v)+' ч'+(c.cap?(' из '+num(c.cap)):''))+'">'
       +(showVals?('<div class="rb-v">'+(c.v>0?num(c.v):'')+'</div>'):'')
       +'<div class="rb-c">'+(c.cap>0?('<div class="rb-cap" style="height:'+Math.round(c.cap/maxV*100)+'%"></div>'):'')
-        +'<div class="rb-f'+(over?' bad':'')+'" style="height:'+hR+'%;background:'+loadFill+'"></div></div>'
+        +'<div class="rb-f data-fill'+(over?' bad':'')+'" style="height:'+hR+'%;background:'+rampCss(c.cap>0?c.v/c.cap:(c.v>0?1.75:0))+'"></div></div>'
       +'<div class="rb-l">'+esc(c.label)+'</div></div>'; });
   chart+='</div>';
   chart+='<div class="cap-note">пунктир — 100% загрузки: '+num(dayCap)+' ч в день'
@@ -3323,7 +3349,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   if(box) box.style.display='';
   if(seg) seg.style.display='';
   if(attnCaps) attnCaps.textContent='Требует внимания';
-  box.innerHTML='<div class="hint">Считаю…</div>';
+  box.innerHTML='<div class="shim" role="status" aria-label="Загрузка данных"></div>';
   try{
     await ensureRefs();
     const {data:js}=await sb.from('jobs')
@@ -3342,6 +3368,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
 
     const made={fin:financeCard(jb,trips),work:worksCard(jb,trips,tripOf),load:loadCard(jb,tripOf,tripById,tripOrd)};
     box.innerHTML=dashOrder.map(k=>made[k]||'').join('');
+    paintFirstMotion(box);
     wirePeriodSeg(box);
     wireDashDrag(box);
     foldApply();
