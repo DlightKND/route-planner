@@ -1896,8 +1896,8 @@ function gtBlocks(){ return feedCtx?feedCtx.plan.blocks:[]; }
 function gtFind(id){ return gtBlocks().find(b=>String(b.id)===String(id))||null; }
 
 const LOAD_STOPS={
-  light:[[0,'#ffffff'],[.8,'#86d0a2'],[1,'#f5dd7d'],[1.25,'#f0a878'],[1.75,'#c9372c']],
-  dark:[[0,'#1a1c20'],[.8,'#2b7048'],[1,'#8a7318'],[1.25,'#9c5a1e'],[1.75,'#b5352a']]
+  light:[[0,'#ffffff'],[.8,'#66c98d'],[1,'#f0cf4f'],[1.25,'#ef8d50'],[1.75,'#d83b31']],
+  dark:[[0,'#1a1c20'],[.8,'#3f9a64'],[1,'#b59a25'],[1.25,'#c8782d'],[1.75,'#d7463a']]
 };
 function loadHexRgb(hex){ const n=parseInt(hex.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255].map(x=>x/255); }
 function loadRgbHex(rgb){ return '#'+rgb.map(x=>Math.round(Math.max(0,Math.min(1,x))*255).toString(16).padStart(2,'0')).join(''); }
