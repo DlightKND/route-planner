@@ -1416,8 +1416,6 @@
    инженера. Горизонтально прокручивается только внутренняя сетка. */
 .vg-feed{display:grid;gap:var(--sp-5);min-width:0}
 .wkrow{min-width:0;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);overflow:hidden;box-shadow:var(--shadow-sm)}
-.wkrow.has-load::after{content:'';display:block;height:3px;width:var(--week-fill,0%);background:var(--week-ramp);animation:weekFill .8s var(--ease) both;transform-origin:left}
-@keyframes weekFill{from{transform:scaleX(0)}}
 .vg-feed.first-enter .wkrow{animation:cardRise .34s var(--ease) both;animation-delay:var(--entry-delay,0ms)}
 @keyframes cardRise{from{opacity:0;transform:translateY(6px)}}
 .wk-h{width:100%;min-width:0;display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);border:0;background:transparent;color:var(--ink);text-align:left;cursor:pointer}
@@ -1676,6 +1674,8 @@
 .el-t i{display:block;height:100%;border-radius: var(--r-pill)}
 .data-fill{animation:dataFill .7s var(--ease) both;transform-origin:left}
 @keyframes dataFill{from{transform:scaleX(0)}}
+.data-fill.vertical{animation-name:dataFillVertical;transform-origin:bottom}
+@keyframes dataFillVertical{from{transform:scaleY(0)}}
 .el-t .el-drive{opacity:.4;margin-left: var(--sp-1)}
 .el-s{grid-area:s;font-family:var(--mono);font-size: var(--fs-1);color:var(--ink-faint)}
 .elrow.none .el-n{color:var(--red)}

@@ -1945,10 +1945,10 @@ function loadTint(p){
   const rgb=loadHexRgb(loadColor(p)).map(x=>Math.round(x*255));
   return 'rgba('+rgb.join(',')+','+(theme.mode==='dark'?'.22':'.16')+')';
 }
-function rampCss(p){
+function rampCss(p,direction='90deg'){
   const stops=[];
   for(let i=0;i<=10;i++) stops.push(loadColor(p*i/10)+' '+(i*10)+'%');
-  return 'linear-gradient(90deg,'+stops.join(',')+')';
+  return 'linear-gradient('+direction+','+stops.join(',')+')';
 }
 
 /* Numbers animate only when a view first appears; the final value never
@@ -2611,8 +2611,8 @@ async function renderFeed(box,o){
         mini+='<i style="height:'+Math.max(3,Math.min(14,maxP*11))+'px;background:'+loadWash(maxP)+'"></i>';
       });
       const summary=blocks.length+' '+plural(blocks.length,'блок','блока','блоков')+' · '+fmtH(total);
-      const weekP=total/(shift*5*laneCount), weekStyle=' style="--entry-delay:'+Math.min(3,weekKeys.indexOf(key))*50+'ms'+(o.mine?'':(';--week-fill:'+Math.min(100,weekP/1.75*100).toFixed(1)+'%;--week-ramp:'+rampCss(weekP)))+'"';
-      return '<section class="wkrow'+(gtOpen[key]?' open':'')+(o.mine?'':' has-load')+'" data-wk="'+esc(key)+'"'+weekStyle+'>'
+      const weekStyle=' style="--entry-delay:'+Math.min(3,weekKeys.indexOf(key))*50+'ms"';
+      return '<section class="wkrow'+(gtOpen[key]?' open':'')+'" data-wk="'+esc(key)+'"'+weekStyle+'>'
         +'<button class="wk-h" type="button" data-gtoggle="'+esc(key)+'" aria-expanded="'+(gtOpen[key]?'true':'false')+'">'
           +'<span class="wk-copy"><b>Неделя '+it.w.n+' · '+esc(weekSpan(it.w))+'</b><span>'+summary
           +(problem?(' · <strong>'+esc(problem)+'</strong>'):'')+'</span></span>'
@@ -3311,7 +3311,7 @@ function loadCard(list,tripOf,tripById,tripOrd){
     chart+='<div class="revbar'+(c.we?' we':'')+'" title="'+esc(c.key+' · '+num(c.v)+' ч'+(c.cap?(' из '+num(c.cap)):''))+'">'
       +(showVals?('<div class="rb-v">'+(c.v>0?num(c.v):'')+'</div>'):'')
       +'<div class="rb-c">'+(c.cap>0?('<div class="rb-cap" style="height:'+Math.round(c.cap/maxV*100)+'%"></div>'):'')
-        +'<div class="rb-f data-fill'+(over?' bad':'')+'" style="height:'+hR+'%;background:'+rampCss(c.cap>0?c.v/c.cap:(c.v>0?1.75:0))+'"></div></div>'
+        +'<div class="rb-f data-fill vertical'+(over?' bad':'')+'" style="height:'+hR+'%;background:'+rampCss(c.cap>0?c.v/c.cap:(c.v>0?1.75:0),'0deg')+'"></div></div>'
       +'<div class="rb-l">'+esc(c.label)+'</div></div>'; });
   chart+='</div>';
   chart+='<div class="cap-note">пунктир — 100% загрузки: '+num(dayCap)+' ч в день'
