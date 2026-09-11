@@ -32,7 +32,7 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
-        planSchedule, scheduleJobIncluded, tripRouteSegments, driveOfLegs, piecesOf, normPos, addHours, diffHours, clockOf,
+        planSchedule, scheduleJobIncluded, tripRouteSegments, driveOfLegs, piecesOf, normPos, addHours, diffHours, clockOf, dayScaleBounds,
         trashDaysLeft,
         measureTrip } = core;
 
@@ -1908,14 +1908,25 @@ function buildBlocks(list,tripOf,tripById,tripOrd){
 // иначе гант закрывался бы на каждое движение.
 let feedCtx=null;                 // {plan, weeks, engN, shift, mine, nameOf}
 const gtOpen={}, gtZoom={};
-const gtLaneMode={};
+const gtLaneMode={}, gtDayScale={};
 let gtSel=null, gtDrag=null;
 
 function gtStep(){ return gtDragZoom()?0.5:1; }
 function gtDragZoom(){ return gtDrag&&gtDrag.zoom; }
 function gtEff(){ return ((+appSettings.shift_hours)||8)*(1+((+appSettings.deviation_pct||0)/100)); }
 function gtSettings(){ return {shiftH:(+appSettings.shift_hours)||8,
-  deviationPct:(+appSettings.deviation_pct||0), dayStart:(+appSettings.day_start||8)}; }
+  deviationPct:(+appSettings.deviation_pct||0), dayStart:(+appSettings.day_start||7)}; }
+
+function gtScaleKey(key,iso){ return key+'|'+iso; }
+function gtDayBounds(key,iso){
+  const pieces=[]; gtBlocks().forEach(b=>pieces.push(...gtPieces(b).filter(p=>p.iso===iso)));
+  return dayScaleBounds(pieces,+appSettings.day_start||7,gtDayScale[gtScaleKey(key,iso)]);
+}
+function gtHourOptions(selected){
+  let out=''; for(let h=0;h<=24;h+=.5){ const m=h%1?'30':'00', label=String(Math.floor(h)%24).padStart(2,'0')+':'+m;
+    out+='<option value="'+h+'"'+(Math.abs(h-selected)<.01?' selected':'')+'>'+label+'</option>'; }
+  return out;
+}
 
 // Дорожки: у менеджера — инженеры, у инженера — он один.
 function gtLanes(){
@@ -2016,7 +2027,7 @@ function gtStart(b){
 }
 
 function scheduleNow(){
-  const d=new Date(), iso=todayISO(d), st=(+appSettings.day_start||8);
+  const d=new Date(), iso=todayISO(d), st=(+appSettings.day_start||7);
   return {iso,h:d.getHours()+d.getMinutes()/60-st,label:String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
 }
 function gtNowLine(cols,eff){
@@ -2043,22 +2054,23 @@ setInterval(paintScheduleNow,60000);
 function gtDayHtml(key){
   if(!feedCtx) return '';
   const it=feedCtx.weeks[key], iso=gtZoom[key]; if(!it||!iso) return '';
-  const eff=gtEff(), shift=(+appSettings.shift_hours)||8, st=gtSettings();
+  const eff=gtEff(), shift=(+appSettings.shift_hours)||8, st=gtSettings(), bounds=gtDayBounds(key,iso);
+  const span=bounds.to-bounds.from, relFrom=bounds.from-st.dayStart, dayH=Math.max(180,Math.round(span*30));
   const lanes=gtWeekLanes(key), laneMin=window.matchMedia('(max-width:600px)').matches?120:150;
-  const rowN=Math.max(1,Math.ceil(eff));
+  const rowN=Math.max(1,Math.ceil(span));
   let axis='<span class="vg-axis-head"></span>';
-  for(let h=0;h<rowN;h++) axis+='<span class="vg-hour-label">'+esc(clockOf(h,st))+'</span>';
+  for(let h=0;h<rowN;h++) axis+='<span class="vg-hour-label">'+esc(clockOf(relFrom+h,st))+'</span>';
   axis='<div class="vg-axis vg-day-axis" style="--hour-rows:'+rowN+'">'+axis+'</div>';
   let heads='',tracks='';
   lanes.forEach(l=>{
     const hours=gtLaneLoad(l.id,iso), pct=Math.round(hours/shift*100);
     heads+='<div class="vg-lane-head"><b>'+esc(l.name)+'</b><span>'+fmtH(hours)+(feedCtx.mine?'':' · '+pct+'%')+'</span></div>';
-    let ticks=''; for(let h=1;h<rowN;h++) ticks+='<i class="vg-hour-line" style="top:'+(h/rowN*266)+'px"></i>';
+    let ticks=''; for(let h=1;h<rowN;h++) ticks+='<i class="vg-hour-line" style="top:'+(h/span*dayH)+'px"></i>';
     let bars='';
     gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
       const pcs=gtPieces(b).filter(p=>p.iso===iso); if(!pcs.length) return;
-      const points=pcs.map(p=>({p,y:p.from/eff*266,h:Math.max(3,p.h/eff*266)}));
-      const top=Math.max(1,Math.min(...points.map(x=>x.y))), bottom=Math.min(265,Math.max(...points.map(x=>x.y+x.h)));
+      const points=pcs.map(p=>({p,y:(p.from-relFrom)/span*dayH,h:Math.max(3,p.h/span*dayH)}));
+      const top=Math.max(1,Math.min(...points.map(x=>x.y))), bottom=Math.min(dayH-1,Math.max(...points.map(x=>x.y+x.h)));
       const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late');
       const totalDrive=(b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0);
       const sub=(b.kind==='trip'?'выезд':'заявка')+' · '+fmtH(b.workH||0)+(totalDrive>.01?' + дорога '+fmtH(totalDrive):'');
@@ -2068,12 +2080,15 @@ function gtDayHtml(key){
         +segs+gaps+'<span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc(sub)+'</small></span>'+(canWrite()?'<button type="button" class="vg-edit" data-gedit="'+esc(b.id)+'" title="Настроить участки" aria-label="Настроить участки">✎</button>':'')+'</div>';
     });
     const color=loadColor(hours/shift), over=Math.max(0,hours-gtEff());
-    tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'" style="--load:'+color+';--load-edge:'+loadEdge(color)+'">'+ticks+bars
+    const now=scheduleNow(), nowY=(now.h-relFrom)/span*dayH, nowLine=now.iso===iso&&nowY>=0&&nowY<=dayH?'<span class="vg-now" title="Сейчас · '+esc(now.label)+'" style="top:'+nowY+'px"></span>':'';
+    tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'" data-vgspan="'+span+'" style="--load:'+color+';--load-edge:'+loadEdge(color)+'">'+ticks+bars+nowLine
       +(!feedCtx.mine&&over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
   });
   return '<div class="gtop"><button class="gback" type="button" data-gback="'+esc(key)+'">← неделя</button>'
-    +'<span class="gttl">'+WD_RU[new Date(utcOf(iso)).getUTCDay()]+' '+esc(shortDate(iso))+' · '+esc(clockOf(0,st))+'–'+esc(clockOf(eff,st))+'</span></div>'
-    +'<div class="vg-scroll"><div class="vg-grid vg-day-grid" style="--lanes:'+Math.max(1,lanes.length)+';--lane-min:'+laneMin+'px">'
+    +'<span class="gttl">'+WD_RU[new Date(utcOf(iso)).getUTCDay()]+' '+esc(shortDate(iso))+'</span>'
+    +'<label class="vg-range">Масштаб <select data-vgfrom>'+gtHourOptions(bounds.from)+'</select><span>—</span><select data-vgto>'+gtHourOptions(bounds.to)+'</select></label>'
+    +(bounds.manual?'<button class="gback" type="button" data-vgauto>Авто</button>':'<span class="vg-auto">авто · расширяется по графику</span>')+'</div>'
+    +'<div class="vg-scroll"><div class="vg-grid vg-day-grid" style="--day-h:'+dayH+'px;--lanes:'+Math.max(1,lanes.length)+';--lane-min:'+laneMin+'px">'
     +axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
     +'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="road"></i>дорога</span>'
     +(canWrite()?'<span>нажми участок — разрыв · перетащи — шаг 30 мин</span>':'<span>только просмотр</span>')+'<span>✎ — расставлено вручную</span></div>';
@@ -2207,6 +2222,12 @@ function gtWire(key,box){
     gtZoom[key]=d.dataset.gday; gtSel=null; gtPaint(key); });
   box.querySelectorAll('[data-vgmode]').forEach(select=>select.onchange=e=>{ e.stopPropagation();
     gtLaneMode[key]=select.value; gtSel=null; gtPaint(key); });
+  const scaleFrom=box.querySelector('[data-vgfrom]'), scaleTo=box.querySelector('[data-vgto]');
+  const saveScale=()=>{ const from=+scaleFrom.value,to=+scaleTo.value; if(to<=from){ showToast('Конец масштаба должен быть позже начала'); return; }
+    gtDayScale[gtScaleKey(key,zoom)]={from,to}; gtPaint(key); };
+  if(scaleFrom) scaleFrom.onchange=saveScale;
+  if(scaleTo) scaleTo.onchange=saveScale;
+  const auto=box.querySelector('[data-vgauto]'); if(auto) auto.onclick=()=>{ delete gtDayScale[gtScaleKey(key,zoom)]; gtPaint(key); };
   if(!zoom) box.querySelectorAll('.vg-lane').forEach(lane=>{
     lane.onpointermove=e=>{
       const i=Math.max(0,Math.min(6,Math.floor((e.clientY-lane.getBoundingClientRect().top)/40)));
@@ -2247,14 +2268,16 @@ function gtWire(key,box){
       const b=gtFind(el.dataset.gb); if(!b) return;
       const tr=el.closest('.gtrack,.vg-lane'), vertical=el.classList.contains('vg-block');
       gtDrag={id:b.id,block:b,start:b.start,base:b.start,x0:e.clientX,
-        y0:e.clientY,w:tr.getBoundingClientRect().width,vertical:vertical,
+        y0:e.clientY,w:tr.getBoundingClientRect().width,h:tr.getBoundingClientRect().height,
+        visibleSpan:+tr.dataset.vgspan||eff,vertical:vertical,
         zoom:!!zoom,cols:(zoom?1:7),moved:false};
       try{ el.setPointerCapture(e.pointerId); }catch(err){}
     };
     el.onpointermove=e=>{
       if(!gtDrag||String(gtDrag.id)!==String(el.dataset.gb)) return;
       const span=gtDrag.cols*eff;
-      const raw=gtDrag.vertical?(e.clientY-gtDrag.y0)/(gtDrag.zoom?266:40)*eff:(e.clientX-gtDrag.x0)/gtDrag.w*span;
+      const visibleSpan=gtDrag.zoom?gtDrag.visibleSpan:eff;
+      const raw=gtDrag.vertical?(e.clientY-gtDrag.y0)/gtDrag.h*visibleSpan:(e.clientX-gtDrag.x0)/gtDrag.w*span;
       // Неделя узкая: час — это 5–7 пикселей, мышь в них не попадает.
       // Поэтому на неделе тащим сутками, а часы правим в дне и кнопками модалки.
       const step=gtDrag.zoom?0.5:eff;
@@ -2306,7 +2329,7 @@ function gtPartName(b,seg,i){
   return (seg.jobId&&feedCtx.jobName(seg.jobId))||'Работа '+(i+1);
 }
 function gtInputTime(pos){
-  const absolute=(+appSettings.day_start||8)+(+pos.h||0), h=Math.floor(absolute), m=Math.round((absolute-h)*60);
+  const absolute=(+appSettings.day_start||7)+(+pos.h||0), h=Math.floor(absolute), m=Math.round((absolute-h)*60);
   return String(h+(m===60?1:0)).padStart(2,'0')+':'+String(m===60?0:m).padStart(2,'0');
 }
 function gtGapAfter(parts,i,st){
@@ -2427,7 +2450,7 @@ function planOfData(list,tripOf,tripById,tripOrd){
   const bb=buildBlocks(list,tripOf,tripById,tripOrd);
   const plan=planSchedule(bb.blocks,{shiftH:(+appSettings.shift_hours)||8,
     deviationPct:(+appSettings.deviation_pct||0),
-    dayStart:(+appSettings.day_start||8)},{today:todayISO()});
+    dayStart:(+appSettings.day_start||7)},{today:todayISO()});
   return {plan:plan,blockOf:bb.blockOf};
 }
 
@@ -5535,7 +5558,7 @@ function tripGmaps(id){ const t=trips.find(x=>x.id==id)||tripCache[id]; const st
 // Есть ли в базе settings.day_start (миграция sql/27). Если нет — не пишем
 // его при сохранении: иначе не сохранились бы и все остальные настройки.
 let hasDayStart=true;
-let appSettings={shift_hours:8,deviation_pct:10,day_start:8,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,avoid_zones:[],tariff_profiles:[],ors_proxy:'',depot_radius_m:5000,depot_exit_margin_m:300,depot_outside_minutes:60};
+let appSettings={shift_hours:8,deviation_pct:10,day_start:7,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,avoid_zones:[],tariff_profiles:[],ors_proxy:'',depot_radius_m:5000,depot_exit_margin_m:300,depot_outside_minutes:60};
 let vehicles=[], vhEditId=null;
 async function loadVehicles(){ try{ const {data}=await sb.from('vehicles').select('*').order('name'); vehicles=data||[]; renderVehicles(); }catch(e){ loadFail('список машин',e); } }
 // ── Одометр убран ───────────────────────────────────────────────────────
@@ -5587,14 +5610,14 @@ async function loadSettings(){ try{
   if(!data){ hasDayStart=false;
     const r=await sb.from('settings').select(SETTINGS_COLS).eq('id',true).single(); data=r.data||null; }
   if(!data){ const pub=await sb.from('settings_public').select('*').eq('id',true).single(); data=pub.data||null; }
-  if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,day_start:(data.day_start==null?8:data.day_start),currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),stay_radius_m:(data.stay_radius_m==null?300:data.stay_radius_m),stay_min_minutes:(data.stay_min_minutes==null?10:data.stay_min_minutes),track_max_kmh:(data.track_max_kmh==null?300:data.track_max_kmh),track_slack:(data.track_slack==null?1.5:data.track_slack),depot_radius_m:(data.depot_radius_m==null?5000:data.depot_radius_m),depot_exit_margin_m:(data.depot_exit_margin_m==null?300:data.depot_exit_margin_m),depot_outside_minutes:(data.depot_outside_minutes==null?60:data.depot_outside_minutes),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); }
+  if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,day_start:(data.day_start==null?7:data.day_start),currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),stay_radius_m:(data.stay_radius_m==null?300:data.stay_radius_m),stay_min_minutes:(data.stay_min_minutes==null?10:data.stay_min_minutes),track_max_kmh:(data.track_max_kmh==null?300:data.track_max_kmh),track_slack:(data.track_slack==null?1.5:data.track_slack),depot_radius_m:(data.depot_radius_m==null?5000:data.depot_radius_m),depot_exit_margin_m:(data.depot_exit_margin_m==null?300:data.depot_exit_margin_m),depot_outside_minutes:(data.depot_outside_minutes==null?60:data.depot_outside_minutes),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); }
   // Пустой результат по обоим источникам — это не «настроек нет», это сбой
   // связи или прав. Без сообщения приложение молча открывалось бы без темы,
   // без зон объезда и без маршрутизации, и искать причину пришлось бы наугад.
   else loadFail('настройки',new Error('settings и settings_public вернули пусто'));
   }catch(e){ loadFail('настройки',e); } }
 function renderSettings(){ const s=appSettings; $('stShift').value=s.shift_hours; $('stDev').value=s.deviation_pct;
-  if($('stDayStart')) $('stDayStart').value=(s.day_start==null?8:s.day_start); $('stCur').value=s.currency||'';
+  if($('stDayStart')) $('stDayStart').value=(s.day_start==null?7:s.day_start); $('stCur').value=s.currency||'';
   const c=s.costs||{}; $('csKm').value=c.km||0;$('csHour').value=c.hour||0;$('csDay').value=c.day||0;$('csNight').value=c.night||0;
   if($('stStayRad')) $('stStayRad').value=(s.stay_radius_m==null?300:s.stay_radius_m);
   if($('stStayMin')) $('stStayMin').value=(s.stay_min_minutes==null?10:s.stay_min_minutes);
@@ -5636,7 +5659,7 @@ if($('profCreate')) $('profCreate').onclick=()=>{ profileResetForm(); $('profOve
 function settingsNav(sec){ document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
 document.querySelectorAll('#settingsNav .son').forEach(b=>b.onclick=()=>settingsNav(b.dataset.sec));
 document.querySelectorAll('.settings-body > .card > h3').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('collapsed'));
-$('stSave').onclick=async ()=>{ const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:parseFloat($('stDayStart').value)||8,currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,depot_radius_m:parseInt($('stDepotRad').value)||5000,depot_exit_margin_m:Math.max(0,parseInt($('stDepotMargin').value)||0),depot_outside_minutes:parseInt($('stDepotOut').value)||60,updated_at:new Date().toISOString()};
+$('stSave').onclick=async ()=>{ const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:parseFloat($('stDayStart').value)||7,currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,depot_radius_m:parseInt($('stDepotRad').value)||5000,depot_exit_margin_m:Math.max(0,parseInt($('stDepotMargin').value)||0),depot_outside_minutes:parseInt($('stDepotOut').value)||60,updated_at:new Date().toISOString()};
   if(!hasDayStart) delete rec.day_start;
   const {error}=await sb.from('settings').update(rec).eq('id',true); if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings=Object.assign(appSettings,rec); $('stStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 $('dtSave').onclick=async ()=>{ const dt={mode:$('dtMode').value,accent:'#ffe100'}; const {error}=await sb.from('settings').update({default_theme:dt}).eq('id',true); if(error){ $('dtStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.default_theme=dt; $('dtStatus').innerHTML='<span class="ok">Сохранено</span>'; };
