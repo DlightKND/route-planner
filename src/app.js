@@ -2327,7 +2327,9 @@ async function renderFeedAgain(){
 // ── Контекстная модалка над этапом ──────────────────────────────────────
 function gtPop(key,b){
   const box=document.querySelector('[data-gtbox="'+key+'"]'); if(!box) return;
-  const old=box.querySelector('.gpop'); if(old) old.remove();
+  // Попап живёт у body, а не внутри недельной карточки: у карточки намеренно
+  // overflow:hidden ради скругления, и длинный редактор участков там обрезался.
+  const old=document.querySelector('.gpop'); if(old) old.remove();
   const el=box.querySelector('.gpc.sel,.vg-block.sel'); if(!el) return;
   const zoom=gtZoom[key]||null, st=gtSettings(), eff=gtEff();
   const pcs=gtPieces(b), start=gtStart(b);
@@ -2368,20 +2370,21 @@ function gtPop(key,b){
     +'<div class="gp-f"><button class="btn sm amber" data-gok="1">Готово</button>'
       +(b.manual?'<button class="btn sm ghost" data-greset="1">Сбросить к авто</button>':'')+'</div>'
   +'</div>';
-  box.insertAdjacentHTML('beforeend',h);
-  const pop=box.querySelector('.gpop');
+  document.body.insertAdjacentHTML('beforeend',h);
+  const pop=document.body.lastElementChild;
   // На узком экране модалка — лист снизу (позиция задана в CSS), на широком
   // она висит под своим островком.
   if(!window.matchMedia('(max-width:600px)').matches){
-    const r=el.getBoundingClientRect(), br=box.getBoundingClientRect();
-    pop.style.left=Math.max(4,Math.min(Math.max(4,br.width-320),r.left-br.left-40))+'px';
-    pop.style.top=(r.bottom-br.top+8)+'px';
+    const r=el.getBoundingClientRect(), margin=8, width=Math.min(320,window.innerWidth-margin*2);
+    pop.style.left=Math.max(margin,Math.min(window.innerWidth-width-margin,r.left-40))+'px';
+    const below=r.bottom+8, above=r.top-pop.offsetHeight-8;
+    pop.style.top=(below+pop.offsetHeight<=window.innerHeight-margin?below:Math.max(margin,above))+'px';
   }
   pop.querySelectorAll('[data-gmv]').forEach(x=>x.onclick=ev=>{ ev.stopPropagation();
     gtSave(b,addHours(gtStart(b),+x.dataset.gmv,st)); });
   pop.querySelectorAll('[data-gok]').forEach(x=>x.onclick=ev=>{ ev.stopPropagation();
-    gtSel=null; gtPaint(key); });
-  pop.querySelectorAll('[data-greset]').forEach(x=>x.onclick=ev=>{ ev.stopPropagation(); gtSave(b,null); });
+    gtSel=null; pop.remove(); gtPaint(key); });
+  pop.querySelectorAll('[data-greset]').forEach(x=>x.onclick=ev=>{ ev.stopPropagation(); pop.remove(); gtSave(b,null); });
   const draft=partStarts.map(x=>x&&({...x}));
   pop.querySelectorAll('[data-gpart]').forEach(row=>{
     const i=+row.dataset.gpart, seg=b.segs[i];
@@ -2393,14 +2396,14 @@ function gtPop(key,b){
     row.querySelectorAll('[data-gpd="s"],[data-gpt="s"]').forEach(x=>x.onchange=()=>sync('s'));
     row.querySelectorAll('[data-gpd="e"],[data-gpt="e"]').forEach(x=>x.onchange=()=>sync('e'));
   });
-  const saveParts=pop.querySelector('[data-gparts-save]'); if(saveParts) saveParts.onclick=async ev=>{ ev.stopPropagation(); saveParts.disabled=true; const ok=await gtSaveParts(b,draft); if(!ok) saveParts.disabled=false; };
+  const saveParts=pop.querySelector('[data-gparts-save]'); if(saveParts) saveParts.onclick=async ev=>{ ev.stopPropagation(); saveParts.disabled=true; const ok=await gtSaveParts(b,draft); if(ok) pop.remove(); else saveParts.disabled=false; };
   pop.onclick=ev=>ev.stopPropagation();
 }
 // Клик мимо — закрыть модалку.
 document.addEventListener('click',e=>{
   if(!gtSel) return;
   if(e.target.closest('.gpop')||e.target.closest('.gpc')||e.target.closest('.vg-block')) return;
-  const key=Object.keys(gtOpen).find(k=>gtOpen[k]); gtSel=null; if(key) gtPaint(key);
+  const key=Object.keys(gtOpen).find(k=>gtOpen[k]); gtSel=null; const pop=document.querySelector('.gpop'); if(pop) pop.remove(); if(key) gtPaint(key);
 });
 // Раскрыть / свернуть гант и открыть день прямо из полосы.
 document.addEventListener('click',e=>{
