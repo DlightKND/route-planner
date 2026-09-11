@@ -1496,8 +1496,11 @@
 .vg-block.man{outline:1px solid color-mix(in srgb,var(--accent-line) 66%,transparent);outline-offset:1px}
 .vg-block.sel{outline:2px solid var(--accent-line);outline-offset:2px;z-index:7}
 .vg-block:active{cursor:grabbing}
-.vg-seg{position:absolute;z-index:1;left:0;right:0;pointer-events:auto;cursor:crosshair}
+.vg-seg{position:absolute;z-index:1;left:0;right:0;pointer-events:auto;cursor:crosshair;border-bottom:1px solid color-mix(in srgb,var(--ink-faint) 20%,transparent)}
 .vg-seg.road{background-position:0 calc(-1 * var(--seg-y,0px));background-size:8px 8px;background-image:linear-gradient(135deg,color-mix(in srgb,var(--block-tone,var(--ink-faint)) 18%,transparent) 25%,transparent 25% 50%,color-mix(in srgb,var(--block-tone,var(--ink-faint)) 18%,transparent) 50% 75%,transparent 75%)}
+.vg-resize{position:absolute;z-index:6;left:0;right:0;bottom:-5px;width:100%;height:11px;padding:0;border:0;background:transparent;cursor:ns-resize;touch-action:none}
+.vg-resize::after{content:'';position:absolute;left:50%;bottom:4px;width:28px;height:3px;border-radius:999px;background:color-mix(in srgb,var(--ink) 55%,transparent);transform:translateX(-50%);box-shadow:0 0 0 2px color-mix(in srgb,var(--panel) 75%,transparent)}
+.vg-resize:hover::after,.vg-resize:focus-visible::after{background:var(--accent-line)}
 .vg-break-mark{position:absolute;z-index:3;left:0;right:0;min-height:5px;padding:0;border:0;border-block:1px dashed var(--accent-line);background:color-mix(in srgb,var(--accent-line) 7%,var(--panel));color:var(--ink-faint);cursor:pointer;overflow:hidden}
 .vg-break-mark span{font:8px/1 var(--mono);text-transform:uppercase;letter-spacing:.4px}
 .vg-label{position:absolute;z-index:2;inset:0;display:flex;min-width:0;flex-direction:column;padding:5px 7px;color:var(--ink);pointer-events:none;line-height:1.15}
