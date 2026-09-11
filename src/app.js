@@ -380,7 +380,7 @@ let jobsLite=[];
 // Фильтр по ЖИВЫМ заявкам, а не по числу дней до срока: сроки у заявок
 // разной длины, и порог в днях легко даёт пустую карту.
 let mapScope='work';
-let vehLayer=L.layerGroup().addTo(map), vehShow=true, vehState=[], vehTrackSessions=[], vehMk={}, vehTick=null, vehVisWired=false, vehModalId=null;
+let vehLayer=L.layerGroup().addTo(map), vehShow=true, vehState=[], vehTrackSessions=[], vehActiveTrips={}, vehMk={}, vehTick=null, vehVisWired=false, vehModalId=null;
 // Кнопка «Сохранить» в карточке точки не должна нажиматься, пока сохранять
 // нечего. Состояние и так известно — подсказка «Место не задано» выводится
 // рядом, — просто кнопка о нём не знала и отвечала ошибкой уже после нажатия.
@@ -2211,7 +2211,14 @@ function gtWire(key,box){
       gtZoom[key]=gtWeekDays(feedCtx.weeks[key])[i]; gtSel=null; gtPaint(key);
     };
   });
-  if(!canWrite()) return;
+  if(!canWrite()){
+    // Просмотр графика не должен быть тупиком: инженер не может двигать
+    // блок, но может открыть сам выезд и увидеть маршрут, заявки и статус.
+    box.querySelectorAll('.vg-block.trip').forEach(el=>el.onclick=e=>{
+      e.stopPropagation(); openTrip(String(el.dataset.gb||'').slice(1));
+    });
+    return;
+  }
   box.querySelectorAll('.gpc,.vg-block').forEach(el=>{
     el.onpointerdown=e=>{
       const b=gtFind(el.dataset.gb); if(!b) return;
@@ -2239,7 +2246,9 @@ function gtWire(key,box){
       if(!gtDrag) return;
       const moved=gtDrag.moved, b=gtDrag.block, start=gtDrag.start;
       gtDrag=null;
-      if(moved) gtSave(b,start); else { gtSel=b.id; gtPaint(key); gtPop(key,b); }
+      if(moved) gtSave(b,start);
+      else if(b.kind==='trip') openTrip(String(b.id).slice(1));
+      else { gtSel=b.id; gtPaint(key); gtPop(key,b); }
     };
     el.onpointercancel=()=>{ gtDrag=null; gtPaint(key); };
   });
@@ -5001,6 +5010,9 @@ async function delJob(id){ if(!await confirmDialog('Переместить за�
 
 // ---------- trips ----------
 let trips=[], tripJobsAll=[], curTripJobs=new Set(), tripEditId=null, tripRouteKeys=new Set();
+// Заявки открытого на карте выезда. Держим отдельно от редактора выезда:
+// карта доступна инженеру, у которого список tripJobsAll намеренно не грузится.
+let tripMapJobs=[];
 const ST_TRIP={planned:'план',assigned:'назначен',in_progress:'в работе',finished:'на проверке',done:'завершён',cancelled:'отменён'};
 let tripRoute={km:0,driveH:0,geometry:null,legs:[]}, tripRouteStops=[], tripVariants=[], tripVarSel=0, tripStart=null, tripOverrides={revenue:'',cost:'',road:{}};
 async function loadTripJobs(){ const {data}=await sb.from('jobs').select('id,status,scheduled_date,equipment_id,at_depot, clients(name,lat,lng), equipment(model,lat,lng), job_works(hours,billable,revenue,tariff_profile), job_parts(qty,price,cost,billable)').is('deleted_at',null).or('at_depot.is.null,at_depot.eq.false').order('created_at',{ascending:false}); tripJobsAll=data||[]; }
@@ -6391,11 +6403,12 @@ function drawTripPlan(t){
   stops.forEach((x,i)=>{
     if(x.lat==null||x.lng==null) return;
     pts.push([x.lat,x.lng]);
+    const popup=tripStopPopup(x,i);
     L.marker([x.lat,x.lng],{icon:L.divIcon({className:'',
       html:'<div class="cbub" style="background:var(--accent);color:var(--on-accent);'
         +'text-shadow:none;border:2px solid '+ringColor()+'">'+(i+1)+'</div>',
       iconSize:[24,24],iconAnchor:[12,12]})})
-      .bindPopup(esc(x.name||('точка '+(i+1)))).addTo(tripLayer);
+      .bindPopup(popup).addTo(tripLayer);
   });
   if(!pts.length&&t&&t.route_geometry&&t.route_geometry.coordinates)
     t.route_geometry.coordinates.forEach(c=>pts.push([c[1],c[0]]));
@@ -6414,6 +6427,7 @@ async function showTripOnMap(tid){
       if(data){ t=data; tripCache[tid]=data; } }catch(e){}
   }
   if(!t){ notify('Выезд не найден.','warn'); return; }
+  tripMapJobs=await loadTripMapJobs(tid);
   // План — в редактор, чтобы точки можно было двигать. Наличие факта этому
   // не мешает: факт про то, как съездили, план про то, как поедут ещё раз.
   const shown=canWrite()?loadTripIntoPlanner(tid,t):drawTripPlan(t);
@@ -6424,6 +6438,51 @@ async function showTripOnMap(tid){
   if(!fact) showToast(shown?'Факта нет — показан плановый маршрут':'У выезда нет ни маршрута, ни трека');
   routeSet('trip/'+encodeURIComponent(tid)+'/map');
 }
+
+async function loadTripMapJobs(tid){
+  try{
+    const {data,error}=await sb.from('trip_jobs')
+      .select('ord,job_id,jobs(id,client_id,equipment_id,status,clients(name),equipment(model))')
+      .eq('trip_id',tid).order('ord');
+    if(error) throw error;
+    return (data||[]).map(r=>r.jobs).filter(Boolean);
+  }catch(e){
+    console.warn('Не удалось загрузить заявки выезда для карты:',e);
+    return [];
+  }
+}
+function jobsAtTripStop(stop){
+  const cid=String((stop&&stop.clientId)||''), eid=String((stop&&stop.equipId)||'');
+  let found=tripMapJobs.filter(j=>(eid&&String(j.equipment_id||'')===eid)||(cid&&String(j.client_id||'')===cid));
+  if(found.length) return found;
+  // Старые route_stops не содержат идентификаторов. Для них оставляем
+  // безопасный fallback по подписи, не назначая заявку случайной точке.
+  const name=String((stop&&stop.name)||'').toLocaleLowerCase('ru');
+  return tripMapJobs.filter(j=>{
+    const client=String((j.clients&&j.clients.name)||'').toLocaleLowerCase('ru');
+    const equip=String((j.equipment&&j.equipment.model)||'').toLocaleLowerCase('ru');
+    return (client&&name.includes(client))||(equip&&name.includes(equip));
+  });
+}
+function tripStopPopup(stop,index){
+  const linked=jobsAtTripStop(stop);
+  return '<div class="trip-stop-popup"><b>'+esc((stop&&stop.name)||('точка '+(index+1)))+'</b>'
+    +(linked.length?'<div class="trip-stop-jobs">'+linked.map(j=>
+      '<button type="button" class="btn sm ghost" data-map-job="'+esc(j.id)+'">Открыть заявку'+(linked.length>1?(' · '+esc((j.equipment&&j.equipment.model)||String(j.id).slice(0,8))):'')+'</button>'
+    ).join('')+'</div>':'')+'</div>';
+}
+window.openTripMapJob=function(id){
+  if(!id) return;
+  try{ map.closePopup(); }catch(e){}
+  openJob(id);
+};
+map.on('popupopen',e=>{
+  const el=e.popup&&e.popup.getElement&&e.popup.getElement();
+  if(!el) return;
+  el.querySelectorAll('[data-map-job]').forEach(b=>b.onclick=ev=>{
+    ev.preventDefault(); ev.stopPropagation(); window.openTripMapJob(b.dataset.mapJob);
+  });
+});
 
 // Отрисовка факта. Отдельно от загрузки, потому что её зовёт ещё и фильтр
 // времени: там данные те же, меняется только окно.
@@ -6804,8 +6863,20 @@ async function loadVehState(){
     const {data,error}=await sb.from('vehicle_state')
       .select('vehicle_id,ts,lat,lng,speed,status,lost_since,trip_id,current_depot_id,depot_state,depot_inside_since,depot_outside_since,depot_distance_km');
     if(error) throw error;
-    const tracking=await sb.from('trip_tracking_sessions').select('id,trip_id,vehicle_id,state,planned_start_at,actual_started_at,start_source,finish_candidate_at').in('state',['armed','active','finish_candidate']);
+    const tracking=await sb.from('trip_tracking_sessions')
+      .select('id,trip_id,vehicle_id,state,planned_start_at,actual_started_at,start_source,finish_candidate_at,trip:trips(id,date_from,date_to,status,vehicle_id,vehicle_label,started_at)')
+      .in('state',['armed','active','finish_candidate']);
     if(!tracking.error) vehTrackSessions=tracking.data||[];
+    // Старые, уже выполнявшиеся при установке tracking-сессий выезды имеют
+    // корректный vehicle_state.trip_id, но могут не иметь строки сессии.
+    // Подтягиваем их одним batch-запросом: открывать сначала «Диспетчер» ради
+    // заполнения глобального массива trips пользователь не обязан.
+    const activeIds=[...new Set((data||[]).map(r=>r.trip_id).filter(Boolean))];
+    vehActiveTrips={};
+    if(activeIds.length){
+      const active=await sb.from('trips').select('id,date_from,date_to,status,vehicle_id,vehicle_label,started_at').in('id',activeIds);
+      if(!active.error) (active.data||[]).forEach(t=>{ vehActiveTrips[t.id]=t; tripCache[t.id]=t; });
+    }
     const prev={}; vehState.forEach(r=>prev[r.vehicle_id]={lat:r.lat,lng:r.lng});
     vehState=(data||[]).map(r=>{ const o=prev[r.vehicle_id];
       const bear=(o && (o.lat!==r.lat || o.lng!==r.lng)) ? vehBearing(o,r) : (vehMk[r.vehicle_id]||{}).__bear;
@@ -6903,13 +6974,24 @@ function showVehModal(vid){
             +pad(L.getHours())+':'+pad(L.getMinutes()); })()+'</span>'
       : (age>VEH_STALE_MIN ? '<span style="color:var(--ink-dim)">сообщений нет</span>' : '<span style="color:var(--green)">есть</span>'));
 
-  const trip=r.trip_id?(trips||[]).find(t=>t.id===r.trip_id):null;
   const tracking=vehTrackSessions.find(x=>x.vehicle_id===vid&&['armed','active','finish_candidate'].includes(x.state));
+  // После автоматического старта vehicle_state.trip_id может обновиться лишь
+  // со следующим пакетом телеметрии. Сессия уже является достоверным
+  // источником связи, а вложенный trip позволяет показать статус даже если
+  // пользователь ещё не открывал список выездов и глобальный trips пуст.
+  const linkedTripId=(tracking&&tracking.trip_id)||r.trip_id||null;
+  const trip=(tracking&&tracking.trip)||vehActiveTrips[linkedTripId]
+    ||((trips||[]).find(t=>String(t.id)===String(linkedTripId))||tripCache[linkedTripId]||null);
   h+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Выезд</div>';
   if(trip){
     h+=vehRow('Дата', esc(trip.date_from||'—')+(trip.date_to&&trip.date_to!==trip.date_from?(' — '+esc(trip.date_to)):''));
-    h+=vehRow('Статус', esc(trip.status||'—'));
-    h+='<div class="hint" style="margin-top: var(--sp-2)">Трек пишется в историю.</div>';
+    const trackingStatus=tracking&&tracking.state==='finish_candidate'?'ожидает завершения'
+      : tracking&&tracking.state==='armed'?'ожидает старта'
+      : (ST_TRIP[trip.status]||trip.status||'—');
+    h+=vehRow('Статус', esc(trackingStatus));
+    h+='<div class="hint" style="margin-top: var(--sp-2)">'+(tracking&&tracking.state==='armed'
+      ?'Телеметрия сохраняется во временный трек до старта выезда.'
+      :'Активный выезд найден · трек пишется в историю.')+'</div>';
   } else {
     // Не молчим об этом: без активного выезда история не пишется, и это
     // штатно. Иначе потом ищешь трек, которого никогда не было.
@@ -7024,7 +7106,10 @@ function updateRouteActions(){
 
 function drawStops(){ routeLayer.clearLayers(); const stops=routeStopsAll();
   drawRouteLine(routeLayer, rRoute.geometry);
-  stops.forEach((s,i)=>{ const ic=L.divIcon({className:'',html:'<div style="background:var(--accent);color:var(--on-accent);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font:600 11px var(--mono);border:2.5px solid '+ringColor()+';pointer-events:none">'+(i+1)+'</div>',iconSize:[20,20],iconAnchor:[10,10]}); L.marker([s.lat,s.lng],{icon:ic,interactive:false}).addTo(routeLayer); }); updateMapSummary(); updateRouteActions(); }
+  stops.forEach((s,i)=>{ const ic=L.divIcon({className:'',html:'<div style="background:var(--accent);color:var(--on-accent);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font:600 11px var(--mono);border:2.5px solid '+ringColor()+';pointer-events:none">'+(i+1)+'</div>',iconSize:[20,20],iconAnchor:[10,10]});
+    const marker=L.marker([s.lat,s.lng],{icon:ic,interactive:true}).addTo(routeLayer);
+    if(plannerTripId) marker.bindPopup(tripStopPopup(s,i));
+  }); updateMapSummary(); updateRouteActions(); }
 // Карточка точки маршрута.
 //
 // Отдельных полей «старт» и «финиш» над списком больше нет: они дублировали
