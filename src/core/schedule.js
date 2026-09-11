@@ -200,6 +200,25 @@ export function placedPieces(segs, parts, s) {
   for(let i=0;i<segs.length;i++){
     const x=parts[i], raw=x&&x.start;
     if(!raw||!raw.d||!Number.isFinite(+raw.h)) return null;
+    const explicit=Array.isArray(x.chunks)&&x.chunks.length?x.chunks:null;
+    if(explicit){
+      let offset=0;
+      for(const chunk of explicit){
+        const p=chunk&&chunk.start, h=+(chunk&&chunk.h);
+        if(!p||!p.d||!Number.isFinite(+p.h)||!(h>0)||+p.h<0||+p.h+h>24-(+s.dayStart||8)+1e-6) return null;
+        const piece={iso:p.d,from:+p.h,to:+(+p.h+h).toFixed(6),h:+h.toFixed(6),k:segs[i].k,
+          jobId:segs[i].jobId||null,segIndex:i,segOffset:+offset.toFixed(6)};
+        if(out.length){ const prev=out[out.length-1];
+          const prevAt=dayMs(prev.iso)+(+(s.dayStart||8)+prev.to)*3600000;
+          const nextAt=dayMs(piece.iso)+(+(s.dayStart||8)+piece.from)*3600000;
+          if(nextAt<prevAt-1) return null;
+        }
+        out.push(piece); offset+=h;
+      }
+      const expected=x.h==null?(+segs[i].h||0):+x.h;
+      if(Math.abs(offset-expected)>.01) return null;
+      continue;
+    }
     const start=normPos({iso:raw.d,h:+raw.h},s);
     if(start.iso!==raw.d||Math.abs(start.h-(+raw.h))>1e-6) return null;
     if(out.length){ const prev=out[out.length-1]; if(diffHours({iso:prev.iso,h:prev.to},start,s)<-1e-6) return null; }

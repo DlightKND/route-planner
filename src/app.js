@@ -2074,7 +2074,10 @@ function gtDayHtml(key){
       const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late');
       const totalDrive=(b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0);
       const sub=(b.kind==='trip'?'выезд':'заявка')+' · '+fmtH(b.workH||0)+(totalDrive>.01?' + дорога '+fmtH(totalDrive):'');
-      const segs=points.map(x=>'<i data-gseg="'+x.p.segIndex+'" data-goffset="'+(x.p.segOffset||0)+'" data-gpieceh="'+x.p.h+'" class="vg-seg '+(x.p.k==='d'?'road':'work')+'" style="--seg-y:'+x.y+'px;top:'+(x.y-top)+'px;height:'+(x.h+.6)+'px"></i>').join('');
+      const all=gtPieces(b);
+      const segs=points.map(x=>{ const more=all.some(p=>p.segIndex===x.p.segIndex&&(p.segOffset||0)>(x.p.segOffset||0)+.01);
+        return '<i data-gseg="'+x.p.segIndex+'" data-goffset="'+(x.p.segOffset||0)+'" data-gpieceh="'+x.p.h+'" class="vg-seg '+(x.p.k==='d'?'road':'work')+'" style="--seg-y:'+x.y+'px;top:'+(x.y-top)+'px;height:'+(x.h+.6)+'px">'
+          +(more&&canWrite()?'<button type="button" class="vg-resize" data-gresize title="Потянуть границу участка" aria-label="Изменить границу участка"></button>':'')+'</i>'; }).join('');
       const gaps=points.slice(0,-1).map((x,i)=>{ const y=x.y+x.h, next=points[i+1], h=next.y-y; return h>2?'<button type="button" class="vg-break-mark" data-gbreak-open="'+x.p.segIndex+'" style="top:'+(y-top)+'px;height:'+h+'px" title="Перерыв · настроить"><span>перерыв</span></button>':''; }).join('');
       bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+((bottom-top)<40?' short':'')+(String(gtSel)===String(b.id)?' sel':'')+'" data-gb="'+esc(b.id)+'" style="top:'+top+'px;height:'+Math.max(12,bottom-top)+'px">'
         +segs+gaps+'<span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc(sub)+'</small></span>'+(canWrite()?'<button type="button" class="vg-edit" data-gedit="'+esc(b.id)+'" title="Настроить участки" aria-label="Настроить участки">✎</button>':'')+'</div>';
@@ -2243,6 +2246,25 @@ function gtWire(key,box){
       gtZoom[key]=gtWeekDays(feedCtx.weeks[key])[i]; gtSel=null; gtPaint(key);
     };
   });
+  box.querySelectorAll('[data-gresize]').forEach(handle=>{
+    handle.onpointerdown=e=>{
+      e.preventDefault(); e.stopPropagation();
+      const seg=handle.closest('[data-gseg]'), host=handle.closest('[data-gb]'), lane=handle.closest('.vg-day-lane');
+      const b=host&&gtFind(host.dataset.gb); if(!seg||!b||!lane) return;
+      const y0=e.clientY, h0=+seg.dataset.gpieceh||0, px0=seg.getBoundingClientRect().height;
+      const span=+lane.dataset.vgspan||1, laneH=lane.getBoundingClientRect().height;
+      let nextH=h0;
+      handle.setPointerCapture(e.pointerId);
+      handle.onpointermove=move=>{ move.preventDefault(); const delta=(move.clientY-y0)/laneH*span;
+        nextH=Math.max(.25,Math.round((h0+delta)*2)/2); seg.style.height=Math.max(3,px0+(nextH-h0)/span*laneH)+'px'; };
+      handle.onpointerup=async up=>{ up.preventDefault(); up.stopPropagation(); handle.onpointermove=null; handle.onpointerup=null;
+        if(Math.abs(nextH-h0)<.01){ gtSel=b.id; gtPaint(key); gtPop(key,b,+seg.dataset.gseg,(+seg.dataset.goffset||0)+h0); return; }
+        handle.disabled=true;
+        const ok=await gtResizePiece(b,+seg.dataset.gseg,+seg.dataset.goffset||0,nextH);
+        if(!ok){ showToast('Не удалось сдвинуть границу: соседний кусок должен сохранить не меньше 30 минут'); gtPaint(key); }
+      };
+    };
+  });
   box.querySelectorAll('[data-gbreak-open]').forEach(mark=>{
     mark.onpointerdown=e=>e.stopPropagation();
     mark.onclick=e=>{ e.stopPropagation(); const host=mark.closest('[data-gb]'), b=host&&gtFind(host.dataset.gb); if(!b) return; gtSel=b.id; gtPaint(key); gtPop(key,b,+mark.dataset.gbreakOpen); };
@@ -2321,8 +2343,42 @@ async function gtSave(b,start){
 
 function gtPartStarts(b){
   if(b.plan&&Array.isArray(b.plan.parts)&&b.plan.parts.length===b.segs.length)
-    return b.plan.parts.map((x,i)=>({d:x.start.d,h:+x.start.h,len:x.h==null?(+b.segs[i].h||0):+x.h,breakAt:+x.breakAt||0,gapH:+x.gapH||0}));
+    return b.plan.parts.map((x,i)=>({d:x.start.d,h:+x.start.h,len:x.h==null?(+b.segs[i].h||0):+x.h,breakAt:+x.breakAt||0,gapH:+x.gapH||0,
+      chunks:Array.isArray(x.chunks)?x.chunks.map(c=>({start:{d:c.start.d,h:+c.start.h},h:+c.h})):null}));
   return b.segs.map((seg,i)=>{ const p=(b.pieces||[]).find(x=>x.segIndex===i); return p?{d:p.iso,h:p.from,len:+seg.h||0,breakAt:0,gapH:0}:null; });
+}
+function gtChunksFor(b,parts,index){
+  const x=parts[index];
+  if(Array.isArray(x.chunks)&&x.chunks.length) return x.chunks;
+  const chunks=(b.pieces||[]).filter(p=>p.segIndex===index).map(p=>({start:{d:p.iso,h:+p.from},h:+p.h}));
+  x.chunks=chunks.length?chunks:[{start:{d:x.d,h:x.h},h:x.len}];
+  x.breakAt=0; x.gapH=0;
+  return x.chunks;
+}
+function gtCalendarAdd(pos,dh,st){
+  const ms=utcOf(pos.iso)+((+st.dayStart||7)+(+pos.h||0)+dh)*3600000;
+  const d=new Date(ms), iso=isoOf(ms);
+  return {iso,h:d.getUTCHours()+d.getUTCMinutes()/60-(+st.dayStart||7)};
+}
+function gtShiftChunkStarts(parts,fromSeg,fromChunk,dh,st){
+  parts.forEach((part,si)=>{
+    const chunks=part.chunks;
+    if(Array.isArray(chunks)) chunks.forEach((c,ci)=>{
+      if(si>fromSeg||(si===fromSeg&&ci>=fromChunk)){ const p=gtCalendarAdd({iso:c.start.d,h:+c.start.h},dh,st); c.start={d:p.iso,h:+p.h.toFixed(2)}; }
+    });
+    else if(si>fromSeg){ const p=addHours({iso:part.d,h:part.h},dh,st); part.d=p.iso; part.h=p.h; }
+  });
+}
+async function gtResizePiece(b,segIndex,segOffset,nextH){
+  const parts=gtPartStarts(b), st=gtSettings(), chunks=gtChunksFor(b,parts,segIndex);
+  const ci=chunks.findIndex((c,i)=>Math.abs(chunks.slice(0,i).reduce((n,x)=>n+x.h,0)-segOffset)<.02);
+  if(ci<0||ci>=chunks.length-1) return false;
+  const cur=chunks[ci], next=chunks[ci+1], delta=nextH-cur.h;
+  if(next.h-delta<-.01||cur.h+delta<.25) return false;
+  cur.h=+(cur.h+delta).toFixed(2); next.h=+(next.h-delta).toFixed(2);
+  gtShiftChunkStarts(parts,segIndex,ci+2,-delta,st);
+  if(next.h<.01) chunks.splice(ci+1,1);
+  return gtSaveParts(b,parts,true);
 }
 function gtPartName(b,seg,i){
   if(seg.k==='d') return 'Дорога '+(b.segs.slice(0,i+1).filter(x=>x.k==='d').length);
@@ -2352,7 +2408,9 @@ async function gtSaveParts(b,parts,acceptOverride){
       if(diffHours(prevEnd,{iso:p.iso,h:p.h},st)<-.01){ notify('Участки пересекаются или стоят в обратном порядке','warn'); return false; } }
   }
   const isTrip=String(b.id)[0]==='t', id=String(b.id).slice(1);
-  const clean=parts.map(x=>({start:{d:x.d,h:+x.h.toFixed(2)},h:+x.len.toFixed(2),...(x.breakAt>0&&x.gapH>0?{breakAt:+x.breakAt.toFixed(2),gapH:+x.gapH.toFixed(2)}:{})}));
+  const clean=parts.map(x=>({start:{d:x.d,h:+x.h.toFixed(2)},h:+x.len.toFixed(2),
+    ...(Array.isArray(x.chunks)&&x.chunks.length?{chunks:x.chunks.map(c=>({start:{d:c.start.d,h:+c.start.h.toFixed(2)},h:+c.h.toFixed(2)}))}:{}),
+    ...(x.breakAt>0&&x.gapH>0?{breakAt:+x.breakAt.toFixed(2),gapH:+x.gapH.toFixed(2)}:{})}));
   const rec={day_plan:{start:clean[0].start,parts:clean,overridden:changed}};
   const {error}=await sb.from(isTrip?'trips':'jobs').update(rec).eq('id',id);
   if(error){ notify('Не сохранилось: '+error.message,'err'); return false; }
@@ -2370,7 +2428,16 @@ function gtPop(key,b,selectedIndex,breakAt){
   const el=box.querySelector('.gpc.sel,.vg-block.sel'); if(!el) return;
   const st=gtSettings(), segs=b.segs||[], draft=gtPartStarts(b);
   let pick=Math.max(0,Math.min(segs.length-1,selectedIndex==null?0:+selectedIndex));
-  if(breakAt>0&&breakAt<draft[pick].len&&!draft[pick].breakAt){ draft[pick].breakAt=breakAt; draft[pick].gapH=.5; gtShiftFollowing(draft,pick+1,.5,st); }
+  if(breakAt>0&&breakAt<draft[pick].len&&!draft[pick].breakAt){
+    if(Array.isArray(draft[pick].chunks)){
+      const chunks=draft[pick].chunks; let used=0, ci=chunks.findIndex(c=>{ const hit=breakAt>used+.01&&breakAt<used+c.h-.01; used+=c.h; return hit; });
+      if(ci>=0){ const c=chunks[ci], before=breakAt-(used-c.h), after=c.h-before;
+        const second=gtCalendarAdd({iso:c.start.d,h:c.start.h},before+.5,st);
+        chunks.splice(ci,1,{start:{...c.start},h:+before.toFixed(2)},{start:{d:second.iso,h:+second.h.toFixed(2)},h:+after.toFixed(2)});
+        gtShiftChunkStarts(draft,pick,ci+2,.5,st);
+      }
+    }else{ draft[pick].breakAt=breakAt; draft[pick].gapH=.5; gtShiftFollowing(draft,pick+1,.5,st); }
+  }
   const nm=b.kind==='trip'?('Выезд '+shortDate(b.from)):((feedCtx.jobName(b.jobIds[0])||'Заявка'));
   const h='<div class="gpop gpop-compact"><div class="gp-h">'+esc(nm)+(b.manual?'<span class="a-tag plan">вручную</span>':'<span class="a-tag auto">авто</span>')+'</div>'
     +'<div class="gp-s">Нажмите участок на графике, чтобы выбрать место разрыва</div>'
