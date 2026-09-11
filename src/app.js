@@ -2076,7 +2076,7 @@ function gtDayHtml(key){
     +'<div class="vg-scroll"><div class="vg-grid vg-day-grid" style="--lanes:'+Math.max(1,lanes.length)+';--lane-min:'+laneMin+'px">'
     +axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
     +'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="road"></i>дорога</span>'
-    +(canWrite()?'<span>перетащи — шаг 30 мин</span>':'<span>только просмотр</span>')+'<span>✎ — расставлено вручную</span></div>';
+    +(canWrite()?'<span>нажми участок — разрыв · перетащи — шаг 30 мин</span>':'<span>только просмотр</span>')+'<span>✎ — расставлено вручную</span></div>';
 }
 function gtWeekDays(it){ const out=[]; for(let i=0;i<7;i++) out.push(isoOf(it.w.mon+i*DAY_MS)); return out; }
 function gtBusyWeekLanes(key){
@@ -2175,7 +2175,7 @@ function gtVerticalHtml(key){
     +axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
     +(feedCtx.mine?'':gtLoadScale())
     +'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="urgent-edge"></i>срок горит</span><span><i class="road"></i>дорога внутри бруска</span>'
-    +(canWrite()?'<span>перетащи — шаг сутки</span>':'<span>только просмотр</span>')+'</div>';
+    +(canWrite()?'<span>нажми участок — разрыв · перетащи — шаг сутки</span>':'<span>только просмотр</span>')+'</div>';
 }
 function gtHtml(key){ return gtZoom[key]?gtDayHtml(key):gtVerticalHtml(key); }
 function gtTicks(nCols,eff){
@@ -2302,7 +2302,7 @@ function gtPartStarts(b){
   return b.segs.map((seg,i)=>{ const p=(b.pieces||[]).find(x=>x.segIndex===i); return p?{d:p.iso,h:p.from,len:+seg.h||0,breakAt:0,gapH:0}:null; });
 }
 function gtPartName(b,seg,i){
-  if(seg.k==='d') return 'Дорога '+(i+1);
+  if(seg.k==='d') return 'Дорога '+(b.segs.slice(0,i+1).filter(x=>x.k==='d').length);
   return (seg.jobId&&feedCtx.jobName(seg.jobId))||'Работа '+(i+1);
 }
 function gtInputTime(pos){
