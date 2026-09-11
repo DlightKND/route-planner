@@ -2062,9 +2062,10 @@ function gtDayHtml(key){
       const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late');
       const totalDrive=(b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0);
       const sub=(b.kind==='trip'?'выезд':'заявка')+' · '+fmtH(b.workH||0)+(totalDrive>.01?' + дорога '+fmtH(totalDrive):'');
-      const segs=points.map(x=>'<i class="vg-seg '+(x.p.k==='d'?'road':'work')+'" style="--seg-y:'+x.y+'px;top:'+(x.y-top)+'px;height:'+(x.h+.6)+'px"></i>').join('');
+      const segs=points.map(x=>'<i data-gseg="'+x.p.segIndex+'" data-goffset="'+(x.p.segOffset||0)+'" data-gpieceh="'+x.p.h+'" class="vg-seg '+(x.p.k==='d'?'road':'work')+'" style="--seg-y:'+x.y+'px;top:'+(x.y-top)+'px;height:'+(x.h+.6)+'px"></i>').join('');
+      const gaps=points.slice(0,-1).map((x,i)=>{ const y=x.y+x.h, next=points[i+1], h=next.y-y; return h>2?'<button type="button" class="vg-break-mark" data-gbreak-open="'+x.p.segIndex+'" style="top:'+(y-top)+'px;height:'+h+'px" title="Перерыв · настроить"><span>перерыв</span></button>':''; }).join('');
       bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+((bottom-top)<40?' short':'')+(String(gtSel)===String(b.id)?' sel':'')+'" data-gb="'+esc(b.id)+'" style="top:'+top+'px;height:'+Math.max(12,bottom-top)+'px">'
-        +segs+'<span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc(sub)+'</small></span>'+(canWrite()?'<button type="button" class="vg-edit" data-gedit="'+esc(b.id)+'" title="Настроить участки" aria-label="Настроить участки">✎</button>':'')+'</div>';
+        +segs+gaps+'<span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc(sub)+'</small></span>'+(canWrite()?'<button type="button" class="vg-edit" data-gedit="'+esc(b.id)+'" title="Настроить участки" aria-label="Настроить участки">✎</button>':'')+'</div>';
     });
     const color=loadColor(hours/shift), over=Math.max(0,hours-gtEff());
     tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'" style="--load:'+color+';--load-edge:'+loadEdge(color)+'">'+ticks+bars
@@ -2157,11 +2158,12 @@ function gtVerticalHtml(key){
       const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late');
       const totalDrive=(b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0);
       const sub=(b.kind==='trip'?'выезд':'заявка')+' · '+fmtH(b.workH||0)+(totalDrive>.01?' + дорога '+fmtH(totalDrive):'');
-      const segs=points.map(x=>'<i class="vg-seg '+(x.p.k==='d'?'road':'work')+'" style="--seg-y:'+x.y+'px;top:'+(x.y-top)+'px;height:'+(x.h+.6)+'px"></i>').join('');
+      const segs=points.map(x=>'<i data-gseg="'+x.p.segIndex+'" data-goffset="'+(x.p.segOffset||0)+'" data-gpieceh="'+x.p.h+'" class="vg-seg '+(x.p.k==='d'?'road':'work')+'" style="--seg-y:'+x.y+'px;top:'+(x.y-top)+'px;height:'+(x.h+.6)+'px"></i>').join('');
+      const gaps=points.slice(0,-1).map((x,i)=>{ const y=x.y+x.h, next=points[i+1], h=next.y-y; return h>2?'<button type="button" class="vg-break-mark" data-gbreak-open="'+x.p.segIndex+'" style="top:'+(y-top)+'px;height:'+h+'px" title="Перерыв · настроить"><span>перерыв</span></button>':''; }).join('');
       const startIso=points.slice().sort((a,b)=>a.y-b.y)[0].p.iso, startP=gtLaneLoad(l.id,startIso)/shift;
       const blockTint=feedCtx.mine?'transparent':loadTint(startP), blockTone=feedCtx.mine?'var(--ink-faint)':loadColor(startP);
       bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+((bottom-top)<40?' short':'')+(String(gtSel)===String(b.id)?' sel':'')+'" data-gb="'+esc(b.id)+'" style="--block-tint:'+blockTint+';--block-tone:'+blockTone+';top:'+top+'px;height:'+Math.max(12,bottom-top)+'px">'
-        +segs+'<span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc(sub)+'</small></span>'+(canWrite()?'<button type="button" class="vg-edit" data-gedit="'+esc(b.id)+'" title="Настроить участки" aria-label="Настроить участки">✎</button>':'')+'</div>';
+        +segs+gaps+'<span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc(sub)+'</small></span>'+(canWrite()?'<button type="button" class="vg-edit" data-gedit="'+esc(b.id)+'" title="Настроить участки" aria-label="Настроить участки">✎</button>':'')+'</div>';
     });
     const now=scheduleNow(), ni=days.indexOf(now.iso), nowLine=ni>=0&&now.h>=0&&now.h<=eff
       ?'<span class="vg-now" title="Сейчас · '+esc(now.label)+'" style="top:'+((ni+now.h/eff)*rowH)+'px"></span>':'';
@@ -2220,6 +2222,14 @@ function gtWire(key,box){
       gtZoom[key]=gtWeekDays(feedCtx.weeks[key])[i]; gtSel=null; gtPaint(key);
     };
   });
+  box.querySelectorAll('[data-gbreak-open]').forEach(mark=>{
+    mark.onpointerdown=e=>e.stopPropagation();
+    mark.onclick=e=>{ e.stopPropagation(); const host=mark.closest('[data-gb]'), b=host&&gtFind(host.dataset.gb); if(!b) return; gtSel=b.id; gtPaint(key); gtPop(key,b,+mark.dataset.gbreakOpen); };
+  });
+  box.querySelectorAll('[data-gseg]').forEach(seg=>{
+    seg.onpointerdown=e=>e.stopPropagation();
+    seg.onclick=e=>{ e.stopPropagation(); const host=seg.closest('[data-gb]'), b=host&&gtFind(host.dataset.gb); if(!b) return; const index=+seg.dataset.gseg, r=seg.getBoundingClientRect(); const frac=Math.max(0,Math.min(1,(e.clientY-r.top)/Math.max(1,r.height))); const at=Math.round(((+seg.dataset.goffset||0)+frac*(+seg.dataset.gpieceh||0))*2)/2; gtSel=b.id; gtPaint(key); gtPop(key,b,index,at); };
+  });
   box.querySelectorAll('[data-gedit]').forEach(edit=>{
     edit.onpointerdown=e=>e.stopPropagation();
     edit.onclick=e=>{ e.stopPropagation(); const b=gtFind(edit.dataset.gedit); if(!b) return; gtSel=b.id; gtPaint(key); gtPop(key,b); };
@@ -2275,7 +2285,7 @@ async function gtSave(b,start){
   let plan=start?{start:{d:start.iso,h:+(+start.h).toFixed(2)}}:null;
   if(plan&&b.plan&&Array.isArray(b.plan.parts)){
     const dh=diffHours(gtStart(b),start,gtSettings());
-    plan.parts=b.plan.parts.map(x=>{ const p=addHours({iso:x.start.d,h:+x.start.h},dh,gtSettings()); return {start:{d:p.iso,h:+p.h.toFixed(2)}}; });
+    plan.parts=b.plan.parts.map(x=>{ const p=addHours({iso:x.start.d,h:+x.start.h},dh,gtSettings()); return {...x,start:{d:p.iso,h:+p.h.toFixed(2)}}; });
   }
   const rec={day_plan:plan};
   try{
@@ -2287,8 +2297,9 @@ async function gtSave(b,start){
 }
 
 function gtPartStarts(b){
-  if(b.plan&&Array.isArray(b.plan.parts)&&b.plan.parts.length===b.segs.length) return b.plan.parts.map(x=>({d:x.start.d,h:+x.start.h}));
-  return b.segs.map((seg,i)=>{ const p=(b.pieces||[]).find(x=>x.segIndex===i); return p?{d:p.iso,h:p.from}:null; });
+  if(b.plan&&Array.isArray(b.plan.parts)&&b.plan.parts.length===b.segs.length)
+    return b.plan.parts.map((x,i)=>({d:x.start.d,h:+x.start.h,len:x.h==null?(+b.segs[i].h||0):+x.h,breakAt:+x.breakAt||0,gapH:+x.gapH||0}));
+  return b.segs.map((seg,i)=>{ const p=(b.pieces||[]).find(x=>x.segIndex===i); return p?{d:p.iso,h:p.from,len:+seg.h||0,breakAt:0,gapH:0}:null; });
 }
 function gtPartName(b,seg,i){
   if(seg.k==='d') return 'Дорога '+(i+1);
@@ -2298,26 +2309,31 @@ function gtInputTime(pos){
   const absolute=(+appSettings.day_start||8)+(+pos.h||0), h=Math.floor(absolute), m=Math.round((absolute-h)*60);
   return String(h+(m===60?1:0)).padStart(2,'0')+':'+String(m===60?0:m).padStart(2,'0');
 }
-function gtInputPos(date,time){
-  const m=/^(\d{2}):(\d{2})$/.exec(time||'');
-  if(!date||!m) return null;
-  return {d:date,h:+m[1]+(+m[2]/60)-(+appSettings.day_start||8)};
+function gtGapAfter(parts,i,st){
+  if(i>=parts.length-1||!parts[i]||!parts[i+1]) return 0;
+  const end=addHours({iso:parts[i].d,h:parts[i].h},parts[i].len+(parts[i].breakAt>0?(parts[i].gapH||0):0),st);
+  return Math.max(0,diffHours(end,{iso:parts[i+1].d,h:parts[i+1].h},st));
 }
-async function gtSaveParts(b,parts){
+function gtShiftFollowing(parts,from,dh,st){
+  for(let i=from;i<parts.length;i++){ const p=addHours({iso:parts[i].d,h:parts[i].h},dh,st); parts[i]={...parts[i],d:p.iso,h:p.h}; }
+}
+async function gtSaveParts(b,parts,acceptOverride){
   const st=gtSettings(), segs=b.segs||[];
-  if(parts.some(x=>!x)||parts.length!==segs.length){ notify('Заполните начало каждого участка','warn'); return false; }
+  if(parts.some(x=>!x)||parts.length!==segs.length){ notify('Не удалось собрать участки графика','warn'); return false; }
+  const changed=parts.some((x,i)=>Math.abs(x.len-(+(segs[i].baseH==null?segs[i].h:segs[i].baseH)||0))>.01);
+  if(changed&&!acceptOverride){ notify('Подтвердите изменение планового объёма','warn'); return false; }
   for(let i=0;i<parts.length;i++){
     const p=normPos({iso:parts[i].d,h:parts[i].h},st);
     if(p.iso!==parts[i].d||Math.abs(p.h-parts[i].h)>.01){ notify('Время участка должно попадать в рабочий день','warn'); return false; }
-    if(i){ const prevEnd=addHours({iso:parts[i-1].d,h:parts[i-1].h},+segs[i-1].h||0,st);
+    if(i){ const prev=parts[i-1], prevEnd=addHours({iso:prev.d,h:prev.h},prev.len+(prev.breakAt>0?(prev.gapH||0):0),st);
       if(diffHours(prevEnd,{iso:p.iso,h:p.h},st)<-.01){ notify('Участки пересекаются или стоят в обратном порядке','warn'); return false; } }
   }
   const isTrip=String(b.id)[0]==='t', id=String(b.id).slice(1);
-  const clean=parts.map(x=>({start:{d:x.d,h:+x.h.toFixed(2)}}));
-  const rec={day_plan:{start:clean[0].start,parts:clean}};
+  const clean=parts.map(x=>({start:{d:x.d,h:+x.h.toFixed(2)},h:+x.len.toFixed(2),...(x.breakAt>0&&x.gapH>0?{breakAt:+x.breakAt.toFixed(2),gapH:+x.gapH.toFixed(2)}:{})}));
+  const rec={day_plan:{start:clean[0].start,parts:clean,overridden:changed}};
   const {error}=await sb.from(isTrip?'trips':'jobs').update(rec).eq('id',id);
   if(error){ notify('Не сохранилось: '+error.message,'err'); return false; }
-  showToast('Участки графика сохранены'); await renderFeedAgain(); return true;
+  showToast(changed?'Новый объём принят как плановый':'Перерывы сохранены'); await renderFeedAgain(); return true;
 }
 // Лента может быть открыта и у менеджера (сводка), и у инженера (график).
 async function renderFeedAgain(){
@@ -2325,79 +2341,45 @@ async function renderFeedAgain(){
 }
 
 // ── Контекстная модалка над этапом ──────────────────────────────────────
-function gtPop(key,b){
+function gtPop(key,b,selectedIndex,breakAt){
   const box=document.querySelector('[data-gtbox="'+key+'"]'); if(!box) return;
-  // Попап живёт у body, а не внутри недельной карточки: у карточки намеренно
-  // overflow:hidden ради скругления, и длинный редактор участков там обрезался.
   const old=document.querySelector('.gpop'); if(old) old.remove();
   const el=box.querySelector('.gpc.sel,.vg-block.sel'); if(!el) return;
-  const zoom=gtZoom[key]||null, st=gtSettings(), eff=gtEff();
-  const pcs=gtPieces(b), start=gtStart(b);
-  const last=pcs[pcs.length-1];
-  const byDay={}; pcs.forEach(p=>{ const t=byDay[p.iso]||(byDay[p.iso]={w:0,d:0}); t[p.k==='w'?'w':'d']+=p.h; });
+  const st=gtSettings(), segs=b.segs||[], draft=gtPartStarts(b);
+  let pick=Math.max(0,Math.min(segs.length-1,selectedIndex==null?0:+selectedIndex));
+  if(breakAt>0&&breakAt<draft[pick].len&&!draft[pick].breakAt){ draft[pick].breakAt=breakAt; draft[pick].gapH=.5; gtShiftFollowing(draft,pick+1,.5,st); }
   const nm=b.kind==='trip'?('Выезд '+shortDate(b.from)):((feedCtx.jobName(b.jobIds[0])||'Заявка'));
-  const total=pcs.reduce((a,p)=>a+p.h,0);
-  const step=zoom?0.5:1, stepTxt=zoom?'30 мин':'1 ч';
-  const partStarts=gtPartStarts(b);
-  const partEditor=(b.segs||[]).map((seg,i)=>{ const start=partStarts[i], end=start?addHours({iso:start.d,h:start.h},+seg.h||0,st):null;
-    return '<div class="gp-part" data-gpart="'+i+'"><div class="gp-part-h"><b>'+esc(gtPartName(b,seg,i))+'</b><span>'+fmtH(seg.h)+'</span></div>'
-      +'<label>начало <input type="date" data-gpd="s" value="'+esc(start?start.d:'')+'"><input type="time" step="1800" data-gpt="s" value="'+esc(start?gtInputTime(start):'')+'"></label>'
-      +'<label>конец <input type="date" data-gpd="e" value="'+esc(end?end.iso:'')+'"><input type="time" step="1800" data-gpt="e" value="'+esc(end?gtInputTime({h:end.h}):'')+'"></label></div>'; }).join('');
-  let h='<div class="gpop">'
-    +'<div class="gp-h">'+esc(nm)+(b.manual?'<span class="a-tag plan">вручную</span>':'<span class="a-tag auto">авто</span>')+'</div>'
-    +'<div class="gp-s">'+(b.jobIds.length>1?(b.jobIds.length+' заявки · '):'')
-      +(+(b.workH||0).toFixed(1))+' ч работ'
-      +(((b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0))>0.05
-        ?(' · '+(+((b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0)).toFixed(1))+' ч дороги'):'')+'</div>'
-    +'<div class="gp-r"><span class="gp-k">начало</span>'
-      +'<button class="gp-b" data-gmv="-'+step+'">−'+stepTxt+'</button>'
-      +'<span class="gp-v">'+WD_RU[new Date(utcOf(start.iso)).getUTCDay()]+' '+esc(shortDate(start.iso))+' '+esc(clockOf(start.h,st))+'</span>'
-      +'<button class="gp-b" data-gmv="'+step+'">+'+stepTxt+'</button></div>'
-    +'<div class="gp-r"><span class="gp-k">конец</span><span class="gp-v">'
-      +(last?(esc(shortDate(last.iso))+' '+esc(clockOf(last.to,st))):'—')+'</span></div>'
-    +'<div class="gp-r"><span class="gp-k">на сутки</span>'
-      +'<button class="gp-b" data-gmv="-'+eff+'">← день</button>'
-      +'<button class="gp-b" data-gmv="'+eff+'">день →</button></div>'
-    +'<div class="gp-days">'+Object.keys(byDay).sort().map(iso=>{
-        const t=byDay[iso];
-        return '<div class="gp-d"><span>'+esc(shortDate(iso))+'</span><span>'
-          +(t.w>0.001?('раб '+(+t.w.toFixed(1))):'')+((t.w>0.001&&t.d>0.001)?' · ':'')
-          +(t.d>0.001?('дор '+(+t.d.toFixed(1))):'')+'</span><b>'+(+(t.w+t.d).toFixed(1))+' ч</b></div>';
-      }).join('')+'</div>'
-    +'<details class="gp-parts"'+(zoom?' open':'')+'><summary>Раздвинуть дорогу и работу</summary><div class="gp-parts-list">'+partEditor+'</div>'
-      +'<button class="btn sm amber" type="button" data-gparts-save>Сохранить участки</button></details>'
-    +'<div class="gp-n">сумма этапа не меняется: '+(+total.toFixed(1))+' ч</div>'
-    +'<div class="gp-f"><button class="btn sm amber" data-gok="1">Готово</button>'
-      +(b.manual?'<button class="btn sm ghost" data-greset="1">Сбросить к авто</button>':'')+'</div>'
-  +'</div>';
-  document.body.insertAdjacentHTML('beforeend',h);
-  const pop=document.body.lastElementChild;
-  // На узком экране модалка — лист снизу (позиция задана в CSS), на широком
-  // она висит под своим островком.
-  if(!window.matchMedia('(max-width:600px)').matches){
-    const r=el.getBoundingClientRect(), margin=8, width=Math.min(320,window.innerWidth-margin*2);
-    pop.style.left=Math.max(margin,Math.min(window.innerWidth-width-margin,r.left-40))+'px';
-    const below=r.bottom+8, above=r.top-pop.offsetHeight-8;
-    pop.style.top=(below+pop.offsetHeight<=window.innerHeight-margin?below:Math.max(margin,above))+'px';
-  }
-  pop.querySelectorAll('[data-gmv]').forEach(x=>x.onclick=ev=>{ ev.stopPropagation();
-    gtSave(b,addHours(gtStart(b),+x.dataset.gmv,st)); });
-  pop.querySelectorAll('[data-gok]').forEach(x=>x.onclick=ev=>{ ev.stopPropagation();
-    gtSel=null; pop.remove(); gtPaint(key); });
-  pop.querySelectorAll('[data-greset]').forEach(x=>x.onclick=ev=>{ ev.stopPropagation(); pop.remove(); gtSave(b,null); });
-  const draft=partStarts.map(x=>x&&({...x}));
-  pop.querySelectorAll('[data-gpart]').forEach(row=>{
-    const i=+row.dataset.gpart, seg=b.segs[i];
-    const read=edge=>gtInputPos(row.querySelector('[data-gpd="'+edge+'"]').value,row.querySelector('[data-gpt="'+edge+'"]').value);
-    const sync=source=>{ const p=read(source); if(!p) return; draft[i]=source==='s'?p:(()=>{ const x=addHours({iso:p.d,h:p.h},-(+seg.h||0),st); return {d:x.iso,h:x.h}; })();
-      const start=draft[i], end=addHours({iso:start.d,h:start.h},+seg.h||0,st);
-      row.querySelector('[data-gpd="s"]').value=start.d; row.querySelector('[data-gpt="s"]').value=gtInputTime(start);
-      row.querySelector('[data-gpd="e"]').value=end.iso; row.querySelector('[data-gpt="e"]').value=gtInputTime({h:end.h}); };
-    row.querySelectorAll('[data-gpd="s"],[data-gpt="s"]').forEach(x=>x.onchange=()=>sync('s'));
-    row.querySelectorAll('[data-gpd="e"],[data-gpt="e"]').forEach(x=>x.onchange=()=>sync('e'));
-  });
-  const saveParts=pop.querySelector('[data-gparts-save]'); if(saveParts) saveParts.onclick=async ev=>{ ev.stopPropagation(); saveParts.disabled=true; const ok=await gtSaveParts(b,draft); if(ok) pop.remove(); else saveParts.disabled=false; };
-  pop.onclick=ev=>ev.stopPropagation();
+  const h='<div class="gpop gpop-compact"><div class="gp-h">'+esc(nm)+(b.manual?'<span class="a-tag plan">вручную</span>':'<span class="a-tag auto">авто</span>')+'</div>'
+    +'<div class="gp-s">Нажмите участок на графике, чтобы выбрать место разрыва</div>'
+    +'<div class="gp-part-pick"><button class="gp-b" data-gprev aria-label="Предыдущий участок">←</button><div><b data-gpart-name></b><span data-gpart-kind></span></div><button class="gp-b" data-gnext aria-label="Следующий участок">→</button></div>'
+    +'<label class="gp-duration">Длина участка, ч <input type="number" min="0.25" step="0.25" data-gduration></label>'
+    +'<div class="gp-break" data-gbreak><div><b>Перерыв после участка</b><span data-ggap-label></span></div><button class="gp-b" data-ggap="-.5">−30 мин</button><button class="gp-b" data-ggap=".5">+30 мин</button><button class="gp-b danger" data-ggap-remove>×</button></div>'
+    +'<div class="gp-alert" data-goverride-alert hidden>Изменён расчётный объём участка. <label><input type="checkbox" data-goverride> принять это значение как плановое</label></div>'
+    +'<div class="gp-f"><button class="btn sm amber" data-gsave>Сохранить</button><button class="btn sm ghost" data-gclose>Закрыть</button>'
+      +(b.manual?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div></div>';
+  document.body.insertAdjacentHTML('beforeend',h); const pop=document.body.lastElementChild;
+  const baseLen=i=>+(segs[i].baseH==null?segs[i].h:segs[i].baseH)||0;
+  const changed=()=>draft.some((x,i)=>Math.abs(x.len-baseLen(i))>.01);
+  const paint=()=>{ const seg=segs[pick], gap=gtGapAfter(draft,pick,st);
+    pop.querySelector('[data-gpart-name]').textContent=gtPartName(b,seg,pick);
+    pop.querySelector('[data-gpart-kind]').textContent=(seg.k==='d'?'дорога':'работа')+' · расчёт '+fmtH(baseLen(pick));
+    pop.querySelector('[data-gduration]').value=draft[pick].len;
+    const breakBox=pop.querySelector('[data-gbreak]'), inner=draft[pick].breakAt>0&&draft[pick].breakAt<draft[pick].len;
+    breakBox.hidden=!inner&&pick>=draft.length-1;
+    pop.querySelector('[data-ggap-label]').textContent=inner?('после '+fmtH(draft[pick].breakAt)+' · '+fmtH(draft[pick].gapH)):(gap>.01?fmtH(gap):'нет');
+    pop.querySelector('[data-goverride-alert]').hidden=!changed();
+  };
+  const close=()=>{ gtSel=null; pop.remove(); gtPaint(key); };
+  pop.querySelector('[data-gprev]').onclick=e=>{e.stopPropagation();pick=Math.max(0,pick-1);paint();};
+  pop.querySelector('[data-gnext]').onclick=e=>{e.stopPropagation();pick=Math.min(segs.length-1,pick+1);paint();};
+  pop.querySelector('[data-gduration]').onchange=e=>{ const next=Math.max(.25,+e.target.value||draft[pick].len), delta=next-draft[pick].len; draft[pick].len=next; if(pick<draft.length-1) gtShiftFollowing(draft,pick+1,delta,st); paint(); };
+  pop.querySelectorAll('[data-ggap]').forEach(x=>x.onclick=e=>{e.stopPropagation();const delta=+x.dataset.ggap;if(draft[pick].breakAt>0){const old=draft[pick].gapH||0;draft[pick].gapH=Math.max(.5,old+delta);gtShiftFollowing(draft,pick+1,draft[pick].gapH-old,st);}else{const oldGap=gtGapAfter(draft,pick,st),next=Math.max(0,oldGap+delta);gtShiftFollowing(draft,pick+1,next-oldGap,st);}paint();});
+  pop.querySelector('[data-ggap-remove]').onclick=e=>{e.stopPropagation();if(draft[pick].breakAt>0){const gap=draft[pick].gapH||0;draft[pick].breakAt=0;draft[pick].gapH=0;gtShiftFollowing(draft,pick+1,-gap,st);}else{const gap=gtGapAfter(draft,pick,st);gtShiftFollowing(draft,pick+1,-gap,st);}paint();};
+  pop.querySelector('[data-gsave]').onclick=async e=>{e.stopPropagation();const btn=e.currentTarget;btn.disabled=true;const ok=await gtSaveParts(b,draft,!!(pop.querySelector('[data-goverride]')||{}).checked);if(ok)pop.remove();else btn.disabled=false;};
+  pop.querySelector('[data-gclose]').onclick=e=>{e.stopPropagation();close();};
+  const reset=pop.querySelector('[data-greset]'); if(reset) reset.onclick=e=>{e.stopPropagation();pop.remove();gtSave(b,null);};
+  pop.onclick=e=>e.stopPropagation(); paint();
+  if(!window.matchMedia('(max-width:600px)').matches){ const r=el.getBoundingClientRect(),margin=8,width=Math.min(320,window.innerWidth-margin*2);pop.style.left=Math.max(margin,Math.min(window.innerWidth-width-margin,r.left-40))+'px';const below=r.bottom+8,above=r.top-pop.offsetHeight-8;pop.style.top=(below+pop.offsetHeight<=window.innerHeight-margin?below:Math.max(margin,above))+'px'; }
 }
 // Клик мимо — закрыть модалку.
 document.addEventListener('click',e=>{

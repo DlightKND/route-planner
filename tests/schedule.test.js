@@ -381,6 +381,23 @@ describe('ручная раскладка частей этапа', () => {
     ]);
   });
 
+  it('вставляет перерыв внутри работы и принимает новый плановый объём', () => {
+    const p=placedPieces([{k:'w',h:8,jobId:'a'}],[{
+      start:{d:'2026-09-08',h:0},h:6,breakAt:3,gapH:1
+    }],S);
+    expect(p.map(x=>[x.iso,x.from,x.to,x.segOffset])).toEqual([
+      ['2026-09-08',0,3,0], ['2026-09-08',4,7,3]
+    ]);
+    expect(p.reduce((n,x)=>n+x.h,0)).toBe(6);
+    const r=planSchedule([{
+      id:'override',kind:'trip',engineer:'ivan',from:'2026-09-08',to:'2026-09-08',
+      routeSegs:[{k:'w',h:8,jobId:'a'}],jobs:[{id:'a',workH:8,sla:'2026-09-08'}],
+      plan:{start:{d:'2026-09-08',h:0},parts:[{start:{d:'2026-09-08',h:0},h:6,breakAt:3,gapH:1}]}
+    }],S,TODAY);
+    expect(r.blocks[0].workH).toBe(6);
+    expect(r.load['ivan|2026-09-08'].workH).toBe(6);
+  });
+
   it('не принимает пересекающиеся части', () => {
     expect(placedPieces([{k:'w',h:4},{k:'d',h:2}],[
       {start:{d:'2026-09-08',h:2}}, {start:{d:'2026-09-08',h:3}}
