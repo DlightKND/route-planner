@@ -1271,6 +1271,13 @@
      и не понимаешь, что именно поехало. Колонка растёт, страница скроллит одна. */
   .kcol-b { padding: var(--gap-row); display: flex; flex-direction: column; gap: var(--gap-row); }
   .kcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--pad-row); }
+  .multi-eng { min-height: 92px; padding: var(--sp-2); }
+  .trip-job-row { display:flex; gap:var(--sp-3); align-items:center; padding:var(--sp-3); border-radius:var(--r-sm); }
+  .trip-job-row + .trip-job-row { margin-top:var(--gap-row); }
+  .trip-job-open { flex:1; min-width:0; border:0; background:transparent; color:var(--ink); text-align:left; cursor:pointer; padding:var(--sp-2); border-radius:var(--r-sm); }
+  .trip-job-open:hover { background:var(--panel-2); }
+  .trip-job-open b,.trip-job-open span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .trip-job-open span { margin-top:var(--sp-1); color:var(--ink-dim); font-size:var(--fs-2); }
   .kcard h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-4); }
   .kcard .meta { font-size: var(--fs-2); color: var(--ink-dim); margin: var(--sp-1) 0; }
   /* Чипы стояли строкой с margin 2px сверху и снизу, и при схлопывании
@@ -2511,7 +2518,7 @@
         <div class="row"><div class="grow"><label>Техника</label><select id="jbEquip"></select></div></div>
         <div class="row" style="margin-top: var(--sp-3);align-items:center"><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;margin: 0"><input type="checkbox" id="jbDepot" style="width:auto">Выполняется в депо</label><div class="grow" id="jbDepotWrap" style="display:none"><select id="jbDepotSel"></select></div></div>
         <span class="q" id="jbDepotHint" style="display:none"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Технику привозит и забирает клиент. Заявка не попадёт в выезд, дорога и суточные не считаются. Ставка — «в депо» у плательщика.</span></span>
-        <div class="row"><div class="grow"><label>Статус</label><select id="jbStatus"><option value="open">открыта</option><option value="planned">запланирована</option><option value="in_progress">в работе</option><option value="done">закрыта</option><option value="cancelled">отменена</option></select></div><div class="grow"><label>Инженер</label><select id="jbEng"></select></div></div>
+        <div class="row"><div class="grow"><label>Статус</label><select id="jbStatus"><option value="open">открыта</option><option value="planned">запланирована</option><option value="in_progress">в работе</option><option value="done">закрыта</option><option value="cancelled">отменена</option></select></div><div class="grow"><label>Инженеры</label><select id="jbEng" class="multi-eng" multiple aria-describedby="jbEngHint"></select><div class="hint" id="jbEngHint">Можно выбрать нескольких · первый будет ответственным</div></div></div>
       </div>
 
       <div class="card"><h3>Сроки</h3>
@@ -2608,7 +2615,7 @@
       <div class="card"><h3>Когда и кто</h3>
         <div class="row"><div class="grow"><label>Дата с</label><input type="date" id="tpFrom"></div><div class="grow"><label>Дата по</label><input type="date" id="tpTo"></div></div>
         <div class="row"><div class="grow"><label>Авто</label><select id="tpVeh"></select><div class="hint" id="tpVehInfo" style="margin-top: var(--sp-2)"></div></div></div>
-        <div class="row"><div class="grow"><label>Инженер</label><select id="tpEng"></select></div><div class="grow"><label>Статус</label><select id="tpStatus"><option value="planned">план</option><option value="assigned">назначен</option><option value="in_progress">в работе</option><option value="done">завершён</option><option value="cancelled">отменён</option></select></div></div>
+        <div class="row"><div class="grow"><label>Инженеры</label><select id="tpEng" class="multi-eng" multiple aria-describedby="tpEngHint"></select><div class="hint" id="tpEngHint">Можно выбрать нескольких · первый будет ведущим</div></div><div class="grow"><label>Статус</label><select id="tpStatus"><option value="planned">план</option><option value="assigned">назначен</option><option value="in_progress">в работе</option><option value="done">завершён</option><option value="cancelled">отменён</option></select></div></div>
         <label style="margin-top: var(--sp-3)">Заметка</label><input type="text" id="tpNotes">
       </div>
 
@@ -2721,19 +2728,10 @@
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
         <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
-        <div class="pane-head"><div class="seg" id="tripsView"><button data-tv="kanban" class="on">Канбан</button><button data-tv="gantt">Гант</button></div><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
+        <div class="pane-head"><select id="tripEngFilter" style="width:150px"><option value="">все инженеры</option></select><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
         <div class="chips" id="tripStatusChips"></div>
       </div>
-      <div id="tripsKanban">
-        <div id="tripList"></div>
-      </div>
-      <div id="tripsGantt" style="display:none">
-        <!-- Период выбирается, а не выводится из крайних дат выездов:
-             один выезд в октябре растягивал шкалу на полгода. -->
-        <div class="gantt-bar-ctl" id="ganttBar"></div>
-        <div id="gantt"></div>
-        <div class="meta" style="margin-top: var(--sp-3)"><span style="color:#9aa1ad">■</span> план · <span style="color:#5eb3f6">■</span> назначен · <span style="color:#111;background:var(--accent);padding: 0 var(--sp-1);border-radius: var(--r-pill)">■</span> в работе · <span style="color:#16a34a">■</span> завершён</div>
-      </div>
+      <div id="tripList"></div>
     </div>
   </div></div>
 
