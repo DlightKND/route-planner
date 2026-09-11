@@ -191,10 +191,9 @@ export function piecesOf(start, segs, s) {
   return out;
 }
 
-// Ручная раскладка отдельных этапов. Длительность дороги/работы остаётся
-// расчётной, пользователь задаёт только независимое начало каждого этапа;
-// благодаря этому между вторничной работой и средовой дорогой может быть
-// реальный ночной разрыв. Пересечения и обратный порядок отвергаются.
+// Ручная раскладка отдельных этапов. Пользователь может поставить разрыв
+// в произвольной точке сегмента и после явного подтверждения переопределить
+// его расчётную длительность. Пересечения и обратный порядок отвергаются.
 export function placedPieces(segs, parts, s) {
   if (!Array.isArray(segs) || !segs.length || !Array.isArray(parts) || parts.length !== segs.length) return null;
   const out=[];
@@ -232,10 +231,27 @@ function cellsOf(pieces) {
 // Порядок поездки: дорога туда, работа у точки, дорога к следующей точке,
 // работа у неё и так до возвращения. Старые снимки знают только три суммы,
 // поэтому для них остаётся прежний запасной порядок.
+export function compactRoadSegments(segs) {
+  const out=[];
+  (segs||[]).filter(x=>x&&(+x.h||0)>0).forEach(x=>{
+    const seg={k:x.k==='d'?'d':'w',h:+x.h||0,jobId:x.jobId||null};
+    const prev=out[out.length-1];
+    // Несколько технических плеч между депо, waypoint и клиентом — одна
+    // непрерывная дорога. Работы не объединяем: их jobId нужен срокам.
+    if(seg.k==='d'&&prev&&prev.k==='d') prev.h+=seg.h;
+    else out.push(seg);
+  });
+  return out;
+}
 function segsOf(b) {
-  if (Array.isArray(b.routeSegs) && b.routeSegs.length)
-    return b.routeSegs.filter(x => x && (+x.h || 0) > 0)
+  if (Array.isArray(b.routeSegs) && b.routeSegs.length) {
+    const raw=b.routeSegs.filter(x => x && (+x.h || 0) > 0)
       .map(x => ({ k: x.k === 'd' ? 'd' : 'w', h: +x.h || 0, jobId: x.jobId || null }));
+    // Уже сохранённую раскладку старого формата не ломаем. После сброса к
+    // авто или нового сохранения она перейдёт на объединённые дороги.
+    if(b.plan&&Array.isArray(b.plan.parts)&&b.plan.parts.length===raw.length) return raw;
+    return compactRoadSegments(raw);
+  }
   const out = [];
   if (b.driveToH > 0) out.push({ k: 'd', h: b.driveToH });
   const work = (+b.workH || 0) + (+b.driveMidH || 0);

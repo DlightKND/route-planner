@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planSchedule, driveOfLegs, dayIso, dayMs, isWorkday,
-  normPos, addHours, piecesOf, placedPieces, clockOf, scheduleJobIncluded, tripRouteSegments } from '../src/core/schedule.js';
+  normPos, addHours, piecesOf, placedPieces, compactRoadSegments, clockOf, scheduleJobIncluded, tripRouteSegments } from '../src/core/schedule.js';
 
 // Календарь для тестов: 2026-09-07 понедельник, 09-08 вт, 09-09 ср,
 // 09-10 чт, 09-11 пт, 09-12 сб, 09-13 вс.
@@ -369,6 +369,15 @@ describe('два этапа в одном дне', () => {
 });
 
 describe('ручная раскладка частей этапа', () => {
+  it('объединяет соседние плечи дороги вокруг работ', () => {
+    expect(compactRoadSegments([
+      {k:'d',h:1},{k:'d',h:2},{k:'d',h:3},
+      {k:'w',h:4,jobId:'a'},{k:'d',h:5},{k:'d',h:6}
+    ])).toEqual([
+      {k:'d',h:6,jobId:null},{k:'w',h:4,jobId:'a'},{k:'d',h:11,jobId:null}
+    ]);
+  });
+
   it('сохраняет ночной разрыв между работой и дорогой', () => {
     const segs=[{k:'w',h:8,jobId:'a'},{k:'d',h:3}];
     const p=placedPieces(segs,[
