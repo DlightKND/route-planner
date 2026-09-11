@@ -192,7 +192,7 @@ function _cdDone(v){ $('confirmOverlay').classList.remove('on'); const r=_cdRes;
 $('confirmYes').onclick=()=>_cdDone(true); $('confirmNo').onclick=()=>_cdDone(false);
 $('confirmOverlay').addEventListener('click',e=>{ if(e.target===$('confirmOverlay')) _cdDone(false); });
 let _pdRes=null;
-function promptDialog(title,fields){ fields=fields||[]; return new Promise(res=>{ _pdRes=res; $('promptTitle').textContent=title||'Ввод'; $('promptFields').innerHTML=fields.map((f,i)=>'<label'+(i?' style="margin-top: var(--sp-3)"':'')+'>'+esc(f.label||'')+'</label>'+(f.type==='textarea'?('<textarea data-pf="'+esc(f.key)+'">'+esc(f.value||'')+'</textarea>'):('<input type="text" data-pf="'+esc(f.key)+'" value="'+esc(f.value||'')+'">'))).join(''); $('promptOverlay').classList.add('on'); setTimeout(()=>{ const el=$('promptFields').querySelector('[data-pf]'); if(el){ try{ el.focus(); if(el.select) el.select(); }catch(e){} } },30); }); }
+function promptDialog(title,fields){ fields=fields||[]; return new Promise(res=>{ _pdRes=res; $('promptTitle').textContent=title||'Ввод'; $('promptFields').innerHTML=fields.map((f,i)=>'<label'+(i?' style="margin-top: var(--sp-3)"':'')+'>'+esc(f.label||'')+'</label>'+(f.type==='textarea'?('<textarea data-pf="'+esc(f.key)+'">'+esc(f.value||'')+'</textarea>'):f.type==='select'?('<select data-pf="'+esc(f.key)+'">'+(f.options||[]).map(o=>'<option value="'+esc(o.value)+'"'+(String(o.value)===String(f.value||'')?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select>'):('<input type="text" data-pf="'+esc(f.key)+'" value="'+esc(f.value||'')+'">'))).join(''); $('promptOverlay').classList.add('on'); setTimeout(()=>{ const el=$('promptFields').querySelector('[data-pf]'); if(el){ try{ el.focus(); if(el.select) el.select(); }catch(e){} } },30); }); }
 function _pdDone(ok){ const ov=$('promptOverlay'); let out=null; if(ok){ out={}; ov.querySelectorAll('[data-pf]').forEach(el=>{ out[el.dataset.pf]=el.value; }); } ov.classList.remove('on'); const r=_pdRes; _pdRes=null; if(r) r(out); }
 $('promptYes').onclick=()=>_pdDone(true); $('promptNo').onclick=()=>_pdDone(false);
 $('promptOverlay').addEventListener('click',e=>{ if(e.target===$('promptOverlay')) _pdDone(false); });
@@ -380,7 +380,7 @@ let jobsLite=[];
 // Фильтр по ЖИВЫМ заявкам, а не по числу дней до срока: сроки у заявок
 // разной длины, и порог в днях легко даёт пустую карту.
 let mapScope='work';
-let vehLayer=L.layerGroup().addTo(map), vehShow=true, vehState=[], vehMk={}, vehTick=null, vehVisWired=false, vehModalId=null;
+let vehLayer=L.layerGroup().addTo(map), vehShow=true, vehState=[], vehTrackSessions=[], vehMk={}, vehTick=null, vehVisWired=false, vehModalId=null;
 // Кнопка «Сохранить» в карточке точки не должна нажиматься, пока сохранять
 // нечего. Состояние и так известно — подсказка «Место не задано» выводится
 // рядом, — просто кнопка о нём не знала и отвечала ошибкой уже после нажатия.
@@ -1232,6 +1232,17 @@ function renderWorkFeed(){
     if(r) map.flyTo([r.lat,r.lng],11); });
 }
 
+const depotOpen=new Set();
+function depotCars(id){
+  return (vehState||[]).filter(r=>String(r.current_depot_id||'')===String(id)&&['inside','outside_candidate'].includes(r.depot_state));
+}
+function depotCarMeta(r){
+  if(r.depot_state==='outside_candidate'){
+    const mins=Math.max(0,Math.floor((Date.now()-new Date(r.depot_outside_since||r.ts))/60000));
+    return 'вне зоны '+mins+' мин';
+  }
+  return vehClass(r)==='idle'?'стоит':'в депо';
+}
 function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('list');
   const onlyAlert=alertOnly();
   const alerts=alertCount;
@@ -1267,7 +1278,10 @@ function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('li
     // тип точки и без того сказан цветом маркера.
     const tip=esc(c.name)+(c.description?(' · '+esc(String(c.description).replace(/\s+/g,' ').trim())):'')+' · '+(+c.lat).toFixed(5)+', '+(+c.lng).toFixed(5);
     const meta=[];
-    meta.push(c.is_base?'депо':(eqn?(eqn+' '+plural(eqn,'единица','единицы','единиц')+' техники'):'без техники'));
+    const dcars=c.is_base?depotCars(c.id):[];
+    const inside=c.is_base?dcars.filter(r=>r.depot_state==='inside').length:0;
+    const leaving=c.is_base?dcars.filter(r=>r.depot_state==='outside_candidate').length:0;
+    meta.push(c.is_base?('депо · '+inside+' '+plural(inside,'машина','машины','машин')+(leaving?(' · '+leaving+' покидает зону'):'')):(eqn?(eqn+' '+plural(eqn,'единица','единицы','единиц')+' техники'):'без техники'));
     if(aln>0) meta.push(aln+' '+plural(aln,'заявка','заявки','заявок'));
     // Описание шло отдельной строкой и добавляло карточке третий этаж —
     // высоты разъезжались, и ровные промежутки читались как рваные.
@@ -1281,13 +1295,23 @@ function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('li
     // до чтения, и карточка становится ровно такой же, как строки ленты
     // «в работе», где кромка была всегда.
     d.style.borderLeftColor=c.color||'var(--line)';
-    d.innerHTML='<div class="nm" title="'+tip+'"><span class="nm-t">'+esc(c.name)+'</span></div>'+
+    const depotRows=c.is_base&&depotOpen.has(String(c.id))
+      ? '<div class="depot-cars">'+(dcars.length?dcars.map(r=>{ const v=vehicles.find(x=>x.id===r.vehicle_id)||{};
+          return '<button class="depot-car" type="button" data-depot-vehicle="'+r.vehicle_id+'"><i class="depot-state-dot'+(r.depot_state==='outside_candidate'?' leaving':'')+'"></i><span>'+esc(v.name||'Машина')+(v.plate?(' · '+esc(v.plate)):'')+'</span><small>'+esc(depotCarMeta(r))+'</small></button>'; }).join(''):'<div class="hint">Сейчас машин нет.</div>')+'</div>' : '';
+    if(c.is_base&&depotOpen.has(String(c.id))) d.classList.add('depot-open');
+    d.innerHTML='<div class="nm'+(c.is_base?' depot-head':'')+'" title="'+tip+'"><span class="nm-t">'+esc(c.name)+'</span>'+(c.is_base?'<button class="depot-toggle" type="button" data-depot-toggle="'+c.id+'" aria-label="Показать машины" aria-expanded="'+(depotOpen.has(String(c.id))?'true':'false')+'">⌄</button>':'')+'</div>'+
       '<div class="meta">'+esc(meta.join(' · '))+'</div>'+
+      depotRows+
       '<div class="acts">'+(canWrite()?'<button class="btn sm amber" data-rt="'+c.id+'">+ маршрут</button>':'')+(c.is_base?'':'<button class="btn sm" data-eq="'+c.id+'">техника</button>')+
       (canWrite()?'<button class="btn sm ghost" data-edit="'+c.id+'">ред.</button><button class="btn sm ghost" data-del="'+c.id+'" title="Удалить точку">×</button>':'')+'</div>';
     // Клик по карточке = выбрать её и показать на карте. Раньше «показать»
     // висело на самом имени и требовало отдельного объяснения подсказкой.
-    d.onclick=(e)=>{ if(e.target.closest('button')) return;
+    d.onclick=(e)=>{ const toggle=e.target.closest('[data-depot-toggle]');
+      if(toggle){ const id=String(toggle.dataset.depotToggle); if(depotOpen.has(id)) depotOpen.delete(id); else depotOpen.add(id); renderList(); return; }
+      const car=e.target.closest('[data-depot-vehicle]');
+      if(car){ const r=vehState.find(x=>x.vehicle_id===car.dataset.depotVehicle); if(r){ map.flyTo([r.lat,r.lng],14); showVehModal(r.vehicle_id); } return; }
+      if(e.target.closest('button')) return;
+      if(c.is_base){ const id=String(c.id); if(depotOpen.has(id)) depotOpen.delete(id); else depotOpen.add(id); renderList(); return; }
       box.querySelectorAll('.pt.sel').forEach(x=>x.classList.remove('sel'));
       d.classList.add('sel');
       switchTab('map'); map.flyTo([c.lat,c.lng],14); };
@@ -5428,7 +5452,7 @@ function tripGmaps(id){ const t=trips.find(x=>x.id==id)||tripCache[id]; const st
 // Есть ли в базе settings.day_start (миграция sql/27). Если нет — не пишем
 // его при сохранении: иначе не сохранились бы и все остальные настройки.
 let hasDayStart=true;
-let appSettings={shift_hours:8,deviation_pct:10,day_start:8,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,avoid_zones:[],tariff_profiles:[],ors_proxy:''};
+let appSettings={shift_hours:8,deviation_pct:10,day_start:8,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,avoid_zones:[],tariff_profiles:[],ors_proxy:'',depot_radius_m:5000,depot_exit_margin_m:300,depot_outside_minutes:60};
 let vehicles=[], vhEditId=null;
 async function loadVehicles(){ try{ const {data}=await sb.from('vehicles').select('*').order('name'); vehicles=data||[]; renderVehicles(); }catch(e){ loadFail('список машин',e); } }
 // ── Одометр убран ───────────────────────────────────────────────────────
@@ -5443,17 +5467,17 @@ function renderVehicles(){ const box=$('vehList'); if(!box) return; box.innerHTM
   vehicles.forEach(v=>{
     const d=document.createElement('div'); d.className='pt';
     d.innerHTML='<div class="nm">'+esc(v.name)+(v.plate?' <span class="pill">'+esc(v.plate)+'</span>':'')+(v.wialon_id?' <span class="pill">GPS</span>':'')+'</div>'+
-      '<div class="meta">'+(v.wialon_id?('датчик '+esc(v.wialon_id)):'без датчика')+'</div>'+
+      '<div class="meta">'+(v.wialon_id?('датчик '+esc(v.wialon_id)):'без датчика')+' · одометр '+Math.round(+v.odometer||0)+' км</div>'+
       '<div class="acts"><button class="btn sm" data-vhedit="'+v.id+'">ред.</button><button class="btn sm ghost" data-vhdel="'+v.id+'">×</button></div>';
     box.appendChild(d); });
   box.querySelectorAll('[data-vhedit]').forEach(b=>b.onclick=()=>editVehicle(b.dataset.vhedit));
   box.querySelectorAll('[data-vhdel]').forEach(b=>b.onclick=()=>delVehicle(b.dataset.vhdel)); }
-function vhReset(){ vhEditId=null; $('vhCancel').style.display='none'; $('vhAdd').textContent='Добавить машину'; $('vhName').value='';$('vhPlate').value='';$('vhWialon').value='';$('vhErr').textContent=''; }
-$('vhAdd').onclick=async ()=>{ const name=$('vhName').value.trim(); if(!name){ $('vhErr').textContent='Введи название.'; return; } const rec={name,plate:$('vhPlate').value.trim(),wialon_id:($('vhWialon').value.trim()||null)};
-  let error; if(vhEditId){ ({error}=await sb.from('vehicles').update(rec).eq('id',vhEditId)); } else { ({error}=await sb.from('vehicles').insert(rec)); }
+function vhReset(){ vhEditId=null; $('vhCancel').style.display='none'; $('vhAdd').textContent='Добавить машину'; $('vhName').value='';$('vhPlate').value='';$('vhWialon').value='';$('vhOdometer').value='';$('vhErr').textContent=''; }
+$('vhAdd').onclick=async ()=>{ const name=$('vhName').value.trim(); if(!name){ $('vhErr').textContent='Введи название.'; return; } const odo=Math.max(0,+$('vhOdometer').value||0); const rec={name,plate:$('vhPlate').value.trim(),wialon_id:($('vhWialon').value.trim()||null)};
+  let error; if(vhEditId){ ({error}=await sb.from('vehicles').update(rec).eq('id',vhEditId)); if(!error){ const r=await sb.rpc('vehicle_odometer_set',{p_vehicle:vhEditId,p_value:odo,p_note:'Настройки автопарка'}); error=r.error; } } else { rec.odometer=odo; ({error}=await sb.from('vehicles').insert(rec)); }
   if(error){ $('vhErr').textContent=error.message; return; } vhReset(); await loadVehicles(); showToast('Автопарк обновлён'); };
 $('vhCancel').onclick=vhReset;
-function editVehicle(id){ const v=vehicles.find(x=>x.id==id); if(!v) return; vhEditId=id; $('vhName').value=v.name;$('vhPlate').value=v.plate||'';$('vhWialon').value=v.wialon_id||''; $('vhAdd').textContent='Сохранить'; $('vhCancel').style.display=''; }
+function editVehicle(id){ const v=vehicles.find(x=>x.id==id); if(!v) return; vhEditId=id; $('vhName').value=v.name;$('vhPlate').value=v.plate||'';$('vhWialon').value=v.wialon_id||'';$('vhOdometer').value=(v.odometer==null?'':v.odometer); $('vhAdd').textContent='Сохранить'; $('vhCancel').style.display=''; }
 async function delVehicle(id){ if(!await confirmDialog('Удалить машину?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('vehicles').delete().eq('id',id); if(error){ notify(error.message,'err'); return; } await loadVehicles(); }
 function updateVehInfo(){ const el=$('tpVehInfo'); if(!el) return; const v=vehicles.find(x=>x.id==$('tpVeh').value);
   el.textContent=v?(v.wialon_id?'С датчиком — трек и факт-пробег считаются по нему.':'Без датчика — факт-пробег вводится вручную.'):''; }
@@ -5471,7 +5495,7 @@ async function loadSettings(){ try{
   const SETTINGS_COLS='id,shift_hours,deviation_pct,currency,tariffs,costs,'
     +'default_theme,repair_warranty_days,contact_period_days,'
     +'avoid_zones,tariff_profiles,ors_proxy,stay_radius_m,stay_min_minutes,'
-    +'track_max_kmh,track_slack';
+    +'track_max_kmh,track_slack,depot_radius_m,depot_exit_margin_m,depot_outside_minutes';
   // day_start приходит из миграции sql/27. Если её ещё не накатили, запрос
   // со списком столбцов падает целиком, и настройки уехали бы в
   // settings_public — то есть без тарифов и себестоимости, молча. Поэтому
@@ -5480,7 +5504,7 @@ async function loadSettings(){ try{
   if(!data){ hasDayStart=false;
     const r=await sb.from('settings').select(SETTINGS_COLS).eq('id',true).single(); data=r.data||null; }
   if(!data){ const pub=await sb.from('settings_public').select('*').eq('id',true).single(); data=pub.data||null; }
-  if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,day_start:(data.day_start==null?8:data.day_start),currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),stay_radius_m:(data.stay_radius_m==null?300:data.stay_radius_m),stay_min_minutes:(data.stay_min_minutes==null?10:data.stay_min_minutes),track_max_kmh:(data.track_max_kmh==null?300:data.track_max_kmh),track_slack:(data.track_slack==null?1.5:data.track_slack),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); }
+  if(data){ appSettings={shift_hours:data.shift_hours,deviation_pct:data.deviation_pct,day_start:(data.day_start==null?8:data.day_start),currency:data.currency,tariffs:data.tariffs||{km:0,hour:0,day:0,night:0},costs:data.costs||{km:0,hour:0,day:0,night:0},default_theme:data.default_theme||{},repair_warranty_days:(data.repair_warranty_days==null?90:data.repair_warranty_days),contact_period_days:(data.contact_period_days||0),stay_radius_m:(data.stay_radius_m==null?300:data.stay_radius_m),stay_min_minutes:(data.stay_min_minutes==null?10:data.stay_min_minutes),track_max_kmh:(data.track_max_kmh==null?300:data.track_max_kmh),track_slack:(data.track_slack==null?1.5:data.track_slack),depot_radius_m:(data.depot_radius_m==null?5000:data.depot_radius_m),depot_exit_margin_m:(data.depot_exit_margin_m==null?300:data.depot_exit_margin_m),depot_outside_minutes:(data.depot_outside_minutes==null?60:data.depot_outside_minutes),avoid_zones:(data.avoid_zones||[]),tariff_profiles:(data.tariff_profiles||[]),ors_proxy:(data.ors_proxy||'')}; renderAvoidZones(); }
   // Пустой результат по обоим источникам — это не «настроек нет», это сбой
   // связи или прав. Без сообщения приложение молча открывалось бы без темы,
   // без зон объезда и без маршрутизации, и искать причину пришлось бы наугад.
@@ -5493,6 +5517,7 @@ function renderSettings(){ const s=appSettings; $('stShift').value=s.shift_hours
   if($('stStayMin')) $('stStayMin').value=(s.stay_min_minutes==null?10:s.stay_min_minutes);
   if($('stTrkKmh')) $('stTrkKmh').value=(s.track_max_kmh==null?300:s.track_max_kmh);
   if($('stTrkSlack')) $('stTrkSlack').value=(s.track_slack==null?1.5:s.track_slack);
+  $('stDepotRad').value=(s.depot_radius_m==null?5000:s.depot_radius_m); $('stDepotMargin').value=(s.depot_exit_margin_m==null?300:s.depot_exit_margin_m); $('stDepotOut').value=(s.depot_outside_minutes==null?60:s.depot_outside_minutes);
   const dt=s.default_theme||{}; $('dtMode').value=dt.mode||'dark'; $('orsProxy').value=s.ors_proxy||''; $('stWarrDays').value=(s.repair_warranty_days==null?90:s.repair_warranty_days); $('stContact').value=s.contact_period_days||0;
   renderProfiles(); renderVehicles(); renderUsersAdmin(); renderVersionLine(); }
 let profEditId=null;
@@ -5528,7 +5553,7 @@ if($('profCreate')) $('profCreate').onclick=()=>{ profileResetForm(); $('profOve
 function settingsNav(sec){ document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
 document.querySelectorAll('#settingsNav .son').forEach(b=>b.onclick=()=>settingsNav(b.dataset.sec));
 document.querySelectorAll('.settings-body > .card > h3').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('collapsed'));
-$('stSave').onclick=async ()=>{ const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:parseFloat($('stDayStart').value)||8,currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,updated_at:new Date().toISOString()};
+$('stSave').onclick=async ()=>{ const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:parseFloat($('stDayStart').value)||8,currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,depot_radius_m:parseInt($('stDepotRad').value)||5000,depot_exit_margin_m:Math.max(0,parseInt($('stDepotMargin').value)||0),depot_outside_minutes:parseInt($('stDepotOut').value)||60,updated_at:new Date().toISOString()};
   if(!hasDayStart) delete rec.day_start;
   const {error}=await sb.from('settings').update(rec).eq('id',true); if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings=Object.assign(appSettings,rec); $('stStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 $('dtSave').onclick=async ()=>{ const dt={mode:$('dtMode').value,accent:'#ffe100'}; const {error}=await sb.from('settings').update({default_theme:dt}).eq('id',true); if(error){ $('dtStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.default_theme=dt; $('dtStatus').innerHTML='<span class="ok">Сохранено</span>'; };
@@ -6777,13 +6802,18 @@ const VEH_STALE_MIN = 12;   // старше — считаем данные пр
 async function loadVehState(){
   try{
     const {data,error}=await sb.from('vehicle_state')
-      .select('vehicle_id,ts,lat,lng,speed,status,lost_since,trip_id,mileage');
+      .select('vehicle_id,ts,lat,lng,speed,status,lost_since,trip_id,current_depot_id,depot_state,depot_inside_since,depot_outside_since,depot_distance_km');
     if(error) throw error;
+    const tracking=await sb.from('trip_tracking_sessions').select('id,trip_id,vehicle_id,state,planned_start_at,actual_started_at,start_source,finish_candidate_at').in('state',['armed','active','finish_candidate']);
+    if(!tracking.error) vehTrackSessions=tracking.data||[];
     const prev={}; vehState.forEach(r=>prev[r.vehicle_id]={lat:r.lat,lng:r.lng});
     vehState=(data||[]).map(r=>{ const o=prev[r.vehicle_id];
       const bear=(o && (o.lat!==r.lat || o.lng!==r.lng)) ? vehBearing(o,r) : (vehMk[r.vehicle_id]||{}).__bear;
       return Object.assign({},r,{__bear:bear}); });
     renderVehState();
+    // Счётчик и раскрытый список машин у депо должны обновляться тем же
+    // пульсом, что и маркеры, а не только после перезагрузки справочника.
+    if(mapScope!=='work'&&$('list')) renderList();
     // Открытый факт живёт тем же 30-секундным пульсом, что и маркер машины:
     // догружаем только новые исторические точки и соединяем коротким
     // пунктиром последнюю подтверждённую с текущей телеметрией.
@@ -6857,7 +6887,13 @@ function showVehModal(vid){
   if(stale) h+='<div class="vm-stale">Ниже — на момент последней связи, не текущее состояние.</div>';
   const dimv=v=>stale?('<span style="color:var(--ink-faint)">'+v+'</span>'):v;
   if(cls!=='idle') h+=vehRow('Скорость', dimv(Math.round(+r.speed||0)+' км/ч'));
-  if(r.mileage!=null) h+=vehRow('Пробег по Wialon', dimv(Math.round(+r.mileage)+' км'));
+  const depot=clients.find(c=>String(c.id)===String(r.current_depot_id));
+  if(depot){
+    const depotText=r.depot_state==='inside'?'в депо':r.depot_state==='outside_candidate'
+      ? 'вне зоны '+Math.max(0,Math.floor((Date.now()-new Date(r.depot_outside_since||r.ts))/60000))+' мин':'вне депо';
+    h+=vehRow('Депо',dimv(esc(depot.name)+' · '+depotText));
+  } else h+=vehRow('Депо','<span style="color:var(--ink-faint)">не определено</span>');
+  h+=vehRow('Одометр',Math.round(+v.odometer||0)+' км'+(canWrite()?' <button class="btn sm ghost" id="vehOdometer">изменить</button>':''));
 
   // Связь и занятие — разные строки. Машина у клиента с заглушенным мотором
   // стоит И молчит одновременно; склеив это в одну строку, соврём про оба.
@@ -6868,6 +6904,7 @@ function showVehModal(vid){
       : (age>VEH_STALE_MIN ? '<span style="color:var(--ink-dim)">сообщений нет</span>' : '<span style="color:var(--green)">есть</span>'));
 
   const trip=r.trip_id?(trips||[]).find(t=>t.id===r.trip_id):null;
+  const tracking=vehTrackSessions.find(x=>x.vehicle_id===vid&&['armed','active','finish_candidate'].includes(x.state));
   h+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Выезд</div>';
   if(trip){
     h+=vehRow('Дата', esc(trip.date_from||'—')+(trip.date_to&&trip.date_to!==trip.date_from?(' — '+esc(trip.date_to)):''));
@@ -6878,6 +6915,13 @@ function showVehModal(vid){
     // штатно. Иначе потом ищешь трек, которого никогда не было.
     h+='<div class="hint" style="margin-top: var(--sp-1)">Активного выезда нет — трек в историю не пишется. Поставь выезду статус «в работе».</div>';
   }
+  if(tracking&&tracking.state==='armed'){
+    h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Трекинг подготовлен с '+esc(new Date(tracking.planned_start_at).toLocaleString('ru'))+'. Ожидаем кнопку «Начать» или подтверждённый выход из депо.</div>'
+      +'<div class="row" style="margin-top:var(--sp-3);flex-wrap:wrap"><button class="btn sm amber" id="vehTrackStart">Начать выезд</button>'
+      +(canWrite()?'<button class="btn sm" id="vehTrackMove">Другой выезд</button><button class="btn sm ghost" id="vehTrackCancel">Отменить трек</button>':'')+'</div>';
+  } else if(tracking&&tracking.state==='finish_candidate'){
+    h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Машина не менее '+esc(String(appSettings.depot_outside_minutes||60))+' мин находится в депо. Можно завершить выезд.</div><button class="btn sm amber" id="vehTrackFinish" style="margin-top:var(--sp-3)">Завершить выезд</button>';
+  }
 
   h+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Координаты</div>';
   h+='<div class="veh-kv"><span style="font-family:var(--mono);font-size: var(--fs-2)">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
@@ -6886,6 +6930,31 @@ function showVehModal(vid){
   $('vehBody').innerHTML=h;
   const cp=$('vehCopy'); if(cp) cp.onclick=()=>{ const t=(+r.lat).toFixed(6)+', '+(+r.lng).toFixed(6);
     try{ navigator.clipboard.writeText(t); }catch(e){} showToast('Координаты: '+t); };
+  const odo=$('vehOdometer'); if(odo) odo.onclick=async ()=>{
+    const x=await promptDialog('Показание одометра',[{key:'value',label:'Пробег, км',value:String(v.odometer||0)},{key:'note',label:'Комментарий (необязательно)'}]);
+    if(!x) return; const value=+String(x.value||'').replace(',','.');
+    if(!isFinite(value)||value<0){ notify('Укажи корректный пробег.','warn'); return; }
+    const {error}=await sb.rpc('vehicle_odometer_set',{p_vehicle:v.id,p_value:value,p_note:(x.note||'').trim()||null});
+    if(error){ notify(error.message,'err'); return; }
+    await loadVehicles(); showVehModal(v.id); showToast('Одометр обновлён');
+  };
+  const start=$('vehTrackStart'); if(start) start.onclick=()=>tripAction(tracking.trip_id,'start');
+  const finish=$('vehTrackFinish'); if(finish) finish.onclick=()=>tripAction(tracking.trip_id,'finish');
+  const cancel=$('vehTrackCancel'); if(cancel) cancel.onclick=async ()=>{
+    if(!await confirmDialog('Отменить подготовленный трек? Телеметрия останется в журнале, но отвяжется от выезда.',{danger:true,okText:'Отменить трек'})) return;
+    const {error}=await sb.rpc('trip_tracking_cancel',{p_trip:tracking.trip_id}); if(error){ notify(error.message,'err'); return; }
+    await loadAll(); await loadVehState(); showVehModal(v.id); showToast('Трек отменён');
+  };
+  const move=$('vehTrackMove'); if(move) move.onclick=async ()=>{
+    const options=(trips||[]).filter(t=>t.id!==tracking.trip_id&&t.vehicle_id===vid&&['planned','assigned'].includes(t.status))
+      .map(t=>({value:t.id,label:tripPeriod(t.date_from,t.date_to)+' · '+(t.vehicle_label||v.name)}));
+    if(!options.length){ notify('Нет другого ожидающего выезда этой машины.','warn'); return; }
+    const x=await promptDialog('Переназначить трек',[{key:'trip',label:'Выезд',type:'select',options}]); if(!x) return;
+    const {data,error}=await sb.rpc('trip_tracking_reassign',{p_from:tracking.trip_id,p_to:x.trip});
+    if(error){ notify(error.message,'err'); return; }
+    await loadAll(); await loadVehState(); showVehModal(v.id);
+    showToast(data==='reassigned_future'?'Трек переназначен; будущие точки начнут новый буфер':'Трек переназначен и обрезан по старту');
+  };
   $('vehOverlay').classList.add('on');
 }
 
@@ -7081,7 +7150,9 @@ $('rWpAdd').onclick=async ()=>{ const q=$('rWp').value.trim(); const box=$('rWpR
 $('rClear').onclick=()=>{ rStops=[]; rStart=null; plannerTripId=null; endDeclined=false; $('rBuf').value=0; bufferKm=0; $('rBufVal').textContent='0 км'; $('rIso').value=0; isoMin=0; $('rIsoVal').textContent='0 мин'; tripLayer.clearLayers(); renderRoutePanel(); resetBuilt(); };
 function openBasePicker(mode,after){ baseMode=mode; baseAfter=after||null; $('baseTitle').textContent=(mode==='start'?'Старт — депо':'Финиш — депо'); $('baseSub').textContent=(mode==='start'?'Выбери депо старта или создай новое. «Не нужно» — стартом станет первая точка маршрута.':'Выбери депо для финиша или откажись.'); renderBaseList(); $('baseNew').value=''; $('baseNewRes').innerHTML=''; $('baseOverlay').classList.add('on'); }
 function renderBaseList(){ const box=$('baseList'); box.innerHTML=places.length?'':'<div class="hint">Депо пока нет. Создай новое ниже.</div>';
-  places.forEach(p=>{ const d=document.createElement('div'); d.className='pt'; d.innerHTML='<div style="display:flex;gap: var(--sp-3);align-items:center"><span class="grow" style="cursor:pointer" data-bpick="'+p.id+'"><b>'+esc(p.name)+'</b>'+(p.description?'<div class="hint" style="margin: 0">'+esc(p.description)+'</div>':'')+'</span><button class="btn sm ghost" data-bedit="'+p.id+'">ред.</button></div>'; box.appendChild(d); });
+  places.forEach(p=>{ const d=document.createElement('div'); d.className='pt'; const cars=depotCars(p.id).filter(x=>x.depot_state==='inside');
+    const names=cars.map(r=>{ const v=vehicles.find(x=>x.id===r.vehicle_id); return v?(v.name+(v.plate?' · '+v.plate:'')):'Машина'; });
+    d.innerHTML='<div style="display:flex;gap: var(--sp-3);align-items:center"><span class="grow" style="cursor:pointer" data-bpick="'+p.id+'"><b>'+esc(p.name)+'</b>'+(p.description?'<div class="hint" style="margin: 0">'+esc(p.description)+'</div>':'')+'<div class="hint" style="margin: var(--sp-1) 0 0">'+cars.length+' '+plural(cars.length,'машина','машины','машин')+(names.length?' · '+esc(names.join(', ')):'')+'</div></span><button class="btn sm ghost" data-bedit="'+p.id+'">ред.</button></div>'; box.appendChild(d); });
   box.querySelectorAll('[data-bpick]').forEach(el=>el.onclick=()=>{ const p=places.find(x=>x.id==el.dataset.bpick); if(p) chooseBase(p); });
   box.querySelectorAll('[data-bedit]').forEach(b=>b.onclick=async ()=>{ const p=places.find(x=>x.id==b.dataset.bedit); if(!p) return; const r=await promptDialog('Депо',[{key:'name',label:'Название',value:p.name},{key:'desc',label:'Описание',value:p.description||'',type:'textarea'}]); if(!r) return; const {error}=await sb.from('clients').update({name:((r.name||'').trim()||p.name),description:(r.desc||'').trim()}).eq('id',p.id); if(error){ notify(error.message,'err'); return; } await loadAll(); renderBaseList(); }); }
 function chooseBase(p){ const o={name:p.name,lat:p.lat,lng:p.lng,placeId:p.id,description:p.description||''}; if(baseMode==='start'){ rStart=o; } else { rStops.push(Object.assign({type:'place'},o)); } $('baseOverlay').classList.remove('on'); renderRoutePanel(); resetBuilt(); const a=baseAfter; baseAfter=null; if(typeof a==='function') a(true); }
@@ -7790,7 +7861,10 @@ const SCHEMA_MARKS = [
   // Ручная расстановка этапов в ганте: без колонки перетаскивание молча
   // не сохранялось бы — этап возвращался бы на автоместо после обновления.
   { sql: 'sql/27', table: 'trips',      col: 'day_plan',       what: 'ручная расстановка' },
-  { sql: 'sql/27', table: 'settings',   col: 'day_start',      what: 'начало смены' }
+  { sql: 'sql/27', table: 'settings',   col: 'day_start',      what: 'начало смены' },
+  { sql: '20260911', table: 'vehicle_state', col: 'current_depot_id', what: 'текущее депо машины' },
+  { sql: '20260911', table: 'trip_tracking_sessions', col: 'planned_start_at', what: 'ожидание автоматического старта' },
+  { sql: '20260911', table: 'vehicle_odometer_log', col: 'value_km', what: 'история ручного одометра' }
 ];
 
 async function checkSchema(){
