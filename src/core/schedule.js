@@ -243,6 +243,21 @@ export function compactRoadSegments(segs) {
   });
   return out;
 }
+
+// Видимая шкала увеличенного дня. В автоматическом режиме всегда показывает
+// 07:00–16:00 и расширяется наружу, если график начинается раньше или
+// заканчивается позже. Ручная шкала намеренно не расширяется.
+export function dayScaleBounds(pieces, dayStart=7, manual=null) {
+  if(manual&&Number.isFinite(+manual.from)&&Number.isFinite(+manual.to)&&+manual.to>+manual.from)
+    return {from:+manual.from,to:+manual.to,manual:true};
+  let from=7,to=16;
+  (pieces||[]).forEach(p=>{
+    const start=(+dayStart||7)+(+p.from||0), end=start+(+p.h||0);
+    from=Math.min(from,Math.floor(start*2)/2);
+    to=Math.max(to,Math.ceil(end*2)/2);
+  });
+  return {from,to:Math.max(from+.5,to),manual:false};
+}
 function segsOf(b) {
   if (Array.isArray(b.routeSegs) && b.routeSegs.length) {
     const raw=b.routeSegs.filter(x => x && (+x.h || 0) > 0)
