@@ -175,12 +175,15 @@ export function piecesOf(start, segs, s) {
   let p = normPos(start, s), guard = 0;
   (segs || []).forEach((seg, segIndex) => {
     let left = +seg.h || 0;
+    let used = 0;
     while (left > 1e-9 && guard++ < 2000) {
       const take = Math.min(left, eff - p.h);
       if (take > 1e-9) {
         out.push({ iso: p.iso, from: +p.h.toFixed(6), to: +(p.h + take).toFixed(6), h: +take.toFixed(6), k: seg.k,
-          jobId: seg.jobId || null, segIndex: seg.segIndex == null ? segIndex : seg.segIndex });
+          jobId: seg.jobId || null, segIndex: seg.segIndex == null ? segIndex : seg.segIndex,
+          segOffset: +(used.toFixed(6)) });
         left -= take;
+        used += take;
       }
       p = addHours(p, Math.max(take, 1e-9), s);
     }
@@ -201,7 +204,16 @@ export function placedPieces(segs, parts, s) {
     const start=normPos({iso:raw.d,h:+raw.h},s);
     if(start.iso!==raw.d||Math.abs(start.h-(+raw.h))>1e-6) return null;
     if(out.length){ const prev=out[out.length-1]; if(diffHours({iso:prev.iso,h:prev.to},start,s)<-1e-6) return null; }
-    out.push(...piecesOf(start,[{...segs[i],segIndex:i}],s));
+    const h=x.h==null?(+segs[i].h||0):+x.h;
+    if(!(h>0)) return null;
+    const cut=+x.breakAt, gap=Math.max(0,+x.gapH||0);
+    if(cut>1e-6&&cut<h-1e-6&&gap>1e-6){
+      out.push(...piecesOf(start,[{...segs[i],h:cut,segIndex:i}],s));
+      const second=addHours(start,cut+gap,s);
+      const tail=piecesOf(second,[{...segs[i],h:h-cut,segIndex:i}],s)
+        .map(p=>({...p,segOffset:p.segOffset+cut}));
+      out.push(...tail);
+    }else out.push(...piecesOf(start,[{...segs[i],h,segIndex:i}],s));
   }
   return out;
 }
@@ -376,19 +388,24 @@ export function planSchedule(blocks, settings, opts) {
   });
 
   const finish = (b, start, extra) => {
-    const segs = segsOf(b);
-    const custom = placedPieces(segs, b.plan && b.plan.parts, s);
-    const pieces = custom || piecesOf(start, segs, s);
+    const baseSegs = segsOf(b);
+    const partsPlan=b.plan&&b.plan.parts;
+    const segs=Array.isArray(partsPlan)&&partsPlan.length===baseSegs.length
+      ?baseSegs.map((x,i)=>({...x,h:partsPlan[i].h==null?x.h:+partsPlan[i].h,baseH:x.h}))
+      :baseSegs;
+    const custom = placedPieces(segs, partsPlan, s);
+    const pieces = custom || piecesOf(start, baseSegs, s);
     const days = cellsOf(pieces);
     const wp = pieces.filter(p => p.k === 'w');
     const jobDays = assignJobs(b, pieces);
     const rec = Object.assign({}, b, {
       start: custom && custom.length ? {iso:custom[0].iso,h:custom[0].from} : start,
-      segs: segs, pieces: pieces, days: days, jobDays: jobDays,
+      segs: custom?segs:baseSegs, pieces: pieces, days: days, jobDays: jobDays,
       from: days.length ? days[0].iso : start.iso,
       to: days.length ? days[days.length - 1].iso : start.iso,
       workFrom: wp.length ? wp[0].iso : (days.length ? days[0].iso : start.iso),
       workTo: wp.length ? wp[wp.length - 1].iso : (days.length ? days[days.length - 1].iso : start.iso),
+      workH:pieces.filter(p=>p.k==='w').reduce((n,p)=>n+p.h,0),
       ok: true, why: '', manualParts: !!custom
     }, extra || {});
     const key = laneOf(b);
