@@ -19,9 +19,9 @@
 //     deviation_pct, что и в экономике). Работа начинается с начала смены:
 //     влезает в допуск — делается за один день, а не размазывается на два.
 //
-//  4. Этап идёт СПЛОШНЫМ потоком: дорога туда → работа → дорога обратно.
-//     Что не влезло в смену, переходит на следующий рабочий день с его
-//     начала. Окон внутри этапа не бывает: доделал — поехал.
+//  4. Автоматическая раскладка идёт СПЛОШНЫМ потоком: дорога туда → работа
+//     → дорога обратно. Что не влезло в смену, переходит на следующий
+//     рабочий день. Диспетчер может вручную раздвинуть отдельные участки.
 //     8 ч работ + 4 ч туда + 4 ч обратно при сроке в четверг = вторая
 //     половина среды (дорога), четверг (работа), первая половина пятницы
 //     (дорога).
@@ -34,9 +34,9 @@
 //  6. Ничья очередь. Неназначенные заявки (без инженера) считаются в общей
 //     загрузке команды, но ни с кем не сталкиваются: у них своя дорожка.
 //
-//  7. РУЧНАЯ РАССТАНОВКА. Человек может подвинуть этап по часам. Тогда он
-//     хранит только НАЧАЛО (день и час от начала смены), а раскладка по дням
-//     считается из него тем же потоком. Начало вне дат выезда — не начало:
+//  7. РУЧНАЯ РАССТАНОВКА. Можно подвинуть весь этап либо независимо задать
+//     начало каждого участка дороги/работы. Длительности остаются расчётными,
+//     поэтому итоговые часы не меняются. Начало вне дат выезда — не начало:
 //     диспетчер подвинул даты, и старая расстановка отброшена с
 //     предупреждением ('stale').
 //
@@ -173,18 +173,36 @@ export function piecesOf(start, segs, s) {
   const eff = effShift(s);
   const out = [];
   let p = normPos(start, s), guard = 0;
-  (segs || []).forEach(seg => {
+  (segs || []).forEach((seg, segIndex) => {
     let left = +seg.h || 0;
     while (left > 1e-9 && guard++ < 2000) {
       const take = Math.min(left, eff - p.h);
       if (take > 1e-9) {
         out.push({ iso: p.iso, from: +p.h.toFixed(6), to: +(p.h + take).toFixed(6), h: +take.toFixed(6), k: seg.k,
-          jobId: seg.jobId || null });
+          jobId: seg.jobId || null, segIndex: seg.segIndex == null ? segIndex : seg.segIndex });
         left -= take;
       }
       p = addHours(p, Math.max(take, 1e-9), s);
     }
   });
+  return out;
+}
+
+// Ручная раскладка отдельных этапов. Длительность дороги/работы остаётся
+// расчётной, пользователь задаёт только независимое начало каждого этапа;
+// благодаря этому между вторничной работой и средовой дорогой может быть
+// реальный ночной разрыв. Пересечения и обратный порядок отвергаются.
+export function placedPieces(segs, parts, s) {
+  if (!Array.isArray(segs) || !segs.length || !Array.isArray(parts) || parts.length !== segs.length) return null;
+  const out=[];
+  for(let i=0;i<segs.length;i++){
+    const x=parts[i], raw=x&&x.start;
+    if(!raw||!raw.d||!Number.isFinite(+raw.h)) return null;
+    const start=normPos({iso:raw.d,h:+raw.h},s);
+    if(start.iso!==raw.d||Math.abs(start.h-(+raw.h))>1e-6) return null;
+    if(out.length){ const prev=out[out.length-1]; if(diffHours({iso:prev.iso,h:prev.to},start,s)<-1e-6) return null; }
+    out.push(...piecesOf(start,[{...segs[i],segIndex:i}],s));
+  }
   return out;
 }
 // Куски → дни: [{iso, ms, workH, driveH}] в порядке календаря.
@@ -359,17 +377,19 @@ export function planSchedule(blocks, settings, opts) {
 
   const finish = (b, start, extra) => {
     const segs = segsOf(b);
-    const pieces = piecesOf(start, segs, s);
+    const custom = placedPieces(segs, b.plan && b.plan.parts, s);
+    const pieces = custom || piecesOf(start, segs, s);
     const days = cellsOf(pieces);
     const wp = pieces.filter(p => p.k === 'w');
     const jobDays = assignJobs(b, pieces);
     const rec = Object.assign({}, b, {
-      start: start, segs: segs, pieces: pieces, days: days, jobDays: jobDays,
+      start: custom && custom.length ? {iso:custom[0].iso,h:custom[0].from} : start,
+      segs: segs, pieces: pieces, days: days, jobDays: jobDays,
       from: days.length ? days[0].iso : start.iso,
       to: days.length ? days[days.length - 1].iso : start.iso,
       workFrom: wp.length ? wp[0].iso : (days.length ? days[0].iso : start.iso),
       workTo: wp.length ? wp[wp.length - 1].iso : (days.length ? days[days.length - 1].iso : start.iso),
-      ok: true, why: ''
+      ok: true, why: '', manualParts: !!custom
     }, extra || {});
     const key = laneOf(b);
     busyAdd(busy, key, pieces); put(key, pieces);

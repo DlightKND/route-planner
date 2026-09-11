@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planSchedule, driveOfLegs, dayIso, dayMs, isWorkday,
-  normPos, addHours, piecesOf, clockOf, scheduleJobIncluded, tripRouteSegments } from '../src/core/schedule.js';
+  normPos, addHours, piecesOf, placedPieces, clockOf, scheduleJobIncluded, tripRouteSegments } from '../src/core/schedule.js';
 
 // Календарь для тестов: 2026-09-07 понедельник, 09-08 вт, 09-09 ср,
 // 09-10 чт, 09-11 пт, 09-12 сб, 09-13 вс.
@@ -365,5 +365,40 @@ describe('два этапа в одном дне', () => {
     expect(B.workFrom).toBe('2026-09-10');          // тот же день — это нормально
     expect(r.load['ivan|2026-09-10'].workH).toBe(8);
     expect(r.warnings).toEqual([]);
+  });
+});
+
+describe('ручная раскладка частей этапа', () => {
+  it('сохраняет ночной разрыв между работой и дорогой', () => {
+    const segs=[{k:'w',h:8,jobId:'a'},{k:'d',h:3}];
+    const p=placedPieces(segs,[
+      {start:{d:'2026-09-08',h:1}}, // 09:00–17:00
+      {start:{d:'2026-09-09',h:1}}  // со следующего утра
+    ],S);
+    expect(p.map(x=>[x.iso,x.from,x.to,x.k])).toEqual([
+      ['2026-09-08',1,8,'w'], ['2026-09-09',0,1,'w'],
+      ['2026-09-09',1,4,'d']
+    ]);
+  });
+
+  it('не принимает пересекающиеся части', () => {
+    expect(placedPieces([{k:'w',h:4},{k:'d',h:2}],[
+      {start:{d:'2026-09-08',h:2}}, {start:{d:'2026-09-08',h:3}}
+    ],S)).toBe(null);
+  });
+
+  it('planSchedule считает загрузку по вручную раздвинутым частям', () => {
+    const r=planSchedule([{
+      id:'split',kind:'trip',engineer:'ivan',from:'2026-09-08',to:'2026-09-10',
+      routeSegs:[{k:'w',h:8,jobId:'a'},{k:'d',h:3}],jobs:[{id:'a',workH:8,sla:'2026-09-10'}],
+      plan:{start:{d:'2026-09-08',h:1},parts:[
+        {start:{d:'2026-09-08',h:1}}, {start:{d:'2026-09-09',h:1}}
+      ]}
+    }],S,TODAY);
+    const b=r.blocks[0];
+    expect(b.manualParts).toBe(true);
+    expect(r.load['ivan|2026-09-08'].workH).toBe(7);
+    expect(r.load['ivan|2026-09-09'].workH).toBe(1);
+    expect(r.load['ivan|2026-09-09'].driveH).toBe(3);
   });
 });
