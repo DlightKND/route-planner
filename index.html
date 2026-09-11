@@ -557,6 +557,17 @@
      восьмидесяти строк — это и была «духота» в панели. */
   .pt .acts { display: none; gap: var(--gap-row); margin-top: var(--sp-3); flex-wrap: wrap; }
   .pt.sel .acts { display: flex; }
+  .depot-head { display:flex;align-items:center;gap:var(--gap-row);min-width:0; }
+  .depot-head .nm-t { flex:1; }
+  .depot-toggle { flex:none;border:0;background:transparent;color:var(--ink-faint);font:600 var(--fs-3)/1 var(--mono);cursor:pointer;padding:var(--sp-2);transition:transform var(--t-fast),color var(--t); }
+  .pt.depot-open .depot-toggle { transform:rotate(180deg); }
+  .depot-cars { display:grid;gap:var(--sp-2);margin-top:var(--sp-3);padding-top:var(--sp-3);border-top:1px solid var(--line); }
+  .depot-car { display:flex;align-items:center;gap:var(--gap-row);width:100%;border:0;background:transparent;color:var(--ink);text-align:left;padding:var(--sp-2);border-radius:var(--r-sm);cursor:pointer; }
+  .depot-car:hover { background:var(--panel-2); }
+  .depot-car > span:first-child { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-3);font-weight:600; }
+  .depot-car small { flex:none;color:var(--ink-faint);font:var(--fs-1)/1.2 var(--mono); }
+  .depot-state-dot { width:7px;height:7px;border-radius:50%;background:var(--green);flex:none; }
+  .depot-state-dot.leaving { background:#f59e0b; }
   /* ── Карточка точки в справочнике ────────────────────────────────────
      Ровно та же анатомия, что у строк ленты «в работе»: имя, под ним
      мета, слева жирная кромка. Кромку красит цвет клиента — тот самый,
@@ -2748,6 +2759,8 @@
       <div class="row"><div class="grow"><label>Радиус вокруг точки, м</label><input type="number" id="stStayRad" step="10"></div><div class="grow"><label>Короче этого не считать, мин</label><input type="number" id="stStayMin" step="1"></div></div>
       <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Проверка факт-трека <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Два порога, по которым выезд признаётся достоверным. Скорость — грубый отсев: быстрее неё по прямой техника не ездит, такая точка выбрасывается сразу и бесплатно. Запас времени — точная проверка: после сбоя связи спрашиваем у ORS, сколько ехать по дорогам до следующей точки, и сравниваем с тем временем, которое реально было. Запас 1,5 значит «принимаем, если уложился в полтора раза дольше доступного». Меньше — строже и больше ложных срабатываний, больше — мягче.</span></span></div>
       <div class="row"><div class="grow"><label>Предельная скорость, км/ч</label><input type="number" id="stTrkKmh" step="10"></div><div class="grow"><label>Запас времени, ×</label><input type="number" id="stTrkSlack" step="0.1"></div></div>
+      <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Геозона депо <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Машина считается покинувшей депо только после непрерывного нахождения вне радиуса. Нейтральный пояс защищает от GPS-дрожания на границе.</span></span></div>
+      <div class="row"><div class="grow"><label>Радиус, м</label><input type="number" id="stDepotRad" step="100" min="100"></div><div class="grow"><label>Нейтральный пояс, м</label><input type="number" id="stDepotMargin" step="50" min="0"></div><div class="grow"><label>Подтверждение выхода, мин</label><input type="number" id="stDepotOut" step="5" min="1"></div></div>
       <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Версия сборки <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Считается по содержимому файлов, а не пишется руками. Совпал отпечаток с тем, что назван в поставке, — прод собран ровно из переданных файлов. Не совпал — в списке видно, какой файл отстал. Там же проверяется, применены ли миграции базы.</span></span></div>
       <button class="verline" id="verBtn" type="button"><span id="verId">—</span><span class="qc">?</span></button>
 
@@ -2769,10 +2782,10 @@
       <div class="row"><div class="grow"><label>Режим</label><select id="dtMode"><option value="dark">Тёмная</option><option value="light">Светлая</option></select></div></div>
       <button class="btn sm amber" id="dtSave" style="margin-top: var(--sp-3)">Сохранить тему по умолчанию</button><span class="hint" id="dtStatus" style="margin-left: var(--sp-3)"></span>
     </div>
-    <div class="card" data-sec-panel="fleet" style="display:none"><h3 class="cardhead">Автопарк <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Машины для выбора в выездах. ID объекта в Wialon связывает машину с датчиком: по нему рисуется трек и считается факт-пробег выезда. Показания одометра не ведём — датчик их не даёт достоверно.</span></span></h3>
+    <div class="card" data-sec-panel="fleet" style="display:none"><h3 class="cardhead">Автопарк <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">ID объекта в Wialon связывает машину с GPS. Пробег по Wialon не используется; одометр задаётся вручную и дополняется подтверждёнными выездами.</span></span></h3>
       <div id="vehList" style="margin-top: var(--sp-3)"></div>
       <div class="row" style="margin-top: var(--sp-3)"><input type="text" id="vhName" placeholder="название (Газель)" class="grow"><input type="text" id="vhPlate" placeholder="госномер" class="grow"></div>
-      <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>ID объекта в Wialon</label><input type="text" id="vhWialon" placeholder="напр. 28307408"><div class="hint" style="margin-top: var(--sp-2)">Пусто — машина без датчика, на карте её не будет.</div></div></div>
+      <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>ID объекта в Wialon</label><input type="text" id="vhWialon" placeholder="напр. 28307408"><div class="hint" style="margin-top: var(--sp-2)">Пусто — машина без датчика, на карте её не будет.</div></div><div class="grow"><label>Одометр, км</label><input type="number" id="vhOdometer" step="0.1" min="0"><div class="hint" style="margin-top: var(--sp-2)">Ручное проверенное показание.</div></div></div>
       <div class="row" style="margin-top: var(--sp-3)"><button class="btn sm amber grow" id="vhAdd">Добавить машину</button><button class="btn sm ghost" id="vhCancel" style="display:none">Отмена</button></div>
       <div class="err" id="vhErr"></div>
     </div>
