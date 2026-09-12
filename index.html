@@ -1463,7 +1463,7 @@
 .vg-scroll::before,.vg-scroll::after{content:'';position:sticky;z-index:11;top:0;bottom:0;width:12px;pointer-events:none}
 .vg-scroll::before{left:96px;float:left;margin-right:-12px;box-shadow:10px 0 12px -12px rgba(0,0,0,.8)}
 .vg-scroll::after{right:0;float:right;margin-left:-12px;box-shadow:-10px 0 12px -12px rgba(0,0,0,.8)}
-.vg-grid{position:relative;display:grid;grid-template-columns:96px minmax(calc(var(--lanes)*var(--lane-min)),1fr);grid-template-rows:34px 280px;min-width:calc(96px + var(--lanes)*var(--lane-min))}
+.vg-grid{position:relative;display:grid;grid-template-columns:96px minmax(calc(var(--lanes)*var(--lane-min)),1fr);grid-template-rows:34px var(--week-h,315px);min-width:calc(96px + var(--lanes)*var(--lane-min))}
 .vg-axis{grid-column:1;grid-row:1/3;position:sticky;left:0;z-index:10;display:grid;grid-template-rows:34px repeat(7,40px);background:var(--panel);border-right:1px solid var(--line)}
 .vg-axis-head{pointer-events:none}
 .vg-date{pointer-events:auto;border:0;border-top:1px solid var(--line);padding:0 var(--sp-3);background:var(--panel);color:var(--ink-dim);font-family:var(--mono);font-size:var(--fs-2);text-align:right;cursor:zoom-in;white-space:nowrap}
@@ -1478,10 +1478,12 @@
 .vg-lane-head b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-1);text-transform:uppercase;letter-spacing:.35px}
 .vg-lane-head>span{margin-left:auto;flex:none;font-size:9px;color:var(--ink-faint);white-space:nowrap}
 .vg-tracks{grid-column:2;grid-row:2}
-.vg-lane{position:relative;height:280px;border-left:1px solid var(--line);touch-action:pan-x pan-y}
+.vg-lane{position:relative;height:var(--week-h,315px);border-left:1px solid var(--line);touch-action:pan-x pan-y}
 .vg-cell{position:relative;height:40px;box-sizing:border-box;border-top:1px solid var(--line);background:transparent}
 .vg-cell.we{background-image:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,var(--ink-faint) 7%,transparent) 7px 8px)}
 .vg-cell.today{box-shadow:inset 0 1px #0f141b}
+.vg-tolerance{position:absolute;z-index:1;left:0;right:0;background:rgba(255,143,46,.14);pointer-events:none}
+.vg-day-end{position:absolute;z-index:2;left:0;right:0;height:1px;background:var(--line);pointer-events:none}
 .vg-empty-ticks{position:absolute;left:8px;top:0;width:3px;height:100%;opacity:.7;background:linear-gradient(to bottom,transparent 24%,color-mix(in srgb,var(--ink-faint) 36%,transparent) 24% 26%,transparent 26% 49%,color-mix(in srgb,var(--ink-faint) 36%,transparent) 49% 51%,transparent 51% 74%,color-mix(in srgb,var(--ink-faint) 36%,transparent) 74% 76%,transparent 76%)}
 .vg-rail{position:absolute;z-index:2;left:7px;top:4px;bottom:4px;width:11px;border-radius:999px;background:color-mix(in srgb,var(--ink-faint) 14%,transparent);overflow:hidden}
 .vg-rail>i{position:absolute;left:0;right:0;bottom:0;min-height:12%;border-radius:inherit;background:var(--rail-color)}
@@ -1512,6 +1514,12 @@
 .vg-edit{position:absolute;z-index:4;right:4px;top:4px;width:24px;height:24px;padding:0;border:1px solid var(--line);border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 88%,transparent);color:var(--ink-dim);cursor:pointer;display:grid;place-items:center;font-size:11px;box-shadow:var(--shadow-sm)}
 .vg-edit:hover{border-color:var(--accent-line);color:var(--ink)}
 .vg-block:has(.vg-edit) .vg-label{padding-right:34px}
+.vg-piece{left:28px;right:12px;cursor:grab;overflow:visible}.vg-piece:active{cursor:grabbing}
+.vg-divide{position:absolute;z-index:7;right:4px;top:4px;width:23px;height:23px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--panel);color:var(--ink-dim);cursor:pointer}
+.vg-cut{position:absolute;z-index:12;left:3px;right:3px;top:50%;height:0;border-top:1px dashed var(--accent-line);pointer-events:auto}
+.vg-cut input{position:absolute;left:0;right:0;top:-10px;width:100%;height:20px;opacity:.01;cursor:ns-resize}
+.vg-cut span{position:absolute;left:4px;bottom:5px;padding:2px 4px;border-radius:4px;background:var(--ink);color:var(--panel);font:9px/1 var(--mono);pointer-events:none}
+.vg-cut button{position:relative;float:right;transform:translateY(-50%);margin-left:3px;padding:3px 5px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);cursor:pointer}
 .vg-now{position:absolute;z-index:9;left:0;right:0;height:2px;background:var(--cyan);pointer-events:none;box-shadow:0 0 0 1px color-mix(in srgb,var(--panel) 55%,transparent)}
 .vg-now::before{content:'';position:absolute;left:0;top:-3px;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:6px solid var(--cyan)}
 .vg-day-grid{grid-template-rows:34px var(--day-h,270px)}
@@ -1522,6 +1530,12 @@
 .vg-range select{width:auto;min-width:68px;padding:5px 22px 5px 7px;font:inherit}
 .vg-auto{font:var(--fs-1)/1 var(--mono);color:var(--ink-faint)}
 .vg-hour-line{position:absolute;z-index:1;left:0;right:0;height:1px;background:var(--line);pointer-events:none}
+.vg-off{position:absolute;z-index:1;left:0;right:0;background:repeating-linear-gradient(135deg,var(--grain,rgba(0,0,0,.04)) 0 5px,transparent 5px 10px);pointer-events:none}
+.vg-win-line{position:absolute;z-index:8;left:0;right:0;width:100%;height:9px;margin-top:-4px;padding:0;border:0;border-top:1px solid var(--line);background:transparent;cursor:ns-resize;touch-action:none}
+.vg-win-line i{position:absolute;right:4px;top:-13px;padding:1px 4px;border-radius:4px;background:var(--panel);color:var(--ink-faint);font:8px/1 var(--mono);font-style:normal;pointer-events:none}
+.vg-win-line.tolerance{border-top:1px dashed #ff8f2e}.vg-win-line.start{border-color:var(--accent-line)}
+.vg-proposed{position:absolute;z-index:8;left:0;right:0;border-top:2px dashed #ff8f2e;color:#ff8f2e;font:9px/1 var(--mono);pointer-events:none}
+.vg-request{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-2);padding:var(--sp-2) var(--sp-3);border:1px solid color-mix(in srgb,#ff8f2e 55%,var(--line));border-radius:var(--r-sm);background:color-mix(in srgb,#ff8f2e 8%,var(--panel));font-size:var(--fs-2)}
 .gleg{display:flex;gap:var(--sp-3);margin-top:var(--sp-2);flex-wrap:wrap;font-family:var(--mono);font-size:9px;color:var(--ink-faint)}
 .gleg i{display:inline-block;width:12px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px;background:var(--line)}
 .gleg i.trip-edge{background:var(--accent)}.gleg i.job-edge{background:var(--ink-faint)}.gleg i.urgent-edge{background:#c9372c}
@@ -1539,6 +1553,7 @@
 [data-theme="dark"] .vg-date.today{background:color-mix(in srgb,#ffe100 8%,#17191d)}
 [data-theme="dark"] .vg-date.today::before{background:#ffe100}
 [data-theme="dark"] .vg-cell.today{box-shadow:inset 0 1px #ffe100}
+[data-theme="dark"] .vg-tolerance{background:rgba(255,148,51,.12)}
 [data-theme="light"]{--press:rgba(120,92,0,.32)}
 /* Дневной увеличенный вид сохраняет прежнюю точную часовую механику. */
 .gtop{display:flex;align-items:center;gap:var(--gap-row);margin-bottom:var(--sp-3);flex-wrap:wrap}
@@ -2775,7 +2790,10 @@
       </div>
       <div class="settings-body">
     <div class="card" data-sec-panel="tariffs"><h3 class="cardhead">Общие параметры</h3>
-      <div class="row"><div class="grow"><label>Валюта</label><input type="text" id="stCur"></div><div class="grow"><label>Смена, ч</label><input type="number" id="stShift" step="0.5"></div><div class="grow"><label>Допуск, %</label><input type="number" id="stDev" step="1"></div><div class="grow"><label>Начало смены, ч</label><input type="number" id="stDayStart" step="0.5" min="0" max="23"></div></div>
+      <h3>Рабочий день</h3>
+      <div class="row"><div class="grow"><label>Начало</label><input type="number" id="stDayStart" step="0.25" min="0" max="23.75"></div><div class="grow"><label>Конец</label><input type="number" id="stDayEnd" step="0.25" min="0.25" max="24"></div><div class="grow"><label>Допуск, ч</label><input type="number" id="stTolerance" step="0.25" min="0" max="8"></div></div>
+      <h3>Тарифные сутки</h3><div class="hint">Только для расчёта суток по суточному тарифу; на график не влияют.</div>
+      <div class="row"><div class="grow"><label>Валюта</label><input type="text" id="stCur"></div><div class="grow"><label>Смена тарифа, ч</label><input type="number" id="stShift" step="0.5"></div><div class="grow"><label>Допуск тарифа, %</label><input type="number" id="stDev" step="1"></div></div>
       <div class="meta" style="margin-top: var(--sp-4)">Себестоимость по умолчанию <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">За км, час, день и ночь. Профиль тарифа может переопределить эти значения своими.</span></span></div>
       <div class="row"><div class="grow"><label>за км</label><input type="number" id="csKm" step="0.01"></div><div class="grow"><label>за час</label><input type="number" id="csHour" step="0.01"></div><div class="grow"><label>за день</label><input type="number" id="csDay" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="csNight" step="0.01"></div></div>
       <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Стоянки → факт-часы <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Стоянка засчитывается в работу, только если попала в радиус точки заявки. Обед на трассе и ночёвка не попадут. Идёт только в себестоимость — нормочасы не трогаются.</span></span></div>
