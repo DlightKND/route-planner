@@ -1922,6 +1922,15 @@ function gtDayBounds(key,iso){
   const pieces=[]; gtBlocks().forEach(b=>pieces.push(...gtPieces(b).filter(p=>p.iso===iso)));
   return dayScaleBounds(pieces,+appSettings.day_start||7,gtDayScale[gtScaleKey(key,iso)]);
 }
+function gtDayGeometry(lanes,iso){
+  const ws=lanes.map(l=>dayWindow(l.id,iso,gtSettings())).filter(Boolean);
+  const focusStart=Math.max(0,Math.min(...ws.map(w=>w.start))-1),focusEnd=Math.min(24,Math.max(...ws.map(w=>w.ceiling))+1);
+  const yOf=t=>t<=focusStart?t*10:(t<=focusEnd?focusStart*10+(t-focusStart)*20:focusStart*10+(focusEnd-focusStart)*20+(t-focusEnd)*10);
+  const split=yOf(focusStart),split2=yOf(focusEnd),height=yOf(24);
+  const tOf=y=>y<=split?y/10:(y<=split2?focusStart+(y-split)/20:focusEnd+(y-split2)/10);
+  return {focusStart,focusEnd,yOf,tOf,height};
+}
+function gtLaneTime(lane,y){const a=+lane.dataset.focusStart,b=+lane.dataset.focusEnd,s1=a*10,s2=s1+(b-a)*20;return y<=s1?y/10:(y<=s2?a+(y-s1)/20:b+(y-s2)/10);}
 function gtHourOptions(selected){
   let out=''; for(let h=0;h<=24;h+=.5){ const m=h%1?'30':'00', label=String(Math.floor(h)%24).padStart(2,'0')+':'+m;
     out+='<option value="'+h+'"'+(Math.abs(h-selected)<.01?' selected':'')+'>'+label+'</option>'; }
@@ -2053,36 +2062,34 @@ setInterval(paintScheduleNow,60000);
 function gtDayHtml(key){
   if(!feedCtx) return '';
   const it=feedCtx.weeks[key], iso=gtZoom[key]; if(!it||!iso) return '';
-  const eff=gtEff(), shift=((+appSettings.day_end)||16)-((+appSettings.day_start)||7), st=gtSettings(), bounds={from:0,to:24};
-  const span=24, relFrom=0, dayH=330;
-  const lanes=gtWeekLanes(key), laneMin=window.matchMedia('(max-width:600px)').matches?120:150;
-  const rowN=Math.max(1,Math.ceil(span));
+  const eff=gtEff(), shift=((+appSettings.day_end)||16)-((+appSettings.day_start)||7), st=gtSettings();
+  const span=24, relFrom=0,lanes=gtWeekLanes(key),geo=gtDayGeometry(lanes,iso),dayH=geo.height,laneMin=window.matchMedia('(max-width:600px)').matches?120:150;
   let axis='<span class="vg-axis-head"></span>';
-  for(let h=0;h<rowN;h++) axis+='<span class="vg-hour-label">'+clockLabel(h)+'</span>';
-  axis='<div class="vg-axis vg-day-axis" style="--hour-rows:'+rowN+'">'+axis+'</div>';
+  for(let h=0;h<=24;h+=(h<geo.focusStart||h>geo.focusEnd?3:1)) axis+='<span class="vg-hour-label" style="position:absolute;top:'+(34+geo.yOf(h))+'px">'+clockLabel(h)+'</span>';
+  axis='<div class="vg-axis vg-day-axis" style="height:'+(dayH+34)+'px">'+axis+'</div>';
   let heads='',tracks='';
   lanes.forEach(l=>{
     const hours=gtLaneLoad(l.id,iso), pct=Math.round(hours/shift*100);
     heads+='<div class="vg-lane-head"><b>'+esc(l.name)+'</b><span>'+fmtH(hours)+(feedCtx.mine?'':' · '+pct+'%')+'</span></div>';
-    const w=dayWindow(l.id,iso,st); let ticks=''; for(let h=1;h<rowN;h++) ticks+='<i class="vg-hour-line" style="top:'+(h/span*dayH)+'px"></i>';
-    if(w) ticks+='<span class="vg-off" style="top:0;height:'+(w.start/24*dayH)+'px"></span><span class="vg-off" style="top:'+(w.ceiling/24*dayH)+'px;bottom:0"></span>'
-      +'<span class="vg-tolerance" style="top:'+(w.end/24*dayH)+'px;height:'+((w.ceiling-w.end)/24*dayH)+'px"></span>'
-      +'<button class="vg-win-line start" data-winline="start" data-engineer="'+esc(l.id)+'" style="top:'+(w.start/24*dayH)+'px"><i>начало '+clockLabel(w.start)+'</i></button>'
-      +'<button class="vg-win-line end" data-winline="end" data-engineer="'+esc(l.id)+'" style="top:'+(w.end/24*dayH)+'px"><i>конец '+clockLabel(w.end)+'</i></button>'
-      +'<button class="vg-win-line tolerance" data-winline="tol" data-engineer="'+esc(l.id)+'" style="top:'+(w.ceiling/24*dayH)+'px"><i>допуск '+clockLabel(w.ceiling)+'</i></button>'
-      +(w.proposedEnd!=null?'<span class="vg-proposed" style="top:'+(w.proposedEnd/24*dayH)+'px">предложено '+clockLabel(w.proposedEnd)+'</span>':'');
+    const w=dayWindow(l.id,iso,st); let ticks=''; for(let h=1;h<24;h++) if((h>=geo.focusStart&&h<=geo.focusEnd)||h%3===0)ticks+='<i class="vg-hour-line" style="top:'+geo.yOf(h)+'px"></i>';
+    if(w) ticks+='<span class="vg-off" style="top:0;height:'+geo.yOf(w.start)+'px"></span><span class="vg-off" style="top:'+geo.yOf(w.ceiling)+'px;bottom:0"></span>'
+      +'<span class="vg-tolerance" style="top:'+geo.yOf(w.end)+'px;height:'+(geo.yOf(w.ceiling)-geo.yOf(w.end))+'px"></span>'
+      +'<button class="vg-win-line start" data-winline="start" data-engineer="'+esc(l.id)+'" style="top:'+geo.yOf(w.start)+'px"><i>начало '+clockLabel(w.start)+'</i></button>'
+      +'<button class="vg-win-line end" data-winline="end" data-engineer="'+esc(l.id)+'" style="top:'+geo.yOf(w.end)+'px"><i>конец '+clockLabel(w.end)+'</i></button>'
+      +'<button class="vg-win-line tolerance" data-winline="tol" data-engineer="'+esc(l.id)+'" style="top:'+geo.yOf(w.ceiling)+'px"><i>допуск '+clockLabel(w.ceiling)+'</i></button>'
+      +(w.proposedEnd!=null?'<span class="vg-proposed" style="top:'+geo.yOf(w.proposedEnd)+'px">предложено '+clockLabel(w.proposedEnd)+'</span>':'');
     let bars='';
     gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
       const pcs=gtPieces(b).filter(p=>p.iso===iso);if(!pcs.length)return;
       const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late');
-      pcs.forEach(p=>{const y=(p.from-relFrom)/span*dayH,h=Math.max(12,p.h/span*dayH),name=p.k==='d'?'Дорога':((p.jobId&&feedCtx.jobName(p.jobId))||gtBlockName(b));
+      pcs.forEach(p=>{const y=geo.yOf(p.from),h=Math.max(12,geo.yOf(p.to)-geo.yOf(p.from)),name=p.k==='d'?'Дорога':((p.jobId&&feedCtx.jobName(p.jobId))||gtBlockName(b));
         bars+='<div class="vg-block vg-piece '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(p.pinned?' man':'')+(h<40?' short':'')+'" data-gb="'+esc(b.id)+'" data-piece-at="'+p.at+'" data-piece-from="'+p.from+'" data-piece-to="'+p.to+'" data-piece-iso="'+p.iso+'" style="top:'+y+'px;height:'+h+'px">'
           +(p.k==='d'?'<i class="vg-seg road" style="inset:0"></i>':'')+'<span class="vg-label"><b>'+esc(name)+(p.pinned?' ✎':'')+'</b><small>'+esc(fmtH(p.h)+' · '+clockLabel(p.from)+'–'+clockLabel(p.to))+'</small></span>'
           +(canWrite()&&p.h>1?'<button class="vg-divide" type="button" data-gdivide aria-label="Разделить участок">÷</button>':'')+'</div>';});
     });
     const color=loadColor(hours/shift), over=Math.max(0,hours-gtEff());
-    const now=scheduleNow(), nowY=(now.t-relFrom)/span*dayH, nowLine=now.iso===iso&&nowY>=0&&nowY<=dayH?'<span class="vg-now" title="Сейчас · '+esc(now.label)+'" style="top:'+nowY+'px"></span>':'';
-    tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'" data-vgspan="'+span+'" style="--load:'+color+';--load-edge:'+loadEdge(color)+'">'+ticks+bars+nowLine
+    const now=scheduleNow(), nowY=geo.yOf(now.t), nowLine=now.iso===iso&&nowY>=0&&nowY<=dayH?'<span class="vg-now" title="Сейчас · '+esc(now.label)+'" style="top:'+nowY+'px"></span>':'';
+    tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'" data-vgspan="'+span+'" data-focus-start="'+geo.focusStart+'" data-focus-end="'+geo.focusEnd+'" style="--load:'+color+';--load-edge:'+loadEdge(color)+'">'+ticks+bars+nowLine
       +(!feedCtx.mine&&over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
   });
   const proposals=lanes.map(l=>({l,o:staffDayMap[l.id+'|'+iso]})).filter(x=>x.o&&x.o.proposed_end_h!=null);
@@ -2218,7 +2225,7 @@ function gtWire(key,box){
   box.querySelectorAll('[data-winline]').forEach(line=>line.onpointerdown=e=>{
     const kind=line.dataset.winline,engineer=line.dataset.engineer;if((kind!=='end'||role!=='engineer')&&!canWrite())return;
     e.preventDefault();e.stopPropagation();const lane=line.closest('.vg-day-lane'),R=lane.getBoundingClientRect(),iso=zoom,w=dayWindow(engineer,iso,gtSettings());let value=kind==='start'?w.start:(kind==='end'?w.end:w.ceiling);
-    line.setPointerCapture(e.pointerId);line.onpointermove=ev=>{value=q4(Math.max(0,Math.min(24,(ev.clientY-R.top)/R.height*24)));line.style.top=(value/24*R.height)+'px';line.querySelector('i').textContent=(kind==='tol'?'допуск ':(kind==='start'?'начало ':'конец '))+clockLabel(value);};
+    line.setPointerCapture(e.pointerId);line.onpointermove=ev=>{value=q4(Math.max(0,Math.min(24,gtLaneTime(lane,ev.clientY-R.top))));const g=gtDayGeometry(gtWeekLanes(key),iso);line.style.top=g.yOf(value)+'px';line.querySelector('i').textContent=(kind==='tol'?'допуск ':(kind==='start'?'начало ':'конец '))+clockLabel(value);};
     line.onpointerup=async ev=>{ev.stopPropagation();line.onpointermove=null;line.onpointerup=null;const old=staffDayMap[engineer+'|'+iso]||{},rec={engineer,date:iso,start_h:old.start_h,end_h:old.end_h,tol_h:old.tol_h};
       if(role==='engineer'){const {error}=await sb.from('staff_day').upsert({engineer,date:iso,proposed_end_h:value,proposed_by:session.user.id,proposed_at:new Date().toISOString()});if(error)notify(error.message,'err');else showToast('Предложение отправлено менеджеру');}
       else{if(kind==='start'){const delta=value-w.start;rec.start_h=value;rec.end_h=q4(w.end+delta);for(const b of gtBlocks()){const cuts=(b.plan&&b.plan.cuts)||[],changed=cuts.some(c=>c.at&&c.at.d===iso);if(changed){const next=cuts.map(c=>c.at&&c.at.d===iso?{...c,at:{...c.at,t:q4(Math.max(value,+c.at.t+delta))}}:c);await sb.from(String(b.id)[0]==='t'?'trips':'jobs').update({day_plan:{...b.plan,cuts:next}}).eq('id',String(b.id).slice(1));}}}else if(kind==='end')rec.end_h=value;else rec.tol_h=Math.max(0,q4(value-w.end));const {error}=await sb.from('staff_day').upsert(rec);if(error)notify(error.message,'err');else showToast('Рабочее окно обновлено');}
@@ -2255,7 +2262,7 @@ function gtWire(key,box){
   box.querySelectorAll('.vg-piece').forEach(el=>{
     el.onpointerdown=e=>{if(e.target.closest('button,input,.vg-cut'))return;e.stopPropagation();const lane=el.closest('.vg-day-lane'),R=lane.getBoundingClientRect(),b=gtFind(el.dataset.gb),y0=e.clientY,top0=el.offsetTop;let moved=false;
       el.setPointerCapture(e.pointerId);el.onpointermove=ev=>{const dy=ev.clientY-y0;if(Math.abs(dy)>3)moved=true;el.style.top=Math.max(0,Math.min(R.height-el.offsetHeight,top0+dy))+'px';};
-      el.onpointerup=async ev=>{el.onpointermove=null;el.onpointerup=null;if(!moved){if(b.kind==='trip')openTrip(String(b.id).slice(1));else gtPop(key,b);return;}const t=q4((Math.max(0,Math.min(R.height,ev.clientY-R.top))/R.height)*24);await gtPinPiece(b,{at:+el.dataset.pieceAt},el.dataset.pieceIso,t);};};
+      el.onpointerup=async ev=>{el.onpointermove=null;el.onpointerup=null;if(!moved){if(b.kind==='trip')openTrip(String(b.id).slice(1));else gtPop(key,b);return;}const t=q4(Math.max(0,Math.min(24,gtLaneTime(lane,ev.clientY-R.top))));await gtPinPiece(b,{at:+el.dataset.pieceAt},el.dataset.pieceIso,t);};};
   });
   if(!canWrite()){
     // Просмотр графика не должен быть тупиком: инженер не может двигать
