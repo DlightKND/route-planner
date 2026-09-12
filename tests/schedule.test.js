@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planSchedule, driveOfLegs, dayIso, dayMs, isWorkday,
-  normPos, addHours, piecesOf, placedPieces, compactRoadSegments, dayScaleBounds, clockOf, scheduleJobIncluded, tripRouteSegments, dayWindow, weekRowSpan, q4 } from '../src/core/schedule.js';
+  normPos, addHours, piecesOf, compactRoadSegments, dayScaleBounds, clockOf, scheduleJobIncluded, tripRouteSegments, dayWindow, weekRowSpan, q4 } from '../src/core/schedule.js';
 
 // Календарь для тестов: 2026-09-07 понедельник, 09-08 вт, 09-09 ср,
 // 09-10 чт, 09-11 пт, 09-12 сб, 09-13 вс.
