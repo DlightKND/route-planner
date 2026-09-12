@@ -135,13 +135,22 @@ export const q4 = x => Math.round((+x || 0) * 4) / 4;
 
 export function dayWindow(engineer, iso, settings) {
   const s=Object.assign({},SCHEDULE_DEFAULTS,settings||{});
-  if(!isWorkday(dayMs(iso),s.weekend)) return null;
   const o=(s.staffDay||{})[(engineer||' free')+'|'+iso]||{};
+  // Явное индивидуальное окно открывает и субботу/воскресенье. Это не
+  // превращает выходные в обычные рабочие дни: без staff_day они по-прежнему
+  // закрыты, но диспетчер может осознанно занять конкретную дату.
+  const explicit=o.start_h!=null||o.end_h!=null;
+  if(!explicit&&!isWorkday(dayMs(iso),s.weekend)) return null;
   const start=o.start_h==null?+s.dayStart:+o.start_h;
   const end=o.end_h==null?+s.dayEnd:+o.end_h;
   const tol=o.tol_h==null?+s.toleranceH:+o.tol_h;
   if(!(end>start)) return null;
   return {start,end,tol,ceiling:Math.min(24,end+Math.max(0,tol)),proposedEnd:o.proposed_end_h==null?null:+o.proposed_end_h};
+}
+function stepOpen(ms,dir,engineer,s){
+  let x=ms+dir*DAY;
+  for(let i=0;i<400&&!dayWindow(engineer,dayIso(x),s);i++)x+=dir*DAY;
+  return x;
 }
 function windowHours(s){ return Math.max(.25,(+s.dayEnd||16)-(+s.dayStart||7)+Math.max(0,+s.toleranceH||0)); }
 
@@ -149,9 +158,9 @@ function windowHours(s){ return Math.max(.25,(+s.dayEnd||16)-(+s.dayStart||7)+Ma
 // {iso, t} — рабочий день и настоящий час суток.
 export function normPos(p, s) {
   s=Object.assign({},SCHEDULE_DEFAULTS,s||{});
-  const w=s.weekend; let ms=snapWork(dayMs(p.iso),1,w), iso=dayIso(ms), t=Number.isFinite(+p.t)?+p.t:+s.dayStart;
+  let ms=dayMs(p.iso), iso=dayIso(ms), t=Number.isFinite(+p.t)?+p.t:+s.dayStart;
   let win=dayWindow(p.engineer,iso,s),guard=0;
-  while((!win||t>=win.ceiling-1e-9)&&guard++<400){ ms=stepWork(ms,1,w); iso=dayIso(ms); win=dayWindow(p.engineer,iso,s); t=win?win.start:+s.dayStart; }
+  while((!win||t>=win.ceiling-1e-9)&&guard++<400){ ms=stepOpen(ms,1,p.engineer,s); iso=dayIso(ms); win=dayWindow(p.engineer,iso,s); t=win?win.start:+s.dayStart; }
   if(win&&t<win.start) t=win.start;
   return {iso,t:+t.toFixed(6)};
 }
@@ -161,11 +170,11 @@ export function addHours(p, dh, s, engineer) {
   if(left<0){
     while(left<-.000001&&guard++<400){ const w=dayWindow(owner,cur.iso,s),room=cur.t-(w?w.start:+s.dayStart);
       if(-left<=room) return {iso:cur.iso,t:+(cur.t+left).toFixed(6)};
-      left+=room; const ms=stepWork(dayMs(cur.iso),-1,s.weekend); cur={iso:dayIso(ms),t:dayWindow(owner,dayIso(ms),s).ceiling}; }
+      left+=room; const ms=stepOpen(dayMs(cur.iso),-1,owner,s); cur={iso:dayIso(ms),t:dayWindow(owner,dayIso(ms),s).ceiling}; }
     return cur;
   }
   while(left>.000001&&guard++<400){ const w=dayWindow(owner,cur.iso,s),room=w.ceiling-cur.t,take=Math.min(left,room); cur.t+=take;left-=take;
-    if(left>.000001){ const ms=stepWork(dayMs(cur.iso),1,s.weekend),iso=dayIso(ms);cur={iso,t:dayWindow(owner,iso,s).start}; } }
+    if(left>.000001){ const ms=stepOpen(dayMs(cur.iso),1,owner,s),iso=dayIso(ms);cur={iso,t:dayWindow(owner,iso,s).start}; } }
   return {iso:cur.iso,t:+cur.t.toFixed(6)};
 }
 // Сколько рабочих часов от a до b (b − a). Нужна и для сравнения позиций.

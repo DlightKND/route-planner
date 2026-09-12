@@ -1915,8 +1915,19 @@ let gtSel=null, gtDrag=null;
 function gtStep(){ return gtDragZoom()?.25:1; }
 function gtDragZoom(){ return gtDrag&&gtDrag.zoom; }
 function gtEff(){ return ((+appSettings.day_end)||16)-((+appSettings.day_start)||7)+((+appSettings.tolerance_h)||1); }
-function gtSettings(){ return {dayStart:(+appSettings.day_start)||7,dayEnd:(+appSettings.day_end)||16,
-  toleranceH:(+appSettings.tolerance_h)||1,weekend:[0,6],staffDay:staffDayMap}; }
+function gtSettings(blocks){
+  const dayStart=(+appSettings.day_start)||7,dayEnd=(+appSettings.day_end)||16,toleranceH=(+appSettings.tolerance_h)||1;
+  const staffDay={...staffDayMap};
+  // Старые ручные планы могли уже быть прибиты к выходному до появления
+  // staff_day. Открываем только даты, явно названные в плане; остальные
+  // субботы и воскресенья остаются выходными.
+  (blocks||((feedCtx&&feedCtx.plan&&feedCtx.plan.blocks)||[])).forEach(b=>{
+    const dates=[];if(b.plan&&b.plan.start&&b.plan.start.d)dates.push(b.plan.start.d);
+    ((b.plan&&b.plan.cuts)||[]).forEach(c=>{if(c.at&&c.at.d)dates.push(c.at.d);});
+    dates.forEach(iso=>{const d=new Date(utcOf(iso)).getUTCDay(),k=(b.engineer||' free')+'|'+iso;if((d===0||d===6)&&!staffDay[k])staffDay[k]={start_h:dayStart,end_h:dayEnd,tol_h:toleranceH,synthetic:true};});
+  });
+  return {dayStart,dayEnd,toleranceH,weekend:[0,6],staffDay};
+}
 
 function gtScaleKey(key,iso){ return key+'|'+iso; }
 function gtDayBounds(key,iso){
@@ -2028,7 +2039,11 @@ function paintFirstMotion(root){
 
 // Куски блока с учётом того, что его сейчас тащат.
 function gtPieces(b){
-  if(gtDrag&&String(gtDrag.id)===String(b.id)) return piecesOf(gtDrag.start,b.segs,gtSettings(),b.engineer,b.cuts||[]);
+  if(gtDrag&&String(gtDrag.id)===String(b.id)){
+    const s=gtSettings(),d=new Date(utcOf(gtDrag.start.iso)).getUTCDay(),k=(b.engineer||' free')+'|'+gtDrag.start.iso;
+    if((d===0||d===6)&&!s.staffDay[k])s.staffDay[k]={start_h:s.dayStart,end_h:s.dayEnd,tol_h:s.toleranceH,synthetic:true};
+    return piecesOf(gtDrag.start,b.segs,s,b.engineer,b.cuts||[]);
+  }
   return b.pieces||[];
 }
 function gtStart(b){
@@ -2381,6 +2396,14 @@ async function gtSave(b,start){
   }
   const rec={day_plan:plan};
   try{
+    if(start&&b.engineer){
+      const dow=new Date(utcOf(start.iso)).getUTCDay(),key=b.engineer+'|'+start.iso;
+      if((dow===0||dow===6)&&!staffDayMap[key]){
+        const {error:dayError}=await sb.from('staff_day').upsert({engineer:b.engineer,date:start.iso,start_h:(+appSettings.day_start)||7,end_h:(+appSettings.day_end)||16,tol_h:(+appSettings.tolerance_h)||1});
+        if(dayError)throw dayError;
+        await loadStaffDays();
+      }
+    }
     const {error}=await sb.from(isTrip?'trips':'jobs').update(rec).eq('id',id);
     if(error) throw error;
     showToast(start?'Расстановка сохранена':'Вернул автоматическую раскладку');
@@ -2469,7 +2492,7 @@ function engineersCount(plan){
 
 function planOfData(list,tripOf,tripById,tripOrd){
   const bb=buildBlocks(list,tripOf,tripById,tripOrd);
-  const plan=planSchedule(bb.blocks,gtSettings(),{today:todayISO()});
+  const plan=planSchedule(bb.blocks,gtSettings(bb.blocks),{today:todayISO()});
   return {plan:plan,blockOf:bb.blockOf};
 }
 
@@ -3370,23 +3393,46 @@ function loadCard(list,tripOf,tripById,tripOrd){
     fromIso=week?week.from:todayISO();
     toIso=isoOf(utcOf(fromIso)+(loadDays-1)*DAY_MS);
   }
-  const wd=Math.max(1,workDaysBetween(fromIso,toIso));
+  const plan=planOfData(list,tripOf,tripById,tripOrd).plan;
   const engs=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim());
   const engIds=new Set(engs.map(p=>p.id));
-  const capEach=shift*wd;
-
-  const plan=planOfData(list,tripOf,tripById,tripOrd).plan;
-  const lane={}, day={};
+  const capByEngineer={},dayCapacity={};
+  const capacitySettings=gtSettings(plan.blocks);
+  engs.forEach(e=>{capByEngineer[e.id]=0;for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){const iso=isoOf(x),w=dayWindow(e.id,iso,capacitySettings);const cap=w?Math.max(0,w.end-w.start):0;capByEngineer[e.id]+=cap;dayCapacity[iso]=(dayCapacity[iso]||0)+cap;}});
+  const capEach=shift*Math.max(1,workDaysBetween(fromIso,toIso));
+  const lane={}, day={},factDay={};
   Object.keys(plan.load).forEach(k=>{ const l=plan.load[k];
     if(l.date<fromIso||l.date>toIso) return;
     if(l.engineer!==' free'&&!engIds.has(l.engineer)) return;
-    const r=lane[l.engineer]||(lane[l.engineer]={w:0,d:0,n:0});
+    const r=lane[l.engineer]||(lane[l.engineer]={w:0,d:0,n:0,f:0,fKnown:0});
     r.w+=l.workH; r.d+=l.driveH;
     day[l.date]=(day[l.date]||0)+l.workH+l.driveH; });
   plan.blocks.forEach(b=>{ const k=b.engineer||' free';
     if(b.to<fromIso||b.from>toIso) return;
     if(k!==' free'&&!engIds.has(k)) return;
-    const r=lane[k]||(lane[k]={w:0,d:0,n:0}); r.n+=b.jobIds.length; });
+    const r=lane[k]||(lane[k]={w:0,d:0,n:0,f:0,fKnown:0}); r.n+=b.jobIds.length; });
+
+  // Факт хранится в утверждённых стоянках trip_stays и уже используется
+  // экономикой. Раскладываем его по тем же рабочим кускам, которыми план
+  // построил график: так факт и план сравниваются в одной шкале и у того же
+  // инженера, не придумывая отдельную календарную модель.
+  let factTrips=0,factTotal=0,factPlan=0;const factHandled=new Set();
+  plan.blocks.filter(b=>b.kind==='trip'&&factHByTrip[b.tripId]!=null).forEach(b=>{
+    const factual=Math.max(0,+factHByTrip[b.tripId]||0),work=(b.pieces||[]).filter(p=>p.k==='w'),planned=work.reduce((n,p)=>n+p.h,0);
+    const periodWork=work.filter(p=>p.iso>=fromIso&&p.iso<=toIso),plannedPeriod=periodWork.reduce((n,p)=>n+p.h,0);
+    if(!planned||!plannedPeriod)return;factHandled.add(String(b.tripId));factTrips++;factTotal+=factual*plannedPeriod/planned;factPlan+=plannedPeriod;
+    work.forEach(p=>{if(p.iso<fromIso||p.iso>toIso)return;const share=factual*p.h/planned,k=b.engineer||' free';if(k!==' free'&&!engIds.has(k))return;
+      const r=lane[k]||(lane[k]={w:0,d:0,n:0,f:0,fKnown:0});r.f+=share;r.fKnown=1;factDay[p.iso]=(factDay[p.iso]||0)+share;});
+  });
+  // Закрытые выезды уже исчезают из оперативного планировщика. Их факт не
+  // должен исчезать из статистики: распределяем утверждённые часы по
+  // календарным датам самого выезда, а норму берём из сохранённого снимка.
+  Object.keys(factHByTrip).forEach(id=>{if(factHandled.has(String(id)))return;const t=tripById[id];if(!t||!t.date_from)return;
+    const a=utcOf(t.date_from),z=utcOf(t.date_to||t.date_from),dates=[];for(let x=a;x<=z;x+=DAY_MS)dates.push(isoOf(x));
+    const inside=dates.filter(d=>d>=fromIso&&d<=toIso);if(!inside.length)return;const factual=Math.max(0,+factHByTrip[id]||0),share=factual/Math.max(1,dates.length),k=t.lead_engineer||' free';if(k!==' free'&&!engIds.has(k))return;
+    const r=lane[k]||(lane[k]={w:0,d:0,n:0,f:0,fKnown:0});inside.forEach(d=>{r.f+=share;factDay[d]=(factDay[d]||0)+share;});r.fKnown=1;factTrips++;factTotal+=share*inside.length;
+    factPlan+=(+(t.econ_snapshot&&t.econ_snapshot.workH)||0)*inside.length/Math.max(1,dates.length);
+  });
 
   const num=v=>v.toFixed(v%1?1:0);
   const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
@@ -3394,6 +3440,7 @@ function loadCard(list,tripOf,tripById,tripOrd){
     const t=r.w+r.d, p=cap>0?t/cap:0, pct=p*100;
     const col=loadColor(p), fillPct=Math.min(100,p/1.75*100);
     const parts=[num(r.w)+' ч работ']; if(r.d) parts.push(num(r.d)+' ч дороги');
+    if(r.fKnown)parts.push('факт работ '+num(r.f)+' ч');
     parts.push(r.n+' '+plural(r.n,'заявка','заявки','заявок'));
     return '<div class="elrow'+(cls?(' '+cls):'')+'">'
       +'<div class="el-n">'+esc(nm)+'</div>'
@@ -3410,14 +3457,15 @@ function loadCard(list,tripOf,tripById,tripOrd){
     .map(id=>({id:id,name:name(id)}));
   // Знаменатель — тот же, что у полоски недель в ленте.
   const engN=engineersCount(plan);
-  const fund=capEach*engN;
-  const tot={w:0,d:0,n:0};
-  Object.keys(lane).forEach(k=>{ tot.w+=lane[k].w; tot.d+=lane[k].d; tot.n+=lane[k].n; });
+  if(!engs.length)for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){const iso=isoOf(x),d=new Date(x).getUTCDay();dayCapacity[iso]=(d===0||d===6)?0:shift*engN;}
+  const fund=people.reduce((n,p)=>n+(capByEngineer[p.id]||0),0)||(capEach*engN);
+  const tot={w:0,d:0,n:0,f:0,fKnown:0};
+  Object.keys(lane).forEach(k=>{ tot.w+=lane[k].w; tot.d+=lane[k].d; tot.n+=lane[k].n;tot.f+=lane[k].f||0;tot.fKnown+=lane[k].fKnown||0; });
   let body=rowHtml('Отдел · '+engN+' '+plural(engN,'инженер','инженера','инженеров'),
     tot,fund,'el-dep');
   people.slice().sort((a,b)=>{ const ra=lane[a.id]||{w:0,d:0}, rb=lane[b.id]||{w:0,d:0};
     return (rb.w+rb.d)-(ra.w+ra.d); })
-    .forEach(p=>{ body+=rowHtml(p.name,lane[p.id]||{w:0,d:0,n:0},capEach); });
+    .forEach(p=>{ body+=rowHtml(p.name,lane[p.id]||{w:0,d:0,n:0},capByEngineer[p.id]||capEach); });
   if(lane[' free']) body+=rowHtml('Без инженера',lane[' free'],capEach,'none');
 
   // График загрузки по дням периода. Длинный период рисуется неделями:
@@ -3433,27 +3481,31 @@ function loadCard(list,tripOf,tripById,tripOrd){
     let cur=null;
     for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){ const iso=isoOf(x);
       const w=weekOf(iso); if(!w) continue;
-      if(!cur||cur.key!==w.key){ cur={key:w.key,label:'н'+w.n,v:0,cap:0}; cells.push(cur); }
-      const d=new Date(x).getUTCDay(); if(d!==0&&d!==6) cur.cap+=dayCap;
-      cur.v+=day[iso]||0; }
+      if(!cur||cur.key!==w.key){ cur={key:w.key,label:'н'+w.n,v:0,f:0,cap:0}; cells.push(cur); }
+      cur.cap+=dayCapacity[iso]||0;
+      cur.v+=day[iso]||0;cur.f+=factDay[iso]||0; }
   } else {
     for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){ const iso=isoOf(x);
       const d=new Date(x).getUTCDay();
-      cells.push({key:iso,label:String(iso.slice(8)),v:day[iso]||0,cap:(d===0||d===6)?0:dayCap,we:(d===0||d===6)}); }
+      cells.push({key:iso,label:String(iso.slice(8)),v:day[iso]||0,f:factDay[iso]||0,cap:dayCapacity[iso]||0,we:(d===0||d===6)}); }
   }
-  const maxV=Math.max(1,...cells.map(c=>Math.max(c.v,c.cap)));
+  const maxV=Math.max(1,...cells.map(c=>Math.max(c.v,c.f||0,c.cap)));
   const showVals=cells.length<=16;
   let chart='<div class="revbars loadbars'+(showVals?'':' novals')+'">';
   cells.forEach(c=>{ const hR=c.v>0?Math.max(4,Math.round(c.v/maxV*100)):0;
     const over=c.cap>0&&c.v>c.cap+1e-6;
-    chart+='<div class="revbar'+(c.we?' we':'')+'" title="'+esc(c.key+' · '+num(c.v)+' ч'+(c.cap?(' из '+num(c.cap)):''))+'">'
+    chart+='<div class="revbar'+(c.we?' we':'')+'" title="'+esc(c.key+' · план '+num(c.v)+' ч'+(c.f?(' · факт работ '+num(c.f)+' ч'):'')+(c.cap?(' · фонд '+num(c.cap)+' ч'):''))+'">'
       +(showVals?('<div class="rb-v">'+(c.v>0?num(c.v):'')+'</div>'):'')
       +'<div class="rb-c">'+(c.cap>0?('<div class="rb-cap" style="height:'+Math.round(c.cap/maxV*100)+'%"></div>'):'')
-        +'<div class="rb-f data-fill vertical'+(over?' bad':'')+'" style="height:'+hR+'%;background:'+rampCss(c.cap>0?c.v/c.cap:(c.v>0?1.75:0),'0deg')+'"></div></div>'
+        +'<div class="rb-f data-fill vertical'+(over?' bad':'')+'" style="height:'+hR+'%;background:'+rampCss(c.cap>0?c.v/c.cap:(c.v>0?1.75:0),'0deg')+'"></div>'
+        +(c.f?'<div class="rb-fact data-fill vertical" style="height:'+Math.max(3,Math.round(c.f/maxV*100))+'%"></div>':'')+'</div>'
       +'<div class="rb-l">'+esc(c.label)+'</div></div>'; });
   chart+='</div>';
-  chart+='<div class="cap-note">пунктир — 100% загрузки: '+num(dayCap)+' ч в день'
+  chart+='<div class="cap-note">пунктир — 100% загрузки: '+num(dayCap)+' ч в день · широкая заливка — план · тёмная узкая — записанный факт работ'
     +(long?(' · столбик — неделя'):'')+'</div>';
+  const factStats='<div class="fact-load-stats">'+(factTrips
+    ?'<b>Записанный факт: '+num(factTotal)+' ч</b><span>план работ по этим выездам '+num(factPlan)+' ч · отклонение '+(factTotal-factPlan>=0?'+':'')+num(factTotal-factPlan)+' ч · '+factTrips+' '+plural(factTrips,'выезд','выезда','выездов')+'</span>'
+    :'<span>За выбранный период фактические часы ещё не утверждены.</span>')+'</div>';
 
   const hzTxt=(loadRange?tripPeriod(loadRange.from,loadRange.to)
     :(loadDays===7?'неделя вперёд':loadDays===14?'две недели вперёд':'месяц вперёд'))
@@ -3461,7 +3513,7 @@ function loadCard(list,tripOf,tripById,tripOrd){
   return '<div class="card elcard foldable f-any" data-fold="dashLoad" data-dcard="load">'
     +'<h3 class="cardhead">'+dashGrip('load')+'Загрузка отдела <span class="el-hz">'+esc(hzTxt)+'</span>'
     +periodSeg('load',LOAD_PERIODS,loadDays,loadRange,loadOpen,'date')+'</h3>'
-    +body
+    +body+factStats
     +'<div class="foldx-h">'+foldxBtn('dashLoadChart',long?'По неделям':'По дням')+'</div>'
     +foldxBox('dashLoadChart',chart)
     +'</div>';
@@ -3489,7 +3541,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   if(attnCaps) attnCaps.textContent='Требует внимания';
   box.innerHTML='<div class="shim" role="status" aria-label="Загрузка данных"></div>';
   try{
-    await ensureRefs(); await loadStaffDays();
+    await ensureRefs(); await loadStaffDays(); await loadFactHours();
     const {data:js}=await sb.from('jobs')
       .select('id,status,at_depot,due_date,created_at,assigned_engineer,day_plan, clients(lat,lng), equipment(lat,lng), job_works(hours,billable,revenue), job_parts(qty,price,cost,billable)')
       .is('deleted_at',null);

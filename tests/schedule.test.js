@@ -307,6 +307,13 @@ describe('часы суток и окна дня', () => {
     const X={...S,staffDay:{'ivan|2026-09-09':{start_h:8,end_h:16,tol_h:2}}};
     expect(dayWindow('ivan','2026-09-09',X)).toMatchObject({start:8,end:16,tol:2,ceiling:18});
   });
+  it('открывает конкретный выходной только явным индивидуальным окном',()=>{
+    const X={...S,staffDay:{'ivan|2026-09-13':{start_h:7,end_h:16,tol_h:1}}};
+    expect(dayWindow('ivan','2026-09-12',X)).toBeNull();
+    expect(dayWindow('ivan','2026-09-13',X)).toMatchObject({start:7,end:16,ceiling:17});
+    expect(piecesOf({iso:'2026-09-13',t:7},[{k:'d',h:4}],X,'ivan',[]))
+      .toMatchObject([{iso:'2026-09-13',from:7,to:11,h:4}]);
+  });
   it('округляет общий шаг до четверти часа',()=>expect(q4(8.13)).toBe(8.25));
 });
 
