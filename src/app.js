@@ -1880,7 +1880,8 @@ function buildBlocks(list,tripOf,tripById,tripOrd){
     const d=driveOfLegs(es.legs), dh=+es.driveH||0;
     const routeSegs=scheduleRouteSegs(t,js,es.legs||[],dh);
     const slas=js.map(j=>j.due_date).filter(Boolean).sort();
-    blocks.push({id:'t'+tid,kind:'trip',engineer:t.lead_engineer||js[0].assigned_engineer||null,
+    blocks.push({id:'t'+tid,kind:'trip',tripId:tid,status:t.status,startedAt:t.started_at||null,finishedAt:t.finished_at||null,
+      engineerIds:tripEngineerIds(t),engineer:t.lead_engineer||js[0].assigned_engineer||null,
       sla:slas[0]||null,workH:js.reduce((a,j)=>a+jobHours(j),0),
       driveToH:d.toH||dh/2,driveBackH:d.backH||dh/2,driveMidH:d.midH||0,
       from:t.date_from||null,to:t.date_to||t.date_from||null,jobIds:js.map(j=>j.id),
@@ -2036,7 +2037,7 @@ function gtStart(b){
 }
 
 function scheduleNow(){
-  const n=core.scheduleNowAt(new Date(),appSettings.day_start,'Europe/Kyiv'); return {iso:n.iso,t:n.t,label:n.label};
+  const at=new Date(),n=core.scheduleNowAt(at,appSettings.day_start,'Europe/Kyiv'); return {iso:n.iso,t:n.t,label:n.label,ms:at.getTime()};
 }
 function gtNowLine(cols,eff){
   const n=scheduleNow(), i=cols.indexOf(n.iso), rel=n.t-(+appSettings.day_start||7), on=i>=0&&rel>=0&&rel<=eff;
@@ -2056,6 +2057,7 @@ function paintScheduleNow(){
     el.style.display=on?'':'none';
     if(on){ el.style.left=(rel/shift*100)+'%'; el.title='Сейчас · '+n.label; }
   });
+  if(feedCtx) Object.keys(gtOpen).filter(k=>gtOpen[k]&&!gtZoom[k]).forEach(gtPaint);
 }
 setInterval(paintScheduleNow,60000);
 
@@ -2156,9 +2158,45 @@ function gtLoadScale(){
     +'<div class="vg-scale-labels"><span style="left:0">нет работ</span><span style="left:'+(80/1.75)+'%">номинал 80%</span>'
     +'<span style="left:'+(100/1.75)+'%">смена</span><span style="left:'+(allowance/1.75*100)+'%">допуск</span><span style="left:100%">перегруз</span></div></div>';
 }
+const gtWallMs=(iso,t)=>utcOf(iso)+(+t||0)*3600000;
+function gtElapsed(ms){
+  const mins=Math.max(0,Math.floor(ms/60000));
+  if(mins>=1440){const d=Math.floor(mins/1440);return d+' '+plural(d,'день','дня','дней');}
+  return Math.floor(mins/60)+':'+String(mins%60).padStart(2,'0');
+}
+function gtTripLive(b,first,last,now){
+  if(b.kind!=='trip') return null;
+  const nowWall=gtWallMs(now.iso,now.t),startWall=gtWallMs(first.iso,first.from),endWall=gtWallMs(last.iso,last.to);
+  if((b.status==='planned'||b.status==='assigned')&&nowWall>startWall)
+    return {tone:'bad',html:'<i></i>не начат · +'+gtElapsed(nowWall-startWall)};
+  if(b.status==='in_progress'){
+    if(!b.startedAt) return {tone:'bad',html:'<i></i>идёт'};
+    const elapsed=now.ms-new Date(b.startedAt).getTime();
+    if(nowWall>endWall) return {tone:'bad',html:'<i></i>идёт '+gtElapsed(elapsed)+' · +'+gtElapsed(nowWall-endWall)};
+    return {tone:'run',html:'<i></i>идёт '+gtElapsed(elapsed)};
+  }
+  if(b.status==='finished'){
+    const elapsed=b.finishedAt?now.ms-new Date(b.finishedAt).getTime():0;
+    return {tone:'wait',html:'<i></i>ждёт'+(elapsed>0?' '+gtElapsed(elapsed):'')};
+  }
+  return null;
+}
+function gtActionIcon(kind){
+  const body=kind==='start'?'<path d="M5.5 3.4 12.8 8 5.5 12.6z"/>':kind==='finish'?'<rect x="4.6" y="4.6" width="6.8" height="6.8" rx="1.2"/>':kind==='confirm'?'<path d="M3.6 8.4 6.6 11.4 12.4 4.9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>':'<circle cx="4.2" cy="8" r="1.35"/><circle cx="8" cy="8" r="1.35"/><circle cx="11.8" cy="8" r="1.35"/>';
+  return '<svg viewBox="0 0 16 16" aria-hidden="true">'+body+'</svg>';
+}
+function gtTripAction(b){
+  if(b.kind!=='trip') return null;
+  const own=(b.engineerIds||[]).includes(session&&session.user&&session.user.id);
+  if((b.status==='planned'||b.status==='assigned')&&own) return {kind:'start',label:'Начать выезд'};
+  if(b.status==='in_progress'&&own) return {kind:'finish',label:'Завершить выезд'};
+  if(b.status==='finished'&&canWrite()) return {kind:'confirm',label:'Подтвердить выезд'};
+  if(b.status==='finished'&&!canWrite()&&own) return {kind:'wait',label:'Ждёт менеджера',passive:true};
+  return null;
+}
 function gtVerticalHtml(key){
   const it=feedCtx.weeks[key],days=gtWeekDays(it),lanes=gtWeekLanes(key);
-  const laneMin=window.matchMedia('(max-width:600px)').matches?120:150,today=todayISO();
+  const laneMin=window.matchMedia('(max-width:600px)').matches?108:132,today=todayISO(),now=scheduleNow();
   const all=[];gtBlocks().forEach(b=>gtPieces(b).forEach(p=>all.push({...p,engineer:b.engineer||' free'})));
   const rows=days.map(iso=>weekRowSpan(iso,lanes.map(l=>l.id),all,gtSettings(),5));
   const totalH=rows.reduce((n,r)=>n+r.px,0),template=rows.map(r=>r.px+'px').join(' ');
@@ -2175,10 +2213,24 @@ function gtVerticalHtml(key){
         +(w&&!feedCtx.mine?'<span class="vg-tolerance" style="top:'+((w.end-row.top)*5)+'px;height:'+Math.max(0,(w.ceiling-w.end)*5)+'px"></span><span class="vg-day-end" style="top:'+((w.end-row.top)*5)+'px"></span>':'')
         +(!feedCtx.mine&&hours>0?'<span class="vg-rail" style="top:'+Math.max(4,(w.start-row.top)*5)+'px;height:'+Math.max(12,Math.min(row.px-8,hours*5))+'px"><i style="height:100%;--rail-color:'+loadColor(p)+'"></i></span>':'')
         +(!feedCtx.mine&&over>.01?'<span class="vg-over" style="top:'+Math.max(2,(w.end-row.top)*5-8)+'px">+'+fmtH(over)+'</span>':'')+'</div>';
-      gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{const pcs=gtPieces(b).filter(x=>x.iso===iso);if(!pcs.length)return;
+      gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{const blockPieces=gtPieces(b),pcs=blockPieces.filter(x=>x.iso===iso);if(!pcs.length)return;
         const from=Math.min(...pcs.map(x=>x.from)),to=Math.max(...pcs.map(x=>x.to)),top=offset+Math.max(1,(from-row.top)*5),height=Math.max(12,(Math.min(to,row.bot)-Math.max(from,row.top))*5);
-        const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late'),startP=hours/windowH;
-        bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+(height<40?' short':'')+'" data-gb="'+esc(b.id)+'" style="--block-tint:'+(feedCtx.mine?'transparent':loadTint(startP))+';top:'+top+'px;height:'+height+'px"><span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc((b.kind==='trip'?'выезд':'заявка')+' · '+fmtH(pcs.reduce((n,x)=>n+x.h,0)))+'</small></span></div>';});
+        const occupied=[...new Set(blockPieces.map(x=>x.iso))].sort(),dayNo=occupied.indexOf(iso),firstDay=dayNo===0;
+        const prev=occupied[dayNo-1],next=occupied[dayNo+1],contUp=prev&&days.includes(prev)&&utcOf(iso)-utcOf(prev)===DAY_MS,contDown=next&&days.includes(next)&&utcOf(next)-utcOf(iso)===DAY_MS;
+        const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late'),startP=hours/windowH,first=blockPieces[0],last=blockPieces[blockPieces.length-1];
+        const live=gtTripLive(b,first,last,now),action=firstDay?gtTripAction(b):null,dayHours=pcs.reduce((n,x)=>n+x.h,0),span=Math.max(.01,to-from);
+        const roads=pcs.filter(x=>x.k==='d').map(x=>'<i class="vg-week-road" style="top:'+(((x.from-from)/span)*100).toFixed(2)+'%;height:'+(((x.to-x.from)/span)*100).toFixed(2)+'%"></i>').join('');
+        const burnable=iso===today&&(b.status==='planned'||b.status==='assigned')&&now.t>from;
+        const burn=burnable?Math.max(0,Math.min(100,(Math.min(now.t,to)-from)/span*100)):0;
+        const title=firstDay?gtBlockName(b):(clockLabel(from)+'–'+clockLabel(to));
+        const meta=(live?'<span class="vg-live '+live.tone+'">'+live.html+'</span>':'<small>'+esc(fmtH(dayHours)+' · '+clockLabel(from)+'–'+clockLabel(to))+'</small>')+(occupied.length>1?'<span class="vg-day-count">'+(dayNo+1)+'/'+occupied.length+'</span>':'');
+        const act=action?'<'+(action.passive?'span':'button')+' class="vg-act'+(action.passive?' passive':'')+'" '+(action.passive?'':'type="button" data-gact="'+action.kind+'"')+' aria-label="'+esc(action.label)+'" title="'+esc(action.label)+'">'+gtActionIcon(action.kind)+'</'+(action.passive?'span':'button')+'>':'';
+        bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+(height<40?' short':'')+(contUp?' cont-up':'')+(contDown?' cont-down':'')+(action?' has-act':'')+'" data-gb="'+esc(b.id)+'" data-block="'+esc(b.id)+'" style="--block-tint:'+(feedCtx.mine?'transparent':loadTint(startP))+';top:'+top+'px;height:'+height+'px">'+roads
+          +(burn>0?'<i class="vg-burn" style="height:'+burn.toFixed(2)+'%"></i><i class="vg-burn-edge" style="top:'+burn.toFixed(2)+'%"></i>':'')
+          +'<span class="vg-label"><b>'+esc(title)+(b.manual?' ✎':'')+'</b><span class="vg-meta">'+meta+'</span></span>'+act+'</div>';
+        if(iso===today&&b.status==='in_progress'&&now.t>to){const tailTop=offset+(to-row.top)*5,tailH=Math.max(2,(Math.min(now.t,row.bot)-to)*5);if(tailH>0)bars+='<i class="vg-tail" style="top:'+tailTop+'px;height:'+tailH+'px"></i>';}
+      });
+      if(iso===today&&now.t>=row.top&&now.t<=row.bot) bars+='<span class="vg-nowline" style="top:'+(offset+(now.t-row.top)*5)+'px"><b></b><s></s></span>';
       offset+=row.px;});
     tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'" style="height:'+totalH+'px">'+cells+bars+'<span class="vg-tip" hidden></span></div>';
   });
@@ -2210,6 +2262,15 @@ function gtApply(){
 // ── Перетаскивание ──────────────────────────────────────────────────────
 function gtWire(key,box){
   const eff=gtEff(), zoom=gtZoom[key]||null;
+  const gantt=box.querySelector('.vg-scroll');
+  if(gantt&&!zoom){
+    gantt.onpointerover=e=>{const el=e.target.closest('[data-block]');if(!el)return;gantt.classList.add('hl');gantt.querySelectorAll('[data-block]').forEach(x=>x.classList.toggle('on',x.dataset.block===el.dataset.block));};
+    gantt.onpointerleave=()=>{gantt.classList.remove('hl');gantt.querySelectorAll('[data-block]').forEach(x=>x.classList.remove('on'));};
+  }
+  box.querySelectorAll('[data-gact]').forEach(btn=>{
+    btn.onpointerdown=e=>e.stopPropagation();
+    btn.onclick=async e=>{e.preventDefault();e.stopPropagation();const host=btn.closest('[data-gb]'),b=host&&gtFind(host.dataset.gb);if(b&&b.tripId)await tripAction(b.tripId,btn.dataset.gact);};
+  });
   box.querySelectorAll('[data-gback]').forEach(b=>b.onclick=e=>{ e.stopPropagation();
     gtZoom[key]=null; gtSel=null; gtPaint(key); });
   box.querySelectorAll('[data-gday]').forEach(d=>d.onclick=e=>{ e.stopPropagation();
@@ -2268,7 +2329,7 @@ function gtWire(key,box){
     // Просмотр графика не должен быть тупиком: инженер не может двигать
     // блок, но может открыть сам выезд и увидеть маршрут, заявки и статус.
     box.querySelectorAll('.vg-block.trip').forEach(el=>el.onclick=e=>{
-      e.stopPropagation(); openTrip(String(el.dataset.gb||'').slice(1));
+      e.stopPropagation(); const b=gtFind(el.dataset.gb); if(b) gtPop(key,b);
     });
     return;
   }
@@ -2302,7 +2363,6 @@ function gtWire(key,box){
       const moved=gtDrag.moved, b=gtDrag.block, start=gtDrag.start;
       gtDrag=null;
       if(moved) gtSave(b,start);
-      else if(b.kind==='trip') openTrip(String(b.id).slice(1));
       else { gtSel=b.id; gtPaint(key); gtPop(key,b); }
     };
     el.onpointercancel=()=>{ gtDrag=null; gtPaint(key); };
@@ -2339,14 +2399,24 @@ async function renderFeedAgain(){if(feedCtx&&feedCtx.mine)await renderMine();els
 function gtPop(key,b){
   const old=document.querySelector('.gpop');if(old)old.remove();
   const cuts=(b.cuts||[]).map(c=>({after:+c.after,at:{d:c.at.d,t:+c.at.t}}));
+  const trip=b.kind==='trip',action=trip?gtTripAction(b):null;
+  const tripTools=trip?'<div class="gp-f gp-trip-tools">'
+    +(action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'')
+    +((b.status==='planned'||b.status==='assigned')&&!reschedByTrip[b.tripId]?'<button class="btn sm" data-pop-resched>Перенести</button>':'')
+    +'<button class="btn sm ghost" data-pop-map>Карта</button>'
+    +((b.status==='finished'||b.status==='done')?'<button class="btn sm" data-pop-stays>Стоянки</button>':'')
+    +((b.status==='finished'||b.status==='done')&&canWrite()?'<button class="btn sm" data-pop-km>Пересчитать факт</button>':'')
+    +(canWrite()?'<button class="btn sm" data-pop-open>Открыть выезд</button>':'')+'</div>':'';
   const h='<div class="gpop gpop-compact"><div class="gp-h">'+esc(gtBlockName(b))+'<span class="a-tag '+(cuts.length?'plan':'auto')+'">'+(cuts.length?'вручную':'авто')+'</span></div>'
     +'<div class="gp-s">В зуме дня перетащите отдельную плашку или нажмите ÷, чтобы создать точку разреза.</div>'
     +'<div class="gp-days">'+(cuts.length?cuts.map((c,i)=>'<div class="gp-r"><span class="gp-k">после '+fmtH(c.after)+'</span><b class="gp-v">'+shortDate(c.at.d)+' · '+String(Math.floor(c.at.t)).padStart(2,'0')+':'+String(Math.round(c.at.t%1*60)).padStart(2,'0')+'</b><button class="gp-b danger" data-cut-del="'+i+'">×</button></div>').join(''):'<div class="hint">Ручных разрезов нет</div>')+'</div>'
-    +'<div class="gp-f"><button class="btn sm ghost" data-gclose>Закрыть</button>'+(b.manual?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div></div>';
+    +tripTools+'<div class="gp-f"><button class="btn sm ghost" data-gclose>Закрыть</button>'+(b.manual?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div></div>';
   document.body.insertAdjacentHTML('beforeend',h);const pop=document.body.lastElementChild;
   pop.querySelectorAll('[data-cut-del]').forEach(x=>x.onclick=async e=>{e.stopPropagation();cuts.splice(+x.dataset.cutDel,1);pop.remove();await gtSaveCuts(b,cuts);});
   const close=()=>{gtSel=null;pop.remove();gtPaint(key);};pop.querySelector('[data-gclose]').onclick=e=>{e.stopPropagation();close();};
   const reset=pop.querySelector('[data-greset]');if(reset)reset.onclick=e=>{e.stopPropagation();pop.remove();gtSave(b,null);};pop.onclick=e=>e.stopPropagation();
+  const tool=(sel,fn)=>{const x=pop.querySelector(sel);if(x)x.onclick=async e=>{e.stopPropagation();pop.remove();await fn();};};
+  tool('[data-pop-action]',()=>tripAction(b.tripId,action.kind));tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
   const el=document.querySelector('[data-gb="'+window.CSS.escape(String(b.id))+'"]');if(el&&!matchMedia('(max-width:600px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-348,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
 }
 async function gtPinPiece(b,piece,iso,t){
