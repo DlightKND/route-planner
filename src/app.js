@@ -2240,10 +2240,6 @@ function gtWire(key,box){
       gtZoom[key]=gtWeekDays(feedCtx.weeks[key])[i]; gtSel=null; gtPaint(key);
     };
   });
-  box.querySelectorAll('[data-gbreak-open]').forEach(mark=>{
-    mark.onpointerdown=e=>e.stopPropagation();
-    mark.onclick=e=>{ e.stopPropagation(); const host=mark.closest('[data-gb]'), b=host&&gtFind(host.dataset.gb); if(!b) return; gtSel=b.id; gtPaint(key); gtPop(key,b,+mark.dataset.gbreakOpen); };
-  });
   box.querySelectorAll('[data-gseg]').forEach(seg=>{
     seg.onpointerdown=e=>e.stopPropagation();
     seg.onclick=e=>{ e.stopPropagation(); const host=seg.closest('[data-gb]'), b=host&&gtFind(host.dataset.gb); if(!b) return; const index=+seg.dataset.gseg, r=seg.getBoundingClientRect(); const frac=Math.max(0,Math.min(1,(e.clientY-r.top)/Math.max(1,r.height))); const at=Math.round(((+seg.dataset.goffset||0)+frac*(+seg.dataset.gpieceh||0))*2)/2; gtSel=b.id; gtPaint(key); gtPop(key,b,index,at); };
@@ -2260,10 +2256,6 @@ function gtWire(key,box){
     el.onpointerdown=e=>{if(e.target.closest('button,input,.vg-cut'))return;e.stopPropagation();const lane=el.closest('.vg-day-lane'),R=lane.getBoundingClientRect(),b=gtFind(el.dataset.gb),y0=e.clientY,top0=el.offsetTop;let moved=false;
       el.setPointerCapture(e.pointerId);el.onpointermove=ev=>{const dy=ev.clientY-y0;if(Math.abs(dy)>3)moved=true;el.style.top=Math.max(0,Math.min(R.height-el.offsetHeight,top0+dy))+'px';};
       el.onpointerup=async ev=>{el.onpointermove=null;el.onpointerup=null;if(!moved){if(b.kind==='trip')openTrip(String(b.id).slice(1));else gtPop(key,b);return;}const t=q4((Math.max(0,Math.min(R.height,ev.clientY-R.top))/R.height)*24);await gtPinPiece(b,{at:+el.dataset.pieceAt},el.dataset.pieceIso,t);};};
-  });
-  box.querySelectorAll('[data-gedit]').forEach(edit=>{
-    edit.onpointerdown=e=>e.stopPropagation();
-    edit.onclick=e=>{ e.stopPropagation(); const b=gtFind(edit.dataset.gedit); if(!b) return; gtSel=b.id; gtPaint(key); gtPop(key,b); };
   });
   if(!canWrite()){
     // Просмотр графика не должен быть тупиком: инженер не может двигать
