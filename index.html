@@ -1438,6 +1438,7 @@
    Время идёт сверху вниз: семь строк дней и отдельная колонка каждого
    инженера. Горизонтально прокручивается только внутренняя сетка. */
 .vg-feed{display:grid;gap:var(--sp-5);min-width:0}
+.vg-history{display:flex;align-items:center;gap:3px;flex-wrap:wrap;padding:3px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--panel);font:var(--fs-1)/1 var(--mono);color:var(--ink-faint);justify-self:start}.vg-history>span{padding:0 7px}.vg-history button{padding:6px 9px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--ink-dim);font:inherit;cursor:pointer}.vg-history button.on{background:var(--ink);color:var(--panel)}
 .wkrow{min-width:0;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);overflow:hidden;box-shadow:var(--shadow-sm)}
 .vg-feed.first-enter .wkrow{animation:cardRise .34s var(--ease) both;animation-delay:var(--entry-delay,0ms)}
 @keyframes cardRise{from{opacity:0;transform:translateY(6px)}}
@@ -1493,8 +1494,6 @@
 .vg-over{position:absolute;z-index:8;right:3px;top:3px;padding:2px 5px;border-radius:var(--r-pill);background:#c9372c;color:#fff;font:600 9px/1 var(--mono);box-shadow:0 1px 4px rgba(0,0,0,.24)}
 .vg-tip{position:absolute;z-index:12;left:6px;max-width:calc(100% - 12px);padding:3px 6px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--ink);color:var(--panel);font:600 9px/1.2 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:var(--shadow-sm);transform:translateY(-50%)}
 .vg-block{position:absolute;z-index:3;left:28px;right:12px;min-height:12px;border:1px solid var(--line);border-left:3px solid var(--ink-faint);border-radius:9px;background:linear-gradient(90deg,var(--block-tint,transparent) 0,transparent 56px),var(--panel);box-shadow:0 1px 1px rgba(0,0,0,.18),0 6px 16px rgba(0,0,0,.16);overflow:hidden;cursor:grab;touch-action:none}
-.vg-block.cont-down{border-bottom:1px dashed var(--ink-faint);border-bottom-left-radius:2px;border-bottom-right-radius:2px}
-.vg-block.cont-up{border-top:1px dashed var(--ink-faint);border-top-left-radius:2px;border-top-right-radius:2px}
 .vg-scroll.hl .vg-block{opacity:.42;transition:opacity .18s var(--ease),box-shadow .18s var(--ease)}
 .vg-scroll.hl .vg-block.on{opacity:1;box-shadow:0 0 0 1.5px var(--ink),0 1px 1px rgba(0,0,0,.18),0 6px 16px rgba(0,0,0,.16)}
 .vg-block.trip{border-left-color:var(--accent)}
@@ -1514,7 +1513,7 @@
 .vg-meta{display:flex;align-items:center;gap:5px;min-width:0;margin-top:2px}.vg-label small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);font-size:var(--fs-1);color:var(--ink-dim)}
 .vg-day-count{flex:none;padding:1px 4px;border:1px solid var(--line);border-radius:999px;color:var(--ink-faint);font:600 9px/1 var(--mono)}
 .vg-live{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-dim);font:600 var(--fs-2)/1 var(--mono)}.vg-live i{display:inline-block;width:5px;height:5px;margin-right:6px;border-radius:50%;background:#2fbf6e;vertical-align:1px}.vg-live.bad{color:#d5342a}.vg-live.bad i{background:#d5342a}.vg-live.wait{color:var(--ink-faint)}.vg-live.wait i{background:var(--ink-faint)}
-.vg-block.has-act .vg-label{right:42px}.vg-act{position:absolute;right:0;top:0;bottom:0;width:34px;z-index:7;display:flex;align-items:center;justify-content:center;padding:0;border:0;border-left:1px solid var(--line);border-radius:0 8px 8px 0;background:var(--accent);color:var(--on-accent,#111);cursor:pointer;overflow:hidden;isolation:isolate}.vg-act::before{content:'';position:absolute;inset:0;background:color-mix(in srgb,var(--ink) 16%,transparent);transform:scaleY(0);transform-origin:bottom;transition:transform .22s var(--ease)}.vg-act:hover::before{transform:scaleY(1)}.vg-act:active{transform:translateY(1px)}.vg-act:active::before{transform:scaleY(.35)}.vg-act svg{position:relative;width:16px;height:16px;fill:currentColor}.vg-act.passive{background:transparent;color:var(--ink-faint);cursor:default;border-left-style:dashed}.vg-act.passive::before{display:none}.vg-block.cont-down .vg-act{border-bottom-right-radius:2px}.vg-block.cont-up .vg-act{border-top-right-radius:2px}
+.vg-block.has-act .vg-label{right:42px}.vg-act{position:absolute;right:0;top:0;bottom:0;width:34px;z-index:7;display:flex;align-items:center;justify-content:center;padding:0;border:0;border-left:1px solid var(--line);border-radius:0 8px 8px 0;background:var(--accent);color:var(--on-accent,#111);cursor:pointer;overflow:hidden;isolation:isolate}.vg-act::before{content:'';position:absolute;inset:0;background:color-mix(in srgb,var(--ink) 16%,transparent);transform:scaleY(0);transform-origin:bottom;transition:transform .22s var(--ease)}.vg-act:hover::before{transform:scaleY(1)}.vg-act:active{transform:translateY(1px)}.vg-act:active::before{transform:scaleY(.35)}.vg-act svg{position:relative;width:16px;height:16px;fill:currentColor}.vg-act.passive{background:transparent;color:var(--ink-faint);cursor:default;border-left-style:dashed}.vg-act.passive::before{display:none}
 @container (max-width:149px){.vg-day-count{display:none}}
 @container (max-width:131px){.vg-act{display:none}.vg-block.has-act .vg-label{right:0}}
 .vg-block.short .vg-label small{display:none}
@@ -1558,6 +1557,7 @@
 [data-theme="dark"] .vg-cell.we{background-image:repeating-linear-gradient(135deg,transparent 0 7px,rgba(233,236,241,.035) 7px 8px)}
 [data-theme="dark"] .vg-empty-ticks{background:linear-gradient(to bottom,transparent 24%,rgba(233,236,241,.10) 24% 26%,transparent 26% 49%,rgba(233,236,241,.10) 49% 51%,transparent 51% 74%,rgba(233,236,241,.10) 74% 76%,transparent 76%)}
 [data-theme="dark"] .vg-block{background:linear-gradient(90deg,var(--block-tint,transparent) 0,transparent 56px),#22262c;border-color:#343a42;box-shadow:0 1px 1px rgba(0,0,0,.5),0 6px 16px rgba(0,0,0,.45)}
+[data-theme="dark"] .vg-week-road{background-image:repeating-linear-gradient(135deg,rgba(233,236,241,.16) 0 4px,transparent 4px 9px)}
 [data-theme="dark"] .vg-date.today{background:color-mix(in srgb,#ffe100 8%,#17191d)}
 [data-theme="dark"] .vg-date.today::before{background:#ffe100}
 [data-theme="dark"] .vg-cell.today{box-shadow:inset 0 1px #ffe100}
