@@ -32,7 +32,7 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         vehAgeMin, vehAgeText, vehClass, vehTitle, vehBearing, vehLabel,
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
-        planSchedule, scheduleJobIncluded, tripRouteSegments, driveOfLegs, piecesOf, normPos, addHours, diffHours, clockOf, dayScaleBounds, dayWindow, weekRowSpan, q4,
+        planSchedule, scheduleJobIncluded, tripRouteSegments, driveOfLegs, piecesOf, normPos, addHours, diffHours, dayWindow, weekRowSpan, q4,
         trashDaysLeft,
         measureTrip } = core;
 
@@ -116,7 +116,6 @@ const THEMES={
     // Поэтому токена два.
     '--accent-line':'#ffe100', '--focus':'#ffe100',
     '--nav-bg':'#24262b', '--nav-ink':'#ffe100',
-    '--gantt-label-shadow':'none',
     '--shadow-sm':'0 2px 8px rgba(0,0,0,.20)', '--shadow-md':'0 6px 18px rgba(0,0,0,.30)', '--shadow-lg':'0 12px 28px rgba(0,0,0,.38)',
     // Матовое стекло. Тон СВОЙ У КАЖДОЙ поверхности и равен её же сплошному
     // цвету: стекло делает панель прозрачной, а не перекрашивает её. Общий
@@ -149,7 +148,6 @@ const THEMES={
     // и недостаточно контрастной.
     '--accent-line':'#ffe100', '--focus':'#0f141b',
     '--nav-bg':'#ffe100', '--nav-ink':'#141414', 
-    '--gantt-label-shadow':'0 1px 0 rgba(255,255,255,.78)',
     '--accent':'#ffe100', '--accent-ink':'#1a1d22', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)', // бренд-жёлтый для заливок/границ, тёмный текст-акцент для читаемости
     '--shadow-sm':'0 1px 2px rgba(15,20,27,.07), 0 2px 8px rgba(15,20,27,.07)',
     '--shadow-md':'0 4px 8px rgba(15,20,27,.07), 0 8px 20px rgba(15,20,27,.09)',
@@ -1910,13 +1908,25 @@ function buildBlocks(list,tripOf,tripById,tripOrd,includeDone){
 // иначе гант закрывался бы на каждое движение.
 let feedCtx=null;                 // {plan, weeks, engN, shift, mine, nameOf}
 const gtOpen={}, gtZoom={};
-const gtLaneMode={}, gtDayScale={};
+const gtLaneMode={};
 let gtHistoryWeeks=0;
 let gtSel=null, gtDrag=null;
+const gtStickyVisible=new Set();let gtStickyFrame=0,gtStickyObserver=null;
+function gtStickyPaint(){
+  gtStickyFrame=0;
+  gtStickyVisible.forEach(group=>{if(!group.isConnected){gtStickyVisible.delete(group);return;}const title=group.querySelector('.vg-gtitle');if(!title)return;const r=group.getBoundingClientRect(),max=Math.max(0,r.height-title.offsetHeight);title.style.top=Math.max(0,Math.min(max,8-r.top))+'px';});
+}
+function gtStickyRequest(){if(!gtStickyFrame)gtStickyFrame=requestAnimationFrame(gtStickyPaint);}
+function gtStickyObserve(root){
+  if(!gtStickyObserver&&'IntersectionObserver'in window)gtStickyObserver=new window.IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting)gtStickyVisible.add(e.target);else gtStickyVisible.delete(e.target);});gtStickyRequest();});
+  root.querySelectorAll('[data-vggroup]').forEach(g=>{if(gtStickyObserver)gtStickyObserver.observe(g);else gtStickyVisible.add(g);});gtStickyRequest();
+}
+window.addEventListener('scroll',gtStickyRequest,{passive:true});window.addEventListener('resize',gtStickyRequest,{passive:true});
 
-function gtStep(){ return gtDragZoom()?.25:1; }
 function gtDragZoom(){ return gtDrag&&gtDrag.zoom; }
-function gtEff(){ return ((+appSettings.day_end)||16)-((+appSettings.day_start)||7)+((+appSettings.tolerance_h)||1); }
+const GT_WEEK_PX_H=5;
+function gtWindowHours(){return Math.max(.25,((+appSettings.day_end)||16)-((+appSettings.day_start)||7));}
+function gtEff(){ return gtWindowHours()+((+appSettings.tolerance_h)||1); }
 function gtSettings(blocks){
   const dayStart=(+appSettings.day_start)||7,dayEnd=(+appSettings.day_end)||16,toleranceH=(+appSettings.tolerance_h)||1;
   const staffDay={...staffDayMap};
@@ -1931,11 +1941,6 @@ function gtSettings(blocks){
   return {dayStart,dayEnd,toleranceH,weekend:[0,6],staffDay};
 }
 
-function gtScaleKey(key,iso){ return key+'|'+iso; }
-function gtDayBounds(key,iso){
-  const pieces=[]; gtBlocks().forEach(b=>pieces.push(...gtPieces(b).filter(p=>p.iso===iso)));
-  return dayScaleBounds(pieces,+appSettings.day_start||7,gtDayScale[gtScaleKey(key,iso)]);
-}
 function gtDayGeometry(lanes,iso){
   const ws=lanes.map(l=>dayWindow(l.id,iso,gtSettings())).filter(Boolean);
   const focusStart=Math.max(0,Math.min(...ws.map(w=>w.start))-1),focusEnd=Math.min(24,Math.max(...ws.map(w=>w.ceiling))+1);
@@ -1945,21 +1950,6 @@ function gtDayGeometry(lanes,iso){
   return {focusStart,focusEnd,yOf,tOf,height};
 }
 function gtLaneTime(lane,y){const a=+lane.dataset.focusStart,b=+lane.dataset.focusEnd,s1=a*10,s2=s1+(b-a)*20;return y<=s1?y/10:(y<=s2?a+(y-s1)/20:b+(y-s2)/10);}
-function gtHourOptions(selected){
-  let out=''; for(let h=0;h<=24;h+=.5){ const m=h%1?'30':'00', label=String(Math.floor(h)%24).padStart(2,'0')+':'+m;
-    out+='<option value="'+h+'"'+(Math.abs(h-selected)<.01?' selected':'')+'>'+label+'</option>'; }
-  return out;
-}
-
-// Дорожки: у менеджера — инженеры, у инженера — он один.
-function gtLanes(){
-  if(!feedCtx) return [];
-  if(feedCtx.mine) return [{id:session.user.id,name:'Мои работы'}];
-  const seen=[], out=[];
-  feedCtx.plan.blocks.forEach(b=>{ const k=b.engineer||' free';
-    if(seen.indexOf(k)<0){ seen.push(k); out.push({id:k,name:k===' free'?'Без инженера':(feedCtx.nameOf(k)||'—')}); } });
-  return out;
-}
 function gtBlocks(){ return feedCtx?feedCtx.plan.blocks:[]; }
 function gtFind(id){ return gtBlocks().find(b=>String(b.id)===String(id))||null; }
 
@@ -1995,13 +1985,12 @@ function loadMix(a,b,t){
   return loadLabRgb([x[0]+(y[0]-x[0])*t,c*Math.cos(h),c*Math.sin(h)]);
 }
 function loadColor(p){
-  const mode=theme.mode==='light'?'light':'dark', allowance=1+(+appSettings.deviation_pct||0)/100;
+  const mode=theme.mode==='light'?'light':'dark', allowance=gtEff()/gtWindowHours();
   const base=LOAD_STOPS[mode], stops=base.map((s,i)=>[i===3?allowance:s[0],s[1]]);
   if(p<=0) return stops[0][1];
   for(let i=0;i<stops.length-1;i++) if(p<=stops[i+1][0]) return loadMix(stops[i][1],stops[i+1][1],(p-stops[i][0])/(stops[i+1][0]-stops[i][0]));
   return stops[stops.length-1][1];
 }
-function loadEdge(hex){ const lab=loadRgbLab(hex); lab[0]+=theme.mode==='dark'?.12:-.12; return loadLabRgb(lab); }
 function loadIntensity(p){ return p<=0?0:(p<.8?.35+.65*(p/.8):1); }
 function loadWash(p){
   const rgb=loadHexRgb(loadColor(p)).map(x=>Math.round(x*255));
@@ -2056,24 +2045,7 @@ function gtStart(b){
 function scheduleNow(){
   const at=new Date(),n=core.scheduleNowAt(at,appSettings.day_start,'Europe/Kyiv'); return {iso:n.iso,t:n.t,label:n.label,ms:at.getTime()};
 }
-function gtNowLine(cols,eff){
-  const n=scheduleNow(), i=cols.indexOf(n.iso), rel=n.t-(+appSettings.day_start||7), on=i>=0&&rel>=0&&rel<=eff;
-  const left=on?((i*eff+rel)/(cols.length*eff)*100):0;
-  return '<span class="gnow" data-gnow data-cols="'+cols.join('|')+'" title="Сейчас · '+esc(n.label)+'" style="left:'+left+'%;'+(on?'':'display:none')+'"></span>';
-}
 function paintScheduleNow(){
-  const n=scheduleNow(), eff=gtEff(), shift=(+appSettings.shift_hours)||8;
-  document.querySelectorAll('[data-gnow]').forEach(el=>{
-    const cols=String(el.dataset.cols||'').split('|'), i=cols.indexOf(n.iso);
-    const rel=n.t-(+appSettings.day_start||7),on=i>=0&&rel>=0&&rel<=eff;
-    el.style.display=on?'':'none';
-    if(on){ el.style.left=((i*eff+rel)/(cols.length*eff)*100)+'%'; el.title='Сейчас · '+n.label; }
-  });
-  document.querySelectorAll('[data-wknow]').forEach(el=>{
-    const rel=n.t-(+appSettings.day_start||7),on=el.dataset.wknow===n.iso&&rel>=0&&rel<=shift;
-    el.style.display=on?'':'none';
-    if(on){ el.style.left=(rel/shift*100)+'%'; el.title='Сейчас · '+n.label; }
-  });
   if(feedCtx) Object.keys(gtOpen).filter(k=>gtOpen[k]&&!gtZoom[k]).forEach(gtPaint);
 }
 setInterval(paintScheduleNow,60000);
@@ -2108,7 +2080,7 @@ function gtDayHtml(key){
     });
     const color=loadColor(hours/shift), over=Math.max(0,hours-gtEff());
     const now=scheduleNow(), nowY=geo.yOf(now.t), nowLine=now.iso===iso&&nowY>=0&&nowY<=dayH?'<span class="vg-now" title="Сейчас · '+esc(now.label)+'" style="top:'+nowY+'px"></span>':'';
-    tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'" data-vgspan="'+span+'" data-focus-start="'+geo.focusStart+'" data-focus-end="'+geo.focusEnd+'" style="--load:'+color+';--load-edge:'+loadEdge(color)+'">'+ticks+bars+nowLine
+    tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'" data-vgspan="'+span+'" data-focus-start="'+geo.focusStart+'" data-focus-end="'+geo.focusEnd+'" style="--load:'+color+'">'+ticks+bars+nowLine
       +(!feedCtx.mine&&over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
   });
   const proposals=lanes.map(l=>({l,o:staffDayMap[l.id+'|'+iso]})).filter(x=>x.o&&x.o.proposed_end_h!=null);
@@ -2154,9 +2126,9 @@ function gtBlockName(b){
   return names.join(' + ')||(b.kind==='trip'?'Выезд':'Заявка');
 }
 function gtWeekProblem(key,lanes){
-  const days=gtWeekDays(feedCtx.weeks[key]), allowance=gtEff(); let worst=null;
+  const days=gtWeekDays(feedCtx.weeks[key]); let worst=null;
   lanes.forEach(l=>days.forEach((iso,i)=>{
-    const over=gtLaneLoad(l.id,iso)-allowance;
+    const w=dayWindow(l.id,iso,gtSettings()),over=gtLaneLoad(l.id,iso)-(w?Math.max(.25,w.ceiling-w.start):gtEff());
     if(over>.01&&(!worst||over>worst.over)) worst={over,l,iso,i};
   }));
   if(worst) return WD_RU[(worst.i+1)%7]+' у '+worst.l.name+' '+fmtH(gtLaneLoad(worst.l.id,worst.iso))+' — на '+fmtH(worst.over)+' сверх допуска';
@@ -2168,12 +2140,12 @@ function gtWeekProblem(key,lanes){
 function fmtH(n){ n=+n||0; return (+n.toFixed(n%1?1:0))+' ч'; }
 function clockLabel(t){const h=Math.floor(+t||0),m=Math.round(((+t||0)-h)*60);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
 function gtLoadScale(){
-  const allowance=1+(+appSettings.deviation_pct||0)/100;
+  const allowance=gtEff()/gtWindowHours();
   const stops=[[0,'0%'],[.8,(.8/1.75*100)+'%'],[1,(1/1.75*100)+'%'],[allowance,(allowance/1.75*100)+'%'],[1.75,'100%']];
   const gradient=stops.map(x=>loadColor(x[0])+' '+x[1]).join(',');
   return '<div class="vg-scale"><div class="vg-scale-bar" style="background:linear-gradient(90deg,'+gradient+')"></div>'
     +'<div class="vg-scale-labels"><span style="left:0">нет работ</span><span style="left:'+(80/1.75)+'%">номинал 80%</span>'
-    +'<span style="left:'+(100/1.75)+'%">смена</span><span style="left:'+(allowance/1.75*100)+'%">допуск</span><span style="left:100%">перегруз</span></div></div>';
+    +'<span style="left:'+(100/1.75)+'%">окно</span><span style="left:'+(allowance/1.75*100)+'%">допуск</span><span style="left:100%">перегруз</span></div></div>';
 }
 const gtWallMs=(iso,t)=>utcOf(iso)+(+t||0)*3600000;
 function gtElapsed(ms){
@@ -2202,11 +2174,12 @@ function gtActionIcon(kind){
   const body=kind==='start'?'<path d="M5.5 3.4 12.8 8 5.5 12.6z"/>':kind==='finish'?'<rect x="4.6" y="4.6" width="6.8" height="6.8" rx="1.2"/>':kind==='confirm'?'<path d="M3.6 8.4 6.6 11.4 12.4 4.9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>':'<circle cx="4.2" cy="8" r="1.35"/><circle cx="8" cy="8" r="1.35"/><circle cx="11.8" cy="8" r="1.35"/>';
   return '<svg viewBox="0 0 16 16" aria-hidden="true">'+body+'</svg>';
 }
-function gtTripAction(b){
+function gtTripAction(b,allowEarly){
   if(b.kind!=='trip') return null;
   const own=(b.engineerIds||[]).includes(session&&session.user&&session.user.id);
-  if((b.status==='planned'||b.status==='assigned')&&own) return {kind:'start',label:'Начать выезд'};
-  if(b.status==='in_progress'&&own) return {kind:'finish',label:'Завершить выезд'};
+  const mayAct=own||canWrite(),first=(b.pieces||[])[0],startedToday=!first||first.iso<=todayISO();
+  if((b.status==='planned'||b.status==='assigned')&&mayAct&&(startedToday||allowEarly)) return {kind:'start',label:'Начать выезд'};
+  if(b.status==='in_progress'&&mayAct) return {kind:'finish',label:'Завершить выезд'};
   if(b.status==='finished'&&canWrite()) return {kind:'confirm',label:'Подтвердить выезд'};
   if(b.status==='finished'&&!canWrite()&&own) return {kind:'wait',label:'Ждёт менеджера',passive:true};
   return null;
@@ -2215,51 +2188,50 @@ function gtVerticalHtml(key){
   const it=feedCtx.weeks[key],days=gtWeekDays(it),lanes=gtWeekLanes(key);
   const laneMin=window.matchMedia('(max-width:600px)').matches?108:132,today=todayISO(),now=scheduleNow();
   const all=[];gtBlocks().forEach(b=>gtPieces(b).forEach(p=>all.push({...p,engineer:b.engineer||' free'})));
-  const rows=days.map(iso=>weekRowSpan(iso,lanes.map(l=>l.id),all,gtSettings(),5));
+  const rows=days.map(iso=>weekRowSpan(iso,lanes.map(l=>l.id),all,gtSettings(),GT_WEEK_PX_H));
   const totalH=rows.reduce((n,r)=>n+r.px,0),template=rows.map(r=>r.px+'px').join(' ');
   let axis='<span class="vg-axis-head" aria-hidden="true"></span>';
   days.forEach((iso,i)=>axis+='<button style="height:'+rows[i].px+'px" class="vg-date'+(rows[i].weekend?' we':'')+(iso===today?' today':'')+'" data-gday="'+iso+'"><b>'+WD_RU[(i+1)%7]+'</b> '+shortDate(iso)+'</button>');
   axis='<div class="vg-axis" style="grid-template-rows:34px '+template+'">'+axis+'</div>';
   let heads='',tracks='';
   lanes.forEach(l=>{
-    const weekH=days.reduce((n,d)=>n+gtLaneLoad(l.id,d),0),windowH=Math.max(.25,(+appSettings.day_end||16)-(+appSettings.day_start||7));
-    heads+='<div class="vg-lane-head"><b>'+esc(l.name)+'</b><span>'+fmtH(weekH)+(feedCtx.mine?'':' · '+Math.round(weekH/(windowH*5)*100)+'%')+'</span></div>';
-    let cells='',bars='',offset=0;
+    const weekH=days.reduce((n,d)=>n+gtLaneLoad(l.id,d),0),windowH=gtWindowHours(),weekCap=days.reduce((n,d)=>{const w=dayWindow(l.id,d,gtSettings());return n+(w?Math.max(.25,w.end-w.start):0);},0);
+    heads+='<div class="vg-lane-head"><b>'+esc(l.name)+'</b><span>'+fmtH(weekH)+(feedCtx.mine?'':' · '+Math.round(weekH/Math.max(.25,weekCap)*100)+'%')+'</span></div>';
+    let cells='',bars='',offset=0;const groupBounds={};
     days.forEach((iso,i)=>{const row=rows[i],w=dayWindow(l.id,iso,gtSettings()),hours=gtLaneLoad(l.id,iso),p=hours/(w?Math.max(.25,w.end-w.start):windowH),over=Math.max(0,hours-(w?Math.max(0,w.end-w.start):windowH));
-      cells+='<div class="vg-cell'+(row.weekend?' we':'')+(iso===today?' today':'')+'" style="position:absolute;top:'+offset+'px;height:'+row.px+'px">'
-        +(w&&!feedCtx.mine?'<span class="vg-tolerance" style="top:'+((w.end-row.top)*5)+'px;height:'+Math.max(0,(w.ceiling-w.end)*5)+'px"></span><span class="vg-day-end" style="top:'+((w.end-row.top)*5)+'px"></span>':'')
-        +(!feedCtx.mine&&hours>0?'<span class="vg-rail" style="top:'+Math.max(4,(w.start-row.top)*5)+'px;height:'+Math.max(12,Math.min(row.px-8,hours*5))+'px"><i style="height:100%;--rail-color:'+loadColor(p)+'"></i></span>':'')
-        +(!feedCtx.mine&&over>.01?'<span class="vg-over" style="top:'+Math.max(2,(w.end-row.top)*5-8)+'px">+'+fmtH(over)+'</span>':'')+'</div>';
+      const ceilingH=w?Math.max(.25,w.ceiling-w.start):windowH,railFill=Math.max(12,Math.min(100,hours/ceilingH*100));
+      cells+='<div class="vg-cell'+(row.weekend?' we':'')+(iso===today?' today':'')+'" data-vgday="'+iso+'" style="position:absolute;top:'+offset+'px;height:'+row.px+'px">'
+        +(w&&!feedCtx.mine?'<span class="vg-tolerance" style="top:'+((w.end-row.top)*GT_WEEK_PX_H)+'px;height:'+Math.max(0,(w.ceiling-w.end)*GT_WEEK_PX_H)+'px"></span><span class="vg-day-end" style="top:'+((w.end-row.top)*GT_WEEK_PX_H)+'px"></span>':'')
+        +(!feedCtx.mine&&w?'<span class="vg-rail'+(hours>ceilingH?' over':'')+'" style="top:'+Math.max(4,(w.start-row.top)*GT_WEEK_PX_H)+'px;height:'+(ceilingH*GT_WEEK_PX_H)+'px">'+(hours>0?'<i style="height:'+railFill+'%;--rail-color:'+loadColor(p)+'"></i>':'')+'</span>':'')
+        +(!feedCtx.mine&&over>.01?'<span class="vg-over" style="top:'+Math.max(2,(w.end-row.top)*GT_WEEK_PX_H-8)+'px">+'+fmtH(over)+'</span>':'')+'</div>';
       gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{const blockPieces=gtPieces(b),pcs=blockPieces.filter(x=>x.iso===iso);if(!pcs.length)return;
-        const from=Math.min(...pcs.map(x=>x.from)),to=Math.max(...pcs.map(x=>x.to)),top=offset+Math.max(1,(from-row.top)*5),height=Math.max(12,(Math.min(to,row.bot)-Math.max(from,row.top))*5);
+        const from=Math.min(...pcs.map(x=>x.from)),to=Math.max(...pcs.map(x=>x.to)),top=offset+Math.max(1,(from-row.top)*GT_WEEK_PX_H),height=Math.max(12,(Math.min(to,row.bot)-Math.max(from,row.top))*GT_WEEK_PX_H);
         const occupied=[...new Set(blockPieces.map(x=>x.iso))].sort(),dayNo=occupied.indexOf(iso),firstDay=dayNo===0;
+        const prev=occupied[dayNo-1],next=occupied[dayNo+1],contUp=prev&&days.includes(prev)&&utcOf(iso)-utcOf(prev)===DAY_MS,contDown=next&&days.includes(next)&&utcOf(next)-utcOf(iso)===DAY_MS;
         const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late'),startP=hours/windowH,first=blockPieces[0],last=blockPieces[blockPieces.length-1];
         const live=gtTripLive(b,first,last,now),action=firstDay?gtTripAction(b):null,dayHours=pcs.reduce((n,x)=>n+x.h,0),span=Math.max(.01,to-from);
         const roads=pcs.filter(x=>x.k==='d').map(x=>'<i class="vg-week-road" style="top:'+(((x.from-from)/span)*100).toFixed(2)+'%;height:'+(((x.to-x.from)/span)*100).toFixed(2)+'%"></i>').join('');
         const burnable=iso===today&&(b.status==='planned'||b.status==='assigned')&&now.t>from;
         const burn=burnable?Math.max(0,Math.min(100,(Math.min(now.t,to)-from)/span*100)):0;
-        const title=firstDay?gtBlockName(b):(clockLabel(from)+'–'+clockLabel(to));
+        const title=occupied.length===1?gtBlockName(b):'';
         const meta=(live?'<span class="vg-live '+live.tone+'">'+live.html+'</span>':'<small>'+esc(fmtH(dayHours)+' · '+clockLabel(from)+'–'+clockLabel(to))+'</small>')+(occupied.length>1?'<span class="vg-day-count">'+(dayNo+1)+'/'+occupied.length+'</span>':'');
         const act=action?'<'+(action.passive?'span':'button')+' class="vg-act'+(action.passive?' passive':'')+'" '+(action.passive?'':'type="button" data-gact="'+action.kind+'"')+' aria-label="'+esc(action.label)+'" title="'+esc(action.label)+'">'+gtActionIcon(action.kind)+'</'+(action.passive?'span':'button')+'>':'';
-        bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+(height<40?' short':'')+(action?' has-act':'')+'" data-gb="'+esc(b.id)+'" data-block="'+esc(b.id)+'" style="--block-tint:'+(feedCtx.mine?'transparent':loadTint(startP))+';top:'+top+'px;height:'+height+'px">'+roads
+        bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+(height<40?' short':'')+(contUp?' cont-up':'')+(contDown?' cont-down':'')+(action?' has-act':'')+'" data-gb="'+esc(b.id)+'" data-block="'+esc(b.id)+'" style="--block-tint:'+(feedCtx.mine?'transparent':loadTint(startP))+';top:'+top+'px;height:'+height+'px">'+roads
           +(burn>0?'<i class="vg-burn" style="height:'+burn.toFixed(2)+'%"></i><i class="vg-burn-edge" style="top:'+burn.toFixed(2)+'%"></i>':'')
-          +'<span class="vg-label"><b>'+esc(title)+(b.manual?' ✎':'')+'</b><span class="vg-meta">'+meta+'</span></span>'+act+'</div>';
-        if(iso===today&&b.status==='in_progress'&&now.t>to){const tailTop=offset+(to-row.top)*5,tailH=Math.max(2,(Math.min(now.t,row.bot)-to)*5);if(tailH>0)bars+='<i class="vg-tail" style="top:'+tailTop+'px;height:'+tailH+'px"></i>';}
+          +'<span class="vg-label">'+(title?'<b>'+esc(title)+(b.manual?' ✎':'')+'</b>':'')+'<span class="vg-meta">'+meta+'</span></span>'+act+'</div>';
+        if(occupied.length>1){const g=groupBounds[b.id]||(groupBounds[b.id]={top,bottom:top+height,b,name:gtBlockName(b)});g.top=Math.min(g.top,top);g.bottom=Math.max(g.bottom,top+height);}
+        if(iso===today&&b.status==='in_progress'&&now.t>to){const tailTop=offset+(to-row.top)*GT_WEEK_PX_H,tailH=Math.max(2,(Math.min(now.t,row.bot)-to)*GT_WEEK_PX_H);if(tailH>0)bars+='<i class="vg-tail" style="top:'+tailTop+'px;height:'+tailH+'px"></i>';}
       });
-      if(iso===today&&now.t>=row.top&&now.t<=row.bot) bars+='<span class="vg-nowline" style="top:'+(offset+(now.t-row.top)*5)+'px"><b></b><s></s></span>';
+      if(iso===today&&now.t>=row.top&&now.t<=row.bot) bars+='<span class="vg-nowline" style="top:'+(offset+(now.t-row.top)*GT_WEEK_PX_H)+'px"><b></b><s></s></span>';
       offset+=row.px;});
-    tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'" style="height:'+totalH+'px">'+cells+bars+'<span class="vg-tip" hidden></span></div>';
+    const groups=Object.values(groupBounds).map(g=>'<div class="vg-group" data-vggroup data-gb="'+esc(g.b.id)+'" style="top:'+g.top+'px;height:'+(g.bottom-g.top)+'px"><b class="vg-gtitle">'+esc(g.name)+(g.b.manual?' ✎':'')+'</b></div>').join('');
+    tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'" style="height:'+totalH+'px">'+cells+bars+groups+'<span class="vg-tip" hidden></span></div>';
   });
   return '<div class="vg-tools"><span>'+(feedCtx.mine?'Работы по дням':'Рабочее окно '+fmtH((+appSettings.day_end||16)-(+appSettings.day_start||7))+' · допуск '+fmtH(appSettings.tolerance_h||1)+' · перетащите на сб/вс, чтобы открыть выходной')+'</span>'+gtLanePicker(key)+'</div>'
     +'<div class="vg-scroll" style="--lane-min:'+laneMin+'px"><div class="vg-grid" style="--week-h:'+totalH+'px;--lanes:'+Math.max(1,lanes.length)+'">'+axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
     +(feedCtx.mine?'':gtLoadScale())+'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="road"></i>дорога</span><span>тап по дню — сутки и ручная раскладка</span></div>';
 }
 function gtHtml(key){ return gtZoom[key]?gtDayHtml(key):gtVerticalHtml(key); }
-function gtTicks(nCols,eff){
-  let t=''; const total=nCols*Math.round(eff);
-  for(let i=1;i<total;i++) t+='<span class="gtick'+((i%Math.round(eff)===0)?' day':'')+'" style="left:'+(i/total*100)+'%"></span>';
-  return t;
-}
 function gtPaint(key){
   const box=document.querySelector('[data-gtbox="'+key+'"]'); if(!box) return;
   box.innerHTML=gtHtml(key);
@@ -2279,26 +2251,22 @@ function gtApply(){
 function gtWire(key,box){
   const eff=gtEff(), zoom=gtZoom[key]||null;
   const gantt=box.querySelector('.vg-scroll');
+  gtStickyObserve(box);
   if(gantt&&!zoom){
     gantt.onpointerover=e=>{const el=e.target.closest('[data-block]');if(!el)return;gantt.classList.add('hl');gantt.querySelectorAll('[data-block]').forEach(x=>x.classList.toggle('on',x.dataset.block===el.dataset.block));};
     gantt.onpointerleave=()=>{gantt.classList.remove('hl');gantt.querySelectorAll('[data-block]').forEach(x=>x.classList.remove('on'));};
   }
   box.querySelectorAll('[data-gact]').forEach(btn=>{
     btn.onpointerdown=e=>e.stopPropagation();
-    btn.onclick=async e=>{e.preventDefault();e.stopPropagation();const host=btn.closest('[data-gb]'),b=host&&gtFind(host.dataset.gb);if(b&&b.tripId)await tripAction(b.tripId,btn.dataset.gact);};
+    btn.onclick=async e=>{e.preventDefault();e.stopPropagation();const host=btn.closest('[data-gb]'),b=host&&gtFind(host.dataset.gb);if(b&&b.tripId){const own=(b.engineerIds||[]).includes(session.user.id);await tripAction(b.tripId,btn.dataset.gact,!own&&canWrite()?feedCtx.nameOf(b.engineer):'');}};
   });
+  box.querySelectorAll('.vg-gtitle').forEach(title=>title.onclick=e=>{e.stopPropagation();const b=gtFind(title.closest('[data-gb]').dataset.gb);if(b){gtSel=b.id;gtPop(key,b);}});
   box.querySelectorAll('[data-gback]').forEach(b=>b.onclick=e=>{ e.stopPropagation();
     gtZoom[key]=null; gtSel=null; gtPaint(key); });
   box.querySelectorAll('[data-gday]').forEach(d=>d.onclick=e=>{ e.stopPropagation();
     gtZoom[key]=d.dataset.gday; gtSel=null; gtPaint(key); });
   box.querySelectorAll('[data-vgmode]').forEach(select=>select.onchange=e=>{ e.stopPropagation();
     gtLaneMode[key]=select.value; gtSel=null; gtPaint(key); });
-  const scaleFrom=box.querySelector('[data-vgfrom]'), scaleTo=box.querySelector('[data-vgto]');
-  const saveScale=()=>{ const from=+scaleFrom.value,to=+scaleTo.value; if(to<=from){ showToast('Конец масштаба должен быть позже начала'); return; }
-    gtDayScale[gtScaleKey(key,zoom)]={from,to}; gtPaint(key); };
-  if(scaleFrom) scaleFrom.onchange=saveScale;
-  if(scaleTo) scaleTo.onchange=saveScale;
-  const auto=box.querySelector('[data-vgauto]'); if(auto) auto.onclick=()=>{ delete gtDayScale[gtScaleKey(key,zoom)]; gtPaint(key); };
   box.querySelectorAll('[data-winline]').forEach(line=>line.onpointerdown=e=>{
     const kind=line.dataset.winline,engineer=line.dataset.engineer;if((kind!=='end'||role!=='engineer')&&!canWrite())return;
     e.preventDefault();e.stopPropagation();const lane=line.closest('.vg-day-lane'),R=lane.getBoundingClientRect(),iso=zoom,w=dayWindow(engineer,iso,gtSettings());let value=kind==='start'?w.start:(kind==='end'?w.end:w.ceiling);
@@ -2312,7 +2280,7 @@ function gtWire(key,box){
   if(!zoom) box.querySelectorAll('.vg-lane').forEach(lane=>{
     lane.onpointermove=e=>{
       const y=e.clientY-lane.getBoundingClientRect().top,cells=[...lane.querySelectorAll('[data-vgday]')],cell=cells.find(x=>y>=x.offsetTop&&y<x.offsetTop+x.offsetHeight),i=Math.max(0,cells.indexOf(cell));
-      const iso=gtWeekDays(feedCtx.weeks[key])[i], hours=gtLaneLoad(lane.dataset.vglane,iso), shift=(+appSettings.shift_hours)||8;
+      const iso=gtWeekDays(feedCtx.weeks[key])[i], hours=gtLaneLoad(lane.dataset.vglane,iso), shift=gtWindowHours();
       const tip=lane.querySelector('.vg-tip');
       if(tip){ tip.hidden=false; tip.style.top=((cell?cell.offsetTop:0)+(cell?cell.offsetHeight/2:20))+'px';
         tip.textContent=WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)
@@ -2323,10 +2291,6 @@ function gtWire(key,box){
       const y=e.clientY-lane.getBoundingClientRect().top,cells=[...lane.querySelectorAll('[data-vgday]')],i=Math.max(0,cells.findIndex(x=>y>=x.offsetTop&&y<x.offsetTop+x.offsetHeight));
       gtZoom[key]=gtWeekDays(feedCtx.weeks[key])[i]; gtSel=null; gtPaint(key);
     };
-  });
-  box.querySelectorAll('[data-gseg]').forEach(seg=>{
-    seg.onpointerdown=e=>e.stopPropagation();
-    seg.onclick=e=>{ e.stopPropagation(); const host=seg.closest('[data-gb]'), b=host&&gtFind(host.dataset.gb); if(!b) return; const index=+seg.dataset.gseg, r=seg.getBoundingClientRect(); const frac=Math.max(0,Math.min(1,(e.clientY-r.top)/Math.max(1,r.height))); const at=Math.round(((+seg.dataset.goffset||0)+frac*(+seg.dataset.gpieceh||0))*2)/2; gtSel=b.id; gtPaint(key); gtPop(key,b,index,at); };
   });
   box.querySelectorAll('[data-gdivide]').forEach(btn=>btn.onclick=e=>{
     e.preventDefault();e.stopPropagation();const el=btn.closest('.vg-piece'),b=el&&gtFind(el.dataset.gb);if(!b)return;
@@ -2349,10 +2313,10 @@ function gtWire(key,box){
     });
     return;
   }
-  box.querySelectorAll('.gpc,.vg-block:not(.vg-piece)').forEach(el=>{
+  box.querySelectorAll('.vg-block:not(.vg-piece)').forEach(el=>{
     el.onpointerdown=e=>{
       const b=gtFind(el.dataset.gb); if(!b) return;
-      const tr=el.closest('.gtrack,.vg-lane'), vertical=el.classList.contains('vg-block');
+      const tr=el.closest('.vg-lane'), vertical=true;
       gtDrag={id:b.id,block:b,start:b.start,base:b.start,x0:e.clientX,
         y0:e.clientY,w:tr.getBoundingClientRect().width,h:tr.getBoundingClientRect().height,
         visibleSpan:+tr.dataset.vgspan||eff,vertical:vertical,
@@ -2423,7 +2387,7 @@ async function renderFeedAgain(){if(feedCtx&&feedCtx.mine)await renderMine();els
 function gtPop(key,b){
   const old=document.querySelector('.gpop');if(old)old.remove();
   const cuts=(b.cuts||[]).map(c=>({after:+c.after,at:{d:c.at.d,t:+c.at.t}}));
-  const trip=b.kind==='trip',action=trip?gtTripAction(b):null;
+  const trip=b.kind==='trip',action=trip?gtTripAction(b,true):null;
   const tripTools=trip?'<div class="gp-f gp-trip-tools">'
     +(action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'')
     +((b.status==='planned'||b.status==='assigned')&&!reschedByTrip[b.tripId]?'<button class="btn sm" data-pop-resched>Перенести</button>':'')
@@ -2440,7 +2404,7 @@ function gtPop(key,b){
   const close=()=>{gtSel=null;pop.remove();gtPaint(key);};pop.querySelector('[data-gclose]').onclick=e=>{e.stopPropagation();close();};
   const reset=pop.querySelector('[data-greset]');if(reset)reset.onclick=e=>{e.stopPropagation();pop.remove();gtSave(b,null);};pop.onclick=e=>e.stopPropagation();
   const tool=(sel,fn)=>{const x=pop.querySelector(sel);if(x)x.onclick=async e=>{e.stopPropagation();pop.remove();await fn();};};
-  tool('[data-pop-action]',()=>tripAction(b.tripId,action.kind));tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
+  tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWrite()?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
   const el=document.querySelector('[data-gb="'+window.CSS.escape(String(b.id))+'"]');if(el&&!matchMedia('(max-width:600px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-348,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
 }
 async function gtPinPiece(b,piece,iso,t){
@@ -2452,18 +2416,13 @@ async function gtPinPiece(b,piece,iso,t){
 // Клик мимо — закрыть модалку.
 document.addEventListener('click',e=>{
   if(!gtSel) return;
-  if(e.target.closest('.gpop')||e.target.closest('.gpc')||e.target.closest('.vg-block')) return;
+  if(e.target.closest('.gpop')||e.target.closest('.vg-block')||e.target.closest('.vg-gtitle')) return;
   const key=Object.keys(gtOpen).find(k=>gtOpen[k]); gtSel=null; const pop=document.querySelector('.gpop'); if(pop) pop.remove(); if(key) gtPaint(key);
 });
-// Раскрыть / свернуть гант и открыть день прямо из полосы.
+// Раскрыть / свернуть гант.
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-gtoggle]');
   if(t){ const k=t.dataset.gtoggle; gtOpen[k]=!gtOpen[k]; gtApply(); return; }
-  const d=e.target.closest('.wk-d[data-gday]');
-  if(d){
-    const row=d.closest('.wkrow'); if(!row) return;
-    const k=row.dataset.wk; gtOpen[k]=true; gtZoom[k]=d.dataset.gday; gtSel=null; gtApply();
-  }
 });
 
 // ── Одна арифметика загрузки на всё приложение ──────────────────────────
@@ -2566,7 +2525,7 @@ async function renderFeed(box,o){
     const u2=j=>Math.round((utcOf(j.due_date)-utcOf(todayISO()))/DAY_MS);
     const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||''):''; };
     const hours=jobHours;
-    const shift=(+appSettings.shift_hours)||8;
+    const shift=gtWindowHours();
 
     // ── Группировка по дате срока ────────────────────────────────────────
     // ── Календарный план ─────────────────────────────────────────────────
@@ -2780,11 +2739,11 @@ async function renderFeed(box,o){
       const it=weeks[key], lanes=gtWeekLanes(key), days=gtWeekDays(it);
       const blocks=ganttPlan.blocks.filter(b=>(b.pieces||[]).some(p=>days.includes(p.iso)));
       const total=blocks.reduce((n,b)=>n+(b.pieces||[]).filter(p=>days.includes(p.iso)).reduce((x,p)=>x+p.h,0),0);
-      const laneCount=o.mine?1:engineersCount(ganttPlan);
-      const pct=Math.round(total/(shift*5*laneCount)*100), problem=o.mine?'':gtWeekProblem(key,lanes);
+      const capacity=lanes.reduce((sum,l)=>sum+days.reduce((n,iso)=>{const w=dayWindow(l.id,iso,gtSettings());return n+(w?Math.max(.25,w.end-w.start):0);},0),0);
+      const pct=Math.round(total/Math.max(.25,capacity)*100), problem=o.mine?'':gtWeekProblem(key,lanes);
       let mini='';
       days.forEach(iso=>{
-        const maxP=Math.max(0,...lanes.map(l=>gtLaneLoad(l.id,iso)/shift));
+        const maxP=Math.max(0,...lanes.map(l=>{const w=dayWindow(l.id,iso,gtSettings());return gtLaneLoad(l.id,iso)/Math.max(.25,w?w.end-w.start:gtWindowHours());}));
         mini+='<i style="height:'+Math.max(3,Math.min(14,maxP*11))+'px;background:'+loadWash(maxP)+'"></i>';
       });
       const summary=blocks.length+' '+plural(blocks.length,'блок','блока','блоков')+' · '+fmtH(total);
@@ -3398,7 +3357,7 @@ function worksCard(jb,trips,tripOf){
 // мы взять ещё работу» задаётся отделу, а не человеку.
 function loadCard(list,tripOf,tripById,tripOrd){
   if(!canWrite()) return '';
-  const shift=(+appSettings.shift_hours)||8;
+  const shift=gtWindowHours();
   let fromIso,toIso;
   if(loadRange){ fromIso=loadRange.from; toIso=loadRange.to; }
   else {
@@ -5226,95 +5185,6 @@ function slimGeometry(g){
   }catch(e){ return g; }
 }
 function routeAll(){ return (tripStart?[{type:'start',name:tripStart.name,lat:tripStart.lat,lng:tripStart.lng}]:[]).concat(tripRouteStops); }
-let ganttTrips=[], gDayW=36;
-function wireGantt(box){
-  box.querySelectorAll('[data-gt]').forEach(bar=>{
-    if(!canWrite()){ bar.onclick=()=>showTripOnMap(bar.dataset.gt); return; }
-    bar.style.cursor='grab'; bar.title=(bar.title||'')+' · тяни, чтобы перенести даты';
-    let sx=0, dx=0, orig=0, on=false;
-    const move=ev=>{ if(!on) return; const p=ev.touches?ev.touches[0]:ev; dx=p.clientX-sx; if(ev.cancelable) ev.preventDefault(); bar.style.left=(orig+dx)+'px'; };
-    const up=async ()=>{ if(!on) return; on=false; bar.style.cursor='grab'; bar.style.opacity=''; bar.style.zIndex='';
-      document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up);
-      document.removeEventListener('touchmove',move); document.removeEventListener('touchend',up);
-      if(Math.abs(dx)<4){ bar.style.left=orig+'px'; openTrip(bar.dataset.gt); return; }
-      const days=Math.round(dx/gDayW); if(!days){ bar.style.left=orig+'px'; return; }
-      await shiftTrip(bar.dataset.gt,days); };
-    const down=ev=>{ const p=ev.touches?ev.touches[0]:ev; sx=p.clientX; dx=0; on=true; orig=parseFloat(bar.style.left)||0;
-      bar.style.cursor='grabbing'; bar.style.opacity='.75'; bar.style.zIndex='5';
-      document.addEventListener('mousemove',move); document.addEventListener('mouseup',up);
-      document.addEventListener('touchmove',move,{passive:false}); document.addEventListener('touchend',up); };
-    bar.addEventListener('mousedown',down); bar.addEventListener('touchstart',down,{passive:true}); }); }
-async function shiftTrip(id,days){ const t=ganttTrips.find(x=>x.id==id); if(!t||!t.date_from){ renderGantt(); return; }
-  const mv=ds=>{ if(!ds) return null; const d=new Date(ds+'T00:00:00'); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); };
-  const oldFrom=t.date_from, oldTo=t.date_to; const from=mv(t.date_from), to=t.date_to?mv(t.date_to):null;
-  const {error}=await sb.from('trips').update({date_from:from,date_to:to}).eq('id',id);
-  if(error){ notify('Не удалось перенести: '+error.message,'err'); await renderGantt(); return; }
-  await renderGantt();
-  undoToast('Выезд перенесён на '+from+(to&&to!==from?(' → '+to):''), async ()=>{ const {error:e2}=await sb.from('trips').update({date_from:oldFrom,date_to:oldTo}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderGantt(); showToast('Даты возвращены'); }); }
-// ── Гант ────────────────────────────────────────────────────────────────────
-// Раньше окно считалось само: от самого раннего выезда до самого позднего,
-// по 36 px на день. Один выезд в октябре растягивал шкалу на полгода, полоса
-// уезжала в горизонтальный скролл, и увидеть «что на этой неделе» было
-// нельзя. Теперь период выбирают, а ширина дня считается от окна.
-let ganttDays=30;          // сколько дней в окне
-let ganttShift=0;          // на сколько окон сдвинуты от «сегодня»
-const GANTT_PERIODS=[[14,'2 недели'],[30,'месяц'],[90,'квартал']];
-function ganttFrom(){
-  // Окно начинается за три дня до сегодня: вчерашнее ещё нужно видеть.
-  const d=new Date(); d.setDate(d.getDate()-3+ganttShift*ganttDays); return d;
-}
-function renderGanttBar(){
-  const box=$('ganttBar'); if(!box) return;
-  const d0=ganttFrom(), d1=new Date(d0); d1.setDate(d1.getDate()+ganttDays-1);
-  box.innerHTML='<div class="seg" id="ganttPeriod">'
-      +GANTT_PERIODS.map(([n,l])=>'<button'+(n===ganttDays?' class="on"':'')+' data-gd="'+n+'">'+l+'</button>').join('')
-    +'</div>'
-    +'<button class="btn sm" data-gnav="-1" title="Раньше">←</button>'
-    +'<button class="btn sm" data-gnav="0">Сегодня</button>'
-    +'<button class="btn sm" data-gnav="1" title="Позже">→</button>'
-    +'<span class="hint" style="margin: 0">'+esc(tripPeriod(todayISO(d0),todayISO(d1)))+'</span>';
-  box.querySelectorAll('[data-gd]').forEach(b=>b.onclick=()=>{ ganttDays=+b.dataset.gd; renderGanttBar(); renderGantt(); });
-  box.querySelectorAll('[data-gnav]').forEach(b=>b.onclick=()=>{
-    const v=+b.dataset.gnav; ganttShift=v?(ganttShift+v):0; renderGanttBar(); renderGantt(); });
-}
-async function renderGantt(){ await ensureRefs(); const box=$('gantt'); if(!box) return;
-  renderGanttBar();
-  const {data,error}=await sb.from('trips').select('*').is('deleted_at',null).order('date_from'); if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
-  let src=(data||[]).filter(t=>t.date_from); if(role==='engineer') src=src.filter(t=>t.lead_engineer===session.user.id); ganttTrips=src;
-  if(!src.length){ box.innerHTML='<div class="hint">Выездов с датами нет.</div>'; return; }
-  const dayMs=86400000, today=todayISO();
-  const d0=ganttFrom(); d0.setHours(0,0,0,0);
-  const N=ganttDays;
-  // Дни считаем календарём, а не прибавлением суток в миллисекундах:
-  // в ночь перевода часов «плюс 24 часа» даёт 23:00 предыдущего дня,
-  // и в шкале появился бы задвоенный день.
-  const dayAt=i=>new Date(d0.getFullYear(),d0.getMonth(),d0.getDate()+i);
-  const from=todayISO(d0), to=todayISO(dayAt(N-1));
-  // Ширина дня — от ширины окна, а не константой. Подпись имени инженера
-  // занимает свою колонку, её вычитаем.
-  const avail=Math.max(320,(box.clientWidth||box.parentElement.clientWidth||900)-2);
-  const dayW=Math.max(6,Math.floor(avail/N));
-  gDayW=dayW;
-  const off=ds=>Math.round((new Date(ds+'T00:00:00')-d0)/dayMs);
-  const vis=src.filter(t=>{ const a=t.date_from, b=t.date_to||t.date_from; return !(b<from||a>to); });
-  if(!vis.length){ box.innerHTML='<div class="hint">В этом периоде выездов нет.</div>'; return; }
-  const groups={}; vis.forEach(t=>{ const eng=t.lead_engineer||'__none'; (groups[eng]=groups[eng]||[]).push(t); });
-  // На узком дне число не влезает: подписываем только понедельники.
-  const dense=dayW<22;
-  let head='<div class="gantt-head" style="width:'+(N*dayW)+'px">';
-  for(let i=0;i<N;i++){ const d=dayAt(i); const iso=todayISO(d);
-    const wknd=(d.getDay()===0||d.getDay()===6);
-    const lbl=dense?(d.getDay()===1?String(d.getDate()):''):String(d.getDate());
-    head+='<div class="gantt-day'+(iso===today?' today':'')+(wknd?' wknd':'')+'" style="width:'+dayW+'px">'+lbl+'</div>'; }
-  head+='</div>';
-  let rows=''; Object.keys(groups).forEach(eng=>{ const p=profilesList.find(x=>x.id===eng); const nm=p?(p.full_name||'инженер'):(eng==='__none'?'Без инженера':'—');
-    rows+='<div class="gantt-eng">'+esc(nm)+'</div><div class="gantt-row" style="width:'+(N*dayW)+'px">';
-    groups[eng].forEach(t=>{ const s=off(t.date_from); const e=off(t.date_to||t.date_from);
-      if(s>=N||e<0) return; const s2=Math.max(0,s); const span=Math.max(1,Math.min(N-1,e)-s2+1);
-      const w=Math.max(4,span*dayW-4); const pts=(t.route_stops||[]).filter(x=>x&&x.name&&x.type!=='start'&&x.type!=='place'&&x.type!=='wp').map(x=>String(x.name).split(' · ')[0]); const label=pts[0]||t.vehicle_label||'выезд'; rows+='<div class="gantt-bar st-'+esc(t.status)+'" style="left:'+(s2*dayW)+'px;width:'+w+'px" data-gt="'+t.id+'" title="'+esc((t.date_from||'')+' → '+(t.date_to||'')+(pts.length?(' · '+pts.join(', ')):''))+'">'+esc(label)+'</div>'; });
-    rows+='</div>'; });
-  box.innerHTML='<div class="gantt-wrap">'+head+rows+'</div>';
-  wireGantt(box); }
 function wireKanbanDrag(box,onDrop){ if(!canWrite()) return;
   box.querySelectorAll('.kcard').forEach(card=>{ card.setAttribute('draggable','true');
     card.addEventListener('dragstart',e=>{ card.classList.add('dragging'); try{ e.dataTransfer.setData('text/plain',card.dataset.kid); e.dataTransfer.effectAllowed='move'; }catch(err){} });
@@ -6233,9 +6103,10 @@ async function settleFactKm(tid){
   return true;
 }
 
-async function tripAction(id,kind){
+async function tripAction(id,kind,engineerName){
   const a=TRIP_ASK[kind];
-  if(!await confirmDialog(a.q,{okText:a.ok})) return;
+  const question=engineerName?a.q.replace('выезд?', 'выезд '+engineerName+'?'):a.q;
+  if(!await confirmDialog(question,{okText:a.ok})) return;
   // Подтверждение — последняя точка, где пробег ещё можно поправить: сразу
   // после него число уходит в одометр машины и в себестоимость. Поэтому
   // считаем факт ЗДЕСЬ, до RPC, и своими руками.
