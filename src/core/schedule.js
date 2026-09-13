@@ -588,11 +588,3 @@ export function driveOfLegs(legs) {
   const midH = l.slice(1, -1).reduce((a, x) => a + (+x.h || 0), 0);
   return { toH: toH, backH: backH, midH: midH, km: km };
 }
-
-// Часы в текст: 08:00 при dayStart 8. Нужен ганту и подсказкам.
-export function clockOf(h, s) {
-  const st = (s && s.dayStart != null) ? +s.dayStart : SCHEDULE_DEFAULTS.dayStart;
-  const t = st + (+h || 0);
-  const hh = Math.floor(t), mm = Math.round((t - hh) * 60);
-  return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
-}
