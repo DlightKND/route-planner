@@ -1946,12 +1946,17 @@ function gtSettings(blocks){
 function gtDayGeometry(lanes,iso){
   const ws=lanes.map(l=>dayWindow(l.id,iso,gtSettings())).filter(Boolean);
   const focusStart=Math.max(0,Math.min(...ws.map(w=>w.start))-1),focusEnd=Math.min(24,Math.max(...ws.map(w=>w.ceiling))+1);
-  const yOf=t=>t<=focusStart?t*10:(t<=focusEnd?focusStart*10+(t-focusStart)*20:focusStart*10+(focusEnd-focusStart)*20+(t-focusEnd)*10);
-  const split=yOf(focusStart),split2=yOf(focusEnd),height=yOf(24);
-  const tOf=y=>y<=split?y/10:(y<=split2?focusStart+(y-split)/20:focusEnd+(y-split2)/10);
+  // The day view is a clock, not a focus lens: every hour from 00:00 to
+  // 24:00 must occupy the same amount of space.  Compressing the night made
+  // the evening labels jump from 19:00 to 22:00 and made late work hard to
+  // resize accurately.
+  const pxPerHour=20;
+  const yOf=t=>Math.max(0,Math.min(24,+t||0))*pxPerHour;
+  const tOf=y=>Math.max(0,Math.min(24,(+y||0)/pxPerHour));
+  const height=yOf(24);
   return {focusStart,focusEnd,yOf,tOf,height};
 }
-function gtLaneTime(lane,y){const a=+lane.dataset.focusStart,b=+lane.dataset.focusEnd,s1=a*10,s2=s1+(b-a)*20;return y<=s1?y/10:(y<=s2?a+(y-s1)/20:b+(y-s2)/10);}
+function gtLaneTime(lane,y){return Math.max(0,Math.min(24,(+y||0)/20));}
 function gtBlocks(){ return feedCtx?feedCtx.plan.blocks:[]; }
 function gtFind(id){ return gtBlocks().find(b=>String(b.id)===String(id))||null; }
 
@@ -2058,13 +2063,13 @@ function gtDayHtml(key){
   const eff=gtEff(), shift=((+appSettings.day_end)||16)-((+appSettings.day_start)||7), st=gtSettings();
   const span=24, relFrom=0,lanes=gtWeekLanes(key),geo=gtDayGeometry(lanes,iso),dayH=geo.height,laneMin=window.matchMedia('(max-width:600px)').matches?120:150;
   let axis='<span class="vg-axis-head"></span>';
-  for(let h=0;h<=24;h+=(h<geo.focusStart||h>geo.focusEnd?3:1)) axis+='<span class="vg-hour-label" style="position:absolute;top:'+(34+geo.yOf(h))+'px">'+clockLabel(h)+'</span>';
+  for(let h=0;h<=24;h++) axis+='<span class="vg-hour-label" style="position:absolute;top:'+(34+geo.yOf(h))+'px">'+clockLabel(h)+'</span>';
   axis='<div class="vg-axis vg-day-axis" style="height:'+(dayH+34)+'px">'+axis+'</div>';
   let heads='',tracks='';
   lanes.forEach(l=>{
     const hours=gtLaneLoad(l.id,iso), pct=Math.round(hours/shift*100);
     heads+='<div class="vg-lane-head"><b>'+esc(l.name)+'</b><span>'+fmtH(hours)+(feedCtx.mine?'':' · '+pct+'%')+'</span></div>';
-    const w=dayWindow(l.id,iso,st); let ticks=''; for(let h=1;h<24;h++) if((h>=geo.focusStart&&h<=geo.focusEnd)||h%3===0)ticks+='<i class="vg-hour-line" style="top:'+geo.yOf(h)+'px"></i>';
+    const w=dayWindow(l.id,iso,st); let ticks=''; for(let h=1;h<24;h++)ticks+='<i class="vg-hour-line" style="top:'+geo.yOf(h)+'px"></i>';
     if(w) ticks+='<span class="vg-off" style="top:0;height:'+geo.yOf(w.start)+'px"></span><span class="vg-off" style="top:'+geo.yOf(w.ceiling)+'px;bottom:0"></span>'
       +'<span class="vg-tolerance" style="top:'+geo.yOf(w.end)+'px;height:'+(geo.yOf(w.ceiling)-geo.yOf(w.end))+'px"></span>'
       +'<button class="vg-win-line start" data-winline="start" data-engineer="'+esc(l.id)+'" style="top:'+geo.yOf(w.start)+'px"><i>начало '+clockLabel(w.start)+'</i></button>'
@@ -2204,7 +2209,7 @@ function gtVerticalHtml(key){
       const ceilingH=w?Math.max(.25,w.ceiling-w.start):windowH,railFill=Math.max(12,Math.min(100,hours/ceilingH*100));
       cells+='<div class="vg-cell'+(row.weekend?' we':'')+(iso===today?' today':'')+'" data-vgday="'+iso+'" style="position:absolute;top:'+offset+'px;height:'+row.px+'px">'
         +(w&&!feedCtx.mine?'<span class="vg-tolerance" style="top:'+((w.end-row.top)*GT_WEEK_PX_H)+'px;height:'+Math.max(0,(w.ceiling-w.end)*GT_WEEK_PX_H)+'px"></span><span class="vg-day-end" style="top:'+((w.end-row.top)*GT_WEEK_PX_H)+'px"></span>':'')
-        +(!feedCtx.mine&&w?'<span class="vg-rail'+(hours>ceilingH?' over':'')+'" style="top:'+Math.max(4,(w.start-row.top)*GT_WEEK_PX_H)+'px;height:'+(ceilingH*GT_WEEK_PX_H)+'px">'+(hours>0?'<i style="height:'+railFill+'%;--rail-color:'+loadColor(p)+'"></i>':'')+'</span>':'')
+        +(!feedCtx.mine&&w?'<span class="vg-rail'+(hours>ceilingH?' over':'')+'" style="top:4px;height:'+Math.max(4,row.px-8)+'px">'+(hours>0?'<i style="height:'+railFill+'%;--rail-color:'+loadColor(p)+'"></i>':'')+'</span>':'')
         +(!feedCtx.mine&&over>.01?'<span class="vg-over" style="top:'+Math.max(2,(w.end-row.top)*GT_WEEK_PX_H-8)+'px">+'+fmtH(over)+'</span>':'')+'</div>';
       gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{const blockPieces=gtPieces(b),pcs=blockPieces.filter(x=>x.iso===iso);if(!pcs.length)return;
         const from=Math.min(...pcs.map(x=>x.from)),to=Math.max(...pcs.map(x=>x.to)),top=offset+Math.max(1,(from-row.top)*GT_WEEK_PX_H),height=Math.max(12,(Math.min(to,row.bot)-Math.max(from,row.top))*GT_WEEK_PX_H);
