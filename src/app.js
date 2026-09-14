@@ -1921,6 +1921,8 @@ function gtStickyObserve(root){
   if(!gtStickyObserver&&'IntersectionObserver'in window)gtStickyObserver=new window.IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting)gtStickyVisible.add(e.target);else gtStickyVisible.delete(e.target);});gtStickyRequest();});
   root.querySelectorAll('[data-vggroup]').forEach(g=>{if(gtStickyObserver)gtStickyObserver.observe(g);else gtStickyVisible.add(g);});gtStickyRequest();
 }
+// Scroll events do not bubble from the application's `.scrollp` panes.
+document.addEventListener('scroll',gtStickyRequest,{passive:true,capture:true});
 window.addEventListener('scroll',gtStickyRequest,{passive:true});window.addEventListener('resize',gtStickyRequest,{passive:true});
 
 function gtDragZoom(){ return gtDrag&&gtDrag.zoom; }
@@ -2216,7 +2218,7 @@ function gtVerticalHtml(key){
         const title=occupied.length===1?gtBlockName(b):'';
         const meta=(live?'<span class="vg-live '+live.tone+'">'+live.html+'</span>':'<small>'+esc(fmtH(dayHours)+' · '+clockLabel(from)+'–'+clockLabel(to))+'</small>')+(occupied.length>1?'<span class="vg-day-count">'+(dayNo+1)+'/'+occupied.length+'</span>':'');
         const act=action?'<'+(action.passive?'span':'button')+' class="vg-act'+(action.passive?' passive':'')+'" '+(action.passive?'':'type="button" data-gact="'+action.kind+'"')+' aria-label="'+esc(action.label)+'" title="'+esc(action.label)+'">'+gtActionIcon(action.kind)+'</'+(action.passive?'span':'button')+'>':'';
-        bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+(height<40?' short':'')+(contUp?' cont-up':'')+(contDown?' cont-down':'')+(action?' has-act':'')+'" data-gb="'+esc(b.id)+'" data-block="'+esc(b.id)+'" style="--block-tint:'+(feedCtx.mine?'transparent':loadTint(startP))+';top:'+top+'px;height:'+height+'px">'+roads
+        bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+(height<40?' short':'')+(height<40&&live?' short-live':'')+(height<44?' tap-short':'')+(contUp?' cont-up':'')+(contDown?' cont-down':'')+(action?' has-act':'')+'" data-gb="'+esc(b.id)+'" data-block="'+esc(b.id)+'" style="--block-tint:'+(feedCtx.mine?'transparent':loadTint(startP))+';top:'+top+'px;height:'+height+'px">'+roads
           +(burn>0?'<i class="vg-burn" style="height:'+burn.toFixed(2)+'%"></i><i class="vg-burn-edge" style="top:'+burn.toFixed(2)+'%"></i>':'')
           +'<span class="vg-label">'+(title?'<b>'+esc(title)+(b.manual?' ✎':'')+'</b>':'')+'<span class="vg-meta">'+meta+'</span></span>'+act+'</div>';
         if(occupied.length>1){const g=groupBounds[b.id]||(groupBounds[b.id]={top,bottom:top+height,b,name:gtBlockName(b)});g.top=Math.min(g.top,top);g.bottom=Math.max(g.bottom,top+height);}
