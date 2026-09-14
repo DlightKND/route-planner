@@ -2581,7 +2581,7 @@ async function renderFeed(box,o){
       let mini='';
       days.forEach(iso=>{
         const maxP=Math.max(0,...lanes.map(l=>gtLaneLoad(l.id,iso)/shift));
-        mini+='<i style="background:'+loadWash(maxP)+'"></i>';
+        mini+='<i style="height:'+Math.max(3,Math.min(14,maxP*11))+'px;background:'+loadWash(maxP)+'"></i>';
       });
       const summary=blocks.length+' '+plural(blocks.length,'блок','блока','блоков')+' · '+fmtH(total);
       return '<section class="wkrow'+(gtOpen[key]?' open':'')+'" data-wk="'+esc(key)+'">'
