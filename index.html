@@ -714,7 +714,7 @@
   .trip-stop-jobs .btn { width: 100%; }
   
   .pane { flex: 1; display: flex; flex-direction: column; padding: var(--pad-window); overflow: hidden; background: var(--bg); }
-  .pane.scrollp { display: block; overflow-y: auto; }
+  .pane.scrollp { display: block; overflow-x: hidden; overflow-y: auto; }
   .pane-head { display: flex; align-items: center; gap: var(--gap-card); margin-bottom: var(--sp-5); flex-wrap: wrap; }
   /* Шапка раздела и фильтры уезжают вверх при прокрутке длинного списка,
      и «+ Заявка» вместе с чипами статусов приходится искать, вернувшись
@@ -1499,9 +1499,12 @@
 .vg-block.has-act .vg-label{right:42px}.vg-act{position:absolute;right:0;top:0;bottom:0;width:34px;z-index:7;display:flex;align-items:center;justify-content:center;padding:0;border:0;border-left:1px solid var(--line);border-radius:0 8px 8px 0;background:var(--accent);color:var(--on-accent,#111);cursor:pointer;overflow:hidden;isolation:isolate}.vg-act::before{content:'';position:absolute;inset:0;background:color-mix(in srgb,var(--ink) 16%,transparent);transform:scaleY(0);transform-origin:bottom;transition:transform .22s var(--ease)}.vg-act:hover::before{transform:scaleY(1)}.vg-act:active{transform:translateY(1px)}.vg-act:active::before{transform:scaleY(.35)}.vg-act svg{position:relative;width:16px;height:16px;fill:currentColor}.vg-act.passive{background:transparent;color:var(--ink-faint);cursor:default;border-left-style:dashed}.vg-act.passive::before{display:none}
 @container (max-width:149px){.vg-day-count{display:none}}
 @container (max-width:131px){.vg-act{display:none}.vg-block.has-act .vg-label{right:0}}
-.vg-block.short .vg-label small{display:none}
+.vg-block.cont-up .vg-label,.vg-block.cont-down .vg-label{padding-top:20px}
 .vg-block.short .vg-label{justify-content:center;padding-block:0}
 .vg-block.short .vg-label b{line-height:1;transform:translateY(-.25px)}
+.vg-block.short .vg-label b+.vg-meta{display:none}
+.vg-block.short.short-live .vg-label b{display:none}
+.vg-block.short.short-live .vg-label b+.vg-meta{display:flex}
 .vg-piece{left:28px;right:12px;cursor:grab;overflow:visible}.vg-piece:active{cursor:grabbing}
 .vg-divide{position:absolute;z-index:7;right:4px;top:4px;width:23px;height:23px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--panel);color:var(--ink-dim);cursor:pointer}
 .vg-cut{position:absolute;z-index:12;left:3px;right:3px;top:50%;height:0;border-top:1px dashed var(--accent-line);pointer-events:auto}
@@ -1538,11 +1541,17 @@
 [data-theme="dark"] .vg-cell.we{background-image:repeating-linear-gradient(135deg,transparent 0 7px,rgba(233,236,241,.035) 7px 8px)}
 [data-theme="dark"] .vg-block{background:linear-gradient(90deg,var(--block-tint,transparent) 0,transparent 56px),#22262c;border-color:#343a42;box-shadow:0 1px 1px rgba(0,0,0,.5),0 6px 16px rgba(0,0,0,.45)}
 [data-theme="dark"] .vg-week-road{background-image:repeating-linear-gradient(135deg,rgba(233,236,241,.16) 0 4px,transparent 4px 9px)}
+[data-theme="dark"] .vg-date{color:#b8bec8}[data-theme="dark"] .vg-date b,[data-theme="dark"] .vg-lane-head b{color:#e1e5eb}
+[data-theme="dark"] .vg-label b,[data-theme="dark"] .vg-gtitle{color:#f2f4f7}[data-theme="dark"] .vg-label small{color:#b8bec8}
 [data-theme="dark"] .vg-date.today{background:color-mix(in srgb,#ffe100 8%,#17191d)}
 [data-theme="dark"] .vg-date.today::before{background:#ffe100}
 [data-theme="dark"] .vg-cell.today{box-shadow:inset 0 1px #ffe100}
 [data-theme="dark"] .vg-tolerance{background:rgba(255,148,51,.12)}
 @media(prefers-reduced-motion:reduce){.vg-scroll.hl .vg-block,.vg-act::before{transition:none}}
+@media(pointer:coarse){
+  .vg-act{width:44px}.vg-block.has-act .vg-label{right:52px}
+  .vg-block.tap-short .vg-act{display:none}.vg-block.tap-short.has-act .vg-label{right:0}
+}
 [data-theme="light"]{--press:rgba(120,92,0,.32)}
 /* Дневной увеличенный вид сохраняет прежнюю точную часовую механику. */
 .gtop{display:flex;align-items:center;gap:var(--gap-row);margin-bottom:var(--sp-3);flex-wrap:wrap}
@@ -1570,6 +1579,7 @@
 .gp-alert label{display:flex;align-items:flex-start;gap:var(--sp-2);margin-top:var(--sp-2);color:var(--ink)}.gp-alert input{width:auto;margin-top:2px}
 @media(max-width:600px){
   .gtwrap{padding:var(--sp-3)}.wk-h{padding:var(--sp-3)}.wk-pct{width:34px}.vg-tools{align-items:flex-start;flex-direction:column}
+  .vg-scale-labels span:not(:first-child):not(:last-child){display:none}
   .vg-lane-head b{font-size:var(--fs-1)}.vg-grid{grid-template-columns:86px minmax(calc(var(--lanes)*var(--lane-min)),1fr);min-width:calc(86px + var(--lanes)*var(--lane-min))}.vg-scroll::before{left:86px}.vg-date{padding-inline:6px;font-size:var(--fs-1)}
   .ghead{margin-left:0}.gwho{font-size:var(--fs-1);font-family:var(--mono)}
   .gpop{position:fixed;left:var(--sp-3);right:var(--sp-3);width:auto;top:auto !important;bottom:calc(78px + env(safe-area-inset-bottom,0px));max-height:72vh;overflow:auto;z-index:1200;box-shadow:var(--shadow-lg)}
