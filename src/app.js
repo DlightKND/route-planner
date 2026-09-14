@@ -210,8 +210,8 @@ function orsKeyMissing(){ return !(appSettings.ors_proxy||'').trim(); }
 function orsMissing(el){ if(el) el.innerHTML='Маршрутизация не настроена. <span class="lnk" onclick="gotoSettings()">Указать ключ ORS или адрес прокси в настройках</span>'; }
 $('themeBtn').onclick=e=>{ e.stopPropagation(); $('themePop').classList.toggle('on'); };
 document.addEventListener('click',e=>{ const p=$('themePop'); if(p.classList.contains('on') && !p.contains(e.target) && e.target!==$('themeBtn')) p.classList.remove('on'); });
-$('modeDark').onclick=()=>{ theme.mode='dark'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); if(document.querySelector('.view-dash.active')) renderAttention(); if(plannerCur==='mine') renderMine(); $('themePop').classList.remove('on'); };
-$('modeLight').onclick=()=>{ theme.mode='light'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); if(document.querySelector('.view-dash.active')) renderAttention(); if(plannerCur==='mine') renderMine(); $('themePop').classList.remove('on'); };
+$('modeDark').onclick=()=>{ theme.mode='dark'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); if(document.querySelector('.view-dash.active')) renderDashboard(); if(plannerCur==='mine') renderMine(); $('themePop').classList.remove('on'); };
+$('modeLight').onclick=()=>{ theme.mode='light'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); if(document.querySelector('.view-dash.active')) renderDashboard(); if(plannerCur==='mine') renderMine(); $('themePop').classList.remove('on'); };
 // закрытие модалок по фону и Esc
 ['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o) o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('on'); }); });
 document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; ['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o&&o.classList.contains('on')) o.classList.remove('on'); }); const tp=$('themePop'); if(tp) tp.classList.remove('on'); });
@@ -1934,10 +1934,11 @@ function loadColor(p){
   for(let i=0;i<stops.length-1;i++) if(p<=stops[i+1][0]) return loadMix(stops[i][1],stops[i+1][1],(p-stops[i][0])/(stops[i+1][0]-stops[i][0]));
   return stops[stops.length-1][1];
 }
+function loadEdge(hex){ const lab=loadRgbLab(hex); lab[0]+=theme.mode==='dark'?.12:-.12; return loadLabRgb(lab); }
 function loadIntensity(p){ return p<=0?0:(p<.8?.35+.65*(p/.8):1); }
-function loadWash(p,alpha){
+function loadWash(p){
   const rgb=loadHexRgb(loadColor(p)).map(x=>Math.round(x*255));
-  const a=Math.min(.96,loadIntensity(p)*LOAD_SATURATION*(theme.mode==='dark'?.92:1)*(alpha==null?1:alpha));
+  const a=Math.min(.96,loadIntensity(p)*LOAD_SATURATION*(theme.mode==='dark'?.92:1));
   return 'rgba('+rgb.join(',')+','+a.toFixed(3)+')';
 }
 function loadTint(p){
@@ -1995,7 +1996,7 @@ function gtDayHtml(key){
     heads+='<div class="vg-lane-head"><b>'+esc(l.name)+'</b><span>'+fmtH(hours)+' · '+pct+'%</span></div>';
     let ticks=''; for(let h=1;h<rowN;h++) ticks+='<i class="vg-hour-line" style="top:'+(h/rowN*266)+'px"></i>';
     let bars='';
-    if(l.id!==' department') gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
+    gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
       const pcs=gtPieces(b).filter(p=>p.iso===iso); if(!pcs.length) return;
       const points=pcs.map(p=>({p,y:p.from/eff*266,h:Math.max(3,p.h/eff*266)}));
       const top=Math.max(1,Math.min(...points.map(x=>x.y))), bottom=Math.min(265,Math.max(...points.map(x=>x.y+x.h)));
@@ -2006,8 +2007,8 @@ function gtDayHtml(key){
       bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+((bottom-top)<40?' short':'')+(String(gtSel)===String(b.id)?' sel':'')+'" data-gb="'+esc(b.id)+'" style="top:'+top+'px;height:'+Math.max(12,bottom-top)+'px">'
         +segs+'<span class="vg-label"><b>'+esc(gtBlockName(b))+(b.manual?' ✎':'')+'</b><small>'+esc(sub)+'</small></span></div>';
     });
-    const over=Math.max(0,hours-gtEff());
-    tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'">'+ticks+bars
+    const color=loadColor(hours/shift), over=Math.max(0,hours-gtEff());
+    tracks+='<div class="vg-lane vg-day-lane" data-vglane="'+esc(l.id)+'" style="--load:'+color+';--load-edge:'+loadEdge(color)+'">'+ticks+bars
       +(over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
   });
   return '<div class="gtop"><button class="gback" type="button" data-gback="'+esc(key)+'">← неделя</button>'
@@ -2018,24 +2019,32 @@ function gtDayHtml(key){
     +(canWrite()?'<span>перетащи — шаг 30 мин</span>':'<span>только просмотр</span>')+'<span>✎ — расставлено вручную</span></div>';
 }
 function gtWeekDays(it){ const out=[]; for(let i=0;i<7;i++) out.push(isoOf(it.w.mon+i*DAY_MS)); return out; }
-function gtWeekLanes(key){
+function gtBusyWeekLanes(key){
   const it=feedCtx.weeks[key], days=gtWeekDays(it), used={};
   gtBlocks().forEach(b=>gtPieces(b).forEach(p=>{ if(days.includes(p.iso)) used[b.engineer||' free']=1; }));
   if(feedCtx.mine) return [{id:session.user.id,name:'Мои работы'}];
-  if(gtLaneMode[key]==='department') return [{id:' department',name:'Отдел'}];
-  if(gtLaneMode[key]==='all'){
-    const all=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim())
-      .map(p=>({id:p.id,name:p.full_name||'—'}));
-    if(used[' free']) all.push({id:' free',name:'Без инженера'}); return all;
-  }
   const named=new Set((profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim()).map(p=>p.id));
   return Object.keys(used).filter(id=>id===' free'||named.has(id))
     .map(id=>({id,name:id===' free'?'Без инженера':feedCtx.nameOf(id)}));
 }
+function gtWeekLanes(key){
+  const busy=gtBusyWeekLanes(key);
+  const selected=String(gtLaneMode[key]||'all');
+  if(selected.startsWith('lane:')){
+    const id=selected.slice(5), lane=busy.find(x=>String(x.id)===id);
+    if(lane) return [lane];
+  }
+  return busy;
+}
 function gtLaneLoad(id,iso){
-  if(id===' department') return Object.keys(feedCtx.plan.load||{}).reduce((n,k)=>{
-    const x=feedCtx.plan.load[k]; return n+(x.date===iso?x.workH+x.driveH:0); },0);
   const x=(feedCtx.plan.load||{})[id+'|'+iso]; return x?(x.workH+x.driveH):0;
+}
+function gtLanePicker(key){
+  if(feedCtx.mine) return '';
+  const current=String(gtLaneMode[key]||'all');
+  const options=['<option value="all"'+(current==='all'?' selected':'')+'>Все занятые</option>'];
+  gtBusyWeekLanes(key).forEach(l=>options.push('<option value="lane:'+esc(l.id)+'"'+(current==='lane:'+l.id?' selected':'')+'>'+esc(l.name)+'</option>'));
+  return '<label class="vg-filter">Инженер <select data-vgmode aria-label="Инженер">'+options.join('')+'</select></label>';
 }
 function gtBlockName(b){
   const names=(b.jobIds||[]).map(id=>feedCtx.jobName(id)).filter(Boolean);
@@ -2043,7 +2052,7 @@ function gtBlockName(b){
 }
 function gtWeekProblem(key,lanes){
   const days=gtWeekDays(feedCtx.weeks[key]), allowance=gtEff(); let worst=null;
-  lanes.filter(l=>l.id!==' department').forEach(l=>days.forEach((iso,i)=>{
+  lanes.forEach(l=>days.forEach((iso,i)=>{
     const over=gtLaneLoad(l.id,iso)-allowance;
     if(over>.01&&(!worst||over>worst.over)) worst={over,l,iso,i};
   }));
@@ -2071,13 +2080,12 @@ function gtVerticalHtml(key){
   axis='<div class="vg-axis">'+axis+'</div>';
   let heads='', tracks='';
   lanes.forEach(l=>{
-    const laneCap=shift*(l.id===' department'?Math.max(1,engineersCount(feedCtx.plan)):1);
-    const weekH=days.reduce((n,d)=>n+gtLaneLoad(l.id,d),0), pct=Math.round(weekH/(laneCap*5)*100);
-    const headMini=days.map(iso=>{ const p=gtLaneLoad(l.id,iso)/laneCap;
+    const weekH=days.reduce((n,d)=>n+gtLaneLoad(l.id,d),0), pct=Math.round(weekH/(shift*5)*100);
+    const headMini=days.map(iso=>{ const p=gtLaneLoad(l.id,iso)/shift;
       return '<i style="height:'+Math.max(3,Math.min(14,p*11))+'px;background:'+loadColor(p)+'"></i>'; }).join('');
     heads+='<div class="vg-lane-head" title="'+esc(l.name)+'"><b>'+esc(l.name)+'</b><span>'+fmtH(weekH)+' · '+pct+'%</span><em class="vg-head-mini">'+headMini+'</em></div>';
     let cells=''; days.forEach((iso,i)=>{
-      const hours=gtLaneLoad(l.id,iso), p=l.id===' department'?hours/(shift*Math.max(1,engineersCount(feedCtx.plan))):hours/shift;
+      const hours=gtLaneLoad(l.id,iso), p=hours/shift;
       const color=loadColor(p), over=Math.max(0,hours-eff);
       const railH=hours>0?Math.max(12,Math.min(100,p/(1+(+appSettings.deviation_pct||0)/100)*100)):0;
       cells+='<div class="vg-cell'+(i>4?' we':'')+(iso===today?' today':'')+(hours<=0?' empty':'')+'" data-vgday="'+iso+'" title="'+esc(WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)+' из '+fmtH(shift))+'">'
@@ -2085,7 +2093,7 @@ function gtVerticalHtml(key){
         +(over>.01?'<span class="vg-over">+'+fmtH(over)+'</span>':'')+'</div>';
     });
     let bars='';
-    if(l.id!==' department') gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
+    gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
       const pcs=gtPieces(b).filter(p=>days.includes(p.iso)); if(!pcs.length) return;
       const points=pcs.map(p=>({p,y:(days.indexOf(p.iso)+(p.from/eff))*rowH,h:Math.max(2,p.h/eff*rowH)}));
       const top=Math.max(1,Math.min(...points.map(x=>x.y))), bottom=Math.min(weekHpx-1,Math.max(...points.map(x=>x.y+x.h)));
@@ -2099,10 +2107,10 @@ function gtVerticalHtml(key){
     });
     const now=scheduleNow(), ni=days.indexOf(now.iso), nowLine=ni>=0&&now.h>=0&&now.h<=eff
       ?'<span class="vg-now" title="Сейчас · '+esc(now.label)+'" style="top:'+((ni+now.h/eff)*rowH)+'px"></span>':'';
-    tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'">'+cells+bars+nowLine+'</div>';
+    tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'">'+cells+bars+nowLine+'<span class="vg-tip" hidden></span></div>';
   });
   return '<div class="vg-tools"><span>Загрузка дня · смена '+fmtH(shift)+' · допуск '+(+appSettings.deviation_pct||0)+'%</span>'
-    +(feedCtx.mine?'':'<div class="vg-switch"><button data-vgmode="busy" class="'+((gtLaneMode[key]||'busy')==='busy'?'on':'')+'">занятые</button><button data-vgmode="all" class="'+(gtLaneMode[key]==='all'?'on':'')+'">все</button><button data-vgmode="department" class="'+(gtLaneMode[key]==='department'?'on':'')+'">свернуть в отдел</button></div>')+'</div>'
+    +gtLanePicker(key)+'</div>'
     +'<div class="vg-scroll" style="--lane-min:'+laneMin+'px"><div class="vg-grid" style="--lanes:'+Math.max(1,lanes.length)+'">'
     +axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
     +gtLoadScale()
@@ -2137,14 +2145,17 @@ function gtWire(key,box){
     gtZoom[key]=null; gtSel=null; gtPaint(key); });
   box.querySelectorAll('[data-gday]').forEach(d=>d.onclick=e=>{ e.stopPropagation();
     gtZoom[key]=d.dataset.gday; gtSel=null; gtPaint(key); });
-  box.querySelectorAll('[data-vgmode]').forEach(b=>b.onclick=e=>{ e.stopPropagation();
-    gtLaneMode[key]=b.dataset.vgmode; gtSel=null; gtPaint(key); });
+  box.querySelectorAll('[data-vgmode]').forEach(select=>select.onchange=e=>{ e.stopPropagation();
+    gtLaneMode[key]=select.value; gtSel=null; gtPaint(key); });
   if(!zoom) box.querySelectorAll('.vg-lane').forEach(lane=>{
     lane.onpointermove=e=>{
       const i=Math.max(0,Math.min(6,Math.floor((e.clientY-lane.getBoundingClientRect().top)/40)));
-      const iso=gtWeekDays(feedCtx.weeks[key])[i], hours=gtLaneLoad(lane.dataset.vglane,iso);
-      lane.title=WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)+' из '+fmtH((+appSettings.shift_hours)||8);
+      const iso=gtWeekDays(feedCtx.weeks[key])[i], hours=gtLaneLoad(lane.dataset.vglane,iso), shift=(+appSettings.shift_hours)||8;
+      const tip=lane.querySelector('.vg-tip');
+      if(tip){ tip.hidden=false; tip.style.top=(i*40+20)+'px';
+        tip.textContent=WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)+' / '+fmtH(shift)+' · '+Math.round(hours/shift*100)+'%'; }
     };
+    lane.onpointerleave=()=>{ const tip=lane.querySelector('.vg-tip'); if(tip) tip.hidden=true; };
     lane.onclick=e=>{ if(e.target.closest('.vg-block')) return;
       const i=Math.max(0,Math.min(6,Math.floor((e.clientY-lane.getBoundingClientRect().top)/40)));
       gtZoom[key]=gtWeekDays(feedCtx.weeks[key])[i]; gtSel=null; gtPaint(key);
@@ -2558,9 +2569,8 @@ async function renderFeed(box,o){
       nameOf:engName,jobName:id=>{ const j=jobById[id]; return j&&j.clients?j.clients.name:''; }};
     const weekKeys=Object.keys(weeks).sort();
     if(weekKeys.length&&!weekKeys.some(k=>Object.prototype.hasOwnProperty.call(gtOpen,k))){
-      const now=utcOf(todayISO());
-      const nearest=weekKeys.reduce((best,k)=>Math.abs(utcOf(k)-now)<Math.abs(utcOf(best)-now)?k:best,weekKeys[0]);
-      gtOpen[nearest]=true;
+      const current=weekOf(todayISO());
+      if(current&&weeks[current.key]) gtOpen[current.key]=true;
     }
     function weekHtml(key){
       const it=weeks[key], lanes=gtWeekLanes(key), days=gtWeekDays(it);
@@ -2570,7 +2580,7 @@ async function renderFeed(box,o){
       const pct=Math.round(total/(shift*5*laneCount)*100), problem=gtWeekProblem(key,lanes);
       let mini='';
       days.forEach(iso=>{
-        const maxP=Math.max(0,...lanes.map(l=>gtLaneLoad(l.id,iso)/(l.id===' department'?shift*laneCount:shift)));
+        const maxP=Math.max(0,...lanes.map(l=>gtLaneLoad(l.id,iso)/shift));
         mini+='<i style="background:'+loadWash(maxP)+'"></i>';
       });
       const summary=blocks.length+' '+plural(blocks.length,'блок','блока','блоков')+' · '+fmtH(total);
