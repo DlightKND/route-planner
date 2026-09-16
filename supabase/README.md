@@ -16,3 +16,15 @@ supabase functions deploy trash-purge --project-ref anqfbljgfimoaziztdxe
 Store `$SECRET` in Vault as `trash_purge_secret`, then apply
 `migrations/20260910100000_job_trip_trash.sql`. The migration schedules the
 function daily at 03:10 UTC. A manual call without the shared header is denied.
+
+Depot tracking and trip-start reminders use the existing `push-send` function.
+Before applying `20260911100000_depot_tracking.sql`, store the same random
+`PUSH_SECRET` in Edge Function secrets and Vault under `push_secret`, then deploy:
+
+```bash
+supabase secrets set PUSH_SECRET="$PUSH_SECRET" --project-ref anqfbljgfimoaziztdxe
+supabase functions deploy push-send --project-ref anqfbljgfimoaziztdxe
+```
+
+The migration schedules the planned-start, end-of-shift, and 24-hour escalation
+checks every 15 minutes. `push_log` makes those calls idempotent.
