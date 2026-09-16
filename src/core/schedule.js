@@ -498,7 +498,12 @@ export function planSchedule(blocks, settings, opts) {
   // ── Выезды с ручными датами ──────────────────────────────────────────
   fixed.forEach(b => {
     const man = manualStart(b, s);
-    const auto = normPos({ iso: dayIso(snapWork(dayMs(b.from), 1, s.weekend)), t:s.dayStart,engineer:b.engineer }, s);
+    let auto=normPos({iso:b.from,t:s.dayStart,engineer:b.engineer},s);
+    if(!dayWindow(b.engineer,b.from,s)){
+      auto=normPos({iso:dayIso(snapWork(dayMs(b.from),1,s.weekend)),t:s.dayStart,engineer:b.engineer},s);
+      warnings.push({kind:'snapped',blockId:b.id,engineer:b.engineer,date:auto.iso,
+        text:'Дата выезда '+b.from+' закрыта у инженера, выезд стоит с '+auto.iso+'.'});
+    }
     const start = (man && !man.stale) ? man.pos : auto;
     finish(b, start, { fixed: true, manual: !!(man && !man.stale), stalePlan: !!(man && man.stale) });
   });
