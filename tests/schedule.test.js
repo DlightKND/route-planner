@@ -315,6 +315,12 @@ describe('часы суток и окна дня', () => {
       .toMatchObject([{iso:'2026-09-13',from:7,to:11,h:4}]);
   });
   it('округляет общий шаг до четверти часа',()=>expect(q4(8.13)).toBe(8.25));
+  it('сохраняет заданную дату выезда на открытом воскресенье',()=>{
+    const X={...S,staffDay:{'ivan|2026-09-13':{start_h:7,end_h:16,tol_h:1}}};
+    const b=planSchedule([{id:'sun',kind:'trip',engineer:'ivan',from:'2026-09-13',to:'2026-09-13',workH:2,jobIds:[],jobs:[]}],X,{today:'2026-09-01'}).blocks[0];
+    expect(b.from).toBe('2026-09-13');
+    expect(b.start).toEqual({iso:'2026-09-13',t:7});
+  });
 });
 
 describe('ручная расстановка разрезами',()=>{
