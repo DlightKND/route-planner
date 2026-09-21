@@ -2640,14 +2640,22 @@
         <div class="th-sub" id="tripSub"></div>
       </div>
       <div class="th-econ" id="tripHeadEcon"></div>
-      <button class="btn amber" id="tpSave">Сохранить выезд</button>
+      <button class="btn amber" id="tpSave">Сохранить план</button>
     </div>
     <div class="err" id="tripErr"></div>
+    <div class="wb-tabs" role="tablist" aria-label="Разделы выезда">
+      <button class="btn" role="tab" id="tpTabPlan" data-trip-tab="plan" aria-selected="true" aria-controls="tpPlanPane">План и факт</button>
+      <button class="btn" role="tab" id="tpTabEconomy" data-trip-tab="economy" aria-selected="false" aria-controls="tpEconomyPane">Экономика</button>
+      <button class="btn" role="tab" id="tpTabHistory" data-trip-tab="history" aria-selected="false" aria-controls="tpHistoryPane">История</button>
+    </div>
+    <div class="wb-note" id="tpReviewState" role="status"></div>
+    <div id="tpPlanPane" role="tabpanel" aria-labelledby="tpTabPlan" data-trip-pane="plan">
+    <label for="tpChangeReason">Причина изменения плана</label><input id="tpChangeReason" type="text" placeholder="Например: объект Б перенесён, едем сразу на В">
     <div class="trip-grid">
       <div class="card"><h3>Когда и кто</h3>
         <div class="row"><div class="grow"><label>Дата с</label><input type="date" id="tpFrom"></div><div class="grow"><label>Дата по</label><input type="date" id="tpTo"></div></div>
         <div class="row"><div class="grow"><label>Авто</label><select id="tpVeh"></select><div class="hint" id="tpVehInfo" style="margin-top: var(--sp-2)"></div></div></div>
-        <div class="row"><div class="grow"><label>Инженеры</label><select id="tpEng" class="multi-eng" multiple aria-describedby="tpEngHint"></select><div class="hint" id="tpEngHint">Можно выбрать нескольких · первый будет ведущим</div></div><div class="grow"><label>Статус</label><select id="tpStatus"><option value="planned">план</option><option value="assigned">назначен</option><option value="in_progress">в работе</option><option value="done">завершён</option><option value="cancelled">отменён</option></select></div></div>
+        <div class="row"><div class="grow"><label>Инженеры</label><select id="tpEng" class="multi-eng" multiple aria-describedby="tpEngHint"></select><div class="hint" id="tpEngHint">Команда будущих посещений. Проверенное присутствие сохраняется отдельно.</div></div><div class="grow"><label>Статус</label><select id="tpStatus"><option value="planned">план</option><option value="assigned">назначен</option><option value="in_progress">в работе</option><option value="finished">на проверке</option><option value="done">подтверждён</option><option value="cancelled">отменён</option></select></div></div>
         <label style="margin-top: var(--sp-3)">Заметка</label><input type="text" id="tpNotes">
       </div>
 
@@ -2660,6 +2668,7 @@
              напрямую меняет деньги выезда, и догадываться о нём нельзя. -->
         <div class="jobs-legend"><span class="jl-a">☑ в выезде</span><span class="jl-b">◉ основная</span><span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Флажок включает заявку в выезд. Радиокнопка помечает основную: она несёт базовый пробег «Депо → она → Депо», остальным считается только крюк сверх него.</span></span></div>
         <div id="tpJobs" style="max-height:340px;overflow:auto"></div>
+        <div id="tpRemovedJobs"></div>
         
       </div>
 
@@ -2678,9 +2687,16 @@
         <!-- Факт-пробег стоит здесь, у маршрута, а не в «Экономике»: это
              результат разбора трека, и рядом с ним нужна кнопка пересчёта. -->
         <div id="tpFactBox" style="margin-top: var(--sp-4)"></div>
+        <button class="btn sm" id="tpRebuildRemaining" style="margin-top:12px;width:100%">Рассчитать оставшийся маршрут</button>
+        <div class="hint" id="tpRemainingInfo"></div>
         
       </div>
 
+      <div class="card trip-wide"><h3>Присутствие на объектах</h3><div id="tpPresence"></div></div>
+    </div>
+    </div>
+    <div id="tpEconomyPane" role="tabpanel" aria-labelledby="tpTabEconomy" data-trip-pane="economy" hidden>
+      <div class="wb-note">Расчёт по текущему плану и доступному факту. Окончательное подтверждение экономики требует полной проверки выезда.</div>
       <!-- Ручные суммы стоят рядом с разбивкой, на которую влияют: раньше
            это были разные половины окна, и связь приходилось держать в уме. -->
       <div class="card trip-wide"><h3>Экономика</h3>
@@ -2696,6 +2712,7 @@
         </div>
       </div>
     </div>
+    <div id="tpHistoryPane" role="tabpanel" aria-labelledby="tpTabHistory" data-trip-pane="history" hidden></div>
   </div></div>
 
   <div class="view view-catalog">

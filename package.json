@@ -6,13 +6,15 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run", "test:tz": "TZ=America/Los_Angeles vitest run",
+    "test": "vitest run",
+    "test:tz": "TZ=America/Los_Angeles vitest run",
     "smoke": "npm run build && node tests/smoke.cjs dist/index.html",
     "lint": "eslint src"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "eslint": "^9.0.0",
     "vite": "^5.4.0",
-    "vitest": "^2.1.0",
-    "eslint": "^9.0.0"
+    "vitest": "^2.1.0"
   }
 }

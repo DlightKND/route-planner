@@ -129,7 +129,7 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
     // утверждённых стоянок, привязанных именно к этой заявке. Если факта нет,
     // fact* остаются null, и потребитель показывает только план.
     const fh = (ctx.factHoursByJob && j.id != null) ? ctx.factHoursByJob[j.id] : null;
-    const factHours = (fh != null && fh > 0) ? +fh : null;
+    const factHours = (fh != null && Number.isFinite(+fh) && fh >= 0) ? +fh : null;
     const costPlan = jh * ((c.hour) || 0);
     const costFact = (factHours != null) ? factHours * ((c.hour) || 0) : null;
     // Запчасти. costPlan/costFact остаются ЧИСТЫМ трудом — так они и
@@ -159,12 +159,12 @@ export function econCompute(jobs, routeKm, driveH, T, ov, ctx, fallbackProfiles,
   // согласована с плательщиком заранее и от того, что водитель заплутал,
   // расти не должна. Затраты объективны: бензин сожжён на реально пройденные
   // километры. Поэтому km остаётся плановым везде, кроме cKm.
-  const factKm = (ctx.factKm != null && ctx.factKm > 0) ? (+ctx.factKm) : null;
+  const factKm = (ctx.factKm != null && Number.isFinite(+ctx.factKm) && ctx.factKm >= 0) ? (+ctx.factKm) : null;
   const costKm = (factKm != null) ? factKm : km;
 
   // То же и с трудом: выручка по нормочасам из job_works (их ставит человек,
   // они уходят в акт), себестоимость — по утверждённым часам стоянок.
-  const factWorkH = (ctx.factWorkH != null && ctx.factWorkH > 0) ? (+ctx.factWorkH) : null;
+  const factWorkH = (ctx.factWorkH != null && Number.isFinite(+ctx.factWorkH) && ctx.factWorkH >= 0) ? (+ctx.factWorkH) : null;
   const costWorkH = (factWorkH != null) ? factWorkH : workH;
 
   const days = (function () {

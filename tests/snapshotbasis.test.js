@@ -16,6 +16,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { econCompute } from '../src/core/economics.js';
+import { economicSnapshot } from '../src/core/economic-snapshot.js';
 
 const T = {
   tariffs: { km: 20, day: 500, night: 1500, hour: 1500 },
@@ -61,14 +62,14 @@ describe('себестоимость считается по факту, ког�
   });
 });
 
-describe('ноль и null означают «факта нет»', () => {
-  // Приложение и trip_econ трактуют их одинаково: проверка везде > 0.
-  // Иначе незаполненный факт обнулял бы себестоимость.
-  it('factKm=0 — это план, а не бесплатная дорога', () => {
-    expect(fact(0, null).cost).toBe(plan().cost);
+describe('подтверждённый ноль отличается от отсутствия данных', () => {
+  it('factKm=0 обнуляет только километровую составляющую', () => {
+    expect(fact(0, null).cKm).toBe(0);
+    expect(fact(0, null).cLabor).toBe(plan().cLabor);
   });
-  it('factWorkH=0 — это план, а не бесплатный труд', () => {
-    expect(fact(null, 0).cost).toBe(plan().cost);
+  it('factWorkH=0 обнуляет только присутствие, сохраняя остальные затраты', () => {
+    expect(fact(null, 0).cLabor).toBe(0);
+    expect(fact(null, 0).cKm).toBe(plan().cKm);
   });
   it('оба null — cost совпадает с планом', () => {
     expect(fact(null, null).cost).toBe(plan().cost);
@@ -76,16 +77,7 @@ describe('ноль и null означают «факта нет»', () => {
 });
 
 describe('правила сборки снимка', () => {
-  // Повторяют логику econSnapshot() из src/app.js.
-  const build = (fk, fh) => {
-    const p = plan();
-    const hasFact = (fk != null && +fk > 0) || (fh != null && +fh > 0);
-    const f = hasFact ? fact(fk, fh) : null;
-    const best = f || p;
-    return { revenue:p.rev, cost:best.cost, cost_basis: f ? 'fact' : 'plan',
-             cost_plan:p.cost, cost_fact: f ? f.cost : null,
-             profit_plan:p.profit, profit_fact: f ? f.profit : null };
-  };
+  const build = (fk, fh) => economicSnapshot(jobs,400,5,T,{}, {...ctx,factKm:fk,factWorkH:fh});
 
   it('без факта: basis=plan, cost=cost_plan, cost_fact пуст', () => {
     const s = build(null, null);
@@ -108,7 +100,9 @@ describe('правила сборки снимка', () => {
     expect(s.profit_plan).toBeCloseTo(s.revenue - s.cost_plan, 6);
     expect(s.profit_fact).toBeCloseTo(s.revenue - s.cost_fact, 6);
   });
-  it('одни только фактические часы, без километров, тоже включают факт', () => {
-    expect(build(null, 3).cost_basis).toBe('fact');
+  it('частичное покрытие не выдаётся за окончательную себестоимость', () => {
+    expect(build(null, 3).cost_basis).toBe('partial');
+    expect(build(null, 3).cost_fact).toBeNull();
+    expect(build(0, 0).cost_basis).toBe('fact');
   });
 });
