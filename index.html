@@ -2674,6 +2674,7 @@
         <div id="tpRouteStops" style="max-height:220px;overflow:auto"></div>
         <div class="hint" id="tpRouteStatus" style="margin-top: var(--sp-3)"></div>
         <button class="btn sm" id="tpEditMap" style="margin-top: var(--sp-3);width:100%">Редактировать маршрут на карте</button>
+        <button class="btn sm amber" id="tpStayMap" style="display:none;margin-top: var(--sp-2);width:100%">Привязать точки факта на карте</button>
         <!-- Факт-пробег стоит здесь, у маршрута, а не в «Экономике»: это
              результат разбора трека, и рядом с ним нужна кнопка пересчёта. -->
         <div id="tpFactBox" style="margin-top: var(--sp-4)"></div>
@@ -2870,7 +2871,7 @@
 <div class="overlay" id="staysOverlay"><div class="modal">
   <h3 id="staysTitle">Стоянки на выезде</h3>
   <div id="staysBody" style="max-height:52vh;overflow:auto"></div>
-  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="staysClose">Закрыть</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="staysMap">Привязать на карте</button><button class="btn ghost grow" id="staysClose">Закрыть</button></div>
 </div></div>
 
 <div class="overlay" id="todayOverlay"><div class="modal s">

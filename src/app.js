@@ -2383,6 +2383,7 @@ function gtPop(key,b){
     +((b.status==='planned'||b.status==='assigned')&&!reschedByTrip[b.tripId]?'<button class="btn sm" data-pop-resched>Перенести</button>':'')
     +'<button class="btn sm ghost" data-pop-map>Карта</button>'
     +((b.status==='finished'||b.status==='done')?'<button class="btn sm" data-pop-stays>Стоянки</button>':'')
+    +((b.status==='finished'||b.status==='done')?'<button class="btn sm amber" data-pop-stay-map>Привязка факта</button>':'')
     +((b.status==='finished'||b.status==='done')&&canWrite()?'<button class="btn sm" data-pop-km>Пересчитать факт</button>':'')
     +(canWrite()?'<button class="btn sm" data-pop-open>Открыть выезд</button>':'')+'</div>':'';
   const selected=document.querySelector('.vg-block[data-gb="'+window.CSS.escape(String(b.id))+'"]'),selectedDay=selected&&selected.dataset.blockDay;
@@ -2396,7 +2397,7 @@ function gtPop(key,b){
   const close=()=>{gtSel=null;pop.remove();gtPaint(key);};pop.querySelector('[data-gclose]').onclick=e=>{e.stopPropagation();close();};
   const reset=pop.querySelector('[data-greset]');if(reset)reset.onclick=e=>{e.stopPropagation();pop.remove();gtSave(b,null);};pop.onclick=e=>e.stopPropagation();
   const tool=(sel,fn)=>{const x=pop.querySelector(sel);if(x)x.onclick=async e=>{e.stopPropagation();pop.remove();await fn();};};
-  tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWrite()?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
+  tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWrite()?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-stay-map]',()=>openStayBindingMap(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
   tool('[data-pop-divide]',async()=>{gtZoom[key]=selectedDay;gtPendingDivide={id:String(b.id),iso:selectedDay};gtPaint(key);});
   const el=document.querySelector('[data-gb="'+window.CSS.escape(String(b.id))+'"]');if(el&&!matchMedia('(max-width:600px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-348,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
 }
@@ -2956,7 +2957,7 @@ function wireTripActs(box,offline){
   // не падают, а становятся в очередь, поэтому остаются живыми —
   // ради них офлайн и затевался.
   if(offline){
-    box.querySelectorAll('[data-topen],[data-tstay],[data-tresched]').forEach(b=>{
+    box.querySelectorAll('[data-topen],[data-tstay],[data-tstaymap],[data-tresched]').forEach(b=>{
       b.disabled=true;
       b.title='Нет связи. Действие станет доступно, когда появится сеть.';
     });
@@ -2969,6 +2970,7 @@ function wireTripActs(box,offline){
   box.querySelectorAll('[data-tmap]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.tmap));
   box.querySelectorAll('[data-tgm]').forEach(b=>b.onclick=()=>tripGmaps(b.dataset.tgm));
   box.querySelectorAll('[data-tstay]').forEach(b=>b.onclick=()=>openStaysModal(b.dataset.tstay));
+  box.querySelectorAll('[data-tstaymap]').forEach(b=>b.onclick=()=>openStayBindingMap(b.dataset.tstaymap));
   box.querySelectorAll('[data-tkm]').forEach(b=>b.onclick=()=>remeasureTrip(b.dataset.tkm));
   box.querySelectorAll('[data-tresched]').forEach(b=>b.onclick=()=>openReschedModal(b.dataset.tresched));
   box.querySelectorAll('[data-rok]').forEach(b=>b.onclick=()=>reschedDecide(b.dataset.rok,true));
@@ -3429,6 +3431,7 @@ function tripActs(t){
   if(t.status==='finished' && canWrite()) a+='<button class="btn sm amber" data-tconf="'+t.id+'">✓ Подтвердить</button>';
   if(t.status==='finished' && !canWrite()) a+='<span class="pill">ждёт менеджера</span>';
   if(t.status==='finished'||t.status==='done') a+='<button class="btn sm" data-tstay="'+t.id+'">⏱ Стоянки</button>';
+  if((t.status==='finished'||t.status==='done')&&canWrite()) a+='<button class="btn sm amber" data-tstaymap="'+t.id+'">Привязка факта на карте</button>';
   // Ручной пересчёт. Нужен, когда ORS в момент подтверждения был недоступен
   // или отвечал ошибками: тогда часть точек осудили по кругу или по отказу
   // маршрутизатора, а не по дорогам. Повторный запуск считает всё заново
@@ -5152,6 +5155,7 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs();
   $('tpFrom').value=t?(t.date_from||''):''; $('tpTo').value=t?(t.date_to||''):''; $('tpVeh').innerHTML='<option value="">— авто —</option>'+vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.name+(v.plate?(' · '+v.plate):''))+'</option>').join(''); $('tpVeh').value=t&&t.vehicle_id?t.vehicle_id:''; updateVehInfo(); $('tpVeh').onchange=()=>{ updateVehInfo(); tripHead(); }; $('tpNotes').value=t?(t.notes||''):'';
   $('tpEng').innerHTML=profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
   setEngineerSelect('tpEng',t?tripEngineerIds(t):[]); $('tpStatus').value=t?t.status:'planned';
+  if($('tpStayMap')) $('tpStayMap').style.display=t&&(t.status==='finished'||t.status==='done')?'':'none';
   curTripJobs=new Set(); if(t){ const {data}=await sb.from('trip_jobs').select('job_id').eq('trip_id',id); (data||[]).forEach(r=>curTripJobs.add(r.job_id)); }
   const ro=!canWrite(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
   const es=(t&&t.econ_snapshot)||{}; tripRoute={km:es.km||0,driveH:es.driveH||0,geometry:(t&&t.route_geometry)||null,legs:es.legs||[]}; tripVariants=[];
@@ -5314,6 +5318,7 @@ function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; con
 // Одна кнопка на оба занятия: открывает плановый маршрут в редакторе (точки
 // можно двигать) и поверх — факт, если он есть. Слои переключаются в легенде.
 $('tpEditMap').onclick=()=>{ if(tripEditId){ showTripOnMap(tripEditId); } else { notify('Сначала сохрани выезд — потом правь маршрут на карте.','warn'); } };
+if($('tpStayMap')) $('tpStayMap').onclick=()=>{if(tripEditId)openStayBindingMap(tripEditId);};
 function loadTripIntoPlanner(id,known){ const t=known||trips.find(x=>x.id==id)||tripCache[id]; if(!t) return false; switchTab('map'); tripLayer.clearLayers(); plannerTripId=id;
   const saved=t.route_stops||[]; const st=saved.find(x=>x.type==='start'); rStart=st?{name:st.name,lat:st.lat,lng:st.lng,description:st.description||''}:null;
   rStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'client',name:x.name,lat:x.lat,lng:x.lng,clientId:x.clientId||null,equipId:x.equipId||null,description:x.description||''}));
@@ -5687,6 +5692,7 @@ function reschedBanner(t){
 // Факт-часы кэшируем на клиенте, а не храним в trips: единственный источник
 // правды — trip_stays, и лишняя копия в другой таблице разъезжается молча.
 let factHByTrip={};
+let staysModalTripId=null;
 
 async function loadFactHours(){
   try{
@@ -5704,6 +5710,7 @@ function minText(m){ if(m==null) return '—'; const h=Math.floor(m/60), r=Math.
 const STAY_ST={detected:'посчитано',engineer_ok:'подтвердил инженер',approved:'утверждено',rejected:'не работа'};
 
 async function openStaysModal(tid){
+  staysModalTripId=tid;
   const t=getTrip(tid);
   $('staysTitle').textContent='Стоянки на выезде'+(t&&t.date_from?(' '+t.date_from):'');
   $('staysBody').innerHTML='<div class="hint">Загрузка…</div>';
@@ -5818,6 +5825,11 @@ async function stayAct(sid,kind,tid){
   }catch(e){ notify('Ошибка: '+(e.message||e),'err'); }
 }
 if($('staysClose')) $('staysClose').onclick=()=>$('staysOverlay').classList.remove('on');
+if($('staysMap')) $('staysMap').onclick=async()=>{
+  if(!staysModalTripId) return;
+  $('staysOverlay').classList.remove('on');
+  await openStayBindingMap(staysModalTripId);
+};
 
 // ---------- выезд: старт / финиш / подтверждение ----------
 // Всё через RPC. Инженеру НЕ дан UPDATE на trips: политика пустила бы его
@@ -6054,11 +6066,62 @@ let factG={}; FACT_LAYERS.forEach(k=>{ factG[k]=L.layerGroup().addTo(map); });
 let factVis={plan:true,track:true,road:true,line:true,live:true,drop:true,stay:true};
 let factTripId=null;
 let factTrip=null, factRaw=[], factLiveBusy=false;
+let stayBindMap=null;
 
 function factClear(){
   FACT_LAYERS.forEach(k=>factG[k].clearLayers());
   factTripId=null; factTrip=null; factRaw=[]; factLast=null;
   try{ renderMapPanel(); }catch(e){}
+}
+
+function stayBindIcon(stay,index){
+  const attached=!!stay.job_id, selected=stayBindMap&&stayBindMap.selected===stay.id;
+  const bg=selected?'var(--accent)':(attached?'#2fbf6e':'#d5342a');
+  const fg=selected?'var(--on-accent)':'#fff';
+  return L.divIcon({className:'',iconSize:[28,28],iconAnchor:[14,14],html:'<div class="cbub" style="width:28px;height:28px;line-height:24px;background:'+bg+';color:'+fg+';border:2px solid '+ringColor()+'">'+(index+1)+'</div>'});
+}
+function stayJobLabel(j){return (j.clients&&j.clients.name)||((j.equipment&&j.equipment.model)||'заявка');}
+function stayBindingPopup(stay,index){
+  const jobs=(stayBindMap&&stayBindMap.jobs)||[], current=jobs.find(j=>String(j.id)===String(stay.job_id));
+  return '<div class="trip-stop-popup"><b>Стоянка '+(index+1)+'</b><div class="meta">'+hhmm(stay.stay_from)+' — '+hhmm(stay.stay_to)+' · '+minText(stay.minutes_raw)+'</div>'
+    +'<div class="hint">'+(current?('Привязана: '+esc(stayJobLabel(current))):'Не привязана к заявке')+'</div>'
+    +'<div class="trip-stop-jobs"><button type="button" class="btn sm amber" data-stay-select="'+esc(stay.id)+'">Выбрать точку</button>'
+    +jobs.map(j=>'<button type="button" class="btn sm ghost" data-stay-job="'+esc(stay.id)+'" data-job="'+esc(j.id)+'">'+(String(j.id)===String(stay.job_id)?'✓ ':'')+esc(stayJobLabel(j))+'</button>').join('')
+    +(stay.job_id?'<button type="button" class="btn sm ghost" data-stay-job="'+esc(stay.id)+'" data-job="">Снять привязку</button>':'')+'</div></div>';
+}
+function drawStayBindingMap(){
+  if(!stayBindMap) return;
+  factG.stay.clearLayers();
+  const pts=[];
+  stayBindMap.stays.forEach((s,i)=>{if(s.lat==null||s.lng==null)return;pts.push([s.lat,s.lng]);factG.stay.addLayer(L.marker([s.lat,s.lng],{icon:stayBindIcon(s,i)}).bindPopup(stayBindingPopup(s,i)));});
+  factVis.stay=true;factApplyVis();renderMapPanel();
+  if(pts.length)setTimeout(()=>map.fitBounds(pts,fitPadL(fitPad(70))),60);
+}
+async function attachStayOnMap(stayId,jobId){
+  if(!stayBindMap) return;
+  try{
+    const {data,error}=await sb.rpc('stay_attach',{p_stay:stayId,p_job:jobId||null});
+    if(error) throw error;
+    if(data==='foreign_job') throw new Error('Эта заявка не входит в выезд.');
+    if(data==='already_approved') throw new Error('Утверждённую стоянку менять нельзя.');
+    const s=stayBindMap.stays.find(x=>String(x.id)===String(stayId));if(s)s.job_id=jobId||null;
+    stayBindMap.selected=null;if(canWrite())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();await loadFactHours();showToast(jobId?'Стоянка привязана к заявке':'Привязка снята');
+  }catch(e){notify('Не удалось изменить привязку: '+(e.message||e),'err');}
+}
+async function openStayBindingMap(tid){
+  const t=getTrip(tid)||tripCache[tid];
+  if(t&&t.status!=='finished'&&t.status!=='done'){notify('Привязка факта доступна после завершения выезда.','warn');return;}
+  await showTripOnMap(tid);
+  try{
+    const [{data:stays,error:se},{data:links,error:je}]=await Promise.all([
+      sb.from('trip_stays').select('*').eq('trip_id',tid).order('stay_from'),
+      sb.from('trip_jobs').select('job_id,jobs(id,clients(name),equipment(model))').eq('trip_id',tid).order('ord')
+    ]);
+    if(se)throw se;if(je)throw je;
+    stayBindMap={tid,stays:stays||[],jobs:(links||[]).map(x=>x.jobs).filter(Boolean),selected:null};
+    drawStayBindingMap();
+    showToast(stayBindMap.stays.length?'Выберите красную точку стоянки и заявку':'Стоянок для привязки не найдено');
+  }catch(e){notify('Стоянки не загрузились: '+(e.message||e),'err');}
 }
 // Слой либо на карте, либо нет. Очистка слоя тут не годится: при следующем
 // включении рисовать было бы нечего, пришлось бы пересчитывать трек.
@@ -6155,6 +6218,7 @@ let factLast=null;
 
 function mapPanelRows(){
   const R=[];
+  if(stayBindMap) R.push({key:'stay',icon:stopSvg(13),name:'привязка факта',sub:stayBindMap.selected?'Выбрана стоянка · нажмите точку заявки':'Нажмите стоянку, затем точку заявки'});
   const stops=routeStopsAll().length;
   if(stops||(rRoute&&rRoute.km>0)){
     R.push({key:'plan',style:'border-top:3px dashed var(--ink-faint)',name:'плановый маршрут',
@@ -6169,7 +6233,7 @@ function mapPanelRows(){
     if(d.lineKm)  R.push({key:'line', style:'border-top:3px dotted '+GAP_C, name:'прямая, маршрут не строился',km:d.lineKm});
     if(factLiveTail(d)) R.push({key:'live',style:'border-top:3px dashed '+LIVE_C,name:'текущая позиция · ждёт истории'});
     if(d.dropped.length) R.push({key:'drop',icon:dropSvg(13),name:'выброшено точек',val:d.droppedTotal||d.dropped.length});
-    R.push({key:'stay',icon:stopSvg(13),name:'стоянки'});
+    if(!stayBindMap) R.push({key:'stay',icon:stopSvg(13),name:'стоянки'});
   }
   return R;
 }
@@ -6327,6 +6391,7 @@ function drawTripPlan(t){
   return pts.length>0;
 }
 async function showTripOnMap(tid){
+  stayBindMap=null;
   // Не записываем промежуточный #/map: одна кнопка должна давать одну запись
   // истории, чтобы Back возвращал туда, откуда открыли выезд.
   const wasApplying=routeApplying; routeApplying=true; switchTab('map'); routeApplying=wasApplying;
@@ -6377,9 +6442,12 @@ function jobsAtTripStop(stop){
 }
 function tripStopPopup(stop,index){
   const linked=jobsAtTripStop(stop);
+  const selected=stayBindMap&&stayBindMap.selected;
   return '<div class="trip-stop-popup"><b>'+esc((stop&&stop.name)||('точка '+(index+1)))+'</b>'
     +(linked.length?'<div class="trip-stop-jobs">'+linked.map(j=>
-      '<button type="button" class="btn sm ghost" data-map-job="'+esc(j.id)+'">Открыть заявку'+(linked.length>1?(' · '+esc((j.equipment&&j.equipment.model)||String(j.id).slice(0,8))):'')+'</button>'
+      selected
+        ? '<button type="button" class="btn sm amber" data-stay-job="'+esc(selected)+'" data-job="'+esc(j.id)+'">Привязать стоянку → '+esc(stayJobLabel(j))+'</button>'
+        : '<button type="button" class="btn sm ghost" data-map-job="'+esc(j.id)+'">Открыть заявку'+(linked.length>1?(' · '+esc((j.equipment&&j.equipment.model)||String(j.id).slice(0,8))):'')+'</button>'
     ).join('')+'</div>':'')+'</div>';
 }
 window.openTripMapJob=function(id){
@@ -6392,6 +6460,12 @@ map.on('popupopen',e=>{
   if(!el) return;
   el.querySelectorAll('[data-map-job]').forEach(b=>b.onclick=ev=>{
     ev.preventDefault(); ev.stopPropagation(); window.openTripMapJob(b.dataset.mapJob);
+  });
+  el.querySelectorAll('[data-stay-select]').forEach(b=>b.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();if(!stayBindMap)return;stayBindMap.selected=b.dataset.staySelect;map.closePopup();if(canWrite())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();showToast('Теперь нажмите плановую точку заявки');
+  });
+  el.querySelectorAll('[data-stay-job]').forEach(b=>b.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();attachStayOnMap(b.dataset.stayJob,b.dataset.job||null);
   });
 });
 
