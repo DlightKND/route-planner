@@ -49,9 +49,9 @@ export function installEngineerPickers(root = document) {
         };
       }
       const names=[...select.options].filter(o=>o.selected).map(o=>o.textContent.trim());
-      const label=names.length?names.join(', '):'Выбрать инженеров';
+      const label=names.length>1?names[0]+' +'+(names.length-1):names[0]||'Выбрать инженеров';
       if(button.textContent!==label+' ▾')button.textContent=label+' ▾';
-      button.title=label;if(button.disabled!==select.disabled)button.disabled=select.disabled;
+      button.title=names.join(', ')||label;if(button.disabled!==select.disabled)button.disabled=select.disabled;
       button.setAttribute('aria-label',(select.getAttribute('aria-label') || 'Инженеры')+': '+label);
     });
   };

@@ -8,11 +8,11 @@ afterEach(async()=>{await win.happyDOM.close();vi.unstubAllGlobals();});
 it('shows selected names and keeps the native selection contract on checkbox change',async()=>{
  installEngineerPickers();const button=doc.querySelector('.engineer-picker');expect(button.textContent).toContain('Анна');button.click();
  const changes=vi.fn();doc.querySelector('select').addEventListener('change',changes);const check=doc.querySelectorAll('.engineer-options input')[1];check.checked=true;check.dispatchEvent(new win.Event('change',{bubbles:true}));
- expect([...doc.querySelector('select').selectedOptions].map(o=>o.value)).toEqual(['a','b']);expect(changes).toHaveBeenCalledOnce();expect(button.textContent).toContain('Богдан');
+ expect([...doc.querySelector('select').selectedOptions].map(o=>o.value)).toEqual(['a','b']);expect(changes).toHaveBeenCalledOnce();expect(button.textContent).toBe('Анна +1 ▾');expect(button.title).toBe('Анна, Богдан');
  await tick();expect(doc.querySelectorAll('.engineer-picker')).toHaveLength(1);
 });
 it('updates after programmatic form hydration and dynamically inserted presence forms',async()=>{
- installEngineerPickers();doc.querySelectorAll('option')[1].selected=true;doc.querySelector('select').dispatchEvent(new win.Event('crew-sync',{bubbles:true}));expect(doc.querySelector('.engineer-picker').textContent).toContain('Богдан');
+ installEngineerPickers();doc.querySelectorAll('option')[1].selected=true;doc.querySelector('select').dispatchEvent(new win.Event('crew-sync',{bubbles:true}));expect(doc.querySelector('.engineer-picker').textContent).toBe('Анна +1 ▾');
  const dialog=doc.createElement('dialog');dialog.innerHTML='<select multiple><option selected>Вера</option></select>';doc.body.append(dialog);await tick();expect(dialog.querySelector('.engineer-picker').textContent).toContain('Вера');dialog.querySelector('button').click();expect(dialog.querySelector('.engineer-options')).not.toBeNull();
 });
 it('closes on Escape and when the underlying control becomes disabled',async()=>{

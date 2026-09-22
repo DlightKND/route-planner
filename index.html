@@ -2681,8 +2681,14 @@
         </div>
         <details class="wb-route-details"><summary>Точки маршрута</summary><div id="tpRouteStops" style="max-height:180px;overflow:auto"></div></details>
         <div class="hint" id="tpRouteStatus" style="margin-top: var(--sp-3)"></div>
-        <div class="wb-route-actions"><button class="btn sm" id="tpEditMap" style="margin-top: var(--sp-3);width:100%">Маршрут на карте</button>
-        <button class="btn sm amber" id="tpStayMap" style="display:none;margin-top: var(--sp-2);width:100%">Проверить стоянки на карте</button><button class="btn sm" id="tpRebuildRemaining">Оставшийся маршрут</button></div>
+        <div class="wb-route-actions">
+          <button class="btn sm amber" id="tpStayMap" style="display:none">Проверить стоянки</button>
+          <details class="wb-route-more"><summary class="btn sm">Ещё ▾</summary><div class="wb-route-menu">
+            <button class="btn sm" id="tpEditMap">Редактировать маршрут на карте</button>
+            <button class="btn sm" id="tpRebuildRemaining">Рассчитать оставшийся маршрут</button>
+            <div id="tpKmAction"></div>
+          </div></details>
+        </div>
         <!-- Факт-пробег стоит здесь, у маршрута, а не в «Экономике»: это
              результат разбора трека, и рядом с ним нужна кнопка пересчёта. -->
         <div id="tpFactBox" style="margin-top: var(--sp-4)"></div>

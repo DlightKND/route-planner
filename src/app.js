@@ -5287,13 +5287,13 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs();
 function renderTpFactKm(){
   const box=$('tpFactBox'); if(!box) return;
   const t=tripEditId?trips.find(x=>x.id==tripEditId):null;
-  if(!t||!canWrite()){ box.innerHTML=''; return; }
+  if(!t||!canWrite()){ box.innerHTML=''; if($('tpKmAction'))$('tpKmAction').innerHTML=''; return; }
   const val=t.fact_km!=null
     ? ('<b>'+Math.round(t.fact_km)+' км</b>'+esc(factSrcRu(t.fact_km_source)))
     : '<span class="fg-t">не сведён</span>';
   box.innerHTML='<div class="hint">Факт-пробег: '+val
-    +(t.fact_km_note?('<br><span class="fg-t">'+esc(t.fact_km_note)+'</span>'):'')+'</div>'
-    +'<button class="btn sm" id="tpKmCalc" style="margin-top: var(--sp-3);width:100%">'
+    +(t.fact_km_note?('<br><span class="fg-t">'+esc(t.fact_km_note)+'</span>'):'')+'</div>';
+  $('tpKmAction').innerHTML='<button class="btn sm" id="tpKmCalc" style="margin-top: var(--sp-3);width:100%">'
     +(t.fact_km!=null?'↻ Пересчитать пробег по треку':'Свести пробег по треку')+'</button>';
   const b=$('tpKmCalc');
   if(b) b.onclick=async()=>{ const id=tripEditId; await remeasureTrip(id); if(tripEditId===id) renderTpFactKm(); };

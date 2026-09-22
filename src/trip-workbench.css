@@ -80,3 +80,14 @@ select[data-crew-native]{display:none!important}
 .wb-route-card #tpFactBox{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .wb-route-card #tpFactBox>.hint{flex:1 1 180px}
 .wb-route-card #tpFactBox>.btn{width:auto!important;margin:0!important}
+
+/* Explicit specificity: base .btn rules are also present in the page stylesheet. */
+.btn.engineer-picker{display:block;box-sizing:border-box;height:32px;min-height:32px;max-height:32px;width:100%;max-width:320px;padding:5px 10px;text-align:left;font-family:inherit;font-size:13px;font-weight:400;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wb-route-actions{flex-wrap:nowrap;align-items:center;gap:6px;margin:8px 0}
+.wb-route-actions>.btn,.wb-route-actions summary.btn{flex:0 1 auto;width:auto!important;padding:6px 10px}
+.wb-route-more{position:relative;margin:0}
+.wb-route-more>summary{list-style:none;cursor:pointer}
+.wb-route-more>summary::-webkit-details-marker{display:none}
+.wb-route-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:30;width:min(280px,75vw);padding:6px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);box-shadow:var(--shadow-lg)}
+.wb-route-menu .btn{display:block;white-space:normal;width:100%!important;text-align:left;margin:0!important;padding:9px 10px;border:0;background:transparent}
+@media(pointer:coarse){.btn.engineer-picker{height:40px;min-height:40px;max-height:40px}}
