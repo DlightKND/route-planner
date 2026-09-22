@@ -8,6 +8,7 @@ import { presenceSummary, validatePresence, remainingStops, presenceDaily, sameE
 import { presenceHTML, historyHTML, removedHTML, readPresenceForm } from './trip-workbench.js';
 import './trip-workbench.css';
 import { economicSnapshot } from './core/economic-snapshot.js';
+import { requestRouteProxy } from './core/route-proxy.js';
 
 // ── Аварийный перехватчик ────────────────────────────────────────────────────
 // Если что-то падает при старте, модуль обрывается и остаётся серый экран
@@ -7370,7 +7371,7 @@ async function orsPost(url,body){ const px=(appSettings.ors_proxy||'').trim(); l
   // Прямой режим убран: ключ ORS живёт только в секрете Edge Function.
   if(!px) throw new Error('Маршрутизация не настроена: не задан адрес прокси ORS в настройках.');
   if(px){ const path=url.replace('https://api.openrouteservice.org/',''); const tok=(session&&session.access_token)||'';
-    r=await fetch(px,{method:'POST',headers:{'Authorization':'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify({path,body})}); }
+    r=await requestRouteProxy(px,loadCfg().url,tok,{path,body}); }
   if(r.ok) return await r.json();
   let t=''; try{ t=await r.text(); }catch(e){}
   // Причина отказа ORS лежит в теле ответа. Без вывода в консоль виден только
