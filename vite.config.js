@@ -19,7 +19,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 // я назвал, — прод собран ровно из того, что мы наработали. Не совпал —
 // список ниже показывает, какой именно файл отстал.
 function buildStamp() {
-  const files = ['index.html', 'src/app.js', 'src/trip-workbench.js', 'src/trip-workbench.css', 'public/sw.js']
+  const files = ['index.html', 'src/app.js', 'src/trip-workbench.js', 'src/engineer-picker.js', 'src/trip-workbench.css', 'public/sw.js']
     .concat(readdirSync('src/core').filter(f => f.endsWith('.js')).sort().map(f => 'src/core/' + f));
   const parts = files.map(name => {
     let text = '';
