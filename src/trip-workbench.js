@@ -4,7 +4,7 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const n = v => v == null ? '—' : (+v).toLocaleString('ru-RU',{maximumFractionDigits:2});
 const time = v => v ? new Date(v).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Kyiv'}) : '—';
 
-export function presenceHTML(data, jobs, profiles) {
+export function presenceHTML(data, jobs, profiles, {editor = false} = {}) {
   const summary = presenceSummary(data.stays), t = data.trip;
   const jobName = id => jobs.find(j=>j.id===id)?.clients?.name || data.removed.find(j=>j.job_id===id)?.snapshot?.client_name || 'Заявка '+String(id).slice(0,8);
   const candidateJobs = [...jobs.filter(j => data.jobIds.includes(j.id)).map(j=>({id:j.id,name:jobName(j.id)})),
@@ -20,9 +20,11 @@ export function presenceHTML(data, jobs, profiles) {
       <td data-label="Минуты на человека"><input data-presence="minutes_mgr" aria-label="Минуты присутствия" type="number" min="0" step="1" value="${esc(mins??'')}"><div class="hint">${n(hrs)} чел.-ч</div></td>
       <td data-label="Проверка"><select data-presence="status" aria-label="Результат проверки"><option value="" ${!suggested&&!['approved','rejected'].includes(s.status)?'selected':''}>Проверить позже</option><option value="approved" ${suggested||s.status==='approved'?'selected':''}>${suggested?'Присутствие · предложено':'Присутствие'}</option><option value="rejected" ${s.status==='rejected'?'selected':''}>Не учитывать</option></select></td></tr>`;
   }).join('');
+  const table = `<div class="wb-table-scroll" role="region" aria-label="Стоянки на объектах" tabindex="0"><table class="wb-table"><thead><tr><th>Интервал</th><th>Объект / заявка</th><th>Команда</th><th>Минуты на человека</th><th>Проверка</th>${editor?'':'<th></th>'}</tr></thead><tbody>${editor?rows:rows.replaceAll('</tr>','<td><button type="button" class="btn sm" data-presence-edit>Изменить</button></td></tr>')}</tbody></table></div>`;
+  if (editor) return table;
   return `<div class="wb-metrics"><div><span>Присутствие · проверено</span><b>${n(summary.approved)} чел.-ч</b></div><div><span>Стоянки на проверке</span><b>${summary.pending}</b></div><div><span>Факт-пробег</span><b>${n(t.fact_km)} км</b></div></div>
     <p class="hint">Всё время на объекте × присутствовавшие инженеры. Ожидание включено. Нормочасы работ не изменяются. Время указано по Киеву.</p>
-    ${rows?`<div class="wb-table-scroll" role="region" aria-label="Стоянки на объектах" tabindex="0"><table class="wb-table"><thead><tr><th>Интервал</th><th>Объект / заявка</th><th>Команда</th><th>Минуты на человека</th><th>Проверка</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="hint">Стоянок пока нет. Отсутствие данных не означает нулевое присутствие.</p>'}
+    ${rows?table:'<p class="hint">Стоянок пока нет. Отсутствие данных не означает нулевое присутствие.</p>'}
     <div class="row"><button type="button" class="btn" id="wbDetect">Обновить стоянки по треку</button>${rows?'<button type="button" class="btn amber" id="wbPresenceSave">Сохранить проверку присутствия</button>':''}</div>
     <div class="hint" id="wbPresenceMessage" role="status"></div>`;
 }

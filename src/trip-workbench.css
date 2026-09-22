@@ -48,3 +48,35 @@
 
 .wb-presence-details>summary{cursor:pointer;font-size:var(--fs-4);font-weight:600;padding:4px 0}
 .wb-presence-details[open]>summary{margin-bottom:12px}
+
+/* Multi-person fields stay one line; options are fixed/top-layer overlays. */
+select[data-crew-native]{display:none!important}
+.engineer-picker{display:block;width:100%;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400}
+.engineer-options{position:fixed;inset:auto;margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);color:var(--ink);box-shadow:var(--shadow-lg);z-index:10000;overflow:auto;box-sizing:border-box}
+.engineer-options-title{font-weight:600;padding:4px 6px 8px}
+.engineer-options label{display:flex;align-items:center;gap:10px;padding:8px 6px;margin:0;cursor:pointer;font-size:var(--fs-3)}
+.engineer-options label:hover{background:var(--panel-2)}
+.engineer-options input[type=checkbox]{width:16px;height:16px;flex:none;margin:0}
+.engineer-options>.btn{margin-top:8px;width:100%}
+.presence-editor{width:min(620px,calc(100vw - 24px));max-height:85dvh;overflow:auto;padding:20px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);color:var(--ink)}
+.presence-editor::backdrop{background:rgb(0 0 0 / .55)}
+.presence-editor-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.presence-editor-head h3{margin:0}
+.presence-editor .wb-table-scroll{max-height:none;overflow:visible}
+.presence-editor .wb-table{display:block;min-width:0}
+.presence-editor .wb-table thead{display:none}
+.presence-editor .wb-table tbody{display:block}
+.presence-editor .wb-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;border:0;padding:0}
+.presence-editor .wb-table td{display:block;border:0;padding:0;min-width:0}
+.presence-editor .wb-table td::before{content:attr(data-label);display:block;font-size:12px;color:var(--ink-dim);margin-bottom:6px}
+.presence-editor .wb-table td:first-child{grid-column:1/-1}
+.presence-editor-foot{display:flex;justify-content:flex-end;margin-top:12px}
+.presence-editor .presence-error:empty{display:none}
+.wb-route-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.wb-route-actions .btn{width:auto!important;margin:0!important;flex:1 1 180px}
+.wb-route-card #tpFactBox{margin-top:8px!important}
+@media(max-width:480px){.presence-editor .wb-table tr{grid-template-columns:1fr}.presence-editor{padding:14px}}
+
+.wb-route-card #tpFactBox{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.wb-route-card #tpFactBox>.hint{flex:1 1 180px}
+.wb-route-card #tpFactBox>.btn{width:auto!important;margin:0!important}

@@ -2681,12 +2681,12 @@
         </div>
         <details class="wb-route-details"><summary>Точки маршрута</summary><div id="tpRouteStops" style="max-height:180px;overflow:auto"></div></details>
         <div class="hint" id="tpRouteStatus" style="margin-top: var(--sp-3)"></div>
-        <button class="btn sm" id="tpEditMap" style="margin-top: var(--sp-3);width:100%">Редактировать маршрут на карте</button>
-        <button class="btn sm amber" id="tpStayMap" style="display:none;margin-top: var(--sp-2);width:100%">Привязать точки факта на карте</button>
+        <div class="wb-route-actions"><button class="btn sm" id="tpEditMap" style="margin-top: var(--sp-3);width:100%">Маршрут на карте</button>
+        <button class="btn sm amber" id="tpStayMap" style="display:none;margin-top: var(--sp-2);width:100%">Проверить стоянки на карте</button><button class="btn sm" id="tpRebuildRemaining">Оставшийся маршрут</button></div>
         <!-- Факт-пробег стоит здесь, у маршрута, а не в «Экономике»: это
              результат разбора трека, и рядом с ним нужна кнопка пересчёта. -->
         <div id="tpFactBox" style="margin-top: var(--sp-4)"></div>
-        <button class="btn sm" id="tpRebuildRemaining" style="margin-top:12px;width:100%">Рассчитать оставшийся маршрут</button>
+
         <div class="hint" id="tpRemainingInfo"></div>
         <details class="wb-section wb-presence-details"><summary id="tpPresenceTitle">Присутствие на объектах · стоянки и проверка</summary><div id="tpPresence"></div></details>
       </div>

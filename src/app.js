@@ -7,6 +7,8 @@ import * as core from './core/index.js';
 import { presenceSummary, validatePresence, remainingStops, presenceDaily, sameEditablePlan } from './core/trip-review.js';
 import { presenceHTML, historyHTML, removedHTML, readPresenceForm } from './trip-workbench.js';
 import './trip-workbench.css';
+import { installEngineerPickers } from './engineer-picker.js';
+installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 
@@ -1611,7 +1613,7 @@ const jobEngineerIds=j=>engineerIds(j,'assigned_engineer');
 const tripEngineerIds=t=>engineerIds(t,'lead_engineer');
 const assignedTo=(row,id,legacyField)=>!!id&&engineerIds(row,legacyField).includes(id);
 function selectedEngineerIds(id){ const el=$(id); return el?[...el.selectedOptions].map(o=>o.value).filter(Boolean):[]; }
-function setEngineerSelect(id,ids){ const chosen=new Set(ids||[]); const el=$(id); if(el) [...el.options].forEach(o=>{ o.selected=chosen.has(o.value); }); }
+function setEngineerSelect(id,ids){ const chosen=new Set(ids||[]); const el=$(id); if(el) { [...el.options].forEach(o=>{ o.selected=chosen.has(o.value); }); el.dispatchEvent(new window.Event('crew-sync',{bubbles:true})); } }
 function engineerNames(ids){ return (ids||[]).map(id=>profilesList.find(p=>p.id===id)).filter(Boolean).map(p=>p.full_name||'инженер'); }
 const ST={open:'открыта',planned:'запланирована',in_progress:'в работе',done:'закрыта',cancelled:'отменена'};
 const JOB_STATUS_ORDER=['open','planned','in_progress','done','cancelled'];
@@ -5004,6 +5006,48 @@ document.querySelector('.view-trip')?.addEventListener('change',e=>{
   else if(e.target.closest('#tpPlanPane')||e.target.closest('#tpEconomyPane')){tripPlanDirty=true;}
 });
 window.addEventListener('beforeunload',e=>{if(tripPlanDirty||tripPresenceDirty){e.preventDefault();e.returnValue='';}});
+document.querySelector('#tpPresence')?.addEventListener('click',e=>{
+  const button=e.target.closest('[data-presence-edit]');
+  if(button)openPresenceEditor(tripEditId,button.closest('[data-presence-id]').dataset.presenceId);
+});
+async function openPresenceEditor(tid,stayId,jobId){
+  if(!canWrite())return;
+  if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки выезда.','warn');return;}
+  try{
+    await ensureRefs();await loadTripJobs();
+    const {data,error}=await sb.rpc('trip_workbench_read',{p_trip:tid});if(error)throw error;
+    const original=data.stays.find(s=>String(s.id)===String(stayId));if(!original)throw new Error('Стоянка не найдена');
+    const stay={...original};
+    if(jobId!==undefined)stay.job_id=jobId;
+    // Approval is the default action; the validation still requires a closed
+    // interval and explicitly known crew. No historic team is guessed.
+    if(stay.stay_to&&stay.status!=='rejected')stay.status='approved';
+    const dialog=document.createElement('dialog');dialog.className='presence-editor';
+    dialog.innerHTML='<form method="dialog"><div class="presence-editor-head"><h3>Привязка и присутствие</h3><button class="btn sm" type="submit" aria-label="Закрыть">✕</button></div></form>'
+      +presenceHTML({...data,jobIds:data.job_ids,stays:[stay]},tripJobsAll,profilesList,{editor:true})
+      +'<label>Комментарий<input class="presence-reason" value="Проверено по треку и составу команды"></label><p class="presence-error err" role="alert"></p><div class="presence-editor-foot"><button type="button" class="btn amber" data-presence-submit>Привязать и подтвердить</button></div>';
+    document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
+    const save=dialog.querySelector('[data-presence-submit]'),status=dialog.querySelector('[data-presence="status"]');
+    const label=()=>{save.textContent=status.value==='rejected'?'Не учитывать стоянку':status.value==='approved'?'Привязать и подтвердить':'Закрыть без сохранения';};
+    status.addEventListener('change',label);label();
+    save.onclick=async()=>{
+      const output=dialog.querySelector('.presence-error');output.textContent='';
+      const rows=readPresenceForm(dialog,[original]);
+      if(!rows[0].status){dialog.close();return;}
+      try{
+        validatePresence(rows);const reason=dialog.querySelector('.presence-reason').value.trim();if(!reason)throw new Error('Укажи комментарий проверки');
+        save.disabled=true;
+        const {error}=await sb.rpc('trip_presence_save',{p_trip:tid,p_expected:data.trip.workbench_revision,p_stays:rows.map(s=>({id:s.id,job_id:s.job_id,crew_ids:s.crew_ids,minutes_mgr:s.minutes_mgr,status:s.status})),p_reason:reason});
+        if(error)throw error;
+        dialog.close();showToast(rows[0].status==='approved'?'Стоянка привязана и присутствие подтверждено':'Стоянка исключена из учёта');
+        try{await loadFactHours();
+          if(stayBindMap?.tid===tid)await reloadStayBindingData(tid);
+          if(tripEditId===tid){await loadWorkbench(tid);tripEcon();}
+        }catch(refreshError){notify('Проверка сохранена, но обновить отображение не удалось: '+refreshError.message,'warn');}
+      }catch(e){output.textContent=e.message||String(e);save.disabled=false;}
+    };
+  }catch(e){notify('Не удалось открыть присутствие: '+(e.message||e),'err');}
+}
 async function loadWorkbench(id){
   tripWorkbench=null;tripPresenceDirty=false;
   if(!id){$('tpPresence').textContent='Сохрани план, чтобы начать учёт выезда.';$('tpHistoryPane').textContent='Новый выезд';$('tpRemovedJobs').innerHTML='';$('tpReviewState').textContent='Новый план';return;}
@@ -6119,13 +6163,15 @@ function factClear(){
 }
 
 function stayBindIcon(stay,index){
-  const attached=!!stay.job_id, selected=stayBindMap&&stayBindMap.selected===stay.id;
+  const attached=stay.status==='approved', selected=stayBindMap&&stayBindMap.selected===stay.id;
   const bg=selected?'var(--accent)':(attached?'#2fbf6e':'#d5342a');
   const fg=selected?'var(--on-accent)':'#fff';
   return L.divIcon({className:'',iconSize:[28,28],iconAnchor:[14,14],html:'<div class="cbub" style="width:28px;height:28px;line-height:24px;background:'+bg+';color:'+fg+';border:2px solid '+ringColor()+'">'+(index+1)+'</div>'});
 }
 function stayJobLabel(j){return (j.clients&&j.clients.name)||((j.equipment&&j.equipment.model)||'заявка');}
 function stayBindingPopup(stay,index){
+  if(canWrite())return '<div class="trip-stop-popup"><b>Стоянка '+(index+1)+'</b><div class="meta">'+hhmm(stay.stay_from)+' — '+hhmm(stay.stay_to)+' · '+minText(stay.minutes_raw)+'</div><p class="hint">'+(stay.status==='approved'?'Присутствие подтверждено':stay.status==='rejected'?'Не учитывается':'Требует проверки')+'</p><button type="button" class="btn sm amber" data-stay-edit="'+esc(stay.id)+'">Привязка и присутствие</button><button type="button" class="btn sm ghost" data-stay-select="'+esc(stay.id)+'">Выбрать объект на карте</button></div>';
+
   const jobs=(stayBindMap&&stayBindMap.jobs)||[], current=jobs.find(j=>String(j.id)===String(stay.job_id));
   return '<div class="trip-stop-popup"><b>Стоянка '+(index+1)+'</b><div class="meta">'+hhmm(stay.stay_from)+' — '+hhmm(stay.stay_to)+' · '+minText(stay.minutes_raw)+'</div>'
     +'<div class="hint">'+(current?('Привязана: '+esc(stayJobLabel(current))):'Не привязана к заявке')+'</div>'
@@ -6143,6 +6189,7 @@ function drawStayBindingMap(){
 }
 async function attachStayOnMap(stayId,jobId){
   if(!stayBindMap) return;
+  if(canWrite()){map.closePopup();return openPresenceEditor(stayBindMap.tid,stayId,jobId);}
   try{
     const {data,error}=await sb.rpc('stay_attach',{p_stay:stayId,p_job:jobId||null});
     if(error) throw error;
@@ -6152,10 +6199,16 @@ async function attachStayOnMap(stayId,jobId){
     stayBindMap.selected=null;if(canWrite())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();await loadFactHours();showToast(jobId?'Стоянка привязана к заявке':'Привязка снята');
   }catch(e){notify('Не удалось изменить привязку: '+(e.message||e),'err');}
 }
+async function reloadStayBindingData(tid){
+  const {data,error}=await sb.rpc('trip_workbench_read',{p_trip:tid});if(error)throw error;
+  stayBindMap={tid,stays:data.stays,jobs:tripJobsAll.filter(j=>data.job_ids.includes(j.id)||data.removed.some(r=>r.job_id===j.id)),selected:null};
+  drawStayBindingMap();
+}
 async function openStayBindingMap(tid){
   const t=getTrip(tid)||tripCache[tid];
   if(t&&t.status!=='finished'&&t.status!=='done'){notify('Привязка факта доступна после завершения выезда.','warn');return;}
   await showTripOnMap(tid);
+  if(canWrite()){try{await loadTripJobs();await reloadStayBindingData(tid);}catch(e){notify(e.message,'err');}return;}
   try{
     const [{data:stays,error:se},{data:links,error:je}]=await Promise.all([
       sb.from('trip_stays').select('*').eq('trip_id',tid).order('stay_from'),
@@ -6505,6 +6558,7 @@ map.on('popupopen',e=>{
   el.querySelectorAll('[data-map-job]').forEach(b=>b.onclick=ev=>{
     ev.preventDefault(); ev.stopPropagation(); window.openTripMapJob(b.dataset.mapJob);
   });
+  el.querySelectorAll('[data-stay-edit]').forEach(b=>b.onclick=ev=>{ev.preventDefault();ev.stopPropagation();map.closePopup();openPresenceEditor(stayBindMap.tid,b.dataset.stayEdit);});
   el.querySelectorAll('[data-stay-select]').forEach(b=>b.onclick=ev=>{
     ev.preventDefault();ev.stopPropagation();if(!stayBindMap)return;stayBindMap.selected=b.dataset.staySelect;map.closePopup();if(canWrite())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();showToast('Теперь нажмите плановую точку заявки');
   });
