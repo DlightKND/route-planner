@@ -2652,14 +2652,12 @@
     <div id="tpPlanPane" role="tabpanel" aria-labelledby="tpTabPlan" data-trip-pane="plan">
     <label for="tpChangeReason">Причина изменения плана</label><input id="tpChangeReason" type="text" placeholder="Например: объект Б перенесён, едем сразу на В">
     <div class="trip-grid">
-      <div class="card"><h3>Когда и кто</h3>
+      <div class="card wb-plan-card"><h3>План выезда</h3>
         <div class="row"><div class="grow"><label>Дата с</label><input type="date" id="tpFrom"></div><div class="grow"><label>Дата по</label><input type="date" id="tpTo"></div></div>
         <div class="row"><div class="grow"><label>Авто</label><select id="tpVeh"></select><div class="hint" id="tpVehInfo" style="margin-top: var(--sp-2)"></div></div></div>
         <div class="row"><div class="grow"><label>Инженеры</label><select id="tpEng" class="multi-eng" multiple aria-describedby="tpEngHint"></select><div class="hint" id="tpEngHint">Команда будущих посещений. Проверенное присутствие сохраняется отдельно.</div></div><div class="grow"><label>Статус</label><select id="tpStatus"><option value="planned">план</option><option value="assigned">назначен</option><option value="in_progress">в работе</option><option value="finished">на проверке</option><option value="done">подтверждён</option><option value="cancelled">отменён</option></select></div></div>
         <label style="margin-top: var(--sp-3)">Заметка</label><input type="text" id="tpNotes">
-      </div>
-
-      <div class="card"><h3>Заявки выезда <span class="cnt" id="tpJobsCnt">0</span></h3>
+      <div class="wb-section"><h3>Заявки выезда <span class="cnt" id="tpJobsCnt">0</span></h3>
         <label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim);margin: var(--sp-1) 0 var(--sp-3)"><input type="checkbox" id="tpJobsRoute" checked style="width:auto">показывать только заявки по точкам маршрута</label>
         <!-- Два разных переключателя на строке, и оба раньше были без подписи.
              Флажок — включить заявку в выезд. Радиокнопка — пометить основную,
@@ -2672,7 +2670,8 @@
         
       </div>
 
-      <div class="card"><h3 class="cardhead">Маршрут <span class="cnt" id="tpRouteKm">—</span><span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Построение маршрута, старт и депо, буфер и изохрона — в планировщике на вкладке «Карта».</span></span></h3>
+      </div>
+      <div class="card wb-route-card"><h3 class="cardhead">Маршрут и присутствие <span class="cnt" id="tpRouteKm">—</span><span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Построение маршрута, старт и депо, буфер и изохрона — в планировщике на вкладке «Карта».</span></span></h3>
         <!-- В макете карта тут была, и не для красоты: список остановок
              не показывает ни формы круга, ни того, что точка стоит в стороне
              от него. Пунктир — план, сплошная — где машина прошла на самом деле. -->
@@ -2680,7 +2679,7 @@
           <div id="tpMap" class="emap"></div>
           <div class="eleg"><span><i class="edash"></i>план</span><span><i class="esolid"></i>факт</span></div>
         </div>
-        <div id="tpRouteStops" style="max-height:220px;overflow:auto"></div>
+        <details class="wb-route-details"><summary>Точки маршрута</summary><div id="tpRouteStops" style="max-height:180px;overflow:auto"></div></details>
         <div class="hint" id="tpRouteStatus" style="margin-top: var(--sp-3)"></div>
         <button class="btn sm" id="tpEditMap" style="margin-top: var(--sp-3);width:100%">Редактировать маршрут на карте</button>
         <button class="btn sm amber" id="tpStayMap" style="display:none;margin-top: var(--sp-2);width:100%">Привязать точки факта на карте</button>
@@ -2689,10 +2688,8 @@
         <div id="tpFactBox" style="margin-top: var(--sp-4)"></div>
         <button class="btn sm" id="tpRebuildRemaining" style="margin-top:12px;width:100%">Рассчитать оставшийся маршрут</button>
         <div class="hint" id="tpRemainingInfo"></div>
-        
+        <details class="wb-section wb-presence-details"><summary id="tpPresenceTitle">Присутствие на объектах · стоянки и проверка</summary><div id="tpPresence"></div></details>
       </div>
-
-      <div class="card trip-wide"><h3>Присутствие на объектах</h3><div id="tpPresence"></div></div>
     </div>
     </div>
     <div id="tpEconomyPane" role="tabpanel" aria-labelledby="tpTabEconomy" data-trip-pane="economy" hidden>
