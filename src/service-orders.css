@@ -18,10 +18,21 @@
 #orderEditor .card{margin-bottom:16px}
 .order-items{max-height:440px;overflow:auto}
 .order-items>fieldset,.order-items>[data-result-item]{padding:10px 0!important;border-bottom:1px solid var(--line)!important}
+.order-item-row{display:grid;gap:6px}
+.order-item-top{display:grid;grid-template-columns:104px minmax(130px,1fr) 92px 34px;gap:8px;align-items:end}
+.order-item-top>select:first-child{min-width:0}
+.order-item-top>[data-i-stock],.order-item-top>[data-i-title]{min-width:0;width:100%}
+.order-item-qty{min-width:0}
+.order-item-snapshot{padding-left:112px;color:var(--ink-dim);font-size:12px;line-height:1.4}
+.order-item-unit{display:block;width:min(220px,100%);margin-left:112px}
+.order-line-adds{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.order-material-totals{display:grid;gap:4px;margin-top:8px;color:var(--ink-dim);font-size:12px}
+.order-material-totals>div{display:flex;justify-content:space-between;gap:12px}
+.order-material-totals b{color:var(--ink);font-weight:600;text-align:right}
 .order-job-row{display:flex;align-items:center;justify-content:space-between}
 #orderScope{display:flex;gap:8px;align-items:center}
 #orderScope[hidden]{display:none}
-@media(max-width:760px){.order-grid{grid-template-columns:1fr}.order-savebar{flex-wrap:wrap}.order-items{max-height:none}#plOrders{overflow:auto}#orderList{flex:none!important}.order-child{min-height:44px}}
+@media(max-width:760px){.order-grid{grid-template-columns:1fr}.order-savebar{flex-wrap:wrap}.order-items{max-height:none}.order-item-top{grid-template-columns:82px minmax(90px,1fr) 72px 30px;gap:5px}.order-item-snapshot,.order-item-unit{padding-left:87px;margin-left:0}.order-material-totals>div{align-items:flex-start}#plOrders{overflow:auto}#orderList{flex:none!important}.order-child{min-height:44px}}
 .view-planner button.subtab{background:transparent;border-top:0;border-left:0;border-right:0;border-radius:0}
 #plOrders .pane-head>input[type=search]{flex:1 1 220px;width:auto}
 #plOrders .pane-head>select{flex:0 1 200px;width:auto}
