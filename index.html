@@ -1365,6 +1365,13 @@
   .staff-field { display: grid; gap: var(--sp-1); min-width: 0; color: var(--ink-dim); font-size: var(--fs-2); }
   .staff-row .staff-field input, .staff-row .staff-field select { width: 100%; min-width: 0; max-width: none; }
   .staff-save { display: flex; align-items: end; }
+  .stock-list { display: grid; gap: var(--sp-2); margin-top: var(--sp-3); }
+  .stock-row { display: grid; grid-template-columns: minmax(180px,1.5fr) repeat(2,minmax(100px,.7fr)) minmax(90px,.55fr) auto; gap: var(--sp-3); align-items: center; }
+  .stock-row .stock-title { min-width: 0; }
+  .stock-row .stock-title small { display: block; color: var(--ink-faint); font-size: var(--fs-1); }
+  .stock-cell small { display: block; color: var(--ink-faint); font-size: var(--fs-1); }
+  .stock-state { color: var(--ink-dim); font-size: var(--fs-2); }
+  @media (max-width: 720px) { .stock-row { grid-template-columns: minmax(0,1fr) minmax(72px,.5fr); gap: var(--sp-2); } .stock-row .stock-actions { grid-column: 1 / -1; } }
   .settings-body > .card:first-child { margin-top: 0; }
   .settings-body > .card > h3 { cursor: pointer; user-select: none; position: relative; padding-right: var(--sp-6); }
   .settings-body > .card > h3::after { content: '▾'; position: absolute; right: 2px; top: 1px; color: var(--ink-faint); font-size: var(--fs-3); transition: transform var(--t); }
@@ -2746,7 +2753,7 @@
            два яруса вместо одного и своя черта во всю ширину, которой
            больше нигде нет. -->
       <div id="catWorks">
-      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div></div>
+      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Склад</div></div>
       <div class="pane-head"><h2>Нормированные работы</h2>
         <div class="searchbox"><input type="search" id="catSearch" placeholder="поиск работы…"></div>
         <select id="catFilter" style="width:160px"><option value="">все</option><option value="warranty">гарантийные</option><option value="paid">только платные</option><option value="maint">ТО / сервис</option></select>
@@ -2754,7 +2761,7 @@
       <div id="catList"></div>
       </div>
       <div id="catModels" style="display:none">
-      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div></div>
+      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Склад</div></div>
       <div class="pane-head"><h2>Техника <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Справочник моделей: производитель → тип → модель. Гарантия и сервисный интервал по умолчанию нужны для привязки к технике клиентов и к работам.</span></span></h2>
         <div class="searchbox"><input type="search" id="emSearch" placeholder="поиск модели…"></div>
         <button class="btn sm amber" id="emShowAdd">+ Модель</button></div>
@@ -2768,6 +2775,15 @@
         <div class="row" style="margin-top: var(--sp-3)"><button class="btn amber grow" id="emSave">Сохранить модель</button><button class="btn ghost" id="emCancel">Отмена</button></div>
         <div class="err" id="emErr"></div>
       </div>
+      </div>
+      <div id="catMaterials" style="display:none">
+        <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Склад</div></div>
+        <div class="pane-head"><h2>Материалы и запчасти</h2>
+          <div class="searchbox"><input type="search" id="stockSearch" placeholder="поиск по названию или артикулу…"></div>
+          <label class="stock-state"><input type="checkbox" id="stockShowInactive" style="width:auto">показать архив</label>
+          <button class="btn sm amber" id="stockAdd">+ Позиция</button></div>
+        <div class="hint">Справочник цен и себестоимости. Физические остатки появятся после инвентаризации и настройки мест хранения.</div>
+        <div id="stockList" class="stock-list"></div>
       </div>
     </div>
   </div>
@@ -3101,6 +3117,17 @@
   <label>Мануалы (по строке: название|ссылка)</label><textarea id="cwManuals" placeholder="Инструкция|https://..."></textarea>
   <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="cwSave">Сохранить</button><button class="btn ghost" id="cwCancel">Отмена</button></div>
   <div class="err" id="cwErr"></div>
+</div></div>
+
+<div class="overlay" id="stockOverlay"><div class="modal">
+  <h3 id="stockFormTitle">Материал</h3>
+  <label>Название</label><input type="text" id="stockName" maxlength="300" autocomplete="off">
+  <div class="row"><div class="grow"><label>Артикул</label><input type="text" id="stockSku" maxlength="120"></div><div class="grow"><label>Единица</label><input type="text" id="stockUnit" maxlength="40" value="шт"></div></div>
+  <div class="row"><div class="grow"><label>Цена продажи за единицу</label><input type="number" id="stockPrice" min="0" step="0.01" value="0"></div><div class="grow"><label>Себестоимость за единицу</label><input type="number" id="stockCost" min="0" step="0.01" value="0"></div></div>
+  <label style="display:flex;align-items:center;gap:var(--sp-3);text-transform:none;letter-spacing:0;color:var(--ink)"><input type="checkbox" id="stockActive" style="width:auto" checked>Доступна для выбора</label>
+  <div class="hint" id="stockSourceNote"></div>
+  <div class="row" style="margin-top:var(--sp-4)"><button class="btn amber grow" id="stockSave">Сохранить</button><button class="btn ghost" id="stockCancel">Отмена</button></div>
+  <div class="err" id="stockErr"></div>
 </div></div>
 
 <link rel="shortcut icon" href="favicon.png">
