@@ -2,7 +2,7 @@
 // Synthetic data only; no authentication, network requests or production writes.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { presenceHTML, historyHTML, removedHTML } from '../src/trip-workbench.js';
+import { presenceHTML, historyHTML, removedHTML, tripCostReviewHTML } from '../src/trip-workbench.js';
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES+'/playwright');
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
@@ -16,11 +16,13 @@ const data={trip:{id:'demo',status:'in_progress',fact_km:120,workbench_revision:
     {id:'s2',job_id:null,stay_from:'2026-09-21T09:00:00Z',stay_to:'2026-09-21T09:15:00Z',minutes_raw:15,status:'detected',crew_ids:['e1','e2'],crew_source:'snapshot'}],
   removed:[{job_id:'b',removed_at:'2026-09-21T09:05:00Z',snapshot:{client_name:'Объект Б'}}],
   history:[{revision:3,recorded_at:'2026-09-21T09:05:00Z',reason:'Объект Б перенесён. Едем сразу на В.',snapshot:{date_from:'2026-09-21',job_ids:['a','b','c'],econ_snapshot:{km:240},route_stops:[{name:'Депо'},{name:'Объект А'},{name:'Объект Б'},{name:'Объект В'},{name:'Депо'}]}}]};
+const orders=[{id:'o1',number:101,title:'Диагностика',job_id:'a'},{id:'o2',number:102,title:'Замена насоса',job_id:'a'},{id:'o3',number:103,title:'Проверка автоматики',job_id:'c'}];
+const allocation=tripCostReviewHTML({trip:{...data.trip,orders},canApprove:true,preview:{components:{distance:{total:1200,assigned:860,unallocated:340},labor:{total:480,assigned:400,unallocated:80},fixed:{total:300,assigned:0,unallocated:300},manual_adjustment:{total:0,assigned:0,unallocated:0}},rows:[{cost_type:'distance',service_order_id:'o1',amount:310,quantity:31},{cost_type:'labor',service_order_id:'o1',amount:160,quantity:8},{cost_type:'distance',service_order_id:'o2',amount:550,quantity:55},{cost_type:'labor',service_order_id:'o2',amount:240,quantity:12}],diagnostics:{fact_km:120,reliable_track_km:86,gps_variance_km:34,unknown_segments:1}}});
 const browser=await chromium.launch({headless:true,executablePath:process.env.TRIP_PREVIEW_CHROMIUM||undefined,args:['--no-sandbox','--disable-dev-shm-usage']});
 const page=await browser.newPage({viewport:{width:1440,height:1100},deviceScaleFactor:1});
 await page.route('**/*',route=>route.abort());
 await page.setContent(`<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Карточка выезда — ревью</title><style>${styles}\nhtml,body{height:auto!important;display:block!important;overflow:visible!important}.view-trip{display:block;position:relative;height:auto!important;max-height:none;overflow:visible;flex:none}.view-trip .pane{height:auto!important;overflow:visible!important;max-height:none;max-width:1440px;margin:auto;padding:24px}.preview-note{padding:12px 24px;background:#e6f1ff;color:#183352;font:14px system-ui}</style><body><div class="preview-note">Предпросмотр PR · условные данные · вкладки переключаются · сохранение и GPS не подключены</div>${card}</body></html>`);
-await page.evaluate(({data,jobs,profiles,presence,history,removed})=>{
+await page.evaluate(({data,jobs,profiles,presence,history,removed,allocation})=>{
   const $=id=>document.getElementById(id);
   $('tripTitle').textContent='Выезд · Объект А, Объект В';$('tripCrumb').textContent='21 сентября';
   $('tripSub').textContent='Сервисный автомобиль · 2 инженера · в работе';
@@ -35,11 +37,14 @@ await page.evaluate(({data,jobs,profiles,presence,history,removed})=>{
   $('tpRemainingInfo').textContent='Осталось 85 км · расчёт от текущего положения';
   $('tpEcon').textContent='Норматив: 11 нормочасов · проверенное присутствие: 5 чел.-ч · ещё 1 стоянка требует проверки';
   $('tpEconBody').innerHTML='<p>Доход — по согласованным нормочасам и дороге.</p><p>Затраты труда — по человеко-часам присутствия.</p><p class="hint">В этой демонстрации денежные суммы не рассчитаны.</p>';
-},{data,jobs,profiles,presence:presenceHTML(data,jobs,profiles),history:historyHTML(data),removed:removedHTML(data,jobs)});
+  $('tpTripAllocation').innerHTML=allocation;
+},{data,jobs,profiles,presence:presenceHTML(data,jobs,profiles,{orders}),history:historyHTML(data),removed:removedHTML(data,jobs),allocation});
 const tabs=`document.querySelectorAll('[data-trip-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-trip-pane]').forEach(p=>p.hidden=p.dataset.tripPane!==b.dataset.tripTab);document.querySelectorAll('[data-trip-tab]').forEach(t=>t.setAttribute('aria-selected',String(t===b)));});document.querySelectorAll('button:not([data-trip-tab])').forEach(b=>{b.disabled=true;b.title='Предпросмотр: действие не подключено';});`;
 await page.addScriptTag({content:tabs});
 writeFileSync(out+'/trip-workbench-preview.html',await page.content());
 await page.screenshot({path:out+'/trip-workbench-desktop.png',fullPage:true});
+await page.getByRole('tab',{name:'Экономика',exact:true}).click();
+await page.screenshot({path:out+'/trip-workbench-economy-desktop.png',fullPage:true});
 await page.getByRole('tab',{name:'История',exact:true}).click();
 if(!await page.locator('#tpHistoryPane').isVisible()||await page.locator('#tpPlanPane').isVisible())throw new Error('Tab visibility failure');
 await page.getByRole('tab',{name:'План и факт',exact:true}).click();

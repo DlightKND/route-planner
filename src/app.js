@@ -5,17 +5,19 @@
 
 import * as core from './core/index.js';
 import { presenceSummary, validatePresence, remainingStops, presenceDaily, sameEditablePlan } from './core/trip-review.js';
-import { presenceHTML, historyHTML, removedHTML, readPresenceForm } from './trip-workbench.js';
+import { presenceHTML, historyHTML, removedHTML, readPresenceForm, tripCostReviewHTML } from './trip-workbench.js';
 import './trip-workbench.css';
 import './service-orders.css';
 import { createServiceOrders } from './service-orders.js';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
+import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,profiles:()=>profilesList,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openTrip,tripStatus:s=>ST_TRIP[s]||s,
+ tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
  confirmLeave:()=>window.confirm('Выйти без сохранения изменений задания?'),reason:async title=>window.prompt(title,'')});
 serviceOrders.init();
 
@@ -5023,13 +5025,87 @@ document.querySelector('#tpPresence')?.addEventListener('click',e=>{
   const button=e.target.closest('[data-presence-edit]');
   if(button)openPresenceEditor(tripEditId,button.closest('[data-presence-id]').dataset.presenceId);
 });
+function taskAllocationPayload(stay){
+  const row={id:stay.id,job_id:stay.job_id,crew_ids:stay.crew_ids,minutes_mgr:stay.minutes_mgr,status:stay.status};
+  if(stay.task_allocations)row.task_allocations=stay.status==='approved'?stay.task_allocations:[];
+  return row;
+}
+function validateTaskAllocationShares(stays){
+  for(const stay of stays){
+    const total=(stay.task_allocations||[]).reduce((sum,x)=>sum+(Number(x.share)||0),0);
+    if(total>1.000001)throw new Error('Сумма долей заданий на одной стоянке превышает 100%.');
+  }
+}
+function renderTaskAllocationControls(root,jobId,orders,selected=[]){
+  const list=root.querySelector('.wb-task-share-list');if(!list)return;
+  list.replaceChildren();
+  const candidates=orders.filter(o=>o.job_id===jobId);
+  if(!candidates.length){const hint=document.createElement('span');hint.className='hint';hint.textContent='К этой заявке не привязано задание выезда.';list.append(hint);return;}
+  for(const order of candidates){
+    const existing=selected.find(x=>x.order_id===order.id),share=Number(existing?.share||0);
+    const label=document.createElement('label');label.className='wb-task-share-row';label.dataset.taskAllocationRow=order.id;
+    const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.dataset.taskAllocationOrder='';checkbox.value=order.id;checkbox.checked=share>0;
+    const name=document.createElement('span');name.textContent=`№${order.number} · ${order.title}`;
+    const input=document.createElement('input');input.type='number';input.dataset.taskAllocationShare='';input.min='0';input.max='100';input.step='1';input.value=share>0?String(Math.round(share*100)):'100';input.disabled=share<=0;input.setAttribute('aria-label','Доля задания в процентах');
+    const percent=document.createElement('span');percent.textContent='%';
+    checkbox.addEventListener('change',()=>input.disabled=!checkbox.checked);
+    label.append(checkbox,name,input,percent);list.append(label);
+  }
+}
+async function renderTripCostReview(id){
+  const box=$('tpTripAllocation');if(!box)return;
+  if(!id||!tripWorkbench){box.innerHTML='<p class="hint">Сохрани выезд и подтверди факт, чтобы распределить затраты.</p>';return;}
+  box.innerHTML='<p class="hint">Сверяю выездные затраты…</p>';
+  try{
+    const t=tripWorkbench.trip;
+    const [{data:trackRow,error:trackError},{data:run,error:runError}]=await Promise.all([
+      sb.from('trip_tracks').select('data,updated_at').eq('trip_id',id).maybeSingle(),
+      sb.from('trip_cost_allocation_runs').select('*').eq('trip_id',id).eq('current',true).maybeSingle()
+    ]);
+    if(trackError)throw trackError;if(runError)throw runError;
+    const {data:savedLines,error:linesError}=run
+      ?await sb.from('trip_cost_allocations').select('cost_type,service_order_id,stay_id,track_segment_index,quantity,unit_rate,amount,basis,source_ref').eq('run_id',run.id)
+      :{data:[],error:null};
+    if(linesError)throw linesError;
+    const track=trackRow?{...(trackRow.data||{}),at:trackRow.updated_at}:null;
+    let preview=null,message='';
+    try{preview=calculateTripCostAllocation({trip:t,track,stays:tripWorkbench.stays,taskOrderIds:[...curTripOrders]});}
+    catch(e){message=e.message||String(e);}
+    const sameTimestamp=(a,b)=>!a&&!b||!!a&&!!b&&Date.parse(a)===Date.parse(b);
+    const stale=!!run&&(Number(run.source_revision)!==Number(t.workbench_revision)||!sameTimestamp(run.source_track_updated_at,trackRow?.updated_at)||Number(run.fact_km)!==Number(t.fact_km));
+    const previewForDisplay=preview|| (run?{components:run.components,rows:savedLines||[],diagnostics:run.diagnostics}:null);
+    const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
+    box.innerHTML=tripCostReviewHTML({trip:{...t,orders:linkedOrders},preview:previewForDisplay,run,stale,
+      canApprove:canWrite()&&t.status==='done'&&!tripPlanDirty&&!tripPresenceDirty&&!!preview,message});
+    const approve=$('tripAllocationApprove');
+    if(approve)approve.onclick=async()=>{
+      const reason=$('tripAllocationReason').value.trim();if(!reason){notify('Укажи основание сверки затрат.','warn');return;}
+      if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения выезда и стоянок.','warn');return;}
+      approve.disabled=true;
+      try{
+        const latest=calculateTripCostAllocation({trip:tripWorkbench.trip,track,stays:tripWorkbench.stays,taskOrderIds:[...curTripOrders]});
+        const {error}=await sb.rpc('trip_cost_allocation_save',{p_trip:id,p_expected:t.workbench_revision,
+          p_track_updated_at:trackRow?.updated_at||null,p_reason:reason,p_lines:latest.rows,p_diagnostics:latest.diagnostics});
+        if(error)throw error;
+        await loadWorkbench(id);showToast('Выездные затраты распределены и подтверждены');
+      }catch(e){notify(e.message||String(e),'err');approve.disabled=false;}
+    };
+  }catch(e){box.innerHTML=`<p class="err">Не удалось загрузить распределение затрат: ${esc(e.message||String(e))}</p>`;}
+}
 async function openPresenceEditor(tid,stayId,jobId){
   if(!canWrite())return;
   if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки выезда.','warn');return;}
   try{
-    await ensureRefs();await loadTripJobs();
+    await ensureRefs();await loadTripJobs();await loadTripOrders();
+    const {data:taskLinks,error:taskLinkError}=await sb.from('trip_service_orders').select('order_id').eq('trip_id',tid);if(taskLinkError)throw taskLinkError;
+    const linkedIds=new Set((taskLinks||[]).map(x=>x.order_id));
+    if(!linkedIds.size){const {data:legacyLinks,error:legacyError}=await sb.from('trip_jobs').select('job_id').eq('trip_id',tid);if(legacyError)throw legacyError;const jobs=new Set((legacyLinks||[]).map(x=>x.job_id));tripOrdersAll.filter(o=>jobs.has(o.job_id)&&o.seed_request_id===o.job_id).forEach(o=>linkedIds.add(o.id));}
+    const ordersForTrip=tripOrdersAll.filter(o=>linkedIds.has(o.id));
     const {data,error}=await sb.rpc('trip_workbench_read',{p_trip:tid});if(error)throw error;
-    const original=data.stays.find(s=>String(s.id)===String(stayId));if(!original)throw new Error('Стоянка не найдена');
+    const source=data.stays.find(s=>String(s.id)===String(stayId));if(!source)throw new Error('Стоянка не найдена');
+    const {data:shareRows,error:shareError}=await sb.from('trip_stay_task_allocations').select('service_order_id,share').eq('stay_id',source.id);
+    if(shareError)throw shareError;
+    const original={...source,task_allocations:(shareRows||[]).map(x=>({order_id:x.service_order_id,share:Number(x.share)}))};
     const stay={...original};
     if(jobId!==undefined)stay.job_id=jobId;
     // Approval is the default action; the validation still requires a closed
@@ -5037,10 +5113,12 @@ async function openPresenceEditor(tid,stayId,jobId){
     if(stay.stay_to&&stay.status!=='rejected')stay.status='approved';
     const dialog=document.createElement('dialog');dialog.className='presence-editor';
     dialog.innerHTML='<form method="dialog"><div class="presence-editor-head"><h3>Привязка и присутствие</h3><button class="btn sm" type="submit" aria-label="Закрыть">✕</button></div></form>'
-      +presenceHTML({...data,jobIds:data.job_ids,stays:[stay]},tripJobsAll,profilesList,{editor:true})
+      +presenceHTML({...data,jobIds:data.job_ids,stays:[stay]},tripJobsAll,profilesList,{editor:true,orders:ordersForTrip})
       +'<label>Комментарий<input class="presence-reason" value="Проверено по треку и составу команды"></label><p class="presence-error err" role="alert"></p><div class="presence-editor-foot"><button type="button" class="btn amber" data-presence-submit>Привязать и подтвердить</button></div>';
     document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
     const save=dialog.querySelector('[data-presence-submit]'),status=dialog.querySelector('[data-presence="status"]');
+    const row=dialog.querySelector('[data-presence-id]'),job=dialog.querySelector('[data-presence="job_id"]');
+    job.addEventListener('change',()=>renderTaskAllocationControls(row,job.value,ordersForTrip,job.value===original.job_id?(original.task_allocations||[]):[]));
     const label=()=>{save.textContent=status.value==='rejected'?'Не учитывать стоянку':status.value==='approved'?'Привязать и подтвердить':'Закрыть без сохранения';};
     status.addEventListener('change',label);label();
     save.onclick=async()=>{
@@ -5048,9 +5126,9 @@ async function openPresenceEditor(tid,stayId,jobId){
       const rows=readPresenceForm(dialog,[original]);
       if(!rows[0].status){dialog.close();return;}
       try{
-        validatePresence(rows);const reason=dialog.querySelector('.presence-reason').value.trim();if(!reason)throw new Error('Укажи комментарий проверки');
+        validatePresence(rows);validateTaskAllocationShares(rows);const reason=dialog.querySelector('.presence-reason').value.trim();if(!reason)throw new Error('Укажи комментарий проверки');
         save.disabled=true;
-        const {error}=await sb.rpc('trip_presence_save',{p_trip:tid,p_expected:data.trip.workbench_revision,p_stays:rows.map(s=>({id:s.id,job_id:s.job_id,crew_ids:s.crew_ids,minutes_mgr:s.minutes_mgr,status:s.status})),p_reason:reason});
+        const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:tid,p_expected:data.trip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason});
         if(error)throw error;
         dialog.close();showToast(rows[0].status==='approved'?'Стоянка привязана и присутствие подтверждено':'Стоянка исключена из учёта');
         try{await loadFactHours();
@@ -5063,15 +5141,22 @@ async function openPresenceEditor(tid,stayId,jobId){
 }
 async function loadWorkbench(id){
   tripWorkbench=null;tripPresenceDirty=false;
-  if(!id){$('tpPresence').textContent='Сохрани план, чтобы начать учёт выезда.';$('tpHistoryPane').textContent='Новый выезд';$('tpRemovedJobs').innerHTML='';$('tpReviewState').textContent='Новый план';return;}
+  if(!id){$('tpPresence').textContent='Сохрани план, чтобы начать учёт выезда.';$('tpHistoryPane').textContent='Новый выезд';$('tpRemovedJobs').innerHTML='';$('tpReviewState').textContent='Новый план';if($('tpTripAllocation'))$('tpTripAllocation').innerHTML='<p class="hint">Сохрани выезд и подтверди факт, чтобы распределить затраты.</p>';return;}
   $('tpPresence').textContent='Загружаю присутствие…';
   try{
     const {data,error}=await sb.rpc('trip_workbench_read',{p_trip:id});if(error)throw error;
     if(tripEditId!==id)return;
     if(!sameEditablePlan(getTrip(id),data.trip,[...curTripJobs],data.job_ids||[]))throw new Error('План изменился во время загрузки. Открой карточку заново, чтобы получить согласованную версию.');
-    tripWorkbench={...data,jobIds:data.job_ids};
+    const stayIds=(data.stays||[]).map(s=>s.id);
+    const {data:taskShares,error:shareError}=stayIds.length
+      ?await sb.from('trip_stay_task_allocations').select('stay_id,service_order_id,share').in('stay_id',stayIds)
+      :{data:[],error:null};
+    if(shareError)throw shareError;
+    const allocationByStay=new Map();for(const x of taskShares||[]){const rows=allocationByStay.get(x.stay_id)||[];rows.push({order_id:x.service_order_id,share:Number(x.share)});allocationByStay.set(x.stay_id,rows);}
+    tripWorkbench={...data,jobIds:data.job_ids,stays:(data.stays||[]).map(s=>({...s,task_allocations:allocationByStay.get(s.id)||[]}))};
     const index=trips.findIndex(t=>t.id===id);if(index>=0)trips[index]=data.trip;
-    $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList);
+    const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
+    $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{orders:linkedOrders});
     $('tpRemovedJobs').innerHTML=removedHTML(tripWorkbench,tripJobsAll);
     $('tpHistoryPane').innerHTML=historyHTML(tripWorkbench,profilesList);
     $('tpReviewState').textContent=(ST_TRIP[data.trip.status]||data.trip.status)+' · версия '+data.trip.workbench_revision+' · изменение плана не удаляет трек и посещения';
@@ -5091,10 +5176,11 @@ async function loadWorkbench(id){
       const reason=await promptDialog('Проверка присутствия',[{key:'reason',label:'Причина / комментарий',value:'Проверено по треку и составу команды'}]);
       if(!reason)return;
       $('wbPresenceSave').disabled=true;
-      try{const {error}=await sb.rpc('trip_presence_save',{p_trip:id,p_expected:tripWorkbench.trip.workbench_revision,p_stays:rows.map(s=>({id:s.id,job_id:s.job_id,crew_ids:s.crew_ids,minutes_mgr:s.minutes_mgr,status:s.status})),p_reason:reason.reason});if(error)throw error;
+      try{validateTaskAllocationShares(rows);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:id,p_expected:tripWorkbench.trip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason.reason});if(error)throw error;
         tripPresenceDirty=false;await loadFactHours();await loadWorkbench(id);tripEcon();showToast('Человеко-часы присутствия сохранены');}
       catch(e){notify(e.message,'err');if($('wbPresenceSave'))$('wbPresenceSave').disabled=false;}
     };
+    await renderTripCostReview(id);
   }catch(e){$('tpPresence').textContent='Не удалось загрузить проверку выезда: '+e.message;$('tpSave').disabled=true;$('tpReviewState').textContent='Данные недоступны. Сохранение заблокировано до успешной загрузки.';}
 }
 if($('tpRebuildRemaining'))$('tpRebuildRemaining').onclick=async()=>{
@@ -5432,9 +5518,9 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
   let presenceChanges=null;
   if(tripPresenceDirty){
     presenceChanges=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>['approved','rejected'].includes(s.status));
-    try{if(!presenceChanges.length)throw new Error('Выбери результат проверки изменённых стоянок.');validatePresence(presenceChanges);}
+    try{if(!presenceChanges.length)throw new Error('Выбери результат проверки изменённых стоянок.');validatePresence(presenceChanges);validateTaskAllocationShares(presenceChanges);}
     catch(e){$('tripErr').textContent=e.message;return;}
-    presenceChanges=presenceChanges.map(s=>({id:s.id,job_id:s.job_id,crew_ids:s.crew_ids,minutes_mgr:s.minutes_mgr,status:s.status}));
+    presenceChanges=presenceChanges.map(taskAllocationPayload);
   }
   if(tripEditId&&!$('tpChangeReason').value.trim()){ $('tripErr').textContent='Укажи причину изменения плана.';return; }
   const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};

@@ -91,3 +91,32 @@ select[data-crew-native]{display:none!important}
 .wb-route-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:30;width:min(280px,75vw);padding:6px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);box-shadow:var(--shadow-lg)}
 .wb-route-menu .btn{display:block;white-space:normal;width:100%!important;text-align:left;margin:0!important;padding:9px 10px;border:0;background:transparent}
 @media(pointer:coarse){.btn.engineer-picker{height:40px;min-height:40px;max-height:40px}}
+
+.wb-task-share-list{display:grid;gap:6px;min-width:220px}
+.wb-task-share-row{display:grid;grid-template-columns:18px minmax(90px,1fr) 56px 12px;align-items:center;gap:7px;margin:0!important;font-size:12px}
+.wb-task-share-row input[type=checkbox]{width:16px;height:16px;margin:0}
+.wb-task-share-row input[type=number]{width:56px;max-width:56px;margin:0;padding:4px}
+.wb-task-share{display:inline-block;margin:2px 4px 2px 0;padding:3px 7px;border:1px solid var(--line);border-radius:999px;font-size:12px;white-space:nowrap}
+.trip-allocation-review{display:grid;gap:12px;min-width:0}
+.trip-allocation-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.trip-allocation-head h3{margin:0 0 4px}
+.trip-allocation-state{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:5px 9px;font-size:12px;color:var(--ink-dim)}
+.trip-allocation-state.is-saved{color:var(--ok,#4bbf85)}
+.trip-allocation-state.is-stale{color:var(--warn,#e4b341);border-color:currentColor}
+.trip-allocation-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.trip-allocation-metric{display:grid;gap:4px;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm)}
+.trip-allocation-metric span,.trip-allocation-metric small{color:var(--ink-dim);font-size:12px}
+.trip-allocation-metric b{font-size:17px}
+.trip-allocation-table{min-width:480px}
+.trip-allocation-actions{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.trip-allocation-actions label{flex:1 1 260px;margin:0}
+.trip-allocation-actions .btn{flex:0 0 auto}
+.order-trip-cost-summary{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;padding:12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.order-trip-cost-summary b{flex:1 1 100%}
+.order-trip-cost-summary small{flex:1 1 100%;color:var(--ink-dim)}
+.order-trip-cost-card .order-trip-cost-total{display:flex;align-items:baseline;gap:12px;margin-bottom:8px}
+.order-trip-cost-card .order-trip-cost-total b{font-size:20px}
+.order-trip-cost-list{display:grid;gap:6px}
+.order-trip-cost-list .order-child{width:100%;text-align:left}
+.order-trip-cost-list .order-child small{display:block;color:var(--ink-dim);margin-top:4px}
+@media(max-width:700px){.trip-allocation-metrics{grid-template-columns:1fr}.trip-allocation-actions .btn{width:100%}.wb-task-share-list{min-width:0}}
