@@ -22,3 +22,6 @@
 #orderScope{display:flex;gap:8px;align-items:center}
 #orderScope[hidden]{display:none}
 @media(max-width:760px){.order-grid{grid-template-columns:1fr}.order-savebar{flex-wrap:wrap}.order-items{max-height:none}#plOrders{overflow:auto}#orderList{flex:none!important}.order-child{min-height:44px}}
+.view-planner button.subtab{background:transparent;border-top:0;border-left:0;border-right:0;border-radius:0}
+#plOrders .pane-head>input[type=search]{flex:1 1 220px;width:auto}
+#plOrders .pane-head>select{flex:0 1 200px;width:auto}

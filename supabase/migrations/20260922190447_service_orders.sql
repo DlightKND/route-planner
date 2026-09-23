@@ -17,7 +17,7 @@ create table public.service_order_jobs (
 );
 create index service_order_jobs_job_idx on public.service_order_jobs(job_id);
 create table public.service_order_items (
- id uuid primary key default gen_random_uuid(), order_id uuid not null, job_id uuid not null,
+ id uuid primary key default gen_random_uuid(), order_id uuid not null references public.service_orders(id), job_id uuid not null,
  title text not null check(length(trim(title)) between 1 and 500), unit text not null default 'работа' check(length(trim(unit)) between 1 and 40),
  planned_qty numeric not null check(planned_qty>0 and planned_qty<1000000),
  done_qty numeric not null default 0 check(done_qty>=0), transferred_qty numeric not null default 0 check(transferred_qty>=0),
