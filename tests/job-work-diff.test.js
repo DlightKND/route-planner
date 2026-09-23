@@ -1,10 +1,20 @@
+Warning: truncated output (original token count: 545)
+Total output lines: 47
+
 import {expect,it} from 'vitest';
-import {diffJobWorks} from '../src/core/job-work-diff.js';
+import {diffJobWorks,hasStableJobWorkIds} from '../src/core/job-work-diff.js';
 
 const base={id:'work-1',work_id:'catalog-1',title:'Диагностика',hours:4,
   billable:true,billable_reason:'',revenue:3000,revenue_override:null,
   tariff_profile:'client',approved_at:'2026-09-01T10:00:00Z',approved_by:'manager-1',
   created_at:'2026-08-31T10:00:00Z'};
+
+it('allows work reconciliation only when the cached list has stable IDs',()=>{
+  expect(hasStableJobWorkIds([base])).toBe(true);
+  expect(hasStableJobWorkIds([{hours:4,billable:true}])).toBe(false);
+  expect(hasStableJobWorkIds([])).toBe(true);
+  expect(hasStableJobWorkIds(null)).toBe(false);
+});
 
 it('keeps an unchanged approved work row untouched, including its historical price and ID',()=>{
   const {upserts,deleteIds}=diffJobWorks([base],[{...base,hours:'4'}]);
@@ -12,11 +22,7 @@ it('keeps an unchanged approved work row untouched, including its historical pri
   expect(deleteIds).toEqual([]);
 });
 
-it('updates a changed row in place and clears approval for manager review',()=>{
-  const {upserts,deleteIds}=diffJobWorks([base],[{...base,hours:5,revenue:3750}]);
-  expect(deleteIds).toEqual([]);
-  expect(upserts).toHaveLength(1);
-  expect(upserts[0]).toMatchObject({id:'work-1',hours:5,approved_at:null,approved_by:null});
+it('updates a changed row in place and clears approval for manager re…45 tokens truncated…0]).toMatchObject({id:'work-1',hours:5,approved_at:null,approved_by:null});
 });
 
 it('stamps a manager edit as the new approval when the editor is a manager',()=>{
