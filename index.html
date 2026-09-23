@@ -1276,6 +1276,16 @@
   .trip-job-open:hover { background:var(--panel-2); }
   .trip-job-open b,.trip-job-open span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .trip-job-open span { margin-top:var(--sp-1); color:var(--ink-dim); font-size:var(--fs-2); }
+  .trip-task-group { display:grid; gap:var(--sp-2); padding:var(--sp-2) var(--sp-3); }
+  .trip-task-request { display:flex; align-items:center; gap:var(--sp-2); min-width:0; }
+  .trip-task-request > .hint { margin:0; white-space:nowrap; }
+  .trip-task-options { display:grid; gap:2px; padding-left:28px; }
+  .trip-task-option { display:flex; align-items:center; gap:var(--sp-2); min-width:0; padding:var(--sp-1) var(--sp-2); border-radius:var(--r-sm); cursor:pointer; }
+  .trip-task-option:hover { background:var(--panel-2); }
+  .trip-task-option input { width:auto; flex:0 0 auto; margin:0; }
+  .trip-task-option span { display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-2); min-width:0; width:100%; }
+  .trip-task-option b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--fs-3); font-weight:500; }
+  .trip-task-option small { color:var(--ink-dim); white-space:nowrap; }
   .kcard h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-4); }
   .kcard .meta { font-size: var(--fs-2); color: var(--ink-dim); margin: var(--sp-1) 0; }
   /* Чипы стояли строкой с margin 2px сверху и снизу, и при схлопывании
