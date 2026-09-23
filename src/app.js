@@ -14,6 +14,7 @@ import './entity-activity.css';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
+import { diffJobWorks, hasStableJobWorkIds } from './core/job-work-diff.js';
 import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 
@@ -1658,7 +1659,7 @@ async function geocode(){ const q=$('geoQuery').value.trim(); const box=$('geoRe
   }catch(err){ box.innerHTML='<div class="err">'+esc(err.message||'Ошибка геокодера.')+'</div>'; } }
 
 // ---------- jobs ----------
-let jobs=[], profilesList=[], curWorks=[], jobEditId=null;
+let jobs=[], profilesList=[], curWorks=[], jobEditId=null, curWorksComplete=false;
 async function ensureRefs(){ if(!catalog.length) await loadCatalog(); if(!profilesList.length){ const {data}=await sb.from('profiles').select('id,full_name,role'); profilesList=data||[]; } }
 function engineerIds(row,legacyField){
   const ids=Array.isArray(row&&row.engineer_ids)?row.engineer_ids.filter(Boolean):[];
@@ -2535,7 +2536,7 @@ async function renderFeed(box,o){
     let list=null, tripOf={}, tripById={}, tripOrd={}, offline=false, snapAt=0, orphanLinks=0;
     try{
       const { data, error }=await sb.from('jobs')
-        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), job_works(hours,billable)')
+        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), job_works(id,work_id,title,hours,billable,billable_reason,revenue,revenue_override,tariff_profile,approved_at,approved_by,created_at)')
         .is('deleted_at',null);
       if(error) throw error;
       list=data||[];
@@ -3564,7 +3565,8 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
     :'<option value="">— депо не заведено —</option>';
   if(j&&j.depot_id) $('jbDepotSel').value=j.depot_id; else if(dl.length) $('jbDepotSel').value=dl[0].id;
   renderDepotUi();
-  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {work_id:w.work_id||null,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at}; });
+  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {id:w.id,work_id:w.work_id||null,title:w.title||'',revenue:+w.revenue||0,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at,approved_at:w.approved_at||null,approved_by:w.approved_by||null}; });
+  curWorksComplete=!id||hasStableJobWorkIds(j?.job_works);
   renderJobWorks();
   const ro=!canWrite() && !(j&&assignedTo(j,session.user.id,'assigned_engineer'));
   jobRO=ro;
@@ -3756,6 +3758,7 @@ if($('jbDepot')) $('jbDepot').onchange=()=>{
     return;
   }
   jobAtDepot=$('jbDepot').checked;
+  curWorks.forEach(w=>{ w._dirty=true; });
   renderDepotUi();
   // Ставка сменилась — показываем это сразу, а не после сохранения.
   renderJobWorks();
@@ -3778,7 +3781,7 @@ function defaultProfileId(billable){ const list=appSettings.tariff_profiles||[];
   const dw=list.find(p=>p.def_warranty); return dw?dw.id:''; }
 $('jbWorkAdd').onclick=async ()=>{ const wid=$('jbWorkPick').value; if(!wid) return; const cw=catalog.find(c=>c.id===wid); if(!cw) return;
   let sug={billable:true,reasons:[]}; try{ const {data}=await sb.rpc('suggest_warranty',{p_equipment:$('jbEquip').value||null,p_work:wid,p_date:$('jbDate').value||null}); if(data) sug=data; }catch(e){}
-  const bill=sug.billable!==false; curWorks.push({work_id:wid,name:cw.name,hours:+cw.norm_hours||0,override:((+cw.price>0)?String(cw.price):''),billable:bill,reasons:sug.reasons||[],billable_reason:'',profile:defaultProfileId(bill),custom:false}); $('jbWorkPick').value=''; renderJobWorks(); };
+  const bill=sug.billable!==false; curWorks.push({work_id:wid,title:cw.name,name:cw.name,hours:+cw.norm_hours||0,override:((+cw.price>0)?String(cw.price):''),billable:bill,reasons:sug.reasons||[],billable_reason:'',profile:defaultProfileId(bill),custom:false}); $('jbWorkPick').value=''; renderJobWorks(); };
 $('jbCustomAdd').onclick=()=>{ curWorks.push({work_id:null,name:'',hours:0,override:'',billable:true,reasons:[],billable_reason:'',profile:defaultProfileId(true),custom:true}); renderJobWorks(); };
 function profileById(id){ return id?((appSettings.tariff_profiles||[]).find(p=>p.id===id)||null):null; }
 // Зеркало серверного guard_job_work_money. Разъедутся — инженер увидит одну
@@ -3840,12 +3843,12 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
       const fx=$('jbWorksFix'); if(fx) fx.onclick=()=>openFixModal('work',null);
     }
   }
-  box.querySelectorAll('[data-wn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wn].name=inp.value; });
-  box.querySelectorAll('[data-wo]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wo].override=inp.value; jobTotals(); });
-  box.querySelectorAll('[data-wh]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wh].hours=parseFloat(inp.value)||0; jobTotals(); });
-  box.querySelectorAll('[data-wrsn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wrsn].billable_reason=inp.value; });
-  box.querySelectorAll('[data-wp]').forEach(sel=>sel.onchange=()=>{ curWorks[sel.dataset.wp].profile=sel.value; });
-  box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; w.profile=defaultProfileId(w.billable); renderJobWorks(); });
+  box.querySelectorAll('[data-wn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wn].name=inp.value; curWorks[inp.dataset.wn]._dirty=true; });
+  box.querySelectorAll('[data-wo]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wo].override=inp.value; curWorks[inp.dataset.wo]._dirty=true; jobTotals(); });
+  box.querySelectorAll('[data-wh]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wh].hours=parseFloat(inp.value)||0; curWorks[inp.dataset.wh]._dirty=true; jobTotals(); });
+  box.querySelectorAll('[data-wrsn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wrsn].billable_reason=inp.value; curWorks[inp.dataset.wrsn]._dirty=true; });
+  box.querySelectorAll('[data-wp]').forEach(sel=>sel.onchange=()=>{ curWorks[sel.dataset.wp].profile=sel.value; curWorks[sel.dataset.wp]._dirty=true; });
+  box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; w._dirty=true; w.profile=defaultProfileId(w.billable); renderJobWorks(); });
   box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); });
   jobTotals();
   // Подсказки по материалам зависят от того, какие работы стоят в заявке:
@@ -4089,12 +4092,9 @@ async function qSendOne(it){
   }
   if(it.kind==='job'){
     // Тот же порядок, что и при обычном сохранении: работы, затем статус.
-    const del=await sb.from('job_works').delete().eq('job_id',p.jobId);
-    if(del.error) throw del.error;
-    if(p.works&&p.works.length){
-      const ins=await sb.from('job_works').insert(p.works.map(w=>Object.assign({job_id:p.jobId},w)));
-      if(ins.error) throw ins.error;
-    }
+    if(p.works_complete&&Array.isArray(p.works)) await persistJobWorks(p.jobId,p.works,p.works);
+    else if(Array.isArray(p.works)&&p.works.length)
+      notify('Старые офлайн-работы не отправлены: в снимке нет стабильных ID. Открой заявку с сетью и внеси правку заново.','err');
     const {error}=await sb.from('jobs').update(p.rec).eq('id',p.jobId);
     if(error) throw error;
     // Заявку закрыли без связи — последствия наступают сейчас, а не теряются.
@@ -4390,7 +4390,7 @@ async function visitEnd(){
       // Если работ ещё нет — заводим строку, иначе часы некуда положить.
       // Название пустое: его пишет инженер, придумывать за него нельзя.
       if(!curWorks.length) curWorks.push({work_id:null,name:'',hours:0,override:'',billable:true,reasons:[],billable_reason:'',profile:defaultProfileId(true),custom:true});
-      curWorks[0].hours=h; renderJobWorks(); queueJobSave();
+      curWorks[0].hours=h; curWorks[0]._dirty=true; renderJobWorks(); queueJobSave();
     }
   }
 }
@@ -4470,16 +4470,18 @@ let jobRO=false;
 //
 // Часы и запчасти — это деньги. Цены инженеру закрыты триггерами на сервере,
 // но сами строки он мог и добавить, и переписать, и удалить задним числом.
-// Теперь так: вносить — да, переписывать подтверждённое — нет. Отметку
-// подтверждения ставит менеджер, и ставит её база (sql/26), а не экран.
+// Вносить — да, переписывать подтверждённое — только менеджеру. Отметку
+// подтверждения ставит база (sql/26), исполнитель не может снять её сам.
 //
-// Работы приложение переписывает БЛОКОМ (удалить всё по заявке и вставить
-// заново), поэтому и право на них даётся блоком: пока менеджер не подтвердил
-// ни одной строки, исполнитель волен переписывать свой отчёт.
+// Работы сохраняются полным снимком редактора, но поштучно: прежние ID
+// остаются стабильными, удаляются только убранные строки. Изменение
+// исполнителем остаётся непроверенным; правка менеджера сохраняет его новое
+// подтверждение, соответствуя поведению серверного триггера.
 function worksPending(){ return curWorks.some(w=>!w.approved); }
 function worksLocked(){ return curWorks.some(w=>w.approved); }
 function canEditWorks(){
   if(jobRO) return false;
+  if(jobEditId&&!curWorksComplete) return false;
   if(canWrite()) return true;
   if(!jobEditId) return true;                       // новую заявку заводит менеджер
   if(($('jbStatus')?$('jbStatus').value:'')==='done') return false;
@@ -4677,7 +4679,7 @@ async function worksApprove(){
       .update({approved_at:new Date().toISOString(),approved_by:session.user.id})
       .eq('job_id',jobEditId).is('approved_at',null);
     if(error) throw error;
-    curWorks.forEach(w=>{ w.approved=true; });
+    curWorks.forEach(w=>{ w.approved=true; w.approved_at=new Date().toISOString(); w.approved_by=session.user.id; });
     renderJobWorks(); jobSaveState('сохранено'); showToast('Работы подтверждены');
   }catch(e){ notify('Не подтвердилось: '+((e&&e.message)||e),'err'); }
 }
@@ -4894,10 +4896,42 @@ function jobSaveState(txt,cls){ const el=$('jobSaveState'); if(!el) return;
 // Строка работы в том виде, в каком она уезжает в базу. Вынесена, потому
 // что теперь её собирает и обычное сохранение, и очередь.
 function jobWorkRow(w){
-  return {work_id:w.work_id||null,title:w.name||'',hours:w.hours,billable:w.billable,
+  return {...(w.id?{id:w.id}:{}),work_id:w.work_id||null,title:w.work_id?(w.title||''):(w.name||''),hours:w.hours,billable:w.billable,
     billable_reason:w.billable_reason||'',tariff_profile:(w.profile||null),
-    revenue:workRevenue(w),
+    revenue:(w._dirty||w.revenue==null)?workRevenue(w):+w.revenue,
+    approved_at:w.approved_at||null,approved_by:w.approved_by||null,
     revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)};
+}
+async function persistJobWorks(jobId,proposedRows,targets=[]){
+  const {data:existing,error:readError}=await sb.from('job_works')
+    .select('id,work_id,title,hours,billable,billable_reason,revenue,revenue_override,tariff_profile,approved_at,approved_by,created_at')
+    .eq('job_id',jobId);
+  if(readError) throw readError;
+  const approval=canWrite()?{approvedAt:new Date().toISOString(),approvedBy:session?.user?.id||null}:{};
+  const diff=diffJobWorks(existing||[],(proposedRows||[]).map(w=>Object.assign({job_id:jobId},w)),approval);
+  if(diff.upserts.length){
+    const {data,error}=await sb.from('job_works').upsert(diff.upserts,{onConflict:'id'}).select('id,revenue,approved_at,approved_by');
+    if(error) throw error;
+    diff.upsertIndexes.forEach((targetIndex,resultIndex)=>{
+      const id=data?.[resultIndex]?.id;
+      if(id&&targets[targetIndex]){
+        targets[targetIndex].id=id;
+        targets[targetIndex].approved_at=data[resultIndex].approved_at;
+        targets[targetIndex].approved_by=data[resultIndex].approved_by;
+        targets[targetIndex].approved=!!data[resultIndex].approved_at;
+        targets[targetIndex]._dirty=false;
+        targets[targetIndex].revenue=data[resultIndex].revenue;
+      }
+    });
+  }
+  if(diff.deleteIds.length){
+    const {error}=await sb.from('job_works').delete().in('id',diff.deleteIds);
+    if(error) throw error;
+  }
+  (targets||[]).forEach((row,index)=>{
+    row._dirty=false;
+    if(proposedRows?.[index]?.revenue!=null) row.revenue=proposedRows[index].revenue;
+  });
 }
 // Правка местного снимка после постановки в очередь: заявка внутри
 // «График» должен показывать то, что инженер только что ввёл.
@@ -4906,7 +4940,7 @@ async function snapJobPatch(jobId,rec,works){
   let touched=false;
   Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{
     if(j.id!==jobId) return;
-    j.status=rec.status; j.job_works=works; touched=true;
+    j.status=rec.status; if(Array.isArray(works)) j.job_works=works; touched=true;
   }));
   if(touched) await snapSet('mine',s.val,s.at);
 }
@@ -4925,14 +4959,13 @@ async function persistJob(rec){
     // заметки и статус: без этой проверки автосохранение падало бы на
     // запрете удаления и он не мог бы даже закрыть заявку.
     if(canEditWorks()){
-      await sb.from('job_works').delete().eq('job_id',jobId);
-      if(curWorks.length){ const rows=curWorks.map(w=>Object.assign({job_id:jobId},jobWorkRow(w))); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
+      await persistJobWorks(jobId,curWorks.map(jobWorkRow),curWorks);
     }
     const {error}=await sb.from('jobs').update(rec).eq('id',jobEditId); if(error) throw error;
   } else {
     rec.created_by=session.user.id;
     const {data,error}=await sb.from('jobs').insert(rec).select('id').single(); if(error) throw error; jobId=data.id;
-    if(curWorks.length){ const rows=curWorks.map(w=>Object.assign({job_id:jobId},jobWorkRow(w))); const {error:e2}=await sb.from('job_works').insert(rows); if(e2) throw e2; }
+    if(curWorks.length) await persistJobWorks(jobId,curWorks.map(jobWorkRow),curWorks);
   }
   if(rec.status==='done') await jobClosed(jobId,{equipmentId:rec.equipment_id,
     works:curWorks.map(w=>({billable:w.billable,title:w.name})),
@@ -5004,13 +5037,13 @@ async function saveJobNow(){
     // Нет связи — кладём в очередь и правим местный снимок, чтобы при
     // возврате на заявку инженер увидел свои часы, а не старые.
     if(isNetErr(e)){
-      const rec=jobRec(), works=curWorks.map(jobWorkRow);
+      const rec=jobRec(), works=canEditWorks()?curWorks.map(jobWorkRow):null;
       // Прежние записи этой же заявки снимаем: в очереди лежит полная
       // строка, и каждая новая целиком заменяет предыдущую. Иначе правка
       // часов десять раз подряд дала бы десять одинаковых по смыслу
       // отправок и счётчик, который врёт о количестве работы.
       await qDropJob(jobEditId);
-      if(await qPush('job',{jobId:jobEditId,rec,works})){
+      if(await qPush('job',{jobId:jobEditId,rec,works,works_complete:Array.isArray(works)})){
         await snapJobPatch(jobEditId,rec,works);
         jobSaveState('без связи · отправлю позже');
       } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
