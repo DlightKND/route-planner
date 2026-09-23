@@ -1,0 +1,11 @@
+.entity-activity { margin-top:var(--sp-4); }
+.entity-activity-feed { display:grid; gap:var(--sp-2); margin-block:var(--sp-3); }
+.activity-entry { border-left:2px solid var(--line); padding:var(--sp-2) var(--sp-3); min-width:0; }
+.activity-entry.is-comment { border-left-color:var(--amber); }
+.activity-entry header { display:flex; gap:var(--sp-3); align-items:baseline; justify-content:space-between; color:var(--muted); font-size:.84rem; }
+.activity-entry time { white-space:nowrap; }
+.activity-entry p { margin:.35rem 0 0; white-space:normal; overflow-wrap:anywhere; }
+.entity-activity-form { display:grid; gap:var(--sp-2); }
+.entity-activity-form textarea { width:100%; min-height:4.5rem; resize:vertical; }
+.entity-activity-form button { justify-self:start; }
+.entity-activity-form [role=status] { min-height:1.25em; }

@@ -2625,6 +2625,7 @@
         <div class="ph-grid" id="jbPhotoList"></div>
       </div>
     </div>
+    <section class="card trip-wide entity-activity" id="jobActivitySection" hidden><h3>История заявки и комментарии</h3><div id="jobActivity"></div></section>
     <!-- Подпись заказчика. Отдельным окном при закрытии заявки: это
          последний шаг, и он должен быть один на экране, без соседей. -->
     <div class="overlay" id="signOverlay"><div class="modal sign-modal">
@@ -2742,7 +2743,10 @@
         <p class="hint">Сначала загрузите подтверждённый выезд.</p>
       </section>
     </div>
-    <div id="tpHistoryPane" role="tabpanel" aria-labelledby="tpTabHistory" data-trip-pane="history" hidden></div>
+    <div id="tpHistoryPane" role="tabpanel" aria-labelledby="tpTabHistory" data-trip-pane="history" hidden>
+      <div id="tpHistoryLog"></div>
+      <section class="card trip-wide entity-activity" id="tripActivitySection" hidden><h3>Комментарии к выезду</h3><div id="tripActivity"></div></section>
+    </div>
   </div></div>
 
   <div class="view view-order"><div class="pane scrollp" id="orderEditor"></div></div>
