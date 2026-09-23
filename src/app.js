@@ -6165,7 +6165,7 @@ async function refreshTripEcon(tripId){
       .eq('id',tripId).single();
     if(error||!t) return false;
     const {data:tj,error:e1}=await sb.from('trip_jobs')
-      .select('jobs(id,clients(name,lat,lng),equipment(lat,lng),'+JOB_FINANCE_SELECT+'))'
+      .select('jobs(id,clients(name,lat,lng),equipment(lat,lng),'+JOB_FINANCE_SELECT+')')
       .eq('trip_id',tripId);
     if(e1) return false;
     const jobs=projectLegacyFinanceRows((tj||[]).map(r=>r.jobs).filter(Boolean));
