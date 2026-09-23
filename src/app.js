@@ -14,7 +14,7 @@ import './entity-activity.css';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
-import { diffJobWorks } from './core/job-work-diff.js';
+import { diffJobWorks, hasStableJobWorkIds } from './core/job-work-diff.js';
 import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 
@@ -1659,7 +1659,7 @@ async function geocode(){ const q=$('geoQuery').value.trim(); const box=$('geoRe
   }catch(err){ box.innerHTML='<div class="err">'+esc(err.message||'Ошибка геокодера.')+'</div>'; } }
 
 // ---------- jobs ----------
-let jobs=[], profilesList=[], curWorks=[], jobEditId=null;
+let jobs=[], profilesList=[], curWorks=[], jobEditId=null, curWorksComplete=false;
 async function ensureRefs(){ if(!catalog.length) await loadCatalog(); if(!profilesList.length){ const {data}=await sb.from('profiles').select('id,full_name,role'); profilesList=data||[]; } }
 function engineerIds(row,legacyField){
   const ids=Array.isArray(row&&row.engineer_ids)?row.engineer_ids.filter(Boolean):[];
@@ -2536,7 +2536,7 @@ async function renderFeed(box,o){
     let list=null, tripOf={}, tripById={}, tripOrd={}, offline=false, snapAt=0, orphanLinks=0;
     try{
       const { data, error }=await sb.from('jobs')
-        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), job_works(hours,billable)')
+        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), job_works(id,work_id,title,hours,billable,billable_reason,revenue,revenue_override,tariff_profile,approved_at,approved_by,created_at)')
         .is('deleted_at',null);
       if(error) throw error;
       list=data||[];
@@ -3566,6 +3566,7 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
   if(j&&j.depot_id) $('jbDepotSel').value=j.depot_id; else if(dl.length) $('jbDepotSel').value=dl[0].id;
   renderDepotUi();
   curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {id:w.id,work_id:w.work_id||null,title:w.title||'',revenue:+w.revenue||0,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at,approved_at:w.approved_at||null,approved_by:w.approved_by||null}; });
+  curWorksComplete=!id||hasStableJobWorkIds(j?.job_works);
   renderJobWorks();
   const ro=!canWrite() && !(j&&assignedTo(j,session.user.id,'assigned_engineer'));
   jobRO=ro;
@@ -4091,7 +4092,9 @@ async function qSendOne(it){
   }
   if(it.kind==='job'){
     // Тот же порядок, что и при обычном сохранении: работы, затем статус.
-    await persistJobWorks(p.jobId,p.works||[],p.works||[]);
+    if(p.works_complete&&Array.isArray(p.works)) await persistJobWorks(p.jobId,p.works,p.works);
+    else if(Array.isArray(p.works)&&p.works.length)
+      notify('Старые офлайн-работы не отправлены: в снимке нет стабильных ID. Открой заявку с сетью и внеси правку заново.','err');
     const {error}=await sb.from('jobs').update(p.rec).eq('id',p.jobId);
     if(error) throw error;
     // Заявку закрыли без связи — последствия наступают сейчас, а не теряются.
@@ -4478,6 +4481,7 @@ function worksPending(){ return curWorks.some(w=>!w.approved); }
 function worksLocked(){ return curWorks.some(w=>w.approved); }
 function canEditWorks(){
   if(jobRO) return false;
+  if(jobEditId&&!curWorksComplete) return false;
   if(canWrite()) return true;
   if(!jobEditId) return true;                       // новую заявку заводит менеджер
   if(($('jbStatus')?$('jbStatus').value:'')==='done') return false;
@@ -4936,7 +4940,7 @@ async function snapJobPatch(jobId,rec,works){
   let touched=false;
   Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{
     if(j.id!==jobId) return;
-    j.status=rec.status; j.job_works=works; touched=true;
+    j.status=rec.status; if(Array.isArray(works)) j.job_works=works; touched=true;
   }));
   if(touched) await snapSet('mine',s.val,s.at);
 }
@@ -5033,13 +5037,13 @@ async function saveJobNow(){
     // Нет связи — кладём в очередь и правим местный снимок, чтобы при
     // возврате на заявку инженер увидел свои часы, а не старые.
     if(isNetErr(e)){
-      const rec=jobRec(), works=curWorks.map(jobWorkRow);
+      const rec=jobRec(), works=canEditWorks()?curWorks.map(jobWorkRow):null;
       // Прежние записи этой же заявки снимаем: в очереди лежит полная
       // строка, и каждая новая целиком заменяет предыдущую. Иначе правка
       // часов десять раз подряд дала бы десять одинаковых по смыслу
       // отправок и счётчик, который врёт о количестве работы.
       await qDropJob(jobEditId);
-      if(await qPush('job',{jobId:jobEditId,rec,works})){
+      if(await qPush('job',{jobId:jobEditId,rec,works,works_complete:Array.isArray(works)})){
         await snapJobPatch(jobEditId,rec,works);
         jobSaveState('без связи · отправлю позже');
       } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
