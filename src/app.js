@@ -7,10 +7,17 @@ import * as core from './core/index.js';
 import { presenceSummary, validatePresence, remainingStops, presenceDaily, sameEditablePlan } from './core/trip-review.js';
 import { presenceHTML, historyHTML, removedHTML, readPresenceForm } from './trip-workbench.js';
 import './trip-workbench.css';
+import './service-orders.css';
+import { createServiceOrders } from './service-orders.js';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
 import { requestRouteProxy } from './core/route-proxy.js';
+
+const serviceOrders=createServiceOrders({db:()=>sb,canWrite,profiles:()=>profilesList,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
+ showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openTrip,tripStatus:s=>ST_TRIP[s]||s,
+ confirmLeave:()=>window.confirm('Выйти без сохранения изменений задания?'),reason:async title=>window.prompt(title,'')});
+serviceOrders.init();
 
 // ── Аварийный перехватчик ────────────────────────────────────────────────────
 // Если что-то падает при старте, модуль обрывается и остаётся серый экран
@@ -699,7 +706,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeMore(); });
 // соответствует ОДИН пункт data-sub="disp": navSub() и переводит состояние
 // страницы в ключ пункта меню. Без этого перехода на «Выездах» не
 // подсвечивалось бы ничего.
-function navSub(s){ return (s==='jobs'||s==='trips')?'disp':s; }
+function navSub(s){ return (s==='jobs'||s==='trips'||s==='orders')?'disp':s; }
 // URL живёт в hash, чтобы прямые ссылки работали и на GitHub Pages: серверу
 // не приходится знать маршруты SPA. Пароль/сессия в ссылку не попадают.
 let routeReady=false, routeApplying=false;
@@ -711,6 +718,7 @@ function routeSet(path,replace){
   history[replace?'replaceState':'pushState'](null,'',url);
 }
 function routeForView(name,sub){
+  if(name==='order'&&serviceOrders.currentId()) return 'order/'+encodeURIComponent(serviceOrders.currentId());
   if(name==='job'&&jobEditId) return 'job/'+encodeURIComponent(jobEditId);
   if(name==='trip'&&tripEditId) return 'trip/'+encodeURIComponent(tripEditId);
   if(name==='planner') return 'planner/'+(sub==='disp'?dispCur:(sub||plannerCur));
@@ -732,6 +740,7 @@ async function applyRoute(){
     const p=raw.split('/').filter(Boolean).map(x=>{ try{ return decodeURIComponent(x); }catch(e){ return x; } });
     if(!p.length){ const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
       switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
+    if(p[0]==='order'&&p[1]){await serviceOrders.open(p[1]);return;}
     if(p[0]==='job'&&p[1]){
       const j=await fetchJobFull(p[1]);
       if(!j){ notify('Заявка по ссылке не найдена.','warn'); switchTab('planner','jobs'); return; }
@@ -744,7 +753,7 @@ async function applyRoute(){
       if(p[2]==='map') await showTripOnMap(p[1]); else await openTrip(p[1]);
       return;
     }
-    if(p[0]==='planner'&&['mine','jobs','trips'].includes(p[1])){ switchTab('planner',p[1]); return; }
+    if(p[0]==='planner'&&['mine','jobs','trips','orders'].includes(p[1])){ switchTab('planner',p[1]); return; }
     if(['dash','map','catalog','settings'].includes(p[0])){ switchTab(p[0]); return; }
     notify('Ссылка не распознана. Открыта сводка.','warn');
     const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
@@ -754,6 +763,8 @@ async function applyRoute(){
 window.addEventListener('popstate',applyRoute);
 window.addEventListener('hashchange',applyRoute);
 function switchTab(name, sub){ if(!tabAllowed(name)) return;
+  if(name!=='order'&&serviceOrders.isDirty()&&!serviceOrders.leave())return;
+  if(name!=='trip'&&document.querySelector('.view-trip.active')&&(tripPlanDirty||tripPresenceDirty)){if(!window.confirm('Выйти без сохранения изменений выезда?'))return;tripPlanDirty=false;tripPresenceDirty=false;}
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
   document.querySelectorAll('.nav-i[data-tab]').forEach(t=>{
     const hit = t.dataset.tab===name && (!t.dataset.sub || t.dataset.sub===navSub(sub||plannerCur));
@@ -763,7 +774,7 @@ function switchTab(name, sub){ if(!tabAllowed(name)) return;
   document.querySelector('.view-'+name).classList.add('active');
   // У страницы выезда нет своего пункта в рельсе: она — вложенный экран
   // «Выездов», и подсветка должна остаться на них, иначе непонятно, где ты.
-  if(name==='trip'||name==='job') document.querySelectorAll('.nav-i[data-sub="disp"]').forEach(t=>t.classList.add('active'));
+  if(name==='trip'||name==='job'||name==='order') document.querySelectorAll('.nav-i[data-sub="disp"]').forEach(t=>t.classList.add('active'));
   // Высота шторки считается от высоты вкладки, а вкладка получает высоту
   // только когда становится активной: пересчитываем при каждом заходе.
   if(name==='map'){ if(sheetIsSheet()) sheetSnapTo(sheetSnap); setTimeout(()=>map.invalidateSize(),60); }
@@ -784,11 +795,11 @@ let plannerCur='jobs';
 let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
 function renderTripsView(){ renderTrips(); }
 function plannerSub(name){ plannerCur=name;
-  if(name==='jobs'||name==='trips') dispCur=name;
+  if(name==='jobs'||name==='trips'||name==='orders') dispCur=name;
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
   document.querySelectorAll('.view-planner .subtab').forEach(t=>t.classList.toggle('active',t.dataset.sub===name));
-  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else renderTripsView();
+  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; $('plOrders').style.display=name==='orders'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else if(name==='orders') serviceOrders.board(); else renderTripsView();
   routeSet('planner/'+name); }
 // Поворот телефона и открытие на планшете меняют раскладку списков —
 // перерисовываем, когда пересекли границу, а не на каждый пиксель.
@@ -798,6 +809,7 @@ try{
     if(!document.querySelector('.view-planner.active')) return;
     if(plannerCur==='jobs') renderJobs();
     else if(plannerCur==='trips') renderTripsView();
+    else if(plannerCur==='orders') serviceOrders.board();
   };
   if(mqPhone.addEventListener) mqPhone.addEventListener('change',onPhoneChange);
 }catch(e){}
@@ -1690,7 +1702,7 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
   const pool=baseJobs.filter(match);
   if(!pool.length){ box.className=''; box.innerHTML='<div class="hint">Заявок нет. Создай первую.</div>'; return; }
   chipCounts($('jobStatusChips'),'js',pool);
-  if(isPhone()){ box.className='klist'; box.innerHTML=flatList(pool,jobVisible,j=>j.due_date,jobCard,'По выбранным статусам заявок нет.'); wireJobCards(box); return; }
+  if(isPhone()){ box.className='klist'; box.innerHTML=flatList(pool,jobVisible,j=>j.due_date,jobCard,'По выбранным статусам заявок нет.'); wireJobCards(box); await serviceOrders.attachJobs(box); return; }
   box.className='kanban';
   box.innerHTML=cols.map(s=>{ const items=pool.filter(j=>j.status===s);
     // Тире — это не пустое состояние, это отсутствие ответа. Строка о том,
@@ -1700,7 +1712,7 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
     const cards=items.map(j=>jobCard(j)).join('')
       ||'<div class="kempty">'+esc(EMPTY[s]||'Пусто')+'</div>';
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
-  wireJobCards(box); wireKanbanDrag(box,dropJob); }
+  wireJobCards(box); wireKanbanDrag(box,dropJob); await serviceOrders.attachJobs(box); }
 $('jobSearch').oninput=renderJobs; if($('jobEngFilter')) $('jobEngFilter').onchange=renderJobs; if($('mineDone')) $('mineDone').onchange=renderMine; $('jobAdd').onclick=()=>{ if(canWrite()) openJob(null); };
 
 // ── Корзина заявок и выездов ───────────────────────────────────────────
@@ -3487,7 +3499,7 @@ async function fetchJobFull(id){
     return data||null;
   }catch(e){ console.warn('Заявка не дочитана:',e); return null; }
 }
-async function openJob(id,presetClient,presetEquip){ await ensureRefs(); jobEditId=id;
+async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); jobEditId=id; serviceOrders.requestPanel(id);
   let j=null;
   if(id){
     j=jobs.find(x=>x.id==id)||null;
@@ -5005,7 +5017,7 @@ document.querySelector('.view-trip')?.addEventListener('change',e=>{
   if(e.target.closest('[data-presence-id]'))tripPresenceDirty=true;
   else if(e.target.closest('#tpPlanPane')||e.target.closest('#tpEconomyPane')){tripPlanDirty=true;}
 });
-window.addEventListener('beforeunload',e=>{if(tripPlanDirty||tripPresenceDirty){e.preventDefault();e.returnValue='';}});
+window.addEventListener('beforeunload',e=>{if(tripPlanDirty||tripPresenceDirty||serviceOrders.isDirty()){e.preventDefault();e.returnValue='';}});
 document.querySelector('#tpPresence')?.addEventListener('click',e=>{
   const button=e.target.closest('[data-presence-edit]');
   if(button)openPresenceEditor(tripEditId,button.closest('[data-presence-id]').dataset.presenceId);
@@ -5250,7 +5262,7 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
   wireTripCards(box); wireKanbanDrag(box,dropTrip); }
 $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) openTrip(null); };
 if($('tripEngFilter')) $('tripEngFilter').onchange=renderTrips;
-async function openTrip(id){ await ensureRefs(); await loadTripJobs();
+async function openTrip(id){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); await loadTripJobs();
   // econCompute считает дорогу по плательщикам через turf, когда готовых
   // километров в выезде нет. Без turf он молча уйдёт в плоскую ветку и
   // покажет другую цифру — поэтому ждём здесь, до первого tripCalc().
@@ -5272,7 +5284,7 @@ async function openTrip(id){ await ensureRefs(); await loadTripJobs();
   drawTripMap(t);
   renderTripJobs(); $('tripErr').textContent=''; tripEcon(); switchTab('trip');
   $('tpChangeReason').value=''; tripPlanDirty=false; tripRemainingRoute=t?.remaining_route||null;
-  setTripPane('plan'); await loadWorkbench(id);
+  setTripPane('plan'); await loadWorkbench(id); await serviceOrders.tripParent(t);
   const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
 // Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
 // было собирать глазами из четырёх мест модалки.

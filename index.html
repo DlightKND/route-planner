@@ -2534,7 +2534,7 @@
            сама. -->
       <button class="btn amber" id="jobSave">Создать заявку</button>
     </div>
-    <div class="err" id="jobErr"></div>
+    <div class="err" id="jobErr"></div><section class="card" id="jobOrders" hidden></section>
     <div class="trip-grid">
       <!-- Кнопка «Подробности» появляется только у инженера: ему справочные
            поля показываются свёрнутыми и на чтение. -->
@@ -2642,7 +2642,7 @@
       <div class="th-econ" id="tripHeadEcon"></div>
       <button class="btn amber" id="tpSave">Сохранить план</button>
     </div>
-    <div class="err" id="tripErr"></div>
+    <div id="tripOrderParent"></div><div class="err" id="tripErr"></div>
     <div class="wb-tabs" role="tablist" aria-label="Разделы выезда">
       <button class="btn" role="tab" id="tpTabPlan" data-trip-tab="plan" aria-selected="true" aria-controls="tpPlanPane">План и факт</button>
       <button class="btn" role="tab" id="tpTabEconomy" data-trip-tab="economy" aria-selected="false" aria-controls="tpEconomyPane">Экономика</button>
@@ -2718,6 +2718,7 @@
     <div id="tpHistoryPane" role="tabpanel" aria-labelledby="tpTabHistory" data-trip-pane="history" hidden></div>
   </div></div>
 
+  <div class="view view-order"><div class="pane scrollp" id="orderEditor"></div></div>
   <div class="view view-catalog">
     <div class="pane scrollp">
       <!-- Переключатель подразделов стоит на месте заголовка — так же, как
@@ -2768,7 +2769,7 @@
     </div>
     <div id="plJobs">
       <div class="stickyhead">
-        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
+        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Поездки · обзор</button></div>
         <div class="pane-head">
           <select id="jobEngFilter" style="width:150px"><option value="">все инженеры</option></select>
           <div class="searchbox"><input type="search" id="jobSearch" placeholder="поиск по клиенту…"></div>
@@ -2778,9 +2779,15 @@
       </div>
       <div id="jobList"></div>
     </div>
+    <div id="plOrders" style="display:none"><div class="stickyhead">
+      <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button></div>
+      <div class="pane-head"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"><select id="orderEngineer" aria-label="Фильтр по инженеру"></select><button class="btn sm amber" id="orderAdd">+ Задание</button></div>
+      <div id="orderScope" hidden><span id="orderScopeText"></span><button class="btn sm ghost" id="orderScopeClear">Все задания</button></div>
+      <label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label>
+    </div><div id="orderList"></div></div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
-        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><div class="subtab" data-sub="jobs">Заявки</div><div class="subtab" data-sub="trips">Выезды</div></div>
+        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Поездки · обзор</button></div>
         <div class="pane-head"><select id="tripEngFilter" style="width:150px"><option value="">все инженеры</option></select><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
         <div class="chips" id="tripStatusChips"></div>
       </div>
