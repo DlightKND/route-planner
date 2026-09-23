@@ -8,7 +8,7 @@ let db;const q=async(s,a=[])=>(await db.query(s,a)).rows;
 beforeAll(async()=>{
   db=new PGlite();
   await db.exec(readFileSync(new URL('./fixtures/trip-workbench-base.sql',import.meta.url),'utf8'));
-  await db.exec('create schema dlight_private; alter function job_point(uuid) set search_path=public;');
+  await db.exec('create schema dlight_private; alter function job_point(uuid) set search_path=public; create table public.job_parts(id uuid primary key,job_id uuid,name text,sku text,unit text,qty numeric,price numeric,cost numeric,created_at timestamptz default now(),created_by uuid);');
   await db.exec("alter table trip_stays add column crew_ids uuid[] not null default '{}'");
   await q("insert into clients values($1,'A',50,30),($2,'B',51,31),($3,'C',52,32)",[id(20),id(21),id(22)]);
   await q('insert into jobs(id,client_id) values($1,$2),($3,$4),($5,$6)',[id(10),id(20),id(11),id(21),id(12),id(22)]);
@@ -18,6 +18,8 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260922190447_service_orders.sql',import.meta.url),'utf8'));
   await db.exec('grant select on trips to authenticated');
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923124804_request_task_trip_links.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260923154000_stock_catalog.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260923183739_service_order_material_snapshots.sql',import.meta.url),'utf8'));
 },30000);
 
 afterAll(async()=>{await db?.close();});
@@ -80,6 +82,22 @@ it('creates one-request tasks through the manager RPC and rejects reassignment',
   const [saved]=await q('select job_id from service_orders where id=$1',[created.id]);
   expect(saved.job_id).toBe(id(10));
   await expect(q("select public.service_order_save_one($1,0,$2::jsonb,$3,'[]'::jsonb)",[created.id,JSON.stringify({title:'Проверка',work_mode:'onsite',engineer_ids:[],instructions:''}),id(11)])).rejects.toThrow('Связь задания с заявкой зафиксирована');
+  await db.exec('rollback');
+});
+
+it('snapshots a material price when selected and preserves it across later catalog changes',async()=>{
+  await db.exec('begin');
+  await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+  await q("select set_config('test.uid',$1,true)",[id(1)]);
+  const [catalog]=await q("insert into stock_catalog(name,sku,unit,price,cost,created_by) values('Насос','P-7','шт',1200,800,$1) returning id",[id(1)]);
+  const data={title:'Замена насоса',work_mode:'onsite',engineer_ids:[],instructions:''};
+  const [created]=await q("select public.service_order_save_one(null,null,$1::jsonb,$2,$3::jsonb) id",[JSON.stringify(data),id(10),JSON.stringify([{job_id:id(10),kind:'material',stock_catalog_id:catalog.id,planned_qty:2}])]);
+  const [first]=await q('select id,title,unit,kind,stock_catalog_id,sku_snapshot,unit_price_snapshot,unit_cost_snapshot from service_order_items where order_id=$1',[created.id]);
+  expect(first).toMatchObject({title:'Насос',unit:'шт',kind:'material',stock_catalog_id:catalog.id,sku_snapshot:'P-7',unit_price_snapshot:'1200.00',unit_cost_snapshot:'800.00'});
+  await q("update stock_catalog set price=1500,cost=950,name='Насос новая цена' where id=$1",[catalog.id]);
+  await q("select public.service_order_save_one($1,0,$2::jsonb,$3,$4::jsonb)",[created.id,JSON.stringify(data),id(10),JSON.stringify([{id:first.id,job_id:id(10),kind:'material',stock_catalog_id:catalog.id,planned_qty:2}])]);
+  const [saved]=await q('select title,sku_snapshot,unit_price_snapshot,unit_cost_snapshot from service_order_items where id=$1',[first.id]);
+  expect(saved).toEqual({title:'Насос',sku_snapshot:'P-7',unit_price_snapshot:'1200.00',unit_cost_snapshot:'800.00'});
   await db.exec('rollback');
 });
 
