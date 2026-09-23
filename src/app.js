@@ -52,11 +52,12 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
         planSchedule, scheduleJobIncluded, tripRouteSegments, driveOfLegs, piecesOf, normPos, addHours, diffHours, dayWindow, weekRowSpan, q4,
-        trashDaysLeft,
+        trashDaysLeft, projectLegacyFinance, projectLegacyFinanceRows,
         measureTrip } = core;
 
 
 const $=id=>document.getElementById(id);
+const JOB_FINANCE_SELECT='service_orders!service_orders_job_id_fkey(service_order_items(*))';
 
 
 // ── Ленивая загрузка тяжёлых библиотек ──────────────────────────────────────
@@ -976,14 +977,15 @@ async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
   // срочность клиента для раскраски точек на карте. Отдельного похода
   // в базу это не стоит, а карта из справочника координат превращается
   // в картину дня.
-  try{ const {data,error}=await sb.from('jobs').select('id,client_id,status,due_date,created_at,clients(name),equipment(model),job_works(hours,billable,revenue,tariff_profile), job_parts(qty,price,cost,billable)').is('deleted_at',null);
+  try{ const {data,error}=await sb.from('jobs').select('id,client_id,status,due_date,created_at,clients(name),equipment(model),'+JOB_FINANCE_SELECT).is('deleted_at',null);
     if(error) throw error;
+    const financeRows=projectLegacyFinanceRows(data||[]);
     const ch=+((appSettings.costs&&appSettings.costs.hour))||0;
     const now=new Date();
     // Сырые живые заявки складываем отдельно: из них строится лента «в работе»
     // на карте. Отдельного запроса это не стоит — данные уже пришли.
-    jobsLite=(data||[]).filter(j=>j.status!=='done'&&j.status!=='cancelled');
-    (data||[]).forEach(j=>{ if(!j.client_id) return; const s=clientStats[j.client_id]||(clientStats[j.client_id]={rev:0,hours:0,warrH:0,cost:0,jobs:0,done:0,urg:null,open:0});
+    jobsLite=financeRows.filter(j=>j.status!=='done'&&j.status!=='cancelled');
+    financeRows.forEach(j=>{ if(!j.client_id) return; const s=clientStats[j.client_id]||(clientStats[j.client_id]={rev:0,hours:0,warrH:0,cost:0,jobs:0,done:0,urg:null,open:0});
       s.jobs++; if(j.status==='done') s.done++;
       // Острота — по самой горящей ЖИВОЙ заявке клиента. Закрытые
       // и отменённые на цвет точки не влияют: работа по ним кончилась.
@@ -1736,9 +1738,9 @@ function wireJobCards(box){
   box.querySelectorAll('[data-jdel]').forEach(b=>b.onclick=()=>delJob(b.dataset.jdel));
   box.querySelectorAll('[data-jstat]').forEach(sel=>sel.onchange=()=>jobSetStatus(sel.dataset.jstat, sel.value)); }
 async function renderJobs(){ await ensureRefs(); renderJobChips();
-  const { data, error }=await sb.from('jobs').select('*, clients(name), equipment(model,kind), job_works(*), job_parts(qty,price,cost,billable)').is('deleted_at',null).order('created_at',{ascending:false});
+  const { data, error }=await sb.from('jobs').select('*, clients(name), equipment(model,kind),'+JOB_FINANCE_SELECT).is('deleted_at',null).order('created_at',{ascending:false});
   const box=$('jobList'); if(error){ box.className=''; box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
-  jobs=data||[]; const q=$('jobSearch').value.trim().toLowerCase();
+  jobs=projectLegacyFinanceRows(data||[]); const q=$('jobSearch').value.trim().toLowerCase();
   if($('jobEngFilter') && $('jobEngFilter').dataset.filled!=='1'){ $('jobEngFilter').innerHTML='<option value="">все инженеры</option>'+profilesList.filter(p=>p.role==='engineer').map(p=>'<option value="'+p.id+'">'+esc(p.full_name||'инженер')+'</option>').join(''); $('jobEngFilter').dataset.filled='1'; }
   const ef=$('jobEngFilter')?$('jobEngFilter').value:'';
   const baseJobs=(role==='engineer')?jobs.filter(j=>assignedTo(j,session.user.id,'assigned_engineer')):jobs;
@@ -2536,10 +2538,10 @@ async function renderFeed(box,o){
     let list=null, tripOf={}, tripById={}, tripOrd={}, offline=false, snapAt=0, orphanLinks=0;
     try{
       const { data, error }=await sb.from('jobs')
-        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), job_works(id,work_id,title,hours,billable,billable_reason,revenue,revenue_override,tariff_profile,approved_at,approved_by,created_at)')
+        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), '+JOB_FINANCE_SELECT)
         .is('deleted_at',null);
       if(error) throw error;
-      list=data||[];
+      list=projectLegacyFinanceRows(data||[]);
       // Какая заявка в каком выезде. Нужно и для метки, и для кнопок:
       // «Начать выезд» относится к выезду, а виден он через его заявки.
       //
@@ -2681,8 +2683,9 @@ async function renderFeed(box,o){
             ? await sb.from(tbl).select('id',{count:'exact',head:true}).is(col,null)
             : await sb.from(tbl).select('id',{count:'exact',head:true}).eq(col,val);
           if(r.error) throw r.error; return r.count||0; };
-        pendParts=await q('job_parts','approved_at',null);
-        pendWorks=await q('job_works','approved_at',null);
+        const countPending=async source=>{const r=await sb.from('service_order_items').select('id',{count:'exact',head:true}).is('approved_at',null).not(source,'is',null);if(r.error)throw r.error;return r.count||0;};
+        pendParts=await countPending('legacy_job_part_id');
+        pendWorks=await countPending('legacy_job_work_id');
         openFix  =await q('job_change_requests','status','open');
       }catch(e){ /* миграция ещё не накатана — о ней скажет слепок сборки */ }
     }
@@ -3420,9 +3423,9 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   try{
     await ensureRefs(); await loadStaffDays(); await loadFactHours();
     const {data:js}=await sb.from('jobs')
-      .select('id,status,at_depot,due_date,created_at,assigned_engineer,day_plan, clients(lat,lng), equipment(lat,lng), job_works(hours,billable,revenue), job_parts(qty,price,cost,billable)')
+      .select('id,status,at_depot,due_date,created_at,assigned_engineer,day_plan, clients(lat,lng), equipment(lat,lng), '+JOB_FINANCE_SELECT)
       .is('deleted_at',null);
-    const jb=js||[];
+    const jb=projectLegacyFinanceRows(js||[]);
     const {data:tr}=await sb.from('trips').select('id,econ_snapshot,route_stops,date_from,date_to,lead_engineer,engineer_ids,status,day_plan,started_at,finished_at,fact_km,fact_km_source').is('deleted_at',null);
     const trips=tr||[];
     // Кто в каком выезде — планировщику: без этого выезд рассыпается на
@@ -3539,10 +3542,10 @@ async function snapFindJob(id){
 async function fetchJobFull(id){
   try{
     const {data,error}=await sb.from('jobs')
-      .select('*, clients(name), equipment(model,kind), job_works(*), job_parts(qty,price,cost,billable)')
+      .select('*, clients(name), equipment(model,kind),'+JOB_FINANCE_SELECT)
       .eq('id',id).is('deleted_at',null).maybeSingle();
     if(error) throw error;
-    return data||null;
+    return projectLegacyFinance(data||null);
   }catch(e){ console.warn('Заявка не дочитана:',e); return null; }
 }
 async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); jobEditId=id; serviceOrders.requestPanel(id);
@@ -3565,7 +3568,7 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
     :'<option value="">— депо не заведено —</option>';
   if(j&&j.depot_id) $('jbDepotSel').value=j.depot_id; else if(dl.length) $('jbDepotSel').value=dl[0].id;
   renderDepotUi();
-  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {id:w.id,work_id:w.work_id||null,title:w.title||'',revenue:+w.revenue||0,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at,approved_at:w.approved_at||null,approved_by:w.approved_by||null}; });
+  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {id:w.id,work_id:w.work_id||null,title:w.title||'',revenue:+w.revenue||0,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at,approved_at:w.approved_at||null,approved_by:w.approved_by||null,legacy_task_item_id:w.legacy_task_item_id||null}; });
   curWorksComplete=!id||hasStableJobWorkIds(j?.job_works);
   renderJobWorks();
   const ro=!canWrite() && !(j&&assignedTo(j,session.user.id,'assigned_engineer'));
@@ -3821,7 +3824,7 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
       '<input type="number" step="0.25" value="'+w.hours+'" data-wh="'+i+'" style="width:74px" title="часы"><span class="hint" style="margin: 0">ч</span>'+
       '<button class="btn sm '+(w.billable?'amber':'ghost')+'" data-wb="'+i+'">'+(w.billable?'платно':'гарантия')+'</button>'+
       money+
-      '<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button></div>'+
+      (w.legacy_task_item_id?'<span class="hint" style="margin-left:auto">историческая</span>':'<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button>')+'</div>'+
       ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top: var(--sp-2)">'+esc(w.reasons.join(' · '))+'</div>':'')+
       (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
     if(!mayW) d.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
@@ -4429,9 +4432,9 @@ async function loadJobParts(){
   jobParts=[]; partT={};
   if(!jobEditId){ renderJobParts(); return; }
   try{
-    const {data,error}=await sb.from('job_parts').select('*').eq('job_id',jobEditId).order('created_at');
+    const {data,error}=await sb.from('jobs').select(JOB_FINANCE_SELECT).eq('id',jobEditId).single();
     if(error) throw error;
-    jobParts=data||[];
+    jobParts=projectLegacyFinance({service_orders:data?.service_orders||[]}).job_parts;
   }catch(e){
     const j=await snapFindJob(jobEditId);
     jobParts=(j&&j.job_parts)||[];
@@ -4518,7 +4521,7 @@ function renderJobParts(){
     d.innerHTML='<div class="pt-top">'
         +'<input type="text" value="'+esc(p.name||'')+'" data-pn="'+i+'" placeholder="наименование">'
         +'<input type="text" value="'+esc(p.sku||'')+'" data-ps="'+i+'" placeholder="артикул">'
-        +'<button class="btn sm ghost pt-rm" data-prm="'+i+'" title="Убрать">×</button>'
+        +(p.legacy_task_item_id?'<span class="hint" title="Историческую финансовую строку нельзя удалить">историческая</span>':'<button class="btn sm ghost pt-rm" data-prm="'+i+'" title="Убрать">×</button>')
       +'</div>'
       +'<div class="pt-bot">'
         +'<input type="number" step="0.01" min="0" value="'+esc(String(partQty(p)))+'" data-pq="'+i+'" title="количество">'
@@ -4659,6 +4662,7 @@ async function partSave(p){
 async function partApprove(p,ok){
   if(!p||!p.id||!canWrite()) return;
   if(!ok){
+    if(p.legacy_task_item_id){notify('Перенесённую финансовую строку нельзя удалить до перехода на аннулирование.','warn');return;}
     if(!await confirmDialog('Отклонить «'+String(p.name||'').trim()+'»? Строка будет убрана из заявки.',
       {danger:true,okText:'Отклонить'})) return;
     await partDel(p); return;
@@ -4764,6 +4768,7 @@ async function fixDecide(id,st){
 
 async function partDel(p){
   if(!p) return;
+  if(p.legacy_task_item_id){notify('Перенесённую финансовую строку нельзя удалить до перехода на аннулирование.','warn');return;}
   const what=String(p.name||'').trim();
   if(partReady(p)&&!await confirmDialog('Убрать «'+what+'» из заявки?',{danger:true,okText:'Убрать'})) return;
   clearTimeout(partT[p.id]); delete partT[p.id];
@@ -4903,12 +4908,13 @@ function jobWorkRow(w){
     revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)};
 }
 async function persistJobWorks(jobId,proposedRows,targets=[]){
-  const {data:existing,error:readError}=await sb.from('job_works')
-    .select('id,work_id,title,hours,billable,billable_reason,revenue,revenue_override,tariff_profile,approved_at,approved_by,created_at')
-    .eq('job_id',jobId);
+  const {data:request,error:readError}=await sb.from('jobs').select(JOB_FINANCE_SELECT).eq('id',jobId).single();
   if(readError) throw readError;
+  const existing=projectLegacyFinance({service_orders:request?.service_orders||[]}).job_works;
   const approval=canWrite()?{approvedAt:new Date().toISOString(),approvedBy:session?.user?.id||null}:{};
   const diff=diffJobWorks(existing||[],(proposedRows||[]).map(w=>Object.assign({job_id:jobId},w)),approval);
+  const blocked=existing.filter(w=>w.legacy_task_item_id&&diff.deleteIds.includes(w.id));
+  if(blocked.length) throw new Error('Перенесённую финансовую строку нельзя удалить до перехода на аннулирование.');
   if(diff.upserts.length){
     const {data,error}=await sb.from('job_works').upsert(diff.upserts,{onConflict:'id'}).select('id,revenue,approved_at,approved_by');
     if(error) throw error;
@@ -5283,7 +5289,7 @@ if($('tpRebuildRemaining'))$('tpRebuildRemaining').onclick=async()=>{
     $('tpRemainingInfo').textContent='Осталось '+totals.km.toFixed(1)+' км · '+totals.h.toFixed(1)+' ч. Сохрани план. Пройденный трек не изменён.';
   }catch(e){notify(e.message,'err');}finally{button.disabled=false;}
 };
-async function loadTripJobs(){ const {data}=await sb.from('jobs').select('id,status,scheduled_date,equipment_id,at_depot, clients(name,lat,lng), equipment(model,lat,lng), job_works(hours,billable,revenue,tariff_profile), job_parts(qty,price,cost,billable)').is('deleted_at',null).or('at_depot.is.null,at_depot.eq.false').order('created_at',{ascending:false}); tripJobsAll=data||[]; }
+async function loadTripJobs(){ const {data}=await sb.from('jobs').select('id,status,scheduled_date,equipment_id,at_depot, clients(name,lat,lng), equipment(model,lat,lng), '+JOB_FINANCE_SELECT).is('deleted_at',null).or('at_depot.is.null,at_depot.eq.false').order('created_at',{ascending:false}); tripJobsAll=projectLegacyFinanceRows(data||[]); }
 async function loadTripOrders(){const {data,error}=await sb.from('service_orders').select('id,number,title,status,work_mode,job_id,seed_request_id').not('job_id','is',null).eq('work_mode','onsite').order('created_at',{ascending:false});if(error)throw error;tripOrdersAll=data||[];}
 function syncTripJobsFromOrders(){curTripJobs=new Set(tripOrdersAll.filter(o=>curTripOrders.has(o.id)).map(o=>o.job_id));}
 function tripStops(){ const stops=[]; const seen=new Set(); tripJobsAll.filter(j=>curTripJobs.has(j.id)).forEach(j=>{ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); if(lat==null) return; const nm=(eq&&eq.lat!=null)?((j.clients?j.clients.name:'')+' · '+(eq.model||'')):(j.clients?j.clients.name:''); const key=(+lat).toFixed(5)+','+(+lng).toFixed(5); if(seen.has(key)) return; seen.add(key); stops.push({name:nm,lat,lng}); }); return stops; }
@@ -6159,10 +6165,10 @@ async function refreshTripEcon(tripId){
       .eq('id',tripId).single();
     if(error||!t) return false;
     const {data:tj,error:e1}=await sb.from('trip_jobs')
-      .select('jobs(id,clients(name,lat,lng),equipment(lat,lng),job_works(hours,billable,revenue,tariff_profile),job_parts(qty,price,cost,billable))')
+      .select('jobs(id,clients(name,lat,lng),equipment(lat,lng),'+JOB_FINANCE_SELECT+')')
       .eq('trip_id',tripId);
     if(e1) return false;
-    const jobs=(tj||[]).map(r=>r.jobs).filter(Boolean);
+    const jobs=projectLegacyFinanceRows((tj||[]).map(r=>r.jobs).filter(Boolean));
     // turf нужен только запасному расчёту дороги по прямым — у выездов
     // с готовыми километрами он не понадобится, но ждать дешевле, чем
     // молча посчитать дорогу мимо.
@@ -7946,7 +7952,7 @@ function applyCorridor(polys){ bufferLayer.clearLayers(); $('rCorridor').innerHT
 async function seedTaskForRoute(jobId){const {data,error}=await sb.rpc('service_order_seed_task',{p_job:jobId});if(error)throw error;return data;}
 $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<2){ notify('Нужно минимум 2 точки.','warn'); return; }
   const clientIds=[...new Set(rStops.filter(s=>s.clientId).map(s=>s.clientId))];
-  let linked=[]; if(clientIds.length){ try{ const {data}=await sb.from('jobs').select('id, client_id, clients(name,lat,lng), equipment(lat,lng), job_works(hours,billable,revenue,tariff_profile), job_parts(qty,price,cost,billable)').is('deleted_at',null).in('client_id',clientIds).not('status','in','(done,cancelled)'); linked=data||[]; }catch(e){} }
+  let linked=[]; if(clientIds.length){ try{ const {data}=await sb.from('jobs').select('id, client_id, clients(name,lat,lng), equipment(lat,lng), '+JOB_FINANCE_SELECT).is('deleted_at',null).in('client_id',clientIds).not('status','in','(done,cancelled)'); linked=projectLegacyFinanceRows(data||[]); }catch(e){} }
   const exist=plannerTripId?(trips.find(x=>x.id==plannerTripId)||{}):{};let selectedOrderIds=[];
   let planReason='Создание маршрута';
   if(plannerTripId){
