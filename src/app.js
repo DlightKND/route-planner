@@ -5674,17 +5674,41 @@ $('stSave').onclick=async ()=>{ const start=parseFloat($('stDayStart').value),en
   if(!hasDayStart) delete rec.day_start;
   const {error}=await sb.from('settings').update(rec).eq('id',true); if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings=Object.assign(appSettings,rec); $('stStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 $('dtSave').onclick=async ()=>{ const dt={mode:$('dtMode').value,accent:'#ffe100'}; const {error}=await sb.from('settings').update({default_theme:dt}).eq('id',true); if(error){ $('dtStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } appSettings.default_theme=dt; $('dtStatus').innerHTML='<span class="ok">Сохранено</span>'; };
-async function renderUsersAdmin(){ const {data,error}=await sb.from('profiles').select('id,full_name,role'); const box=$('usersList'); if(error){ box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
-  profilesList=data||[]; box.innerHTML='';
-  // Раскладка строки — в стилях (класс .urow), а не инлайном: на телефоне
-  // ей нужно переноситься, а инлайновый стиль медиазапросу не перебить.
-  profilesList.forEach(p=>{ const d=document.createElement('div'); d.className='eqitem urow';
-    d.innerHTML='<input type="text" value="'+esc(p.full_name||'')+'" data-un="'+p.id+'" placeholder="имя" class="grow">'+
-      '<select data-ur="'+p.id+'"><option value="admin">админ</option><option value="logist">логист</option><option value="engineer">инженер</option></select>'+
-      '<button class="btn sm" data-us="'+p.id+'">сохранить</button>';
-    box.appendChild(d); d.querySelector('[data-ur]').value=p.role; });
-  box.querySelectorAll('[data-us]').forEach(b=>b.onclick=async ()=>{ const id=b.dataset.us; const name=box.querySelector('[data-un="'+id+'"]').value.trim(); const r=box.querySelector('[data-ur="'+id+'"]').value;
-    const {error}=await sb.from('profiles').update({full_name:name,role:r}).eq('id',id); if(error){ notify(error.message,'err'); return; } b.textContent='ок'; setTimeout(()=>b.textContent='сохранить',1200); if(id===session.user.id){ role=r; applyTabs(); } }); }
+async function renderUsersAdmin(){
+  const box=$('usersList');
+  const [profileResult,orgResult]=await Promise.all([
+    sb.from('profiles').select('id,full_name,role,active').order('full_name'),
+    sb.from('employee_org').select('profile_id,manager_id,job_title')
+  ]);
+  if(profileResult.error||orgResult.error){ box.innerHTML='<div class="err">'+esc((profileResult.error||orgResult.error).message)+'</div>'; return; }
+  profilesList=profileResult.data||[]; const orgByProfile=new Map((orgResult.data||[]).map(x=>[x.profile_id,x])); box.innerHTML='';
+  if(!profilesList.length){ box.innerHTML='<div class="empty">Учётных записей пока нет.</div>'; return; }
+  const roleLabel={admin:'админ',logist:'логист',engineer:'инженер'};
+  profilesList.forEach(p=>{ const org=orgByProfile.get(p.id)||{}; const d=document.createElement('div'); d.className='eqitem urow staff-row';
+    const managerOptions=profilesList.filter(m=>m.id!==p.id&&m.active).map(m=>'<option value="'+m.id+'">'+esc(m.full_name||roleLabel[m.role]||'Сотрудник')+'</option>').join('');
+    const inactiveManager=org.manager_id&&!profilesList.some(m=>m.id===org.manager_id&&m.active)
+      ?'<option value="'+org.manager_id+'" selected disabled>Текущий руководитель неактивен</option>':'';
+    d.innerHTML='<label class="staff-field"><span>Сотрудник'+(p.active?'':' · неактивен')+'</span><input type="text" value="'+esc(p.full_name||'')+'" data-un="'+p.id+'" placeholder="Имя" autocomplete="off"></label>'+
+      '<label class="staff-field"><span>Должность</span><input type="text" value="'+esc(org.job_title||'')+'" data-title="'+p.id+'" maxlength="120" placeholder="Например, старший инженер"></label>'+
+      '<label class="staff-field"><span>Прямой руководитель</span><select data-manager="'+p.id+'"><option value="">Без руководителя</option>'+inactiveManager+managerOptions+'</select></label>'+
+      '<label class="staff-field"><span>Роль в приложении</span><select data-ur="'+p.id+'"><option value="admin">админ</option><option value="logist">логист</option><option value="engineer">инженер</option></select></label>'+
+      '<div class="staff-save"><button class="btn sm" data-us="'+p.id+'">Сохранить</button></div>';
+    box.appendChild(d); d.querySelector('[data-ur]').value=p.role; d.querySelector('[data-manager]').value=org.manager_id||'';
+  });
+  box.querySelectorAll('[data-us]').forEach(b=>b.onclick=async ()=>{
+    const id=b.dataset.us,row=b.closest('.staff-row'),name=row.querySelector('[data-un]').value.trim(),r=row.querySelector('[data-ur]').value;
+    const title=row.querySelector('[data-title]').value.trim(),manager=row.querySelector('[data-manager]').value||null;
+    if(!name){ notify('Укажи имя сотрудника','warn'); row.querySelector('[data-un]').focus(); return; }
+    b.disabled=true;
+    const {error}=await sb.rpc('employee_org_save',{p_profile:id,p_full_name:name,p_role:r,p_job_title:title,p_manager:manager});
+    b.disabled=false;
+    if(error){ notify(error.message,'err'); return; }
+    const profile=profilesList.find(x=>x.id===id); if(profile){ profile.full_name=name; profile.role=r; }
+    orgByProfile.set(id,{profile_id:id,manager_id:manager,job_title:title}); b.textContent='Сохранено';
+    setTimeout(()=>{ if(b.isConnected)b.textContent='Сохранить'; },1200);
+    if(id===session.user.id){ role=r; applyTabs(); }
+  });
+}
 
 // ---------- пуш-уведомления ----------
 // Ключ публичный по определению: он и так уезжает в браузер каждого
