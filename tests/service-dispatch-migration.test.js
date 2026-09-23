@@ -8,8 +8,8 @@ let db;const q=async(s,a=[])=>(await db.query(s,a)).rows;
 beforeAll(async()=>{
   db=new PGlite();
   await db.exec(readFileSync(new URL('./fixtures/trip-workbench-base.sql',import.meta.url),'utf8'));
-  await db.exec('create schema dlight_private; alter function job_point(uuid) set search_path=public; create table public.job_parts(id uuid primary key,job_id uuid,name text,sku text,unit text,qty numeric,price numeric,cost numeric,created_at timestamptz default now(),created_by uuid);');
-  await db.exec("alter table trip_stays add column crew_ids uuid[] not null default '{}'");
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260921133835_trip_workbench.sql',import.meta.url),'utf8'));
+  await db.exec('alter function job_point(uuid) set search_path=public; create table public.job_parts(id uuid primary key,job_id uuid,name text,sku text,unit text,qty numeric,price numeric,cost numeric,created_at timestamptz default now(),created_by uuid);');
   await q("insert into clients values($1,'A',50,30),($2,'B',51,31),($3,'C',52,32)",[id(20),id(21),id(22)]);
   await q('insert into jobs(id,client_id) values($1,$2),($3,$4),($5,$6)',[id(10),id(20),id(11),id(21),id(12),id(22)]);
   await q("insert into trips(id,status) values($1,'planned'),($2,'planned'),($3,'finished')",[id(30),id(31),id(32)]);
@@ -18,8 +18,12 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260922190447_service_orders.sql',import.meta.url),'utf8'));
   await db.exec('grant select on trips to authenticated');
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923124804_request_task_trip_links.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260923133423_trip_cost_allocation.sql',import.meta.url),'utf8'));
+  await db.exec("create type public.user_role as enum ('admin','logist','engineer')");
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260923144500_employee_org_structure.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923154000_stock_catalog.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923183739_service_order_material_snapshots.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260923210000_restore_task_link_invariants.sql',import.meta.url),'utf8'));
 },30000);
 
 afterAll(async()=>{await db?.close();});
@@ -83,6 +87,102 @@ it('creates one-request tasks through the manager RPC and rejects reassignment',
   expect(saved.job_id).toBe(id(10));
   await expect(q("select public.service_order_save_one($1,0,$2::jsonb,$3,'[]'::jsonb)",[created.id,JSON.stringify({title:'Проверка',work_mode:'onsite',engineer_ids:[],instructions:''}),id(11)])).rejects.toThrow('Связь задания с заявкой зафиксирована');
   await db.exec('rollback');
+});
+
+it('carries remaining work to a task with the same canonical request and material snapshots',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await q("insert into stock_catalog(id,name,sku,unit,price,cost) values($1,'Насос','P-7','шт',1200,800)",[id(80)]);
+    const [source]=await q("insert into service_orders(title,status,job_id) values('Замена насоса','in_progress',$1) returning id",[id(10)]);
+    await q('insert into service_order_jobs(order_id,job_id) values($1,$2)',[source.id,id(10)]);
+    const [item]=await q("insert into service_order_items(order_id,job_id,title,unit,planned_qty,kind,stock_catalog_id,sku_snapshot,unit_price_snapshot,unit_cost_snapshot) values($1,$2,'Насос','шт',5,'material',$3,'P-7',1200,800) returning id",[source.id,id(10),id(80)]);
+    const [carried]=await q("select public.service_order_carry($1,0,'Материал отсутствует') id",[source.id]);
+    const [task]=await q('select job_id from service_orders where id=$1',[carried.id]);
+    const [rel]=await q('select job_id from service_order_jobs where order_id=$1',[carried.id]);
+    const [copy]=await q('select job_id,title,kind,source_item_id,stock_catalog_id,sku_snapshot,unit_price_snapshot,unit_cost_snapshot from service_order_items where order_id=$1',[carried.id]);
+    expect(task.job_id).toBe(id(10));
+    expect(rel.job_id).toBe(id(10));
+    expect(copy).toMatchObject({job_id:id(10),title:'Насос',kind:'material',source_item_id:item.id,stock_catalog_id:id(80),sku_snapshot:'P-7',unit_price_snapshot:'1200.00',unit_cost_snapshot:'800.00'});
+  }finally{await db.exec('rollback');}
+});
+
+it('does not guess a request when a legacy multi-request task has remaining work for several requests',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const [source]=await q("insert into service_orders(title,status,job_id) values('Старое общее задание','in_progress',null) returning id");
+    await q('insert into service_order_jobs(order_id,job_id) values($1,$2),($1,$3)',[source.id,id(10),id(11)]);
+    await q("insert into service_order_items(order_id,job_id,title,planned_qty) values($1,$2,'Работа А',2),($1,$3,'Работа Б',3)",[source.id,id(10),id(11)]);
+    const before=Number((await q('select count(*) n from service_orders'))[0].n);
+    await db.exec('savepoint ambiguous_carry');
+    await expect(q("select public.service_order_carry($1,0,'Разделить остаток')",[source.id])).rejects.toThrow('нескольким заявкам');
+    await db.exec('rollback to savepoint ambiguous_carry');
+    expect(Number((await q('select count(*) n from service_orders'))[0].n)).toBe(before);
+    expect((await q('select sum(transferred_qty) transferred from service_order_items where order_id=$1',[source.id]))[0].transferred).toBe('0');
+  }finally{await db.exec('rollback');}
+});
+
+it('reconciles legacy request edits without dropping other task selections',async()=>{
+  await db.exec('begin');
+  try{
+    await q('update trip_jobs set job_id=$1 where trip_id=$2 and job_id=$3',[id(12),id(30),id(10)]);
+    const expected=[id(11),id(12)].sort();
+    const links=await q('select o.job_id from trip_service_orders tso join service_orders o on o.id=tso.order_id where tso.trip_id=$1 order by o.job_id',[id(30)]);
+    expect(links.map(row=>row.job_id)).toEqual(expected);
+
+    await q('update trip_jobs set ord=ord+5 where trip_id=$1 and job_id=$2',[id(30),id(11)]);
+    const afterReorder=await q('select o.job_id from trip_service_orders tso join service_orders o on o.id=tso.order_id where tso.trip_id=$1 order by o.job_id',[id(30)]);
+    expect(afterReorder.map(row=>row.job_id)).toEqual(expected);
+  }finally{await db.exec('rollback');}
+});
+
+it('rejects removing a task with approved stay allocation unless that stay is explicitly reassigned atomically',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("insert into profiles(id,role,active) values($1,'engineer',true)",[id(3)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const [old]=await q('select id from service_orders where seed_request_id=$1',[id(10)]);
+    const [keep]=await q('select id from service_orders where seed_request_id=$1',[id(11)]);
+    const [replacement]=await q("insert into service_orders(title,work_mode,job_id) values('Дополнительная работа','onsite',$1) returning id",[id(10)]);
+    const [replacement2]=await q("insert into service_orders(title,work_mode,job_id) values('Вторая дополнительная работа','onsite',$1) returning id",[id(10)]);
+    await q('insert into service_order_jobs(order_id,job_id) values($1,$2)',[replacement.id,id(10)]);
+    await q('insert into service_order_jobs(order_id,job_id) values($1,$2)',[replacement2.id,id(10)]);
+    await q('insert into trip_service_orders(trip_id,order_id) values($1,$2)',[id(30),replacement.id]);
+    await q('insert into trip_service_orders(trip_id,order_id) values($1,$2)',[id(30),replacement2.id]);
+    await q('update trip_stays set service_order_id=$1 where id=$2',[old.id,id(40)]);
+    await q("update trip_stays set stay_to=stay_from+interval '70 minutes' where id=$1",[id(40)]);
+    await q('insert into trip_stay_task_allocations(stay_id,service_order_id,share,source) values($1,$2,1,\'manager\') on conflict do nothing',[id(40),old.id]);
+    await q('update trip_stays set task_allocations_explicit=true where id=$1',[id(40)]);
+    await q("insert into trip_cost_allocation_runs(trip_id,source_revision,fact_km,components,diagnostics,approval_reason) values($1,(select workbench_revision from trips where id=$1),0,'{}','{}','До замены')",[id(30)]);
+    const before=await q('select order_id from trip_service_orders where trip_id=$1 order by order_id',[id(30)]);
+    const revision=(await q('select workbench_revision from trips where id=$1',[id(30)]))[0].workbench_revision;
+    const call=(stays)=>q('select dlight_private.trip_plan_save_tasks($1,$2,$3,$4,$5,$6)',[id(30),revision,{},[keep.id,replacement.id,replacement2.id],'Замена задания',stays]);
+
+    await db.exec('savepoint without_explicit_reallocation');
+    await expect(call(null)).rejects.toThrow();
+    await db.exec('rollback to savepoint without_explicit_reallocation');
+    expect(await q('select order_id from trip_service_orders where trip_id=$1 order by order_id',[id(30)])).toEqual(before);
+    expect((await q('select service_order_id from trip_stays where id=$1',[id(40)]))[0].service_order_id).toBe(old.id);
+    expect((await q('select service_order_id from trip_stay_task_allocations where stay_id=$1',[id(40)]))[0].service_order_id).toBe(old.id);
+    expect((await q('select workbench_revision from trips where id=$1',[id(30)]))[0].workbench_revision).toBe(revision);
+
+    const stays=[{id:id(40),job_id:id(10),service_order_id:null,crew_ids:[id(3)],minutes_mgr:70,status:'approved',task_allocations:[{order_id:replacement.id,share:0.4},{order_id:replacement2.id,share:0.6}]}];
+    await call(stays);
+    expect((await q('select service_order_id from trip_stays where id=$1',[id(40)]))[0].service_order_id).toBeNull();
+    const allocations=await q('select service_order_id,share from trip_stay_task_allocations where stay_id=$1',[id(40)]);
+    expect(Object.fromEntries(allocations.map(row=>[row.service_order_id,row.share]))).toEqual({
+      [replacement.id]:'0.400000',[replacement2.id]:'0.600000'
+    });
+    expect(await q('select 1 from trip_service_orders where trip_id=$1 and order_id=$2',[id(30),old.id])).toHaveLength(0);
+    const [run]=await q('select source_revision,current from trip_cost_allocation_runs where trip_id=$1',[id(30)]);
+    const [after]=await q('select workbench_revision from trips where id=$1',[id(30)]);
+    expect(Number(after.workbench_revision)).toBeGreaterThan(Number(run.source_revision));
+    expect(run.current).toBe(true);
+  }finally{await db.exec('rollback');}
 });
 
 it('snapshots a material price when selected and preserves it across later catalog changes',async()=>{
