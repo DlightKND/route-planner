@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 545)
-Total output lines: 47
-
 import {expect,it} from 'vitest';
 import {diffJobWorks,hasStableJobWorkIds} from '../src/core/job-work-diff.js';
 
@@ -22,7 +19,11 @@ it('keeps an unchanged approved work row untouched, including its historical pri
   expect(deleteIds).toEqual([]);
 });
 
-it('updates a changed row in place and clears approval for manager re…45 tokens truncated…0]).toMatchObject({id:'work-1',hours:5,approved_at:null,approved_by:null});
+it('updates a changed row in place and clears approval for manager review',()=>{
+  const {upserts,deleteIds}=diffJobWorks([base],[{...base,hours:5,revenue:3750}]);
+  expect(deleteIds).toEqual([]);
+  expect(upserts).toHaveLength(1);
+  expect(upserts[0]).toMatchObject({id:'work-1',hours:5,approved_at:null,approved_by:null});
 });
 
 it('stamps a manager edit as the new approval when the editor is a manager',()=>{
