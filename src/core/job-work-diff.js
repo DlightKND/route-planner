@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 552)
-Total output lines: 62
-
 const FIELDS = [
   'work_id', 'title', 'hours', 'billable', 'billable_reason',
   'revenue', 'revenue_override', 'tariff_profile'
@@ -27,7 +24,9 @@ export function hasStableJobWorkIds(rows) {
 // A row's ID is durable provenance for downstream task migration. Unchanged
 // rows are omitted from writes; edited rows keep their ID and are re-approved
 // by a manager; new rows receive a database ID; removed rows are deleted.
-exp…52 tokens truncated…
+export function diffJobWorks(existingRows, proposedRows, approval = {}) {
+  const existing = Array.isArray(existingRows) ? existingRows : [];
+  const proposed = Array.isArray(proposedRows) ? proposedRows : [];
   const byId = new Map(existing.map(row => [String(row.id), row]));
   const retained = new Set();
   const upserts = [];
