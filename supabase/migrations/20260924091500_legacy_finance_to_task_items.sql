@@ -184,17 +184,19 @@ begin
   end if;
   if (new.legacy_job_work_id,new.legacy_job_part_id,new.legacy_snapshot,
       new.work_catalog_id,new.billable,new.billable_reason,new.tariff_profile,
+      new.kind,new.title,new.unit,new.planned_qty,new.stock_catalog_id,new.sku_snapshot,
       new.unit_price_snapshot,new.unit_cost_snapshot,
       new.financial_revenue_snapshot,new.financial_cost_snapshot,
       new.approved_at,new.approved_by,new.created_at)
      is distinct from
      (old.legacy_job_work_id,old.legacy_job_part_id,old.legacy_snapshot,
       old.work_catalog_id,old.billable,old.billable_reason,old.tariff_profile,
+      old.kind,old.title,old.unit,old.planned_qty,old.stock_catalog_id,old.sku_snapshot,
       old.unit_price_snapshot,old.unit_cost_snapshot,
       old.financial_revenue_snapshot,old.financial_cost_snapshot,
       old.approved_at,old.approved_by,old.created_at)
      and (old.legacy_job_work_id is not null or old.legacy_job_part_id is not null) then
-    raise exception 'Финансовый снимок импортированной строки неизменяем';
+    raise exception 'Импортированная строка заявки заблокирована до переключения финансовых записей';
   end if;
   return new;
 end $$;
