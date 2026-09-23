@@ -157,4 +157,22 @@ drop trigger if exists job_parts_prevent_migrated_delete on public.job_parts;
 create trigger job_parts_prevent_migrated_delete before delete on public.job_parts
 for each row execute function dlight_private.sync_job_part_to_task();
 
+-- Catch rows written between the initial backfill and installation of these
+-- triggers. The legacy tables have no other update triggers, and setting the
+-- primary key to itself leaves source identifiers and timestamps unchanged.
+update public.job_works set id=id;
+update public.job_parts set id=id;
+
+do $$
+begin
+  if exists(select 1 from public.job_works w left join public.service_order_items i
+            on i.legacy_job_work_id=w.id
+            where coalesce(w.hours,0)>0 and i.id is null)
+     or exists(select 1 from public.job_parts p left join public.service_order_items i
+               on i.legacy_job_part_id=p.id
+               where coalesce(p.qty,0)>0 and i.id is null) then
+    raise exception 'Legacy finance dual-write reconciliation is incomplete';
+  end if;
+end $$;
+
 commit;
