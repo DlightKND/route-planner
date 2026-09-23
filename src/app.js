@@ -227,8 +227,8 @@ document.addEventListener('click',e=>{ const p=$('themePop'); if(p.classList.con
 $('modeDark').onclick=()=>{ theme.mode='dark'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); if(document.querySelector('.view-dash.active')) renderDashboard(); if(plannerCur==='mine') renderMine(); $('themePop').classList.remove('on'); };
 $('modeLight').onclick=()=>{ theme.mode='light'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); if(document.querySelector('.view-dash.active')) renderDashboard(); if(plannerCur==='mine') renderMine(); $('themePop').classList.remove('on'); };
 // закрытие модалок по фону и Esc
-['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o) o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('on'); }); });
-document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; ['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay'].forEach(id=>{ const o=$(id); if(o&&o.classList.contains('on')) o.classList.remove('on'); }); const tp=$('themePop'); if(tp) tp.classList.remove('on'); });
+['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay','stockOverlay'].forEach(id=>{ const o=$(id); if(o) o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('on'); }); });
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; ['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay','stockOverlay'].forEach(id=>{ const o=$(id); if(o&&o.classList.contains('on')) o.classList.remove('on'); }); const tp=$('themePop'); if(tp) tp.classList.remove('on'); });
 
 // ---------- logo ----------
 (function(){ const lg=$('logoImg'); lg.onload=()=>{lg.style.display='block';$('wordmark').style.display='none';}; lg.onerror=()=>{lg.style.display='none';$('wordmark').style.display='';}; lg.src='./logo.png'; })();
@@ -791,7 +791,7 @@ document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
   el.onclick=()=>switchTab(el.dataset.tab, el.dataset.sub||null);
 });
 let catCur='works';
-function catSub(name){ catCur=name; document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.classList.toggle('active',t.dataset.csub===name)); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; if(name==='works') renderCatalog(); else renderEqModels(); }
+function catSub(name){ catCur=name; document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.classList.toggle('active',t.dataset.csub===name)); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; $('catMaterials').style.display=name==='materials'?'':'none'; if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else renderStockCatalog(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
 let plannerCur='jobs';
 let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
@@ -1578,6 +1578,47 @@ $('cwSave').onclick=async ()=>{ const name=$('cwName').value.trim(); if(!name){ 
   $('cwSave').disabled=true; let error; if(cwEditId){ ({error}=await sb.from('work_catalog').update(rec).eq('id',cwEditId)); } else { ({error}=await sb.from('work_catalog').insert(rec)); } $('cwSave').disabled=false;
   if(error){ $('cwErr').textContent='Ошибка: '+error.message; return; } $('catOverlay').classList.remove('on'); catalog=[]; await renderCatalog(); };
 async function delCw(id){ if(!await confirmDialog('Удалить работу из каталога?',{danger:true,okText:'Удалить'})) return; const { error }=await sb.from('work_catalog').delete().eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } catalog=[]; await renderCatalog(); }
+
+// ---------- material catalog (no on-hand quantities until physical inventory) ----------
+let stockCatalog=[],stockEditId=null;
+async function loadStockCatalog(){
+  const {data,error}=await sb.from('stock_catalog').select('id,name,sku,unit,price,cost,active,current_since,legacy_part_id').order('name');
+  if(error) throw error; stockCatalog=data||[];
+}
+async function renderStockCatalog(){
+  const box=$('stockList'); if(!box)return;
+  try{ if(!stockCatalog.length) await loadStockCatalog(); }
+  catch(e){box.innerHTML='<div class="err">Не удалось загрузить справочник: '+esc(e.message)+'</div>';return;}
+  const q=$('stockSearch').value.trim().toLowerCase(),showInactive=$('stockShowInactive').checked;
+  const rows=stockCatalog.filter(x=>(showInactive||x.active)&&(!q||(x.name+' '+x.sku).toLowerCase().includes(q)));
+  const mayManage=role==='admin'||role==='logist'; $('stockAdd').hidden=!mayManage;
+  box.innerHTML=rows.map(x=>'<div class="eqitem stock-row"><div class="stock-title"><b>'+esc(x.name)+'</b><small>'+(x.sku?'Артикул '+esc(x.sku):'Без артикула')+' · '+esc(x.unit)+'</small><small>Цены актуальны с '+esc(new Date(x.current_since).toLocaleDateString('ru-RU'))+(x.legacy_part_id?' · перенесено из старой строки':'')+'</small></div><div class="stock-cell"><small>Продажа</small><b>'+Number(x.price||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b></div><div class="stock-cell"><small>Себестоимость</small><b>'+Number(x.cost||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b></div><div class="stock-cell stock-state">'+(x.active?'Активна':'В архиве')+'</div><div class="stock-actions">'+(mayManage?'<button type="button" class="btn sm ghost" data-stock-edit="'+x.id+'">Изменить</button>':'')+'</div></div>').join('')||'<div class="kempty">'+(q?'Ничего не найдено.':'В этой выборке пока нет позиций.')+'</div>';
+  box.querySelectorAll('[data-stock-edit]').forEach(b=>b.onclick=()=>openStockItem(b.dataset.stockEdit));
+}
+function openStockItem(id){
+  stockEditId=id; const x=id?stockCatalog.find(r=>r.id===id):null;
+  $('stockFormTitle').textContent=x?'Изменить материал':'Новая позиция';
+  $('stockName').value=x?.name||''; $('stockSku').value=x?.sku||''; $('stockUnit').value=x?.unit||'шт';
+  $('stockPrice').value=x?.price??0; $('stockCost').value=x?.cost??0; $('stockActive').checked=x?.active!==false;
+  $('stockSourceNote').textContent=x?.legacy_part_id?'Эта позиция перенесена из ранее внесённой строки. Изменение справочника не изменит сохранённые значения в заявках.':'';
+  $('stockErr').textContent=''; $('stockOverlay').classList.add('on'); $('stockName').focus();
+}
+$('stockAdd').onclick=()=>openStockItem(null);
+$('stockCancel').onclick=()=>$('stockOverlay').classList.remove('on');
+$('stockSearch').oninput=()=>renderStockCatalog();
+$('stockShowInactive').onchange=()=>renderStockCatalog();
+$('stockSave').onclick=async()=>{
+  const name=$('stockName').value.trim(),sku=$('stockSku').value.trim(),unit=$('stockUnit').value.trim();
+  const price=Number($('stockPrice').value),cost=Number($('stockCost').value);
+  if(!name||!unit){$('stockErr').textContent='Укажи название и единицу измерения.';return;}
+  if(!Number.isFinite(price)||price<0||!Number.isFinite(cost)||cost<0){$('stockErr').textContent='Цена и себестоимость должны быть неотрицательными числами.';return;}
+  if(stockCatalog.some(x=>x.id!==stockEditId&&x.active&&x.name.trim().toLowerCase()===name.toLowerCase()&&x.unit.trim().toLowerCase()===unit.toLowerCase())){$('stockErr').textContent='Активная позиция с таким названием и единицей уже есть.';return;}
+  const rec={name,sku,unit,price,cost,active:$('stockActive').checked}; $('stockSave').disabled=true;
+  const result=stockEditId?await sb.from('stock_catalog').update(rec).eq('id',stockEditId):await sb.from('stock_catalog').insert(rec);
+  $('stockSave').disabled=false;
+  if(result.error){$('stockErr').textContent='Ошибка: '+result.error.message;return;}
+  $('stockOverlay').classList.remove('on');stockCatalog=[];await renderStockCatalog();showToast('Позиция сохранена');
+};
 
 // ---------- geocode ----------
 // Nominatim просит не чаще одного запроса в секунду и не любит очередей.
