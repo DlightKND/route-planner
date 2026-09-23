@@ -117,9 +117,9 @@ it('backfills a legacy work and part as immutable financial snapshots on the req
 
 it('prevents an imported financial line from being deleted or having its snapshots rewritten',async()=>{
   await expect(q('delete from service_order_items where legacy_job_work_id=$1',[id(60)])).rejects.toThrow(/нельзя удалить/);
-  await expect(q('update service_order_items set financial_revenue_snapshot=0 where legacy_job_work_id=$1',[id(60)])).rejects.toThrow(/снимок.*неизменяем/);
-  await q("update service_order_items set planned_qty=3 where legacy_job_work_id=$1",[id(60)]);
-  expect((await q('select financial_revenue_snapshot,planned_qty from service_order_items where legacy_job_work_id=$1',[id(60)]))[0]).toMatchObject({financial_revenue_snapshot:'1200',planned_qty:'3'});
+  await expect(q('update service_order_items set financial_revenue_snapshot=0 where legacy_job_work_id=$1',[id(60)])).rejects.toThrow(/заблокирована до переключения/);
+  await expect(q("update service_order_items set planned_qty=3 where legacy_job_work_id=$1",[id(60)])).rejects.toThrow(/заблокирована до переключения/);
+  expect((await q('select financial_revenue_snapshot,planned_qty from service_order_items where legacy_job_work_id=$1',[id(60)]))[0]).toMatchObject({financial_revenue_snapshot:'1200',planned_qty:'2.5'});
 });
 
 it('creates one-request tasks through the manager RPC and rejects reassignment',async()=>{
