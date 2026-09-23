@@ -9,9 +9,18 @@ beforeAll(async()=>{
   db=new PGlite();
   await db.exec(readFileSync(new URL('./fixtures/trip-workbench-base.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260921133835_trip_workbench.sql',import.meta.url),'utf8'));
-  await db.exec('alter function job_point(uuid) set search_path=public; create table public.job_parts(id uuid primary key,job_id uuid,name text,sku text,unit text,qty numeric,price numeric,cost numeric,created_at timestamptz default now(),created_by uuid);');
-  await q("insert into clients values($1,'A',50,30),($2,'B',51,31),($3,'C',52,32)",[id(20),id(21),id(22)]);
-  await q('insert into jobs(id,client_id) values($1,$2),($3,$4),($5,$6)',[id(10),id(20),id(11),id(21),id(12),id(22)]);
+  await db.exec(`alter function job_point(uuid) set search_path=public;
+    create table public.job_parts(id uuid primary key,job_id uuid,name text,sku text,unit text,qty numeric,price numeric,cost numeric,billable boolean default true,approved_at timestamptz,approved_by uuid,created_at timestamptz default now(),created_by uuid);
+    create table public.work_catalog(id uuid primary key,name text);
+    create table public.job_works(id uuid primary key,job_id uuid,work_id uuid,hours numeric,materials jsonb,billable boolean,billable_reason text,revenue numeric,created_at timestamptz,title text,revenue_override numeric,tariff_profile text,approved_at timestamptz,approved_by uuid);`);
+  await q("insert into clients values($1,'A',50,30),($2,'B',51,31),($3,'C',52,32),($4,'D',53,33)",[id(20),id(21),id(22),id(23)]);
+  await q('insert into jobs(id,client_id) values($1,$2),($3,$4),($5,$6),($7,$8)',[id(10),id(20),id(11),id(21),id(12),id(22),id(13),id(23)]);
+  await q("insert into work_catalog values($1,'Диагностика')",[id(80)]);
+  await q("insert into job_works(id,job_id,work_id,hours,materials,billable,billable_reason,revenue,created_at,title,revenue_override,tariff_profile,approved_at,approved_by) values($1,$2,$3,2.5,'[]',true,'',1200,'2026-09-20T10:00:00Z','',null,'client','2026-09-21T10:00:00Z',$4)",[id(60),id(10),id(80),id(1)]);
+  await q("insert into job_works(id,job_id,work_id,hours,materials,billable,billable_reason,revenue,created_at,title,revenue_override,tariff_profile,approved_at,approved_by) values($1,$2,$3,1,'[]',false,'Гарантия',250,'2026-09-20T10:00:00Z','',null,'warranty','2026-09-21T10:00:00Z',$4)",[id(61),id(13),id(80),id(1)]);
+  await q("insert into job_parts(id,job_id,name,sku,unit,qty,price,cost,billable,approved_at,approved_by,created_by) values($1,$2,'Фильтр','F-1','шт',2,100,55,true,'2026-09-21T11:00:00Z',$3,null)",[id(70),id(10),id(1)]);
+  await q("insert into job_parts(id,job_id,name,sku,unit,qty,price,cost,billable,approved_at,approved_by,created_by) values($1,$2,'Прокладка','P-1','шт',1,30,15,false,'2026-09-21T11:00:00Z',$3,null)",[id(71),id(13),id(1)]);
+  await db.exec("alter table settings add column costs jsonb; update settings set costs='{\"hour\":750}' where id=true");
   await q("insert into trips(id,status) values($1,'planned'),($2,'planned'),($3,'finished')",[id(30),id(31),id(32)]);
   await q('insert into trip_jobs(trip_id,job_id,ord) values($1,$2,0),($1,$3,1),($4,$3,0),($5,$6,0)',[id(30),id(10),id(11),id(31),id(32),id(12)]);
   await q("insert into trip_stays(id,trip_id,job_id,stay_from,minutes_mgr,crew_ids,status) values($1,$2,$3,'2026-09-20 09:00Z',70,array[$5]::uuid[],'approved'),($4,$2,null,'2026-09-20 12:00Z',null,'{}','detected')",[id(40),id(30),id(10),id(41),id(3)]);
@@ -24,14 +33,22 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923154000_stock_catalog.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923183739_service_order_material_snapshots.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923210000_restore_task_link_invariants.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260924091500_legacy_finance_to_task_items.sql',import.meta.url),'utf8'));
 },30000);
 
 afterAll(async()=>{await db?.close();});
 
 it('seeds one task per request, even when a request has multiple trips',async()=>{
-  const rows=await q('select seed_request_id,job_id,count(*) over(partition by seed_request_id) duplicates from service_orders where seed_request_id is not null order by seed_request_id');
+  const rows=await q('select seed_request_id,job_id,count(*) over(partition by seed_request_id) duplicates from service_orders where seed_request_id in (select distinct job_id from trip_jobs) order by seed_request_id');
   expect(rows).toHaveLength(3);
   expect(rows.every(r=>r.job_id===r.seed_request_id&&Number(r.duplicates)===1)).toBe(true);
+});
+
+it('creates a draft seed task for a legacy financial request without inventing a trip',async()=>{
+  const [seed]=await q('select id,status,work_mode,job_id,seed_request_id from service_orders where seed_request_id=$1',[id(13)]);
+  expect(seed).toMatchObject({status:'draft',work_mode:'onsite',job_id:id(13),seed_request_id:id(13)});
+  expect(await q('select * from trip_service_orders where order_id=$1',[seed.id])).toHaveLength(0);
+  expect(await q('select order_id,job_id from service_order_jobs where order_id=$1',[seed.id])).toEqual([{order_id:seed.id,job_id:id(13)}]);
 });
 
 it('links a shared trip to all distinct request tasks and a request to all its trips',async()=>{
@@ -76,6 +93,33 @@ it('lets an assigned trip engineer read attached tasks under RLS',async()=>{
     const rows=await q('select o.id from service_orders o join trip_service_orders tso on tso.order_id=o.id where tso.trip_id=$1',[id(30)]);
     expect(rows).toHaveLength(2);
   }finally{await db.exec('reset role; rollback');}
+});
+
+it('backfills a legacy work and part as immutable financial snapshots on the request task',async()=>{
+  const [work]=await q('select order_id,job_id,kind,work_catalog_id,legacy_job_work_id,legacy_snapshot,planned_qty,done_qty,billable,financial_revenue_snapshot,financial_cost_snapshot,approved_at,approved_by from service_order_items where legacy_job_work_id=$1',[id(60)]);
+  expect(work).toMatchObject({job_id:id(10),kind:'work',work_catalog_id:id(80),legacy_job_work_id:id(60),planned_qty:'2.5',done_qty:'0',billable:true,approved_by:id(1)});
+  expect(Number(work.financial_revenue_snapshot)).toBe(1200);
+  expect(Number(work.financial_cost_snapshot)).toBe(1875);
+  expect(work.legacy_snapshot).toMatchObject({id:id(60),job_id:id(10),hours:2.5,revenue:1200});
+  const [part]=await q('select order_id,job_id,kind,legacy_job_part_id,legacy_snapshot,planned_qty,done_qty,stock_catalog_id,sku_snapshot,unit_price_snapshot,unit_cost_snapshot,financial_revenue_snapshot,financial_cost_snapshot,approved_at,approved_by from service_order_items where legacy_job_part_id=$1',[id(70)]);
+  expect(part).toMatchObject({job_id:id(10),kind:'material',legacy_job_part_id:id(70),planned_qty:'2',done_qty:'0',sku_snapshot:'F-1',approved_by:id(1)});
+  expect(Number(part.unit_price_snapshot)).toBe(100);
+  expect(Number(part.unit_cost_snapshot)).toBe(55);
+  expect(Number(part.financial_revenue_snapshot)).toBe(200);
+  expect(Number(part.financial_cost_snapshot)).toBe(110);
+  expect(part.legacy_snapshot).toMatchObject({id:id(70),job_id:id(10),qty:2,price:100,cost:55});
+  expect((await q('select count(*) n from service_order_items where legacy_job_work_id=$1 or legacy_job_part_id=$2',[id(60),id(70)]))[0].n).toBe(2);
+  const [warranty]=await q('select billable,billable_reason,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where legacy_job_work_id=$1',[id(61)]);
+  expect(warranty).toMatchObject({billable:false,billable_reason:'Гарантия',financial_revenue_snapshot:'250',financial_cost_snapshot:'750'});
+  const [warrantyPart]=await q('select billable,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where legacy_job_part_id=$1',[id(71)]);
+  expect(warrantyPart).toMatchObject({billable:false,financial_revenue_snapshot:'0',financial_cost_snapshot:'15'});
+});
+
+it('prevents an imported financial line from being deleted or having its snapshots rewritten',async()=>{
+  await expect(q('delete from service_order_items where legacy_job_work_id=$1',[id(60)])).rejects.toThrow(/нельзя удалить/);
+  await expect(q('update service_order_items set financial_revenue_snapshot=0 where legacy_job_work_id=$1',[id(60)])).rejects.toThrow(/заблокирована до переключения/);
+  await expect(q("update service_order_items set planned_qty=3 where legacy_job_work_id=$1",[id(60)])).rejects.toThrow(/заблокирована до переключения/);
+  expect((await q('select financial_revenue_snapshot,planned_qty from service_order_items where legacy_job_work_id=$1',[id(60)]))[0]).toMatchObject({financial_revenue_snapshot:'1200',planned_qty:'2.5'});
 });
 
 it('creates one-request tasks through the manager RPC and rejects reassignment',async()=>{
@@ -205,11 +249,11 @@ it('does not create duplicates when the legacy trip planner inserts a request af
   await db.exec('begin');
   await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
   await q('select set_config(\'test.uid\',$1,true)',[id(1)]);
-  await q("insert into clients values($1,'D',53,33)",[id(23)]);
-  await q('insert into jobs(id,client_id) values($1,$2)',[id(13),id(23)]);
+  await q("insert into clients values($1,'E',54,34)",[id(24)]);
+  await q('insert into jobs(id,client_id) values($1,$2)',[id(14),id(24)]);
   await q("insert into trips(id,status) values($1,'planned')",[id(33)]);
-  await q('insert into trip_jobs(trip_id,job_id,ord) values($1,$2,0)',[id(33),id(13)]);
-  const seeded=await q('select id from service_orders where seed_request_id=$1',[id(13)]);
+  await q('insert into trip_jobs(trip_id,job_id,ord) values($1,$2,0)',[id(33),id(14)]);
+  const seeded=await q('select id from service_orders where seed_request_id=$1',[id(14)]);
   const linked=await q('select order_id from trip_service_orders where trip_id=$1',[id(33)]);
   expect(seeded).toHaveLength(1);expect(linked.map(r=>r.order_id)).toEqual([seeded[0].id]);
   await db.exec('rollback');
