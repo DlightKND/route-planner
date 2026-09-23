@@ -1,5 +1,26 @@
 # Передача работы: сервисный диспетчер
 
+## Самая свежая точка: canonical financial reads (2026-09-24)
+
+- PR #77 слит: `d2fdc65c6ed0a35b1e9999a5f2e1db24dd90960b`, merge title включал `[deploy]`. Финальный PR CI run #336 успешен (lint, весь test suite, timezone suite, build и smoke). Первоначальный run #335 поймал синтаксическую ошибку вложенного embed; скобка исправлена, #336 прошёл. Live Pages stamp после deploy пока **не подтверждён**: sandbox вернул `environment_offline` при доступе к workspace, а web-fetch сайта недоступен. Не объявляй deployment подтверждённым, пока не сверил build stamp.
+- PR #77 переводит финансовые чтения списка заявок, dashboard, ленты/карты, маршрутов/выездов, карточки заявки, загрузки материалов и очереди подтверждения на `jobs → service_orders (service_orders_job_id_fkey) → service_order_items`. Чтение `job_works/job_parts` через embed или прямой `.select` удалено из этих app queries; старый UI/offline queue пока записывает в legacy source, trigger-ы синхронизируют source → canonical.
+- `src/core/legacy-finance.js` проецирует только строки с legacy provenance и восстанавливает поля старого API из `legacy_snapshot` и текущих canonical snapshot columns. Task-only scope пока не попадает в старые фин. агрегаты: правила цены/переноса/частичного факта ещё не реализованы; нельзя молча посчитать строку дважды. Это переходный мост, не завершённая модель экономики.
+- Удаление/отклонение импортированных работ и материалов заблокировано в старой форме; source delete trigger блокирует его и в БД. Разрешать удаление можно после разработки audited void/correction процесса.
+- Production migration ledger: `20260923230626 legacy_finance_to_task_items`, `20260923230641 legacy_finance_dualwrite`. Сверка: 17/17 работ, 131 час, 98,250 выручки, 98,250 себестоимости; 23/23 материала, 90 шт., 126,290 выручки, 88,451.49 себестоимости. Все source snapshots совпали построчно, `done_qty=0` у импортированных строк, 17 записей migration history. Источники сохранены.
+- PR #76 со значительно более подробной предыдущей контрольной точкой слит (`88f6e465e47cad65606e1248111f34b2c953cfa1`); этот раздел новее и дополняет его.
+
+### Следующие действия
+
+1. Восстановить workspace, проверить `git status`, обновить рабочую копию от remote `main`; PR #77 уже слит, его read-cutover code не восстанавливать повторно.
+2. Подтвердить Pages deploy из commit #77: сравнить встроенный build stamp live asset с локальной сборкой актуального `main`. Проверить PostgREST embeds `jobs → service_orders → service_order_items` и RLS в production; CI этого не доказывает.
+3. Описать экономику task-only work/material rows: work pricing/tariff, подтверждение, план/факт, billable revenue, частичное выполнение, `transferred_qty`/carry и правило суммирования без дубля. Заменить переходный adapter полноценной canonical economics model.
+4. Перевести request editor writes/offline queue на canonical item RPC/триггеры. Сейчас только legacy → canonical dual-write; обратная совместимость старых клиентов нужна до отключения legacy endpoints.
+5. Разработать audited void/correction для work/parts; не снимать DELETE guard раньше. Проверить approve/reject, engineer edits, offline replay и RLS.
+6. Инвентаризировать 7 старых заданий с `job_id=NULL` и `legacy_trip_id`; сохранить историю и ссылки, не объединять/удалять автоматически.
+7. Продолжать регулярно обновлять checkpoint. Пользователь разрешил автономные действия в репозитории и Supabase; не запрашивать разрешение повторно.
+
+---
+
 ## Контрольная точка: финансовый backfill и продолжение cutover (2026-09-24)
 
 Это верхнее состояние актуально; нижние пункты с более ранней датой описывают историю. Пользователь разрешил автономную работу в репозитории и production Supabase и поручил завершить переход на «заявка → задание ↔ выезд», включая связи, историю/таймлайн, комментарии, финансовые данные и миграцию. Общедоступный старый чат напрямую не удалось открыть; цель и согласованные инварианты восстановлены из предыдущей контрольной точки и репозитория.
