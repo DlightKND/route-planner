@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 167458)
-Total output lines: 8235
-
 // Приложение DLIGHT. Пока это цельный перенос боевого index.html в сборку:
 // код тот же, но теперь это модуль: ядро подключается импортом.
 // Обработчики вешаются из JS (.onclick=), инлайновых onclick в разметке нет,
@@ -2304,7 +2301,3317 @@ function gtWire(key,box){
     gtLaneMode[key]=select.value; gtSel=null; gtPaint(key); });
   box.querySelectorAll('[data-winline]').forEach(line=>line.onpointerdown=e=>{
     const kind=line.dataset.winline,engineer=line.dataset.engineer;if((kind!=='end'||role!=='engineer')&&!canWrite())return;
-    e.preventDefault();e.stopPropagation();const lane=…67458 tokens truncated…riff_profiles,ors_proxy,stay_radius_m,stay_min_minutes,'
+    e.preventDefault();e.stopPropagation();const lane=line.closest('.vg-day-lane'),R=lane.getBoundingClientRect(),iso=zoom,w=dayWindow(engineer,iso,gtSettings());let value=kind==='start'?w.start:(kind==='end'?w.end:w.ceiling);
+    line.setPointerCapture(e.pointerId);line.onpointermove=ev=>{value=q4(Math.max(0,Math.min(24,gtLaneTime(lane,ev.clientY-R.top))));const g=gtDayGeometry(gtWeekLanes(key),iso);line.style.top=g.yOf(value)+'px';line.querySelector('i').textContent=(kind==='tol'?'допуск ':(kind==='start'?'начало ':'конец '))+clockLabel(value);};
+    line.onpointerup=async ev=>{ev.stopPropagation();line.onpointermove=null;line.onpointerup=null;const old=staffDayMap[engineer+'|'+iso]||{},rec={engineer,date:iso,start_h:old.start_h,end_h:old.end_h,tol_h:old.tol_h};
+      if(role==='engineer'){const {error}=await sb.from('staff_day').upsert({engineer,date:iso,proposed_end_h:value,proposed_by:session.user.id,proposed_at:new Date().toISOString()});if(error)notify(error.message,'err');else showToast('Предложение отправлено менеджеру');}
+      else{if(kind==='start'){const delta=value-w.start;rec.start_h=value;rec.end_h=q4(w.end+delta);for(const b of gtBlocks()){const cuts=(b.plan&&b.plan.cuts)||[],changed=cuts.some(c=>c.at&&c.at.d===iso);if(changed){const next=cuts.map(c=>c.at&&c.at.d===iso?{...c,at:{...c.at,t:q4(Math.max(value,+c.at.t+delta))}}:c);await sb.from(String(b.id)[0]==='t'?'trips':'jobs').update({day_plan:{...b.plan,cuts:next}}).eq('id',String(b.id).slice(1));}}}else if(kind==='end')rec.end_h=value;else rec.tol_h=Math.max(0,q4(value-w.end));const {error}=await sb.from('staff_day').upsert(rec);if(error)notify(error.message,'err');else showToast('Рабочее окно обновлено');}
+      await loadStaffDays();await renderFeedAgain();};
+  });
+  box.querySelectorAll('[data-day-decide]').forEach(btn=>btn.onclick=async e=>{e.stopPropagation();const engineer=btn.dataset.engineer,o=staffDayMap[engineer+'|'+zoom];if(!o)return;const accept=btn.dataset.dayDecide==='accept',rec={...o,end_h:accept?o.proposed_end_h:o.end_h,proposed_end_h:null,proposed_by:null,proposed_at:null};const {error}=await sb.from('staff_day').upsert(rec);if(error)notify(error.message,'err');else showToast(accept?'Изменение подтверждено':'Предложение отклонено');await loadStaffDays();await renderFeedAgain();});
+  if(!zoom) box.querySelectorAll('.vg-lane').forEach(lane=>{
+    lane.onpointermove=e=>{
+      const y=e.clientY-lane.getBoundingClientRect().top,cells=[...lane.querySelectorAll('[data-vgday]')],cell=cells.find(x=>y>=x.offsetTop&&y<x.offsetTop+x.offsetHeight),i=Math.max(0,cells.indexOf(cell));
+      const iso=gtWeekDays(feedCtx.weeks[key])[i], hours=gtLaneLoad(lane.dataset.vglane,iso), shift=gtWindowHours();
+      const tip=lane.querySelector('.vg-tip');
+      if(tip){ tip.hidden=false; tip.style.top=((cell?cell.offsetTop:0)+(cell?cell.offsetHeight/2:20))+'px';
+        tip.textContent=WD_RU[(i+1)%7]+' '+shortDate(iso)+' · '+fmtH(hours)
+          +(feedCtx.mine?'':' / '+fmtH(shift)+' · '+Math.round(hours/shift*100)+'%'); }
+    };
+    lane.onpointerleave=()=>{ const tip=lane.querySelector('.vg-tip'); if(tip) tip.hidden=true; };
+    lane.onclick=e=>{ if(e.target.closest('.vg-block')) return;
+      const y=e.clientY-lane.getBoundingClientRect().top,cells=[...lane.querySelectorAll('[data-vgday]')],i=Math.max(0,cells.findIndex(x=>y>=x.offsetTop&&y<x.offsetTop+x.offsetHeight));
+      gtZoom[key]=gtWeekDays(feedCtx.weeks[key])[i]; gtSel=null; gtPaint(key);
+    };
+  });
+  box.querySelectorAll('[data-gdivide]').forEach(btn=>btn.onclick=e=>{
+    e.preventDefault();e.stopPropagation();const el=btn.closest('.vg-piece'),b=el&&gtFind(el.dataset.gb);if(!b)return;
+    const from=+el.dataset.pieceFrom,to=+el.dataset.pieceTo,mid=q4((from+to)/2);
+    el.classList.add('dividing');el.insertAdjacentHTML('beforeend','<div class="vg-cut"><input type="range" min="'+(from+.25)+'" max="'+(to-.25)+'" step=".25" value="'+mid+'"><span>режем в <b>'+clockLabel(mid)+'</b></span><button data-cut-ok>ОК</button><button data-cut-no>×</button></div>');
+    const cut=el.querySelector('.vg-cut'),range=cut.querySelector('input');range.oninput=()=>{cut.querySelector('b').textContent=clockLabel(+range.value);cut.style.top=((+range.value-from)/(to-from)*100)+'%';};
+    cut.querySelector('[data-cut-no]').onclick=x=>{x.stopPropagation();cut.remove();el.classList.remove('dividing');};
+    cut.querySelector('[data-cut-ok]').onclick=async x=>{x.stopPropagation();const after=q4((+el.dataset.pieceAt||0)+(+range.value-from)),cuts=(b.cuts||[]).filter(c=>Math.abs(+c.after-after)>.01);cuts.push({after,at:{d:el.dataset.pieceIso,t:q4(+range.value)}});cut.remove();await gtSaveCuts(b,cuts);};
+  });
+  if(zoom&&gtPendingDivide&&gtPendingDivide.iso===zoom){const btn=box.querySelector('[data-gdivide][data-gb="'+window.CSS.escape(String(gtPendingDivide.id))+'"], [data-gb="'+window.CSS.escape(String(gtPendingDivide.id))+'"] [data-gdivide]');gtPendingDivide=null;if(btn)requestAnimationFrame(()=>btn.click());}
+  box.querySelectorAll('.vg-piece').forEach(el=>{
+    el.onpointerdown=e=>{if(e.target.closest('button,input,.vg-cut'))return;e.stopPropagation();const lane=el.closest('.vg-day-lane'),R=lane.getBoundingClientRect(),b=gtFind(el.dataset.gb),y0=e.clientY,top0=el.offsetTop;let moved=false;
+      el.setPointerCapture(e.pointerId);el.onpointermove=ev=>{const dy=ev.clientY-y0;if(Math.abs(dy)>3)moved=true;el.style.top=Math.max(0,Math.min(R.height-el.offsetHeight,top0+dy))+'px';};
+      el.onpointerup=async ev=>{el.onpointermove=null;el.onpointerup=null;if(!moved){if(b.kind==='trip')openTrip(String(b.id).slice(1));else gtPop(key,b);return;}const t=q4(Math.max(0,Math.min(24,gtLaneTime(lane,ev.clientY-R.top))));await gtPinPiece(b,{at:+el.dataset.pieceAt},el.dataset.pieceIso,t);};};
+  });
+  if(!canWrite()){
+    // Просмотр графика не должен быть тупиком: инженер не может двигать
+    // блок, но может открыть сам выезд и увидеть маршрут, заявки и статус.
+    box.querySelectorAll('.vg-block.trip').forEach(el=>el.onclick=e=>{
+      e.stopPropagation(); const b=gtFind(el.dataset.gb); if(b) gtPop(key,b);
+    });
+    return;
+  }
+  box.querySelectorAll('.vg-block:not(.vg-piece)').forEach(el=>{
+    el.onpointerdown=e=>{
+      if(e.target.closest('button'))return;
+      const b=gtFind(el.dataset.gb);if(!b)return;
+      const movable=b.kind!=='trip'||b.status==='planned'||b.status==='assigned';
+      const lane=el.closest('.vg-lane'),laneId=lane&&lane.dataset.vglane,y0=e.clientY,pid=e.pointerId;
+      let moved=false,target=null,drop=null;
+      const cleanup=()=>{el.classList.remove('dragging');el.style.transform='';if(drop)drop.classList.remove('drop');const tip=lane&&lane.querySelector('.vg-tip');if(tip)tip.hidden=true;document.removeEventListener('pointermove',move,true);document.removeEventListener('pointerup',up,true);document.removeEventListener('pointercancel',cancel,true);document.removeEventListener('keydown',keyDown,true);gtDrag=null;};
+      const move=ev=>{if(ev.pointerId!==pid)return;const dy=ev.clientY-y0;if(Math.abs(dy)>4)moved=true;if(!moved)return;if(!movable)return;el.classList.add('dragging');el.style.transform='translateY('+dy+'px)';const hit=document.elementFromPoint(ev.clientX,ev.clientY),cell=hit&&hit.closest('.vg-cell[data-vgday]'),hitLane=cell&&cell.closest('.vg-lane');if(drop)drop.classList.remove('drop');drop=null;target=null;if(cell&&hitLane&&hitLane.dataset.vglane===laneId){const cr=cell.getBoundingClientRect(),top=+cell.dataset.vgtop,bot=+cell.dataset.vgbot;const t=Math.max(top,Math.min(bot,q4(top+(ev.clientY-cr.top)/GT_WEEK_PX_H)));target={iso:cell.dataset.vgday,t};drop=cell;drop.classList.add('drop');const tip=lane.querySelector('.vg-tip');if(tip){tip.hidden=false;tip.textContent=shortDate(target.iso)+' · '+clockLabel(target.t)+(cell.classList.contains('we')?' · выходной откроется выездом':'');tip.style.top=(cell.offsetTop+Math.min(cell.offsetHeight-8,Math.max(8,ev.clientY-cr.top)))+'px';}}};
+      const up=async ev=>{if(ev.pointerId!==pid)return;cleanup();if(!moved){gtSel=b.id;gtPaint(key);gtPop(key,b);return;}if(!movable){gtPop(key,b);notify('Начатый или завершённый выезд нельзя переносить жестом.','warn');return;}if(target)await gtSave(b,target);};
+      const cancel=ev=>{if(ev.pointerId===pid)cleanup();};const keyDown=ev=>{if(ev.key==='Escape')cleanup();};
+      gtDrag={id:b.id,block:b,element:el};try{el.setPointerCapture(pid);}catch(err){}
+      document.addEventListener('pointermove',move,true);document.addEventListener('pointerup',up,true);document.addEventListener('pointercancel',cancel,true);document.addEventListener('keydown',keyDown,true);
+    };
+  });
+}
+
+// ── Сохранение расстановки ──────────────────────────────────────────────
+async function gtSave(b,start){
+  if(!canWrite()) return;
+  const isTrip=String(b.id)[0]==='t';
+  const id=String(b.id).slice(1);
+  let plan=start?{start:{d:start.iso,t:q4(start.t)}}:null;
+  const oldPlan=b.plan||null,oldFrom=b.from,oldTo=b.to;
+  let calendarShift=0;
+  if(isTrip&&start&&b.from&&start.iso!==b.from)calendarShift=Math.round((utcOf(start.iso)-utcOf(b.from))/DAY_MS);
+  if(plan&&b.plan&&Array.isArray(b.plan.cuts)){
+    if(calendarShift)plan.cuts=b.plan.cuts.map(x=>({...x,at:{d:isoOf(utcOf(x.at.d)+calendarShift*DAY_MS),t:q4(+x.at.t)}}));
+    else{const dh=diffHours(gtStart(b),start,gtSettings());plan.cuts=b.plan.cuts.map(x=>{const p=addHours({iso:x.at.d,t:+x.at.t},dh,gtSettings());return {...x,at:{d:p.iso,t:q4(p.t)}};});}
+  }
+  const rec={day_plan:plan};
+  if(calendarShift){rec.date_from=start.iso;rec.date_to=isoOf(utcOf(b.to||b.from)+calendarShift*DAY_MS);}
+  try{
+    const {error}=await sb.from(isTrip?'trips':'jobs').update(rec).eq('id',id);
+    if(error) throw error;
+    if(calendarShift){const oldLabel=shortDate(oldFrom)+'–'+shortDate(oldTo||oldFrom),newLabel=shortDate(rec.date_from)+'–'+shortDate(rec.date_to);undoToast(oldLabel+' → '+newLabel,async()=>{const {error:e2}=await sb.from('trips').update({date_from:oldFrom,date_to:oldTo,day_plan:oldPlan}).eq('id',id);if(e2)notify(e2.message,'err');else await renderFeedAgain();});}
+    else showToast(start?'Расстановка сохранена':'Вернул автоматическую раскладку');
+    await renderFeedAgain();
+  }catch(e){ notify('Не сохранилось: '+((e&&e.message)||e),'err'); }
+}
+
+async function gtSaveCuts(b,cuts){
+  const isTrip=String(b.id)[0]==='t',id=String(b.id).slice(1);
+  const plan={start:{d:b.start.iso,t:q4(b.start.t)},cuts:(cuts||[]).map(c=>({after:q4(c.after),at:{d:c.at.d,t:q4(c.at.t)}})).sort((a,z)=>a.after-z.after)};
+  const {error}=await sb.from(isTrip?'trips':'jobs').update({day_plan:plan}).eq('id',id);
+  if(error){notify('Не сохранилось: '+error.message,'err');return false;}
+  showToast('Ручная раскладка сохранена');await renderFeedAgain();return true;
+}
+async function renderFeedAgain(){if(feedCtx&&feedCtx.mine)await renderMine();else await renderAttention();}
+function gtPop(key,b){
+  const old=document.querySelector('.gpop');if(old)old.remove();
+  const cuts=(b.cuts||[]).map(c=>({after:+c.after,at:{d:c.at.d,t:+c.at.t}}));
+  const trip=b.kind==='trip',action=trip?gtTripAction(b,true):null;
+  const tripTools=trip?'<div class="gp-f gp-trip-tools">'
+    +(action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'')
+    +((b.status==='planned'||b.status==='assigned')&&!reschedByTrip[b.tripId]?'<button class="btn sm" data-pop-resched>Перенести</button>':'')
+    +'<button class="btn sm ghost" data-pop-map>Карта</button>'
+    +((b.status==='finished'||b.status==='done')?'<button class="btn sm" data-pop-stays>Стоянки</button>':'')
+    +((b.status==='finished'||b.status==='done')?'<button class="btn sm amber" data-pop-stay-map>Привязка факта</button>':'')
+    +((b.status==='finished'||b.status==='done')&&canWrite()?'<button class="btn sm" data-pop-km>Пересчитать факт</button>':'')
+    +(canWrite()?'<button class="btn sm" data-pop-open>Открыть выезд</button>':'')+'</div>':'';
+  const selected=document.querySelector('.vg-block[data-gb="'+window.CSS.escape(String(b.id))+'"]'),selectedDay=selected&&selected.dataset.blockDay;
+  const h='<div class="gpop gpop-compact"><div class="gp-h">'+esc(gtBlockName(b))+'<span class="a-tag '+(cuts.length?'plan':'auto')+'">'+(cuts.length?'вручную':'авто')+'</span></div>'
+    +'<div class="gp-s">Перетащите отдельную плашку в увеличенном дне или создайте точку разреза.</div>'
+    +(selectedDay?'<button class="btn sm" data-pop-divide>Разделить в этом дне</button>':'')
+    +'<div class="gp-days">'+(cuts.length?cuts.map((c,i)=>'<div class="gp-r"><span class="gp-k">после '+fmtH(c.after)+'</span><b class="gp-v">'+shortDate(c.at.d)+' · '+String(Math.floor(c.at.t)).padStart(2,'0')+':'+String(Math.round(c.at.t%1*60)).padStart(2,'0')+'</b><button class="gp-b danger" data-cut-del="'+i+'">×</button></div>').join(''):'<div class="hint">Ручных разрезов нет</div>')+'</div>'
+    +tripTools+'<div class="gp-f"><button class="btn sm ghost" data-gclose>Закрыть</button>'+(b.manual?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div></div>';
+  document.body.insertAdjacentHTML('beforeend',h);const pop=document.body.lastElementChild;
+  pop.querySelectorAll('[data-cut-del]').forEach(x=>x.onclick=async e=>{e.stopPropagation();cuts.splice(+x.dataset.cutDel,1);pop.remove();await gtSaveCuts(b,cuts);});
+  const close=()=>{gtSel=null;pop.remove();gtPaint(key);};pop.querySelector('[data-gclose]').onclick=e=>{e.stopPropagation();close();};
+  const reset=pop.querySelector('[data-greset]');if(reset)reset.onclick=e=>{e.stopPropagation();pop.remove();gtSave(b,null);};pop.onclick=e=>e.stopPropagation();
+  const tool=(sel,fn)=>{const x=pop.querySelector(sel);if(x)x.onclick=async e=>{e.stopPropagation();pop.remove();await fn();};};
+  tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWrite()?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-stay-map]',()=>openStayBindingMap(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
+  tool('[data-pop-divide]',async()=>{gtZoom[key]=selectedDay;gtPendingDivide={id:String(b.id),iso:selectedDay};gtPaint(key);});
+  const el=document.querySelector('[data-gb="'+window.CSS.escape(String(b.id))+'"]');if(el&&!matchMedia('(max-width:600px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-348,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
+}
+async function gtPinPiece(b,piece,iso,t){
+  const cuts=(b.cuts||[]).filter(c=>Math.abs(+c.after-(+piece.at||0))>.01);
+  if((+piece.at||0)>0)cuts.push({after:q4(piece.at),at:{d:iso,t:q4(t)}});
+  else{b.start={iso,t:q4(t)};}
+  return gtSaveCuts(b,cuts);
+}
+// Клик мимо — закрыть модалку.
+document.addEventListener('click',e=>{
+  if(!gtSel) return;
+  if(e.target.closest('.gpop')||e.target.closest('.vg-block')||e.target.closest('.vg-gtitle')) return;
+  const key=Object.keys(gtOpen).find(k=>gtOpen[k]); gtSel=null; const pop=document.querySelector('.gpop'); if(pop) pop.remove(); if(key) gtPaint(key);
+});
+// Раскрыть / свернуть гант.
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-gtoggle]');
+  if(t){ const k=t.dataset.gtoggle; gtOpen[k]=!gtOpen[k]; gtApply(); return; }
+});
+
+// ── Одна арифметика загрузки на всё приложение ──────────────────────────
+// Полоска недели в ленте, подсказки на днях и карточка «Загрузка отдела»
+// обязаны считать одним и тем же. Пока у каждой был свой знаменатель —
+// у ленты «пять смен всегда» и все инженеры из справочника, у карточки
+// рабочие дни окна и только те, на ком есть работа, — одна и та же неделя
+// показывала 108 % в ленте и 70 % в карточке. Спорить с собой на одном
+// экране приложение не должно.
+function dayHours(plan){
+  const out={};
+  Object.keys((plan&&plan.load)||{}).forEach(k=>{ const l=plan.load[k];
+    const d=out[l.date]||(out[l.date]={workH:0,driveH:0,h:0});
+    d.workH+=l.workH; d.driveH+=l.driveH; d.h+=l.workH+l.driveH; });
+  return out;
+}
+// Сколько инженеров считать фондом. Справочник — источник правды; если роли
+// ещё не расставлены, берём тех, на ком реально висит работа, иначе фонд
+// оказался бы нулевым и любые часы давали бы бесконечный процент.
+function engineersCount(plan){
+  const n=(profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim()).length;
+  if(n) return n;
+  const lanes={};
+  Object.keys((plan&&plan.load)||{}).forEach(k=>{ const e=k.split('|')[0]; if(e!==' free') lanes[e]=1; });
+  return Math.max(1,Object.keys(lanes).length);
+}
+
+function planOfData(list,tripOf,tripById,tripOrd,includeDone){
+  const bb=buildBlocks(list,tripOf,tripById,tripOrd,includeDone);
+  const plan=planSchedule(bb.blocks,gtSettings(bb.blocks),{today:todayISO()});
+  return {plan:plan,blockOf:bb.blockOf};
+}
+
+function tripTagHtml(j,tripOf,tripById){
+  if(j.at_depot) return '<span class="a-tag dep">в депо</span>';
+  const tid=tripOf[j.id];
+  if(!tid) return '<span class="a-tag none">без выезда</span>';
+  const t=tripById[tid];
+  // Короткие даты: полное «10 августа–11 сентября» в пилюле шириной
+  // в треть экрана переносится и рвёт строку.
+  const per=t&&t.date_from?(shortDate(t.date_from)+(t.date_to&&t.date_to!==t.date_from?('–'+shortDate(t.date_to)):'')):'';
+  return '<span class="a-tag has">с выездом'+(per?(' · '+esc(per)):'')+'</span>';
+}
+
+async function renderFeed(box,o){
+  o=o||{};
+  if(!box) return;
+  box.innerHTML='<div class="shim" role="status" aria-label="Загрузка данных"></div>';
+  try{
+    await ensureRefs(); await loadStaffDays();
+    // Заявки со сроком, клиентом, техникой и работами — всё, что нужно ленте.
+    let list=null, tripOf={}, tripById={}, tripOrd={}, offline=false, snapAt=0, orphanLinks=0;
+    try{
+      const { data, error }=await sb.from('jobs')
+        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), job_works(hours,billable)')
+        .is('deleted_at',null);
+      if(error) throw error;
+      list=data||[];
+      // Какая заявка в каком выезде. Нужно и для метки, и для кнопок:
+      // «Начать выезд» относится к выезду, а виден он через его заявки.
+      //
+      // Выезды читаем ПЕРВЫМИ, а связи — только те, чей выезд действительно
+      // есть. Связь в trip_jobs переживает удаление выезда (там мягкое
+      // удаление, строки связей остаются), и заявка продолжала носить метку
+      // «с выездом», указывающую в никуда: в одну карточку такие заявки не
+      // собирались — собирать было не во что, — а метка обещала обратное.
+      const { data:tr, error:trErr }=await sb.from('trips').select('*, vehicles(name,plate)').is('deleted_at',null);
+      if(trErr) throw trErr;
+      (tr||[]).forEach(t=>{ tripById[t.id]=t; tripCache[t.id]=t; });
+      const { data:tj, error:tjErr }=await sb.from('trip_jobs').select('job_id,trip_id,ord');
+      if(tjErr) throw tjErr;
+      (tj||[]).forEach(r=>{ const t=tripById[r.trip_id];
+        if(t&&t.status!=='cancelled'){ tripOf[r.job_id]=r.trip_id; tripOrd[r.job_id]=(+r.ord||0); }
+        else orphanLinks++; });
+      await loadRescheds();
+      if(o.mine) snapSet('mine',{list,tripOf,tripById,tripOrd});
+    }catch(e){
+      // Инженер открывает этот экран первым и нередко без связи.
+      const s=o.mine?await snapGet('mine'):null;
+      if(s&&s.val&&s.val.list){ list=s.val.list; tripOf=s.val.tripOf||{}; tripById=s.val.tripById||{}; tripOrd=s.val.tripOrd||{};
+        Object.values(tripById).forEach(t=>{ tripCache[t.id]=t; }); snapAt=s.at; offline=true; }
+      else { box.innerHTML='<div class="err">'+esc((e&&e.message)||e)+'</div>'; return; }
+    }
+
+    // Инженер видит только свои заявки — как в канбане (см. renderJobs).
+    if(o.mine||role==='engineer'){
+      list=list.filter(j=>assignedTo(j,session.user.id,'assigned_engineer'))
+        .map(j=>({...j,assigned_engineer:session.user.id}));
+      Object.keys(tripById).forEach(id=>{
+        const t=tripById[id];
+        if(assignedTo(t,session.user.id,'lead_engineer')) tripById[id]={...t,lead_engineer:session.user.id};
+      });
+    }
+
+    const b0=attentionBuckets(list, new Date());
+    const dated=b0.dated; let cold=b0.cold;
+
+    // Поле называется full_name — так его читают все остальные восемь мест
+    // в файле.
+    const u2=j=>Math.round((utcOf(j.due_date)-utcOf(todayISO()))/DAY_MS);
+    const engName=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||''):''; };
+    const hours=jobHours;
+    const shift=gtWindowHours();
+
+    // ── Группировка по дате срока ────────────────────────────────────────
+    // ── Календарный план ─────────────────────────────────────────────────
+    //
+    // Срок (SLA) — это обещание клиенту, а не день работы. Раньше лента
+    // группировалась по сроку, и на карточке стояла дата, в которую никто
+    // не собирался приезжать: у выезда с 9 по 11 сентября все три заявки
+    // лежали под своими сроками, а сами даты выезда не показывались нигде.
+    //
+    // Теперь день работы считает планировщик (src/core/schedule.js): даты
+    // выезда, поставленные диспетчером, он берёт как есть, остальному
+    // подбирает дни от срока назад — по часам работ, смене и допуску, с
+    // дорогой по плечам маршрута. На карточке стоит эта дата с меткой
+    // «план» (руками) или «авто» (подобрано), а срок — рядом.
+    const pd=planOfData(list,tripOf,tripById,tripOrd);
+    const plan=pd.plan, blockOf=pd.blockOf;
+    const ganttPlan=dashRanges.gt.from<todayISO()?planOfData(list,tripOf,tripById,tripOrd,true).plan:plan;
+
+    // ── Группы = БЛОКИ ───────────────────────────────────────────────────
+    //
+    // Одна карточка — одна единица планирования. Выезд едет целиком: его
+    // заявки нельзя развести по разным дням, как нельзя разрезать машину.
+    // Раньше группа собиралась по дате, и две точки одного выезда с разными
+    // сроками оказывались в двух карточках на расстоянии двух недель.
+    // Если выезд не помещается, это не повод его порвать — это повод сказать
+    // админу, что его надо перекомпоновать (см. плашку «График не сходится»).
+    const jobById={}; list.forEach(j=>{ jobById[j.id]=j; });
+    const uOf={}; dated.forEach(({job,u})=>{ uOf[job.id]=u; });
+    const coldU={level:'cold',left:null};
+    const today0=utcOf(todayISO());
+    const groups=plan.blocks.map(b=>{
+      const jobs=b.jobIds.map(id=>jobById[id]).filter(Boolean);
+      // Острота группы — самая острая из её заявок; у выезда без сроков
+      // острота холодная, но день работы у него всё равно есть.
+      let u=null, sla=null, slaMax=null, left=null;
+      jobs.forEach(j=>{ const x=uOf[j.id]; if(!x) return;
+        if(!u||urgencyRank(x.level)<urgencyRank(u.level)) u=x;
+        if(x.left!=null&&(left==null||x.left<left)) left=x.left;
+        if(j.due_date){ if(!sla||j.due_date<sla) sla=j.due_date;
+          if(!slaMax||j.due_date>slaMax) slaMax=j.due_date; } });
+      return {id:b.id,kind:b.kind,date:b.from,to:b.to,workFrom:b.workFrom,workTo:b.workTo,
+        jobDays:b.jobDays||{},lateSet:new Set((b.lateJobs||[]).map(x=>String(x.id))),
+        fixed:b.fixed,why:b.ok?'':b.why,trip:b.kind==='trip'?tripById[b.id.slice(1)]:null,
+        jobs:jobs,h:jobs.reduce((x,j)=>x+hours(j),0),
+        drive:(b.driveToH||0)+(b.driveBackH||0)+(b.driveMidH||0),
+        u:u||coldU,left:left==null?9999:left,sla:sla,slaMax:slaMax,
+        dleft:Math.round((utcOf(b.from)-today0)/DAY_MS)};
+    }).filter(g=>g.jobs.length).sort((a,b)=>utcOf(a.date)-utcOf(b.date));
+    // Холодные, попавшие в выезд, из холодных уходят: они уже запланированы.
+    cold=cold.filter(j=>!blockOf[j.id]);
+    if(!groups.length && !(o.cold&&cold.length)){
+      box.innerHTML=(offline?offlineBanner(snapAt):'')
+        +'<div class="aempty">'+(o.mine?'Работы на тебе нет.':'Заявок нет.')+'</div>';
+      return;
+    }
+
+    // ── Лента: градиент по остроте групп сверху вниз ─────────────────────
+    // Остановки ставим в процентах, а не в пикселях: высота карточек
+    // заранее неизвестна, а долю каждой группы мы знаем всегда.
+    const N=groups.length;
+    const stops=[];
+    stops.push(urgHue(groups[0].u)+' 0%');
+    groups.forEach((g,i)=>stops.push(urgHue(g.u)+' '+((i+0.5)/N*100).toFixed(1)+'%'));
+    stops.push(urgHue(groups[N-1].u)+' 100%');
+
+    // Перегруз и опоздание — сигнал тому, кто ставит даты. Инженеру его не
+    // показываем: разложить график не в его власти.
+    const planWarn=(!o.mine&&plan.warnings.length)?(function(){
+      const nameOf=id=>{ const raw=String(id).slice(1);
+        if(String(id)[0]==='t'){ const t=tripById[raw]; return 'Выезд'+(t&&t.date_from?(' '+shortDate(t.date_from)):''); }
+        const j=list.find(x=>String(x.id)===raw); return (j&&j.clients&&j.clients.name)||'Заявка'; };
+      const wText=w=>w.kind==='overflow'
+        ? (w.fixed
+            ? ('даты выставлены вручную, но работа в них не помещается — перегружено '
+               +w.days+' '+plural(w.days,'день','дня','дней')+', с '+shortDate(w.date))
+            : ('свободных дней нет — работа встала поверх занятых, с '+shortDate(w.date)))
+        : ('к сроку '+shortDate(w.sla)+' не успеваем: работа заканчивается '+shortDate(w.date));
+      const items=plan.warnings.slice(0,4).map(w=>'<li>'+esc(nameOf(w.blockId))+' — '+esc(wText(w))+'</li>').join('');
+      const more=plan.warnings.length>4?('<div class="hint">и ещё '+(plan.warnings.length-4)+'</div>'):'';
+      // Выезд — одна единица: сам график его не разрежет. Что с ним делать,
+      // решает человек, и подсказка называет ровно те два способа.
+      const tips=plan.warnings.some(w=>String(w.blockId)[0]==='t')
+        ? '<div class="hint">Выезд едет целиком — раздвинь его даты или разбей на два выезда.</div>' : '';
+      return '<div class="planwarn"><b>График не сходится</b><ul>'+items+'</ul>'+more+tips+'</div>';
+    })():'';
+
+    // Очередь проверки. Менеджер должен видеть, что внесённое инженером
+    // ждёт его, не открывая заявки по одной. Считаем ТОЛЬКО числа: список
+    // здесь был бы вторым списком заявок на экране, где уже есть один.
+    let pendParts=0,pendWorks=0,openFix=0;
+    if(!o.mine){
+      try{
+        const q=async (tbl,col,val)=>{ const r=val===null
+            ? await sb.from(tbl).select('id',{count:'exact',head:true}).is(col,null)
+            : await sb.from(tbl).select('id',{count:'exact',head:true}).eq(col,val);
+          if(r.error) throw r.error; return r.count||0; };
+        pendParts=await q('job_parts','approved_at',null);
+        pendWorks=await q('job_works','approved_at',null);
+        openFix  =await q('job_change_requests','status','open');
+      }catch(e){ /* миграция ещё не накатана — о ней скажет слепок сборки */ }
+    }
+    const pendNote=(pendParts+pendWorks+openFix)
+      ? ('<div class="planwarn soft"><b>Ждёт вашей проверки</b><ul>'
+         +((pendParts+pendWorks)?('<li>'+(pendParts+pendWorks)+' '
+             +plural(pendParts+pendWorks,'строка от инженера ждёт','строки от инженера ждут','строк от инженера ждут')
+             +' подтверждения'
+             +(pendParts?(' · запчастей '+pendParts):'')
+             +(pendWorks?(' · работ '+pendWorks):'')+'</li>'):'')
+         +(openFix?('<li>'+openFix+' '+plural(openFix,'предложение правки','предложения правок','предложений правок')
+             +' ждёт решения</li>'):'')
+         +'</ul></div>')
+      : '';
+
+    // Висячие связи: заявка числится в выезде, которого больше нет. Молча
+    // это выглядит как «лента развалила выезд на отдельные карточки», хотя
+    // разваливать нечего — выезд удалён, а строка связи осталась.
+    const orphanNote=(!o.mine&&orphanLinks)
+      ? ('<div class="planwarn"><b>Связи без выезда</b><ul><li>'+orphanLinks+' '
+         +plural(orphanLinks,'заявка числится','заявки числятся','заявок числятся')
+         +' в удалённых или отменённых выездах — показаны как «без выезда» '
+         +'и в графике стоят порознь. Собрать их обратно можно только новым выездом.</li></ul></div>')
+      : '';
+
+    const firstMotion=!motionPainted.has(box);
+    let h=(offline?offlineBanner(snapAt):'')+orphanNote+pendNote+'<div class="vg-feed'+(firstMotion?' first-enter':'')+'">'+rangeBar('gt');
+
+    // ── Просрочка: колода ────────────────────────────────────────────────
+    //
+    // Просроченное важно, но это ФОН, а не работа на сегодня: его нельзя
+    // сделать вовремя, оно уже опоздало. Развёрнутым списком оно занимало
+    // верх экрана и каждое утро отодвигало вниз то, что человек ещё может
+    // успеть. Поэтому просрочка лежит колодой: одна карточка со сводкой,
+    // из-под неё выглядывают края остальных — видно, что там не одна.
+    // Нажатие раскрывает её в обычные группы, те же, что ниже.
+    //
+    // Пульсация — та же, что у восклицательного знака на карте: ровно
+    // один элемент на экране имеет право двигаться, и это тот, мимо
+    // которого нельзя пройти.
+    const over=groups.filter(g=>g.left<0);
+    const rest=groups.filter(g=>g.left>=0);
+    const overN=over.reduce((a,g)=>a+g.jobs.length,0);
+    const overH=over.reduce((a,g)=>a+g.h,0);
+    const oldest=over.length?Math.max.apply(null,over.map(g=>-g.left)):0;
+
+    // ── Загрузка по рабочим неделям ──────────────────────────────────────
+    //
+    // Часы считаем так же, как карточка «Загрузка инженеров»: работы плюс
+    // дорога. Дорога берётся из снимка выезда и делится по его дням, а не
+    // приписывается одному — иначе выезд с 4 по 11 сентября отдавал бы все
+    // свои 14 часов одному дню.
+    //
+    // Ёмкость недели — пять смен. У менеджера в ленте заявки ВСЕХ
+    // инженеров, поэтому и ёмкость общая: пять смен на каждого действующего.
+    // Мерить командную неделю одной сменой значило бы показывать 400 %
+    // на ровном месте.
+    // Часы дня берём у планировщика: он уже разложил и работу, и дорогу
+    // по тем дням, в которые их делают. Прежняя раскладка делила дорогу
+    // поровну на все дни выезда и приписывала работу дню срока — то есть
+    // показывала загрузку не тех дней.
+    const dayH=dayHours(ganttPlan);
+    // Заявка считается в тот день, в который её ДОДЕЛЫВАЮТ. Раньше она
+    // считалась в каждый рабочий день своего блока, и у выезда на неделю
+    // все пять дней показывали одни и те же «2 заявки».
+    const dayJobs={};
+    ganttPlan.blocks.forEach(b=>{ const jd=b.jobDays||{};
+      (b.jobIds||[]).forEach(id=>{ const d=jd[id]||b.workTo; if(d) dayJobs[d]=(dayJobs[d]||0)+1; }); });
+    const engN=o.mine?1:engineersCount(plan);
+    const dayCap=shift*engN;
+    // В личном графике дорожка одна, поэтому чип может честно показать
+    // порядок внутри смены (дорога → работа → дорога), а не только суммы
+    // двух цветов. Для отдела с несколькими инженерами оставляем сводную
+    // шкалу: их параллельные часы в одну временную ось складывать нельзя.
+    const dayPieces={};
+    if(engN===1){
+      ganttPlan.blocks.forEach(b=>(b.pieces||[]).forEach(p=>{
+        (dayPieces[p.iso]||(dayPieces[p.iso]=[])).push(p);
+      }));
+      Object.keys(dayPieces).forEach(d=>dayPieces[d].sort((a,b)=>a.from-b.from));
+    }
+    const rawWeeks={};
+    Object.keys(dayH).forEach(d=>{ const w=weekOf(d); if(!w) return;
+      const it=rawWeeks[w.key]||(rawWeeks[w.key]={w,h:0,n:0,days:{},spanWeeks:1,sourceKeys:[w.key]});
+      it.h+=dayH[d].h; it.days[d]=(it.days[d]||0)+dayH[d].h; });
+    Object.keys(dayJobs).forEach(d=>{ const w=weekOf(d); if(!w) return;
+      const it=rawWeeks[w.key]||(rawWeeks[w.key]={w,h:0,n:0,days:{},spanWeeks:1,sourceKeys:[w.key]});
+      it.n+=dayJobs[d]; });
+    // Если будущий выезд действительно занял выходной и пересёк границу
+    // недели, соседние недели становятся одной высокой секцией. Так
+    // воскресенье и понедельник остаются в одной временной карте.
+    const rawKeys=Object.keys(rawWeeks).sort(),weeks={};
+    for(let i=0;i<rawKeys.length;){let keys=[rawKeys[i]],end=i;
+      while(end+1<rawKeys.length){const a=rawWeeks[rawKeys[end]],z=rawWeeks[rawKeys[end+1]];if(z.w.mon-a.w.mon!==7*DAY_MS)break;
+        const dates=new Set();for(let q=a.w.mon;q<z.w.mon+7*DAY_MS;q+=DAY_MS)dates.add(isoOf(q));
+        const joins=ganttPlan.blocks.some(b=>{const ps=(b.pieces||[]).filter(p=>dates.has(p.iso)),wk=new Set(ps.map(p=>weekOf(p.iso)&&weekOf(p.iso).key));return wk.has(rawKeys[end])&&wk.has(rawKeys[end+1])&&ps.some(p=>{const d=new Date(utcOf(p.iso)).getUTCDay();return d===0||d===6;})&&utcOf(ps[0].iso)>=utcOf(todayISO());});
+        if(!joins)break;keys.push(rawKeys[++end]);}
+      const first=rawWeeks[keys[0]],id=keys.join('+'),merged={w:first.w,h:0,n:0,days:{},spanWeeks:keys.length,sourceKeys:keys};
+      keys.forEach(k=>{const x=rawWeeks[k];merged.h+=x.h;merged.n+=x.n;Object.assign(merged.days,x.days);});weeks[id]=merged;i=end+1;
+    }
+    // Визуальная сетка получает уже рассчитанные pieces/load. Здесь нет
+    // второй арифметики расписания — только группировка готовых данных по неделям.
+    feedCtx={plan:ganttPlan,weeks:weeks,dayH:dayH,engN:engN,shift:shift,mine:!!o.mine,
+      nameOf:engName,jobName:id=>{ const j=jobById[id]; return j&&j.clients?j.clients.name:''; }};
+    let weekKeys=Object.keys(weeks).sort();
+    weekKeys=weekKeys.filter(k=>{const w=weeks[k],a=isoOf(w.w.mon),z=isoOf(w.w.mon+(7*(w.spanWeeks||1)-1)*DAY_MS);return z>=dashRanges.gt.from&&a<=dashRanges.gt.to;});
+    if(weekKeys.length&&!weekKeys.some(k=>Object.prototype.hasOwnProperty.call(gtOpen,k))){
+      const current=weekOf(todayISO());
+      if(current&&weeks[current.key]) gtOpen[current.key]=true;
+    }
+    function weekHtml(key){
+      const it=weeks[key], lanes=gtWeekLanes(key), days=gtWeekDays(it);
+      const blocks=ganttPlan.blocks.filter(b=>(b.pieces||[]).some(p=>days.includes(p.iso)));
+      const total=blocks.reduce((n,b)=>n+(b.pieces||[]).filter(p=>days.includes(p.iso)).reduce((x,p)=>x+p.h,0),0);
+      const capacity=lanes.reduce((sum,l)=>sum+days.reduce((n,iso)=>{const w=dayWindow(l.id,iso,gtSettings());return n+(w?Math.max(.25,w.end-w.start):0);},0),0);
+      const pct=Math.round(total/Math.max(.25,capacity)*100), problem=o.mine?'':gtWeekProblem(key,lanes);
+      let mini='';
+      days.forEach(iso=>{
+        const maxP=Math.max(0,...lanes.map(l=>{const w=dayWindow(l.id,iso,gtSettings());return gtLaneLoad(l.id,iso)/Math.max(.25,w?w.end-w.start:gtWindowHours());}));
+        mini+='<i style="height:'+Math.max(3,Math.min(14,maxP*11))+'px;background:'+loadWash(maxP)+'"></i>';
+      });
+      const summary=blocks.length+' '+plural(blocks.length,'блок','блока','блоков')+' · '+fmtH(total);
+      const weekStyle=' style="--entry-delay:'+Math.min(3,weekKeys.indexOf(key))*50+'ms"';
+      return '<section class="wkrow'+(gtOpen[key]?' open':'')+'" data-wk="'+esc(key)+'"'+weekStyle+'>'
+        +'<button class="wk-h" type="button" data-gtoggle="'+esc(key)+'" aria-expanded="'+(gtOpen[key]?'true':'false')+'">'
+          +'<span class="wk-copy"><b>'+(it.spanWeeks>1?'Недели '+it.sourceKeys.map(k=>rawWeeks[k].w.n).join('–'):'Неделя '+it.w.n)+' · '+esc(shortDate(days[0])+'–'+shortDate(days[days.length-1]))+'</b><span>'+summary
+          +(problem?(' · <strong>'+esc(problem)+'</strong>'):'')+'</span></span>'
+          +(o.mine?'':'<span class="wk-mini" aria-label="Загрузка недели">'+mini+'</span><span class="wk-pct">'+pct+'%</span>')+'<span class="wk-chev">⌄</span>'
+        +'</button><div class="gtwrap" data-gtbox="'+esc(key)+'" '+(gtOpen[key]?'':'hidden')+'></div></section>';
+    }
+
+    // ── Группы ───────────────────────────────────────────────────────────
+    let prevLeft=0;
+    const shownTrips=new Set();
+    // Кнопки выезда достаются ближайшей ВИДИМОЙ группе, поэтому сперва
+    // собираем то, что впереди, и только потом просрочку: иначе выезд,
+    // задевающий обе части, спрятал бы свои кнопки в закрытой колоде.
+    const groupHtml=(g,gi,lead)=>{
+      let h='';
+      // Разрыв шкалы: пустые недели схлопываем в подпись, иначе ближние
+      // сроки слиплись бы в верхней трети, а дальний уехал бы в одиночестве.
+      // Пустые недели считаем только вперёд: окно между просроченной
+      // заявкой и следующим сроком частью лежит в прошлом, и писать
+      // «три недели без сроков» про уже прошедшие дни — неправда.
+      const gapW=Math.floor((g.dleft-Math.max(0,prevLeft))/7);
+      if(gapW>=3) h+='<div class="a-break"><span>'+gapW+' '+plural(gapW,'неделя','недели','недель')+' без работ</span></div>';
+      prevLeft=g.dleft;
+
+      // Первая группа — ближайшая по сроку, и ей отдаётся высота.
+      //
+      // Экран читают на ходу, одной рукой, не всегда глядя. Если все
+      // карточки одного роста, глаз каждый раз заново ищет, с чего начать,
+      // — а начинать всегда надо с верхней. Крупный кегль, техника и часы
+      // в строке, кнопки выезда прямо здесь: первое дело видно целиком,
+      // не разворачивая. Остальное ниже — теми же строками, что в сводке,
+      // и добирается прокруткой.
+      const col=urgHue(g.u);
+      const n=g.jobs.length;
+      const dia=Math.round((lead?17:13)+Math.min(1,g.h/24)*11);
+      const engs=[...new Set(g.jobs.map(j=>j.assigned_engineer).filter(Boolean))];
+      const engTxt=!engs.length ? '<span class="a-noeng">без инженера</span>'
+        : (engs.length===1 ? esc(engName(engs[0])||'—') : engs.length+' инженера');
+      const shifts=g.h/shift;
+      const load=g.h>shift
+        ? esc(g.h.toFixed(g.h%1?1:0))+' ч · '+Math.ceil(shifts)+' '+plural(Math.ceil(shifts),'смена','смены','смен')
+        : esc(g.h.toFixed(g.h%1?1:0))+' ч';
+      // Ось ленты идёт по дню работы. Срок стоит в шапке отдельной строкой:
+      // это разные вещи, и путать их — значит обещать клиенту день, в
+      // который никто не выезжает.
+      const dl=g.dleft;
+      const leftTxt=dl<0?('−'+(-dl)+' дн'):(dl+' дн');
+      const running=dl<0&&g.to>=todayISO();
+      const nearTxt=running?'идёт сейчас'
+        :(dl<0?('было '+(-dl)+' '+plural(-dl,'день','дня','дней')+' назад')
+        :(dl===0?'сегодня':('через '+dl+' '+plural(dl,'день','дня','дней'))));
+      // «план» — даты выставил диспетчер, «авто» — подобрал график.
+      // Смешанной группе метка не нужна: она соврала бы про половину строк.
+      const mode=g.fixed?'plan':'auto';
+      // День работы: один день — с днём недели («чт 10 сентября»), несколько —
+      // диапазоном в одном формате. Смешивать «10 августа – 11.09» нельзя:
+      // это читается как две разные величины.
+      const dateTxt=(g.to&&g.to!==g.date)?(shortDate(g.date)+' – '+shortDate(g.to)):dayLabel(g.date);
+      // Сроки группы: один — «срок 10.09», разные — «сроки 04.09–10.09».
+      // Один срок за всю группу врал бы про остальные строки.
+      const slaTxt=!g.sla?'':(g.slaMax&&g.slaMax!==g.sla
+        ? ('сроки '+shortDate(g.sla)+'–'+shortDate(g.slaMax))
+        : ('срок '+shortDate(g.sla)));
+      // Выезд подписан выездом, и дорога у него своя строка: это половина
+      // его дней, и прятать её за общими часами работ значит показывать
+      // выезд легче, чем он есть.
+      const isTrip=g.kind==='trip';
+      const driveTxt=g.drive>0.05?('дорога '+g.drive.toFixed(g.drive%1?1:0)+' ч'):'';
+
+      h+='<div class="agrp'+(lead?' agrp-lead':'')+'">'
+        +'<div class="a-ax"><b>'+shortDate(g.date)+'</b><i>'+leftTxt+'</i></div>'
+        +'<span class="a-dot" style="width:'+dia+'px;height:'+dia+'px;left:'+(-21-dia/2)+'px;top:'+(20-dia/2)+'px;'
+          +'background:'+col+';box-shadow:0 0 0 1px '+col+'">'+(n>1?n:'')+'</span>'
+        +'<span class="a-stem" style="left:'+(-21+dia/2)+'px;width:'+(21-dia/2)+'px"></span>'
+        +'<div class="agrp-card" style="border-left-color:'+col+'">'
+        +'<div class="agrp-h" style="background:color-mix(in srgb,'+col+' '+(lead?'14':'9')+'%,var(--panel))">'
+          +'<span class="agrp-n">'+esc(dateTxt)+'</span>'
+          +(isTrip?'<span class="a-tag trip">выезд</span>':'')
+          +('<span class="a-tag '+mode+'">'+(mode==='plan'?'план':'авто')+'</span>')
+          +(slaTxt?('<span class="agrp-hint'+(g.left<0?' bad':'')+'">'+esc(slaTxt)+'</span>'):'')
+          +(g.why&&!o.mine?('<span class="a-tag bad">'+(g.why==='overflow'?'перегруз':'не успеваем')+'</span>'):'')
+          +(lead?('<span class="agrp-hint" style="color:'+col+'">'+esc(nearTxt)+'</span>'):'')
+          +'<span class="agrp-track"><i style="width:'+Math.min(100,g.h/(shift*5)*100).toFixed(0)+'%;background:'+col+'"></i></span>'
+          +'<span class="agrp-hint">'+load+(n>1?(' · '+n+' '+plural(n,'точка','точки','точек')):'')
+            +(driveTxt?(' · '+driveTxt):'')+'</span>'
+          +(o.mine?'':('<span class="agrp-eng">'+engTxt+'</span>'))
+        +'</div>';
+      g.jobs.forEach(j=>{
+        const mdl=(j.equipment&&j.equipment.model)||'';
+        const c=j.clients||{};
+        const tel=lead?telHref(c.phone):null, nav=lead?navHref(c.lat,c.lng):null;
+        h+='<div class="arow2'+(lead?' arow2-lead':'')+'" data-ajob="'+j.id+'">'
+          +'<div class="a-main"><div class="a-name">'+esc(c.name||'—')+'</div>'
+          +(mdl?('<div class="a-sub">'+esc(mdl)+'</div>'):'')
+          +'<div class="a-tags">'+tripTagHtml(j,tripOf,tripById)
+            // Срок строки. В шапке стоит день работы, и без этой метки
+            // заявка с более поздним сроком выглядела бы как соседняя.
+            // День, в который эту заявку доделают, и её собственный срок.
+            // Внутри выезда заявки идут по порядку маршрута, поэтому «не
+            // успеваем» относится к конкретной строке, а не ко всему выезду.
+            +((g.jobDays[j.id]&&n>1)?('<span class="a-tag">делаем '+shortDate(g.jobDays[j.id])+'</span>'):'')
+            +(j.due_date?('<span class="a-tag'+(g.lateSet.has(String(j.id))?' bad':'')+'">срок '+shortDate(j.due_date)+'</span>'):'')
+            // Статус — только инженеру: на его экране это ответ на «я это
+            // уже начал?». В сводке менеджер смотрит на сроки и загрузку,
+            // и вторая пилюля в каждой строке была бы шумом.
+            +(o.mine?('<span class="a-tag st">'+esc(ST[j.status]||j.status)+'</span>'):'')+'</div></div>'
+          +'<span class="a-h">'+esc(hours(j).toFixed(hours(j)%1?1:0))+' ч</span></div>';
+        // Позвонить и проехать — только у первой, самой срочной группы:
+        // ниже это шум, а здесь ровно те две кнопки, которые нужны
+        // на подъезде.
+        if(lead&&(tel||nav)) h+='<div class="a-acts">'
+          +(tel?('<a class="btn sm" href="'+esc(tel)+'">Позвонить</a>'):'')
+          // «Проехать» ведёт в одну точку. У выезда точек несколько, и вести
+          // в первую из них — врать: маршрут там свой, с депо и порядком.
+          // Поэтому у выезда вместо неё карта и GMaps на всю поездку, как
+          // в карточке выезда у диспетчера.
+          +((nav&&!isTrip)?('<a class="btn sm" href="'+esc(nav)+'" target="_blank" rel="noopener">Проехать</a>'):'')
+          +'</div>';
+      });
+      // Кнопки выезда — в подвале группы, а не отдельной карточкой.
+      // Инженер не может открыть страницу выезда (это право менеджера),
+      // и «Начать выезд» доступно ему ТОЛЬКО отсюда: убрать эти кнопки
+      // значит отнять у смены начало и конец.
+      // Кнопки выезда — в подвале карточки. Карточка выезда одна на выезд,
+      // поэтому и кнопки ровно одни: shownTrips больше ничего не сторожит,
+      // но остаётся страховкой на случай двух карточек одного выезда.
+      if(isTrip&&g.trip&&!shownTrips.has(g.trip.id)){
+        const t=g.trip; shownTrips.add(t.id);
+        h+='<div class="a-foot"><span class="a-foot-n">выезд · '+esc(ST_TRIP[t.status]||t.status)+'</span>'
+          +'<span class="acts">'+(o.mine?tripActs(t)
+            :('<button class="btn sm" data-tmap="'+t.id+'">карта</button>'
+              +'<button class="btn sm" data-tgm="'+t.id+'">⌖ Google Maps</button>'
+              +(canWrite()?('<button class="btn sm" data-topen="'+t.id+'">открыть</button>'):'')))
+          +'</span></div>'
+          +(o.mine?reschedBanner(t):'');
+      }
+      h+='</div></div>';
+      return h;
+    };
+
+    h+=weekKeys.map(weekHtml).join('');
+    h+='</div>';
+
+    // ── Завершённые ──────────────────────────────────────────────────────
+    // Галочка «показать завершённые» осталась при своём смысле: закрытое
+    // и отменённое не участвует в сроках и потому лежит отдельным
+    // свёрнутым списком в самом низу, а не подмешивается в ленту.
+    if(o.done){
+      const fin=list.filter(j=>j.status==='done'||j.status==='cancelled');
+      if(fin.length){
+        h+='<details class="acold"><summary><span class="achev">▸</span>'
+          +'Завершённые <span class="acount">'+fin.length+'</span></summary><div>'
+          +fin.map(j=>'<div class="arow gray" data-ajob="'+j.id+'"><span class="astripe"></span>'
+            +'<div class="amain"><div class="aname">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
+            +'<div class="asub">'+esc((j.equipment&&j.equipment.model)||'')+'</div></div>'
+            +'<span class="abadge gray">'+esc(ST[j.status]||j.status)+'</span></div>').join('')
+          +'</div></details>';
+      }
+    }
+
+    // ── Холодные ─────────────────────────────────────────────────────────
+    // Только в сводке. Холодная потребность — это работа продажи, а не
+    // инженера: у него она каждый день говорила бы «у тебя ещё дела»,
+    // которых он не может ни начать, ни закрыть.
+    if(o.cold&&cold.length){
+      let ch='';
+      cold.forEach(j=>{
+        ch+='<div class="arow gray" data-ajob="'+j.id+'"><span class="astripe"></span>'
+          +'<div class="amain"><div class="aname">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
+          +'<div class="asub">'+esc((j.equipment&&j.equipment.model)||'')+'</div></div>'
+          +'<span class="abadge gray">без срока</span></div>';
+      });
+      h+='<details class="acold"><summary><span class="achev">▸</span>'
+        +'Холодные потребности <span class="acount">'+cold.length+'</span></summary>'
+        +'<div>'+ch+'</div></details>';
+    }
+
+    box.innerHTML=h;
+    paintFirstMotion(box);
+    wireRangeBar(box);
+    // Строка ведёт в заявку; кнопки внутри строки — к себе, поэтому клик
+    // по ним до строки не доходит.
+    box.querySelectorAll('[data-ajob]').forEach(el=>el.onclick=e=>{
+      if(e.target.closest('.a-acts')||e.target.closest('.a-foot')) return;
+      openJob(el.dataset.ajob); });
+    // Колода раскрывается и закрывается на месте: перерисовывать ленту
+    // ради этого не нужно, а состояние живёт ровно до следующего
+    // обновления списка — просрочка не то, что стоит помнить открытой.
+    const deck=box.querySelector('[data-odeck]'), dbody=box.querySelector('.odeck-body');
+    if(deck&&dbody){
+      const wrap=deck.closest('.odeck-wrap');
+      const set=open=>{ dbody.hidden=!open; if(wrap) wrap.hidden=open;
+        const f=deck.querySelector('.odeck-face'); if(f) f.setAttribute('aria-expanded',open?'true':'false'); };
+      deck.onclick=()=>set(true);
+      const hide=dbody.querySelector('.odeck-hide'); if(hide) hide.onclick=()=>set(false);
+    }
+    // Кнопки выезда вешаются ОБЕИМ ролям. Раньше стояло if(o.mine), и в
+    // сводке у менеджера «карта», «GMaps» и «открыть» были нарисованы, но
+    // ни на что не отвечали: обработчики им никто не назначал.
+    wireTripActs(box,offline);
+    // Гант читает уже посчитанное: своего расчёта у него нет и быть не должно.
+    gtApply();
+  }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; }
+}
+function renderAttention(){ return renderFeed($('attnBody'),{cold:true}); }
+
+// Обработчики кнопок выезда. Отдельной функцией: их вешают и лента
+// «График», и всё, что перерисовывает её кусками.
+function wireTripActs(box,offline){
+  // Без связи гасим только то, что офлайн действительно не работает:
+  // «открыть» и «Стоянки» тянут данные с сервера, «Перенести» пишет
+  // отдельную запись мимо очереди. Старт, финиш и подтверждение теперь
+  // не падают, а становятся в очередь, поэтому остаются живыми —
+  // ради них офлайн и затевался.
+  if(offline){
+    box.querySelectorAll('[data-topen],[data-tstay],[data-tstaymap],[data-tresched]').forEach(b=>{
+      b.disabled=true;
+      b.title='Нет связи. Действие станет доступно, когда появится сеть.';
+    });
+  }
+  box.querySelectorAll('[data-tstart]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tstart,'start'));
+  box.querySelectorAll('[data-tfin]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tfin,'finish'));
+  box.querySelectorAll('[data-tconf]').forEach(b=>b.onclick=()=>tripAction(b.dataset.tconf,'confirm'));
+  box.querySelectorAll('[data-topen]').forEach(b=>b.onclick=()=>openTrip(b.dataset.topen));
+  box.querySelectorAll('[data-mopen]').forEach(b=>b.onclick=()=>openJob(b.dataset.mopen));
+  box.querySelectorAll('[data-tmap]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.tmap));
+  box.querySelectorAll('[data-tgm]').forEach(b=>b.onclick=()=>tripGmaps(b.dataset.tgm));
+  box.querySelectorAll('[data-tstay]').forEach(b=>b.onclick=()=>openStaysModal(b.dataset.tstay));
+  box.querySelectorAll('[data-tstaymap]').forEach(b=>b.onclick=()=>openStayBindingMap(b.dataset.tstaymap));
+  box.querySelectorAll('[data-tkm]').forEach(b=>b.onclick=()=>remeasureTrip(b.dataset.tkm));
+  box.querySelectorAll('[data-tresched]').forEach(b=>b.onclick=()=>openReschedModal(b.dataset.tresched));
+  box.querySelectorAll('[data-rok]').forEach(b=>b.onclick=()=>reschedDecide(b.dataset.rok,true));
+  box.querySelectorAll('[data-rno]').forEach(b=>b.onclick=()=>reschedDecide(b.dataset.rno,false));
+  box.querySelectorAll('[data-rcancel]').forEach(b=>b.onclick=()=>reschedCancel(b.dataset.rcancel));
+}
+
+// ── Загрузка инженеров ──────────────────────────────────────────────────────
+// Горизонт обязателен. Без него «загрузка» — это сумма всех часов до конца
+// года: число большое, красивое и ни на что не влияющее. Две рабочие недели
+// вперёд — это тот срок, на который ещё можно что-то переставить.
+// Ёмкость считаем сменой из настроек: 8 ч × 10 рабочих дней.
+//
+// Часы работ — это не весь день инженера. При наших плечах дорога нередко
+// длиннее самой работы: выезд на 21 ч работ легко несёт 20 ч за рулём,
+// и загрузка «26 %» по одним нормочасам — это неправда. Дорогу берём
+// из driveH снимка выезда: она посчитана роутером по настоящим дорогам,
+// выдумывать её не нужно. У заявок, ещё не собранных в выезд, маршрута
+// нет физически — их дорога в счёт не идёт, и об этом сказано в подписи.
+// Периоды выбираются, а не прибиты. Готовые ступени закрывают девять
+// случаев из десяти, произвольный диапазон — десятый.
+const RANGE_META={
+  rev:{dir:'back',lengths:[[30,'месяц'],[90,'квартал'],[365,'год']]},
+  load:{dir:'ahead',lengths:[[7,'неделя'],[14,'2 недели'],[30,'месяц']]},
+  gt:{dir:'ahead',lengths:[[7,'неделя'],[14,'2 недели'],[30,'месяц']]}
+};
+function defaultRange(kind){
+  const len=kind==='rev'?30:14,t=todayISO();
+  return RANGE_META[kind].dir==='back'?{from:isoOf(utcOf(t)-(len-1)*DAY_MS),to:t}:{from:t,to:isoOf(utcOf(t)+(len-1)*DAY_MS)};
+}
+function loadRangeState(kind){try{const v=JSON.parse(localStorage.getItem('dl_range_'+kind)||'null');if(v&&v.from&&v.to)return v;}catch(e){}return defaultRange(kind);}
+const dashRanges={rev:loadRangeState('rev'),load:loadRangeState('load'),gt:loadRangeState('gt')};
+function saveRange(kind){try{localStorage.setItem('dl_range_'+kind,JSON.stringify(dashRanges[kind]));}catch(e){}}
+function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<div class="rangebar" data-rk="'+kind+'">'
+  +'<input type="date" data-rf value="'+esc(r.from)+'"><span class="rdash">—</span><input type="date" data-rt value="'+esc(r.to)+'">'
+  +'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
+  +meta.lengths.map(x=>'<button data-rlen="'+x[0]+'">'+x[1]+'</button>').join('')+'</span></div>';}
+function setRange(kind,from,to){if(!from||!to)return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderAttention();}else renderDashboard();}
+function wireRangeBar(box){box.querySelectorAll('.rangebar').forEach(bar=>{const kind=bar.dataset.rk,read=()=>[bar.querySelector('[data-rf]').value,bar.querySelector('[data-rt]').value];
+  bar.querySelectorAll('input').forEach(i=>i.onchange=()=>setRange(kind,...read()));
+  bar.querySelectorAll('[data-rshift]').forEach(b=>b.onclick=()=>{const r=dashRanges[kind],n=Math.round((utcOf(r.to)-utcOf(r.from))/DAY_MS)+1,d=(+b.dataset.rshift)*n;setRange(kind,isoOf(utcOf(r.from)+d*DAY_MS),isoOf(utcOf(r.to)+d*DAY_MS));});
+  bar.querySelector('[data-rnow]').onclick=()=>{const r=dashRanges[kind],n=Math.round((utcOf(r.to)-utcOf(r.from))/DAY_MS)+1,t=todayISO();setRange(kind,RANGE_META[kind].dir==='back'?isoOf(utcOf(t)-(n-1)*DAY_MS):t,RANGE_META[kind].dir==='back'?t:isoOf(utcOf(t)+(n-1)*DAY_MS));};
+  bar.querySelectorAll('[data-rlen]').forEach(b=>b.onclick=()=>{const n=+b.dataset.rlen,t=todayISO();setRange(kind,RANGE_META[kind].dir==='back'?isoOf(utcOf(t)-(n-1)*DAY_MS):t,RANGE_META[kind].dir==='back'?t:isoOf(utcOf(t)+(n-1)*DAY_MS));});});}
+// ── Порядок карточек сводки ─────────────────────────────────────────────
+// Что важнее — деньги, работы или загрузка, — зависит от дня и от человека.
+// Порядок переставляется теми же двумя способами, что точки в маршруте:
+// мышью за ручку и стрелками (на телефоне перетаскивания по стандарту
+// браузера нет вовсе, и без стрелок порядок стал бы неизменяемым).
+// Живёт в браузере: это положение рук, а не данные компании.
+const DASH_CARDS=['fin','work','load'];
+const DASH_TITLE={fin:'Финансы',work:'Работы',load:'Загрузка отдела'};
+const WORK_STATUS_META=[
+  ['open','Открыта','var(--cyan)'],['planned','Запланирована','#5b9bd5'],
+  ['in_progress','В работе','#f5b23d'],['done','Готова','var(--green)'],
+  ['cancelled','Отменена','var(--ink-faint)']
+];
+let workStatusVisible=(function(){
+  try{ const v=JSON.parse(localStorage.getItem('dl_dash_work_statuses')||'null');
+    if(Array.isArray(v)){ const valid=v.filter(x=>WORK_STATUS_META.some(s=>s[0]===x)); if(valid.length) return new Set(valid); } }catch(e){}
+  return new Set(['open','planned','in_progress','done']);
+})();
+function workStatusSave(){ try{ localStorage.setItem('dl_dash_work_statuses',JSON.stringify(Array.from(workStatusVisible))); }catch(e){} }
+let dashEngineers=new Set();
+try{const v=JSON.parse(localStorage.getItem('dl_dash_engineers')||'[]');if(Array.isArray(v))dashEngineers=new Set(v);}catch(e){}
+function dashEngineersSave(){try{localStorage.setItem('dl_dash_engineers',JSON.stringify(Array.from(dashEngineers)));}catch(e){}}
+function dashEngineerList(){return (profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim());}
+function dashEnsureEngineers(){const all=dashEngineerList();if(!dashEngineers.size)all.forEach(p=>dashEngineers.add(String(p.id)));else{const valid=new Set(all.map(p=>String(p.id)));dashEngineers=new Set(Array.from(dashEngineers).filter(id=>valid.has(String(id))));if(!dashEngineers.size)all.forEach(p=>dashEngineers.add(String(p.id)));}return all;}
+function dashTripInScope(t){const ids=[t.lead_engineer].concat(t.engineer_ids||[]).filter(Boolean).map(String);return ids.some(id=>dashEngineers.has(id));}
+function engineerScopeHtml(){const all=dashEnsureEngineers(),on=all.length&&dashEngineers.size===all.length;if(all.length<=5)return '<div class="echips"><button class="echip all'+(on?' on':'')+'" data-eall>все инженеры</button>'+all.map(p=>'<button class="echip'+(dashEngineers.has(String(p.id))?'':' off')+'" data-eng="'+p.id+'"><i class="dot" style="background:'+esc(p.color||'var(--cyan)')+'"></i>'+esc(p.full_name)+'</button>').join('')+'</div>';
+  return '<div class="echips"><button class="echip all" data-epop>Инженеры · '+dashEngineers.size+' из '+all.length+'</button><div class="ctxmenu engineer-pop" hidden><button data-eall>Все</button>'+all.map(p=>'<button class="'+(dashEngineers.has(String(p.id))?'':'off')+'" data-eng="'+p.id+'">'+esc(p.full_name)+'</button>').join('')+'</div></div>';}
+function metricDelta(plan,fact,dir){if(fact==null||!(plan>0))return {pct:null,cls:'nofact',text:'—'};const pct=(fact-plan)/plan*100;if(Math.abs(pct)<5)return {pct,cls:'flat',text:deltaSign(pct)+Math.abs(pct).toFixed(1)+'%'};const good=dir==='up'?pct>0:pct<0;return {pct,cls:good?'good':'bad',text:deltaSign(pct)+Math.abs(pct).toFixed(1)+'%'};}
+function deltaSign(v){return v>1e-9?'+':v<-1e-9?'−':'±';}
+function metricRow({name,plan,fact,unit='',dir='down',sub='',single=false}){if(single)return '<div class="mrow"><div class="m-top"><span class="m-n">'+esc(name)+'</span><span class="m-v">'+esc(fact)+'<span class="m-u">'+esc(unit)+'</span></span><span class="m-d flat">одно число</span></div></div>';
+  const d=metricDelta(plan,fact,dir),fv=fact==null?'—':fmtMetric(fact),pv=fmtMetric(plan),width=fact==null?66:Math.min(100,Math.max(0,66*fact/Math.max(.0001,plan)));
+  return '<div class="mrow"><div class="m-top"><span class="m-n">'+esc(name)+'</span><span class="m-v"><span class="desktop-value">'+esc(fv)+'</span><span class="mobile-pair pair"><span class="pl">'+esc(pv)+'</span><span class="ar">→</span><span class="fc">'+esc(fv)+'</span></span><span class="m-u">'+esc(unit)+'</span></span><span class="m-d '+d.cls+'">'+esc(d.text)+'</span></div><div class="m-rail '+(fact==null?'nofact':'')+'"><i class="'+d.cls+'" style="width:'+width.toFixed(1)+'%"></i><b style="left:66%"></b></div><div class="m-sub">план '+esc(pv)+' '+esc(unit)+(sub?' · '+esc(sub):'')+'</div></div>';}
+function fmtMetric(v){return (+v||0).toLocaleString('ru-RU',{maximumFractionDigits:1});}
+let dashOrder=(function(){
+  try{ const v=JSON.parse(localStorage.getItem('dl_dash_order')||'null');
+    if(Array.isArray(v)){ const o=v.filter(k=>DASH_CARDS.indexOf(k)>=0);
+      DASH_CARDS.forEach(k=>{ if(o.indexOf(k)<0) o.push(k); }); return o; } }catch(e){}
+  return DASH_CARDS.slice();
+})();
+function dashOrderSave(){ try{ localStorage.setItem('dl_dash_order',JSON.stringify(dashOrder)); }catch(e){} }
+// Переставляем УЗЛЫ, а не перерисовываем сводку: перерисовка — это три
+// запроса в базу ради того, что уже посчитано и лежит на экране.
+function dashPaint(){ const box=$('dashBody'); if(!box) return;
+  dashOrder.forEach(k=>{ const el=box.querySelector('[data-dcard="'+k+'"]'); if(el) box.appendChild(el); }); }
+function dashMove(k,dir){
+  const i=dashOrder.indexOf(k), j=i+dir;
+  if(i<0||j<0||j>=dashOrder.length) return;
+  dashOrder[i]=dashOrder[j]; dashOrder[j]=k; dashOrderSave(); dashPaint();
+}
+// Ручка и стрелки — в шапке карточки, слева от названия.
+function dashGrip(k){
+  const i=dashOrder.indexOf(k);
+  return '<span class="dgrip" data-dgrip title="Перетащить">⠿</span>'
+    +'<span class="dmoves">'
+    +'<button class="dmove" type="button" data-dup="'+k+'" title="Выше"'+(i<=0?' disabled':'')+'>↑</button>'
+    +'<button class="dmove" type="button" data-ddn="'+k+'" title="Ниже"'+(i>=DASH_CARDS.length-1?' disabled':'')+'>↓</button>'
+    +'</span>';
+}
+function wireDashDrag(box){
+  let from=null;
+  const cards=Array.prototype.slice.call(box.querySelectorAll('[data-dcard]'));
+  const clear=()=>cards.forEach(c=>c.classList.remove('drag-over','drag-under','dragging'));
+  box.querySelectorAll('[data-dup]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); dashMove(b.dataset.dup,-1); });
+  box.querySelectorAll('[data-ddn]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); dashMove(b.dataset.ddn,1); });
+  cards.forEach(card=>{
+    // draggable включается только на время удержания ручки: иначе карточка
+    // перестаёт давать выделять в себе текст и мешает своим же кнопкам.
+    const grip=card.querySelector('[data-dgrip]');
+    if(grip){
+      grip.addEventListener('mousedown',()=>{ card.setAttribute('draggable','true'); });
+      grip.addEventListener('click',e=>e.stopPropagation());
+      document.addEventListener('mouseup',()=>{ if(!card.classList.contains('dragging')) card.removeAttribute('draggable'); });
+    }
+    card.addEventListener('dragstart',e=>{ from=card.dataset.dcard; card.classList.add('dragging');
+      try{ e.dataTransfer.setData('text/plain',from); e.dataTransfer.effectAllowed='move'; }catch(err){} });
+    card.addEventListener('dragend',()=>{ card.removeAttribute('draggable'); clear(); from=null; });
+    card.addEventListener('dragover',e=>{
+      if(from==null||card.dataset.dcard===from) return;
+      e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(err){}
+      // Половина карточки под курсором решает, встанет она до или после.
+      const r=card.getBoundingClientRect(), up=(e.clientY-r.top)<r.height/2;
+      card.classList.toggle('drag-over',up); card.classList.toggle('drag-under',!up);
+    });
+    card.addEventListener('dragleave',()=>card.classList.remove('drag-over','drag-under'));
+    card.addEventListener('drop',e=>{
+      e.preventDefault();
+      const to=card.dataset.dcard, r=card.getBoundingClientRect();
+      const up=(e.clientY-r.top)<r.height/2;
+      clear();
+      if(from==null||to===from){ from=null; return; }
+      const rest=dashOrder.filter(k=>k!==from);
+      let dest=rest.indexOf(to); if(!up) dest++;
+      rest.splice(Math.max(0,Math.min(rest.length,dest)),0,from);
+      dashOrder=rest; from=null; dashOrderSave(); dashPaint();
+      // Стрелки на краях гаснут — после перестановки края другие.
+      const b=$('dashBody'); if(b){ b.querySelectorAll('[data-dup]').forEach(x=>{ x.disabled=dashOrder.indexOf(x.dataset.dup)<=0; });
+        b.querySelectorAll('[data-ddn]').forEach(x=>{ x.disabled=dashOrder.indexOf(x.dataset.ddn)>=dashOrder.length-1; }); }
+    });
+  });
+}
+
+// ── Свёртывание кусков карточки ─────────────────────────────────────────
+// Карточку целиком складывает общий механизм (.card.foldable), а здесь
+// складываются куски ВНУТРИ неё — графики. Правило простое: всё, что может
+// вырасти в высоту, должно уметь закрыться, иначе одна карточка съедает
+// экран, а остальные приходится искать прокруткой. Состояние живёт в том же
+// наборе folded: это положение рук, а не данные.
+function foldxBtn(key,label){
+  return '<button class="foldx-btn'+(folded.has(key)?' off':'')+'" type="button" data-foldx="'+esc(key)+'">'
+    +esc(label)+'</button>';
+}
+function foldxBox(key,html){
+  return '<div class="foldx" data-foldxk="'+esc(key)+'"'+(folded.has(key)?' hidden':'')+'>'+html+'</div>';
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-foldx]'); if(!b) return;
+  const k=b.dataset.foldx;
+  const box=document.querySelector('.foldx[data-foldxk="'+k+'"]');
+  if(folded.has(k)){ folded.delete(k); b.classList.remove('off'); if(box) box.hidden=false; }
+  else { folded.add(k); b.classList.add('off'); if(box) box.hidden=true; }
+});
+
+// ── Календарь периода ───────────────────────────────────────────────────
+function workDaysBetween(fromIso,toIso){
+  let n=0; const a=utcOf(fromIso), b=utcOf(toIso);
+  if(!(a<=b)) return 0;
+  for(let x=a;x<=b;x+=DAY_MS){ const d=new Date(x).getUTCDay(); if(d!==0&&d!==6) n++; }
+  return n;
+}
+function monthEndIso(key){ const a=String(key).split('-').map(Number);
+  return isoOf(Date.UTC(a[0],a[1],0)); }
+// Период сводки: денежные и штучные итоги считаются в тех же границах, что
+// и график под ними. Одна карточка — один период, иначе цифра и столбик
+// рядом говорят о разном.
+function dashPeriod(){
+  return dashRanges.rev;
+}
+
+// ── Финансы ─────────────────────────────────────────────────────────────
+// Состоявшееся и запланированное — две разные строки и ни разу не одна
+// сумма. Выезд на будущий четверг это не выручка, а намерение; смешивать
+// их значит отчитываться деньгами, которых нет.
+const TRIP_EARNED=t=>t.status==='finished'||t.status==='done';
+const TRIP_AHEAD=t=>t.status==='planned'||t.status==='assigned'||t.status==='in_progress';
+const JOB_EARNED=j=>j.status==='done';
+const JOB_AHEAD=j=>j.status==='open'||j.status==='planned'||j.status==='in_progress';
+// У депо-заявки нет дат выезда — она в цеху. Датой считаем срок, а если
+// его нет — день заведения: другой у нас просто не записан.
+const jobDate=j=>j.due_date||String(j.created_at||'').slice(0,10);
+
+function financeCard(jb,trips){
+  if(!canWrite()) return '';
+  const per=dashRanges.rev,cur=appSettings.currency||'',inP=d=>d&&d>=per.from&&d<=per.to;
+  const scope=trips.filter(t=>inP(t.date_from)&&t.status!=='cancelled'&&dashTripInScope(t));
+  const covered=scope.filter(t=>{const e=t.econ_snapshot||{};return t.status==='done'&&e.cost_basis==='fact'&&e.presence_basis==='person_hours_v1'&&factHByTrip[t.id]!=null&&e.cost_fact!=null&&e.profit_fact!=null;});
+  const sum=(rows,key)=>rows.reduce((n,t)=>n+(+(t.econ_snapshot||{})[key]||0),0);
+  const revenue=sum(covered,'revenue'),costPlan=sum(covered,'cost_plan'),costFact=sum(covered,'cost_fact');
+  const profitPlan=sum(covered,'profit_plan'),profitFact=sum(covered,'profit_fact');
+  const marginPlan=revenue?profitPlan/revenue*100:0,marginFact=revenue?profitFact/revenue*100:0;
+  const cov='подтверждённый факт по '+covered.length+' из '+scope.length+' '+plural(scope.length,'выезда','выездов','выездов')+' · остальные ожидают полной проверки';
+  const breakdown=foldxBtn('dashFinBreak','разбивка')+foldxBox('dashFinBreak','<div class="hint">Работы и запчасти остаются в сохранённых экономических снимках выездов.</div>');
+  return '<div class="card foldable f-any" data-fold="dashFin" data-dcard="fin"><h3 class="cardhead">'+dashGrip('fin')+'Деньги <span class="mc-note">'+esc(shortDate(per.from)+' — '+shortDate(per.to))+'</span></h3>'
+    +rangeBar('rev')+engineerScopeHtml()+'<div class="coverage">'+esc(cov)+'</div>'
+    +'<div class="hero"><div><div class="hk">прибыль · подтверждено</div><div class="hv">'+(covered.length?fmtMetric(profitFact)+' '+esc(cur):'—')+'</div></div><div><div class="hk">маржа</div><div class="hv">'+(covered.length&&revenue?fmtMetric(marginFact)+'%':'—')+'</div></div></div>'
+    +'<div class="m-sub">по плану было '+fmtMetric(profitPlan)+' '+esc(cur)+' и '+fmtMetric(marginPlan)+'%</div><div class="sect">Из чего сложилось</div>'
+    +metricRow({name:'Себестоимость',plan:costPlan,fact:covered.length?costFact:null,unit:cur,dir:'down'})
+    +metricRow({name:'Прибыль',plan:profitPlan,fact:covered.length?profitFact:null,unit:cur,dir:'up'})
+    +metricRow({name:'Маржа',plan:marginPlan,fact:covered.length?marginFact:null,unit:'%',dir:'up'})
+    +'<div class="sect">Оплачиваемость</div>'+metricRow({name:'Выручка · договорная',fact:fmtMetric(revenue),unit:cur,single:true})
+    +'<div class="foldx-h">'+breakdown+'</div></div>';
+}
+
+// ── Работы ──────────────────────────────────────────────────────────────
+function worksCard(jb,trips,tripOf){
+  if(!canWrite()) return '';
+  const per=dashRanges.rev,inP=d=>d&&d>=per.from&&d<=per.to;
+  const scopedTrips=trips.filter(t=>inP(t.date_from)&&t.status!=='cancelled'&&dashTripInScope(t));
+  const shown=jb.filter(j=>inP(jobDate(j))&&workStatusVisible.has(j.status)&&(!j.assigned_engineer||dashEngineers.has(String(j.assigned_engineer))));
+  const withHours=scopedTrips.filter(t=>factHByTrip[t.id]!=null),withKm=scopedTrips.filter(t=>t.fact_km!=null);
+  const snap=(rows,key)=>rows.reduce((n,t)=>n+(+(t.econ_snapshot||{})[key]||0),0);
+  const workPlan=snap(withHours,'workH'),workFact=withHours.reduce((n,t)=>n+(+factHByTrip[t.id]||0),0);
+  const kmPlan=snap(withKm,'km'),kmFact=withKm.reduce((n,t)=>n+(+t.fact_km||0),0);
+  const drivePlan=snap(scopedTrips,'driveH');
+  const timed=scopedTrips.filter(t=>t.started_at&&t.finished_at),tripPlanH=timed.reduce((n,t)=>n+Math.max(0,(utcOf(t.date_to||t.date_from)-utcOf(t.date_from))/36e5+gtWindowHours()),0),tripFactH=timed.reduce((n,t)=>n+Math.max(0,(new Date(t.finished_at)-new Date(t.started_at))/36e5),0);
+  const planNights=snap(scopedTrips,'nights'),factNights=timed.reduce((n,t)=>n+Math.max(0,Math.ceil((new Date(t.finished_at)-new Date(t.started_at))/DAY_MS)-1),0);
+  const byst={open:0,planned:0,in_progress:0,done:0,cancelled:0};shown.forEach(j=>byst[j.status]=(byst[j.status]||0)+1);let bar='',leg='';const total=Math.max(1,shown.length);
+  WORK_STATUS_META.forEach(([status,lbl,col])=>{const n=byst[status]||0,on=workStatusVisible.has(status);if(on&&n)bar+='<i style="width:'+(n/total*100)+'%;background:'+col+'"></i>';leg+='<button type="button" class="stat-filter'+(on?'':' off')+'" data-work-status="'+status+'"><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</button>';});
+  const src=Array.from(new Set(withKm.map(t=>factSrcRu(t.fact_km_source)).filter(Boolean))).join(', ');
+  return '<div class="card foldable f-any statuscard" data-fold="dashWork" data-dcard="work"><h3 class="cardhead">'+dashGrip('work')+'Работа в поле <span class="mc-note">'+esc(shortDate(per.from)+' — '+shortDate(per.to))+'</span></h3>'
+    +rangeBar('rev')+engineerScopeHtml()+'<div class="coverage">факт по '+withHours.length+' из '+scopedTrips.length+' выездов</div>'
+    +'<div class="hero"><div><div class="hk">присутствие · факт</div><div class="hv">'+(withHours.length?fmtMetric(workFact)+' чел.-ч':'—')+'</div></div><div><div class="hk">отклонение от норматива</div><div class="hv">'+(withHours.length?metricDelta(workPlan,workFact,'down').text:'—')+'</div></div></div>'
+    +'<div class="sect">Ресурсы</div>'+metricRow({name:'Присутствие команды',plan:workPlan,fact:withHours.length?workFact:null,unit:'чел.-ч',dir:'down',sub:'План — норматив; факт — проверенное присутствие'})
+    +metricRow({name:'Километры',plan:kmPlan,fact:withKm.length?kmFact:null,unit:'км',dir:'down',sub:(src||'источник не указан')+' · '+withKm.length+' из '+scopedTrips.length})
+    +metricRow({name:'Время выезда',plan:tripPlanH,fact:timed.length?tripFactH:null,unit:'ч',dir:'down'})+metricRow({name:'Часы дороги',plan:drivePlan,fact:null,unit:'ч',dir:'down',sub:'источника факта пока нет'})
+    +'<div class="sect">Объём</div>'+metricRow({name:'Выездов',fact:String(scopedTrips.length),single:true})+metricRow({name:'Заявок',fact:String(shown.length),single:true})+metricRow({name:'Ночёвок',plan:planNights,fact:timed.length?factNights:null,dir:'down'})
+    +'<div class="statbar">'+(bar||'<i style="width:100%;background:var(--line)"></i>')+'</div><div class="statleg">'+leg+'</div></div>';
+}
+
+// ── Загрузка отдела ─────────────────────────────────────────────────────
+//
+// Считается тем же планировщиком, что рисует ленту: часы лежат в тех днях,
+// в которые их будут делать, вместе с дорогой по плечам. Пока эта карточка
+// считала по-своему — по датам сроков и дороге, размазанной на все дни
+// выезда, — она показывала одни числа, а лента рядом другие.
+//
+// Фонд отдела — все действующие инженеры: смена × рабочие дни периода ×
+// число инженеров. Отдельной строкой сверху, потому что вопрос «можем ли
+// мы взять ещё работу» задаётся отделу, а не человеку.
+function loadCard(list,tripOf,tripById,tripOrd){
+  if(!canWrite()) return '';
+  const shift=gtWindowHours();
+  const fromIso=dashRanges.load.from,toIso=dashRanges.load.to;
+  const plan=planOfData(list,tripOf,tripById,tripOrd).plan;
+  const engs=dashEnsureEngineers().filter(p=>dashEngineers.has(String(p.id)));
+  const engIds=new Set(engs.map(p=>p.id));
+  const capByEngineer={},dayCapacity={};
+  const capacitySettings=gtSettings(plan.blocks);
+  engs.forEach(e=>{capByEngineer[e.id]=0;for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){const iso=isoOf(x),w=dayWindow(e.id,iso,capacitySettings);const cap=w?Math.max(0,w.end-w.start):0;capByEngineer[e.id]+=cap;dayCapacity[iso]=(dayCapacity[iso]||0)+cap;}});
+  const capEach=shift*Math.max(1,workDaysBetween(fromIso,toIso));
+  const lane={}, day={},factDay={};
+  Object.keys(plan.load).forEach(k=>{ const l=plan.load[k];
+    if(l.date<fromIso||l.date>toIso) return;
+    if(l.engineer!==' free'&&!engIds.has(l.engineer)) return;
+    const r=lane[l.engineer]||(lane[l.engineer]={w:0,d:0,n:0,f:0,fKnown:0});
+    r.w+=l.workH; r.d+=l.driveH;
+    day[l.date]=(day[l.date]||0)+l.workH+l.driveH; });
+  plan.blocks.forEach(b=>{ const k=b.engineer||' free';
+    if(b.to<fromIso||b.from>toIso) return;
+    if(k!==' free'&&!engIds.has(k)) return;
+    const r=lane[k]||(lane[k]={w:0,d:0,n:0,f:0,fKnown:0}); r.n+=b.jobIds.length; });
+
+  // Присутствие относится к реальным участникам и календарным дням.
+  // План не определяет дату факта и не присваивает всю команду ведущему.
+  presenceDaily(factPresenceRows.filter(s=>tripById[s.trip_id]),fromIso,toIso,engIds).forEach(p=>{
+    const r=lane[p.engineer]||(lane[p.engineer]={w:0,d:0,n:0,f:0,fKnown:0});
+    r.f+=p.hours;r.fKnown=1;factDay[p.date]=(factDay[p.date]||0)+p.hours;
+  });
+
+  const num=v=>v.toFixed(v%1?1:0);
+  const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
+  const rowHtml=(nm,r,cap,cls)=>{
+    const t=r.w+r.d, p=cap>0?t/cap:0, pct=p*100;
+    const col=loadColor(p), fillPct=Math.min(100,p/1.75*100);
+    const parts=[num(r.w)+' ч работ']; if(r.d) parts.push(num(r.d)+' ч дороги');
+    if(r.fKnown)parts.push('присутствие '+num(r.f)+' чел.-ч');
+    parts.push(r.n+' '+plural(r.n,'заявка','заявки','заявок'));
+    return '<div class="elrow'+(cls?(' '+cls):'')+'">'
+      +'<div class="el-n">'+esc(nm)+'</div>'
+      +'<div class="el-v" style="color:'+col+'">'+num(t)+' / '+num(cap)+' ч · '+Math.round(pct)+'%</div>'
+      +'<div class="el-t"><i class="data-fill" style="width:'+fillPct.toFixed(1)+'%;background:'+rampCss(p)+'"></i></div>'
+      +'<div class="el-s">'+esc(parts.join(' · '))+'</div></div>';
+  };
+
+  // Фонд отдела — по инженерам из справочника. Если ролей ещё не расставили,
+  // берём тех, на ком реально висит работа: иначе карточка показывала бы
+  // загрузку отдела из нуля человек.
+  let people=engs.map(p=>({id:p.id,name:p.full_name||'без имени'}));
+  if(!people.length) people=Object.keys(lane).filter(k=>k!==' free')
+    .map(id=>({id:id,name:name(id)}));
+  // Знаменатель — тот же, что у полоски недель в ленте.
+  const engN=engineersCount(plan);
+  if(!engs.length)for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){const iso=isoOf(x),d=new Date(x).getUTCDay();dayCapacity[iso]=(d===0||d===6)?0:shift*engN;}
+  const fund=people.reduce((n,p)=>n+(capByEngineer[p.id]||0),0)||(capEach*engN);
+  const tot={w:0,d:0,n:0,f:0,fKnown:0};
+  Object.keys(lane).forEach(k=>{ tot.w+=lane[k].w; tot.d+=lane[k].d; tot.n+=lane[k].n;tot.f+=lane[k].f||0;tot.fKnown+=lane[k].fKnown||0; });
+  let body=rowHtml('Отдел · '+engN+' '+plural(engN,'инженер','инженера','инженеров'),
+    tot,fund,'el-dep');
+  people.slice().sort((a,b)=>{ const ra=lane[a.id]||{w:0,d:0}, rb=lane[b.id]||{w:0,d:0};
+    return (rb.w+rb.d)-(ra.w+ra.d); })
+    .forEach(p=>{ body+=rowHtml(p.name,lane[p.id]||{w:0,d:0,n:0},capByEngineer[p.id]||capEach); });
+  if(lane[' free']) body+=rowHtml('Без инженера',lane[' free'],capEach,'none');
+
+  // График загрузки по дням периода. Длинный период рисуется неделями:
+  // сорок столбиков шириной в волос не читаются.
+  const dayCap=shift*engN;
+  // Днями рисуем до полутора месяцев, дальше — неделями: сорок столбиков
+  // шириной в волос не читаются. Числа над столбиками убираем раньше — они
+  // начинают переноситься в две строки и превращаются в кашу; значение
+  // остаётся в подсказке.
+  const spanD=Math.round((utcOf(toIso)-utcOf(fromIso))/DAY_MS)+1;
+  const cells=[]; const long=spanD>45;
+  if(long){
+    let cur=null;
+    for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){ const iso=isoOf(x);
+      const w=weekOf(iso); if(!w) continue;
+      if(!cur||cur.key!==w.key){ cur={key:w.key,label:'н'+w.n,v:0,f:0,cap:0}; cells.push(cur); }
+      cur.cap+=dayCapacity[iso]||0;
+      cur.v+=day[iso]||0;cur.f+=factDay[iso]||0; }
+  } else {
+    for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){ const iso=isoOf(x);
+      const d=new Date(x).getUTCDay();
+      cells.push({key:iso,label:String(iso.slice(8)),v:day[iso]||0,f:factDay[iso]||0,cap:dayCapacity[iso]||0,we:(d===0||d===6)}); }
+  }
+  const maxV=Math.max(1,...cells.map(c=>Math.max(c.v,c.f||0,c.cap)));
+  const showVals=cells.length<=16;
+  let chart='<div class="revbars loadbars'+(showVals?'':' novals')+'">';
+  cells.forEach(c=>{ const hR=c.v>0?Math.max(4,Math.round(c.v/maxV*100)):0;
+    const over=c.cap>0&&c.v>c.cap+1e-6;
+    chart+='<div class="revbar'+(c.we?' we':'')+'" title="'+esc(c.key+' · план '+num(c.v)+' ч'+(c.f?(' · факт работ '+num(c.f)+' ч'):'')+(c.cap?(' · фонд '+num(c.cap)+' ч'):''))+'">'
+      +(showVals?('<div class="rb-v">'+(c.v>0?num(c.v):'')+'</div>'):'')
+      +'<div class="rb-c">'+(c.cap>0?('<div class="rb-cap" style="height:'+Math.round(c.cap/maxV*100)+'%"></div>'):'')
+        +'<div class="rb-f data-fill vertical'+(over?' bad':'')+'" style="height:'+hR+'%;background:'+rampCss(c.cap>0?c.v/c.cap:(c.v>0?1.75:0),'0deg')+'"></div>'
+        +(c.f?'<div class="rb-fact data-fill vertical" style="height:'+Math.max(3,Math.round(c.f/maxV*100))+'%"></div>':'')+'</div>'
+      +'<div class="rb-l">'+esc(c.label)+'</div></div>'; });
+  chart+='</div>';
+  chart+='<div class="cap-note">пунктир — 100% загрузки: '+num(dayCap)+' ч в день · широкая заливка — план · тёмная узкая — записанный факт работ'
+    +(long?(' · столбик — неделя'):'')+'</div>';
+  const hzTxt=shortDate(fromIso)+'–'+shortDate(toIso);
+  return '<div class="card elcard foldable f-any" data-fold="dashLoad" data-dcard="load">'
+    +'<h3 class="cardhead">'+dashGrip('load')+'Загрузка отдела <span class="el-hz">'+esc(hzTxt)+'</span>'
+    +'</h3>'+rangeBar('load')+engineerScopeHtml()
+    +body
+    +'<div class="foldx-h">'+foldxBtn('dashLoadChart',long?'По неделям':'По дням')+'</div>'
+    +foldxBox('dashLoadChart',chart)
+    +'</div>';
+}
+
+async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
+  renderAttention();
+  // Ролевая раскладка. Инженер видит только «График» — ленту на всю ширину,
+  // без денег и без правой колонки. Менеджер и админ — двухколоночно.
+  const grid=document.querySelector('.dash-grid');
+  const attnCaps=document.querySelector('.dash-attn .acaps');
+  const seg=$('dashSeg');
+  if(role==='engineer'){
+    if(grid) grid.classList.add('one-col');
+    if(box) box.style.display='none';
+    if(seg) seg.style.display='none';
+    if(attnCaps) attnCaps.textContent='График';
+    return;   // правую колонку инженеру не строим вовсе
+  }
+  // Через класс, а не инлайном: инлайновый grid-template-columns перебивал
+  // медиазапрос, и на телефоне сводка оставалась в две колонки по 190 px.
+  if(grid) grid.classList.remove('one-col');
+  if(box) box.style.display='';
+  if(seg) seg.style.display='';
+  if(attnCaps) attnCaps.textContent='Требует внимания';
+  box.innerHTML='<div class="shim" role="status" aria-label="Загрузка данных"></div>';
+  try{
+    await ensureRefs(); await loadStaffDays(); await loadFactHours();
+    const {data:js}=await sb.from('jobs')
+      .select('id,status,at_depot,due_date,created_at,assigned_engineer,day_plan, clients(lat,lng), equipment(lat,lng), job_works(hours,billable,revenue), job_parts(qty,price,cost,billable)')
+      .is('deleted_at',null);
+    const jb=js||[];
+    const {data:tr}=await sb.from('trips').select('id,econ_snapshot,route_stops,date_from,date_to,lead_engineer,engineer_ids,status,day_plan,started_at,finished_at,fact_km,fact_km_source').is('deleted_at',null);
+    const trips=tr||[];
+    // Кто в каком выезде — планировщику: без этого выезд рассыпается на
+    // отдельные заявки, и дорога исчезает из загрузки.
+    const tripOf={}, tripById={}, tripOrd={};
+    trips.forEach(t=>{ tripById[t.id]=t; });
+    const {data:tj}=await sb.from('trip_jobs').select('job_id,trip_id,ord');
+    (tj||[]).forEach(r=>{ const t=tripById[r.trip_id];
+      if(t&&t.status!=='cancelled'){ tripOf[r.job_id]=r.trip_id; tripOrd[r.job_id]=(+r.ord||0); } });
+
+    const made={fin:financeCard(jb,trips),work:worksCard(jb,trips,tripOf),load:loadCard(jb,tripOf,tripById,tripOrd)};
+    box.innerHTML=dashOrder.map(k=>made[k]||'').join('');
+    paintFirstMotion(box);
+    wireRangeBar(box);
+    box.querySelectorAll('[data-epop]').forEach(b=>b.onclick=e=>{e.stopPropagation();const p=b.parentElement.querySelector('.engineer-pop');if(p)p.hidden=!p.hidden;});
+    box.querySelectorAll('[data-eall]').forEach(b=>b.onclick=()=>{const all=dashEngineerList();dashEngineers=new Set(all.map(p=>String(p.id)));dashEngineersSave();renderDashboard();});
+    box.querySelectorAll('[data-eng]').forEach(b=>b.onclick=()=>{const id=String(b.dataset.eng);if(dashEngineers.has(id)){if(dashEngineers.size===1){notify('Оставь хотя бы одного инженера.','warn');return;}dashEngineers.delete(id);}else dashEngineers.add(id);dashEngineersSave();renderDashboard();});
+    wireDashDrag(box);
+    foldApply();
+    box.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>dashNav(el.dataset.nav));
+    box.querySelectorAll('[data-work-status]').forEach(el=>el.onclick=()=>{
+      const status=el.dataset.workStatus;
+      if(workStatusVisible.has(status)){
+        if(workStatusVisible.size===1){ notify('Оставь хотя бы один статус.','warn'); return; }
+        workStatusVisible.delete(status);
+      } else workStatusVisible.add(status);
+      workStatusSave(); renderDashboard();
+    });
+  }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; } }
+// Чипы сводки на узком экране: две колонки туда не помещаются, и вместо
+// того чтобы гнать инфокарты в подвал ленты, показываем одну из двух.
+(function(){
+  const seg=$('dashSeg'); if(!seg) return;
+  seg.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return;
+    const grid=document.querySelector('.dash-grid'); if(!grid) return;
+    seg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    grid.classList.toggle('show-feed',b.dataset.dv==='feed');
+    grid.classList.toggle('show-cards',b.dataset.dv==='cards');
+  });
+})();
+function dashNav(k){ if(k==='points'){ switchTab('map'); return; } if(k==='trips'){ switchTab('planner'); plannerSub('trips'); return; } if(k==='vehicles'){ switchTab('settings'); return; } switchTab('planner'); plannerSub('jobs'); if(k==='jobs-done'){ jobVisible={open:false,planned:false,in_progress:false,done:true,cancelled:false}; } else { jobVisible={open:true,planned:true,in_progress:true,done:false,cancelled:false}; } renderJobs(); }
+// ---------- Мой день ----------
+// Инженер живёт выездами, а не заявками: выезд — это его день, машина,
+// маршрут и точки. Заявки показываем ВНУТРИ выезда, а не вместо него.
+// Заявки без выезда всё же выводим отдельным блоком — иначе назначенная,
+// но ещё не спланированная работа просто исчезла бы с глаз.
+
+
+function tripActs(t){
+  let a='';
+  if(t.status==='planned'||t.status==='assigned'){
+    a+='<button class="btn sm amber" data-tstart="'+t.id+'">▶ Начать выезд</button>';
+    if(!reschedByTrip[t.id]) a+='<button class="btn sm" data-tresched="'+t.id+'">Перенести</button>';
+  }
+  if(t.status==='in_progress') a+='<button class="btn sm amber" data-tfin="'+t.id+'">■ Завершить</button>';
+  if(t.status==='finished' && canWrite()) a+='<button class="btn sm amber" data-tconf="'+t.id+'">✓ Подтвердить</button>';
+  if(t.status==='finished' && !canWrite()) a+='<span class="pill">ждёт менеджера</span>';
+  if(t.status==='finished'||t.status==='done') a+='<button class="btn sm" data-tstay="'+t.id+'">⏱ Стоянки</button>';
+  if((t.status==='finished'||t.status==='done')&&canWrite()) a+='<button class="btn sm amber" data-tstaymap="'+t.id+'">Привязка факта на карте</button>';
+  // Ручной пересчёт. Нужен, когда ORS в момент подтверждения был недоступен
+  // или отвечал ошибками: тогда часть точек осудили по кругу или по отказу
+  // маршрутизатора, а не по дорогам. Повторный запуск считает всё заново
+  // с чистого листа — никакой прошлый результат не подмешивается.
+  if((t.status==='finished'||t.status==='done')&&canWrite())
+    a+='<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ Пробег</button>';
+  if(canWrite()) a+='<button class="btn sm" data-topen="'+t.id+'">открыть</button>';
+  a+='<button class="btn sm ghost" data-tmap="'+t.id+'">на карте</button>';
+  a+='<button class="btn sm ghost" data-tgm="'+t.id+'">Google Maps</button>';
+  return a;
+}
+
+// «График» у инженера — та же лента, что «Требует внимания» у менеджера.
+//
+// Раньше здесь был свой экран: карточка текущего выезда, свёрнутые строки
+// «просрочено / ещё сегодня / дальше», отдельная карточка «в депо» и
+// отдельная — «заявки без выезда». Пять разных способов показать одно и то
+// же, и порядок в них задавал не срок, а то, собрал ли уже диспетчер
+// маршрут. Заявка, которая горит сегодня, оказывалась ниже той, что через
+// неделю, — просто потому что её ещё не положили в выезд.
+//
+// Теперь порядок один и он тот же, что у менеджера: срок. Признак
+// «с выездом / без выезда / в депо» стал меткой в строке. Первая группа —
+// самая срочная — крупная, с телефоном, проездом и кнопками выезда;
+// остальное добирается прокруткой.
+async function renderMine(){
+  const box=$('mineList'); if(!box) return;
+  await renderFeed(box,{mine:true,lead:true,done:!!($('mineDone')&&$('mineDone').checked)});
+}
+
+
+async function jobSetStatus(id,st){ const j=jobs.find(x=>x.id==id);
+  const {error}=await sb.from('jobs').update({status:st}).eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; }
+  if(st==='done') await jobClosed(id,{equipmentId:j&&j.equipment_id,works:(j&&j.job_works)||[]}); showToast('Статус: '+(ST[st]||st)); renderJobs(); }
+function populateEquip(){ const list=eqByClient[$('jbClient').value]||[]; $('jbEquip').innerHTML='<option value="">— без привязки —</option>'+list.map(e=>'<option value="'+e.id+'">'+esc(e.model+(e.serial?' · '+e.serial:''))+'</option>').join(''); }
+$('jbClient').onchange=()=>{ populateEquip(); jobHead(); };
+['jbEquip','jbStatus','jbEng','jbDue'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',jobHead); });
+// Сменили исполнителя или статус — меняются и права на действия внутри
+// страницы: отметка приезда и правка запчастей смотрят на то же самое.
+['jbEng','jbStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',()=>{ paintVisit(); renderJobParts(); }); });
+// Заявку открывают и из «Графика», где без связи список jobs пуст.
+// Тогда берём строку из снимка — она там полная, вместе с работами.
+async function snapFindJob(id){
+  const s=await snapGet('mine'); if(!s||!s.val||!s.val.list) return null;
+  return s.val.list.find(j=>j&&j.id===id)||null;
+}
+// Полная строка заявки из базы.
+//
+// Лента грузит заявки СВОИМ, тонким запросом: ей нужны срок, клиент, часы —
+// и всё. В этом ответе нет ни client_id, ни техники, ни примечаний. Открыв
+// заявку из ленты, форма получала такую тонкую строку и заполнялась пустотой,
+// а список клиентов, которому нечего было выбрать, вставал на первый пункт —
+// то есть показывал ЧУЖОГО клиента. Поэтому при открытии заявку всегда
+// дочитываем целиком, если в руках оказалась тонкая или её нет вовсе.
+async function fetchJobFull(id){
+  try{
+    const {data,error}=await sb.from('jobs')
+      .select('*, clients(name), equipment(model,kind), job_works(*), job_parts(qty,price,cost,billable)')
+      .eq('id',id).is('deleted_at',null).maybeSingle();
+    if(error) throw error;
+    return data||null;
+  }catch(e){ console.warn('Заявка не дочитана:',e); return null; }
+}
+async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); jobEditId=id; serviceOrders.requestPanel(id);
+  let j=null;
+  if(id){
+    j=jobs.find(x=>x.id==id)||null;
+    // client_id — признак полной строки: в тонком ответе ленты его нет.
+    if(!j||j.client_id==null){ const full=await fetchJobFull(id); if(full) j=full; else if(!j) j=await snapFindJob(id); }
+  }
+  $('jbClient').innerHTML=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  $('jbEng').innerHTML=profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
+  $('jbWorkPick').innerHTML='<option value="">— выбрать работу —</option>'+catalog.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join('');
+  $('jobTitle').textContent=id?'Заявка':'Новая заявка';
+  $('jbClient').value=j?j.client_id:(presetClient||(clients[0]?clients[0].id:'')); populateEquip();
+  $('jbStatus').value=j?j.status:'open'; setEngineerSelect('jbEng',j?jobEngineerIds(j):[]); $('jbDate').value=j?(j.scheduled_date||''):''; $('jbWindow').value=j?(j.time_window||''):''; $('jbDue').value=j?(j.due_date||''):''; $('jbNotes').value=j?(j.notes||''):''; if($('jbWarrDays')) $('jbWarrDays').value=(appSettings.repair_warranty_days==null?90:appSettings.repair_warranty_days);
+  if(presetEquip) $('jbEquip').value=presetEquip; else if(j) $('jbEquip').value=j.equipment_id||'';
+  jobAtDepot=!!(j&&j.at_depot);
+  const dl=depotList();
+  $('jbDepotSel').innerHTML=dl.length?dl.map(d=>'<option value="'+d.id+'">'+esc(d.name)+'</option>').join('')
+    :'<option value="">— депо не заведено —</option>';
+  if(j&&j.depot_id) $('jbDepotSel').value=j.depot_id; else if(dl.length) $('jbDepotSel').value=dl[0].id;
+  renderDepotUi();
+  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {work_id:w.work_id||null,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at}; });
+  renderJobWorks();
+  const ro=!canWrite() && !(j&&assignedTo(j,session.user.id,'assigned_engineer'));
+  jobRO=ro;
+  ['jbClient','jbEquip','jbEng','jbDate','jbWindow','jbDue','jbNotes','jbWorkPick','jbWorkAdd','jbCustomAdd','jobSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
+  // Инженеру — вид «задание»: работы наверх, справочные поля свёрнуты и
+  // на чтение. Он их не заполняет — их заполняет диспетчер, когда принимает
+  // заявку; а случайно сменить у заявки клиента или исполнителя он мог.
+  setJobMode(!canWrite());
+  // Кнопка — только для новой заявки; у существующей на её месте
+  // состояние автосохранения.
+  clearTimeout(jobSaveT); jobSaveT=null; jobSaving=false; jobSaveAgain=false;
+  if($('jobSave')){
+    // Автосохранение осталось — оно страхует от потери. Но человек, правящий
+    // форму, хочет закончить правку явно и увидеть, что она принята;
+    // «сохраняется само» узнаётся не сразу и не всеми. Кнопка не обманывает:
+    // она пишет в базу тут же, не дожидаясь таймера.
+    // У инженера её нет: его страница — задание, а не форма. Там одно
+    // главное действие внизу и автосохранение; вторая кнопка сверху
+    // заставляла бы выбирать между двумя способами закончить.
+    $('jobSave').style.display=(ro||(jobEditId&&!canWrite()))?'none':'';
+    $('jobSave').textContent=jobEditId?'Сохранить':'Создать заявку';
+  }
+  if($('jobSaveState')){ $('jobSaveState').style.display=(jobEditId&&!ro)?'':'none'; jobSaveState('сохранено'); }
+  if($('jobRefToggle')) $('jobRefToggle').textContent='Подробности заявки';
+  $('jobErr').textContent=''; jobHead(); jobFootUpdate();
+  loadJobPhotos(); loadJobVisits(); loadJobParts(); loadFixes();
+  // Куда вернёт хлебная крошка. Заявку открывают из пяти мест — со сводки,
+  // с карты, из канбана, из выезда, — и возвращать всегда в канбан значит
+  // выкидывать человека из того места, где он работал.
+  const cur=document.querySelector('.view.active');
+  jobBack=(cur&&cur.className.match(/view-(\w+)/)||[])[1]||'planner';
+  if(jobBack==='job') jobBack='planner';
+  jobBackSub=(jobBack==='planner')?plannerCur:null;
+  switchTab('job');
+  const pane=document.querySelector('.view-job .pane'); if(pane) pane.scrollTop=0; }
+let jobBack='planner', jobBackSub='jobs';
+
+// ---------- заявка: два режима одной страницы ----------
+//
+// Диспетчер ЗАВОДИТ заявку, инженер её ВЫПОЛНЯЕТ. Первому нужна форма,
+// второму — задание: к кому, что сломано, записать часы, закрыть.
+// Одна страница на обе роли отдавала инженеру полэкрана выпадающих
+// списков до первого, что ему нужно, — и позволяла случайно сменить
+// у заявки клиента или исполнителя.
+// Дата словами. Системный ввод даты показывает её в формате браузера,
+// и «09/11/2026» читается и как 9 ноября, и как 11 сентября.
+const MON_GEN=['января','февраля','марта','апреля','мая','июня','июля',
+  'августа','сентября','октября','ноября','декабря'];
+function dateHuman(iso){ if(!iso) return '—';
+  const d=new Date(iso+'T00:00:00'); if(isNaN(d)) return iso;
+  return d.getDate()+' '+MON_GEN[d.getMonth()]+' '+d.getFullYear(); }
+function selText(id){ const s=$(id); if(!s||s.selectedIndex<0) return '—';
+  const t=(s.options[s.selectedIndex]||{}).text||''; return t.trim()||'—'; }
+function setJobMode(task){
+  const v=document.querySelector('.view-job'); if(!v) return;
+  v.classList.toggle('job-task',!!task);
+  const read=$('jobRefRead'), tg=$('jobRefToggle');
+  if(task&&read){
+    read.hidden=true;
+    if(tg) tg.setAttribute('aria-expanded','false');
+    buildJobRead();
+  }
+}
+// Пересобирается при каждом обновлении шапки: после «Взять в работу»
+// статус в справке должен меняться вместе с кнопкой, а не после
+// перезахода на страницу.
+function buildJobRead(){
+  const read=$('jobRefRead'); if(!read) return;
+  const rows=[
+      ['Клиент',selText('jbClient')],
+      ['Техника',($('jbEquip')&&$('jbEquip').selectedIndex>0)?selText('jbEquip'):'без привязки'],
+      ['Статус',selText('jbStatus')],
+      ['Инженер',selectedEngineerIds('jbEng').length?engineerNames(selectedEngineerIds('jbEng')).join(', '):'не назначены'],
+      ['Дата визита',dateHuman($('jbDate').value)],
+      ['Окно',$('jbWindow').value.trim()||'—'],
+      ['Дедлайн SLA',dateHuman($('jbDue').value)],
+      ['Заметка',$('jbNotes').value.trim()||'—']];
+  if(jobAtDepot) rows.splice(2,0,['В депо',selText('jbDepotSel')]);
+  read.innerHTML='<dl>'+rows.map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join('')+'</dl>';
+}
+if($('jobRefToggle')) $('jobRefToggle').onclick=()=>{
+  const read=$('jobRefRead'); if(!read) return;
+  const open=read.hidden;
+  read.hidden=!open;
+  $('jobRefToggle').setAttribute('aria-expanded',open?'true':'false');
+  $('jobRefToggle').textContent=open?'Скрыть подробности':'Подробности заявки';
+};
+
+// Одно главное действие внизу страницы: им заявку ведёт ТОТ, КТО ЕЁ ДЕЛАЕТ.
+// Инженер закрывает заявку отсюда, а не ищет статус в выпадающем списке
+// в свёрнутом блоке.
+//
+// Менеджеру, открывшему ЧУЖУЮ заявку, эта кнопка не показывается. Он не
+// исполнитель: «Взять в работу» от его имени означало бы, что работу взял
+// он. Статус у него и так есть — выпадающим списком, где рядом видны все
+// пять состояний, включая «отменена», которой в этой цепочке нет вовсе.
+// Признак один и тот же для любой роли: заявка назначена на меня.
+const JOB_NEXT={open:'in_progress',planned:'in_progress',in_progress:'done'};
+const JOB_NEXT_LABEL={open:'Взять в работу',planned:'Взять в работу',in_progress:'Завершить заявку'};
+function jobFootUpdate(){
+  const foot=$('jobFoot'); if(!foot) return;
+  const st=$('jbStatus')?$('jbStatus').value:'';
+  const mine=!!(jobEditId&&selectedEngineerIds('jbEng').includes(session.user.id));
+  const next=JOB_NEXT[st];
+  const show=!!(jobEditId&&next&&mine);
+  foot.style.display=show?'':'none';
+  if(!show) return;
+  $('jobPrimary').textContent=JOB_NEXT_LABEL[st]||'Дальше';
+  const hrs=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
+  $('jobFootHint').textContent=(next==='done'&&!hrs)
+    ? 'Часы не записаны — заявка закроется с нулём'
+    : (next==='done'?('Записано '+hrs.toFixed(1)+' ч'):'');
+}
+if($('jobPrimary')) $('jobPrimary').onclick=async ()=>{
+  const st=$('jbStatus').value, next=JOB_NEXT[st]; if(!next) return;
+  if(next==='done'){
+    const hrs=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
+    if(!await confirmDialog(hrs?('Завершить заявку? Записано '+hrs.toFixed(1)+' ч.')
+      :'Часы не записаны. Всё равно завершить заявку?',{okText:'Завершить'})) return;
+  }
+  // Подпись просим ДО смены статуса: после закрытия правило удаления
+  // делает её неприкосновенной, и переподписать криво поставленную
+  // будет уже нельзя. Отказаться можно — заказчика может не быть на месте.
+  let sig=null;
+  if(next==='done'&&!jobPhotos.some(p=>p.kind==='signature')){
+    const cl=clients.find(c=>c.id==$('jbClient').value);
+    sig=await askSignature(cl?cl.name:'');
+  }
+  $('jbStatus').value=next; jobHead(); jobFootUpdate();
+  if(sig) await saveSignature(sig);
+  await saveJobNow();
+};
+// Шапка страницы заявки: кто, что за техника, сколько это стоит и когда срок.
+function jobHead(){
+  const cl=clients.find(c=>c.id==$('jbClient').value);
+  const eqName=(()=>{ const sel=$('jbEquip'); return (sel&&sel.selectedIndex>0)?sel.options[sel.selectedIndex].text:''; })();
+  const nm=cl?cl.name:'Новая заявка';
+  $('jobTitle').textContent=jobEditId?nm:('Новая заявка' + (cl?(' · '+nm):''));
+  $('jobCrumb').textContent=jobEditId?nm:'Новая заявка';
+  const parts=[];
+  if(eqName) parts.push(esc(eqName)); else parts.push('без техники');
+  const st=$('jbStatus'); if(st) parts.push(esc(st.options[st.selectedIndex].text));
+  // Своё имя человек в подписи не читает — он и так знает, чья это заявка.
+  const en=$('jbEng');
+  if(en&&selectedEngineerIds('jbEng').length){ const ns=engineerNames(selectedEngineerIds('jbEng')); parts.push(selectedEngineerIds('jbEng').includes(session.user.id)?'в том числе на мне':esc(ns.join(', '))); }
+  const due=$('jbDue').value;
+  if(due){
+    const u=jobUrgency({due_date:due,created_at:null},new Date());
+    const col=urgHue(u);
+    parts.push('<span style="color:'+col+'">срок '+esc(tripPeriod(due,null))
+      +(u.left<0?(' · просрочено '+(-u.left)+' дн'):(' · '+u.left+' дн'))+'</span>');
+  }
+  $('jobSub').innerHTML=parts.join(' · ');
+  // Позвонить и доехать — прямо в шапке заявки, а не после поисков по карте.
+  // Кнопки появляются, только когда есть чему появляться: номер задан,
+  // координаты у точки есть.
+  const ja=$('jobActs');
+  if(ja){
+    let a=''; const tel=cl?telHref(cl.phone):'';
+    if(tel) a+='<a class="btn sm" href="'+esc(tel)+'">Позвонить</a>';
+    if(cl&&cl.lat!=null&&cl.lng!=null) a+='<a class="btn sm ghost" href="'+esc(navHref(cl.lat,cl.lng))+'" target="_blank" rel="noopener">Проехать</a>';
+    ja.innerHTML=a; ja.style.display=a?'':'none';
+  }
+  const hrs=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
+  const rev=curWorks.reduce((a,w)=>a+(+workRevenue(w)||0),0);
+  const cur=appSettings.currency||'';
+  const works=curWorks.length+' '+plural(curWorks.length,'работа','работы','работ');
+  // Крупно — то, чем человек распоряжается. Менеджеру это деньги, инженеру
+  // часы: выручку он не назначает, и в поле она ему ни о чём не говорит.
+  $('jobHeadEcon').innerHTML=canWrite()
+    ? ('<div class="te-k">Выручка</div>'
+      +'<div class="te-v">'+Math.round(rev).toLocaleString('ru-RU')+' '+cur+'</div>'
+      +'<div class="te-s">'+hrs.toFixed(hrs%1?1:0)+' ч · '+works+'</div>')
+    : ('<div class="te-k">Записано</div>'
+      +'<div class="te-v">'+hrs.toFixed(hrs%1?1:0)+' ч</div>'
+      +'<div class="te-s">'+works+'</div>');
+  // Дата словами рядом с системным полем: «09/11/2026» читается и как
+  // 9 ноября, и как 11 сентября — формат берётся из браузера, не из страницы.
+  if($('jbDateHint')) $('jbDateHint').textContent=$('jbDate').value?dateHuman($('jbDate').value):'';
+  if($('jbDueHint')) $('jbDueHint').textContent=$('jbDue').value?dateHuman($('jbDue').value):'';
+  if(document.querySelector('.view-job.job-task')) buildJobRead();
+}
+if($('jbDepot')) $('jbDepot').onchange=()=>{
+  if($('jbDepot').checked && !depotList().length){
+    $('jbDepot').checked=false;
+    notify('Депо не заведено. Карта → Справочник → создай точку и отметь её как депо.','err');
+    return;
+  }
+  jobAtDepot=$('jbDepot').checked;
+  renderDepotUi();
+  // Ставка сменилась — показываем это сразу, а не после сохранения.
+  renderJobWorks();
+};
+
+window.newJobForClient=function(cid){ if(!canWrite()) return; map.closePopup(); openJob(null,cid); };
+window.newJobForEquip=function(cid,eid){ if(!canWrite()) return; map.closePopup(); openJob(null,cid,eid); };
+// Место выполнения открытой заявки. Читается workRevenue() при пересчёте
+// строк работ. false для новой заявки — по умолчанию всё на выезде.
+let jobAtDepot=false;
+function depotList(){ return clients.filter(c=>c.is_base); }
+function renderDepotUi(){
+  const on=!!jobAtDepot;
+  if($('jbDepot')) $('jbDepot').checked=on;
+  if($('jbDepotWrap')) $('jbDepotWrap').style.display=on?'':'none';
+  if($('jbDepotHint')) $('jbDepotHint').style.display=on?'inline-flex':'none';
+}
+function defaultProfileId(billable){ const list=appSettings.tariff_profiles||[];
+  if(billable){ const cid=$('jbClient')?$('jbClient').value:''; const cl=cid?clients.find(c=>c.id==cid):null; if(cl&&cl.default_profile&&list.some(p=>p.id===cl.default_profile)) return cl.default_profile; const dp=list.find(p=>p.def_paid); return dp?dp.id:''; }
+  const dw=list.find(p=>p.def_warranty); return dw?dw.id:''; }
+$('jbWorkAdd').onclick=async ()=>{ const wid=$('jbWorkPick').value; if(!wid) return; const cw=catalog.find(c=>c.id===wid); if(!cw) return;
+  let sug={billable:true,reasons:[]}; try{ const {data}=await sb.rpc('suggest_warranty',{p_equipment:$('jbEquip').value||null,p_work:wid,p_date:$('jbDate').value||null}); if(data) sug=data; }catch(e){}
+  const bill=sug.billable!==false; curWorks.push({work_id:wid,name:cw.name,hours:+cw.norm_hours||0,override:((+cw.price>0)?String(cw.price):''),billable:bill,reasons:sug.reasons||[],billable_reason:'',profile:defaultProfileId(bill),custom:false}); $('jbWorkPick').value=''; renderJobWorks(); };
+$('jbCustomAdd').onclick=()=>{ curWorks.push({work_id:null,name:'',hours:0,override:'',billable:true,reasons:[],billable_reason:'',profile:defaultProfileId(true),custom:true}); renderJobWorks(); };
+function profileById(id){ return id?((appSettings.tariff_profiles||[]).find(p=>p.id===id)||null):null; }
+// Зеркало серверного guard_job_work_money. Разъедутся — инженер увидит одну
+// цифру, а в базе ляжет другая: последнее слово всегда за триггером.
+// Правишь здесь — правь и там.
+function workRevenue(w){ if(w.override!==''&&w.override!=null) return +w.override||0; const p=profileById(w.profile||w.tariff_profile);
+  const depot=!!jobAtDepot;
+  if(w.billable){
+    let r=0;
+    if(depot){
+      r=p?(+((p.work_depot||{}).rate)||0):0;
+      // Фолбэк на ставку выезда, а не на ноль: пустая «депо/ч» не должна
+      // молча означать бесплатную работу.
+      if(r<=0) r=p?(+((p.work_paid||{}).rate)||0):0;
+    } else {
+      r=p?(+((p.work_paid||{}).rate)||0):0;
+    }
+    return (+w.hours||0)*(r>0?r:((appSettings.tariffs&&appSettings.tariffs.hour)||0));
+  }
+  const wr=p?(+((p.work_warr||{}).rate)||0):0; return (+w.hours||0)*wr; }
+
+function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
+  const mayW=canEditWorks();
+  curWorks.forEach((w,i)=>{ const d=document.createElement('div'); d.className='eqitem';
+    const head=w.custom?('<input type="text" placeholder="название работы" value="'+esc(w.name)+'" data-wn="'+i+'" style="width:100%">'):('<div class="t">'+esc(w.name)+'</div>');
+    const rev=workRevenue(w);
+    // Тариф, ручная цена и сумма строки — органы управления деньгами.
+    // Инженеру их не показываем вовсе: писать выручку ему всё равно не даёт
+    // сервер (guard_job_work_money), а на экране они занимали половину
+    // строки и предлагали трогать то, что трогать нельзя.
+    const money=canWrite()
+      ? ('<select data-wp="'+i+'" style="max-width:120px;font-size: var(--fs-2)" title="профиль тарифа (плательщик)"><option value="">— профиль —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'"'+(w.profile===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select>'
+        +'<input type="number" step="0.01" value="'+esc(w.override)+'" data-wo="'+i+'" placeholder="авто" style="width:84px" title="цена вручную (оверрайд)">'
+        +'<span class="hint" style="margin: 0">= '+rev.toFixed(0)+'</span>')
+      : '';
+    d.innerHTML=head+'<div style="display:flex;gap: var(--sp-3);align-items:center;margin-top: var(--sp-3);flex-wrap:wrap">'+
+      '<input type="number" step="0.25" value="'+w.hours+'" data-wh="'+i+'" style="width:74px" title="часы"><span class="hint" style="margin: 0">ч</span>'+
+      '<button class="btn sm '+(w.billable?'amber':'ghost')+'" data-wb="'+i+'">'+(w.billable?'платно':'гарантия')+'</button>'+
+      money+
+      '<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button></div>'+
+      ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top: var(--sp-2)">'+esc(w.reasons.join(' · '))+'</div>':'')+
+      (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
+    if(!mayW) d.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
+    box.appendChild(d); });
+  // Добавлять работы можно ровно там же, где и править: иначе кнопка «+ из
+  // каталога» обещала бы то, что сервер не примет.
+  ['jbWorkPick','jbWorkAdd','jbCustomAdd'].forEach(id=>{ const el=$(id); if(el) el.disabled=!mayW; });
+  const wrap=$('jbWorksApp');
+  if(wrap){
+    const pend=jobEditId&&worksPending()&&curWorks.length;
+    const st=$('jbWorksState'), acts=$('jbWorksActs');
+    wrap.style.display=(pend||(!mayW&&jobEditId&&!canWrite()))?'':'none';
+    if(st){ st.textContent=pend?'работы ждут подтверждения':'работы подтверждены';
+      st.className=pend?'pt-wait':'pt-ok'; }
+    if(acts){ acts.innerHTML=(pend&&canWrite())
+        ? '<button class="btn sm amber" id="jbWorksOk">Подтвердить работы</button>'
+        : ((!mayW&&!canWrite())?'<button class="btn sm ghost" id="jbWorksFix">Предложить правку</button>':'');
+      const ok=$('jbWorksOk'); if(ok) ok.onclick=worksApprove;
+      const fx=$('jbWorksFix'); if(fx) fx.onclick=()=>openFixModal('work',null);
+    }
+  }
+  box.querySelectorAll('[data-wn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wn].name=inp.value; });
+  box.querySelectorAll('[data-wo]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wo].override=inp.value; jobTotals(); });
+  box.querySelectorAll('[data-wh]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wh].hours=parseFloat(inp.value)||0; jobTotals(); });
+  box.querySelectorAll('[data-wrsn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wrsn].billable_reason=inp.value; });
+  box.querySelectorAll('[data-wp]').forEach(sel=>sel.onchange=()=>{ curWorks[sel.dataset.wp].profile=sel.value; });
+  box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; w.profile=defaultProfileId(w.billable); renderJobWorks(); });
+  box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); });
+  jobTotals();
+  // Подсказки по материалам зависят от того, какие работы стоят в заявке:
+  // добавили каталожную — появились её материалы, убрали — исчезли.
+  if(typeof partSuggest==='function') partSuggest(); }
+function workCost(w){ return (+w.hours||0)*((appSettings.costs&&appSettings.costs.hour)||0); }
+function jobTotals(){ jobHead(); jobFootUpdate();
+  const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
+  // Инженеру — только часы: выручку и прибыль он не назначает, а строка
+  // с деньгами под его же работой читается как оценка его работы.
+  if(!canWrite()){ $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · '+curWorks.length+' '+plural(curWorks.length,'работа','работы','работ'); foldSums(); return; }
+  const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0);
+  $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · прибыль '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)';
+  foldSums(); }
+// Уходя со страницы — дописываем то, что ещё ждало таймера, и обновляем
+// список, если за время правки что-то изменилось. Иначе человек вернулся
+// бы в канбан и увидел там старые данные.
+$('jobCancel').onclick=async ()=>{
+  if(jobSaveT) await saveJobNow();
+  switchTab(jobBack, jobBackSub);
+  if(jobsDirty){ jobsDirty=false; await renderJobs(); await refreshStats(); } };
+// ---------- снимок данных на устройстве ----------
+//
+// Кэш оболочки (service worker) даёт приложению открыться без связи, но
+// открыться пустым. Инженеру нужен ответ на «куда я еду и что там делать»,
+// а это данные. Кладём их на устройство при каждой удачной загрузке
+// и достаём, когда сети нет.
+//
+// Только чтение. Запись в офлайне пока не поддерживаем — и говорим об этом
+// прямо, а не делаем вид, что сохранили.
+//
+// IndexedDB, а не localStorage: там строки, синхронный доступ и лимит
+// в несколько мегабайт, а здесь список выездов с точками.
+const SNAP_DB='dlight-snap', SNAP_STORE='kv', Q_STORE='queue';
+let snapDbP=null;
+function snapDb(){
+  if(snapDbP) return snapDbP;
+  snapDbP=new Promise((res,rej)=>{
+    let rq; try{ rq=indexedDB.open(SNAP_DB,2); }catch(e){ rej(e); return; }
+    rq.onupgradeneeded=()=>{ const db=rq.result;
+      try{ if(!db.objectStoreNames.contains(SNAP_STORE)) db.createObjectStore(SNAP_STORE); }catch(e){}
+      // Очередь с автоключом: порядок отправки должен совпадать с порядком
+      // действий. Инженер сначала берёт заявку в работу, потом закрывает —
+      // наоборот сервер не примет.
+      try{ if(!db.objectStoreNames.contains(Q_STORE)) db.createObjectStore(Q_STORE,{keyPath:'id',autoIncrement:true}); }catch(e){}
+    };
+    rq.onsuccess=()=>res(rq.result);
+    rq.onerror=()=>rej(rq.error||new Error('indexeddb'));
+  }).catch(e=>{ snapDbP=null; throw e; });
+  return snapDbP;
+}
+// at передаётся, когда снимок правится локально: отметка времени должна
+// остаться прежней. Иначе правка в офлайне выдавала бы данные за свежие,
+// и полоса «данные на 08:40» врала бы.
+async function snapSet(key,val,at){
+  try{ const db=await snapDb();
+    await new Promise((res,rej)=>{ const t=db.transaction(SNAP_STORE,'readwrite');
+      t.objectStore(SNAP_STORE).put({at:at||Date.now(),val},key);
+      t.oncomplete=res; t.onerror=()=>rej(t.error); });
+  }catch(e){ /* нет места или приватный режим — снимок не главная функция */ }
+}
+async function snapGet(key){
+  try{ const db=await snapDb();
+    return await new Promise((res,rej)=>{ const t=db.transaction(SNAP_STORE,'readonly');
+      const rq=t.objectStore(SNAP_STORE).get(key);
+      rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>rej(rq.error); });
+  }catch(e){ return null; }
+}
+function snapAge(at){
+  if(!at) return '';
+  const d=new Date(at), now=new Date();
+  const hh=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const sameDay=d.toDateString()===now.toDateString();
+  return sameDay?('данные на '+hh):('данные от '+d.getDate()+' '+MON_GEN[d.getMonth()]+', '+hh);
+}
+// Признак связи: navigator.onLine врёт в одну сторону (говорит «есть»,
+// когда есть только Wi-Fi без интернета), поэтому опираемся на факт
+// провала запроса, а onLine используем лишь для быстрой подсказки.
+function offlineBanner(at){
+  const n=qCount;
+  return '<div class="offbar">Нет связи · '+esc(snapAge(at))
+    +'<span class="offbar-h">'
+    +(n?('показываю сохранённое · '+n+' '+plural(n,'изменение ждёт','изменения ждут','изменений ждут')+' отправки')
+       :'показываю сохранённое, изменения уйдут, когда появится связь')
+    +'</span></div>';
+}
+
+// ---------- очередь записи ----------
+//
+// Второй уровень офлайна. Снимок отвечает на «куда я еду», очередь — на
+// «я это сделал». Без неё инженер без связи видит день, но не может
+// отметить ни одного шага, и вечером восстанавливает всё по памяти.
+//
+// Порядок важен: «взял в работу» должно уйти раньше «завершил», поэтому
+// хранилище с автоключом и строго последовательная отправка.
+//
+// Сетевую ошибку от отказа сервера отличаем по тексту: отказ («статус уже
+// изменился», «нет прав») повторять бессмысленно — такой пункт снимаем
+// с очереди и говорим вслух. Молча копить неотправляемое хуже, чем
+// признать потерю.
+let qCount=0, qFlushing=false;
+// Пока связи не было, визит жил под временным id. При отправке сервер
+// выдаёт настоящий, и «уехал» из очереди должен попасть в ту же строку.
+const qLocalIds={};
+function isNetErr(e){
+  const m=String((e&&e.message)||e||'').toLowerCase();
+  return !m || m.includes('fetch') || m.includes('network') || m.includes('offline')
+      || m.includes('timeout') || m.includes('соедин');
+}
+async function qPush(kind,payload){
+  try{
+    const db=await snapDb();
+    await new Promise((res,rej)=>{ const t=db.transaction(Q_STORE,'readwrite');
+      t.objectStore(Q_STORE).add({kind,payload,at:Date.now()});
+      t.oncomplete=res; t.onerror=()=>rej(t.error); });
+    await qRefresh();
+    return true;
+  }catch(e){ return false; }
+}
+async function qAll(){
+  try{ const db=await snapDb();
+    return await new Promise((res,rej)=>{ const t=db.transaction(Q_STORE,'readonly');
+      const rq=t.objectStore(Q_STORE).getAll();
+      rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); });
+  }catch(e){ return []; }
+}
+async function qDrop(id){
+  try{ const db=await snapDb();
+    await new Promise((res,rej)=>{ const t=db.transaction(Q_STORE,'readwrite');
+      t.objectStore(Q_STORE).delete(id); t.oncomplete=res; t.onerror=()=>rej(t.error); });
+  }catch(e){}
+}
+// Снять из очереди прежние сохранения этой заявки. Фото и действия
+// по выезду не трогаем: они не заменяют друг друга.
+async function qDropJob(jobId){
+  const items=await qAll();
+  for(const it of items){
+    if(it.kind==='job'&&it.payload&&it.payload.jobId===jobId) await qDrop(it.id);
+  }
+}
+// Одна строка запчасти — одна запись в очереди. Правки поверх правки
+// заменяют друг друга; «удалить» перекрывает и добавление, которое ещё
+// не уехало, — отправлять вставку ради немедленного удаления незачем.
+async function qDropPart(localId){
+  const items=await qAll();
+  for(const it of items){
+    if(it.kind==='part'&&it.payload&&String(it.payload.localId)===String(localId)) await qDrop(it.id);
+  }
+}
+async function qRefresh(){ qCount=(await qAll()).length; paintQueue(); return qCount; }
+function paintQueue(){
+  const el=$('qBadge'); if(!el) return;
+  el.style.display=qCount?'':'none';
+  // Глагол склоняем вместе с числом: «1 изменение ждут отправки» —
+  // мелочь, но именно по таким мелочам интерфейс читается как небрежный.
+  el.textContent=qCount+' '+plural(qCount,'изменение ждёт','изменения ждут','изменений ждут')+' отправки';
+}
+// Одна попытка отправки всей очереди. Возвращает, сколько ушло.
+async function qFlush(){
+  if(qFlushing) return 0;
+  qFlushing=true;
+  let sent=0, dropped=0;
+  try{
+    const items=await qAll();
+    for(const it of items){
+      try{
+        await qSendOne(it);
+        await qDrop(it.id); sent++;
+      }catch(e){
+        if(isNetErr(e)) break;                 // связи нет — пробуем позже
+        await qDrop(it.id); dropped++;         // отказ сервера — снимаем
+        notify('Изменение не принято сервером и снято с очереди: '+((e&&e.message)||e),'err');
+      }
+    }
+  } finally { qFlushing=false; }
+  await qRefresh();
+  if(sent) showToast('Отправлено: '+sent+' '+plural(sent,'изменение','изменения','изменений'));
+  if(sent&&!dropped){ try{ await loadAll(); }catch(e){} }
+  // Открытая заявка держит В ПАМЯТИ строки с временными id (local-…).
+  // После отправки настоящие id знает только очередь, и следующая правка
+  // такой строки уехала бы вставкой-двойником. Перечитываем то, что
+  // только что ушло, — тогда на экране лежат серверные записи.
+  if(sent&&jobEditId&&document.querySelector('.view-job.active')){
+    try{ await loadJobParts(); await loadJobVisits(); await loadJobPhotos();
+      jobSaveState('сохранено');
+    }catch(e){}
+  }
+  return sent;
+}
+async function qSendOne(it){
+  const p=it.payload||{};
+  if(it.kind==='trip'){
+    const {data,error}=await sb.rpc(TRIP_RPC[p.action],{p_trip:p.tripId});
+    if(error) throw error;
+    if(data==='wrong_status'||data==='not_found') throw new Error(TRIP_SAY[data]||String(data));
+    return;
+  }
+  if(it.kind==='visit'){
+    if(p.op==='start'){
+      // Возвращаем настоящий id и запоминаем соответствие: закрытие
+      // того же визита может лежать в очереди следом.
+      const {data,error}=await sb.from('job_visits').insert({job_id:p.jobId,started_at:p.startedAt}).select('id').single();
+      if(error) throw error;
+      qLocalIds[p.localId]=data.id;
+      return;
+    }
+    const id=qLocalIds[p.visitId]||p.visitId;
+    if(String(id).startsWith('local-')) throw new Error('отметка приезда не отправилась');
+    const {error}=await sb.from('job_visits').update({ended_at:p.endedAt}).eq('id',id);
+    if(error) throw error;
+    return;
+  }
+  if(it.kind==='part'){
+    if(p.op==='add'){
+      const {data,error}=await sb.from('job_parts').insert(p.row).select('id').single();
+      if(error) throw error;
+      qLocalIds[p.localId]=data.id;
+      return;
+    }
+    const id=qLocalIds[p.localId]||p.partId||p.localId;
+    if(String(id).startsWith('local-')) throw new Error('запчасть не добавилась');
+    if(p.op==='del'){
+      const {error}=await sb.from('job_parts').delete().eq('id',id);
+      if(error) throw error;
+      return;
+    }
+    const {error}=await sb.from('job_parts').update(p.row).eq('id',id);
+    if(error) throw error;
+    return;
+  }
+  if(it.kind==='photo'){
+    // Файл лежит в очереди как есть — IndexedDB хранит Blob, пережимать
+    // второй раз нечего. Порядок тот же: сначала файл, потом строка;
+    // строка без файла показала бы пустую плитку.
+    const path='jobs/'+p.jobId+'/'+p.name;
+    const up=await sb.storage.from('job-photos').upload(path,p.blob,{contentType:'image/jpeg'});
+    if(up.error) throw up.error;
+    const {error}=await sb.from('job_photos').insert({job_id:p.jobId,path,kind:p.kind});
+    if(error){ try{ await sb.storage.from('job-photos').remove([path]); }catch(e){} throw error; }
+    return;
+  }
+  if(it.kind==='job'){
+    // Тот же порядок, что и при обычном сохранении: работы, затем статус.
+    const del=await sb.from('job_works').delete().eq('job_id',p.jobId);
+    if(del.error) throw del.error;
+    if(p.works&&p.works.length){
+      const ins=await sb.from('job_works').insert(p.works.map(w=>Object.assign({job_id:p.jobId},w)));
+      if(ins.error) throw ins.error;
+    }
+    const {error}=await sb.from('jobs').update(p.rec).eq('id',p.jobId);
+    if(error) throw error;
+    // Заявку закрыли без связи — последствия наступают сейчас, а не теряются.
+    if(p.rec&&p.rec.status==='done') await jobClosed(p.jobId,{equipmentId:p.rec.equipment_id,works:p.works||[]});
+    return;
+  }
+  throw new Error('неизвестный тип записи');
+}
+// Пробуем отправить: при запуске, при возврате связи и при возврате
+// на вкладку. Три повода вместо одного — потому что событие online
+// приходит не всегда, а вкладку инженер переключает постоянно.
+window.addEventListener('online',()=>{ qFlush(); });
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) qFlush(); });
+
+// ---------- фото к заявке ----------
+//
+// В настройках зашита гарантия на ремонт, а доказательной базы под неё не
+// было ни одной. Снимок «до» отвечает на «оно уже было сломано», «после» —
+// на «вы не сделали», «дефект» — на «деталь была бракованной».
+//
+// Главное решение здесь не про интерфейс, а про размер: снимок с телефона
+// весит 3–12 МБ, и в поле на слабой связи он просто не уходит. Ужимаем до
+// 1600 px по длинной стороне и JPEG 0.8 — это ~250 КБ, разницы на экране
+// не видно, а отправка перестаёт быть лотереей. Перекодирование заодно
+// срезает EXIF: координаты съёмки в архиве нам не нужны, место заявки
+// и так известно.
+const PH_MAX=1600, PH_Q=0.8, PH_TARGET=600*1024;
+const PH_LABEL={before:'до',after:'после',defect:'дефект',signature:'подпись'};
+let jobPhotos=[], jobPhotosQ=[], phBusy=0, phUrls=[];
+function phState(txt,bad){ const el=$('jbPhotoState'); if(!el) return;
+  el.textContent=txt||''; el.className='ph-state'+(bad?' bad':''); }
+async function shrinkImage(file){
+  // createImageBitmap с imageOrientation учитывает поворот из EXIF —
+  // без него снятое вертикально приезжает лёжа.
+  let bmp;
+  try{ bmp=await createImageBitmap(file,{imageOrientation:'from-image'}); }
+  catch(e){ bmp=await createImageBitmap(file); }
+  // Ограничиваем не только сторону, но и БАЙТЫ. Мелкая деталь — трещина,
+  // шильдик — сжимается плохо, и снимок «по стороне 1600» иногда весит
+  // за мегабайт. На слабой связи это снова лотерея, поэтому при перевесе
+  // сначала опускаем качество, потом сторону.
+  const steps=[[PH_MAX,PH_Q],[PH_MAX,0.6],[1200,0.6]];
+  let blob=null;
+  for(const [side,q] of steps){
+    const k=Math.min(1,side/Math.max(bmp.width,bmp.height));
+    const w=Math.round(bmp.width*k), h=Math.round(bmp.height*k);
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    cv.getContext('2d').drawImage(bmp,0,0,w,h);
+    blob=await new Promise(res=>cv.toBlob(res,'image/jpeg',q));
+    if(!blob) break;
+    if(blob.size<=PH_TARGET) break;
+  }
+  if(bmp.close) bmp.close();
+  if(!blob) throw new Error('не удалось пережать снимок');
+  return blob;
+}
+async function loadJobPhotos(){
+  const box=$('jbPhotoList'); if(!box) return;
+  jobPhotos=[]; jobPhotosQ=[];
+  if(!jobEditId){ box.innerHTML=''; phState('Снимки можно добавить после создания заявки'); return; }
+  // Отложенные снимки этой заявки — из очереди. Показываем вместе
+  // с отправленными: инженер сфотографировал, значит снимок есть,
+  // и он должен его видеть, а не гадать, сохранилось ли.
+  jobPhotosQ=(await qAll())
+    .filter(i=>i.kind==='photo'&&i.payload&&i.payload.jobId===jobEditId)
+    .map(i=>({qid:i.id,kind:i.payload.kind,blob:i.payload.blob,pending:true}));
+  let netFail=false;
+  try{
+    const {data,error}=await sb.from('job_photos').select('id,path,kind,created_by,created_at')
+      .eq('job_id',jobEditId).order('created_at');
+    if(error) throw error;
+    jobPhotos=data||[];
+  }catch(e){
+    // Нет связи — показываем то, что есть на устройстве. Иначе (нет таблицы,
+    // нет прав) говорим прямо, а не рисуем пустую сетку, будто снимков нет.
+    if(!isNetErr(e)){ box.innerHTML=''; phState('Фото недоступны: '+(e.message||e),true); return; }
+    netFail=true;
+  }
+  await renderJobPhotos();
+  phState((jobPhotos.length||jobPhotosQ.length)?'':(netFail?'Нет связи — снимки покажу позже':'Снимков нет'));
+  foldSums();
+}
+async function renderJobPhotos(){
+  const box=$('jbPhotoList'); if(!box) return;
+  // Ссылки на локальные файлы освобождаем при каждой перерисовке: иначе
+  // за смену их накопятся десятки, и браузер будет держать все снимки
+  // в памяти.
+  phUrls.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} }); phUrls=[];
+  if(!jobPhotos.length&&!jobPhotosQ.length){ box.innerHTML=''; return; }
+  // Бакет приватный: адреса подписываются на час. Публичный положил бы
+  // снимки чужой техники на угадываемый адрес навсегда.
+  let urls={};
+  try{
+    const {data}=await sb.storage.from('job-photos').createSignedUrls(jobPhotos.map(p=>p.path),3600);
+    (data||[]).forEach(r=>{ if(r&&r.path&&r.signedUrl) urls[r.path]=r.signedUrl; });
+  }catch(e){ /* без ссылок покажем плитки-заглушки, а не пустоту */ }
+  const mayDel=p=>role==='admin'||(p.created_by===session.user.id&&$('jbStatus').value!=='done');
+  const sent=jobPhotos.map(p=>'<div class="ph-item">'
+    +(urls[p.path]?('<img src="'+esc(urls[p.path])+'" alt="'+esc(PH_LABEL[p.kind]||'')+'" data-phv="'+esc(urls[p.path])+'">')
+                  :'<div class="ph-wait">нет доступа</div>')
+    +'<span class="ph-tag">'+esc(PH_LABEL[p.kind]||p.kind)+'</span>'
+    +(mayDel(p)?('<button class="ph-del" type="button" data-phd="'+p.id+'" aria-label="Удалить снимок">×</button>'):'')
+    +'</div>').join('');
+  // Отложенные снимки — те же плитки, но из локального файла и с пометкой.
+  // Удаление такой плитки убирает её из очереди: на сервере её ещё нет.
+  const waiting=jobPhotosQ.map(p=>{
+    let u=''; try{ u=URL.createObjectURL(p.blob); phUrls.push(u); }catch(e){}
+    return '<div class="ph-item pending">'
+      +(u?('<img src="'+esc(u)+'" alt="'+esc(PH_LABEL[p.kind]||'')+'" data-phv="'+esc(u)+'">'):'<div class="ph-wait">файл</div>')
+      +'<span class="ph-tag">'+esc(PH_LABEL[p.kind]||p.kind)+' · ждёт</span>'
+      +'<button class="ph-del" type="button" data-phq="'+p.qid+'" aria-label="Убрать снимок из очереди">×</button>'
+      +'</div>'; }).join('');
+  box.innerHTML=sent+waiting;
+  box.querySelectorAll('[data-phv]').forEach(im=>im.onclick=()=>{
+    $('phViewImg').src=im.dataset.phv; $('phView').hidden=false; });
+  box.querySelectorAll('[data-phd]').forEach(b=>b.onclick=()=>delJobPhoto(b.dataset.phd));
+  box.querySelectorAll('[data-phq]').forEach(b=>b.onclick=async ()=>{
+    if(!await confirmDialog('Убрать снимок из очереди? Он ещё не отправлен и будет потерян.',{danger:true,okText:'Убрать'})) return;
+    await qDrop(+b.dataset.phq); await qRefresh(); await loadJobPhotos(); });
+}
+async function addJobPhotos(files,kind){
+  if(!jobEditId||!files||!files.length) return;
+  // По одному, а не пачкой: на слабой связи параллельные отправки мешают
+  // друг другу и все разом отваливаются по таймауту.
+  for(let i=0;i<files.length;i++){
+    phBusy=i+1;
+    phState(files.length>1?('Отправляю '+(i+1)+' из '+files.length+'…'):'Отправляю снимок…');
+    try{
+      const blob=await shrinkImage(files[i]);
+      const path='jobs/'+jobEditId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg';
+      const up=await sb.storage.from('job-photos').upload(path,blob,{contentType:'image/jpeg'});
+      if(up.error) throw up.error;
+      // Файл без строки — мусор, которого приложение не увидит: если
+      // запись не прошла, убираем и файл.
+      const {error}=await sb.from('job_photos').insert({job_id:jobEditId,path,kind});
+      if(error){ try{ await sb.storage.from('job-photos').remove([path]); }catch(e2){} throw error; }
+    }catch(e){
+      // Нет связи — снимок не теряем: он и делается ровно там, где связи
+      // обычно нет. Кладём в очередь вместе с файлом; плитка появится
+      // сразу, с пометкой «ждёт отправки».
+      if(isNetErr(e)){
+        let ok=false;
+        try{
+          const blob=await shrinkImage(files[i]);
+          ok=await qPush('photo',{jobId:jobEditId,kind,blob,
+            name:Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg'});
+        }catch(e2){ ok=false; }
+        if(ok) continue;
+        phState('Нет связи и не удалось отложить снимок',true); phBusy=0; return;
+      }
+      phBusy=0;
+      const left=files.length-i-1;
+      phState('Не отправлено: '+(e.message||e)+(left?(' · осталось '+left+', попробуй ещё раз'):''),true);
+      await loadJobPhotos(); phState('Не отправлено: '+(e.message||e),true);
+      return;
+    }
+  }
+  phBusy=0; phState('');
+  await loadJobPhotos();
+}
+async function delJobPhoto(id){
+  const p=jobPhotos.find(x=>x.id===id); if(!p) return;
+  if(!await confirmDialog('Удалить снимок «'+(PH_LABEL[p.kind]||p.kind)+'»?',{danger:true,okText:'Удалить'})) return;
+  try{
+    const {error}=await sb.from('job_photos').delete().eq('id',id);
+    if(error) throw error;
+    try{ await sb.storage.from('job-photos').remove([p.path]); }catch(e){}
+    await loadJobPhotos();
+  }catch(e){ phState('Не удалось удалить: '+(e.message||e),true); }
+}
+(function(){
+  const add=$('jbPhotoAdd'), inp=$('jbPhotoFile'); if(!add||!inp) return;
+  let kind='defect';
+  add.querySelectorAll('[data-ph]').forEach(b=>b.onclick=()=>{
+    if(!jobEditId){ phState('Сначала создай заявку',true); return; }
+    kind=b.dataset.ph; inp.value=''; inp.click(); });
+  inp.onchange=()=>{ const files=[...(inp.files||[])]; inp.value=''; addJobPhotos(files,kind); };
+  if($('phClose')) $('phClose').onclick=()=>{ $('phView').hidden=true; $('phViewImg').src=''; };
+  if($('phView')) $('phView').onclick=e=>{ if(e.target===$('phView')){ $('phView').hidden=true; $('phViewImg').src=''; } };
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('phView')&&!$('phView').hidden){ $('phView').hidden=true; $('phViewImg').src=''; } });
+})();
+
+// ---------- «я на месте» ----------
+//
+// Фактические часы выводились только из стоянок трекера машины. Без трекера
+// данных нет вовсе; две заявки на одной площадке трекер не разделяет;
+// а инженер ничего не подтверждает — он только смотрит на догадку детектора
+// о собственном дне.
+//
+// Отметка «приехал/уехал» — свидетельство самого инженера. Трекер остаётся
+// независимой проверкой: две записи об одном и том же, сделанные разными
+// способами, и есть способ поймать ошибку.
+let jobVisits=[];
+function openVisit(){ return jobVisits.find(v=>!v.ended_at)||null; }
+function visitTime(iso){ if(!iso) return ''; const d=new Date(iso); if(isNaN(d)) return '';
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function visitHours(v){ if(!v||!v.started_at||!v.ended_at) return 0;
+  return Math.max(0,(new Date(v.ended_at)-new Date(v.started_at))/3600000); }
+function visitsTotal(){ return jobVisits.reduce((a,v)=>a+visitHours(v),0); }
+async function loadJobVisits(){
+  jobVisits=[];
+  if(!jobEditId){ paintVisit(); return; }
+  try{
+    const {data,error}=await sb.from('job_visits').select('id,started_at,ended_at,created_by')
+      .eq('job_id',jobEditId).order('started_at');
+    if(error) throw error;
+    jobVisits=data||[];
+  }catch(e){
+    // Без связи берём отметки из снимка — там они лежат вместе с заявкой.
+    const j=await snapFindJob(jobEditId);
+    jobVisits=(j&&j.job_visits)||[];
+  }
+  paintVisit();
+}
+// «Я на месте» — свидетельство о СЕБЕ, и нажать его может только тот, кто
+// на этом месте есть: исполнитель заявки. Менеджеру кнопка показывалась
+// потому, что рисовалась по одному признаку «заявка открыта», и он мог
+// отметить чужой приезд от своего имени — сервер бы это принял, политика
+// job_visits смотрит на created_by, а не на исполнителя.
+//
+// Сами отметки менеджер видит: это данные о дне инженера, ради них всё
+// и заводилось. Разница между «видеть» и «делать» здесь и есть роль.
+function canMarkVisit(){
+  return !!(jobEditId && !jobRO && selectedEngineerIds('jbEng').includes(session.user.id));
+}
+function visitTotalNote(total){
+  // Меньше четверти часа не показываем: это промах по кнопке,
+  // а не работа, и «по отметкам 0 ч» выглядит как поломка.
+  return (total>=0.25)
+    ? '<span class="visit-note">по отметкам '+total.toFixed(2).replace(/\.?0+$/,'')+' ч</span>'
+    : '';
+}
+function paintVisit(){
+  const box=$('jbVisit'); if(!box) return;
+  if(!jobEditId){ box.innerHTML=''; return; }
+  const v=openVisit(), total=visitsTotal(), mine=canMarkVisit();
+  let h='';
+  if(!mine){
+    // Читателю — только факт. Пустая строка и есть пустая строка:
+    // «отметок нет» под каждой заявкой было бы шумом на весь список.
+    if(v) h+='<span class="visit-note">инженер на месте с '+esc(visitTime(v.started_at))+'</span>';
+    h+=visitTotalNote(total);
+  } else if(v){
+    h+='<button class="btn amber" type="button" id="visitEnd">Уехал</button>'
+      +'<span class="visit-note">на месте с '+esc(visitTime(v.started_at))+'</span>';
+  } else {
+    h+='<button class="btn" type="button" id="visitStart">Я на месте</button>'+visitTotalNote(total);
+  }
+  box.innerHTML=h;
+  box.style.display=h?'':'none';
+  if($('visitStart')) $('visitStart').onclick=visitStart;
+  if($('visitEnd')) $('visitEnd').onclick=visitEnd;
+}
+async function visitStart(){
+  if(!jobEditId||openVisit()) return;
+  const at=new Date().toISOString();
+  try{
+    const {data,error}=await sb.from('job_visits').insert({job_id:jobEditId,started_at:at}).select('id,started_at,ended_at,created_by').single();
+    if(error) throw error;
+    jobVisits.push(data);
+  }catch(e){
+    if(!isNetErr(e)){ notify('Отметка не сохранилась: '+((e&&e.message)||e),'err'); return; }
+    // Локальный id: по нему потом закроем визит в очереди.
+    const tmp='local-'+Date.now();
+    jobVisits.push({id:tmp,started_at:at,ended_at:null,created_by:session.user.id});
+    await qPush('visit',{op:'start',jobId:jobEditId,localId:tmp,startedAt:at});
+    showToast('Нет связи — отметку отправлю позже');
+  }
+  paintVisit();
+}
+async function visitEnd(){
+  const v=openVisit(); if(!v) return;
+  const at=new Date().toISOString();
+  v.ended_at=at;
+  try{
+    if(String(v.id).startsWith('local-')) throw new Error('offline');
+    const {error}=await sb.from('job_visits').update({ended_at:at}).eq('id',v.id);
+    if(error) throw error;
+  }catch(e){
+    if(!isNetErr(e)&&String(e&&e.message)!=='offline'){ notify('Отметка не сохранилась: '+((e&&e.message)||e),'err'); v.ended_at=null; paintVisit(); return; }
+    await qPush('visit',{op:'end',jobId:jobEditId,localId:String(v.id),visitId:String(v.id),endedAt:at});
+    showToast('Нет связи — отметку отправлю позже');
+  }
+  paintVisit();
+  // Предложить записать наработанное. Нормочасы ставит человек — они
+  // уходят в счёт, — но предлагать ему считать в уме то, что уже
+  // посчитано, незачем.
+  const h=Math.round(visitHours(v)*4)/4;   // до четверти часа
+  if(h>=0.25){
+    const cur=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
+    if(await confirmDialog('На месте '+h.toFixed(2).replace(/\.?0+$/,'')+' ч. Записать в работы?'
+      +(cur?(' Сейчас записано '+cur.toFixed(1)+' ч — они заменятся.'):''),{okText:'Записать'})){
+      // Если работ ещё нет — заводим строку, иначе часы некуда положить.
+      // Название пустое: его пишет инженер, придумывать за него нельзя.
+      if(!curWorks.length) curWorks.push({work_id:null,name:'',hours:0,override:'',billable:true,reasons:[],billable_reason:'',profile:defaultProfileId(true),custom:true});
+      curWorks[0].hours=h; renderJobWorks(); queueJobSave();
+    }
+  }
+}
+
+// ---------- запчасти и материалы ----------
+//
+// Прибыль выезда складывалась из работ, дороги и суточных минус труд,
+// километры и командировочные. Проданной запчасти в этой арифметике не было
+// вовсе — ни в выручке, ни в закупке. В сервисе тяжёлой техники один узел
+// перебивает по деньгам всю бригаду за день, так что это не погрешность,
+// а систематический перекос в обе стороны сразу.
+//
+// Вторая причина — история машины. Через два года спросят не «сколько
+// заработали», а «когда меняли этот насос», и ответить будет нечем:
+// work_catalog.materials — это список НУЖНОГО для типовой работы, план,
+// который в заявку никогда не попадал.
+//
+// Строки живут поштучно, а не переписываются целиком вместе с работами.
+// Так требует защита денег: серверный триггер сохраняет старую цену при
+// правке инженером, а при «удалить всё и вставить заново» сохранять было
+// бы нечего — цены менеджера стирались бы каждым сохранением заявки.
+let jobParts=[], partT={};
+const PART_UNITS=['шт','л','кг','м','компл'];
+function partQty(p){ return +p.qty||0; }
+// Считает ядро, и только оно: partsMoney() лежит под тестами, а вторая
+// копия той же арифметики здесь однажды разошлась бы с ним — и сумма
+// в строке перестала бы сходиться с итогом выезда, никого не предупредив.
+function partRev(p){ return partsMoney({job_parts:[p]}).rev; }
+function partCost(p){ return partsMoney({job_parts:[p]}).cost; }
+function partLocal(p){ return String(p.id||'').startsWith('local-'); }
+// Строка без названия в базу не уедет: там стоит check на непустое имя.
+// Это не ошибка ввода, а ещё не заполненная строка, поэтому молча ждём.
+function partReady(p){ return !!String(p.name||'').trim(); }
+
+async function loadJobParts(){
+  jobParts=[]; partT={};
+  if(!jobEditId){ renderJobParts(); return; }
+  try{
+    const {data,error}=await sb.from('job_parts').select('*').eq('job_id',jobEditId).order('created_at');
+    if(error) throw error;
+    jobParts=data||[];
+  }catch(e){
+    const j=await snapFindJob(jobEditId);
+    jobParts=(j&&j.job_parts)||[];
+  }
+  renderJobParts();
+}
+// Подсказки из каталога: у типовой работы уже перечислено, что она съедает.
+// Список этот годами лежал мёртвым — единственным его читателем был акт,
+// куда он не попадал, потому что в заявку материалы не переносились.
+function partSuggest(){
+  const box=$('jbPartSug'); if(!box) return;
+  if(!canEditParts()){ box.innerHTML=''; return; }
+  const seen=new Set(jobParts.map(p=>String(p.name||'').trim().toLowerCase()));
+  const out=[];
+  curWorks.forEach(w=>{ if(!w.work_id) return;
+    const cw=catalog.find(c=>c.id===w.work_id); if(!cw) return;
+    (cw.materials||[]).forEach(m=>{
+      const nm=String(m&&m.name||'').trim(); if(!nm) return;
+      const k=nm.toLowerCase(); if(seen.has(k)) return; seen.add(k);
+      out.push({name:nm,qty:(+m.qty||1)||1,unit:m.unit||'шт'});
+    });
+  });
+  box.innerHTML=out.slice(0,6).map((m,i)=>'<button class="btn sm ghost" type="button" data-psug="'+i+'">+ '+esc(m.name)+'</button>').join('');
+  box.querySelectorAll('[data-psug]').forEach(b=>b.onclick=()=>partAdd(out[b.dataset.psug]));
+}
+// Запчасти правит тот же, кто правит заявку: менеджер всегда, инженер —
+// свою. Цены сверх этого видит только менеджер, и это уже отдельное правило.
+//
+// Третье условие — от политики job_parts_edit: автору она разрешает правку,
+// только пока заявка не закрыта, потом строка становится частью счёта.
+// Раньше интерфейс об этом не знал: поля оставались живыми, и правка
+// упиралась в отказ сервера уже ПОСЛЕ нажатия. Правило должно быть видно
+// до действия, а не после.
+let jobRO=false;
+// ── Подтверждение внесённого ────────────────────────────────────────────
+//
+// Часы и запчасти — это деньги. Цены инженеру закрыты триггерами на сервере,
+// но сами строки он мог и добавить, и переписать, и удалить задним числом.
+// Теперь так: вносить — да, переписывать подтверждённое — нет. Отметку
+// подтверждения ставит менеджер, и ставит её база (sql/26), а не экран.
+//
+// Работы приложение переписывает БЛОКОМ (удалить всё по заявке и вставить
+// заново), поэтому и право на них даётся блоком: пока менеджер не подтвердил
+// ни одной строки, исполнитель волен переписывать свой отчёт.
+function worksPending(){ return curWorks.some(w=>!w.approved); }
+function worksLocked(){ return curWorks.some(w=>w.approved); }
+function canEditWorks(){
+  if(jobRO) return false;
+  if(canWrite()) return true;
+  if(!jobEditId) return true;                       // новую заявку заводит менеджер
+  if(($('jbStatus')?$('jbStatus').value:'')==='done') return false;
+  return !worksLocked();
+}
+function canEditParts(){
+  if(!jobEditId||jobRO) return false;
+  if(canWrite()) return true;
+  return ($('jbStatus')?$('jbStatus').value:'')!=='done';
+}
+// Отдельная строка запчасти: своя, ещё не подтверждённая, заявка открыта.
+function canEditPart(p){
+  if(canWrite()) return !jobRO;
+  return canEditParts() && !p.approved_at
+    && (!p.created_by || p.created_by===session.user.id);
+}
+function personName(id){ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'—'):'—'; }
+function renderJobParts(){
+  const box=$('jbParts'); if(!box) return;
+  const may=canEditParts(), money=canWrite();
+  if($('jbPartAdd')) $('jbPartAdd').style.display=may?'':'none';
+  box.innerHTML='';
+  jobParts.forEach((p,i)=>{
+    const d=document.createElement('div'); d.className='eqitem pt-row';
+    const mine=canEditPart(p);
+    const unitOpts=PART_UNITS.concat(PART_UNITS.indexOf(p.unit)<0&&p.unit?[p.unit]:[])
+      .map(u=>'<option'+(u===p.unit?' selected':'')+'>'+esc(u)+'</option>').join('');
+    const cash=money
+      ? ('<span class="pt-money">'
+        +'<input type="number" step="0.01" min="0" value="'+esc(String(p.price==null?'':p.price))+'" data-pp="'+i+'" title="цена продажи за единицу" placeholder="цена">'
+        +'<input type="number" step="0.01" min="0" value="'+esc(String(p.cost==null?'':p.cost))+'" data-pc="'+i+'" title="закупка за единицу" placeholder="закупка">'
+        +'<span class="pt-sum">'+partRev(p).toFixed(0)+' / '+partCost(p).toFixed(0)+'</span></span>')
+      : '';
+    d.innerHTML='<div class="pt-top">'
+        +'<input type="text" value="'+esc(p.name||'')+'" data-pn="'+i+'" placeholder="наименование">'
+        +'<input type="text" value="'+esc(p.sku||'')+'" data-ps="'+i+'" placeholder="артикул">'
+        +'<button class="btn sm ghost pt-rm" data-prm="'+i+'" title="Убрать">×</button>'
+      +'</div>'
+      +'<div class="pt-bot">'
+        +'<input type="number" step="0.01" min="0" value="'+esc(String(partQty(p)))+'" data-pq="'+i+'" title="количество">'
+        +'<select data-pu="'+i+'" title="единица">'+unitOpts+'</select>'
+        +'<button class="btn sm '+(p.billable===false?'ghost':'amber')+'" data-pb="'+i+'">'+(p.billable===false?'гарантия':'платно')+'</button>'
+        +cash
+      +'</div>'
+      +'<div class="m pt-warn" style="margin-top: var(--sp-2)'+(partReady(p)?';display:none':'')+'">Без наименования строка не сохранится.</div>'
+      // Кто внёс и проверено ли. Автор виден только тому, кто распоряжается
+      // деньгами: это инструмент разбора апсейла, а не публичная подпись.
+      +(p.id?('<div class="pt-foot">'
+        +(money&&p.created_by?('<span class="pt-who">добавил: '+esc(personName(p.created_by))+'</span>'):'')
+        +(p.approved_at
+            ? '<span class="pt-ok">проверено</span>'
+            : '<span class="pt-wait">ждёт подтверждения</span>')
+        +(money&&!p.approved_at?('<span class="pt-acts">'
+            +'<button class="btn sm amber" data-pok="'+i+'">Подтвердить</button>'
+            +'<button class="btn sm ghost" data-pno="'+i+'">Отклонить</button></span>'):'')
+        +((!money&&p.approved_at&&jobEditId)?('<span class="pt-acts">'
+            +'<button class="btn sm ghost" data-pfix="'+i+'">Предложить правку</button></span>'):'')
+      +'</div>'):'');
+    // Заперта не вся карточка, а строка: подтверждённое инженер не трогает,
+    // своё непроверенное правит как раньше.
+    if(!mine) d.querySelectorAll('.pt-top input,.pt-bot input,.pt-bot select,[data-pb],[data-prm]')
+      .forEach(el=>el.disabled=true);
+    box.appendChild(d);
+  });
+  const bind=(attr,f,ev)=>box.querySelectorAll('['+attr+']').forEach(el=>el[ev||'oninput']=()=>{ f(jobParts[el.dataset[attr.replace('data-','')]],el); });
+  bind('data-pn',(p,el)=>{ p.name=el.value; partTouch(p); partPaint(); },'oninput');
+  bind('data-ps',(p,el)=>{ p.sku=el.value; partTouch(p); },'oninput');
+  bind('data-pq',(p,el)=>{ p.qty=parseFloat(el.value)||0; partTouch(p); partPaint(); },'oninput');
+  bind('data-pu',(p,el)=>{ p.unit=el.value; partTouch(p); },'onchange');
+  bind('data-pp',(p,el)=>{ p.price=parseFloat(el.value)||0; partTouch(p); partPaint(); },'oninput');
+  bind('data-pc',(p,el)=>{ p.cost=parseFloat(el.value)||0; partTouch(p); partPaint(); },'oninput');
+  box.querySelectorAll('[data-pb]').forEach(b=>b.onclick=()=>{ const p=jobParts[b.dataset.pb];
+    p.billable=(p.billable===false); partTouch(p); renderJobParts(); });
+  box.querySelectorAll('[data-prm]').forEach(b=>b.onclick=()=>partDel(jobParts[b.dataset.prm]));
+  box.querySelectorAll('[data-pok]').forEach(b=>b.onclick=()=>partApprove(jobParts[b.dataset.pok],true));
+  box.querySelectorAll('[data-pno]').forEach(b=>b.onclick=()=>partApprove(jobParts[b.dataset.pno],false));
+  box.querySelectorAll('[data-pfix]').forEach(b=>b.onclick=()=>openFixModal('part',jobParts[b.dataset.pfix]));
+  partTotals(); partSuggest();
+}
+// Пересчёт чисел БЕЗ пересборки полей: перерисовка на каждую цифру
+// выбрасывала бы курсор из поля, в котором человек ещё печатает.
+function partPaint(){
+  const box=$('jbParts'); if(!box) return;
+  [...box.querySelectorAll('.pt-row')].forEach((d,i)=>{
+    const p=jobParts[i]; if(!p) return;
+    const s=d.querySelector('.pt-sum');
+    if(s) s.textContent=partRev(p).toFixed(0)+' / '+partCost(p).toFixed(0);
+    const w=d.querySelector('.pt-warn');
+    if(w) w.style.display=partReady(p)?'none':'';
+  });
+  partTotals();
+}
+function partTotals(){
+  const el=$('jbPartTotals'); if(!el) return;
+  const n=jobParts.length;
+  if(!n){ el.textContent=!jobEditId ? 'Появится, когда заявка будет создана.'
+    : (canEditParts()?'Ничего не ставили — строк нет.':'Запчастей нет.'); foldSums(); return; }
+  const cur=appSettings.currency||'';
+  const pcs=n+' '+plural(n,'позиция','позиции','позиций');
+  if(!canWrite()){ el.textContent='Итого: '+pcs; foldSums(); return; }
+  const m=partsMoney({job_parts:jobParts}), r=m.rev, c=m.cost;
+  el.textContent='Итого: '+pcs+' · продажа '+r.toFixed(0)+' · закупка '+c.toFixed(0)
+    +' · наценка '+(r-c).toFixed(0)+' '+cur;
+  foldSums();
+}
+function partAdd(seed){
+  if(!jobEditId){ notify('Сначала создай заявку','warn'); return; }
+  jobParts.push({id:'local-'+Date.now()+'-'+jobParts.length, job_id:jobEditId,
+    name:(seed&&seed.name)||'', sku:'', qty:(seed&&seed.qty)||1, unit:(seed&&seed.unit)||'шт',
+    price:0, cost:0, billable:true, created_by:session.user.id});
+  renderJobParts();
+  if(seed) partTouch(jobParts[jobParts.length-1]);
+  else { const inp=$('jbParts').querySelector('.pt-row:last-child [data-pn]'); if(inp) inp.focus(); }
+}
+// Правка одной строки, с задержкой: имя набирают по буквам, и отправлять
+// на каждую букву значило бы сорок запросов на одну запчасть.
+function partTouch(p){
+  if(!p) return;
+  clearTimeout(partT[p.id]);
+  partT[p.id]=setTimeout(()=>partSave(p),800);
+  jobSaveState('изменено');
+}
+// Тот же приём, что и с работами: заявка внутри «Графика» берётся из
+// снимка, и без правки снимка инженер, вернувшись на заявку без связи,
+// увидел бы прежний список запчастей вместо своего.
+async function snapPartsPatch(jobId){
+  const s=await snapGet('mine'); if(!s||!s.val||!s.val.byTrip) return;
+  const rows=jobParts.filter(partReady).map(x=>({id:x.id,name:x.name,sku:x.sku,qty:x.qty,
+    unit:x.unit,price:x.price,cost:x.cost,billable:x.billable}));
+  let touched=false;
+  Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{
+    if(j.id!==jobId) return; j.job_parts=rows; touched=true;
+  }));
+  if(touched) await snapSet('mine',s.val,s.at);
+}
+async function partSave(p){
+  clearTimeout(partT[p.id]); delete partT[p.id];
+  if(!partReady(p)) return;
+  const row={job_id:p.job_id||jobEditId, name:String(p.name).trim(), sku:String(p.sku||'').trim(),
+    qty:partQty(p)||1, unit:p.unit||'шт', billable:p.billable!==false};
+  if(canWrite()){ row.price=+p.price||0; row.cost=+p.cost||0; }
+  jobSaveState('сохраняю…','busy');
+  const add=partLocal(p);
+  try{
+    if(add){
+      const {data,error}=await sb.from('job_parts').insert(row).select('*').single();
+      if(error) throw error;
+      Object.assign(p,data);            // настоящий id и цены, как их принял сервер
+    } else {
+      const {data,error}=await sb.from('job_parts').update(row).eq('id',p.id).select('*').single();
+      if(error) throw error;
+      if(data) Object.assign(p,data);   // сервер мог обнулить цены — показываем правду
+    }
+    jobsDirty=true; jobSaveState('сохранено');
+    // Перерисовка сбрасывает курсор. Пока человек стоит в поле этой
+    // карточки — он ещё печатает, и вырывать у него фокус посреди слова
+    // нельзя; итоги при этом обновить всё равно надо.
+    if($('jbParts')&&$('jbParts').contains(document.activeElement)) partPaint();
+    else renderJobParts();
+  }catch(e){
+    if(!isNetErr(e)){ jobSaveState('запчасть не сохранена · '+((e&&e.message)||e),'bad'); return; }
+    // Правки одной и той же строки в очереди не копим: там лежит строка
+    // целиком, и каждая новая заменяет предыдущую.
+    await qDropPart(String(p.id));
+    if(await qPush('part',{op:add?'add':'edit',jobId:jobEditId,localId:String(p.id),row})){
+      await snapPartsPatch(jobEditId);
+      jobSaveState('без связи · отправлю позже');
+    } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
+  }
+}
+// Подтверждение и отклонение строки запчасти. Отклонить — значит убрать:
+// строка, которую менеджер не признал, не должна остаться в счёте «просто
+// непроверенной». Причину он скажет инженеру словами, для этого есть
+// предложения правок.
+async function partApprove(p,ok){
+  if(!p||!p.id||!canWrite()) return;
+  if(!ok){
+    if(!await confirmDialog('Отклонить «'+String(p.name||'').trim()+'»? Строка будет убрана из заявки.',
+      {danger:true,okText:'Отклонить'})) return;
+    await partDel(p); return;
+  }
+  try{
+    const {error}=await sb.from('job_parts')
+      .update({approved_at:new Date().toISOString(),approved_by:session.user.id}).eq('id',p.id);
+    if(error) throw error;
+    p.approved_at=new Date().toISOString(); p.approved_by=session.user.id;
+    renderJobParts(); jobSaveState('сохранено');
+  }catch(e){ notify('Не подтвердилось: '+((e&&e.message)||e),'err'); }
+}
+// Подтверждение работ — блоком: приложение и пишет их блоком.
+async function worksApprove(){
+  if(!canWrite()||!jobEditId) return;
+  try{
+    const {error}=await sb.from('job_works')
+      .update({approved_at:new Date().toISOString(),approved_by:session.user.id})
+      .eq('job_id',jobEditId).is('approved_at',null);
+    if(error) throw error;
+    curWorks.forEach(w=>{ w.approved=true; });
+    renderJobWorks(); jobSaveState('сохранено'); showToast('Работы подтверждены');
+  }catch(e){ notify('Не подтвердилось: '+((e&&e.message)||e),'err'); }
+}
+
+// ── Предложение правки ──────────────────────────────────────────────────
+// Подтверждённое инженер не меняет. Но и молчать ему нельзя: ошибка в часах
+// или в артикуле стоит денег. Предложение — письмо менеджеру, привязанное к
+// заявке и к строке, о которой речь.
+let fixTarget=null;
+function openFixModal(kind,row){
+  if(!jobEditId) return;
+  fixTarget={target:kind,target_id:(row&&row.id)||null,
+    label:kind==='part'?('запчасть «'+String((row&&row.name)||'').trim()+'»')
+      :(kind==='work'?'работы по заявке':'заявка')};
+  const el=$('fixWhat'); if(el) el.value='';
+  const t=$('fixSubj'); if(t) t.textContent=fixTarget.label;
+  $('fixOverlay').classList.add('on');
+}
+async function fixSend(){
+  const what=($('fixWhat')?$('fixWhat').value:'').trim();
+  if(!what){ notify('Напиши, что нужно изменить.','warn'); return; }
+  if(!fixTarget||!jobEditId) return;
+  try{
+    const {error}=await sb.from('job_change_requests').insert({
+      job_id:jobEditId,target:fixTarget.target,target_id:fixTarget.target_id,what:what});
+    if(error) throw error;
+    $('fixOverlay').classList.remove('on'); showToast('Отправлено менеджеру');
+    await loadFixes();
+  }catch(e){ notify('Не отправилось: '+((e&&e.message)||e),'err'); }
+}
+let jobFixes=[];
+async function loadFixes(){
+  jobFixes=[];
+  if(jobEditId){
+    try{
+      const {data}=await sb.from('job_change_requests').select('*')
+        .eq('job_id',jobEditId).order('created_at',{ascending:false});
+      jobFixes=data||[];
+    }catch(e){ jobFixes=[]; }
+  }
+  renderFixes();
+}
+function renderFixes(){
+  const box=$('jbFixes'); if(!box) return;
+  const card=$('jbFixCard');
+  const open=jobFixes.filter(f=>f.status==='open');
+  const show=canWrite()?jobFixes:open;
+  // Инженеру карточка нужна и пустой — когда правка ему уже закрыта, это
+  // единственный способ сказать, что в заявке ошибка.
+  const frozen=!canWrite()&&!!jobEditId&&(!canEditWorks()||!canEditParts());
+  if(card) card.style.display=(show.length||frozen)?'':'none';
+  box.innerHTML='';
+  if(frozen){
+    const a=document.createElement('div'); a.className='fix-a';
+    a.innerHTML='<button class="btn sm ghost" id="jbFixNew">Предложить правку</button>';
+    box.appendChild(a);
+    const nb=$('jbFixNew'); if(nb) nb.onclick=()=>openFixModal('job',null);
+  }
+  show.slice(0,20).forEach(f=>{
+    const d=document.createElement('div'); d.className='fixrow'+(f.status!=='open'?' done':'');
+    d.innerHTML='<div class="fix-h"><span class="fix-who">'+esc(personName(f.created_by))+'</span>'
+      +'<span class="fix-d">'+esc(shortDate(String(f.created_at).slice(0,10)))+'</span>'
+      +(f.status==='open'?'':('<span class="fix-st">'+(f.status==='accepted'?'принято':'отклонено')+'</span>'))+'</div>'
+      +'<div class="fix-w">'+esc(f.what)+'</div>'
+      +((canWrite()&&f.status==='open')?('<div class="fix-a">'
+        +'<button class="btn sm amber" data-fok="'+f.id+'">Принято</button>'
+        +'<button class="btn sm ghost" data-fno="'+f.id+'">Отклонить</button></div>'):'');
+    box.appendChild(d);
+  });
+  box.querySelectorAll('[data-fok]').forEach(b=>b.onclick=()=>fixDecide(b.dataset.fok,'accepted'));
+  box.querySelectorAll('[data-fno]').forEach(b=>b.onclick=()=>fixDecide(b.dataset.fno,'declined'));
+}
+async function fixDecide(id,st){
+  if(!canWrite()) return;
+  try{
+    const {error}=await sb.from('job_change_requests')
+      .update({status:st,decided_by:session.user.id,decided_at:new Date().toISOString()}).eq('id',id);
+    if(error) throw error;
+    await loadFixes();
+  }catch(e){ notify('Не записалось: '+((e&&e.message)||e),'err'); }
+}
+
+async function partDel(p){
+  if(!p) return;
+  const what=String(p.name||'').trim();
+  if(partReady(p)&&!await confirmDialog('Убрать «'+what+'» из заявки?',{danger:true,okText:'Убрать'})) return;
+  clearTimeout(partT[p.id]); delete partT[p.id];
+  const i=jobParts.indexOf(p); if(i>=0) jobParts.splice(i,1);
+  renderJobParts();
+  if(partLocal(p)){ await qDropPart(String(p.id)); return; }   // до сервера не доезжала
+  try{
+    const {error}=await sb.from('job_parts').delete().eq('id',p.id);
+    if(error) throw error;
+    jobsDirty=true; jobSaveState('сохранено');
+  }catch(e){
+    if(!isNetErr(e)){ notify('Не удалось убрать запчасть: '+((e&&e.message)||e),'err'); await loadJobParts(); return; }
+    await qDropPart(String(p.id));
+    await qPush('part',{op:'del',jobId:jobEditId,localId:String(p.id),partId:String(p.id)});
+    await snapPartsPatch(jobEditId);
+    jobSaveState('без связи · отправлю позже');
+  }
+}
+if($('jbPartNew')) $('jbPartNew').onclick=()=>partAdd(null);
+
+// ---------- подпись заказчика ----------
+//
+// Документы оформляют с компьютера, то есть в поле подтвердить выполнение
+// было нечем, и между работой и подписью проходили дни — ровно тогда, когда
+// возражения снимаются дешевле всего.
+//
+// Хранится как ещё одна метка в job_photos: тот же приватный бакет, те же
+// правила чтения и та же неизменяемость, что у фото «до/после». Отдельная
+// таблица завела бы второй набор политик, который однажды разошёлся бы
+// с первым.
+let signCtx=null, signDrawing=false, signDirty=false, signResolve=null;
+function signSetup(){
+  const cv=$('signPad'); if(!cv) return null;
+  // Внутренний размер холста подгоняем под экранный, иначе на телефоне
+  // линия рисуется со смещением и «уезжает» от пальца.
+  const r=cv.getBoundingClientRect();
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=Math.max(320,Math.round(r.width*dpr));
+  cv.height=Math.max(160,Math.round(r.height*dpr));
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.strokeStyle='#111'; ctx.lineWidth=Math.max(2,2*dpr);
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  signCtx=ctx; signDirty=false;
+  return ctx;
+}
+function signPoint(e){
+  const cv=$('signPad'), r=cv.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*(cv.width/r.width), y:(e.clientY-r.top)*(cv.height/r.height)};
+}
+(function(){
+  const cv=$('signPad'); if(!cv) return;
+  cv.addEventListener('pointerdown',e=>{ if(!signCtx) return;
+    cv.setPointerCapture(e.pointerId); signDrawing=true; signDirty=true;
+    $('signErr').textContent='';   // начал расписываться — упрёк убираем
+    const p=signPoint(e); signCtx.beginPath(); signCtx.moveTo(p.x,p.y); e.preventDefault(); });
+  cv.addEventListener('pointermove',e=>{ if(!signDrawing||!signCtx) return;
+    const p=signPoint(e); signCtx.lineTo(p.x,p.y); signCtx.stroke(); e.preventDefault(); });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>cv.addEventListener(ev,()=>{ signDrawing=false; }));
+  if($('signClear')) $('signClear').onclick=()=>signSetup();
+  if($('signSkip')) $('signSkip').onclick=()=>signDone(null);
+  if($('signOk')) $('signOk').onclick=()=>{
+    if(!signDirty){ $('signErr').textContent='Поле пустое. Распишитесь или выберите «Без подписи».'; return; }
+    $('signPad').toBlob(b=>signDone(b),'image/jpeg',0.85);
+  };
+})();
+function signDone(blob){
+  $('signOverlay').classList.remove('on');
+  const r=signResolve; signResolve=null; if(r) r(blob);
+}
+// Возвращает Blob или null (расписаться отказались/нечем).
+function askSignature(clientName){
+  return new Promise(res=>{
+    if(!$('signOverlay')){ res(null); return; }
+    $('signErr').textContent='';
+    $('signWho').textContent=clientName?('Заказчик: '+clientName):'Распишитесь в поле ниже';
+    $('signOverlay').classList.add('on');
+    // Холст меряем уже показанным — у скрытого ширина нулевая.
+    setTimeout(signSetup,30);
+    signResolve=res;
+  });
+}
+// Подпись уходит тем же путём, что фото: сеть — сразу, без связи — в очередь.
+async function saveSignature(blob){
+  if(!blob||!jobEditId) return;
+  const name='sign-'+Date.now()+'.jpg';
+  try{
+    const path='jobs/'+jobEditId+'/'+name;
+    const up=await sb.storage.from('job-photos').upload(path,blob,{contentType:'image/jpeg'});
+    if(up.error) throw up.error;
+    const {error}=await sb.from('job_photos').insert({job_id:jobEditId,path,kind:'signature'});
+    if(error){ try{ await sb.storage.from('job-photos').remove([path]); }catch(e){} throw error; }
+    await loadJobPhotos();
+  }catch(e){
+    if(isNetErr(e)){ await qPush('photo',{jobId:jobEditId,kind:'signature',blob,name}); await loadJobPhotos(); return; }
+    notify('Подпись не сохранилась: '+((e&&e.message)||e),'err');
+  }
+}
+
+// ---------- сохранение заявки ----------
+//
+// Ручное сохранение на телефоне — способ потерять работу: приложение
+// сворачивают, звонят, связь пропадает, и заполненная форма исчезает
+// молча, без единого слова. Существующая заявка сохраняется сама, а
+// кнопка остаётся только для создания новой — там сохранять ещё нечего.
+//
+// Состояние показываем словами рядом с шапкой: «сохраняю…», «сохранено»,
+// «не сохранено · причина». Молчащее автосохранение хуже кнопки: человек
+// не знает, можно ли закрывать приложение.
+let jobSaveT=null, jobSaving=false, jobSaveAgain=false, jobsDirty=false;
+function jobRec(){
+  return {client_id:$('jbClient').value,
+    equipment_id:$('jbEquip').value||null,
+    status:$('jbStatus').value,
+    scheduled_date:$('jbDate').value||null,
+    time_window:$('jbWindow').value.trim(),
+    due_date:$('jbDue').value||null,
+    assigned_engineer:selectedEngineerIds('jbEng')[0]||null,engineer_ids:selectedEngineerIds('jbEng'),
+    notes:$('jbNotes').value.trim(),
+    at_depot:!!jobAtDepot,
+    depot_id:(jobAtDepot?($('jbDepotSel').value||null):null)};
+}
+function jobProblem(){
+  if(!$('jbClient').value) return 'не выбран клиент';
+  if(curWorks.some(w=>w.custom&&!w.name.trim())) return 'у своей работы нет названия';
+  return '';
+}
+function jobSaveState(txt,cls){ const el=$('jobSaveState'); if(!el) return;
+  el.textContent=txt; el.className='savestate'+(cls?(' '+cls):''); }
+// Строка работы в том виде, в каком она уезжает в базу. Вынесена, потому
+// что теперь её собирает и обычное сохранение, и очередь.
+function jobWorkRow(w){
+  return {work_id:w.work_id||null,title:w.name||'',hours:w.hours,billable:w.billable,
+    billable_reason:w.billable_reason||'',tariff_profile:(w.profile||null),
+    revenue:workRevenue(w),
+    revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)};
+}
+// Правка местного снимка после постановки в очередь: заявка внутри
+// «График» должен показывать то, что инженер только что ввёл.
+async function snapJobPatch(jobId,rec,works){
+  const s=await snapGet('mine'); if(!s||!s.val||!s.val.byTrip) return;
+  let touched=false;
+  Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{
+    if(j.id!==jobId) return;
+    j.status=rec.status; j.job_works=works; touched=true;
+  }));
+  if(touched) await snapSet('mine',s.val,s.at);
+}
+// Запись без навигации и без тостов: её зовёт и кнопка, и автосохранение.
+async function persistJob(rec){
+  let jobId=jobEditId;
+  // Порядок: сначала работы, потом статус. Обратный порядок делал закрытие
+  // заявки невозможным для инженера, как только на job_works появится
+  // условие «пока заявка не закрыта»: он ставил бы «закрыта», а следующим
+  // же запросом пытался переписать работы уже закрытой заявки.
+  // Порядок важен и без политики: если что-то оборвётся посередине, лучше
+  // сохранённые работы при старом статусе, чем закрытая заявка без работ.
+  if(jobEditId){
+    // Работы переписываются блоком — и только тем, кому это позволено.
+    // Инженер, у которого работы уже подтверждены, всё равно сохраняет
+    // заметки и статус: без этой проверки автосохранение падало бы на
+    // запрете удаления и он не мог бы даже закрыть заявку.
+    if(canEditWorks()){
+      await sb.from('job_works').delete().eq('job_id',jobId);
+      if(curWorks.length){ const rows=curWorks.map(w=>Object.assign({job_id:jobId},jobWorkRow(w))); const {error}=await sb.from('job_works').insert(rows); if(error) throw error; }
+    }
+    const {error}=await sb.from('jobs').update(rec).eq('id',jobEditId); if(error) throw error;
+  } else {
+    rec.created_by=session.user.id;
+    const {data,error}=await sb.from('jobs').insert(rec).select('id').single(); if(error) throw error; jobId=data.id;
+    if(curWorks.length){ const rows=curWorks.map(w=>Object.assign({job_id:jobId},jobWorkRow(w))); const {error:e2}=await sb.from('job_works').insert(rows); if(e2) throw e2; }
+  }
+  if(rec.status==='done') await jobClosed(jobId,{equipmentId:rec.equipment_id,
+    works:curWorks.map(w=>({billable:w.billable,title:w.name})),
+    days:parseInt($('jbWarrDays').value,10)});
+  return jobId;
+}
+// ── «заявка закрыта» ────────────────────────────────────────────────────────
+//
+// Закрытие — не смена одного поля, а событие с двумя последствиями: гарантия
+// на ремонт и отметка визита по технике (от неё зависят «просрочен контакт»
+// на карте и подсказка о подходящем ТО).
+//
+// Последствия были переписаны в трёх местах и в каждом по-своему: со страницы
+// заявки гарантия писалась ТОЛЬКО менеджером — то есть по заявкам, закрытым
+// инженером в поле, её не было вовсе; из выпадающего списка в канбане не было
+// гарантии; перетаскиванием карточки не было ни того, ни другого; а очередь
+// после офлайна не делала ничего. Одно действие давало четыре разных исхода,
+// и ни один из них человеку не был виден.
+//
+// Теперь путь один, и все четыре места ведут сюда.
+async function jobClosed(jobId,opts){
+  const o=opts||{}; if(!jobId) return;
+  // Оба последствия — серверными функциями, а не запросами отсюда.
+  //
+  // Политика repair_warranties разрешает запись только роли admin/logist,
+  // то есть прямой insert от инженера отказывался бы — а закрывает заявку
+  // как раз он. Функция с security definer снимает вопрос: правило «кому
+  // положена гарантия» живёт там же, где данные, и одинаково работает
+  // из поля, из канбана и из очереди после офлайна.
+  //
+  // Ровно тот же приём уже применён к отметке визита по технике
+  // (register_equipment_visit): она идемпотентна — берёт greatest от
+  // прежней даты, поэтому повторный вызов ничего не портит.
+  const days=(o.days!=null&&!isNaN(o.days)&&o.days>0)?o.days:null;
+  try{
+    const {data,error}=await sb.rpc('register_repair_warranty',days!=null?{p_job:jobId,p_days:days}:{p_job:jobId});
+    if(error) throw error;
+    if(data) showToast('Гарантия на ремонт до '+data);
+  }catch(e){
+    // Функции ещё нет в базе — это не поломка закрытия заявки, а
+    // невыполненная миграция. Инженеру про неё знать нечего.
+    if(canWrite()) notify('Гарантия на ремонт не создалась: '+((e&&e.message)||e)+' (выполнен ли sql/19?)','err');
+  }
+  try{ await sb.rpc('register_equipment_visit',{p_job:jobId}); await reloadEquip(); }
+  catch(e){ notify('Заявка закрыта, но визит по технике не отметился: '+((e&&e.message)||e),'err'); }
+}
+function queueJobSave(){
+  if(!jobEditId) return;                       // новая — только кнопкой
+  // Признак прав — свой флаг, а не disabled у кнопки: кнопка теперь гаснет
+  // ещё и на время ручного сохранения, и правка, сделанная в эту секунду,
+  // тихо потерялась бы.
+  if(jobRO) return;
+  clearTimeout(jobSaveT);
+  jobSaveState('изменено');
+  jobSaveT=setTimeout(saveJobNow,800);
+}
+async function saveJobNow(){
+  clearTimeout(jobSaveT); jobSaveT=null;
+  if(!jobEditId) return;
+  const problem=jobProblem();
+  if(problem){ jobSaveState('не сохранено · '+problem,'bad'); return; }
+  // Одна запись за раз: параллельные удаления и вставки job_works
+  // переставляли бы строки местами. Пришедшее во время записи изменение
+  // не теряем — повторяем сразу после.
+  if(jobSaving){ jobSaveAgain=true; return; }
+  jobSaving=true; jobSaveState('сохраняю…','busy');
+  try{ await persistJob(jobRec()); jobsDirty=true; jobSaveState('сохранено'); }
+  catch(e){
+    // Нет связи — кладём в очередь и правим местный снимок, чтобы при
+    // возврате на заявку инженер увидел свои часы, а не старые.
+    if(isNetErr(e)){
+      const rec=jobRec(), works=curWorks.map(jobWorkRow);
+      // Прежние записи этой же заявки снимаем: в очереди лежит полная
+      // строка, и каждая новая целиком заменяет предыдущую. Иначе правка
+      // часов десять раз подряд дала бы десять одинаковых по смыслу
+      // отправок и счётчик, который врёт о количестве работы.
+      await qDropJob(jobEditId);
+      if(await qPush('job',{jobId:jobEditId,rec,works})){
+        await snapJobPatch(jobEditId,rec,works);
+        jobSaveState('без связи · отправлю позже');
+      } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
+    } else jobSaveState('не сохранено · '+(e.message||e),'bad');
+  }
+  finally{ jobSaving=false; if(jobSaveAgain){ jobSaveAgain=false; saveJobNow(); } }
+}
+$('jobSave').onclick=async ()=>{
+  const problem=jobProblem();
+  if(problem){ $('jobErr').textContent='Не сохранить: '+problem+'.'; return; }
+  $('jobSave').disabled=true;
+  try{
+    if(jobEditId){
+      // Существующая: пишем немедленно и остаёмся на странице. Уводить
+      // отсюда после каждого сохранения нельзя — правку обычно продолжают.
+      await saveJobNow();
+      if($('jobSaveState').classList.contains('bad')) $('jobErr').textContent='Не сохранилось: '+$('jobSaveState').textContent;
+      else showToast('Сохранено');
+    } else {
+      await persistJob(jobRec());
+      switchTab(jobBack, jobBackSub); await renderJobs(); await refreshStats(); showToast('Заявка создана');
+    }
+  }catch(err){ $('jobErr').textContent='Ошибка: '+(err.message||err); }
+  finally{ $('jobSave').disabled=false; } };
+// Ловим правки всей страницы разом: строки работ перерисовываются, и
+// обработчики на каждом поле терялись бы при каждом рендере.
+(function(){ const v=document.querySelector('.view-job'); if(!v) return;
+  ['input','change'].forEach(ev=>v.addEventListener(ev,e=>{
+    // Кнопки внизу и выбор файла к полям заявки отношения не имеют:
+    // от них не должно случаться сохранение (а в офлайне — ещё и лишняя
+    // запись в очереди).
+    if(e.target.closest('#jobFoot')||e.target.closest('.job-photos')) return;
+    queueJobSave(); jobFootUpdate(); })); })();
+async function delJob(id){ if(!await confirmDialog('Переместить заявку в корзину? Она удалится автоматически через 7 дней.',{danger:true,okText:'В корзину'})) return; const {error}=await sb.from('jobs').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderJobs(); await refreshStats();
+  undoToast('Заявка перемещена в корзину', async ()=>{ const {error:e2}=await sb.rpc('trash_restore',{p_kind:'jobs',p_id:id}); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Восстановлено'); }); }
+
+// ---------- trips ----------
+let trips=[], tripJobsAll=[], tripOrdersAll=[], curTripJobs=new Set(), curTripOrders=new Set(), tripEditId=null, tripRouteKeys=new Set();
+// Заявки открытого на карте выезда. Держим отдельно от редактора выезда:
+// карта доступна инженеру, у которого список tripJobsAll намеренно не грузится.
+let tripMapJobs=[];
+const ST_TRIP={planned:'план',assigned:'назначен',in_progress:'в работе',finished:'на проверке',done:'завершён',cancelled:'отменён'};
+const SERVICE_ORDER_STATUS={draft:'черновик',assigned:'назначено',in_progress:'в работе',paused:'приостановлено',review:'на проверке',completed:'завершено',cancelled:'отменено'};
+let tripRoute={km:0,driveH:0,geometry:null,legs:[]}, tripRouteStops=[], tripVariants=[], tripVarSel=0, tripStart=null, tripOverrides={revenue:'',cost:'',road:{}};
+let tripWorkbench=null, tripPlanDirty=false, tripPresenceDirty=false, tripRemainingRoute=null;
+function setTripPane(name){
+  document.querySelectorAll('[data-trip-pane]').forEach(el=>el.hidden=el.dataset.tripPane!==name);
+  document.querySelectorAll('[data-trip-tab]').forEach(el=>el.setAttribute('aria-selected',String(el.dataset.tripTab===name)));
+}
+document.querySelectorAll('[data-trip-tab]').forEach(el=>el.onclick=()=>setTripPane(el.dataset.tripTab));
+document.querySelector('.view-trip')?.addEventListener('change',e=>{
+  if(e.target.closest('[data-presence-id]'))tripPresenceDirty=true;
+  else if(e.target.closest('#tpPlanPane')||e.target.closest('#tpEconomyPane')){tripPlanDirty=true;}
+});
+window.addEventListener('beforeunload',e=>{if(tripPlanDirty||tripPresenceDirty||serviceOrders.isDirty()){e.preventDefault();e.returnValue='';}});
+document.querySelector('#tpPresence')?.addEventListener('click',e=>{
+  const button=e.target.closest('[data-presence-edit]');
+  if(button)openPresenceEditor(tripEditId,button.closest('[data-presence-id]').dataset.presenceId);
+});
+function taskAllocationPayload(stay){
+  const row={id:stay.id,job_id:stay.job_id,crew_ids:stay.crew_ids,minutes_mgr:stay.minutes_mgr,status:stay.status};
+  if(stay.task_allocations)row.task_allocations=stay.status==='approved'?stay.task_allocations:[];
+  return row;
+}
+function validateTaskAllocationShares(stays){
+  for(const stay of stays){
+    const total=(stay.task_allocations||[]).reduce((sum,x)=>sum+(Number(x.share)||0),0);
+    if(total>1.000001)throw new Error('Сумма долей заданий на одной стоянке превышает 100%.');
+  }
+}
+function renderTaskAllocationControls(root,jobId,orders,selected=[]){
+  const list=root.querySelector('.wb-task-share-list');if(!list)return;
+  list.replaceChildren();
+  const candidates=orders.filter(o=>o.job_id===jobId);
+  if(!candidates.length){const hint=document.createElement('span');hint.className='hint';hint.textContent='К этой заявке не привязано задание выезда.';list.append(hint);return;}
+  for(const order of candidates){
+    const existing=selected.find(x=>x.order_id===order.id),share=Number(existing?.share||0);
+    const label=document.createElement('label');label.className='wb-task-share-row';label.dataset.taskAllocationRow=order.id;
+    const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.dataset.taskAllocationOrder='';checkbox.value=order.id;checkbox.checked=share>0;
+    const name=document.createElement('span');name.textContent=`№${order.number} · ${order.title}`;
+    const input=document.createElement('input');input.type='number';input.dataset.taskAllocationShare='';input.min='0';input.max='100';input.step='1';input.value=share>0?String(Math.round(share*100)):'100';input.disabled=share<=0;input.setAttribute('aria-label','Доля задания в процентах');
+    const percent=document.createElement('span');percent.textContent='%';
+    checkbox.addEventListener('change',()=>input.disabled=!checkbox.checked);
+    label.append(checkbox,name,input,percent);list.append(label);
+  }
+}
+async function renderTripCostReview(id){
+  const box=$('tpTripAllocation');if(!box)return;
+  if(!id||!tripWorkbench){box.innerHTML='<p class="hint">Сохрани выезд и подтверди факт, чтобы распределить затраты.</p>';return;}
+  box.innerHTML='<p class="hint">Сверяю выездные затраты…</p>';
+  try{
+    const t=tripWorkbench.trip;
+    const [{data:trackRow,error:trackError},{data:run,error:runError}]=await Promise.all([
+      sb.from('trip_tracks').select('data,updated_at').eq('trip_id',id).maybeSingle(),
+      sb.from('trip_cost_allocation_runs').select('*').eq('trip_id',id).eq('current',true).maybeSingle()
+    ]);
+    if(trackError)throw trackError;if(runError)throw runError;
+    const {data:savedLines,error:linesError}=run
+      ?await sb.from('trip_cost_allocations').select('cost_type,service_order_id,stay_id,track_segment_index,quantity,unit_rate,amount,basis,source_ref').eq('run_id',run.id)
+      :{data:[],error:null};
+    if(linesError)throw linesError;
+    const track=trackRow?{...(trackRow.data||{}),at:trackRow.updated_at}:null;
+    let preview=null,message='';
+    try{preview=calculateTripCostAllocation({trip:t,track,stays:tripWorkbench.stays,taskOrderIds:[...curTripOrders]});}
+    catch(e){message=e.message||String(e);}
+    const sameTimestamp=(a,b)=>!a&&!b||!!a&&!!b&&Date.parse(a)===Date.parse(b);
+    const stale=!!run&&(Number(run.source_revision)!==Number(t.workbench_revision)||!sameTimestamp(run.source_track_updated_at,trackRow?.updated_at)||Number(run.fact_km)!==Number(t.fact_km));
+    const previewForDisplay=preview|| (run?{components:run.components,rows:savedLines||[],diagnostics:run.diagnostics}:null);
+    const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
+    box.innerHTML=tripCostReviewHTML({trip:{...t,orders:linkedOrders},preview:previewForDisplay,run,stale,
+      canApprove:canWrite()&&t.status==='done'&&!tripPlanDirty&&!tripPresenceDirty&&!!preview,message});
+    const approve=$('tripAllocationApprove');
+    if(approve)approve.onclick=async()=>{
+      const reason=$('tripAllocationReason').value.trim();if(!reason){notify('Укажи основание сверки затрат.','warn');return;}
+      if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения выезда и стоянок.','warn');return;}
+      approve.disabled=true;
+      try{
+        const latest=calculateTripCostAllocation({trip:tripWorkbench.trip,track,stays:tripWorkbench.stays,taskOrderIds:[...curTripOrders]});
+        const {error}=await sb.rpc('trip_cost_allocation_save',{p_trip:id,p_expected:t.workbench_revision,
+          p_track_updated_at:trackRow?.updated_at||null,p_reason:reason,p_lines:latest.rows,p_diagnostics:latest.diagnostics});
+        if(error)throw error;
+        await loadWorkbench(id);showToast('Выездные затраты распределены и подтверждены');
+      }catch(e){notify(e.message||String(e),'err');approve.disabled=false;}
+    };
+  }catch(e){box.innerHTML=`<p class="err">Не удалось загрузить распределение затрат: ${esc(e.message||String(e))}</p>`;}
+}
+async function openPresenceEditor(tid,stayId,jobId){
+  if(!canWrite())return;
+  if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки выезда.','warn');return;}
+  try{
+    await ensureRefs();await loadTripJobs();await loadTripOrders();
+    const {data:taskLinks,error:taskLinkError}=await sb.from('trip_service_orders').select('order_id').eq('trip_id',tid);if(taskLinkError)throw taskLinkError;
+    const linkedIds=new Set((taskLinks||[]).map(x=>x.order_id));
+    if(!linkedIds.size){const {data:legacyLinks,error:legacyError}=await sb.from('trip_jobs').select('job_id').eq('trip_id',tid);if(legacyError)throw legacyError;const jobs=new Set((legacyLinks||[]).map(x=>x.job_id));tripOrdersAll.filter(o=>jobs.has(o.job_id)&&o.seed_request_id===o.job_id).forEach(o=>linkedIds.add(o.id));}
+    const ordersForTrip=tripOrdersAll.filter(o=>linkedIds.has(o.id));
+    const {data,error}=await sb.rpc('trip_workbench_read',{p_trip:tid});if(error)throw error;
+    const source=data.stays.find(s=>String(s.id)===String(stayId));if(!source)throw new Error('Стоянка не найдена');
+    const {data:shareRows,error:shareError}=await sb.from('trip_stay_task_allocations').select('service_order_id,share').eq('stay_id',source.id);
+    if(shareError)throw shareError;
+    const original={...source,task_allocations:(shareRows||[]).map(x=>({order_id:x.service_order_id,share:Number(x.share)}))};
+    const stay={...original};
+    if(jobId!==undefined)stay.job_id=jobId;
+    // Approval is the default action; the validation still requires a closed
+    // interval and explicitly known crew. No historic team is guessed.
+    if(stay.stay_to&&stay.status!=='rejected')stay.status='approved';
+    const dialog=document.createElement('dialog');dialog.className='presence-editor';
+    dialog.innerHTML='<form method="dialog"><div class="presence-editor-head"><h3>Привязка и присутствие</h3><button class="btn sm" type="submit" aria-label="Закрыть">✕</button></div></form>'
+      +presenceHTML({...data,jobIds:data.job_ids,stays:[stay]},tripJobsAll,profilesList,{editor:true,orders:ordersForTrip})
+      +'<label>Комментарий<input class="presence-reason" value="Проверено по треку и составу команды"></label><p class="presence-error err" role="alert"></p><div class="presence-editor-foot"><button type="button" class="btn amber" data-presence-submit>Привязать и подтвердить</button></div>';
+    document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
+    const save=dialog.querySelector('[data-presence-submit]'),status=dialog.querySelector('[data-presence="status"]');
+    const row=dialog.querySelector('[data-presence-id]'),job=dialog.querySelector('[data-presence="job_id"]');
+    job.addEventListener('change',()=>renderTaskAllocationControls(row,job.value,ordersForTrip,job.value===original.job_id?(original.task_allocations||[]):[]));
+    const label=()=>{save.textContent=status.value==='rejected'?'Не учитывать стоянку':status.value==='approved'?'Привязать и подтвердить':'Закрыть без сохранения';};
+    status.addEventListener('change',label);label();
+    save.onclick=async()=>{
+      const output=dialog.querySelector('.presence-error');output.textContent='';
+      const rows=readPresenceForm(dialog,[original]);
+      if(!rows[0].status){dialog.close();return;}
+      try{
+        validatePresence(rows);validateTaskAllocationShares(rows);const reason=dialog.querySelector('.presence-reason').value.trim();if(!reason)throw new Error('Укажи комментарий проверки');
+        save.disabled=true;
+        const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:tid,p_expected:data.trip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason});
+        if(error)throw error;
+        dialog.close();showToast(rows[0].status==='approved'?'Стоянка привязана и присутствие подтверждено':'Стоянка исключена из учёта');
+        try{await loadFactHours();
+          if(stayBindMap?.tid===tid)await reloadStayBindingData(tid);
+          if(tripEditId===tid){await loadWorkbench(tid);tripEcon();}
+        }catch(refreshError){notify('Проверка сохранена, но обновить отображение не удалось: '+refreshError.message,'warn');}
+      }catch(e){output.textContent=e.message||String(e);save.disabled=false;}
+    };
+  }catch(e){notify('Не удалось открыть присутствие: '+(e.message||e),'err');}
+}
+async function loadWorkbench(id){
+  tripWorkbench=null;tripPresenceDirty=false;
+  if(!id){$('tpPresence').textContent='Сохрани план, чтобы начать учёт выезда.';$('tpHistoryPane').textContent='Новый выезд';$('tpRemovedJobs').innerHTML='';$('tpReviewState').textContent='Новый план';if($('tpTripAllocation'))$('tpTripAllocation').innerHTML='<p class="hint">Сохрани выезд и подтверди факт, чтобы распределить затраты.</p>';return;}
+  $('tpPresence').textContent='Загружаю присутствие…';
+  try{
+    const {data,error}=await sb.rpc('trip_workbench_read',{p_trip:id});if(error)throw error;
+    if(tripEditId!==id)return;
+    if(!sameEditablePlan(getTrip(id),data.trip,[...curTripJobs],data.job_ids||[]))throw new Error('План изменился во время загрузки. Открой карточку заново, чтобы получить согласованную версию.');
+    const stayIds=(data.stays||[]).map(s=>s.id);
+    const {data:taskShares,error:shareError}=stayIds.length
+      ?await sb.from('trip_stay_task_allocations').select('stay_id,service_order_id,share').in('stay_id',stayIds)
+      :{data:[],error:null};
+    if(shareError)throw shareError;
+    const allocationByStay=new Map();for(const x of taskShares||[]){const rows=allocationByStay.get(x.stay_id)||[];rows.push({order_id:x.service_order_id,share:Number(x.share)});allocationByStay.set(x.stay_id,rows);}
+    tripWorkbench={...data,jobIds:data.job_ids,stays:(data.stays||[]).map(s=>({...s,task_allocations:allocationByStay.get(s.id)||[]}))};
+    const index=trips.findIndex(t=>t.id===id);if(index>=0)trips[index]=data.trip;
+    const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
+    $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{orders:linkedOrders});
+    $('tpRemovedJobs').innerHTML=removedHTML(tripWorkbench,tripJobsAll);
+    $('tpHistoryPane').innerHTML=historyHTML(tripWorkbench,profilesList);
+    $('tpReviewState').textContent=(ST_TRIP[data.trip.status]||data.trip.status)+' · версия '+data.trip.workbench_revision+' · изменение плана не удаляет трек и посещения';
+    $('tpStatus').disabled=!!data.trip.started_at||!canWrite();
+    $('tpRemainingInfo').textContent=data.trip.remaining_route?'Осталось '+data.trip.remaining_route.km.toFixed(1)+' км · расчёт '+new Date(data.trip.remaining_route.at).toLocaleString('ru-RU'):'';
+    $('wbDetect').onclick=async()=>{
+      if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки.','warn');return;}
+      $('wbDetect').disabled=true;
+      try{const {error}=await sb.rpc('trip_presence_detect',{p_trip:id,p_expected:tripWorkbench.trip.workbench_revision});if(error)throw error;await loadWorkbench(id);}
+      catch(e){notify(e.message,'err');if($('wbDetect'))$('wbDetect').disabled=false;}
+    };
+    if($('wbPresenceSave'))$('wbPresenceSave').onclick=async()=>{
+      if(tripPlanDirty){notify('Сохрани план и проверку вместе верхней кнопкой «Сохранить план».','warn');return;}
+      const rows=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>['approved','rejected'].includes(s.status));
+      try{if(!rows.length)throw new Error('Выбери стоянки для проверки. Незакрытое присутствие можно проверить позже.');validatePresence(rows);}
+      catch(e){notify(e.message,'warn');return;}
+      const reason=await promptDialog('Проверка присутствия',[{key:'reason',label:'Причина / комментарий',value:'Проверено по треку и составу команды'}]);
+      if(!reason)return;
+      $('wbPresenceSave').disabled=true;
+      try{validateTaskAllocationShares(rows);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:id,p_expected:tripWorkbench.trip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason.reason});if(error)throw error;
+        tripPresenceDirty=false;await loadFactHours();await loadWorkbench(id);tripEcon();showToast('Человеко-часы присутствия сохранены');}
+      catch(e){notify(e.message,'err');if($('wbPresenceSave'))$('wbPresenceSave').disabled=false;}
+    };
+    await renderTripCostReview(id);
+  }catch(e){$('tpPresence').textContent='Не удалось загрузить проверку выезда: '+e.message;$('tpSave').disabled=true;$('tpReviewState').textContent='Данные недоступны. Сохранение заблокировано до успешной загрузки.';}
+}
+if($('tpRebuildRemaining'))$('tpRebuildRemaining').onclick=async()=>{
+  if(!tripWorkbench||!tripWorkbench.trip.started_at){notify('Оставшийся маршрут рассчитывается для начатого выезда.','warn');return;}
+  const button=$('tpRebuildRemaining');button.disabled=true;
+  try{
+    await ensureTurf();
+    const t=tripWorkbench.trip;
+    if(t.status!=='in_progress')throw new Error('Выезд уже завершён. Для него редактируется полный план.');
+    const raw=await loadTripPositions(t.id),last=raw[raw.length-1];
+    if(!last||Date.now()-Date.parse(last.ts)>5*60000)throw new Error('Нужна свежая позиция автомобиля — не старше пяти минут.');
+    const visited=new Set(tripWorkbench.stays.filter(s=>s.job_id&&s.stay_to&&s.status!=='rejected').map(s=>tripJobsAll.find(j=>j.id===s.job_id)).filter(Boolean).map(jobKey));
+    const points=dedupeStops([{type:'start',name:'Текущее положение',lat:last.lat,lng:last.lng},...remainingStops(tripRouteStops,visited)]);
+    if(points.length<2)throw new Error('Нет оставшихся точек. Добавь точку возвращения.');
+    if(avoidHits(points).length)throw new Error('Точка маршрута попала в зону объезда.');
+    const features=[];for(let i=1;i<points.length;i++){
+      const res=await legWithAvoid(points[i-1],points[i],'recommended',avoidPolygons(),m=>{$('tpRemainingInfo').textContent=m;});
+      if(res.noAvoid)throw new Error('Не удалось учесть объезды. Расчёт не сохранён.');features.push(res.feature);
+    }
+    const route=mergeFeatures(features),totals=sumLeg(route);
+    tripRemainingRoute={...totals,geometry:slimGeometry(route.geometry),stops:points,at:new Date().toISOString(),position_ts:last.ts};tripPlanDirty=true;
+    $('tpRemainingInfo').textContent='Осталось '+totals.km.toFixed(1)+' км · '+totals.h.toFixed(1)+' ч. Сохрани план. Пройденный трек не изменён.';
+  }catch(e){notify(e.message,'err');}finally{button.disabled=false;}
+};
+async function loadTripJobs(){ const {data}=await sb.from('jobs').select('id,status,scheduled_date,equipment_id,at_depot, clients(name,lat,lng), equipment(model,lat,lng), job_works(hours,billable,revenue,tariff_profile), job_parts(qty,price,cost,billable)').is('deleted_at',null).or('at_depot.is.null,at_depot.eq.false').order('created_at',{ascending:false}); tripJobsAll=data||[]; }
+async function loadTripOrders(){const {data,error}=await sb.from('service_orders').select('id,number,title,status,work_mode,job_id,seed_request_id').not('job_id','is',null).eq('work_mode','onsite').order('created_at',{ascending:false});if(error)throw error;tripOrdersAll=data||[];}
+function syncTripJobsFromOrders(){curTripJobs=new Set(tripOrdersAll.filter(o=>curTripOrders.has(o.id)).map(o=>o.job_id));}
+function tripStops(){ const stops=[]; const seen=new Set(); tripJobsAll.filter(j=>curTripJobs.has(j.id)).forEach(j=>{ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); if(lat==null) return; const nm=(eq&&eq.lat!=null)?((j.clients?j.clients.name:'')+' · '+(eq.model||'')):(j.clients?j.clients.name:''); const key=(+lat).toFixed(5)+','+(+lng).toFixed(5); if(seen.has(key)) return; seen.add(key); stops.push({name:nm,lat,lng}); }); return stops; }
+const keyOf=s=>(+s.lat).toFixed(5)+','+(+s.lng).toFixed(5);
+function syncRouteStops(){ const jobStops=tripStops(); const desired=new Set(jobStops.map(keyOf));
+  tripRouteStops=tripRouteStops.filter(s=>s.type!=='job'||desired.has(keyOf(s)));
+  const present=new Set(tripRouteStops.map(keyOf));
+  jobStops.forEach(s=>{ if(!present.has(keyOf(s))) tripRouteStops.push({type:'job',name:s.name,lat:s.lat,lng:s.lng}); }); }
+function resetTripRoute(){ tripRoute={km:0,driveH:0,geometry:null,legs:[]}; tripVariants=[]; if($('tpRouteStatus')) $('tpRouteStatus').textContent='маршрут не построен'; tripEcon(); }
+function renderRouteStops(){ const box=$('tpRouteStops'); const hasAny=tripStart||tripRouteStops.length; box.innerHTML=hasAny?'':'<div class="hint">Точек нет. Отметь заявки или добавь промежуточную.</div>';
+  let n=0;
+  if(tripStart){ n++; const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap: var(--sp-3);align-items:center'; d.innerHTML='<span class="grow">'+n+'. '+esc(tripStart.name||'старт')+' <span class="pill">старт</span></span>'; box.appendChild(d); }
+  tripRouteStops.forEach((s,i)=>{ n++; const d=document.createElement('div'); d.className='eqitem'; d.style.cssText='display:flex;gap: var(--sp-3);align-items:center';
+    const tag=s.type==='wp'?' <span class="pill">пром.</span>':(s.type==='place'?' <span class="pill">депо</span>':'');
+    d.innerHTML='<span class="grow">'+n+'. '+esc(s.name||'точка')+tag+'</span>'+
+      '<button class="btn sm ghost" data-up="'+i+'">↑</button><button class="btn sm ghost" data-down="'+i+'">↓</button>'+(s.type==='wp'?'<button class="btn sm ghost" data-wprm="'+i+'">×</button>':'');
+    box.appendChild(d); });
+  box.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>moveStop(+b.dataset.up,-1));
+  box.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>moveStop(+b.dataset.down,1));
+  box.querySelectorAll('[data-wprm]').forEach(b=>b.onclick=()=>{ tripRouteStops.splice(+b.dataset.wprm,1); resetTripRoute(); renderRouteStops(); }); }
+function moveStop(i,dir){ const j=i+dir; if(j<0||j>=tripRouteStops.length) return; const a=tripRouteStops; const t=a[i]; a[i]=a[j]; a[j]=t; resetTripRoute(); renderRouteStops(); }
+// Геометрия маршрута перед сохранением прореживается: ORS отдаёт точку каждые
+// 20–50 м, и на маршруте в 1700 км это до 2 МБ JSON — такой запрос база
+// отклоняет. Для карты подробность не нужна, форма линии сохраняется.
+function slimGeometry(g){
+  if(!g) return null;
+  try{
+    const coords=(g.geometry&&g.geometry.coordinates)||g.coordinates;
+    if(!Array.isArray(coords)||coords.length<3) return g;
+    const before=coords.length;
+    const slim=simplifyLine(coords,0.0001);   // ~11 м
+    if(slim.length===before) return g;
+    console.info('Геометрия маршрута: '+before+' → '+slim.length+' точек');
+    if(g.geometry) return {...g,geometry:{...g.geometry,coordinates:slim}};
+    return {...g,coordinates:slim};
+  }catch(e){ return g; }
+}
+function routeAll(){ return (tripStart?[{type:'start',name:tripStart.name,lat:tripStart.lat,lng:tripStart.lng}]:[]).concat(tripRouteStops); }
+function wireKanbanDrag(box,onDrop){ if(!canWrite()) return;
+  box.querySelectorAll('.kcard').forEach(card=>{ card.setAttribute('draggable','true');
+    card.addEventListener('dragstart',e=>{ card.classList.add('dragging'); try{ e.dataTransfer.setData('text/plain',card.dataset.kid); e.dataTransfer.effectAllowed='move'; }catch(err){} });
+    card.addEventListener('dragend',()=>{ card.classList.remove('dragging'); box.querySelectorAll('.kcol').forEach(c=>c.classList.remove('over')); }); });
+  box.querySelectorAll('.kcol').forEach(col=>{
+    col.addEventListener('dragover',e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(err){} col.classList.add('over'); });
+    col.addEventListener('dragleave',()=>col.classList.remove('over'));
+    col.addEventListener('drop',async e=>{ e.preventDefault(); col.classList.remove('over');
+      let id=''; try{ id=e.dataTransfer.getData('text/plain'); }catch(err){}
+      const st=col.dataset.kst; if(id&&st) await onDrop(id,st); }); }); }
+async function dropJob(id,st){ const j=jobs.find(x=>x.id==id); if(!j||j.status===st) return; const old=j.status;
+  const {error}=await sb.from('jobs').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); return; }
+  if(st==='done') await jobClosed(id,{equipmentId:j.equipment_id,works:j.job_works||[]});
+  j.status=st; await renderJobs(); await refreshStats();
+  undoToast('Заявка → «'+(ST[st]||st)+'»', async ()=>{ const {error:e2}=await sb.from('jobs').update({status:old}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Статус возвращён'); }); }
+// Канбан и выпадающий список статуса раньше писали статус напрямую.
+// Триггер trg_guard_trip_status это запрещает: переходы в «в работе»,
+// «на проверке» и «завершён» должны идти через trip_start / trip_finish /
+// trip_confirm, потому что они пишут started_at, finished_at, fact_km
+// и запускают детектор стоянок. Именно так выезд 33d36776 и оказался
+// in_progress при пустом started_at — его перетащили, а не нажали «Начать».
+const TRIP_KIND={in_progress:'start',finished:'finish',done:'confirm'};
+async function dropTrip(id,st){ const t=trips.find(x=>x.id==id); if(!t||t.status===st) return; const old=t.status;
+  const kind=TRIP_KIND[st];
+  if(kind){ await tripAction(id,kind); await renderTrips(); return; }
+  const {error}=await sb.from('trips').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); return; }
+  t.status=st; await renderTrips();
+  // Откат предлагаем, только если возвращаться некуда через RPC: отменить
+  // старт, финиш или подтверждение нельзя — они уже записали время, факт
+  // и стоянки.
+  if(TRIP_KIND[old]){ showToast('Выезд → «'+(ST_TRIP[st]||st)+'»'); return; }
+  undoToast('Выезд → «'+(ST_TRIP[st]||st)+'»', async ()=>{ const {error:e2}=await sb.from('trips').update({status:old}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Статус возвращён'); }); }
+const TRIP_STATUS_ORDER=['planned','assigned','in_progress','finished','done','cancelled'];
+let tripVisible={planned:true,assigned:true,in_progress:true,finished:true,done:false,cancelled:false};
+function renderTripChips(){ const box=$('tripStatusChips'); if(!box) return; box.innerHTML=TRIP_STATUS_ORDER.map(s=>'<span class="chip'+(tripVisible[s]?' on':'')+'" data-ts="'+s+'">'+esc(ST_TRIP[s])+'</span>').join('');
+  box.querySelectorAll('[data-ts]').forEach(c=>c.onclick=()=>{ tripVisible[c.dataset.ts]=!tripVisible[c.dataset.ts]; renderTripChips(); renderTrips(); }); }
+// Имя выезда — это КУДА он едет, а не КОГДА. Человек опознаёт выезд по
+// клиенту; диапазон дат в ISO не опознаётся вообще, а на телефоне он ещё
+// и занимает всю строку заголовка. Даты уходят в подпись.
+// Порядок источников: заявки выезда → именованные остановки маршрута →
+// период (когда ехать известно, а к кому — ещё нет).
+function tripTitle(t,jobs){
+  const names=[];
+  (jobs||[]).forEach(j=>{ const n=j.clients&&j.clients.name; if(n&&names.indexOf(n)<0) names.push(n); });
+  if(!names.length){
+    (t.route_stops||[]).filter(s=>s&&s.name&&s.type!=='start'&&s.type!=='place'&&s.type!=='wp'&&!/^точка\s*\d+$/i.test(String(s.name).trim()))
+      .forEach(s=>{ const n=String(s.name).split(' · ')[0].trim(); if(n&&names.indexOf(n)<0) names.push(n); });
+  }
+  if(!names.length) return tripPeriod(t.date_from,t.date_to);
+  return names.slice(0,2).join(', ')+(names.length>2?(' +'+(names.length-2)):'');
+}
+function tripCard(t){ const e=t.econ_snapshot||{}; const engs=engineerNames(tripEngineerIds(t)); const share=e.totalHours?Math.round((e.warrantyHours/e.totalHours)*100):0;
+  const pts=(t.route_stops||[]).filter(s=>s&&s.name&&s.type!=='start'&&s.type!=='place'&&s.type!=='wp'&&!/^точка\s*\d+$/i.test(String(s.name).trim())).map(s=>String(s.name).split(' · ')[0].trim()).filter(Boolean);
+  // Даты по-человечески: «10 августа–11 сентября», а не «2026-08-10 → 2026-09-11».
+  // ISO нужен базе, а не тому, кто смотрит на карточку.
+  const uniq=[...new Set(pts)]; const dates=tripPeriod(t.date_from,t.date_to);
+  const title=uniq.length?(uniq.slice(0,2).join(', ')+(uniq.length>2?(' +'+(uniq.length-2)):'')):dates;
+  const mb=[]; if(uniq.length) mb.push(dates); if(t.vehicle_label) mb.push(t.vehicle_label);
+  const head='<h4>'+esc(title)+'</h4>'+(mb.length?'<div class="meta">'+esc(mb.join(' · '))+'</div>':'');
+  const meta=canWrite()
+    ? '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок · выручка '+(e.revenue||0)+(e.profit!=null?(' · приб. '+Math.round(e.profit)):'')+' · гар. '+share+'%'+(engs.length?' · '+esc(engs.join(', ')):'')+'</div>'
+    : '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок'+(e.km!=null?(' · '+(+e.km).toFixed(0)+' км'):'')+(e.driveH!=null?(' · '+(+e.driveH).toFixed(1)+' ч'):'')+'</div>';
+  const mv=canWrite()?('<select class="kmove" data-tstat="'+t.id+'" title="Сменить статус">'+TRIP_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===t.status?' selected':'')+'>'+esc(ST_TRIP[s])+'</option>').join('')+'</select>'):'';
+  const acts=canWrite()
+    ? '<div class="acts">'+mv+'<button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tmap="'+t.id+'" title="На карте">карта</button>'
+      +((t.status==='finished'||t.status==='done')?('<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ км</button>'):'')
+      +'<button class="btn sm" data-tgm="'+t.id+'" title="Google Maps">⌖</button><button class="btn sm ghost" data-tdel="'+t.id+'" title="Удалить выезд">×</button></div>'
+    : '<div class="acts"><button class="btn sm" data-tmap="'+t.id+'">карта</button><button class="btn sm" data-tgm="'+t.id+'">⌖ Google Maps</button></div>';
+  return '<div class="kcard" data-kid="'+t.id+'">'+head+meta+acts+'</div>'; }
+function wireTripCards(box){
+  box.querySelectorAll('[data-tedit]').forEach(b=>b.onclick=()=>openTrip(b.dataset.tedit));
+  box.querySelectorAll('[data-tmap]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.tmap));
+  box.querySelectorAll('[data-tgm]').forEach(b=>b.onclick=()=>tripGmaps(b.dataset.tgm));
+  box.querySelectorAll('[data-tkm]').forEach(b=>b.onclick=()=>remeasureTrip(b.dataset.tkm));
+  box.querySelectorAll('[data-tdel]').forEach(b=>b.onclick=()=>delTrip(b.dataset.tdel));
+  box.querySelectorAll('[data-tstat]').forEach(sel=>sel.onchange=async()=>{ const id=sel.dataset.tstat, st=sel.value;
+    const kind=TRIP_KIND[st];
+    if(kind){ await tripAction(id,kind); renderTrips(); return; }
+    const {error}=await sb.from('trips').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); renderTrips(); return; } const t=trips.find(x=>x.id==id); if(t) t.status=st; showToast('Статус: '+(ST_TRIP[st]||st)); renderTrips(); }); }
+async function renderTrips(){ await ensureRefs(); renderTripChips();
+  const {data,error}=await sb.from('trips').select('*, trip_jobs(job_id)').is('deleted_at',null).order('created_at',{ascending:false});
+  const box=$('tripList'); if(error){ box.className=''; box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
+  trips=data||[]; const q=$('tripSearch').value.trim().toLowerCase();
+  const filter=$('tripEngFilter');
+  if(filter&&filter.dataset.filled!=='1'){
+    filter.innerHTML='<option value="">все инженеры</option>'+profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(p.full_name||'инженер')+'</option>').join('');
+    filter.dataset.filled='1';
+  }
+  const ef=filter?filter.value:'';
+  const match=t=>(role!=='engineer'||assignedTo(t,session.user.id,'lead_engineer'))&&(!ef||assignedTo(t,ef,'lead_engineer'))&&(!q||((t.vehicle_label||'')+' '+(t.date_from||'')+' '+(t.date_to||'')).toLowerCase().includes(q));
+  const cols=TRIP_STATUS_ORDER.filter(s=>tripVisible[s]);
+  if(!cols.length){ box.className=''; box.innerHTML='<div class="hint">Выберите хотя бы один статус выше.</div>'; return; }
+  if(!trips.length){ box.className=''; box.innerHTML='<div class="hint">'+(canWrite()?'Выездов нет. Собери первый из заявок на карте.':'На тебя пока не назначены выезды.')+'</div>'; return; }
+  const tpool=trips.filter(match);
+  chipCounts($('tripStatusChips'),'ts',tpool);
+  if(isPhone()){ box.className='klist'; box.innerHTML=flatList(tpool,tripVisible,t=>t.date_from,tripCard,'По выбранным статусам выездов нет.'); wireTripCards(box); return; }
+  box.className='kanban';
+  box.innerHTML=cols.map(s=>{ const items=trips.filter(t=>t.status===s&&match(t));
+    const TEMPTY={planned:'Запланированных выездов нет',assigned:'Назначенных нет',
+      in_progress:'Никто не в пути',finished:'Завершённых нет',done:'Подтверждённых нет',
+      cancelled:'Отменённых нет'};
+    const cards=items.map(t=>tripCard(t)).join('')
+      ||'<div class="kempty">'+esc(TEMPTY[s]||'Пусто')+'</div>';
+    return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST_TRIP[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
+  wireTripCards(box); wireKanbanDrag(box,dropTrip); }
+$('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) openTrip(null); };
+if($('tripEngFilter')) $('tripEngFilter').onchange=renderTrips;
+async function openTrip(id){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); await loadTripJobs(); await loadTripOrders();
+  // econCompute считает дорогу по плательщикам через turf, когда готовых
+  // километров в выезде нет. Без turf он молча уйдёт в плоскую ветку и
+  // покажет другую цифру — поэтому ждём здесь, до первого tripCalc().
+  await ensureTurf().catch(()=>{}); tripEditId=id;
+  if(id){ const {data,error}=await sb.from('trips').select('*').eq('id',id).single(); if(error){notify(error.message,'err');return;} const i=trips.findIndex(x=>x.id===id);if(i<0)trips.push(data);else trips[i]=data; }
+  const t=id?getTrip(id):null; tripMainJobId=(t&&t.main_job_id)||null;
+  $('tpFrom').value=t?(t.date_from||''):''; $('tpTo').value=t?(t.date_to||''):''; $('tpVeh').innerHTML='<option value="">— авто —</option>'+vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.name+(v.plate?(' · '+v.plate):''))+'</option>').join(''); $('tpVeh').value=t&&t.vehicle_id?t.vehicle_id:''; updateVehInfo(); $('tpVeh').onchange=()=>{ updateVehInfo(); tripHead(); }; $('tpNotes').value=t?(t.notes||''):'';
+  $('tpEng').innerHTML=profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
+  setEngineerSelect('tpEng',t?tripEngineerIds(t):[]); $('tpStatus').value=t?t.status:'planned';
+  if($('tpStayMap')) $('tpStayMap').style.display=t?'':'none';
+  curTripOrders=new Set(); if(t){const {data,error}=await sb.from('trip_service_orders').select('order_id').eq('trip_id',id);if(error){notify(error.message,'err');return;}(data||[]).forEach(r=>curTripOrders.add(r.order_id));}
+  if(t&&!curTripOrders.size){const {data}=await sb.from('trip_jobs').select('job_id').eq('trip_id',id);const ids=new Set((data||[]).map(r=>r.job_id));tripOrdersAll.filter(o=>ids.has(o.job_id)&&o.seed_request_id===o.job_id).forEach(o=>curTripOrders.add(o.id));}
+  syncTripJobsFromOrders();if(tripMainJobId&&!curTripJobs.has(tripMainJobId))tripMainJobId=null;
+  const ro=!canWrite(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
+  const es=(t&&(t.plan_econ_snapshot||t.econ_snapshot))||{}; tripRoute={km:es.km||0,driveH:es.driveH||0,geometry:(t&&t.route_geometry)||null,legs:es.legs||[]}; tripVariants=[];
+  const ovs=(t&&t.overrides)||{}; tripOverrides={revenue:(ovs.revenue!=null?String(ovs.revenue):''),cost:(ovs.cost!=null?String(ovs.cost):''),road:(ovs.road||{})}; $('tpOvRev').value=tripOverrides.revenue; $('tpOvCost').value=tripOverrides.cost;
+  const saved=(t&&t.route_stops)?t.route_stops:[]; const st=saved.find(x=>x.type==='start'); tripStart=st?{name:st.name,lat:st.lat,lng:st.lng}:null;
+  tripRouteKeys=new Set(saved.filter(s=>s.lat!=null&&s.lng!=null).map(s=>(+s.lat).toFixed(5)+','+(+s.lng).toFixed(5))); if($('tpJobsRoute')) $('tpJobsRoute').checked=true;
+  tripRouteStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'job',name:x.name,lat:x.lat,lng:x.lng})); syncRouteStops(); renderRouteStops();
+  $('tpRouteStatus').innerHTML=tripRoute.km?('<span class="ok">'+tripRoute.km.toFixed(1)+' км · '+tripRoute.driveH.toFixed(1)+' ч</span>'):'';
+  drawTripMap(t);
+  renderTripJobs(); $('tripErr').textContent=''; tripEcon(); switchTab('trip');
+  $('tpChangeReason').value=''; tripPlanDirty=false; tripRemainingRoute=t?.remaining_route||null;
+  setTripPane('plan'); await loadWorkbench(id); await serviceOrders.tripParent(t);
+  const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
+// Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
+// было собирать глазами из четырёх мест модалки.
+// Факт-пробег в карточке выезда: число, откуда оно взято, что было с треком
+// и кнопка пересчёта.
+//
+// Почему это отдельный блок, а не строка в «Экономике». Число там —
+// слагаемое в себестоимости, и увидеть его недостаточно: надо понимать, чем
+// оно получено. «303 км (одометр)» и «303 км по треку» стоят одинаково, но
+// доверия заслуживают разного, а «вырезано аномалий: 4» объясняет разницу
+// с планом лучше любой сводки.
+function renderTpFactKm(){
+  const box=$('tpFactBox'); if(!box) return;
+  const t=tripEditId?trips.find(x=>x.id==tripEditId):null;
+  if(!t||!canWrite()){ box.innerHTML=''; if($('tpKmAction'))$('tpKmAction').innerHTML=''; return; }
+  const val=t.fact_km!=null
+    ? ('<b>'+Math.round(t.fact_km)+' км</b>'+esc(factSrcRu(t.fact_km_source)))
+    : '<span class="fg-t">не сведён</span>';
+  box.innerHTML='<div class="hint">Факт-пробег: '+val
+    +(t.fact_km_note?('<br><span class="fg-t">'+esc(t.fact_km_note)+'</span>'):'')+'</div>';
+  $('tpKmAction').innerHTML='<button class="btn sm" id="tpKmCalc" style="margin-top: var(--sp-3);width:100%">'
+    +(t.fact_km!=null?'↻ Пересчитать пробег по треку':'Свести пробег по треку')+'</button>';
+  const b=$('tpKmCalc');
+  if(b) b.onclick=async()=>{ const id=tripEditId; await remeasureTrip(id); if(tripEditId===id) renderTpFactKm(); };
+}
+
+function tripHead(){
+  const per=tripPeriod($('tpFrom').value,$('tpTo').value);
+  $('tripTitle').textContent=tripEditId?('Выезд '+per):'Новый выезд';
+  $('tripCrumb').textContent=tripEditId?per:'Новый выезд';
+  const veh=vehicles.find(x=>x.id==$('tpVeh').value);
+  const engs=engineerNames(selectedEngineerIds('tpEng'));
+  const e=tripCalc();
+  const parts=[];
+  if(veh) parts.push(esc(veh.name+(veh.plate?(' · '+veh.plate):'')));
+  if(engs.length) parts.push(esc(engs.join(', ')));
+  parts.push(e.jobCount+' '+plural(e.jobCount,'заявка','заявки','заявок'));
+  if(e.km>0) parts.push(e.km.toFixed(0)+' км · '+(e.driveH+e.workH).toFixed(1)+' ч');
+  $('tripSub').innerHTML=parts.join(' · ')||'—';
+  const pc=e.profit>=0?'var(--green)':'var(--red)';
+  $('tripHeadEcon').innerHTML='<div class="te-k">Прибыль · предварительно</div>'
+    +'<div class="te-v" style="color:'+pc+'">'+Math.round(e.profit).toLocaleString('ru-RU')+' '+e.cur+'</div>'
+    +'<div class="te-s">маржа '+e.margin.toFixed(0)+'% · выручка '+Math.round(e.rev).toLocaleString('ru-RU')+'</div>';
+  if($('tpJobsCnt')) $('tpJobsCnt').textContent=e.jobCount+' из '+tripJobsAll.length;
+  if($('tpRouteKm')) $('tpRouteKm').textContent=tripRoute.km?(tripRoute.km.toFixed(0)+' км'):'—';
+  renderTpFactKm();
+}
+function plural(n,a,b,c){ n=Math.abs(n)%100; const n1=n%10;
+  if(n>10&&n<20) return c; if(n1>1&&n1<5) return b; if(n1===1) return a; return c; }
+// «07–11 сентября» вместо «2026-09-07 — 2026-09-11». Внутри одного месяца
+// название пишется один раз, на стыке месяцев — оба.
+const MON_RU=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+function tripPeriod(df,dt){
+  if(!df) return 'даты не заданы';
+  const a=new Date(df+'T00:00:00'); if(isNaN(a)) return df;
+  const b=(dt&&dt!==df)?new Date(dt+'T00:00:00'):null;
+  const dd=x=>String(x.getDate()).padStart(2,'0');
+  if(!b||isNaN(b)) return dd(a)+' '+MON_RU[a.getMonth()];
+  if(a.getMonth()===b.getMonth()&&a.getFullYear()===b.getFullYear())
+    return dd(a)+'\u2013'+dd(b)+' '+MON_RU[b.getMonth()];
+  return dd(a)+' '+MON_RU[a.getMonth()]+'\u2013'+dd(b)+' '+MON_RU[b.getMonth()];
+}
+function jobKey(j){ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); if(lat==null) return null; return (+lat).toFixed(5)+','+(+lng).toFixed(5); }
+let tripMainJobId=null;   // основная заявка выезда (для маржинального километража)
+function renderTripJobs(){ const box=$('tpJobs');
+  const routeOnly=$('tpJobsRoute')?$('tpJobsRoute').checked:false; const useFilter=routeOnly&&tripRouteKeys.size>0;
+  let list=tripJobsAll; if(useFilter) list=tripJobsAll.filter(j=>curTripJobs.has(j.id)||tripRouteKeys.has(jobKey(j)));
+  const jobsInView=new Set(list.map(j=>j.id));
+  const tasks=tripOrdersAll.filter(o=>jobsInView.has(o.job_id));
+  const hidden=tripOrdersAll.length-tasks.length;
+  box.innerHTML=tasks.length?'':'<div class="hint">'+(useFilter?'Нет заданий по точкам этого маршрута. Снимите галочку, чтобы показать все.':'Нет выездных заданий. Создай задание из карточки заявки.')+'</div>';
+  list.forEach(j=>{
+    const rows=tripOrdersAll.filter(o=>o.job_id===j.id);
+    if(!rows.length)return;
+    const w=j.job_works||[],rev=w.reduce((a,x)=>a+(+x.revenue||0),0),d=document.createElement('div');d.className='eqitem trip-task-group';
+    const hasSelected=rows.some(o=>curTripOrders.has(o.id));
+    const mainRadio=hasSelected?'<input type="radio" name="tpMain" data-tjmain="'+j.id+'" '+(tripMainJobId===j.id?'checked':'')+' title="Плательщик основной части дороги" style="width:auto">':'<span></span>';
+    d.innerHTML='<div class="trip-task-request">'+mainRadio+'<button type="button" class="trip-job-open" data-tjopen="'+j.id+'"><b>'+esc(j.clients?j.clients.name:'—')+'</b><span>'+esc((j.equipment&&j.equipment.model)||ST[j.status]||j.status)+(j.scheduled_date?' · '+esc(j.scheduled_date):'')+'</span></button><span class="hint">'+(rev?('выручка '+rev):'гар.')+'</span></div>'+
+      '<div class="trip-task-options">'+rows.map(o=>'<label class="trip-task-option"><input type="checkbox" data-torder="'+o.id+'" '+(curTripOrders.has(o.id)?'checked':'')+' '+(['review','completed','cancelled'].includes(o.status)?'disabled':'')+'><span><b>№'+o.number+' · '+esc(o.title)+'</b><small>'+esc(SERVICE_ORDER_STATUS[o.status]||o.status)+'</small></span></label>').join('')+'</div>';
+    box.appendChild(d);
+  });
+  if(useFilter&&hidden>0){const h=document.createElement('div');h.className='hint';h.style.marginTop='6px';h.textContent='Скрыто '+hidden+' заданий вне маршрута.';box.appendChild(h);}
+  box.querySelectorAll('[data-tjmain]').forEach(r=>r.onchange=()=>{tripMainJobId=r.checked?r.dataset.tjmain:null;renderTripJobs();});
+  box.querySelectorAll('[data-tjopen]').forEach(b=>b.onclick=()=>openJob(b.dataset.tjopen));
+  box.querySelectorAll('[data-torder]').forEach(c=>c.onchange=()=>{tripPlanDirty=true;tripRemainingRoute=null;if(c.checked)curTripOrders.add(c.dataset.torder);else curTripOrders.delete(c.dataset.torder);syncTripJobsFromOrders();if(tripMainJobId&&!curTripJobs.has(tripMainJobId))tripMainJobId=null;const before=tripRouteStops.map(keyOf).join('|');syncRouteStops();const after=tripRouteStops.map(keyOf).join('|');renderTripJobs();renderRouteStops();if(before!==after)resetTripRoute();else tripEcon();});
+}
+// tariff_profiles попадают в снапшот наравне с тарифами и себестоимостями
+// (аудит, В10). Раньше их там не было, и roadByPayer читал текущие профили —
+// поэтому правка ставки задним числом переписывала экономику уже закрытых
+// выездов. Снапшот на то и снапшот.
+function tripT(){ return {shift_hours:appSettings.shift_hours,deviation_pct:appSettings.deviation_pct,tariffs:appSettings.tariffs,costs:appSettings.costs,currency:appSettings.currency,tariff_profiles:appSettings.tariff_profiles||[]}; }
+function savedTripT(t){ return t?.started_at&&t.tariffs_snapshot&&Object.keys(t.tariffs_snapshot).length?t.tariffs_snapshot:tripT(); }
+// Снимок экономики для econ_snapshot. Единственное место, где он собирается.
+//
+// Считаем ДВАЖДЫ — по плану и по факту — и храним обе себестоимости.
+// Раньше в поле cost лежало то одно, то другое: карточка выезда передавала
+// в econCompute факт, планировщик — нет. Дашборд складывает econ_snapshot.cost
+// по всем выездам, то есть суммировал разные величины, и общая себестоимость
+// компании менялась от того, каким экраном выезд сохранили последним.
+//
+// Выручка на факт не смотрит по замыслу формулы: она согласована
+// с плательщиком заранее (обоснование — в src/core/economics.js).
+// Поэтому раздваиваем только себестоимость, прибыль и маржу.
+function econSnapshot(jobs,km,driveH,T,ov,ctx,jobCount){return economicSnapshot(jobs,km,driveH,T,ov,ctx,jobCount,appSettings.tariff_profiles,window.turf);}
+function tripCalc(){ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const cur=tripEditId?trips.find(x=>x.id==tripEditId):null; return econCompute(jobs,tripRoute.km,tripRoute.driveH,savedTripT(cur),tripOverrides,{roadKm:(cur&&cur.road_km_by_payer)||null,start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value,factKm:cur?cur.fact_km:null,factWorkH:tripEditId?factHByTrip[tripEditId]:null},appSettings.tariff_profiles,window.turf); }
+function tripEcon(){ const e=tripCalc();
+  $('tpEcon').innerHTML='Работа '+e.workH.toFixed(1)+' ч · в пути '+e.driveH.toFixed(1)+' ч · '
+    +e.km.toFixed(0)+' км · дней '+e.days+' · гарантийная доля '+e.share+'%';
+  // Разбивка лежит на странице, а не в окне поверх окна: цифры в шапке
+  // и строки, из которых они сложились, должны быть видны одновременно.
+  if($('tpEconBody')) $('tpEconBody').innerHTML=econHTML(e,'tpEconMap');
+  renderTpRoadGroups(); tripHead(); }
+function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const rb=(tripStart&&(appSettings.tariff_profiles||[]).length)?roadByPayer(tripStart,jobs):null;
+  if(!rb||!rb.groups.length){ box.innerHTML=''; return; }
+  if(!tripOverrides.road) tripOverrides.road={}; const rd=tripOverrides.road;
+  let h='<div class="meta" style="margin-top: var(--sp-3)">Дорога по плательщикам (оверрайд выручки, пусто = авто):</div>';
+  rb.groups.forEach(g=>{ h+='<div class="row" style="align-items:center;margin-top: var(--sp-2)"><span class="grow" style="font-size: var(--fs-3)">'+esc(g.name)+' · '+g.km.toFixed(0)+' км × '+g.rate+' = '+g.rev.toFixed(0)+'</span><input type="number" data-rgov="'+esc(g.payer)+'" value="'+(rd[g.payer]!=null?rd[g.payer]:'')+'" placeholder="'+g.rev.toFixed(0)+'" style="max-width:110px"></div>'; });
+  box.innerHTML=h;
+  box.querySelectorAll('[data-rgov]').forEach(inp=>inp.onchange=()=>{ const k=inp.dataset.rgov; if(inp.value==='') delete tripOverrides.road[k]; else tripOverrides.road[k]=inp.value; tripEcon(); }); }
+// [сборка] Удалено мёртвое определение showTripOnMap(id)=>loadTripIntoPlanner:
+// из-за подъёма функций в браузере всегда побеждала вторая версия ниже
+// (показ фактического трека), а эта была недостижима с самого начала.
+// Одна кнопка на оба занятия: открывает плановый маршрут в редакторе (точки
+// можно двигать) и поверх — факт, если он есть. Слои переключаются в легенде.
+$('tpEditMap').onclick=()=>{ if(tripEditId){ showTripOnMap(tripEditId); } else { notify('Сначала сохрани выезд — потом правь маршрут на карте.','warn'); } };
+if($('tpStayMap')) $('tpStayMap').onclick=()=>{if(tripEditId)openStayBindingMap(tripEditId);};
+function loadTripIntoPlanner(id,known){ const t=known||trips.find(x=>x.id==id)||tripCache[id]; if(!t) return false; switchTab('map'); tripLayer.clearLayers(); plannerTripId=id; plannerTripRevision=t.workbench_revision??0;
+  const saved=t.route_stops||[]; const st=saved.find(x=>x.type==='start'); rStart=st?{name:st.name,lat:st.lat,lng:st.lng,description:st.description||''}:null;
+  rStops=saved.filter(x=>x.type!=='start').map(x=>({type:x.type||'client',name:x.name,lat:x.lat,lng:x.lng,clientId:x.clientId||null,equipId:x.equipId||null,description:x.description||''}));
+  const es=t.plan_econ_snapshot||t.econ_snapshot||{}; rRoute={km:es.km||0,driveH:es.driveH||0,geometry:t.route_geometry||null,legs:es.legs||[]}; rVariants=[]; if($('rVariants')) $('rVariants').innerHTML='';
+  renderRoutePanel(); $('rStatus').innerHTML=rRoute.km?('<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'):'';
+  if(rStops.length) map.fitBounds(routeStopsAll().map(s=>[s.lat,s.lng]),fitPadL(fitPad(60)));
+  return !!(rStops.length||rStart||rRoute.geometry);
+}
+$('tripCancel').onclick=async()=>{if((tripPlanDirty||tripPresenceDirty)&&!await confirmDialog('Выйти без сохранения изменений карточки?',{okText:'Выйти'}))return;tripPlanDirty=false;tripPresenceDirty=false;switchTab('planner','trips');};
+['tpFrom','tpTo','tpEng','tpStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',tripEcon); });
+$('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
+$('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
+  if(!canWrite())return;
+  let presenceChanges=null;
+  if(tripPresenceDirty){
+    presenceChanges=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>['approved','rejected'].includes(s.status));
+    try{if(!presenceChanges.length)throw new Error('Выбери результат проверки изменённых стоянок.');validatePresence(presenceChanges);validateTaskAllocationShares(presenceChanges);}
+    catch(e){$('tripErr').textContent=e.message;return;}
+    presenceChanges=presenceChanges.map(taskAllocationPayload);
+  }
+  if(tripEditId&&!$('tpChangeReason').value.trim()){ $('tripErr').textContent='Укажи причину изменения плана.';return; }
+  const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};
+  // Километраж по плательщикам — по реальным дорогам. Считаем и здесь:
+  // выезд можно сохранить из карточки, минуя планировщик.
+  const curTrip=tripEditId?trips.find(x=>x.id==tripEditId):null;
+  const linkedForKm=tripJobsAll.filter(j=>curTripJobs.has(j.id));
+  const roadKmTrip=await computeRoadKmByPayer(linkedForKm, tripMainJobId||null,
+    m=>{ $('tripErr').textContent=m; }) || (curTrip&&curTrip.road_km_by_payer) || null;
+  $('tripErr').textContent='';
+
+  // Снимок считаем ПОСЛЕ километража. Раньше tripCalc() отрабатывал первой
+  // строкой обработчика и брал ещё СТАРЫЙ road_km_by_payer — выручка по
+  // дороге в снапшоте отставала ровно на одно сохранение.
+  const e=econSnapshot(linkedForKm,tripRoute.km,tripRoute.driveH,savedTripT(curTrip),ov,{
+    roadKm:roadKmTrip, start:tripStart,
+    dateFrom:$('tpFrom').value, dateTo:$('tpTo').value,
+    factKm:curTrip?curTrip.fact_km:null,
+    factWorkH:tripEditId?factHByTrip[tripEditId]:null
+  },jobIds.length);
+
+  const rec={main_job_id:tripMainJobId||null,road_km_by_payer:roadKmTrip,date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:selectedEngineerIds('tpEng')[0]||null,engineer_ids:selectedEngineerIds('tpEng'),status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:withLegs(e,tripRoute.legs),tariffs_snapshot:savedTripT(curTrip),remaining_route:tripRemainingRoute};
+  $('tpSave').disabled=true;
+  try{ let tid=tripEditId;
+    const {data,error}=await sb.rpc('trip_plan_save_tasks',{p_trip:tid,p_expected:curTrip?.workbench_revision??0,p_plan:rec,p_order_ids:[...curTripOrders],p_reason:$('tpChangeReason').value.trim()||'Создание выезда',p_stays:presenceChanges});
+    if(error)throw error;tid=data;
+    // Одометр здесь БОЛЬШЕ НЕ ТРОГАЕМ. Его пишет триггер trips_odometer
+    // на переходе в 'done' — из fact_km, с фолбэком на плановый ORS.
+    // Если оставить и эту ветку, пробег задвоится:два источника на одно поле.
+    // Заодно чинится дыра: инженер закрывает выезд через RPC, saveTrip не
+    // вызывается вовсе, и пробег молча переставал бы обновляться.
+    tripPlanDirty=false;tripPresenceDirty=false;await loadFactHours(); await renderTrips(); await openTrip(tid); showToast('План и выбранная проверка сохранены. Накопленный трек сохранён отдельно.');
+  }catch(err){ console.error('Сохранение выезда не прошло:', err, '| детали:', err&&(err.details||err.hint||err.code)); $('tripErr').textContent='Ошибка: '+(err.message||err); } finally{ $('tpSave').disabled=false; } };
+async function delTrip(id){ if(!await confirmDialog('Переместить выезд в корзину? Он удалится автоматически через 7 дней.',{danger:true,okText:'В корзину'})) return; const {error}=await sb.from('trips').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderTrips();
+  undoToast('Выезд перемещён в корзину', async ()=>{ const {error:e2}=await sb.rpc('trash_restore',{p_kind:'trips',p_id:id}); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Восстановлено'); }); }
+function tripGmaps(id){ const t=trips.find(x=>x.id==id)||tripCache[id]; const stops=(t&&t.route_stops)||[]; if(stops.length<2){ notify('Нужно минимум 2 точки в выезде (по клиентам заявок).','warn'); return; }
+  const pts=stops.map(s=>(+s.lat).toFixed(6)+','+(+s.lng).toFixed(6)); const url='https://www.google.com/maps/dir/?api=1&origin='+pts[0]+'&destination='+pts[pts.length-1]+(pts.length>2?'&waypoints='+encodeURIComponent(pts.slice(1,-1).join('|')):'')+'&travelmode=driving'; window.open(url,'_blank'); }
+
+// ---------- settings ----------
+// Есть ли в базе settings.day_start (миграция sql/27). Если нет — не пишем
+// его при сохранении: иначе не сохранились бы и все остальные настройки.
+let hasDayStart=true;
+let appSettings={shift_hours:8,deviation_pct:10,day_start:7,day_end:16,tolerance_h:1,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,avoid_zones:[],tariff_profiles:[],ors_proxy:'',depot_radius_m:5000,depot_exit_margin_m:300,depot_outside_minutes:60};
+let staffDayMap={};
+async function loadStaffDays(){
+  try{ const {data,error}=await sb.from('staff_day').select('*'); if(error) throw error;
+    staffDayMap={}; (data||[]).forEach(x=>{staffDayMap[x.engineer+'|'+x.date]=x;});
+  }catch(e){ staffDayMap={}; console.warn('staff_day недоступен',e); }
+}
+let vehicles=[], vhEditId=null;
+async function loadVehicles(){ try{ const {data}=await sb.from('vehicles').select('*').order('name'); vehicles=data||[]; renderVehicles(); }catch(e){ loadFail('список машин',e); } }
+// ── Одометр убран ───────────────────────────────────────────────────────
+// Пробег машины приходил от Wialon и рос как придётся: датчик врал, а
+// триггер прибавлял к нему факт-километраж выездов, посчитанный по тому же
+// треку. Ни одна цифра из этой пары не была проверяемой, а «до ТО 1240 км»
+// выглядело точным знанием — и на него смотрели. Убираем и число, и
+// построенный на нём срок ТО: лучше пусто, чем правдоподобно неверно.
+// Колонки в базе не трогаем — миграция ради удаления мусора того не стоит,
+// а старые значения никому не мешают, пока их никто не показывает.
+function renderVehicles(){ const box=$('vehList'); if(!box) return; box.innerHTML=vehicles.length?'':'<div class="hint">Машин нет. Добавь ниже.</div>';
+  vehicles.forEach(v=>{
+    const d=document.createElement('div'); d.className='pt';
+    d.innerHTML='<div class="nm">'+esc(v.name)+(v.plate?' <span class="pill">'+esc(v.plate)+'</span>':'')+(v.wialon_id?' <span class="pill">GPS</span>':'')+'</div>'+
+      '<div class="meta">'+(v.wialon_id?('датчик '+esc(v.wialon_id)):'без датчика')+' · одометр '+Math.round(+v.odometer||0)+' км</div>'+
+      '<div class="acts"><button class="btn sm" data-vhedit="'+v.id+'">ред.</button><button class="btn sm ghost" data-vhdel="'+v.id+'">×</button></div>';
+    box.appendChild(d); });
+  box.querySelectorAll('[data-vhedit]').forEach(b=>b.onclick=()=>editVehicle(b.dataset.vhedit));
+  box.querySelectorAll('[data-vhdel]').forEach(b=>b.onclick=()=>delVehicle(b.dataset.vhdel)); }
+function vhReset(){ vhEditId=null; $('vhCancel').style.display='none'; $('vhAdd').textContent='Добавить машину'; $('vhName').value='';$('vhPlate').value='';$('vhWialon').value='';$('vhOdometer').value='';$('vhErr').textContent=''; }
+$('vhAdd').onclick=async ()=>{ const name=$('vhName').value.trim(); if(!name){ $('vhErr').textContent='Введи название.'; return; } const odo=Math.max(0,+$('vhOdometer').value||0); const rec={name,plate:$('vhPlate').value.trim(),wialon_id:($('vhWialon').value.trim()||null)};
+  let error; if(vhEditId){ ({error}=await sb.from('vehicles').update(rec).eq('id',vhEditId)); if(!error){ const r=await sb.rpc('vehicle_odometer_set',{p_vehicle:vhEditId,p_value:odo,p_note:'Настройки автопарка'}); error=r.error; } } else { rec.odometer=odo; ({error}=await sb.from('vehicles').insert(rec)); }
+  if(error){ $('vhErr').textContent=error.message; return; } vhReset(); await loadVehicles(); showToast('Автопарк обновлён'); };
+$('vhCancel').onclick=vhReset;
+function editVehicle(id){ const v=vehicles.find(x=>x.id==id); if(!v) return; vhEditId=id; $('vhName').value=v.name;$('vhPlate').value=v.plate||'';$('vhWialon').value=v.wialon_id||'';$('vhOdometer').value=(v.odometer==null?'':v.odometer); $('vhAdd').textContent='Сохранить'; $('vhCancel').style.display=''; }
+async function delVehicle(id){ if(!await confirmDialog('Удалить машину?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('vehicles').delete().eq('id',id); if(error){ notify(error.message,'err'); return; } await loadVehicles(); }
+function updateVehInfo(){ const el=$('tpVehInfo'); if(!el) return; const v=vehicles.find(x=>x.id==$('tpVeh').value);
+  el.textContent=v?(v.wialon_id?'С датчиком — трек и факт-пробег считаются по нему.':'Без датчика — факт-пробег вводится вручную.'):''; }
+async function loadSettings(){ try{
+  // Управленческая часть настроек (себестоимости, тарифы, профили, реквизиты)
+  // читается только менеджером. Инженеру политика settings_read её не отдаёт,
+  // поэтому для него берём settings_public — там валюта, тема, зоны объезда,
+  // адрес прокси и пороги стоянок. Недостающие поля остаются нулями, а всё,
+  // что их использует (экономика), инженеру и так не показывается.
+  //
+  // Столбцы перечислены поимённо, а не '*': в таблице остались колонки от
+  // выпиленной генерации актов (act_template и act_xlsx — там лежал шаблон
+  // в base64, файл до 3 МБ превращался примерно в 4 МБ текста). При
+  // select('*') этот блоб приезжал бы каждый раз, когда открывают настройки.
+  const SETTINGS_COLS='id,shift_hours,deviation_pct,day_start,day_end,tolerance_h,currency,tariffs,costs,'
+    +'default_theme,repair_warranty_days,contact_period_days,'
+    +'avoid_zones,tariff_profiles,ors_proxy,stay_radius_m,stay_min_minutes,'
     +'track_max_kmh,track_slack,depot_radius_m,depot_exit_margin_m,depot_outside_minutes';
   // day_start приходит из миграции sql/27. Если её ещё не накатили, запрос
   // со списком столбцов падает целиком, и настройки уехали бы в
