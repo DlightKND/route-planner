@@ -34,6 +34,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923183739_service_order_material_snapshots.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923210000_restore_task_link_invariants.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924091500_legacy_finance_to_task_items.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260924123000_legacy_finance_dualwrite.sql',import.meta.url),'utf8'));
 },30000);
 
 afterAll(async()=>{await db?.close();});
@@ -120,6 +121,53 @@ it('prevents an imported financial line from being deleted or having its snapsho
   await expect(q('update service_order_items set financial_revenue_snapshot=0 where legacy_job_work_id=$1',[id(60)])).rejects.toThrow(/заблокирована до переключения/);
   await expect(q("update service_order_items set planned_qty=3 where legacy_job_work_id=$1",[id(60)])).rejects.toThrow(/заблокирована до переключения/);
   expect((await q('select financial_revenue_snapshot,planned_qty from service_order_items where legacy_job_work_id=$1',[id(60)]))[0]).toMatchObject({financial_revenue_snapshot:'1200',planned_qty:'2.5'});
+});
+
+it('atomically syncs edits from the legacy work/part editor into canonical task rows',async()=>{
+  await db.exec('begin');
+  try{
+    await q("update job_works set hours=3,revenue=1500,billable=false,billable_reason='Warranty' where id=$1",[id(60)]);
+    const [work]=await q('select planned_qty,billable,billable_reason,legacy_snapshot,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where legacy_job_work_id=$1',[id(60)]);
+    expect(work).toMatchObject({planned_qty:'3',billable:false,billable_reason:'Warranty',financial_revenue_snapshot:'1500',financial_cost_snapshot:'2250'});
+    expect(work.legacy_snapshot).toMatchObject({hours:3,revenue:1500,billable:false});
+    await q("update job_parts set name='Фильтр v2',qty=3,price=110,cost=60,billable=false where id=$1",[id(70)]);
+    const [part]=await q('select title,planned_qty,billable,legacy_snapshot,unit_price_snapshot,unit_cost_snapshot,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where legacy_job_part_id=$1',[id(70)]);
+    expect(part).toMatchObject({title:'Фильтр v2',planned_qty:'3',billable:false,unit_price_snapshot:'110.00',unit_cost_snapshot:'60.00',financial_revenue_snapshot:'0',financial_cost_snapshot:'180'});
+    expect(part.legacy_snapshot).toMatchObject({name:'Фильтр v2',qty:3,price:110,cost:60,billable:false});
+  }finally{await db.exec('rollback');}
+});
+
+it('creates the canonical seed and item when a new legacy line is entered for an unplanned request',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await q("insert into clients values($1,'Новый клиент',54,34)",[id(25)]);
+    await q('insert into jobs(id,client_id) values($1,$2)',[id(16),id(25)]);
+    await q("insert into job_works(id,job_id,work_id,hours,materials,billable,billable_reason,revenue,created_at,title,revenue_override,tariff_profile) values($1,$2,$3,1.5,'[]',true,'',500,'2026-09-22T10:00:00Z','',null,'client')",[id(62),id(16),id(80)]);
+    const [seed]=await q('select id,status from service_orders where seed_request_id=$1',[id(16)]);
+    const [item]=await q('select job_id,kind,legacy_job_work_id,planned_qty,financial_revenue_snapshot from service_order_items where legacy_job_work_id=$1',[id(62)]);
+    expect(seed.status).toBe('draft');
+    expect(item).toMatchObject({job_id:id(16),kind:'work',legacy_job_work_id:id(62),planned_qty:'1.5',financial_revenue_snapshot:'500'});
+    expect(await q('select * from trip_service_orders where order_id=$1',[seed.id])).toHaveLength(0);
+  }finally{await db.exec('reset role; rollback');}
+});
+
+it('maps a newly entered legacy material to the stock catalog and task atomically',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await q("insert into clients values($1,'Новый клиент',55,35)",[id(26)]);
+    await q('insert into jobs(id,client_id) values($1,$2)',[id(17),id(26)]);
+    await q("insert into job_parts(id,job_id,name,sku,unit,qty,price,cost,billable,approved_at,approved_by,created_by) values($1,$2,'Новый фильтр','NF-1','шт',2,180,90,true,'2026-09-22T11:00:00Z',$3,$3)",[id(72),id(17),id(1)]);
+    const [seed]=await q('select id,status from service_orders where seed_request_id=$1',[id(17)]);
+    const [item]=await q('select order_id,job_id,title,kind,legacy_job_part_id,stock_catalog_id,sku_snapshot,unit_price_snapshot,unit_cost_snapshot,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where legacy_job_part_id=$1',[id(72)]);
+    const [catalog]=await q('select legacy_part_id,name,sku,price,cost from stock_catalog where id=$1',[item.stock_catalog_id]);
+    expect(seed.status).toBe('draft');
+    expect(item).toMatchObject({order_id:seed.id,job_id:id(17),title:'Новый фильтр',kind:'material',legacy_job_part_id:id(72),sku_snapshot:'NF-1',unit_price_snapshot:'180.00',unit_cost_snapshot:'90.00',financial_revenue_snapshot:'360',financial_cost_snapshot:'180'});
+    expect(catalog).toMatchObject({legacy_part_id:id(72),name:'Новый фильтр',sku:'NF-1',price:'180.00',cost:'90.00'});
+  }finally{await db.exec('reset role; rollback');}
 });
 
 it('creates one-request tasks through the manager RPC and rejects reassignment',async()=>{
