@@ -3826,10 +3826,10 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
       '<input type="number" step="0.25" value="'+w.hours+'" data-wh="'+i+'" style="width:74px" title="часы"><span class="hint" style="margin: 0">ч</span>'+
       '<button class="btn sm '+(w.billable?'amber':'ghost')+'" data-wb="'+i+'">'+(w.billable?'платно':'гарантия')+'</button>'+
       money+
-      (w.legacy_task_item_id||w.approved?'<span class="hint" title="Требуется отдельная аудированная коррекция" style="margin-left:auto">'+(w.legacy_task_item_id?'историческая · защищена':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button>')+'</div>'+
+      (w.voided?'<span class="hint">аннулирована</span>':w.legacy_task_item_id||w.approved?'<span class="hint" title="Требуется отдельная аудированная коррекция" style="margin-left:auto">'+(w.legacy_task_item_id?'историческая · защищена':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button>')+(canWrite()&&(w.legacy_task_item_id||w.canonical_task_item_id)&&!w.voided?'<button class="btn sm ghost" data-finance-void-work="'+i+'">Аннулировать</button>':'')+'</div>'+
       ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top: var(--sp-2)">'+esc(w.reasons.join(' · '))+'</div>':'')+
       (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
-    if(!canEditRequestFinanceRow(w,mayW)) d.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
+    if(!canEditRequestFinanceRow(w,mayW)) d.querySelectorAll('input,select,button:not([data-finance-void-work])').forEach(el=>el.disabled=true);
     box.appendChild(d); });
   // Добавлять работы можно ровно там же, где и править: иначе кнопка «+ из
   // каталога» обещала бы то, что сервер не примет.
@@ -3855,6 +3855,7 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   box.querySelectorAll('[data-wp]').forEach(sel=>sel.onchange=()=>{ curWorks[sel.dataset.wp].profile=sel.value; curWorks[sel.dataset.wp]._dirty=true; });
   box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; w._dirty=true; w.profile=defaultProfileId(w.billable); renderJobWorks(); });
   box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); });
+  box.querySelectorAll('[data-finance-void-work]').forEach(b=>b.onclick=()=>voidRequestFinanceRow(curWorks[Number(b.dataset.financeVoidWork)]));
   jobTotals();
   // Подсказки по материалам зависят от того, какие работы стоят в заявке:
   // добавили каталожную — появились её материалы, убрали — исчезли.
@@ -4548,7 +4549,8 @@ function renderJobParts(){
     d.innerHTML='<div class="pt-top">'
         +'<input type="text" value="'+esc(p.name||'')+'" data-pn="'+i+'" placeholder="наименование">'
         +'<input type="text" value="'+esc(p.sku||'')+'" data-ps="'+i+'" placeholder="артикул">'
-        +(p.legacy_task_item_id||p.approved_at?'<span class="hint" title="Для удаления подтверждённой строки требуется аудированная коррекция">'+(p.legacy_task_item_id?'историческая':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost pt-rm" data-prm="'+i+'" title="Убрать">×</button>')
+        +(p.voided?'<span class="hint">аннулирована</span>':p.legacy_task_item_id||p.approved_at?'<span class="hint" title="Для удаления подтверждённой строки требуется аудированная коррекция">'+(p.legacy_task_item_id?'историческая':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost pt-rm" data-prm="'+i+'" title="Убрать">×</button>')
+        +(canWrite()&&(p.legacy_task_item_id||p.canonical_task_item_id)&&!p.voided?'<button class="btn sm ghost" data-pvoid="'+i+'">Аннулировать</button>':'')
       +'</div>'
       +'<div class="pt-bot">'
         +'<input type="number" step="0.01" min="0" value="'+esc(String(partQty(p)))+'" data-pq="'+i+'" title="количество">'
@@ -4586,6 +4588,7 @@ function renderJobParts(){
   box.querySelectorAll('[data-pb]').forEach(b=>b.onclick=()=>{ const p=jobParts[b.dataset.pb];
     p.billable=(p.billable===false); partTouch(p); renderJobParts(); });
   box.querySelectorAll('[data-prm]').forEach(b=>b.onclick=()=>partDel(jobParts[b.dataset.prm]));
+  box.querySelectorAll('[data-pvoid]').forEach(b=>b.onclick=()=>voidRequestFinanceRow(jobParts[Number(b.dataset.pvoid)]));
   box.querySelectorAll('[data-pok]').forEach(b=>b.onclick=()=>partApprove(jobParts[b.dataset.pok],true));
   box.querySelectorAll('[data-pno]').forEach(b=>b.onclick=()=>partApprove(jobParts[b.dataset.pno],false));
   box.querySelectorAll('[data-pfix]').forEach(b=>b.onclick=()=>openFixModal('part',jobParts[b.dataset.pfix]));
@@ -4722,6 +4725,22 @@ async function worksApprove(){
   }catch(e){ notify('Не подтвердилось: '+((e&&e.message)||e),'err'); }
 }
 
+async function voidRequestFinanceRow(row){
+  if(!canWrite()||!row||!jobEditId)return;
+  const itemId=row.canonical_task_item_id||row.legacy_task_item_id;
+  if(!itemId){notify('Не найден ID канонической финансовой строки.','err');return;}
+  const answer=await promptDialog('Аннулировать финансовую строку',[{key:'reason',label:'Причина (обязательно)',type:'textarea'}]);
+  const reason=String(answer?.reason||'').trim();
+  if(reason.length<5||reason.length>1000){if(answer)notify('Причина должна содержать от 5 до 1000 символов.','warn');return;}
+  if(!await confirmDialog('Строка останется в аудите вместе с исходными суммами. Исключить её из расчётов?',{danger:true,okText:'Аннулировать'}))return;
+  const jobId=jobEditId;
+  try{
+    const {error}=await sb.rpc('job_request_finance_void',{p_item:itemId,p_reason:reason});
+    if(error)throw error;
+    await openJob(jobId);
+    showToast('Строка аннулирована; исходные данные сохранены в журнале');
+  }catch(e){notify('Не удалось аннулировать: '+((e&&e.message)||e),'err');}
+}
 // ── Предложение правки ──────────────────────────────────────────────────
 // Подтверждённое инженер не меняет. Но и молчать ему нельзя: ошибка в часах
 // или в артикуле стоит денег. Предложение — письмо менеджеру, привязанное к
@@ -4748,15 +4767,27 @@ async function fixSend(){
     await loadFixes();
   }catch(e){ notify('Не отправилось: '+((e&&e.message)||e),'err'); }
 }
-let jobFixes=[];
+let jobFixes=[],jobFinanceVoidEvents=[],jobFinanceCorrectionLinks=[];
 async function loadFixes(){
-  jobFixes=[];
+  jobFixes=[];jobFinanceVoidEvents=[];jobFinanceCorrectionLinks=[];
   if(jobEditId){
     try{
       const {data}=await sb.from('job_change_requests').select('*')
         .eq('job_id',jobEditId).order('created_at',{ascending:false});
       jobFixes=data||[];
     }catch(e){ jobFixes=[]; }
+    if(canWrite())try{
+      const {data,error}=await sb.from('request_finance_void_events')
+        .select('id,item_id,actor_id,reason,original_snapshot,created_at')
+        .eq('job_id',jobEditId).order('created_at',{ascending:false});
+      if(error)throw error;jobFinanceVoidEvents=data||[];
+      if(jobFinanceVoidEvents.length){
+        const {data:links,error:linkError}=await sb.from('request_finance_correction_links')
+          .select('event_id,replacement_item_id,actor_id,linked_at')
+          .in('event_id',jobFinanceVoidEvents.map(e=>e.id));
+        if(linkError)throw linkError;jobFinanceCorrectionLinks=links||[];
+      }
+    }catch(e){jobFinanceVoidEvents=[];}
   }
   renderFixes();
 }
@@ -4768,7 +4799,7 @@ function renderFixes(){
   // Инженеру карточка нужна и пустой — когда правка ему уже закрыта, это
   // единственный способ сказать, что в заявке ошибка.
   const frozen=!canWrite()&&!!jobEditId&&(!canEditWorks()||!canEditParts());
-  if(card) card.style.display=(show.length||frozen)?'':'none';
+  if(card) card.style.display=(show.length||frozen||jobFinanceVoidEvents.length)?'':'none';
   box.innerHTML='';
   if(frozen){
     const a=document.createElement('div'); a.className='fix-a';
@@ -4787,8 +4818,44 @@ function renderFixes(){
         +'<button class="btn sm ghost" data-fno="'+f.id+'">Отклонить</button></div>'):'');
     box.appendChild(d);
   });
+  jobFinanceVoidEvents.forEach(e=>{
+    const s=e.original_snapshot||{},d=document.createElement('div');d.className='fixrow done';
+    const eventLinks=jobFinanceCorrectionLinks.filter(l=>l.event_id===e.id);
+    const linkedIds=new Set(jobFinanceCorrectionLinks.map(l=>l.replacement_item_id));
+    const isWork=s.kind==='work';
+    const candidates=(isWork?curWorks:jobParts).filter(r=>{
+      const id=r.canonical_task_item_id;
+      return id&&!r.legacy_task_item_id&&!r.voided&&!linkedIds.has(id);
+    });
+    const qty=s.planned_qty??'—',unit=s.unit||'',money=s.kind==='material'
+      ? ' · цена '+Number(s.unit_price_snapshot||0).toLocaleString('ru-RU')+' · закупка '+Number(s.unit_cost_snapshot||0).toLocaleString('ru-RU')
+      : ' · выручка '+Number(s.financial_revenue_snapshot||0).toLocaleString('ru-RU')+' · себестоимость '+Number(s.financial_cost_snapshot||0).toLocaleString('ru-RU');
+    d.innerHTML='<div class="fix-h"><span class="fix-who">'+esc(personName(e.actor_id))+'</span><span class="fix-d">'+esc(String(e.created_at||'').slice(0,10))+'</span><span class="fix-st">аннулирована</span></div>'
+      +'<div class="fix-w">'+esc(s.title||'Финансовая строка')+' · '+esc(qty)+' '+esc(unit)+esc(money)+'</div><div class="hint">Причина: '+esc(e.reason)+'</div>'
+      +(eventLinks.length?eventLinks.map(l=>'<div class="hint">Связана замена: '+esc(replacementLabel(l.replacement_item_id))+'</div>').join(''):'')
+      +(canWrite()&&candidates.length?'<div class="fix-a"><button class="btn sm ghost" data-finance-correction="'+esc(e.id)+'">Связать замену</button></div>':'');
+    box.appendChild(d);
+  });
   box.querySelectorAll('[data-fok]').forEach(b=>b.onclick=()=>fixDecide(b.dataset.fok,'accepted'));
   box.querySelectorAll('[data-fno]').forEach(b=>b.onclick=()=>fixDecide(b.dataset.fno,'declined'));
+  box.querySelectorAll('[data-finance-correction]').forEach(b=>b.onclick=()=>linkFinanceCorrection(b.dataset.financeCorrection));
+}
+function replacementLabel(id){
+  const row=[...curWorks,...jobParts].find(r=>r.canonical_task_item_id===id);
+  return row?(row.name||row.title||'Строка')+' · '+String(id).slice(0,8):String(id).slice(0,8);
+}
+async function linkFinanceCorrection(eventId){
+  const ev=jobFinanceVoidEvents.find(e=>e.id===eventId);if(!ev||!canWrite())return;
+  const s=ev.original_snapshot||{},isWork=s.kind==='work',linked=new Set(jobFinanceCorrectionLinks.map(l=>l.replacement_item_id));
+  const options=(isWork?curWorks:jobParts).filter(r=>r.canonical_task_item_id&&!r.legacy_task_item_id&&!r.voided&&!linked.has(r.canonical_task_item_id))
+    .map(r=>({value:r.canonical_task_item_id,label:(r.name||r.title||'Строка')+' · '+String(r.canonical_task_item_id).slice(0,8)}));
+  if(!options.length)return;
+  const picked=await promptDialog('Связать исправленную строку',[{key:'replacement',label:'Новая строка того же типа',type:'select',options}]);
+  if(!picked)return;
+  try{
+    const {error}=await sb.rpc('job_request_finance_link_correction',{p_event:eventId,p_replacement:picked.replacement});
+    if(error)throw error;await loadFixes();showToast('Замена связана с аннулированием');
+  }catch(e){notify('Не удалось связать замену: '+((e&&e.message)||e),'err');}
 }
 async function fixDecide(id,st){
   if(!canWrite()) return;

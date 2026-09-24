@@ -45,6 +45,9 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924230000_seed_task_request_access.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924231000_request_finance_canonical_write.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924130146_preserve_request_finance_approvals.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260925000000_audited_request_finance_void.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260925001000_index_request_finance_audit.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260925002000_lock_voided_request_approvals.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -419,6 +422,54 @@ it('keeps manager approval when an engineer saves an unchanged request and rejec
     await q('savepoint task_plan');
     await expect(q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,null)',[id(10),JSON.stringify(rec),JSON.stringify([{...works[0],id:id(67)}])])).rejects.toThrow('не принадлежит редактору заявки');
     await q('rollback to savepoint task_plan');
+  }finally{await db.exec('rollback');}
+});
+
+it('audits finance voids and keeps stale legacy replay from restoring a voided amount',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const [work]=await q('select id,financial_revenue_snapshot from service_order_items where legacy_job_work_id=$1',[id(60)]);
+    const [part]=await q('select id,unit_price_snapshot from service_order_items where legacy_job_part_id=$1',[id(70)]);
+    const [voided]=await q('select public.job_request_finance_void($1,$2) value',[work.id,'Исправлена сумма в заявке']);
+    expect(voided.value.item_id).toBe(work.id);
+    await q('select public.job_request_finance_void($1,$2)',[part.id,'Исправлена цена материала']);
+    const [event]=await q('select actor_id,reason,original_snapshot->>\'financial_revenue_snapshot\' revenue from request_finance_void_events where item_id=$1',[work.id]);
+    expect(event).toEqual({actor_id:id(1),reason:'Исправлена сумма в заявке',revenue:'1200'});
+    const [marked]=await q('select request_finance_void_event_id is not null voided,legacy_snapshot->>\'request_finance_void_reason\' reason from service_order_items where id=$1',[work.id]);
+    expect(marked).toEqual({voided:true,reason:'Исправлена сумма в заявке'});
+    const rec={client_id:id(20),equipment_id:null,status:'open',scheduled_date:null,time_window:'',due_date:null,assigned_engineer:null,engineer_ids:[],notes:'legacy replay',at_depot:false,depot_id:null};
+    await q('select public.job_request_save($1,$2::jsonb,$3::jsonb,$4::jsonb)',[id(10),JSON.stringify(rec),JSON.stringify([{id:id(60),work_id:id(80),title:'',hours:2.5,billable:true,billable_reason:'',revenue:1200,tariff_profile:'client'}]),JSON.stringify([{id:id(70),name:'Фильтр',sku:'F-1',unit:'шт',qty:2,price:100,cost:55,billable:true}])]);
+    await q('delete from job_parts where id=$1',[id(70)]);
+    expect(await q('select request_finance_void_event_id is not null voided from service_order_items where id=$1',[work.id])).toEqual([{voided:true}]);
+    expect(await q('select id from job_works where id=$1',[id(60)])).toHaveLength(1);
+    expect(await q('select id from job_parts where id=$1',[id(70)])).toHaveLength(1);
+    expect(await q('select request_finance_void_event_id is not null voided from service_order_items where id=$1',[part.id])).toEqual([{voided:true}]);
+    await q('savepoint repeated_void');
+    await expect(q('select public.job_request_finance_void($1,$2)',[work.id,'Повторное аннулирование'])).rejects.toThrow('уже аннулирована');
+    await q('rollback to savepoint repeated_void');
+  }finally{await db.exec('rollback');}
+});
+
+it('keeps voided canonical request rows when a stale new-generation snapshot omits them',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const rec={client_id:id(20),equipment_id:null,status:'open',scheduled_date:null,time_window:'',due_date:null,assigned_engineer:null,engineer_ids:[],notes:'',at_depot:false,depot_id:null};
+    const works=[{id:id(69),work_id:id(80),hours:1,billable:true,tariff_profile:'client'}];
+    await q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,$4::jsonb)',[id(10),JSON.stringify(rec),JSON.stringify(works),JSON.stringify([])]);
+    await q('select public.job_request_finance_void($1,$2)',[id(69),'Дубликат строки в смете']);
+    const replacement={id:id(77),work_id:id(80),title:'Исправленная работа',hours:2,billable:true,tariff_profile:'client'};
+    await q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,$4::jsonb)',[id(10),JSON.stringify(rec),JSON.stringify([...works,replacement]),JSON.stringify([])]);
+    const [event]=await q('select id from request_finance_void_events where item_id=$1',[id(69)]);
+    const [linked]=await q('select public.job_request_finance_link_correction($1,$2) value',[event.id,id(77)]);
+    expect(linked.value.replacement_item_id).toBe(id(77));
+    expect(await q('select replacement_item_id from request_finance_correction_links where replacement_item_id=$1',[id(77)])).toHaveLength(1);
+    await q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,$4::jsonb)',[id(10),JSON.stringify(rec),JSON.stringify([replacement]),JSON.stringify([])]);
+    expect(await q('select request_finance_void_event_id is not null voided from service_order_items where id=$1',[id(69)])).toEqual([{voided:true}]);
+    expect(await q('select item_id from request_finance_void_events where item_id=$1',[id(69)])).toHaveLength(1);
   }finally{await db.exec('rollback');}
 });
 
