@@ -20,9 +20,9 @@
 1. Проверить PostgREST embeds `jobs → service_orders → service_order_items` и RLS в production через аутентифицированный живой сеанс; CI и stamp этого не доказывают.
 2. Описать экономику task-only work/material rows: work pricing/tariff, подтверждение, план/факт, billable revenue, частичное выполнение, `transferred_qty`/carry и правило суммирования без дубля. Заменить переходный adapter полноценной canonical economics model.
 3. Перевести request editor writes/offline queue на canonical item RPC/триггеры. Сейчас только legacy → canonical dual-write; обратная совместимость старых клиентов нужна до отключения legacy endpoints.
-5. Разработать audited void/correction для work/parts; не снимать DELETE guard раньше. Проверить approve/reject, engineer edits, offline replay и RLS.
-6. Инвентаризировать 7 старых заданий с `job_id=NULL` и `legacy_trip_id`; сохранить историю и ссылки, не объединять/удалять автоматически.
-7. Продолжать регулярно обновлять checkpoint. Пользователь разрешил автономные действия в репозитории и Supabase; не запрашивать разрешение повторно.
+4. Разработать audited void/correction для work/parts; не снимать DELETE guard раньше. Проверить approve/reject, engineer edits, offline replay и RLS.
+5. На основе уже выполненной инвентаризации семи shadow-заданий определить совместимое retirement-поведение для `trips.service_order_id`/`legacy_trip_id`; сохранить историю, не объединять/удалять автоматически.
+6. Продолжать регулярно обновлять checkpoint. Пользователь разрешил автономные действия в репозитории и Supabase; не запрашивать разрешение повторно.
 
 ---
 
