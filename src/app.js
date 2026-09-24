@@ -14,9 +14,10 @@ import './entity-activity.css';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
-import { diffJobWorks, hasStableJobWorkIds } from './core/job-work-diff.js';
+import { hasStableJobWorkIds } from './core/job-work-diff.js';
 import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
+import { saveRequestAndWorks } from './core/request-save.js';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openTrip,tripStatus:s=>ST_TRIP[s]||s,
@@ -4094,12 +4095,11 @@ async function qSendOne(it){
     return;
   }
   if(it.kind==='job'){
-    // Тот же порядок, что и при обычном сохранении: работы, затем статус.
-    if(p.works_complete&&Array.isArray(p.works)) await persistJobWorks(p.jobId,p.works,p.works);
-    else if(Array.isArray(p.works)&&p.works.length)
+    // Offline replay uses the same atomic request/work RPC as an online save.
+    const works=p.works_complete&&Array.isArray(p.works)?p.works:null;
+    if(!works&&Array.isArray(p.works)&&p.works.length)
       notify('Старые офлайн-работы не отправлены: в снимке нет стабильных ID. Открой заявку с сетью и внеси правку заново.','err');
-    const {error}=await sb.from('jobs').update(p.rec).eq('id',p.jobId);
-    if(error) throw error;
+    await saveRequestAndWorks(sb,{id:p.jobId,record:p.rec,works});
     // Заявку закрыли без связи — последствия наступают сейчас, а не теряются.
     if(p.rec&&p.rec.status==='done') await jobClosed(p.jobId,{equipmentId:p.rec.equipment_id,works:p.works||[]});
     return;
@@ -4907,38 +4907,6 @@ function jobWorkRow(w){
     approved_at:w.approved_at||null,approved_by:w.approved_by||null,
     revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)};
 }
-async function persistJobWorks(jobId,proposedRows,targets=[]){
-  const {data:request,error:readError}=await sb.from('jobs').select(JOB_FINANCE_SELECT).eq('id',jobId).single();
-  if(readError) throw readError;
-  const existing=projectLegacyFinance({service_orders:request?.service_orders||[]}).job_works;
-  const approval=canWrite()?{approvedAt:new Date().toISOString(),approvedBy:session?.user?.id||null}:{};
-  const diff=diffJobWorks(existing||[],(proposedRows||[]).map(w=>Object.assign({job_id:jobId},w)),approval);
-  const blocked=existing.filter(w=>w.legacy_task_item_id&&diff.deleteIds.includes(w.id));
-  if(blocked.length) throw new Error('Перенесённую финансовую строку нельзя удалить до перехода на аннулирование.');
-  if(diff.upserts.length){
-    const {data,error}=await sb.from('job_works').upsert(diff.upserts,{onConflict:'id'}).select('id,revenue,approved_at,approved_by');
-    if(error) throw error;
-    diff.upsertIndexes.forEach((targetIndex,resultIndex)=>{
-      const id=data?.[resultIndex]?.id;
-      if(id&&targets[targetIndex]){
-        targets[targetIndex].id=id;
-        targets[targetIndex].approved_at=data[resultIndex].approved_at;
-        targets[targetIndex].approved_by=data[resultIndex].approved_by;
-        targets[targetIndex].approved=!!data[resultIndex].approved_at;
-        targets[targetIndex]._dirty=false;
-        targets[targetIndex].revenue=data[resultIndex].revenue;
-      }
-    });
-  }
-  if(diff.deleteIds.length){
-    const {error}=await sb.from('job_works').delete().in('id',diff.deleteIds);
-    if(error) throw error;
-  }
-  (targets||[]).forEach((row,index)=>{
-    row._dirty=false;
-    if(proposedRows?.[index]?.revenue!=null) row.revenue=proposedRows[index].revenue;
-  });
-}
 // Правка местного снимка после постановки в очередь: заявка внутри
 // «График» должен показывать то, что инженер только что ввёл.
 async function snapJobPatch(jobId,rec,works){
@@ -4953,25 +4921,13 @@ async function snapJobPatch(jobId,rec,works){
 // Запись без навигации и без тостов: её зовёт и кнопка, и автосохранение.
 async function persistJob(rec){
   let jobId=jobEditId;
-  // Порядок: сначала работы, потом статус. Обратный порядок делал закрытие
-  // заявки невозможным для инженера, как только на job_works появится
-  // условие «пока заявка не закрыта»: он ставил бы «закрыта», а следующим
-  // же запросом пытался переписать работы уже закрытой заявки.
-  // Порядок важен и без политики: если что-то оборвётся посередине, лучше
-  // сохранённые работы при старом статусе, чем закрытая заявка без работ.
-  if(jobEditId){
-    // Работы переписываются блоком — и только тем, кому это позволено.
-    // Инженер, у которого работы уже подтверждены, всё равно сохраняет
-    // заметки и статус: без этой проверки автосохранение падало бы на
-    // запрете удаления и он не мог бы даже закрыть заявку.
-    if(canEditWorks()){
-      await persistJobWorks(jobId,curWorks.map(jobWorkRow),curWorks);
-    }
-    const {error}=await sb.from('jobs').update(rec).eq('id',jobEditId); if(error) throw error;
-  } else {
-    rec.created_by=session.user.id;
-    const {data,error}=await sb.from('jobs').insert(rec).select('id').single(); if(error) throw error; jobId=data.id;
-    if(curWorks.length) await persistJobWorks(jobId,curWorks.map(jobWorkRow),curWorks);
+  const works=canEditWorks()?curWorks.map(jobWorkRow):null;
+  const data=await saveRequestAndWorks(sb,{id:jobEditId,record:rec,works});
+  jobId=data?.job_id||jobId;
+  for(const saved of data?.works||[]){
+    const row=curWorks[Number(saved.index)];if(!row)continue;
+    row.id=saved.id;row.approved_at=saved.approved_at;row.approved_by=saved.approved_by;
+    row.approved=!!saved.approved_at;row._dirty=false;row.revenue=Number(saved.revenue||0);
   }
   if(rec.status==='done') await jobClosed(jobId,{equipmentId:rec.equipment_id,
     works:curWorks.map(w=>({billable:w.billable,title:w.name})),

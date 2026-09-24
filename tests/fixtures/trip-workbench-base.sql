@@ -5,7 +5,10 @@ create function auth.uid() returns uuid language sql stable as $$ select nullif(
 create table profiles(id uuid primary key,role text,active boolean default true);
 create function user_role() returns text language sql stable security definer set search_path=public as $$ select role from profiles where id=auth.uid() and active $$;
 create table clients(id uuid primary key,name text,lat float8,lng float8);
-create table jobs(id uuid primary key,client_id uuid references clients(id),deleted_at timestamptz,at_depot boolean default false);
+create type public.job_status as enum('open','planned','in_progress','done','cancelled');
+create table jobs(id uuid primary key default gen_random_uuid(),client_id uuid references clients(id),equipment_id uuid,
+  scheduled_date date,time_window text,due_date date,assigned_engineer uuid,engineer_ids uuid[] not null default '{}',
+  notes text,at_depot boolean default false,depot_id uuid,deleted_at timestamptz,created_by uuid);
 create type trip_status as enum('planned','assigned','in_progress','finished','done','cancelled');
 create table trips(id uuid primary key default gen_random_uuid(),date_from date,date_to date,vehicle_id uuid,vehicle_label text,
   lead_engineer uuid,engineer_ids uuid[] default '{}',status trip_status default 'planned',notes text,route_stops jsonb default '[]',route_geometry jsonb,
