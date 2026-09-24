@@ -1,5 +1,16 @@
 # Передача работы: сервисный диспетчер
 
+## Контрольная точка: сводка экономики работ задания (2026-09-24 06:25 UTC)
+
+- PR #81 слит (`17bdc3f9f5225c7206ba917d259920590ebfec92`): план материалов исключает `transferred_qty`, CI #346 прошёл, Pages отдаёт новый bundle `assets/index-Cb-pygmg.js`.
+- PR #82 слит (`d0a75290f6122ebc7675cd35f5f6db7856860027`), migration `carry_task_financial_snapshots` применена к production project `anqfbljgfimoaziztdxe`, ledger version `20260924051759`. Перенос теперь сохраняет атрибуты work rows и пропорциональные финансовые снимки; исходные migration provenance/approvals остаются только у исходных строк. ACL проверен: anon не вызывает private carry, authenticated вызывает через RPC. Production totals после migration не изменились (23 материала, 90 шт., 126,290 выручки / 88,451.49 себестоимости; 17 работ, 131 ч, 98,250 / 98,250).
+- Текущая локальная ветка `feat/task-work-economics-summary` основана на локальных эквивалентах merged PR #81/#82. Добавляется UI сводка работ по сохранённым финансовым снимкам и план/факт; план вычитает `transferred_qty`, для cancelled задания включает только выполненное, факт строится по `done_qty`. Непрайсованные строки исключаются из сумм и помечаются в самой строке и агрегате. Материалы используют ту же cancelled-семантику.
+- Регрессии покрывают перенос остатка (сумма исходной и новой строки без двойного счёта), cancelled, null snapshots и явные нулевые snapshots. На текущем diff: `npm run lint`, `npm test` (396/396), `npm run test:tz` (396/396), `npm run build`, `npm run smoke`, `git diff --check` прошли. После последней правки точечной пометки строки ещё раз выполнить таргетный тест, затем подготовить `[deploy]` PR, дождаться CI, слить и подтвердить Pages bundle.
+- Более ранняя запись ниже, утверждающая, что migration не опубликована/не применена, устарела: #82 merged и production migration применена, как зафиксировано выше.
+- Следующий крупный шаг: task-only tariff/cost snapshots в canonical editor/RPC; далее перевод редакторов заявки и offline replay на canonical writes с сохранением старой очереди, audited void/correction, engineer RLS live-check и безопасное retirement семи legacy shadow-задач. Не удалять legacy source paths или shadow rows автоматически.
+
+## Архивная контрольная точка после `b046538` (2026-09-24)
+
 ## Активная работа после `b046538` (2026-09-24)
 
 - PR #81 `[deploy] fix: avoid double counting carried task materials` слит commit `17bdc3f9f5225c7206ba917d259920590ebfec92`; main push workflow #346 завершился успешно. Live Pages после merge отдаёт свежий bundle `assets/index-Cb-pygmg.js` вместо старого `index-BetlPxAy.js`.
