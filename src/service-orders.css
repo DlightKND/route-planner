@@ -25,6 +25,7 @@
 .order-item-qty{min-width:0}
 .order-item-snapshot{padding-left:112px;color:var(--ink-dim);font-size:12px;line-height:1.4}
 .order-item-unit{display:block;width:min(220px,100%);margin-left:112px}
+.order-work-billable{display:flex!important;align-items:center;gap:7px;margin-left:112px!important}.order-work-billable input{margin:0!important;width:auto!important}
 .order-line-adds{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .order-material-totals{display:grid;gap:4px;margin-top:8px;color:var(--ink-dim);font-size:12px}
 .order-material-totals>div{display:flex;justify-content:space-between;gap:12px}

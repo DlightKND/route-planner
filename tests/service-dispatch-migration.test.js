@@ -11,7 +11,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260921133835_trip_workbench.sql',import.meta.url),'utf8'));
   await db.exec(`alter function job_point(uuid) set search_path=public;
     create table public.job_parts(id uuid primary key,job_id uuid,name text,sku text,unit text,qty numeric,price numeric,cost numeric,billable boolean default true,approved_at timestamptz,approved_by uuid,created_at timestamptz default now(),created_by uuid);
-    create table public.work_catalog(id uuid primary key,name text);
+    create table public.work_catalog(id uuid primary key,name text,norm_hours numeric,warranty_eligible boolean default false,applicable_kinds text[]);
     create table public.job_works(id uuid primary key,job_id uuid,work_id uuid,hours numeric,materials jsonb,billable boolean,billable_reason text,revenue numeric,created_at timestamptz,title text,revenue_override numeric,tariff_profile text,approved_at timestamptz,approved_by uuid);`);
   await db.exec('alter table clients add column default_profile text');
   await q("insert into clients(id,name,lat,lng,default_profile) values($1,'A',50,30,'client'),($2,'B',51,31,null),($3,'C',52,32,null),($4,'D',53,33,null)",[id(20),id(21),id(22),id(23)]);
@@ -38,6 +38,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924123000_legacy_finance_dualwrite.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924160000_carry_task_financial_snapshots.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924180000_task_work_financial_snapshots.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260924200000_task_work_catalog_and_warranty.sql',import.meta.url),'utf8'));
 },30000);
 
 afterAll(async()=>{await db?.close();});
@@ -189,6 +190,7 @@ it('server-snapshots new task work from the request tariff and global cost witho
   try{
     await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
     await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await q("update work_catalog set warranty_eligible=true,norm_hours=2 where id=$1",[id(80)]);
     const data={title:'Нова робота',work_mode:'onsite',engineer_ids:[],instructions:''};
     const [created]=await q("select public.service_order_save_one(null,null,$1::jsonb,$2,$3::jsonb) id",[
       JSON.stringify(data),id(10),JSON.stringify([{job_id:id(10),kind:'work',title:'Діагностика',unit:'ч',planned_qty:2,financial_revenue_snapshot:1,financial_cost_snapshot:1}])
@@ -196,7 +198,7 @@ it('server-snapshots new task work from the request tariff and global cost witho
     const [item]=await q('select billable,tariff_profile,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1',[created.id]);
     expect(item).toEqual({billable:true,tariff_profile:'client',financial_revenue_snapshot:'2400.00',financial_cost_snapshot:'1500.00'});
     await q("update settings set tariffs='{\"hour\":9000}',costs='{\"hour\":3000}' where id=true");
-    await q("select public.service_order_save_one($1,0,$2::jsonb,$3,$4::jsonb)",[created.id,JSON.stringify(data),id(10),JSON.stringify([{id:(await q('select id from service_order_items where order_id=$1',[created.id]))[0].id,job_id:id(10),kind:'work',title:'Диагностика',unit:'ч',planned_qty:3}])]);
+    await q("select public.service_order_save_one($1,0,$2::jsonb,$3,$4::jsonb)",[created.id,JSON.stringify(data),id(10),JSON.stringify([{id:(await q('select id from service_order_items where order_id=$1',[created.id]))[0].id,job_id:id(10),kind:'work',work_catalog_id:null,billable:true,billable_reason:'',tariff_profile:'client',title:'Диагностика',unit:'ч',planned_qty:3}])]);
     const [resized]=await q('select tariff_profile,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1',[created.id]);
     expect(resized).toEqual({tariff_profile:'client',financial_revenue_snapshot:'3600.00',financial_cost_snapshot:'2250.00'});
 
@@ -205,6 +207,17 @@ it('server-snapshots new task work from the request tariff and global cost witho
     ]);
     const [defaultPaid]=await q('select tariff_profile,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1',[fallback.id]);
     expect(defaultPaid).toEqual({tariff_profile:'standard',financial_revenue_snapshot:'1000.00',financial_cost_snapshot:'3000.00'});
+
+    const [warrantyOrder]=await q("select public.service_order_save_one(null,null,$1::jsonb,$2,$3::jsonb) id",[
+      JSON.stringify({...data,title:'Гарантия'}),id(13),JSON.stringify([{job_id:id(13),kind:'work',work_catalog_id:id(80),billable:false,billable_reason:'Повторная неисправность',tariff_profile:'warranty',title:'Подмена из браузера',unit:'ч',planned_qty:2,financial_revenue_snapshot:1,financial_cost_snapshot:1}])
+    ]);
+    const [warranty]=await q('select title,work_catalog_id,billable,billable_reason,tariff_profile,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1',[warrantyOrder.id]);
+    expect(warranty).toEqual({title:'Диагностика',work_catalog_id:id(80),billable:false,billable_reason:'Повторная неисправность',tariff_profile:'warranty',financial_revenue_snapshot:'500.00',financial_cost_snapshot:'6000.00'});
+    await q('savepoint invalid_warranty_reason');
+    await expect(q("select public.service_order_save_one(null,null,$1::jsonb,$2,$3::jsonb)",[
+      JSON.stringify({...data,title:'Без причины'}),id(13),JSON.stringify([{job_id:id(13),kind:'work',work_catalog_id:id(80),billable:false,billable_reason:'',tariff_profile:'warranty',unit:'ч',planned_qty:1}])
+    ])).rejects.toThrow('Укажи причину гарантийной работы');
+    await q('rollback to savepoint invalid_warranty_reason');
 
     const [nonHourly]=await q("select public.service_order_save_one(null,null,$1::jsonb,$2,$3::jsonb) id",[
       JSON.stringify({...data,title:'Фиксированная услуга'}),id(12),JSON.stringify([{job_id:id(12),kind:'work',title:'Фиксированная услуга',unit:'работа',planned_qty:1}])
