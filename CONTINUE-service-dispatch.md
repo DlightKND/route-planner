@@ -10,6 +10,13 @@
 - Проверки: `npm run lint`, `npm test` — 408/408, `npm run test:tz` — 408/408, `npm run smoke` (build и preview smoke), `git diff --check`; PR-CI повторил lint, оба тестовых прогона, build и smoke успешно.
 - Следующий этап: перевести редакторы на canonical writes с поддержкой старой офлайн-очереди; затем отдельно реализовать audited void/correction и провести аудит семи shadow-задач. Не отключать legacy paths и не менять/удалять shadow-задачи до соответствующих этапов. Shared-чат `https://chatgpt.com/share/6ab4fe25-15d0-83eb-bda2-b52a8e6abe2f` в этой среде не отдал содержимое, поэтому исходный ориентир — checkpoint репозитория.
 
+## Активная порция: доступ исполнителя к базовому заданию заявки (2026-09-24)
+
+- Перед переносом записи заявки на canonical task items устраняется разрыв чтения: инженер, назначенный в `jobs.engineer_ids` или `jobs.assigned_engineer`, должен видеть базовое задание этой заявки и его строки даже без отдельного назначения на задание/выезд. Доступ ограничен только `service_orders.seed_request_id = service_orders.job_id`; соседние задания и чужие заявки не открываются.
+- Локальная миграция `20260924230000_seed_task_request_access.sql` расширяет `dlight_private.order_access` этим правилом; существующие manager, task-crew и trip-crew доступы сохраняются. Регрессия проверяет видимость двух строк своего seed task и отсутствие видимости для другого инженера.
+- Локально прошли lint, `npm test` 409/409, `npm run test:tz` 409/409, `npm run smoke` и `git diff --check`. Production миграция ещё не применялась; открыть PR, дождаться CI, затем применить миграцию и слить.
+- Следом продолжить canonical write path редактора заявки с replay старой очереди. До этого не отключать legacy dual-write/источники. Audited void/correction и аудит семи shadow-задач остаются отдельными шагами.
+
 ## Контрольная точка: каталожные работы и атомарная запись заявки (2026-09-24 10:02 UTC)
 
 - PR #83 слит (`9a59b99b10c1ef462cff63ac58281728041a79f5`), PR #84 `[deploy] Snapshot task work tariffs and costs` слит (`c51a073dc09c9840083f60bd2f6c956e988f7658`), PR #85 `[deploy] Add task work catalog and warranty fields` слит (`ccde0ee4b59fb112eeb41642d1ae02ec17f320dc`). PR #85 CI/deploy run #35971464219 успешен; production migration ledger содержит `20260924074648 task_work_catalog_and_warranty`. Pages bundle `index-Y2RrPJto.js` содержал выбор каталога, нормо-часы, платный/гарантийный режим, причину гарантии и профиль тарифа.

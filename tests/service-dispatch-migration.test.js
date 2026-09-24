@@ -42,6 +42,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924200000_task_work_catalog_and_warranty.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924210000_request_write_rpc.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924220000_request_parts_write_rpc.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260924230000_seed_task_request_access.sql',import.meta.url),'utf8'));
 },30000);
 
 afterAll(async()=>{await db?.close();});
@@ -100,6 +101,23 @@ it('lets an assigned trip engineer read attached tasks under RLS',async()=>{
     await db.exec('set role authenticated');
     const rows=await q('select o.id from service_orders o join trip_service_orders tso on tso.order_id=o.id where tso.trip_id=$1',[id(30)]);
     expect(rows).toHaveLength(2);
+  }finally{await db.exec('rollback');await db.exec('reset role');}
+});
+
+it('lets request assignees read only their canonical seed task under RLS',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'engineer',true),($2,'engineer',true)",[id(3),id(4)]);
+    await q('update jobs set assigned_engineer=$1,engineer_ids=array[$1]::uuid[] where id=$2',[id(3),id(10)]);
+    await q("select set_config('test.uid',$1,true)",[id(3)]);
+    await db.exec('set role authenticated');
+    const visible=await q('select o.id,i.legacy_job_work_id from service_orders o join service_order_items i on i.order_id=o.id where o.seed_request_id=$1',[id(10)]);
+    expect(visible).toHaveLength(2);
+    expect(visible.map(x=>x.legacy_job_work_id).filter(Boolean)).toEqual([id(60)]);
+
+    await q("select set_config('test.uid',$1,true)",[id(4)]);
+    const hidden=await q('select o.id from service_orders o where o.seed_request_id=$1',[id(10)]);
+    expect(hidden).toHaveLength(0);
   }finally{await db.exec('rollback');await db.exec('reset role');}
 });
 
