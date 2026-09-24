@@ -3956,7 +3956,7 @@ function offlineBanner(at){
 let qCount=0, qFlushing=false;
 // Пока связи не было, визит жил под временным id. При отправке сервер
 // выдаёт настоящий, и «уехал» из очереди должен попасть в ту же строку.
-const qLocalIds={};
+const qLocalIds={},qSuperseded=new Set();
 function isNetErr(e){
   const m=String((e&&e.message)||e||'').toLowerCase();
   return !m || m.includes('fetch') || m.includes('network') || m.includes('offline')
@@ -3993,6 +3993,18 @@ async function qDropJob(jobId){
     if(it.kind==='job'&&it.payload&&it.payload.jobId===jobId) await qDrop(it.id);
   }
 }
+// A complete atomic job snapshot supersedes older per-material queue events.
+// Mark their ids so the current qFlush batch skips any entries it already read.
+async function qDropPartsForJob(jobId){
+  const items=await qAll();
+  let dropped=false;
+  for(const it of items){
+    if(it.kind==='part'&&it.payload&&it.payload.jobId===jobId){
+      qSuperseded.add(it.id); await qDrop(it.id); dropped=true;
+    }
+  }
+  if(dropped)await qRefresh();
+}
 // Одна строка запчасти — одна запись в очереди. Правки поверх правки
 // заменяют друг друга; «удалить» перекрывает и добавление, которое ещё
 // не уехало, — отправлять вставку ради немедленного удаления незачем.
@@ -4018,6 +4030,7 @@ async function qFlush(){
   try{
     const items=await qAll();
     for(const it of items){
+      if(qSuperseded.has(it.id)){qSuperseded.delete(it.id);continue;}
       try{
         await qSendOne(it);
         await qDrop(it.id); sent++;
@@ -4097,9 +4110,11 @@ async function qSendOne(it){
   if(it.kind==='job'){
     // Offline replay uses the same atomic request/work RPC as an online save.
     const works=p.works_complete&&Array.isArray(p.works)?p.works:null;
+    const parts=p.parts_complete&&Array.isArray(p.parts)?p.parts:null;
     if(!works&&Array.isArray(p.works)&&p.works.length)
       notify('Старые офлайн-работы не отправлены: в снимке нет стабильных ID. Открой заявку с сетью и внеси правку заново.','err');
-    await saveRequestAndWorks(sb,{id:p.jobId,record:p.rec,works});
+    await saveRequestAndWorks(sb,{id:p.jobId,record:p.rec,works,parts});
+    if(Array.isArray(parts))await qDropPartsForJob(p.jobId);
     // Заявку закрыли без связи — последствия наступают сейчас, а не теряются.
     if(p.rec&&p.rec.status==='done') await jobClosed(p.jobId,{equipmentId:p.rec.equipment_id,works:p.works||[]});
     return;
@@ -4415,7 +4430,7 @@ async function visitEnd(){
 // Так требует защита денег: серверный триггер сохраняет старую цену при
 // правке инженером, а при «удалить всё и вставить заново» сохранять было
 // бы нечего — цены менеджера стирались бы каждым сохранением заявки.
-let jobParts=[], partT={};
+let jobParts=[], partT={},jobPartsComplete=false;
 const PART_UNITS=['шт','л','кг','м','компл'];
 function partQty(p){ return +p.qty||0; }
 // Считает ядро, и только оно: partsMoney() лежит под тестами, а вторая
@@ -4423,21 +4438,29 @@ function partQty(p){ return +p.qty||0; }
 // в строке перестала бы сходиться с итогом выезда, никого не предупредив.
 function partRev(p){ return partsMoney({job_parts:[p]}).rev; }
 function partCost(p){ return partsMoney({job_parts:[p]}).cost; }
-function partLocal(p){ return String(p.id||'').startsWith('local-'); }
+function partLocal(p){ return !!p.local_only||String(p.id||'').startsWith('local-'); }
+function partStableId(){
+  if(crypto.randomUUID)return crypto.randomUUID();
+  const b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;
+  const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
 // Строка без названия в базу не уедет: там стоит check на непустое имя.
 // Это не ошибка ввода, а ещё не заполненная строка, поэтому молча ждём.
 function partReady(p){ return !!String(p.name||'').trim(); }
 
 async function loadJobParts(){
-  jobParts=[]; partT={};
+  jobParts=[]; partT={}; jobPartsComplete=false;
   if(!jobEditId){ renderJobParts(); return; }
   try{
     const {data,error}=await sb.from('jobs').select(JOB_FINANCE_SELECT).eq('id',jobEditId).single();
     if(error) throw error;
     jobParts=projectLegacyFinance({service_orders:data?.service_orders||[]}).job_parts;
+    jobPartsComplete=true;
   }catch(e){
     const j=await snapFindJob(jobEditId);
     jobParts=(j&&j.job_parts)||[];
+    jobPartsComplete=Array.isArray(j?.job_parts);
   }
   renderJobParts();
 }
@@ -4603,8 +4626,8 @@ function partAdd(seed){
 // на каждую букву значило бы сорок запросов на одну запчасть.
 function partTouch(p){
   if(!p) return;
-  clearTimeout(partT[p.id]);
-  partT[p.id]=setTimeout(()=>partSave(p),800);
+  if(jobPartsComplete) queueJobSave();
+  else { clearTimeout(partT[p.id]); partT[p.id]=setTimeout(()=>partSave(p),800); }
   jobSaveState('изменено');
 }
 // Тот же приём, что и с работами: заявка внутри «Графика» берётся из
@@ -4612,7 +4635,7 @@ function partTouch(p){
 // увидел бы прежний список запчастей вместо своего.
 async function snapPartsPatch(jobId){
   const s=await snapGet('mine'); if(!s||!s.val||!s.val.byTrip) return;
-  const rows=jobParts.filter(partReady).map(x=>({id:x.id,name:x.name,sku:x.sku,qty:x.qty,
+  const rows=jobParts.filter(partReady).map(x=>({id:x.id,local_only:!!x.local_only,name:x.name,sku:x.sku,qty:x.qty,
     unit:x.unit,price:x.price,cost:x.cost,billable:x.billable}));
   let touched=false;
   Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{
@@ -4621,6 +4644,7 @@ async function snapPartsPatch(jobId){
   if(touched) await snapSet('mine',s.val,s.at);
 }
 async function partSave(p){
+  if(jobPartsComplete){ await saveJobNow(); return; }
   clearTimeout(partT[p.id]); delete partT[p.id];
   if(!partReady(p)) return;
   const row={job_id:p.job_id||jobEditId, name:String(p.name).trim(), sku:String(p.sku||'').trim(),
@@ -4774,6 +4798,7 @@ async function partDel(p){
   clearTimeout(partT[p.id]); delete partT[p.id];
   const i=jobParts.indexOf(p); if(i>=0) jobParts.splice(i,1);
   renderJobParts();
+  if(jobPartsComplete){ queueJobSave(); return; }
   if(partLocal(p)){ await qDropPart(String(p.id)); return; }   // до сервера не доезжала
   try{
     const {error}=await sb.from('job_parts').delete().eq('id',p.id);
@@ -4907,14 +4932,24 @@ function jobWorkRow(w){
     approved_at:w.approved_at||null,approved_by:w.approved_by||null,
     revenue_override:((w.override!==''&&w.override!=null)?(+w.override||0):null)};
 }
+function jobPartRow(p,index){
+  // Give unsaved rows a stable UUID before queuing so retrying an RPC whose
+  // response was lost reuses its original key instead of inserting a twin.
+  if(String(p.id||'').startsWith('local-')){p.id=partStableId();p.local_only=true;}
+  return {index,id:p.id,client_new:!!p.local_only,local_only:!!p.local_only,name:String(p.name||'').trim(),sku:String(p.sku||'').trim(),
+    qty:partQty(p)||1,unit:p.unit||'шт',billable:p.billable!==false,
+    ...(canWrite()?{price:+p.price||0,cost:+p.cost||0}:{})};
+}
 // Правка местного снимка после постановки в очередь: заявка внутри
 // «График» должен показывать то, что инженер только что ввёл.
-async function snapJobPatch(jobId,rec,works){
+async function snapJobPatch(jobId,rec,works,parts){
   const s=await snapGet('mine'); if(!s||!s.val||!s.val.byTrip) return;
   let touched=false;
   Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{
     if(j.id!==jobId) return;
-    j.status=rec.status; if(Array.isArray(works)) j.job_works=works; touched=true;
+    j.status=rec.status; if(Array.isArray(works)) j.job_works=works;
+    if(Array.isArray(parts))j.job_parts=parts.filter(partReady).map(x=>({id:x.id,local_only:!!x.local_only,name:x.name,sku:x.sku,qty:x.qty,unit:x.unit,price:x.price,cost:x.cost,billable:x.billable}));
+    touched=true;
   }));
   if(touched) await snapSet('mine',s.val,s.at);
 }
@@ -4922,13 +4957,20 @@ async function snapJobPatch(jobId,rec,works){
 async function persistJob(rec){
   let jobId=jobEditId;
   const works=canEditWorks()?curWorks.map(jobWorkRow):null;
-  const data=await saveRequestAndWorks(sb,{id:jobEditId,record:rec,works});
+  const parts=canEditParts()&&jobPartsComplete?jobParts.map(jobPartRow).filter((_,i)=>partReady(jobParts[i])):null;
+  const data=await saveRequestAndWorks(sb,{id:jobEditId,record:rec,works,parts});
   jobId=data?.job_id||jobId;
   for(const saved of data?.works||[]){
     const row=curWorks[Number(saved.index)];if(!row)continue;
     row.id=saved.id;row.approved_at=saved.approved_at;row.approved_by=saved.approved_by;
     row.approved=!!saved.approved_at;row._dirty=false;row.revenue=Number(saved.revenue||0);
   }
+  for(const saved of data?.parts||[]){
+    const row=jobParts[Number(saved.index)];if(!row)continue;
+    row.id=saved.id;row.local_only=false;row.price=Number(saved.price||0);row.cost=Number(saved.cost||0);
+    row.approved_at=saved.approved_at;row.approved_by=saved.approved_by;
+  }
+  if(Array.isArray(parts))await qDropPartsForJob(jobId);
   if(rec.status==='done') await jobClosed(jobId,{equipmentId:rec.equipment_id,
     works:curWorks.map(w=>({billable:w.billable,title:w.name})),
     days:parseInt($('jbWarrDays').value,10)});
@@ -5000,13 +5042,15 @@ async function saveJobNow(){
     // возврате на заявку инженер увидел свои часы, а не старые.
     if(isNetErr(e)){
       const rec=jobRec(), works=canEditWorks()?curWorks.map(jobWorkRow):null;
+      const parts=canEditParts()&&jobPartsComplete?jobParts.map(jobPartRow).filter((_,i)=>partReady(jobParts[i])):null;
       // Прежние записи этой же заявки снимаем: в очереди лежит полная
       // строка, и каждая новая целиком заменяет предыдущую. Иначе правка
       // часов десять раз подряд дала бы десять одинаковых по смыслу
       // отправок и счётчик, который врёт о количестве работы.
       await qDropJob(jobEditId);
-      if(await qPush('job',{jobId:jobEditId,rec,works,works_complete:Array.isArray(works)})){
-        await snapJobPatch(jobEditId,rec,works);
+      if(Array.isArray(parts))await qDropPartsForJob(jobEditId);
+      if(await qPush('job',{jobId:jobEditId,rec,works,works_complete:Array.isArray(works),parts,parts_complete:Array.isArray(parts)})){
+        await snapJobPatch(jobEditId,rec,works,parts);
         jobSaveState('без связи · отправлю позже');
       } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
     } else jobSaveState('не сохранено · '+(e.message||e),'bad');

@@ -41,6 +41,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924180000_task_work_financial_snapshots.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924200000_task_work_catalog_and_warranty.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924210000_request_write_rpc.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260924220000_request_parts_write_rpc.sql',import.meta.url),'utf8'));
 },30000);
 
 afterAll(async()=>{await db?.close();});
@@ -174,6 +175,62 @@ it('maps a newly entered legacy material to the stock catalog and task atomicall
     expect(item).toMatchObject({order_id:seed.id,job_id:id(17),title:'Новый фильтр',kind:'material',legacy_job_part_id:id(72),sku_snapshot:'NF-1',unit_price_snapshot:'180.00',unit_cost_snapshot:'90.00',financial_revenue_snapshot:'360',financial_cost_snapshot:'180'});
     expect(catalog).toMatchObject({legacy_part_id:id(72),name:'Новый фильтр',sku:'NF-1',price:'180.00',cost:'90.00'});
   }finally{await db.exec('reset role; rollback');}
+});
+
+it('atomically saves complete request material plans with stable replay IDs',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const rec={client_id:id(20),status:'open',engineer_ids:[],notes:'before'};
+    const material={id:id(73),client_new:true,name:'Фильтр',sku:'F-2',unit:'шт',qty:2,price:180,cost:90,billable:true};
+    const save=(record,parts)=>q('select public.job_request_save($1,$2::jsonb,null,$3::jsonb) result',[
+      id(10),JSON.stringify(record),parts===null?null:JSON.stringify(parts)
+    ]);
+    const [first]=await save(rec,[material]);
+    const firstId=first.result.parts[0].id;
+    expect(firstId).toBe(id(73));
+    expect((await q('select id,qty,price,cost from job_parts where id=$1',[id(73)]))[0]).toMatchObject({id:id(73),qty:'2',price:'180',cost:'90'});
+
+    const [replay]=await save({...rec,notes:'retry'},[material]);
+    expect(replay.result.parts[0].id).toBe(firstId);
+    expect(await q('select id from job_parts where id=$1',[id(73)])).toHaveLength(1);
+
+    await q("insert into profiles(id,role,active) values($1,'engineer',true)",[id(2)]);
+    await q("select set_config('test.uid',$1,true)",[id(2)]);
+    const engineerPart={id:id(74),client_new:true,name:'Прокладка',sku:'G-4',unit:'шт',qty:1,price:999,cost:500,billable:true};
+    const [engineerInsert]=await save({...rec,notes:'engineer add'},[material,engineerPart]);
+    expect(engineerInsert.result.parts[1].id).toBe(id(74));
+    expect((await q('select qty,price,cost from job_parts where id=$1',[id(74)]))[0]).toMatchObject({qty:'1',price:'0',cost:'0'});
+    const [engineerSave]=await save({...rec,notes:'engineer edit'},[{...material,client_new:false},{...engineerPart,qty:3}]);
+    expect(engineerSave.result.parts.map(x=>x.id)).toEqual([firstId,id(74)]);
+    expect((await q('select qty,price,cost from job_parts where id=$1',[id(74)]))[0]).toMatchObject({qty:'3',price:'0',cost:'0'});
+
+    // A stale three-argument client continues to resolve to the original RPC
+    // and does not replace the material plan when it has no parts snapshot.
+    await q("select public.job_request_save($1,$2::jsonb,null)",[id(10),JSON.stringify({...rec,notes:'legacy replay'})]);
+    expect(await q('select id from job_parts where id=$1',[id(73)])).toHaveLength(1);
+
+    await db.exec('savepoint invalid_material');
+    await expect(save({...rec,notes:'must roll back'},[{...material,qty:0}])).rejects.toThrow(/положительное количество/);
+    await db.exec('rollback to savepoint invalid_material');
+    expect((await q('select notes from jobs where id=$1',[id(10)]))[0].notes).toBe('legacy replay');
+
+    await save(rec,[]);
+    // Both rows are mirrored to the canonical table, whose existing delete
+    // guard intentionally remains active until audited corrections ship.
+    expect(await q('select id from job_parts where id in ($1,$2)',[id(73),id(74)])).toHaveLength(2);
+  }finally{await db.exec('rollback');}
+});
+
+it('keeps imported legacy material rows when a complete plan omits them',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await q("select public.job_request_save($1,$2::jsonb,null,'[]'::jsonb)",[id(10),JSON.stringify({client_id:id(20),status:'open',engineer_ids:[],notes:'safe'})]);
+    expect(await q('select id from job_parts where id=$1',[id(70)])).toHaveLength(1);
+  }finally{await db.exec('rollback');}
 });
 
 it('creates one-request tasks through the manager RPC and rejects reassignment',async()=>{
