@@ -44,6 +44,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924220000_request_parts_write_rpc.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924230000_seed_task_request_access.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924231000_request_finance_canonical_write.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260924130146_preserve_request_finance_approvals.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -384,6 +385,41 @@ it('saves new request finance to canonical task rows and preserves imported hist
     const [approved]=await q('select approved_at is not null approved,approved_by from service_order_items where id=$1',[id(64)]);
     expect(approved).toEqual({approved:true,approved_by:id(1)});
   }finally{await db.exec('rollback');await db.exec('reset role');}
+});
+
+it('keeps manager approval when an engineer saves an unchanged request and rejects changing approved billability',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true),($2,'engineer',true)",[id(1),id(2)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await q('update jobs set engineer_ids=array[$2]::uuid[],assigned_engineer=$2 where id=$1',[id(10),id(2)]);
+    const rec={client_id:id(20),equipment_id:null,status:'open',scheduled_date:null,time_window:'',due_date:null,assigned_engineer:id(2),engineer_ids:[id(2)],notes:'approved',at_depot:false,depot_id:null};
+    const works=[{id:id(65),work_id:id(80),hours:2,billable:true,tariff_profile:'client'}];
+    const parts=[{id:id(66),name:'Новый фильтр',sku:'F-3',unit:'шт',qty:2,billable:true,price:100,cost:60}];
+    await q("insert into service_order_items(id,order_id,job_id,title,unit,planned_qty,kind) values($1,(select id from service_orders where seed_request_id=$2),$2,'План задания','ч',1,'work')",[id(67),id(10)]);
+    await q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,$4::jsonb)',[id(10),JSON.stringify(rec),JSON.stringify(works),JSON.stringify(parts)]);
+    await q("select set_config('test.uid',$1,true)",[id(2)]);
+    await q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,$4::jsonb)',[id(10),JSON.stringify(rec),JSON.stringify(works),JSON.stringify(parts)]);
+    const rows=await q('select id,approved_at is not null approved,approved_by,billable from service_order_items where id in ($1,$2) order by id',[id(65),id(66)]);
+    expect(rows).toEqual([{id:id(65),approved:true,approved_by:id(1),billable:true},{id:id(66),approved:true,approved_by:id(1),billable:true}]);
+    expect(await q('select id from service_order_items where id=$1',[id(67)])).toHaveLength(1);
+    await q('savepoint approved_billability');
+    await expect(q('select public.job_request_save_canonical($1,$2::jsonb,null,$3::jsonb)',[id(10),JSON.stringify(rec),JSON.stringify([{...parts[0],billable:false}])])).rejects.toThrow('Подтверждённый материал');
+    await q('rollback to savepoint approved_billability');
+    await q('select public.job_request_save_canonical($1,$2::jsonb, $3::jsonb,$3::jsonb)',[id(10),JSON.stringify(rec),JSON.stringify([])]);
+    expect(await q('select id from service_order_items where id in ($1,$2) order by id',[id(65),id(66)])).toEqual([{id:id(65)},{id:id(66)}]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await q('savepoint approved_delete');
+    await expect(q('select public.job_request_save_canonical($1,$2::jsonb,null,$3::jsonb)',[id(10),JSON.stringify(rec),JSON.stringify([])])).rejects.toThrow('подтверждённый материал');
+    await q('rollback to savepoint approved_delete');
+    await q("select set_config('test.uid',$1,true)",[id(2)]);
+    await q('savepoint cross_kind');
+    await expect(q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,null)',[id(10),JSON.stringify(rec),JSON.stringify([{...works[0],id:id(66)}])])).rejects.toThrow('тип строки');
+    await q('rollback to savepoint cross_kind');
+    await q('savepoint task_plan');
+    await expect(q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,null)',[id(10),JSON.stringify(rec),JSON.stringify([{...works[0],id:id(67)}])])).rejects.toThrow('не принадлежит редактору заявки');
+    await q('rollback to savepoint task_plan');
+  }finally{await db.exec('rollback');}
 });
 
 it('uses depot and warranty tariff rules for task-only work snapshots',async()=>{

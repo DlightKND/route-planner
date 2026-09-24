@@ -3826,7 +3826,7 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
       '<input type="number" step="0.25" value="'+w.hours+'" data-wh="'+i+'" style="width:74px" title="часы"><span class="hint" style="margin: 0">ч</span>'+
       '<button class="btn sm '+(w.billable?'amber':'ghost')+'" data-wb="'+i+'">'+(w.billable?'платно':'гарантия')+'</button>'+
       money+
-      (w.legacy_task_item_id?'<span class="hint" title="Требуется отдельная аудированная коррекция" style="margin-left:auto">историческая · защищена</span>':'<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button>')+'</div>'+
+      (w.legacy_task_item_id||w.approved?'<span class="hint" title="Требуется отдельная аудированная коррекция" style="margin-left:auto">'+(w.legacy_task_item_id?'историческая · защищена':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button>')+'</div>'+
       ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top: var(--sp-2)">'+esc(w.reasons.join(' · '))+'</div>':'')+
       (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
     if(!canEditRequestFinanceRow(w,mayW)) d.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
@@ -4548,7 +4548,7 @@ function renderJobParts(){
     d.innerHTML='<div class="pt-top">'
         +'<input type="text" value="'+esc(p.name||'')+'" data-pn="'+i+'" placeholder="наименование">'
         +'<input type="text" value="'+esc(p.sku||'')+'" data-ps="'+i+'" placeholder="артикул">'
-        +(p.legacy_task_item_id?'<span class="hint" title="Историческую финансовую строку нельзя удалить">историческая</span>':'<button class="btn sm ghost pt-rm" data-prm="'+i+'" title="Убрать">×</button>')
+        +(p.legacy_task_item_id||p.approved_at?'<span class="hint" title="Для удаления подтверждённой строки требуется аудированная коррекция">'+(p.legacy_task_item_id?'историческая':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost pt-rm" data-prm="'+i+'" title="Убрать">×</button>')
       +'</div>'
       +'<div class="pt-bot">'
         +'<input type="number" step="0.01" min="0" value="'+esc(String(partQty(p)))+'" data-pq="'+i+'" title="количество">'
@@ -4803,6 +4803,7 @@ async function fixDecide(id,st){
 async function partDel(p){
   if(!p) return;
   if(p.legacy_task_item_id){notify('Перенесённую финансовую строку нельзя удалить до перехода на аннулирование.','warn');return;}
+  if(p.approved_at){notify('Подтверждённую строку можно убрать только аудированной коррекцией.','warn');return;}
   const what=String(p.name||'').trim();
   if(partReady(p)&&!await confirmDialog('Убрать «'+what+'» из заявки?',{danger:true,okText:'Убрать'})) return;
   clearTimeout(partT[p.id]); delete partT[p.id];
