@@ -13,14 +13,15 @@ beforeAll(async()=>{
     create table public.job_parts(id uuid primary key,job_id uuid,name text,sku text,unit text,qty numeric,price numeric,cost numeric,billable boolean default true,approved_at timestamptz,approved_by uuid,created_at timestamptz default now(),created_by uuid);
     create table public.work_catalog(id uuid primary key,name text);
     create table public.job_works(id uuid primary key,job_id uuid,work_id uuid,hours numeric,materials jsonb,billable boolean,billable_reason text,revenue numeric,created_at timestamptz,title text,revenue_override numeric,tariff_profile text,approved_at timestamptz,approved_by uuid);`);
-  await q("insert into clients values($1,'A',50,30),($2,'B',51,31),($3,'C',52,32),($4,'D',53,33)",[id(20),id(21),id(22),id(23)]);
+  await db.exec('alter table clients add column default_profile text');
+  await q("insert into clients(id,name,lat,lng,default_profile) values($1,'A',50,30,'client'),($2,'B',51,31,null),($3,'C',52,32,null),($4,'D',53,33,null)",[id(20),id(21),id(22),id(23)]);
   await q('insert into jobs(id,client_id) values($1,$2),($3,$4),($5,$6),($7,$8)',[id(10),id(20),id(11),id(21),id(12),id(22),id(13),id(23)]);
   await q("insert into work_catalog values($1,'Диагностика')",[id(80)]);
   await q("insert into job_works(id,job_id,work_id,hours,materials,billable,billable_reason,revenue,created_at,title,revenue_override,tariff_profile,approved_at,approved_by) values($1,$2,$3,2.5,'[]',true,'',1200,'2026-09-20T10:00:00Z','',null,'client','2026-09-21T10:00:00Z',$4)",[id(60),id(10),id(80),id(1)]);
   await q("insert into job_works(id,job_id,work_id,hours,materials,billable,billable_reason,revenue,created_at,title,revenue_override,tariff_profile,approved_at,approved_by) values($1,$2,$3,1,'[]',false,'Гарантия',250,'2026-09-20T10:00:00Z','',null,'warranty','2026-09-21T10:00:00Z',$4)",[id(61),id(13),id(80),id(1)]);
   await q("insert into job_parts(id,job_id,name,sku,unit,qty,price,cost,billable,approved_at,approved_by,created_by) values($1,$2,'Фильтр','F-1','шт',2,100,55,true,'2026-09-21T11:00:00Z',$3,null)",[id(70),id(10),id(1)]);
   await q("insert into job_parts(id,job_id,name,sku,unit,qty,price,cost,billable,approved_at,approved_by,created_by) values($1,$2,'Прокладка','P-1','шт',1,30,15,false,'2026-09-21T11:00:00Z',$3,null)",[id(71),id(13),id(1)]);
-  await db.exec("alter table settings add column costs jsonb; update settings set costs='{\"hour\":750}' where id=true");
+  await db.exec("alter table settings add column costs jsonb; alter table settings add column tariffs jsonb; alter table settings add column tariff_profiles jsonb; update settings set costs='{\"hour\":750}',tariffs='{\"hour\":1500}',tariff_profiles='[{\"id\":\"client\",\"work_paid\":{\"rate\":1200},\"work_warr\":{\"rate\":350},\"work_depot\":{\"rate\":800}},{\"id\":\"standard\",\"work_paid\":{\"rate\":1000},\"def_paid\":true},{\"id\":\"warranty\",\"work_warr\":{\"rate\":250},\"def_warranty\":true}]' where id=true");
   await q("insert into trips(id,status) values($1,'planned'),($2,'planned'),($3,'finished')",[id(30),id(31),id(32)]);
   await q('insert into trip_jobs(trip_id,job_id,ord) values($1,$2,0),($1,$3,1),($4,$3,0),($5,$6,0)',[id(30),id(10),id(11),id(31),id(32),id(12)]);
   await q("insert into trip_stays(id,trip_id,job_id,stay_from,minutes_mgr,crew_ids,status) values($1,$2,$3,'2026-09-20 09:00Z',70,array[$5]::uuid[],'approved'),($4,$2,null,'2026-09-20 12:00Z',null,'{}','detected')",[id(40),id(30),id(10),id(41),id(3)]);
@@ -36,6 +37,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924091500_legacy_finance_to_task_items.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924123000_legacy_finance_dualwrite.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924160000_carry_task_financial_snapshots.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260924180000_task_work_financial_snapshots.sql',import.meta.url),'utf8'));
 },30000);
 
 afterAll(async()=>{await db?.close();});
@@ -143,7 +145,7 @@ it('creates the canonical seed and item when a new legacy line is entered for an
   try{
     await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
     await q("select set_config('test.uid',$1,true)",[id(1)]);
-    await q("insert into clients values($1,'Новый клиент',54,34)",[id(25)]);
+    await q("insert into clients(id,name,lat,lng) values($1,'Новый клиент',54,34)",[id(25)]);
     await q('insert into jobs(id,client_id) values($1,$2)',[id(16),id(25)]);
     await q("insert into job_works(id,job_id,work_id,hours,materials,billable,billable_reason,revenue,created_at,title,revenue_override,tariff_profile) values($1,$2,$3,1.5,'[]',true,'',500,'2026-09-22T10:00:00Z','',null,'client')",[id(62),id(16),id(80)]);
     const [seed]=await q('select id,status from service_orders where seed_request_id=$1',[id(16)]);
@@ -159,7 +161,7 @@ it('maps a newly entered legacy material to the stock catalog and task atomicall
   try{
     await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
     await q("select set_config('test.uid',$1,true)",[id(1)]);
-    await q("insert into clients values($1,'Новый клиент',55,35)",[id(26)]);
+    await q("insert into clients(id,name,lat,lng) values($1,'Новый клиент',55,35)",[id(26)]);
     await q('insert into jobs(id,client_id) values($1,$2)',[id(17),id(26)]);
     await q("insert into job_parts(id,job_id,name,sku,unit,qty,price,cost,billable,approved_at,approved_by,created_by) values($1,$2,'Новый фильтр','NF-1','шт',2,180,90,true,'2026-09-22T11:00:00Z',$3,$3)",[id(72),id(17),id(1)]);
     const [seed]=await q('select id,status from service_orders where seed_request_id=$1',[id(17)]);
@@ -182,6 +184,56 @@ it('creates one-request tasks through the manager RPC and rejects reassignment',
   await db.exec('rollback');
 });
 
+it('server-snapshots new task work from the request tariff and global cost without trusting browser money',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const data={title:'Нова робота',work_mode:'onsite',engineer_ids:[],instructions:''};
+    const [created]=await q("select public.service_order_save_one(null,null,$1::jsonb,$2,$3::jsonb) id",[
+      JSON.stringify(data),id(10),JSON.stringify([{job_id:id(10),kind:'work',title:'Діагностика',unit:'ч',planned_qty:2,financial_revenue_snapshot:1,financial_cost_snapshot:1}])
+    ]);
+    const [item]=await q('select billable,tariff_profile,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1',[created.id]);
+    expect(item).toEqual({billable:true,tariff_profile:'client',financial_revenue_snapshot:'2400.00',financial_cost_snapshot:'1500.00'});
+    await q("update settings set tariffs='{\"hour\":9000}',costs='{\"hour\":3000}' where id=true");
+    await q("select public.service_order_save_one($1,0,$2::jsonb,$3,$4::jsonb)",[created.id,JSON.stringify(data),id(10),JSON.stringify([{id:(await q('select id from service_order_items where order_id=$1',[created.id]))[0].id,job_id:id(10),kind:'work',title:'Диагностика',unit:'ч',planned_qty:3}])]);
+    const [resized]=await q('select tariff_profile,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1',[created.id]);
+    expect(resized).toEqual({tariff_profile:'client',financial_revenue_snapshot:'3600.00',financial_cost_snapshot:'2250.00'});
+
+    const [fallback]=await q("select public.service_order_save_one(null,null,$1::jsonb,$2,$3::jsonb) id",[
+      JSON.stringify({...data,title:'Обычный тариф'}),id(11),JSON.stringify([{job_id:id(11),kind:'work',title:'Настройка',unit:'ч',planned_qty:1}])
+    ]);
+    const [defaultPaid]=await q('select tariff_profile,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1',[fallback.id]);
+    expect(defaultPaid).toEqual({tariff_profile:'standard',financial_revenue_snapshot:'1000.00',financial_cost_snapshot:'3000.00'});
+
+    const [nonHourly]=await q("select public.service_order_save_one(null,null,$1::jsonb,$2,$3::jsonb) id",[
+      JSON.stringify({...data,title:'Фиксированная услуга'}),id(12),JSON.stringify([{job_id:id(12),kind:'work',title:'Фиксированная услуга',unit:'работа',planned_qty:1}])
+    ]);
+    const [unpriced]=await q('select financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1',[nonHourly.id]);
+    expect(unpriced).toEqual({financial_revenue_snapshot:null,financial_cost_snapshot:null});
+  }finally{await db.exec('reset role; rollback');}
+});
+
+it('uses depot and warranty tariff rules for task-only work snapshots',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await q('insert into jobs(id,client_id,at_depot) values($1,$2,true)',[id(18),id(20)]);
+    const data={title:'Робота в депо',work_mode:'depot',engineer_ids:[],instructions:''};
+    const [created]=await q("select public.service_order_save_one(null,null,$1::jsonb,$2,$3::jsonb) id",[
+      JSON.stringify(data),id(18),JSON.stringify([{job_id:id(18),kind:'work',title:'Ремонт',unit:'ч',planned_qty:2}])
+    ]);
+    const [depot]=await q('select tariff_profile,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1',[created.id]);
+    expect(depot).toEqual({tariff_profile:'client',financial_revenue_snapshot:'1600.00',financial_cost_snapshot:'1500.00'});
+
+    const [warrantyTask]=await q("insert into service_orders(title,work_mode,job_id) values('Гарантия','onsite',$1) returning id",[id(13)]);
+    await q('insert into service_order_jobs(order_id,job_id) values($1,$2)',[warrantyTask.id,id(13)]);
+    const [warranty]=await q("insert into service_order_items(order_id,job_id,title,unit,planned_qty,kind,billable) values($1,$2,'Гарантийная работа','ч',3,'work',false) returning tariff_profile,financial_revenue_snapshot,financial_cost_snapshot",[warrantyTask.id,id(13)]);
+    expect(warranty).toEqual({tariff_profile:'warranty',financial_revenue_snapshot:'750.00',financial_cost_snapshot:'2250.00'});
+  }finally{await db.exec('reset role; rollback');}
+});
+
 it('carries remaining work with request, material and work economics snapshots',async()=>{
   await db.exec('begin');
   try{
@@ -201,7 +253,7 @@ it('carries remaining work with request, material and work economics snapshots',
     expect(task.job_id).toBe(id(10));
     expect(rel.job_id).toBe(id(10));
     expect(copy).toMatchObject({job_id:id(10),title:'Насос',kind:'material',source_item_id:item.id,stock_catalog_id:id(80),sku_snapshot:'P-7',unit_price_snapshot:'1200.00',unit_cost_snapshot:'800.00',financial_revenue_snapshot:'4800.00',financial_cost_snapshot:'3200.00'});
-    expect(workCopy).toMatchObject({job_id:id(10),title:'Сварка',kind:'work',source_item_id:work.id,work_catalog_id:id(80),billable:false,billable_reason:'Гарантия',tariff_profile:'warranty',financial_revenue_snapshot:'720.00',financial_cost_snapshot:'3000.00'});
+    expect(workCopy).toMatchObject({job_id:id(10),title:'Сварка',kind:'work',source_item_id:work.id,work_catalog_id:id(80),billable:false,billable_reason:'Гарантия',tariff_profile:'warranty',financial_revenue_snapshot:'1000.00',financial_cost_snapshot:'3000.00'});
   }finally{await db.exec('rollback');}
 });
 
@@ -302,7 +354,7 @@ it('does not create duplicates when the legacy trip planner inserts a request af
   await db.exec('begin');
   await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
   await q('select set_config(\'test.uid\',$1,true)',[id(1)]);
-  await q("insert into clients values($1,'E',54,34)",[id(24)]);
+  await q("insert into clients(id,name,lat,lng) values($1,'E',54,34)",[id(24)]);
   await q('insert into jobs(id,client_id) values($1,$2)',[id(14),id(24)]);
   await q("insert into trips(id,status) values($1,'planned')",[id(33)]);
   await q('insert into trip_jobs(trip_id,job_id,ord) values($1,$2,0)',[id(33),id(14)]);
