@@ -23,11 +23,21 @@
 - Редактор больше не предлагает менять/удалять импортированные work/material строки, подтверждать или отклонять защищённые материалы. Bulk approval работает только по обычным редактируемым строкам; legacy источник и dual-write продолжают работать.
 - Локально: lint, точечные projection/request-save tests 7/7, smoke build/preview, `git diff --check`; PR-CI полностью зелёный.
 
-## Активная порция: перевод записи заявки на canonical task items
+## Контрольная точка: запись новых финансовых строк заявки в canonical task items (2026-09-24 12:27 UTC)
 
-- В редакторе заявки заменить новые изменения работ и материалов на атомарную запись базового `service_order_items`, сохранив серверные тарифы, снимки, approval и RLS исполнителя. Связанные исторические legacy rows остаются неизменяемыми обычным редактором; для них позже нужен audited void/correction.
-- Старая офлайн-очередь должна продолжать replay через совместимый legacy режим `job_request_save`; новый клиент помечает формат очереди и повторяет canonical UUID идемпотентно. Не удалять `job_works`/`job_parts`, их dual-write triggers или старый replay, пока очередь и readers не выведены из эксплуатации и не проверены production smoke.
-- Следом отдельно закончить audited void/correction, затем провести аудит семи shadow-задач; не менять и не удалять их автоматически.
+- PR #91 `[deploy] Save request finance to canonical task items` слит squash-коммитом `cf7301cf94984cbf8ddf042dac49ffa3848b85fe`. CI run #369 зелёный: lint, оба набора тестов, build и smoke; Pages deploy завершился успешно.
+- Production migration `request_finance_canonical_write` применена к `anqfbljgfimoaziztdxe`; ledger version `20260924122723`. Новый клиент использует `job_request_save_canonical`, который атомарно сохраняет шапку, новые работы и материалы в базовый `service_order_items`. Менеджерское подтверждение идёт через `job_request_finance_approve`. Оба публичных wrapper RPC — `SECURITY INVOKER`, `search_path=''`; внутренние функции — в `dlight_private` с явной проверкой роли/назначения. Прямые INSERT права на `service_order_items` не выдавались; `anon` не имеет EXECUTE.
+- Менеджерские тарифные снимки и revenue override сохраняются; инженерская цена/стоимость не принимается от клиента. Стабильные UUID обеспечивают повторяемый offline replay. Новые queue records помечаются canonical generation; старые записи по-прежнему идут через `job_request_save`. Legacy таблицы и dual-write triggers не удалялись.
+- Защищённые импортированные строки остаются неизменяемыми. Новые строки заявки видны в проекциях, а экран задания не позволяет менять их как обычный план; триггер блокирует изменение и удаление вне редактора заявки.
+- Production RLS smoke под назначенным инженером успешно вызвал canonical RPC внутри транзакции; транзакция откатилась, контрольная строка не сохранилась. Advisors не показывают новых findings по добавленным функциям; существующие замечания относятся к старым views/functions.
+- Pages отдаёт `assets/index-E7iggk0w.js`; подтверждены `job_request_save_canonical`, `job_request_finance_approve`, версия очереди и метка защиты строки заявки.
+- Проверки: локально lint, `npm test` 414/414, `npm run test:tz` 414/414, `npm run smoke`, `git diff --check`; CI повторил полный набор успешно.
+
+## Активная порция: audited void/correction для финансовых строк
+
+- Спроектировать отдельную аудируемую операцию для аннулирования/корректировки защищённых импортированных `job_works`/`job_parts` и связанных `service_order_items`; обычное редактирование оставлять закрытым. Сохранить исторические суммы, автора, подтверждение и provenance.
+- Не отключать старую офлайн-очередь, legacy таблицы или dual-write triggers, пока очередь и readers не выведены из эксплуатации и не проверены production smoke.
+- Затем провести отдельный аудит семи shadow-задач; не менять и не удалять их автоматически.
 
 ## Контрольная точка: каталожные работы и атомарная запись заявки (2026-09-24 10:02 UTC)
 
