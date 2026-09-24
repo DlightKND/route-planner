@@ -18,7 +18,7 @@ import { hasStableJobWorkIds } from './core/job-work-diff.js';
 import { canEditRequestFinanceRow } from './core/request-finance-row.js';
 import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
-import { saveRequestAndWorks } from './core/request-save.js';
+import { saveCanonicalRequest, saveRequestAndWorks } from './core/request-save.js';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openTrip,tripStatus:s=>ST_TRIP[s]||s,
@@ -54,12 +54,12 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
         jobUrgency, isCold, needsEngineer, attentionBuckets, urgencyRank,
         simplifyLine, kmBetween, todayISO, monthKey,
         planSchedule, scheduleJobIncluded, tripRouteSegments, driveOfLegs, piecesOf, normPos, addHours, diffHours, dayWindow, weekRowSpan, q4,
-        trashDaysLeft, projectLegacyFinance, projectLegacyFinanceRows,
+        trashDaysLeft, projectLegacyFinance, projectLegacyFinanceRows, projectRequestFinance,
         measureTrip } = core;
 
 
 const $=id=>document.getElementById(id);
-const JOB_FINANCE_SELECT='service_orders!service_orders_job_id_fkey(service_order_items(*))';
+const JOB_FINANCE_SELECT='service_orders!service_orders_job_id_fkey(id,job_id,seed_request_id,service_order_items(*))';
 
 
 // ── Ленивая загрузка тяжёлых библиотек ──────────────────────────────────────
@@ -3547,7 +3547,7 @@ async function fetchJobFull(id){
       .select('*, clients(name), equipment(model,kind),'+JOB_FINANCE_SELECT)
       .eq('id',id).is('deleted_at',null).maybeSingle();
     if(error) throw error;
-    return projectLegacyFinance(data||null);
+    return projectRequestFinance(data||null);
   }catch(e){ console.warn('Заявка не дочитана:',e); return null; }
 }
 async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); jobEditId=id; serviceOrders.requestPanel(id);
@@ -3570,7 +3570,7 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
     :'<option value="">— депо не заведено —</option>';
   if(j&&j.depot_id) $('jbDepotSel').value=j.depot_id; else if(dl.length) $('jbDepotSel').value=dl[0].id;
   renderDepotUi();
-  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {id:w.id,work_id:w.work_id||null,title:w.title||'',revenue:+w.revenue||0,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at,approved_at:w.approved_at||null,approved_by:w.approved_by||null,legacy_task_item_id:w.legacy_task_item_id||null}; });
+  curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {id:w.id,canonical_task_item_id:w.canonical_task_item_id||null,work_id:w.work_id||null,title:w.title||'',revenue:+w.revenue||0,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at,approved_at:w.approved_at||null,approved_by:w.approved_by||null,legacy_task_item_id:w.legacy_task_item_id||null}; });
   curWorksComplete=!id||hasStableJobWorkIds(j?.job_works);
   renderJobWorks();
   const ro=!canWrite() && !(j&&assignedTo(j,session.user.id,'assigned_engineer'));
@@ -4109,12 +4109,14 @@ async function qSendOne(it){
     return;
   }
   if(it.kind==='job'){
-    // Offline replay uses the same atomic request/work RPC as an online save.
+    // New records carry a generation marker; older queue records keep the
+    // legacy RPC so clients already offline at deploy time can still replay.
     const works=p.works_complete&&Array.isArray(p.works)?p.works:null;
     const parts=p.parts_complete&&Array.isArray(p.parts)?p.parts:null;
     if(!works&&Array.isArray(p.works)&&p.works.length)
       notify('Старые офлайн-работы не отправлены: в снимке нет стабильных ID. Открой заявку с сетью и внеси правку заново.','err');
-    await saveRequestAndWorks(sb,{id:p.jobId,record:p.rec,works,parts});
+    const save=p.canonical_generation===1?saveCanonicalRequest:saveRequestAndWorks;
+    await save(sb,{id:p.jobId,record:p.rec,works,parts});
     if(Array.isArray(parts))await qDropPartsForJob(p.jobId);
     // Заявку закрыли без связи — последствия наступают сейчас, а не теряются.
     if(p.rec&&p.rec.status==='done') await jobClosed(p.jobId,{equipmentId:p.rec.equipment_id,works:p.works||[]});
@@ -4456,7 +4458,7 @@ async function loadJobParts(){
   try{
     const {data,error}=await sb.from('jobs').select(JOB_FINANCE_SELECT).eq('id',jobEditId).single();
     if(error) throw error;
-    jobParts=projectLegacyFinance({service_orders:data?.service_orders||[]}).job_parts;
+    jobParts=projectRequestFinance({id:jobEditId,service_orders:data?.service_orders||[]}).job_parts;
     jobPartsComplete=true;
   }catch(e){
     const j=await snapFindJob(jobEditId);
@@ -4694,10 +4696,15 @@ async function partApprove(p,ok){
     await partDel(p); return;
   }
   try{
-    const {error}=await sb.from('job_parts')
-      .update({approved_at:new Date().toISOString(),approved_by:session.user.id}).eq('id',p.id);
-    if(error) throw error;
-    p.approved_at=new Date().toISOString(); p.approved_by=session.user.id;
+    const approvedAt=new Date().toISOString();
+    if(p.canonical_task_item_id){
+      const {error}=await sb.rpc('job_request_finance_approve',{p_job:jobEditId,p_ids:[p.canonical_task_item_id]});
+      if(error) throw error;
+    }else{
+      const {error}=await sb.from('job_parts').update({approved_at:approvedAt,approved_by:session.user.id}).eq('id',p.id);
+      if(error) throw error;
+    }
+    p.approved_at=approvedAt; p.approved_by=session.user.id;
     renderJobParts(); jobSaveState('сохранено');
   }catch(e){ notify('Не подтвердилось: '+((e&&e.message)||e),'err'); }
 }
@@ -4705,14 +4712,12 @@ async function partApprove(p,ok){
 async function worksApprove(){
   if(!canWrite()||!jobEditId) return;
   try{
-    const ids=curWorks.filter(w=>!w.approved&&!w.legacy_task_item_id&&w.id).map(w=>w.id);
+    const ids=curWorks.filter(w=>!w.approved&&!w.legacy_task_item_id&&w.canonical_task_item_id).map(w=>w.canonical_task_item_id);
     if(!ids.length){notify('Историческую строку можно исправить только отдельной аудированной операцией.','warn');return;}
     const approvedAt=new Date().toISOString();
-    const {error}=await sb.from('job_works')
-      .update({approved_at:approvedAt,approved_by:session.user.id})
-      .in('id',ids).eq('job_id',jobEditId).is('approved_at',null);
+    const {error}=await sb.rpc('job_request_finance_approve',{p_job:jobEditId,p_ids:ids});
     if(error) throw error;
-    curWorks.filter(w=>ids.includes(w.id)).forEach(w=>{ w.approved=true; w.approved_at=approvedAt; w.approved_by=session.user.id; });
+    curWorks.filter(w=>ids.includes(w.canonical_task_item_id)).forEach(w=>{ w.approved=true; w.approved_at=approvedAt; w.approved_by=session.user.id; });
     renderJobWorks(); jobSaveState('сохранено'); showToast('Работы подтверждены');
   }catch(e){ notify('Не подтвердилось: '+((e&&e.message)||e),'err'); }
 }
@@ -4931,7 +4936,8 @@ function jobSaveState(txt,cls){ const el=$('jobSaveState'); if(!el) return;
 // Строка работы в том виде, в каком она уезжает в базу. Вынесена, потому
 // что теперь её собирает и обычное сохранение, и очередь.
 function jobWorkRow(w){
-  return {...(w.id?{id:w.id}:{}),work_id:w.work_id||null,title:w.work_id?(w.title||''):(w.name||''),hours:w.hours,billable:w.billable,
+  if(!w.id)w.id=partStableId();
+  return {id:w.canonical_task_item_id||w.id,work_id:w.work_id||null,title:w.work_id?(w.title||''):(w.name||''),unit:'ч',hours:w.hours,billable:w.billable,
     billable_reason:w.billable_reason||'',tariff_profile:(w.profile||null),
     revenue:(w._dirty||w.revenue==null)?workRevenue(w):+w.revenue,
     approved_at:w.approved_at||null,approved_by:w.approved_by||null,
@@ -4941,7 +4947,7 @@ function jobPartRow(p,index){
   // Give unsaved rows a stable UUID before queuing so retrying an RPC whose
   // response was lost reuses its original key instead of inserting a twin.
   if(String(p.id||'').startsWith('local-')){p.id=partStableId();p.local_only=true;}
-  return {index,id:p.id,client_new:!!p.local_only,local_only:!!p.local_only,name:String(p.name||'').trim(),sku:String(p.sku||'').trim(),
+  return {index,id:p.canonical_task_item_id||p.id,client_new:!!p.local_only,local_only:!!p.local_only,name:String(p.name||'').trim(),sku:String(p.sku||'').trim(),
     qty:partQty(p)||1,unit:p.unit||'шт',billable:p.billable!==false,
     ...(canWrite()?{price:+p.price||0,cost:+p.cost||0}:{})};
 }
@@ -4961,18 +4967,21 @@ async function snapJobPatch(jobId,rec,works,parts){
 // Запись без навигации и без тостов: её зовёт и кнопка, и автосохранение.
 async function persistJob(rec){
   let jobId=jobEditId;
-  const works=canEditWorks()?curWorks.map(jobWorkRow):null;
-  const parts=canEditParts()&&jobPartsComplete?jobParts.map(jobPartRow).filter((_,i)=>partReady(jobParts[i])):null;
-  const data=await saveRequestAndWorks(sb,{id:jobEditId,record:rec,works,parts});
+  const editableWorks=curWorks.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
+  const works=canEditWorks()?editableWorks.map(({row,index})=>({...jobWorkRow(row),index})):null;
+  const editableParts=jobParts.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
+  const readyParts=editableParts.filter(x=>partReady(x.row));
+  const parts=canEditParts()&&jobPartsComplete?readyParts.map(({row,index})=>({...jobPartRow(row,index),index})):null;
+  const data=await saveCanonicalRequest(sb,{id:jobEditId,record:rec,works,parts});
   jobId=data?.job_id||jobId;
   for(const saved of data?.works||[]){
     const row=curWorks[Number(saved.index)];if(!row)continue;
-    row.id=saved.id;row.approved_at=saved.approved_at;row.approved_by=saved.approved_by;
+    row.id=saved.id;row.canonical_task_item_id=saved.id;row.approved_at=saved.approved_at;row.approved_by=saved.approved_by;
     row.approved=!!saved.approved_at;row._dirty=false;row.revenue=Number(saved.revenue||0);
   }
   for(const saved of data?.parts||[]){
     const row=jobParts[Number(saved.index)];if(!row)continue;
-    row.id=saved.id;row.local_only=false;row.price=Number(saved.price||0);row.cost=Number(saved.cost||0);
+    row.id=saved.id;row.canonical_task_item_id=saved.id;row.local_only=false;row.price=Number(saved.price||0);row.cost=Number(saved.cost||0);
     row.approved_at=saved.approved_at;row.approved_by=saved.approved_by;
   }
   if(Array.isArray(parts))await qDropPartsForJob(jobId);
@@ -5046,15 +5055,17 @@ async function saveJobNow(){
     // Нет связи — кладём в очередь и правим местный снимок, чтобы при
     // возврате на заявку инженер увидел свои часы, а не старые.
     if(isNetErr(e)){
-      const rec=jobRec(), works=canEditWorks()?curWorks.map(jobWorkRow):null;
-      const parts=canEditParts()&&jobPartsComplete?jobParts.map(jobPartRow).filter((_,i)=>partReady(jobParts[i])):null;
+      const rec=jobRec(), editableWorks=curWorks.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
+      const works=canEditWorks()?editableWorks.map(({row,index})=>({...jobWorkRow(row),index})):null;
+      const editableParts=jobParts.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
+      const parts=canEditParts()&&jobPartsComplete?editableParts.filter(x=>partReady(x.row)).map(({row,index})=>({...jobPartRow(row,index),index})):null;
       // Прежние записи этой же заявки снимаем: в очереди лежит полная
       // строка, и каждая новая целиком заменяет предыдущую. Иначе правка
       // часов десять раз подряд дала бы десять одинаковых по смыслу
       // отправок и счётчик, который врёт о количестве работы.
       await qDropJob(jobEditId);
       if(Array.isArray(parts))await qDropPartsForJob(jobEditId);
-      if(await qPush('job',{jobId:jobEditId,rec,works,works_complete:Array.isArray(works),parts,parts_complete:Array.isArray(parts)})){
+      if(await qPush('job',{jobId:jobEditId,canonical_generation:1,rec,works,works_complete:Array.isArray(works),parts,parts_complete:Array.isArray(parts)})){
         await snapJobPatch(jobEditId,rec,works,parts);
         jobSaveState('без связи · отправлю позже');
       } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
