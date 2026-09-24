@@ -35,6 +35,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923210000_restore_task_link_invariants.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924091500_legacy_finance_to_task_items.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924123000_legacy_finance_dualwrite.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260924160000_carry_task_financial_snapshots.sql',import.meta.url),'utf8'));
 },30000);
 
 afterAll(async()=>{await db?.close();});
@@ -181,7 +182,7 @@ it('creates one-request tasks through the manager RPC and rejects reassignment',
   await db.exec('rollback');
 });
 
-it('carries remaining work to a task with the same canonical request and material snapshots',async()=>{
+it('carries remaining work with request, material and work economics snapshots',async()=>{
   await db.exec('begin');
   try{
     await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
@@ -190,13 +191,17 @@ it('carries remaining work to a task with the same canonical request and materia
     const [source]=await q("insert into service_orders(title,status,job_id) values('Замена насоса','in_progress',$1) returning id",[id(10)]);
     await q('insert into service_order_jobs(order_id,job_id) values($1,$2)',[source.id,id(10)]);
     const [item]=await q("insert into service_order_items(order_id,job_id,title,unit,planned_qty,kind,stock_catalog_id,sku_snapshot,unit_price_snapshot,unit_cost_snapshot) values($1,$2,'Насос','шт',5,'material',$3,'P-7',1200,800) returning id",[source.id,id(10),id(80)]);
+    const [work]=await q("insert into service_order_items(order_id,job_id,title,unit,planned_qty,kind,work_catalog_id,billable,billable_reason,tariff_profile,financial_revenue_snapshot,financial_cost_snapshot) values($1,$2,'Сварка','ч',5,'work',$3,false,'Гарантия','warranty',900,3750) returning id",[source.id,id(10),id(80)]);
+    await q('update service_order_items set done_qty=1 where id=any($1::uuid[])',[[item.id,work.id]]);
     const [carried]=await q("select public.service_order_carry($1,0,'Материал отсутствует') id",[source.id]);
     const [task]=await q('select job_id from service_orders where id=$1',[carried.id]);
     const [rel]=await q('select job_id from service_order_jobs where order_id=$1',[carried.id]);
-    const [copy]=await q('select job_id,title,kind,source_item_id,stock_catalog_id,sku_snapshot,unit_price_snapshot,unit_cost_snapshot from service_order_items where order_id=$1',[carried.id]);
+    const [copy]=await q('select job_id,title,kind,source_item_id,stock_catalog_id,sku_snapshot,unit_price_snapshot,unit_cost_snapshot,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1 and source_item_id=$2',[carried.id,item.id]);
+    const [workCopy]=await q('select job_id,title,kind,source_item_id,work_catalog_id,billable,billable_reason,tariff_profile,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1 and source_item_id=$2',[carried.id,work.id]);
     expect(task.job_id).toBe(id(10));
     expect(rel.job_id).toBe(id(10));
-    expect(copy).toMatchObject({job_id:id(10),title:'Насос',kind:'material',source_item_id:item.id,stock_catalog_id:id(80),sku_snapshot:'P-7',unit_price_snapshot:'1200.00',unit_cost_snapshot:'800.00'});
+    expect(copy).toMatchObject({job_id:id(10),title:'Насос',kind:'material',source_item_id:item.id,stock_catalog_id:id(80),sku_snapshot:'P-7',unit_price_snapshot:'1200.00',unit_cost_snapshot:'800.00',financial_revenue_snapshot:'4800.00',financial_cost_snapshot:'3200.00'});
+    expect(workCopy).toMatchObject({job_id:id(10),title:'Сварка',kind:'work',source_item_id:work.id,work_catalog_id:id(80),billable:false,billable_reason:'Гарантия',tariff_profile:'warranty',financial_revenue_snapshot:'720.00',financial_cost_snapshot:'3000.00'});
   }finally{await db.exec('rollback');}
 });
 
