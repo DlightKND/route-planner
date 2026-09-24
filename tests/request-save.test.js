@@ -1,5 +1,5 @@
 import {it,expect,vi} from 'vitest';
-import {saveRequestAndWorks} from '../src/core/request-save.js';
+import {saveCanonicalRequest,saveRequestAndWorks} from '../src/core/request-save.js';
 
 it('sends online and replay saves through the atomic request work and material RPC',async()=>{
   const rpc=vi.fn(async()=>({data:{job_id:'job-1',works:[]},error:null}));
@@ -28,4 +28,10 @@ it('leaves materials unchanged for an older queue item that only has a work snap
 it('surfaces server rejection without pretending the queue item was saved',async()=>{
   const rpc=vi.fn(async()=>({data:null,error:new Error('revision conflict')}));
   await expect(saveRequestAndWorks({rpc},{id:'job-1',record:{},works:[]})).rejects.toThrow('revision conflict');
+});
+
+it('uses the versioned canonical RPC for new request edits',async()=>{
+  const rpc=vi.fn(async()=>({data:{job_id:'job-1'},error:null}));
+  await saveCanonicalRequest({rpc},{id:'job-1',record:{notes:'new'},works:[{id:'item-1'}],parts:[]});
+  expect(rpc).toHaveBeenCalledWith('job_request_save_canonical',{p_id:'job-1',p_rec:{notes:'new'},p_works:[{id:'item-1'}],p_parts:[]});
 });

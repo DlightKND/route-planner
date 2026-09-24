@@ -43,6 +43,8 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924210000_request_write_rpc.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924220000_request_parts_write_rpc.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924230000_seed_task_request_access.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260924231000_request_finance_canonical_write.sql',import.meta.url),'utf8'));
+  expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
 afterAll(async()=>{await db?.close();});
@@ -338,6 +340,49 @@ it('saves a request and its work lines atomically while dual-writing the canonic
     const [newWork]=await q('select title,hours from job_works where job_id=$1',[newJobId]);
     expect(newWork).toEqual({title:'Browser title',hours:'2'});
     expect(created[0].value.works[0].id).toBeTruthy();
+  }finally{await db.exec('rollback');await db.exec('reset role');}
+});
+
+it('saves new request finance to canonical task rows and preserves imported history',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true),($2,'engineer',true)",[id(1),id(2)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await q('update jobs set engineer_ids=array[$2]::uuid[],assigned_engineer=$2 where id=$1',[id(10),id(2)]);
+    const works=[{id:id(62),work_id:id(80),title:'',hours:3,billable:true,billable_reason:'',tariff_profile:'client',revenue_override:1000}];
+    const parts=[{index:0,id:id(63),name:'Фильтр новый',sku:'F-2',unit:'шт',qty:2,billable:true,price:240,cost:150}];
+    const rec={client_id:id(20),equipment_id:null,status:'open',scheduled_date:null,time_window:'',due_date:null,assigned_engineer:id(2),engineer_ids:[id(2)],notes:'canonical',at_depot:false,depot_id:null};
+    const [result]=await q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,$4::jsonb) value',[id(10),JSON.stringify(rec),JSON.stringify(works),JSON.stringify(parts)]);
+    expect(result.value.works[0]).toMatchObject({id:id(62),revenue:1000,approved_by:id(1)});
+    expect(result.value.parts[0]).toMatchObject({id:id(63),price:240,cost:150,approved_by:id(1)});
+    expect(await q('select id from job_works where id=$1',[id(62)])).toHaveLength(0);
+    expect(await q('select id from job_parts where id=$1',[id(63)])).toHaveLength(0);
+    const [work]=await q('select kind,planned_qty,financial_revenue_snapshot,legacy_job_work_id,legacy_snapshot->>\'revenue_override\' revenue_override from service_order_items where id=$1',[id(62)]);
+    expect(work).toMatchObject({kind:'work',planned_qty:'3',financial_revenue_snapshot:'1000',legacy_job_work_id:null,revenue_override:'1000'});
+    const [part]=await q('select kind,title,planned_qty,unit_price_snapshot,unit_cost_snapshot,legacy_job_part_id from service_order_items where id=$1',[id(63)]);
+    expect(part).toMatchObject({kind:'material',title:'Фильтр новый',planned_qty:'2',unit_price_snapshot:'240.00',unit_cost_snapshot:'150.00',legacy_job_part_id:null});
+    expect(await q('select id from service_order_items where legacy_job_work_id=$1',[id(60)])).toHaveLength(1);
+    expect(await q('select id from service_order_items where legacy_job_part_id=$1',[id(70)])).toHaveLength(1);
+    const [replay]=await q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,$4::jsonb) value',[id(10),JSON.stringify(rec),JSON.stringify(works),JSON.stringify(parts)]);
+    expect(replay.value.works[0].id).toBe(id(62));
+    expect(await q('select id from service_order_items where id in ($1,$2)',[id(62),id(63)])).toHaveLength(2);
+    const [seed]=await q('select id from service_orders where seed_request_id=$1',[id(10)]);
+    const [remaining]=await q("select coalesce(jsonb_agg(jsonb_build_object('id',id,'job_id',job_id,'kind',kind,'stock_catalog_id',stock_catalog_id,'work_catalog_id',work_catalog_id,'planned_qty',planned_qty,'title',title,'unit',unit,'billable',billable,'billable_reason',billable_reason,'tariff_profile',tariff_profile)),'[]'::jsonb) items from service_order_items where order_id=$1 and id not in ($2,$3)",[seed.id,id(62),id(63)]);
+    await q('savepoint task_editor_cannot_remove_request_finance');
+    await expect(q('select public.service_order_save_one($1,0,$2::jsonb,$3,$4::jsonb)',[seed.id,JSON.stringify({title:'Задание по заявке',work_mode:'onsite',engineer_ids:[],instructions:''}),id(10),JSON.stringify(remaining.items)])).rejects.toThrow('Строку заявки меняют только через редактор заявки');
+    await q('rollback to savepoint task_editor_cannot_remove_request_finance');
+    await q("select set_config('test.uid',$1,true)",[id(2)]);
+    const engineerWorks=[{id:id(64),work_id:id(80),title:'',hours:1,billable:true,billable_reason:'',tariff_profile:'client',revenue_override:99999}];
+    const [engineerResult]=await q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,null) value',[id(10),JSON.stringify(rec),JSON.stringify(engineerWorks)]);
+    expect(engineerResult.value.works[0]).toMatchObject({id:id(64),approved_at:null,approved_by:null,revenue:1200});
+    await q("select set_config('test.uid',$1,true)",[id(3)]);
+    await q('savepoint unrelated_engineer_denied');
+    await expect(q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,null)',[id(10),JSON.stringify(rec),JSON.stringify([])])).rejects.toThrow('Нет доступа к заявке');
+    await q('rollback to savepoint unrelated_engineer_denied');
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await q('select public.job_request_finance_approve($1,$2::uuid[])',[id(10),[id(64)]]);
+    const [approved]=await q('select approved_at is not null approved,approved_by from service_order_items where id=$1',[id(64)]);
+    expect(approved).toEqual({approved:true,approved_by:id(1)});
   }finally{await db.exec('rollback');await db.exec('reset role');}
 });
 
