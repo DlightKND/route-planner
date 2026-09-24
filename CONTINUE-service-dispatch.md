@@ -1,3 +1,10 @@
+# Проверка после PR #94 (2026-09-24 17:00 UTC)
+
+- После production rollout PR #93 добавлен и смержен отдельный regression test: когда в заявке присутствуют исходная финансовая строка и перенесённый остаток, остаток не добавляется второй раз в request finance projection. PR #94: https://github.com/DlightKND/route-planner/pull/94, squash commit `ea0293b2966fcd04a5b51f8c0075209025dfcfcf`.
+- Повторная проверка текущей реализации: lint, полный Vitest-набор 421/421, timezone-набор 421/421 (`America/Los_Angeles`), production build/preview smoke и `git diff --check` прошли.
+- Ранее выполненная read-only production-сверка остаётся без изменений: 17/17 legacy work и 23/23 material зеркал совпадают; в production пока нет строк фактического переноса/частичного выполнения для дополнительной сверки.
+- Остаётся проверить полный UI/RLS/replay-сценарий под engineer-ролью, когда доступен отдельный инженерный вход. Не менять production-данные тестовыми строками.
+
 # Передача работы: сервисный диспетчер
 
 ## Аннулирование финансовых строк: production rollout (2026-09-24 15:50 UTC)
