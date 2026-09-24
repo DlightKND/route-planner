@@ -15,6 +15,7 @@ import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
 import { hasStableJobWorkIds } from './core/job-work-diff.js';
+import { canEditRequestFinanceRow } from './core/request-finance-row.js';
 import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 import { saveRequestAndWorks } from './core/request-save.js';
@@ -3825,10 +3826,10 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
       '<input type="number" step="0.25" value="'+w.hours+'" data-wh="'+i+'" style="width:74px" title="часы"><span class="hint" style="margin: 0">ч</span>'+
       '<button class="btn sm '+(w.billable?'amber':'ghost')+'" data-wb="'+i+'">'+(w.billable?'платно':'гарантия')+'</button>'+
       money+
-      (w.legacy_task_item_id?'<span class="hint" style="margin-left:auto">историческая</span>':'<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button>')+'</div>'+
+      (w.legacy_task_item_id?'<span class="hint" title="Требуется отдельная аудированная коррекция" style="margin-left:auto">историческая · защищена</span>':'<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button>')+'</div>'+
       ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top: var(--sp-2)">'+esc(w.reasons.join(' · '))+'</div>':'')+
       (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
-    if(!mayW) d.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
+    if(!canEditRequestFinanceRow(w,mayW)) d.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
     box.appendChild(d); });
   // Добавлять работы можно ровно там же, где и править: иначе кнопка «+ из
   // каталога» обещала бы то, что сервер не примет.
@@ -3840,7 +3841,7 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
     wrap.style.display=(pend||(!mayW&&jobEditId&&!canWrite()))?'':'none';
     if(st){ st.textContent=pend?'работы ждут подтверждения':'работы подтверждены';
       st.className=pend?'pt-wait':'pt-ok'; }
-    if(acts){ acts.innerHTML=(pend&&canWrite())
+    if(acts){ const pendingEditable=curWorks.some(w=>!w.approved&&!w.legacy_task_item_id); acts.innerHTML=(pend&&canWrite()&&pendingEditable)
         ? '<button class="btn sm amber" id="jbWorksOk">Подтвердить работы</button>'
         : ((!mayW&&!canWrite())?'<button class="btn sm ghost" id="jbWorksFix">Предложить правку</button>':'');
       const ok=$('jbWorksOk'); if(ok) ok.onclick=worksApprove;
@@ -4520,6 +4521,7 @@ function canEditParts(){
 }
 // Отдельная строка запчасти: своя, ещё не подтверждённая, заявка открыта.
 function canEditPart(p){
+  if(!canEditRequestFinanceRow(p,true)) return false;
   if(canWrite()) return !jobRO;
   return canEditParts() && !p.approved_at
     && (!p.created_by || p.created_by===session.user.id);
@@ -4560,7 +4562,7 @@ function renderJobParts(){
         +(p.approved_at
             ? '<span class="pt-ok">проверено</span>'
             : '<span class="pt-wait">ждёт подтверждения</span>')
-        +(money&&!p.approved_at?('<span class="pt-acts">'
+        +(money&&!p.approved_at&&!p.legacy_task_item_id?('<span class="pt-acts">'
             +'<button class="btn sm amber" data-pok="'+i+'">Подтвердить</button>'
             +'<button class="btn sm ghost" data-pno="'+i+'">Отклонить</button></span>'):'')
         +((!money&&p.approved_at&&jobEditId)?('<span class="pt-acts">'
@@ -4703,11 +4705,14 @@ async function partApprove(p,ok){
 async function worksApprove(){
   if(!canWrite()||!jobEditId) return;
   try{
+    const ids=curWorks.filter(w=>!w.approved&&!w.legacy_task_item_id&&w.id).map(w=>w.id);
+    if(!ids.length){notify('Историческую строку можно исправить только отдельной аудированной операцией.','warn');return;}
+    const approvedAt=new Date().toISOString();
     const {error}=await sb.from('job_works')
-      .update({approved_at:new Date().toISOString(),approved_by:session.user.id})
-      .eq('job_id',jobEditId).is('approved_at',null);
+      .update({approved_at:approvedAt,approved_by:session.user.id})
+      .in('id',ids).eq('job_id',jobEditId).is('approved_at',null);
     if(error) throw error;
-    curWorks.forEach(w=>{ w.approved=true; w.approved_at=new Date().toISOString(); w.approved_by=session.user.id; });
+    curWorks.filter(w=>ids.includes(w.id)).forEach(w=>{ w.approved=true; w.approved_at=approvedAt; w.approved_by=session.user.id; });
     renderJobWorks(); jobSaveState('сохранено'); showToast('Работы подтверждены');
   }catch(e){ notify('Не подтвердилось: '+((e&&e.message)||e),'err'); }
 }
