@@ -1,3 +1,10 @@
+# Engineer-role fix deployed (2026-09-24 17:30 UTC)
+
+- В live smoke под `engineer` обнаружено, что открытие задания без команды вызывает предупреждение: task loader делает запрос к manager-only `settings.tariff_profiles`. Исправлено в PR #95, squash `5898096d157845427062685e012f5435e3f853ff`; production Pages обновлён, bundle `assets/index-BNK_5308.js`, предупреждение исчезло.
+- Regression test проверяет, что engineer task view читает work catalog, но не обращается к приватным tariff settings. Lint, оба полных набора 422/422, build/preview smoke и `git diff --check` прошли.
+- Аккаунт engineer видит 0 назначенных заданий; старые задания в выборке — draft без команды, факты и перенос отключены. Никаких assignment/task data в production не меняли.
+- Через приложение назначение тестового задания было заблокировано до переноса экономики. Не обходить guard прямым UPDATE, пока не определены точный объект и требуемый finance transfer. Следующий шаг — read-only разбор соответствующей DB-функции/ошибки, затем non-production сценарий с назначением, material/work, partial fact и carry.
+
 # Engineer UI smoke (2026-09-24 17:23 UTC)
 
 - Вход под отдельной ролью `engineer` подтверждён видимым профилем приложения. Карточка задания №22 открывается по сохранённому URL, но задание черновое, команда/ответственный не назначены; поля управления и фиксации факта отключены.
