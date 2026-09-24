@@ -8,11 +8,12 @@ let db;const q=async(s,a=[])=>(await db.query(s,a)).rows;
 beforeAll(async()=>{
   db=new PGlite();
   await db.exec(readFileSync(new URL('./fixtures/trip-workbench-base.sql',import.meta.url),'utf8'));
+  await db.exec("alter table public.jobs add column status public.job_status not null default 'open'");
   await db.exec(readFileSync(new URL('../supabase/migrations/20260921133835_trip_workbench.sql',import.meta.url),'utf8'));
   await db.exec(`alter function job_point(uuid) set search_path=public;
     create table public.job_parts(id uuid primary key,job_id uuid,name text,sku text,unit text,qty numeric,price numeric,cost numeric,billable boolean default true,approved_at timestamptz,approved_by uuid,created_at timestamptz default now(),created_by uuid);
     create table public.work_catalog(id uuid primary key,name text,norm_hours numeric,warranty_eligible boolean default false,applicable_kinds text[]);
-    create table public.job_works(id uuid primary key,job_id uuid,work_id uuid,hours numeric,materials jsonb,billable boolean,billable_reason text,revenue numeric,created_at timestamptz,title text,revenue_override numeric,tariff_profile text,approved_at timestamptz,approved_by uuid);`);
+    create table public.job_works(id uuid primary key default gen_random_uuid(),job_id uuid,work_id uuid,hours numeric,materials jsonb,billable boolean,billable_reason text,revenue numeric,created_at timestamptz,title text,revenue_override numeric,tariff_profile text,approved_at timestamptz,approved_by uuid);`);
   await db.exec('alter table clients add column default_profile text');
   await q("insert into clients(id,name,lat,lng,default_profile) values($1,'A',50,30,'client'),($2,'B',51,31,null),($3,'C',52,32,null),($4,'D',53,33,null)",[id(20),id(21),id(22),id(23)]);
   await q('insert into jobs(id,client_id) values($1,$2),($3,$4),($5,$6),($7,$8)',[id(10),id(20),id(11),id(21),id(12),id(22),id(13),id(23)]);
@@ -39,6 +40,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924160000_carry_task_financial_snapshots.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924180000_task_work_financial_snapshots.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924200000_task_work_catalog_and_warranty.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260924210000_request_write_rpc.sql',import.meta.url),'utf8'));
 },30000);
 
 afterAll(async()=>{await db?.close();});
@@ -97,7 +99,7 @@ it('lets an assigned trip engineer read attached tasks under RLS',async()=>{
     await db.exec('set role authenticated');
     const rows=await q('select o.id from service_orders o join trip_service_orders tso on tso.order_id=o.id where tso.trip_id=$1',[id(30)]);
     expect(rows).toHaveLength(2);
-  }finally{await db.exec('reset role; rollback');}
+  }finally{await db.exec('rollback');await db.exec('reset role');}
 });
 
 it('backfills a legacy work and part as immutable financial snapshots on the request task',async()=>{
@@ -225,6 +227,43 @@ it('server-snapshots new task work from the request tariff and global cost witho
     const [unpriced]=await q('select financial_revenue_snapshot,financial_cost_snapshot from service_order_items where order_id=$1',[nonHourly.id]);
     expect(unpriced).toEqual({financial_revenue_snapshot:null,financial_cost_snapshot:null});
   }finally{await db.exec('reset role; rollback');}
+});
+
+it('saves a request and its work lines atomically while dual-writing the canonical task items',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const works=[{id:id(60),job_id:id(10),work_id:id(80),title:'',hours:4,billable:true,billable_reason:'',revenue:1,revenue_override:null,tariff_profile:'client'}];
+    const rec={client_id:id(20),equipment_id:null,status:'in_progress',scheduled_date:null,time_window:'',due_date:null,assigned_engineer:null,engineer_ids:[],notes:'atomic update',at_depot:false,depot_id:null};
+    const saved=await q('select public.job_request_save($1,$2::jsonb,$3::jsonb) value',[id(10),JSON.stringify(rec),JSON.stringify(works)]);
+    expect(saved[0].value.job_id).toBe(id(10));
+    expect(saved[0].value.works[0]).toMatchObject({id:id(60),revenue:1,approved_by:id(1)});
+    const [source]=await q('select hours,revenue,approved_at is not null as approved from job_works where id=$1',[id(60)]);
+    expect(source).toEqual({hours:'4',revenue:'1',approved:true});
+    const [task]=await q('select planned_qty,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where legacy_job_work_id=$1',[id(60)]);
+    expect(task).toEqual({planned_qty:'4',financial_revenue_snapshot:'1',financial_cost_snapshot:'3000'});
+    const [header]=await q('select status,notes from jobs where id=$1',[id(10)]);
+    expect(header).toEqual({status:'in_progress',notes:'atomic update'});
+
+    await q('savepoint header_fk_failure');
+    await expect(q('select public.job_request_save($1,$2::jsonb,$3::jsonb)',[
+      id(10),JSON.stringify({...rec,client_id:id(999)}),JSON.stringify([{...works[0],hours:5,revenue:1}])
+    ])).rejects.toThrow();
+    await q('rollback to savepoint header_fk_failure');
+    const [unchanged]=await q('select hours from job_works where id=$1',[id(60)]);
+    expect(unchanged.hours).toBe('4');
+
+    const created=await q('select public.job_request_save(null,$1::jsonb,$2::jsonb) value',[
+      JSON.stringify({...rec,notes:'created atomically'}),JSON.stringify([{work_id:id(80),title:'Browser title',hours:2,billable:true,billable_reason:'',revenue:100,tariff_profile:'client'}])
+    ]);
+    const newJobId=created[0].value.job_id;
+    const [newHeader]=await q('select status,notes from jobs where id=$1',[newJobId]);
+    expect(newHeader).toEqual({status:'in_progress',notes:'created atomically'});
+    const [newWork]=await q('select title,hours from job_works where job_id=$1',[newJobId]);
+    expect(newWork).toEqual({title:'Browser title',hours:'2'});
+    expect(created[0].value.works[0].id).toBeTruthy();
+  }finally{await db.exec('rollback');await db.exec('reset role');}
 });
 
 it('uses depot and warranty tariff rules for task-only work snapshots',async()=>{
