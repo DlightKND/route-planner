@@ -4,7 +4,7 @@
 - Пользователь назначил задание №15. Read-only проверка: назначенный профиль активен и имеет роль engineer; задание содержит одну импортированную финансовую строку, она не изменилась. Статус пока `draft`, даты не заданы. Статус и даты не менялись автоматически.
 - Production RLS smoke в транзакции `READ ONLY` под ролью `authenticated` и JWT claims назначенного инженера вернул задание №15 и его строку. Политика `order_access` даёт чтение назначенным инженерам. UI-вход под инженером подтверждён; график оставался на «Работаю…», поэтому открытие задания в браузере не подтверждено.
 - Production counts: 40 service_order_items; 17 зеркал legacy work и 23 зеркала legacy material; 0 request-finance generation 1, 0 аннулирований, 0 строк с фактом и 0 переносов.
-- Локальная перепроверка: `npm test` 424/424, `npm run lint` успешно. Для PR #97 CI build и production Pages deploy завершились успешно.
+- Локальная перепроверка: `npm test` 424/424, `npm run test:tz` 424/424 (`America/Los_Angeles`), `npm run lint`, `npm run build` и `node tests/smoke.cjs dist/index.html` успешно. PR #97 CI build + production Pages deploy и docs checkpoint run #391 завершились успешно.
 - Следующие действия: выяснить причину зависающего экрана инженера и подтвердить открытие №15 в UI; провести полную online/offline replay + fact/carry проверку на non-production данных; не отключать legacy RPC/readers до завершения проверки длительно офлайн-клиентов. Supabase branch для тестов пока нет. Не добавлять факты или переносы в production.
 
 # Engineer-role fix deployed (2026-09-24 17:30 UTC)
