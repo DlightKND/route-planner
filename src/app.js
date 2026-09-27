@@ -20,7 +20,7 @@ import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 import { saveCanonicalRequest, saveRequestAndWorks } from './core/request-save.js';
 
-const serviceOrders=createServiceOrders({db:()=>sb,canWrite,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
+const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openTrip,tripStatus:s=>ST_TRIP[s]||s,
  tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
  confirmLeave:()=>window.confirm('Выйти без сохранения изменений задания?'),reason:async title=>window.prompt(title,'')});
@@ -1616,9 +1616,10 @@ $('stockSearch').oninput=()=>renderStockCatalog();
 $('stockShowInactive').onchange=()=>renderStockCatalog();
 $('stockSave').onclick=async()=>{
   const name=$('stockName').value.trim(),sku=$('stockSku').value.trim(),unit=$('stockUnit').value.trim();
-  const price=Number($('stockPrice').value),cost=Number($('stockCost').value);
+  const priceText=$('stockPrice').value.trim(),costText=$('stockCost').value.trim();
+  const price=Number(priceText),cost=Number(costText);
   if(!name||!unit){$('stockErr').textContent='Укажи название и единицу измерения.';return;}
-  if(!Number.isFinite(price)||price<0||!Number.isFinite(cost)||cost<0){$('stockErr').textContent='Цена и себестоимость должны быть неотрицательными числами.';return;}
+  if(!priceText||!costText||!Number.isFinite(price)||price<0||!Number.isFinite(cost)||cost<0){$('stockErr').textContent='Укажи неотрицательные цену и себестоимость.';return;}
   if(stockCatalog.some(x=>x.id!==stockEditId&&x.active&&x.name.trim().toLowerCase()===name.toLowerCase()&&x.unit.trim().toLowerCase()===unit.toLowerCase())){$('stockErr').textContent='Активная позиция с таким названием и единицей уже есть.';return;}
   const rec={name,sku,unit,price,cost,active:$('stockActive').checked}; $('stockSave').disabled=true;
   const result=stockEditId?await sb.from('stock_catalog').update(rec).eq('id',stockEditId):await sb.from('stock_catalog').insert(rec);

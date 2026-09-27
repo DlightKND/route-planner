@@ -49,10 +49,59 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260925001000_index_request_finance_audit.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260925002000_lock_voided_request_approvals.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924211733_preserve_legacy_task_finance_on_assignment.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260927120000_service_order_deadline_requests.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
 afterAll(async()=>{await db?.close();});
+
+it('lets the assigned engineer propose a deadline and the curator apply it with history',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'admin',true),($2,'engineer',true),($3,'admin',true)",[id(1),id(3),id(2)]);
+    const [o]=await q("update service_orders set status='assigned',date_from='2026-09-24',date_to='2026-09-26',engineer_ids=array[$1]::uuid[] where seed_request_id=$2 returning id,revision",[id(3),id(10)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await db.exec('set role authenticated');
+    await q('select public.service_order_curator_assign($1,$2,$3)',[o.id,id(2),o.revision]);
+    await q("select set_config('test.uid',$1,true)",[id(3)]);
+    const [request]=await q("select public.service_order_deadline_propose($1,'2026-09-29','Нужна поставка запчасти') id",[o.id]);
+    expect(await q('select status from service_order_deadline_requests where id=$1',[request.id])).toEqual([{status:'open'}]);
+    await db.exec('savepoint denied_write');
+    await expect(q("insert into service_order_deadline_requests(order_id,proposed_date_to,reason,order_revision,created_by) values($1,'2026-10-01','Прямой обход',1,$2)",[o.id,id(3)])).rejects.toThrow();
+    await db.exec('rollback to savepoint denied_write');
+    await q("select set_config('test.uid',$1,true)",[id(2)]);
+    await q('select public.service_order_deadline_decide($1,true,null)',[request.id]);
+    const [saved]=await q('select date_to::text,revision from service_orders where id=$1',[o.id]);
+    expect(saved.date_to).toBe('2026-09-29');
+    expect(Number(saved.revision)).toBe(Number(o.revision)+2);
+    expect(await q('select status,decided_by from service_order_deadline_requests where id=$1',[request.id])).toEqual([{status:'accepted',decided_by:id(2)}]);
+    expect((await q("select count(*)::integer n from service_order_history where order_id=$1 and reason like 'Согласован новый срок:%'",[o.id]))[0].n).toBe(1);
+  }finally{await db.exec('rollback');await db.exec('reset role');}
+});
+
+it('rejects unassigned engineers and stale deadline approvals',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'admin',true),($2,'engineer',true),($3,'engineer',true)",[id(1),id(3),id(4)]);
+    const [o]=await q("update service_orders set status='assigned',date_from='2026-09-24',date_to='2026-09-26',engineer_ids=array[$1]::uuid[] where seed_request_id=$2 returning id",[id(3),id(10)]);
+    await q("select set_config('test.uid',$1,true)",[id(4)]);
+    await db.exec('set role authenticated');
+    await db.exec('savepoint denied_engineer');
+    await expect(q("select public.service_order_deadline_propose($1,'2026-09-30','Нужна поставка')",[o.id])).rejects.toThrow();
+    await db.exec('rollback to savepoint denied_engineer');
+    await q("select set_config('test.uid',$1,true)",[id(3)]);
+    const [request]=await q("select public.service_order_deadline_propose($1,'2026-09-30','Нужна поставка') id",[o.id]);
+    await db.exec('reset role');
+    await q('update service_orders set revision=revision+1 where id=$1',[o.id]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await db.exec('set role authenticated');
+    await db.exec('savepoint stale_decision');
+    await expect(q('select public.service_order_deadline_decide($1,true,null)',[request.id])).rejects.toThrow();
+    await db.exec('rollback to savepoint stale_decision');
+    expect(await q('select status from service_order_deadline_requests where id=$1',[request.id])).toEqual([{status:'open'}]);
+    expect((await q('select date_to::text from service_orders where id=$1',[o.id]))[0].date_to).toBe('2026-09-26');
+  }finally{await db.exec('rollback');await db.exec('reset role');}
+});
 
 it('seeds one task per request, even when a request has multiple trips',async()=>{
   const rows=await q('select seed_request_id,job_id,count(*) over(partition by seed_request_id) duplicates from service_orders where seed_request_id in (select distinct job_id from trip_jobs) order by seed_request_id');

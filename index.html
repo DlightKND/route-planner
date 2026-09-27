@@ -2757,7 +2757,7 @@
            два яруса вместо одного и своя черта во всю ширину, которой
            больше нигде нет. -->
       <div id="catWorks">
-      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Склад</div></div>
+      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Материалы и цены</div></div>
       <div class="pane-head"><h2>Нормированные работы</h2>
         <div class="searchbox"><input type="search" id="catSearch" placeholder="поиск работы…"></div>
         <select id="catFilter" style="width:160px"><option value="">все</option><option value="warranty">гарантийные</option><option value="paid">только платные</option><option value="maint">ТО / сервис</option></select>
@@ -2765,7 +2765,7 @@
       <div id="catList"></div>
       </div>
       <div id="catModels" style="display:none">
-      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Склад</div></div>
+      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Материалы и цены</div></div>
       <div class="pane-head"><h2>Техника <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Справочник моделей: производитель → тип → модель. Гарантия и сервисный интервал по умолчанию нужны для привязки к технике клиентов и к работам.</span></span></h2>
         <div class="searchbox"><input type="search" id="emSearch" placeholder="поиск модели…"></div>
         <button class="btn sm amber" id="emShowAdd">+ Модель</button></div>
@@ -2781,12 +2781,12 @@
       </div>
       </div>
       <div id="catMaterials" style="display:none">
-        <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Склад</div></div>
+        <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Материалы и цены</div></div>
         <div class="pane-head"><h2>Материалы и запчасти</h2>
           <div class="searchbox"><input type="search" id="stockSearch" placeholder="поиск по названию или артикулу…"></div>
           <label class="stock-state"><input type="checkbox" id="stockShowInactive" style="width:auto">показать архив</label>
           <button class="btn sm amber" id="stockAdd">+ Позиция</button></div>
-        <div class="hint">Справочник цен и себестоимости. Физические остатки появятся после инвентаризации и настройки мест хранения.</div>
+        <div class="hint">Справочник материалов, цен продажи и себестоимости. Цены в уже сохранённых заданиях не меняются.</div>
         <div id="stockList" class="stock-list"></div>
       </div>
     </div>
