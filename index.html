@@ -2244,11 +2244,13 @@
    думая, что всё записано. */
 .qbadge{position:fixed;left:50%;transform:translateX(-50%);
   bottom: calc(var(--sp-5) + env(safe-area-inset-bottom, 0px));
-  z-index:1200;pointer-events:none;
+  z-index:1200;cursor:pointer;border:1px solid transparent;
   background:var(--ink);color:var(--panel);
   font-family:var(--mono);font-size: var(--fs-2);letter-spacing:.3px;
   padding: var(--pad-btn);border-radius: var(--r-pill);
   box-shadow: var(--shadow-md);max-width:calc(100% - var(--sp-6));text-align:center}
+.qbadge.blocked{background:#8a3327;color:#fff}
+.qbadge:focus-visible{outline:3px solid #f59e0b;outline-offset:3px}
 @media (max-width: 760px){
   /* Над нижним меню, а не под ним. */
   .qbadge{bottom: calc(74px + env(safe-area-inset-bottom, 0px))}
@@ -3143,7 +3145,7 @@
 <div class="ctxmenu" id="ctxMenu"></div>
 <!-- Сколько изменений ещё не уехало. Видно на любом экране: инженер должен
      знать, что его работа пока лежит в телефоне, а не в базе. -->
-<div class="qbadge" id="qBadge" style="display:none"></div>
+<button type="button" class="qbadge" id="qBadge" style="display:none"></button>
 <div class="pop" id="themePop">
   <h4>Тема</h4>
   <div class="seg"><button id="modeDark">Тёмная</button><button id="modeLight">Светлая</button></div>
