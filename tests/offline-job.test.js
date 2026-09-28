@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest';
-import {pendingJobState} from '../src/core/offline-job.js';
+import {pendingJobState,queuedJobDraftIssue} from '../src/core/offline-job.js';
 
 describe('request after an offline reload', () => {
   const jobId='job-1';
@@ -27,5 +27,11 @@ describe('request after an offline reload', () => {
     ];
     expect(pendingJobState(pending,jobId,[{id:'server',name:'server'}]).parts)
       .toEqual([{id:'part-1',name:'corrected',local_only:false}]);
+  });
+
+  it('keeps a zero-hour draft local until the hours are corrected', () => {
+    const original={works_complete:true,works:[{id:'work-1',title:'Ремонт',hours:0}]};
+    expect(queuedJobDraftIssue(original)).toContain('Укажи часы');
+    expect(queuedJobDraftIssue({...original,works:[{...original.works[0],hours:0.25}]})).toBe('');
   });
 });

@@ -1,10 +1,11 @@
 // Stop at the first rejected action: later actions may depend on its result.
 // A server rejection stays on the device so the user can correct or retry it.
-export async function flushQueueItems(items,{send,drop,block,isNetworkError,isSuperseded=()=>false}){
+export async function flushQueueItems(items,{send,drop,block,isNetworkError,isSuperseded=()=>false,isDeferred=()=>false}){
   let sent=0,blocked=0;
   for(const item of items){
     if(isSuperseded(item))continue;
     if(item.blocked_error){blocked++;break;}
+    if(isDeferred(item))break;
     try{await send(item);}
     catch(error){
       if(isNetworkError(error))break;
