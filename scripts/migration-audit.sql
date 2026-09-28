@@ -18,6 +18,15 @@ with work_rows as (
     (select count(*) from public.service_orders where job_id is not null) as canonical_tasks,
     (select count(*) from public.service_orders where job_id is null and legacy_trip_id is not null) as retained_shadow_tasks,
     (select count(*) from public.trips where deleted_at is null) as trips,
+    (select count(*) from public.trip_stays where job_id is null and status = 'detected') as detected_stays_without_request,
+    (select count(*) from public.trip_stays where job_id is null and status = 'approved') as approved_stays_without_request,
+    (select count(*) from public.trip_stays s where s.job_id is null and s.status = 'detected'
+      and (select count(distinct tj.job_id) from public.trip_jobs tj where tj.trip_id = s.trip_id) = 1) as detected_stays_on_single_request_trips,
+    (select count(*) from public.trip_stays s where s.job_id is null and s.status = 'detected'
+      and (select count(distinct tj.job_id) from public.trip_jobs tj where tj.trip_id = s.trip_id) > 1) as detected_stays_on_multi_request_trips,
+    (select count(*) from public.service_order_items i join public.service_orders o on o.id = i.order_id
+      where o.job_id is null and o.legacy_trip_id is not null) as legacy_shadow_items_pending_review,
+    (select count(*) from public.job_photos) as request_photos_retained,
     (select count(*) from public.jobs j where j.deleted_at is null and not exists
       (select 1 from public.service_orders o where o.seed_request_id = j.id and o.job_id = j.id)) as requests_without_seed,
     (select count(*) from (
@@ -71,6 +80,7 @@ select *,
   and works_missing = 0 and works_mismatch = 0
   and materials_missing = 0 and materials_mismatch = 0
   and trip_request_links_missing = 0 and approved_stays_missing_allocation = 0
+  and approved_stays_without_request = 0
   and shadow_history_missing_archive = 0 and shadow_archive_mismatch = 0
   and canonical_item_job_mismatch = 0 and new_finance_rows_without_seed = 0
   as historical_backfill_consistent
