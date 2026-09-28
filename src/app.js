@@ -3974,12 +3974,14 @@ async function qPush(kind,payload){
     return true;
   }catch(e){ return false; }
 }
+async function qAllStrict(){
+  const db=await snapDb();
+  return await new Promise((res,rej)=>{ const t=db.transaction(Q_STORE,'readonly');
+    const rq=t.objectStore(Q_STORE).getAll();
+    rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); });
+}
 async function qAll(){
-  try{ const db=await snapDb();
-    return await new Promise((res,rej)=>{ const t=db.transaction(Q_STORE,'readonly');
-      const rq=t.objectStore(Q_STORE).getAll();
-      rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); });
-  }catch(e){ return []; }
+  try{return await qAllStrict();}catch(e){return [];}
 }
 async function qDrop(id){
   const db=await snapDb();
@@ -4031,10 +4033,35 @@ async function qDropPartsForJob(jobId){
 // заменяют друг друга; «удалить» перекрывает и добавление, которое ещё
 // не уехало, — отправлять вставку ради немедленного удаления незачем.
 async function qDropPart(localId){
-  const items=await qAll();
+  const items=await qAllStrict();
   for(const it of items){
     if(it.kind==='part'&&it.payload&&String(it.payload.localId)===String(localId)) await qDrop(it.id);
   }
+}
+// Legacy per-material events still exist on devices that went offline before
+// complete canonical snapshots. Replace each edit/delete atomically as well.
+async function qReplacePart(localId,payload){
+  try{
+    const db=await snapDb();
+    const removed=await new Promise((res,rej)=>{
+      const t=db.transaction(Q_STORE,'readwrite'),store=t.objectStore(Q_STORE),ids=[];
+      const rq=store.getAll();
+      rq.onsuccess=()=>{
+        for(const it of rq.result||[]){
+          if(it.kind==='part'&&String(it.payload?.localId)===String(localId)){
+            store.delete(it.id);ids.push(it.id);
+          }
+        }
+        store.add({kind:'part',payload,at:Date.now()});
+      };
+      rq.onerror=()=>rej(rq.error);
+      t.oncomplete=()=>res(ids);
+      t.onerror=()=>rej(t.error||new Error('Не удалось сохранить материал'));
+      t.onabort=()=>rej(t.error||new Error('Не удалось сохранить материал'));
+    });
+    removed.forEach(id=>qSuperseded.add(id));
+    await qRefresh();return true;
+  }catch(e){return false;}
 }
 async function qBlock(it,error){
   const db=await snapDb();
@@ -4723,8 +4750,7 @@ async function partSave(p){
     if(!isNetErr(e)){ jobSaveState('запчасть не сохранена · '+((e&&e.message)||e),'bad'); return; }
     // Правки одной и той же строки в очереди не копим: там лежит строка
     // целиком, и каждая новая заменяет предыдущую.
-    await qDropPart(String(p.id));
-    if(await qPush('part',{op:add?'add':'edit',jobId:jobEditId,localId:String(p.id),row})){
+    if(await qReplacePart(String(p.id),{op:add?'add':'edit',jobId:jobEditId,localId:String(p.id),row})){
       await snapPartsPatch(jobEditId);
       jobSaveState('без связи · отправлю позже');
     } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
@@ -4921,15 +4947,20 @@ async function partDel(p){
   const i=jobParts.indexOf(p); if(i>=0) jobParts.splice(i,1);
   renderJobParts();
   if(jobPartsComplete){ queueJobSave(); return; }
-  if(partLocal(p)){ await qDropPart(String(p.id)); return; }   // до сервера не доезжала
+  if(partLocal(p)){
+    try{await qDropPart(String(p.id));await qRefresh();return;}
+    catch(e){if(i>=0)jobParts.splice(i,0,p);renderJobParts();notify('Материал остался в очереди: '+(e.message||e),'err');return;}
+  }   // до сервера не доезжала
   try{
     const {error}=await sb.from('job_parts').delete().eq('id',p.id);
     if(error) throw error;
     jobsDirty=true; jobSaveState('сохранено');
   }catch(e){
     if(!isNetErr(e)){ notify('Не удалось убрать запчасть: '+((e&&e.message)||e),'err'); await loadJobParts(); return; }
-    await qDropPart(String(p.id));
-    await qPush('part',{op:'del',jobId:jobEditId,localId:String(p.id),partId:String(p.id)});
+    if(!await qReplacePart(String(p.id),{op:'del',jobId:jobEditId,localId:String(p.id),partId:String(p.id)})){
+      if(i>=0)jobParts.splice(i,0,p);
+      renderJobParts();jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');return;
+    }
     await snapPartsPatch(jobEditId);
     jobSaveState('без связи · отправлю позже');
   }
