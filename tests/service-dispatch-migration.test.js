@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 20034)
-Total output lines: 872
-
 import {beforeAll,afterAll,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
@@ -442,7 +439,10 @@ it('atomically saves complete request material plans with stable replay IDs',asy
     await db.exec('savepoint invalid_material');
     await expect(save({...rec,notes:'must roll back'},[{...material,qty:0}])).rejects.toThrow(/положительное количество/);
     await db.exec('rollback to savepoint invalid_material');
-    expect((await q('select no…34 tokens truncated…nonical table, whose existing delete
+    expect((await q('select notes from jobs where id=$1',[id(10)]))[0].notes).toBe('legacy replay');
+
+    await save(rec,[]);
+    // Both rows are mirrored to the canonical table, whose existing delete
     // guard intentionally remains active until audited corrections ship.
     expect(await q('select id from job_parts where id in ($1,$2)',[id(73),id(74)])).toHaveLength(2);
   }finally{await db.exec('rollback');}
