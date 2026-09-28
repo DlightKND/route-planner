@@ -18,6 +18,10 @@ with work_rows as (
     (select count(*) from public.service_orders where job_id is not null) as canonical_tasks,
     (select count(*) from public.service_orders where job_id is null and legacy_trip_id is not null) as retained_shadow_tasks,
     (select count(*) from public.trips where deleted_at is null) as trips,
+    (select count(*) from public.jobs j join public.service_orders o on o.seed_request_id=j.id and o.job_id=j.id
+      where j.deleted_at is null and j.status='done' and o.status='draft') as historical_done_requests_with_draft_tasks,
+    (select count(*) from public.service_order_items i join public.jobs j on j.id=i.job_id
+      where j.deleted_at is null and j.status='done' and i.planned_qty>0 and i.done_qty=0) as historical_done_request_items_without_task_fact,
     (select count(*) from public.trip_stays where job_id is null and status = 'detected') as detected_stays_without_request,
     (select count(*) from public.trip_stays where job_id is null and status = 'approved') as approved_stays_without_request,
     (select count(*) from public.trip_stays s where s.job_id is null and s.status = 'detected'
