@@ -60,7 +60,7 @@ const { money, hhmm, businessDays, jobRoadPayer, rateFrom, dedupeStops, tspOrder
 
 
 const $=id=>document.getElementById(id);
-const JOB_FINANCE_SELECT='service_orders!service_orders_job_id_fkey(id,job_id,seed_request_id,service_order_items(*))';
+const JOB_FINANCE_SELECT='service_orders!service_orders_job_id_fkey(id,job_id,seed_request_id,status,service_order_items(*))';
 
 
 // ── Ленивая загрузка тяжёлых библиотек ──────────────────────────────────────
@@ -3561,9 +3561,12 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
   let j=null;
   if(id){
     j=jobs.find(x=>x.id==id)||null;
-    // client_id — признак полной строки: в тонком ответе ленты его нет.
-    if(!j||j.client_id==null){ const full=await fetchJobFull(id); if(full) j=full; else if(!j) j=await snapFindJob(id); }
+    // Состояние задания могло измениться после загрузки списка. Перед
+    // редактированием всегда сверяем его с сервером; без связи используем снимок.
+    const full=await fetchJobFull(id);
+    if(full) j=full; else if(!j) j=await snapFindJob(id);
   }
+  jobFinanceTaskStatus=(j?.service_orders||[]).find(o=>o.seed_request_id===id)?.status||null;
   $('jbClient').innerHTML=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   $('jbEng').innerHTML=profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
   $('jbWorkPick').innerHTML='<option value="">— выбрать работу —</option>'+catalog.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join('');
@@ -3577,11 +3580,11 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
     :'<option value="">— депо не заведено —</option>';
   if(j&&j.depot_id) $('jbDepotSel').value=j.depot_id; else if(dl.length) $('jbDepotSel').value=dl[0].id;
   renderDepotUi();
+  jobRO=!canWrite() && !(j&&assignedTo(j,session.user.id,'assigned_engineer'));
   curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {id:w.id,canonical_task_item_id:w.canonical_task_item_id||null,work_id:w.work_id||null,title:w.title||'',revenue:+w.revenue||0,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at,approved_at:w.approved_at||null,approved_by:w.approved_by||null,legacy_task_item_id:w.legacy_task_item_id||null}; });
   curWorksComplete=!id||hasStableJobWorkIds(j?.job_works);
   renderJobWorks();
-  const ro=!canWrite() && !(j&&assignedTo(j,session.user.id,'assigned_engineer'));
-  jobRO=ro;
+  const ro=jobRO;
   ['jbClient','jbEquip','jbEng','jbDate','jbWindow','jbDue','jbNotes','jbWorkPick','jbWorkAdd','jbCustomAdd','jobSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
   // Инженеру — вид «задание»: работы наверх, справочные поля свёрнуты и
   // на чтение. Он их не заполняет — их заполняет диспетчер, когда принимает
@@ -3603,7 +3606,7 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
   }
   if($('jobSaveState')){ $('jobSaveState').style.display=(jobEditId&&!ro)?'':'none'; jobSaveState('сохранено'); }
   if($('jobRefToggle')) $('jobRefToggle').textContent='Подробности заявки';
-  $('jobErr').textContent=''; jobHead(); jobFootUpdate();
+  $('jobErr').textContent=financeTaskLocked()?'Состав работ и материалов закреплён: связанное задание уже в работе. Изменения оформляются через согласованную корректировку.':''; jobHead(); jobFootUpdate();
   loadJobPhotos(); loadJobVisits(); loadJobParts(); loadFixes();
   // Куда вернёт хлебная крошка. Заявку открывают из пяти мест — со сводки,
   // с карты, из канбана, из выезда, — и возвращать всегда в канбан значит
@@ -4571,7 +4574,8 @@ function partSuggest(){
 // Раньше интерфейс об этом не знал: поля оставались живыми, и правка
 // упиралась в отказ сервера уже ПОСЛЕ нажатия. Правило должно быть видно
 // до действия, а не после.
-let jobRO=false;
+let jobRO=false,jobFinanceTaskStatus=null;
+function financeTaskLocked(){return !!jobFinanceTaskStatus&&!['draft','assigned','paused'].includes(jobFinanceTaskStatus);}
 // ── Подтверждение внесённого ────────────────────────────────────────────
 //
 // Часы и запчасти — это деньги. Цены инженеру закрыты триггерами на сервере,
@@ -4586,7 +4590,7 @@ let jobRO=false;
 function worksPending(){ return curWorks.some(w=>!w.approved); }
 function worksLocked(){ return curWorks.some(w=>w.approved); }
 function canEditWorks(){
-  if(jobRO) return false;
+  if(jobRO||financeTaskLocked()) return false;
   if(jobEditId&&!curWorksComplete) return false;
   if(canWrite()) return true;
   if(!jobEditId) return true;                       // новую заявку заводит менеджер
@@ -4594,7 +4598,7 @@ function canEditWorks(){
   return !worksLocked();
 }
 function canEditParts(){
-  if(!jobEditId||jobRO) return false;
+  if(!jobEditId||jobRO||financeTaskLocked()) return false;
   if(canWrite()) return true;
   return ($('jbStatus')?$('jbStatus').value:'')!=='done';
 }
@@ -4697,6 +4701,7 @@ function partTotals(){
   foldSums();
 }
 function partAdd(seed){
+  if(!canEditParts()){ notify('Состав материалов нельзя менять после начала выполнения задания','warn'); return; }
   if(!jobEditId){ notify('Сначала создай заявку','warn'); return; }
   jobParts.push({id:'local-'+Date.now()+'-'+jobParts.length, job_id:jobEditId,
     name:(seed&&seed.name)||'', sku:'', qty:(seed&&seed.qty)||1, unit:(seed&&seed.unit)||'шт',
