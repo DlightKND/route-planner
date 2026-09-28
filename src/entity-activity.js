@@ -13,7 +13,7 @@ function render(rows,people) {
   return rows.map(row => {
     const who=esc(actor(row.actor_id,people));
     if (row.kind==='comment') return `<article class="activity-entry is-comment"><header>${who}<time>${esc(time(row.created_at))}</time></header><p>${esc(row.body).replaceAll('\n','<br>')}</p></article>`;
-    const label=esc(row.event||row.reason||`Изменение плана · версия ${row.revision??'—'}`);
+    const label=esc((row.kind==='legacy-event'?'Архив задания по выезду · ':'')+(row.event||row.reason||`Изменение плана · версия ${row.revision??'—'}`));
     return `<article class="activity-entry"><header>${who}<time>${esc(time(row.recorded_at))}</time></header><p>${label}</p></article>`;
   }).join('');
 }
@@ -21,13 +21,15 @@ function render(rows,people) {
 export async function loadEntityActivity(db,entity,id,people=[]) {
   const c=CONFIG[entity];
   if (!c) throw new Error('Неизвестный тип карточки');
-  const [comments,history]=await Promise.all([
+  const [comments,history,legacy]=await Promise.all([
     db.from(c.comments).select('id,author_id,created_at,body').eq(c.owner,id).order('created_at',{ascending:false}).limit(100),
-    db.from(c.history).select(entity==='job'?'id,actor_id,recorded_at,event,changed_fields':entity==='trip'?'id,actor_id,recorded_at,reason,revision':'id,actor_id,recorded_at,reason').eq(c.historyOwner,id).order('recorded_at',{ascending:false}).limit(100)
+    db.from(c.history).select(entity==='job'?'id,actor_id,recorded_at,event,changed_fields':entity==='trip'?'id,actor_id,recorded_at,reason,revision':'id,actor_id,recorded_at,reason').eq(c.historyOwner,id).order('recorded_at',{ascending:false}).limit(100),
+    entity==='trip'?db.from('trip_legacy_task_events').select('source_history_id,actor_id,recorded_at,reason').eq('trip_id',id).order('recorded_at',{ascending:false}).limit(100):Promise.resolve({data:[],error:null})
   ]);
   if (comments.error) throw comments.error;
   if (history.error) throw history.error;
-  const entries=[...(comments.data||[]).map(row=>({...row,kind:'comment'})),...(history.data||[]).map(row=>({...row,kind:'event'}))];
+  if (legacy.error) throw legacy.error;
+  const entries=[...(comments.data||[]).map(row=>({...row,kind:'comment'})),...(history.data||[]).map(row=>({...row,kind:'event'})),...(legacy.data||[]).map(row=>({...row,kind:'legacy-event'}))];
   entries.sort((a,b)=>Date.parse(b.created_at||b.recorded_at)-Date.parse(a.created_at||a.recorded_at));
   return render(entries,people);
 }

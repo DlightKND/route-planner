@@ -51,10 +51,28 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260924211733_preserve_legacy_task_finance_on_assignment.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260927120000_service_order_deadline_requests.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260927192300_block_task_closure_with_active_trips.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260928050000_archive_legacy_trip_task_history.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260928051000_optimize_legacy_trip_task_events_rls.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
 afterAll(async()=>{await db?.close();});
+
+it('archives old trip-task history once and follows later legacy events without changing trip revisions',async()=>{
+  await db.exec('begin');
+  try{
+    const [shadow]=await q('select id,legacy_trip_id from service_orders where legacy_trip_id=$1',[id(30)]);
+    const before=await q('select source_history_id,trip_id from trip_legacy_task_events where legacy_order_id=$1',[shadow.id]);
+    expect(before).toHaveLength(1);
+    expect(before[0].trip_id).toBe(id(30));
+    const [revision]=await q('select count(*)::int n from trip_revision_history where trip_id=$1',[id(30)]);
+    await q("insert into service_order_history(order_id,reason,snapshot) values($1,'Позднее событие', '{}'::jsonb)",[shadow.id]);
+    expect(await q('select reason from trip_legacy_task_events where legacy_order_id=$1 order by source_history_id',[shadow.id]))
+      .toEqual([{reason:'Перенесены связи выезда. Состав работ и результат требуют уточнения.'},{reason:'Позднее событие'}]);
+    expect((await q('select count(*)::int n from trip_revision_history where trip_id=$1',[id(30)]))[0].n).toBe(revision.n);
+    expect((await q("select has_table_privilege('authenticated','public.trip_legacy_task_events','insert') allowed"))[0].allowed).toBe(false);
+  }finally{await db.exec('rollback');}
+});
 
 it('keeps a shared active trip from being orphaned by closing or cancelling its task',async()=>{
   await db.exec('begin');
