@@ -20,6 +20,7 @@ import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 import { saveCanonicalRequest, saveRequestAndWorks } from './core/request-save.js';
 import { flushQueueItems, assertReplayableJobSnapshot } from './core/offline-queue.js';
+import { pendingJobState } from './core/offline-job.js';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openTrip,tripStatus:s=>ST_TRIP[s]||s,
@@ -949,12 +950,14 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
     if(tb) tb.classList.toggle('solo',!canWrite());
     if(!canWrite()) sideTab('points'); }
   if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobTrash')) $('jobTrash').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; if($('tripTrash')) $('tripTrash').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
+  // Show durable pending edits before any network-dependent screen loads.
+  await qRefresh();
   setTimeout(()=>{ map.invalidateSize(); fitUkraine(); },80);
   await loadAll(); await loadPlaces(); await loadVehicles(); await loadEqModels();
   await loadVehState(); subscribeVeh(); await loadFactHours(); await loadRescheds();
   // Очередь: показать, сколько лежит, и сразу попробовать отправить —
   // приложение чаще всего открывают уже вернувшись в зону связи.
-  await qRefresh(); qFlush();
+  qFlush();
   checkTodayTrip(); initPush();
   // Сначала поднимаем все формы, справочники и права, и только потом
   // открываем deep link: /trip/:id без этого выглядел бы пустым выездом.
@@ -3537,6 +3540,8 @@ $('jbClient').onchange=()=>{ populateEquip(); jobHead(); };
 // Заявку открывают и из «Графика», где без связи список jobs пуст.
 // Тогда берём строку из снимка — она там полная, вместе с работами.
 async function snapFindJob(id){
+  const full=await snapGet('job:'+session?.user?.id+':'+id);
+  if(full?.val) return full.val;
   const s=await snapGet('mine'); if(!s||!s.val||!s.val.list) return null;
   return s.val.list.find(j=>j&&j.id===id)||null;
 }
@@ -3554,17 +3559,26 @@ async function fetchJobFull(id){
       .select('*, clients(name), equipment(model,kind),'+JOB_FINANCE_SELECT)
       .eq('id',id).is('deleted_at',null).maybeSingle();
     if(error) throw error;
-    return projectRequestFinance(data||null);
+    const full=projectRequestFinance(data||null);
+    if(full) await snapSet('job:'+session?.user?.id+':'+id,full);
+    return full;
   }catch(e){ console.warn('Заявка не дочитана:',e); return null; }
 }
 async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); jobEditId=id; serviceOrders.requestPanel(id);
-  let j=null;
+  let j=null,pendingEdit=false;
   if(id){
     j=jobs.find(x=>x.id==id)||null;
     // Состояние задания могло измениться после загрузки списка. Перед
     // редактированием всегда сверяем его с сервером; без связи используем снимок.
     const full=await fetchJobFull(id);
-    if(full) j=full; else if(!j) j=await snapFindJob(id);
+    if(full) j=full; else j=await snapFindJob(id)||j;
+    const queued=await qAll(),pending=pendingJobState(queued,id);
+    pendingEdit=queued.some(it=>it.payload?.jobId===id&&(it.kind==='job'||it.kind==='part'));
+    if(pending.payload){
+      j={...j,...pending.payload.rec,
+        job_works:pending.payload.works_complete?pending.payload.works:j?.job_works,
+        service_orders:j?.service_orders||[]};
+    }
   }
   jobFinanceTaskStatus=(j?.service_orders||[]).find(o=>o.seed_request_id===id)?.status||null;
   $('jbClient').innerHTML=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
@@ -3606,10 +3620,10 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
     $('jobSave').style.display=(ro||(jobEditId&&!canWrite()))?'none':'';
     $('jobSave').textContent=jobEditId?'Сохранить':'Создать заявку';
   }
-  if($('jobSaveState')){ $('jobSaveState').style.display=(jobEditId&&!ro)?'':'none'; jobSaveState('сохранено'); }
+  if($('jobSaveState')){ $('jobSaveState').style.display=(jobEditId&&!ro)?'':'none'; jobSaveState(pendingEdit?'ждёт отправки':'сохранено'); }
   if($('jobRefToggle')) $('jobRefToggle').textContent='Подробности заявки';
   $('jobErr').textContent=financeTaskLocked()?'Состав работ и материалов закреплён: связанное задание уже в работе. Изменения оформляются через согласованную корректировку.':''; jobHead(); jobFootUpdate();
-  loadJobPhotos(); loadJobVisits(); loadJobParts(); loadFixes();
+  loadJobPhotos(); loadJobVisits(); await loadJobParts(); loadFixes();
   // Куда вернёт хлебная крошка. Заявку открывают из пяти мест — со сводки,
   // с карты, из канбана, из выезда, — и возвращать всегда в канбан значит
   // выкидывать человека из того места, где он работал.
@@ -3798,7 +3812,7 @@ function defaultProfileId(billable){ const list=appSettings.tariff_profiles||[];
   const dw=list.find(p=>p.def_warranty); return dw?dw.id:''; }
 $('jbWorkAdd').onclick=async ()=>{ const wid=$('jbWorkPick').value; if(!wid) return; const cw=catalog.find(c=>c.id===wid); if(!cw) return;
   let sug={billable:true,reasons:[]}; try{ const {data}=await sb.rpc('suggest_warranty',{p_equipment:$('jbEquip').value||null,p_work:wid,p_date:$('jbDate').value||null}); if(data) sug=data; }catch(e){}
-  const bill=sug.billable!==false; curWorks.push({work_id:wid,title:cw.name,name:cw.name,hours:+cw.norm_hours||0,override:((+cw.price>0)?String(cw.price):''),billable:bill,reasons:sug.reasons||[],billable_reason:'',profile:defaultProfileId(bill),custom:false}); $('jbWorkPick').value=''; renderJobWorks(); };
+  const bill=sug.billable!==false; curWorks.push({work_id:wid,title:cw.name,name:cw.name,hours:+cw.norm_hours||0,override:((+cw.price>0)?String(cw.price):''),billable:bill,reasons:sug.reasons||[],billable_reason:'',profile:defaultProfileId(bill),custom:false}); $('jbWorkPick').value=''; renderJobWorks(); queueJobSave(); };
 $('jbCustomAdd').onclick=()=>{ curWorks.push({work_id:null,name:'',hours:0,override:'',billable:true,reasons:[],billable_reason:'',profile:defaultProfileId(true),custom:true}); renderJobWorks(); };
 function profileById(id){ return id?((appSettings.tariff_profiles||[]).find(p=>p.id===id)||null):null; }
 // Зеркало серверного guard_job_work_money. Разъедутся — инженер увидит одну
@@ -3865,8 +3879,8 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   box.querySelectorAll('[data-wh]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wh].hours=parseFloat(inp.value)||0; curWorks[inp.dataset.wh]._dirty=true; jobTotals(); });
   box.querySelectorAll('[data-wrsn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wrsn].billable_reason=inp.value; curWorks[inp.dataset.wrsn]._dirty=true; });
   box.querySelectorAll('[data-wp]').forEach(sel=>sel.onchange=()=>{ curWorks[sel.dataset.wp].profile=sel.value; curWorks[sel.dataset.wp]._dirty=true; });
-  box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; w._dirty=true; w.profile=defaultProfileId(w.billable); renderJobWorks(); });
-  box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); });
+  box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; w._dirty=true; w.profile=defaultProfileId(w.billable); renderJobWorks(); queueJobSave(); });
+  box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); queueJobSave(); });
   box.querySelectorAll('[data-finance-void-work]').forEach(b=>b.onclick=()=>voidRequestFinanceRow(curWorks[Number(b.dataset.financeVoidWork)]));
   jobTotals();
   // Подсказки по материалам зависят от того, какие работы стоят в заявке:
@@ -3894,9 +3908,6 @@ $('jobCancel').onclick=async ()=>{
 // открыться пустым. Инженеру нужен ответ на «куда я еду и что там делать»,
 // а это данные. Кладём их на устройство при каждой удачной загрузке
 // и достаём, когда сети нет.
-//
-// Только чтение. Запись в офлайне пока не поддерживаем — и говорим об этом
-// прямо, а не делаем вид, что сохранили.
 //
 // IndexedDB, а не localStorage: там строки, синхронный доступ и лимит
 // в несколько мегабайт, а здесь список выездов с точками.
@@ -4547,6 +4558,8 @@ async function loadJobParts(){
     jobParts=(j&&j.job_parts)||[];
     jobPartsComplete=Array.isArray(j?.job_parts);
   }
+  const pending=pendingJobState(await qAll(),jobEditId,jobParts);
+  if(pending.hasPendingParts){jobParts=pending.parts;jobPartsComplete=jobPartsComplete||!!pending.payload?.parts_complete;}
   renderJobParts();
 }
 // Подсказки из каталога: у типовой работы уже перечислено, что она съедает.
@@ -4717,7 +4730,7 @@ function partAdd(seed){
 function partTouch(p){
   if(!p) return;
   if(jobPartsComplete) queueJobSave();
-  else { clearTimeout(partT[p.id]); partT[p.id]=setTimeout(()=>partSave(p),800); }
+  else { clearTimeout(partT[p.id]); partT[p.id]=setTimeout(()=>partSave(p),navigator.onLine?800:0); }
   jobSaveState('изменено');
 }
 // Тот же приём, что и с работами: заявка внутри «Графика» берётся из
@@ -5069,6 +5082,10 @@ async function saveSignature(blob){
 // «не сохранено · причина». Молчащее автосохранение хуже кнопки: человек
 // не знает, можно ли закрывать приложение.
 let jobSaveT=null, jobSaving=false, jobSaveAgain=false, jobsDirty=false;
+window.addEventListener('beforeunload',e=>{
+  if(!jobSaveT&&!jobSaving&&!Object.keys(partT).length)return;
+  e.preventDefault();e.returnValue='';
+});
 function jobRec(){
   return {client_id:$('jbClient').value,
     equipment_id:$('jbEquip').value||null,
@@ -5193,7 +5210,7 @@ function queueJobSave(){
   if(jobRO) return;
   clearTimeout(jobSaveT);
   jobSaveState('изменено');
-  jobSaveT=setTimeout(saveJobNow,800);
+  jobSaveT=setTimeout(saveJobNow,navigator.onLine?800:0);
 }
 async function saveJobNow(){
   clearTimeout(jobSaveT); jobSaveT=null;
@@ -5205,7 +5222,10 @@ async function saveJobNow(){
   // не теряем — повторяем сразу после.
   if(jobSaving){ jobSaveAgain=true; return; }
   jobSaving=true; jobSaveState('сохраняю…','busy');
-  try{ await persistJob(jobRec()); jobsDirty=true; jobSaveState('сохранено'); }
+  try{
+    if(!navigator.onLine) throw new Error('offline');
+    await persistJob(jobRec()); jobsDirty=true; jobSaveState('сохранено');
+  }
   catch(e){
     // Нет связи — кладём в очередь и правим местный снимок, чтобы при
     // возврате на заявку инженер увидел свои часы, а не старые.
