@@ -1,6 +1,6 @@
 import {afterEach,beforeEach,it,expect,vi} from 'vitest';
 import {Window} from 'happy-dom';
-import {mountEntityActivity} from '../src/entity-activity.js';
+import {mountEntityActivity,loadEntityActivity} from '../src/entity-activity.js';
 
 let win,root,rows,writes,db;
 const user='00000000-0000-4000-8000-000000000003';
@@ -24,4 +24,14 @@ it('renders request history with escaped comments and posts to the owning entity
   expect(writes[0]).toEqual({table:'job_comments',data:{job_id:'job-1',body:'<script>alert(1)</script>',author_id:user}});
   expect(root.querySelector('.activity-entry.is-comment').innerHTML).not.toContain('<script>');
   expect(root.textContent).toContain('<script>alert(1)</script>');
+});
+
+it('shows archived shadow-task events in trip history with their source labelled',async()=>{
+  rows.trip_comments=[];
+  rows.trip_revision_history=[{id:1,reason:'Изменён маршрут',recorded_at:'2026-09-23T11:00:00Z'}];
+  rows.trip_legacy_task_events=[{source_history_id:2,reason:'Изменён <план> задания',recorded_at:'2026-09-23T10:00:00Z'}];
+  const html=await loadEntityActivity(db,'trip','trip-1');
+  expect(html).toContain('Архив задания по выезду · Изменён &lt;план&gt; задания');
+  expect(html.indexOf('Изменён маршрут')).toBeLessThan(html.indexOf('Архив задания'));
+  expect(html).not.toContain('<план>');
 });
