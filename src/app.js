@@ -20,7 +20,7 @@ import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 import { saveCanonicalRequest, saveRequestAndWorks } from './core/request-save.js';
 import { flushQueueItems, assertReplayableJobSnapshot } from './core/offline-queue.js';
-import { pendingJobState } from './core/offline-job.js';
+import { pendingJobState, queuedJobDraftIssue } from './core/offline-job.js';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openTrip,tripStatus:s=>ST_TRIP[s]||s,
@@ -1738,7 +1738,7 @@ function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.
   // Выручку показываем только тем, кто ею распоряжается. Инженеру в поле
   // это не данные для решения, а лишняя строка в карточке.
   const revTxt=(rev&&canWrite())?(' · выручка '+rev):'';
-  const meta='<div class="meta">'+(j.scheduled_date?'визит '+esc(tripPeriod(j.scheduled_date,null))+' · ':'')+dueTxt+w.length+' раб · '+hours.toFixed(1)+' ч'+revTxt+(engs.length?' · '+esc(engs.join(', ')):'')+'</div>';
+  const meta='<div class="meta">'+(j.scheduled_date?'визит '+esc(tripPeriod(j.scheduled_date,null))+' · ':'')+dueTxt+w.length+' раб · '+hours.toFixed(2)+' ч'+(j.pending_local?' · ждёт отправки':'')+revTxt+(engs.length?' · '+esc(engs.join(', ')):'')+'</div>';
   const mv=canWrite()?('<select class="kmove" data-jstat="'+j.id+'" title="Сменить статус">'+JOB_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===j.status?' selected':'')+'>'+esc(ST[s])+'</option>').join('')+'</select>'):'';
   const eb=(assignedTo(j,session.user.id,'assigned_engineer')&&(j.status==='open'||j.status==='planned'))?'<button class="btn sm amber" data-jst="'+j.id+'|in_progress">В работу</button>':'';
   const eb2=(assignedTo(j,session.user.id,'assigned_engineer')&&j.status==='in_progress')?'<button class="btn sm amber" data-jst="'+j.id+'|done">Завершить</button>':'';
@@ -1752,7 +1752,14 @@ function wireJobCards(box){
 async function renderJobs(){ await ensureRefs(); renderJobChips();
   const { data, error }=await sb.from('jobs').select('*, clients(name), equipment(model,kind),'+JOB_FINANCE_SELECT).is('deleted_at',null).order('created_at',{ascending:false});
   const box=$('jobList'); if(error){ box.className=''; box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
-  jobs=projectLegacyFinanceRows(data||[]); const q=$('jobSearch').value.trim().toLowerCase();
+  const queued=await qAll();
+  jobs=projectLegacyFinanceRows(data||[]).map(j=>{
+    const pending=pendingJobState(queued,j.id);
+    return pending.payload?.works_complete
+      ? {...j,job_works:pending.payload.works,pending_local:true}
+      : j;
+  });
+  const q=$('jobSearch').value.trim().toLowerCase();
   if($('jobEngFilter') && $('jobEngFilter').dataset.filled!=='1'){ $('jobEngFilter').innerHTML='<option value="">все инженеры</option>'+profilesList.filter(p=>p.role==='engineer').map(p=>'<option value="'+p.id+'">'+esc(p.full_name||'инженер')+'</option>').join(''); $('jobEngFilter').dataset.filled='1'; }
   const ef=$('jobEngFilter')?$('jobEngFilter').value:'';
   const baseJobs=(role==='engineer')?jobs.filter(j=>assignedTo(j,session.user.id,'assigned_engineer')):jobs;
@@ -3976,7 +3983,7 @@ function offlineBanner(at){
 //
 // При отказе сервера сохраняем запись на устройстве и останавливаем очередь:
 // дальнейшие действия могут зависеть от отвергнутой записи.
-let qCount=0, qBlocked=null, qFlushing=false;
+let qCount=0, qBlocked=null, qDeferred=null, qFlushing=false, qFlushAgain=false;
 // Пока связи не было, визит жил под временным id. При отправке сервер
 // выдаёт настоящий, и «уехал» из очереди должен попасть в ту же строку.
 const qLocalIds={},qSuperseded=new Set();
@@ -4023,7 +4030,7 @@ async function qReplaceJob(jobId,payload,replaceParts){
           if(it.payload?.jobId!==jobId)continue;
           if(it.kind==='job'||(replaceParts&&it.kind==='part')){
             store.delete(it.id);
-            if(it.kind==='part')removed.push(it.id);
+            removed.push(it.id);
           }
         }
         store.add({kind:'job',payload,at:Date.now()});
@@ -4087,16 +4094,21 @@ async function qReplacePart(localId,payload){
 async function qBlock(it,error){
   const db=await snapDb();
   const message=String(error?.message||error).slice(0,500);
+  let exists=false;
   await new Promise((res,rej)=>{
-    const t=db.transaction(Q_STORE,'readwrite');
-    t.objectStore(Q_STORE).put({...it,blocked_error:message,blocked_at:Date.now()});
+    const t=db.transaction(Q_STORE,'readwrite'),store=t.objectStore(Q_STORE);
+    store.get(it.id).onsuccess=e=>{
+      if(!e.target.result)return;
+      exists=true;store.put({...e.target.result,blocked_error:message,blocked_at:Date.now()});
+    };
     t.oncomplete=res; t.onerror=()=>rej(t.error);
   });
-  notify('Изменение не принято сервером и осталось на устройстве: '+message,'err');
+  if(exists)notify('Изменение не принято сервером и осталось на устройстве: '+message,'err');
 }
 async function qRefresh(){
   const items=await qAll();qCount=items.length;
   qBlocked=items.find(it=>it.blocked_error)||null;
+  qDeferred=items.find(it=>it.kind==='job'&&queuedJobDraftIssue(it.payload))||null;
   paintQueue();return qCount;
 }
 function paintQueue(){
@@ -4105,6 +4117,7 @@ function paintQueue(){
   el.classList.toggle('blocked',!!qBlocked);
   el.textContent=qBlocked
     ? 'Не отправлено: '+qCount+' · Нажмите, чтобы повторить'
+    : qDeferred ? 'Укажи часы работы · '+qCount+' '+plural(qCount,'изменение','изменения','изменений')+' на устройстве'
     : qCount+' '+plural(qCount,'изменение ждёт','изменения ждут','изменений ждут')+' отправки';
   el.title=qBlocked?'Ошибка отправки: '+qBlocked.blocked_error+' · Нажмите, чтобы повторить'
     :'Нажмите, чтобы отправить изменения';
@@ -4126,12 +4139,13 @@ $('qBadge').onclick=async ()=>{
 };
 // Одна попытка отправки всей очереди. Возвращает, сколько ушло.
 async function qFlush(){
-  if(qFlushing) return 0;
+  if(qFlushing){qFlushAgain=true;return 0;}
   qFlushing=true;
   let sent=0;
   try{
     const items=await qAll();
     ({sent}=await flushQueueItems(items,{send:qSendOne,drop:qDrop,block:qBlock,isNetworkError:isNetErr,
+      isDeferred:it=>it.kind==='job'&&!!queuedJobDraftIssue(it.payload),
       isSuperseded:it=>{if(!qSuperseded.has(it.id))return false;qSuperseded.delete(it.id);return true;}}));
   }catch(e){
     notify('Не удалось обновить очередь: '+(e.message||e),'err');
@@ -4145,9 +4159,10 @@ async function qFlush(){
   // только что ушло, — тогда на экране лежат серверные записи.
   if(sent&&jobEditId&&document.querySelector('.view-job.active')){
     try{ await loadJobParts(); await loadJobVisits(); await loadJobPhotos();
-      jobSaveState('сохранено');
+      if(!(await qAll()).some(it=>it.payload?.jobId===jobEditId))jobSaveState('сохранено');
     }catch(e){}
   }
+  if(qFlushAgain){qFlushAgain=false;if(navigator.onLine)void qFlush();}
   return sent;
 }
 async function qSendOne(it){
@@ -5212,6 +5227,16 @@ function queueJobSave(){
   jobSaveState('изменено');
   jobSaveT=setTimeout(saveJobNow,navigator.onLine?800:0);
 }
+async function queueCurrentJobSnapshot(){
+  const rec=jobRec(), editableWorks=curWorks.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
+  const works=canEditWorks()?editableWorks.map(({row,index})=>({...jobWorkRow(row),index})):null;
+  const editableParts=jobParts.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
+  const parts=canEditParts()&&jobPartsComplete?editableParts.filter(x=>partReady(x.row)).map(({row,index})=>({...jobPartRow(row,index),index})):null;
+  const payload={jobId:jobEditId,canonical_generation:1,rec,works,works_complete:Array.isArray(works),parts,parts_complete:Array.isArray(parts)};
+  if(!await qReplaceJob(jobEditId,payload,Array.isArray(parts)))return null;
+  await snapJobPatch(jobEditId,rec,works,parts);
+  return payload;
+}
 async function saveJobNow(){
   clearTimeout(jobSaveT); jobSaveT=null;
   if(!jobEditId) return;
@@ -5223,21 +5248,33 @@ async function saveJobNow(){
   if(jobSaving){ jobSaveAgain=true; return; }
   jobSaving=true; jobSaveState('сохраняю…','busy');
   try{
-    if(!navigator.onLine) throw new Error('offline');
+    // Once a request has an offline snapshot, every subsequent edit replaces
+    // that snapshot before replay. An online write must not bypass a blocked
+    // older snapshot and then get overwritten by its eventual retry.
+    const hasQueuedJob=(await qAll()).some(it=>it.kind==='job'&&it.payload?.jobId===jobEditId);
+    const incomplete=curWorks.some(w=>!(Number(w.hours)>0));
+    if(!navigator.onLine||hasQueuedJob||incomplete){
+      const payload=await queueCurrentJobSnapshot();
+      if(!payload){jobSaveState('не сохранено · нет места на устройстве','bad');return;}
+      if(!navigator.onLine)jobSaveState('без связи · отправлю позже');
+      else if(incomplete)jobSaveState(queuedJobDraftIssue(payload)+' · сохранено на устройстве');
+      else{
+        await qFlush();
+        const waiting=(await qAll()).some(it=>it.payload?.jobId===jobEditId);
+        jobSaveState(waiting?'ждёт отправки':'сохранено');
+        if(!waiting)jobsDirty=true;
+      }
+      return;
+    }
     await persistJob(jobRec()); jobsDirty=true; jobSaveState('сохранено');
   }
   catch(e){
     // Нет связи — кладём в очередь и правим местный снимок, чтобы при
     // возврате на заявку инженер увидел свои часы, а не старые.
     if(isNetErr(e)){
-      const rec=jobRec(), editableWorks=curWorks.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
-      const works=canEditWorks()?editableWorks.map(({row,index})=>({...jobWorkRow(row),index})):null;
-      const editableParts=jobParts.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
-      const parts=canEditParts()&&jobPartsComplete?editableParts.filter(x=>partReady(x.row)).map(({row,index})=>({...jobPartRow(row,index),index})):null;
       // Новая полная версия заменяет прежнюю атомарно: ошибка хранилища
       // не удалит предыдущую сохранённую правку.
-      if(await qReplaceJob(jobEditId,{jobId:jobEditId,canonical_generation:1,rec,works,works_complete:Array.isArray(works),parts,parts_complete:Array.isArray(parts)},Array.isArray(parts))){
-        await snapJobPatch(jobEditId,rec,works,parts);
+      if(await queueCurrentJobSnapshot()){
         jobSaveState('без связи · отправлю позже');
       } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
     } else jobSaveState('не сохранено · '+(e.message||e),'bad');

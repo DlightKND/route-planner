@@ -36,6 +36,21 @@ describe('offline queue delivery',()=>{
     expect(queue).toEqual([{id:1},{id:2}]);
   });
 
+  it('waits for a missing hour and then sends the corrected snapshot without sending the old draft',async()=>{
+    const queue=[{id:1,kind:'job',payload:{works:[{hours:0}]}}],sent=[];
+    const callbacks={send:async it=>sent.push(it.payload.works[0].hours),
+      drop:async id=>queue.splice(queue.findIndex(it=>it.id===id),1),
+      block:async()=>{throw new Error('draft must not be blocked');},
+      isNetworkError:()=>false,
+      isDeferred:it=>it.payload.works.some(w=>!(Number(w.hours)>0))};
+    expect(await flushQueueItems([...queue],callbacks)).toEqual({sent:0,blocked:0});
+    expect(queue).toHaveLength(1);
+    queue.splice(0,1,{id:2,kind:'job',payload:{works:[{hours:0.25}]}});
+    expect(await flushQueueItems([...queue],callbacks)).toEqual({sent:1,blocked:0});
+    expect(sent).toEqual([0.25]);
+    expect(queue).toHaveLength(0);
+  });
+
   it('does not mark an accepted action as rejected when local deletion fails',async()=>{
     let blocked=false;
     await expect(flushQueueItems([{id:1}],{

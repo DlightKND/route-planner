@@ -20,3 +20,9 @@ export function pendingJobState(items, jobId, serverParts = []) {
   }
   return {payload, parts, hasPendingParts: pending.some(it => it.kind === 'part') || !!payload?.parts_complete};
 }
+
+export function queuedJobDraftIssue(payload) {
+  if (!payload?.works_complete || !Array.isArray(payload.works)) return '';
+  const work=payload.works.find(w=>!(Number(w.hours)>0));
+  return work ? 'Укажи часы у работы «'+(work.title||'без названия')+'»' : '';
+}
