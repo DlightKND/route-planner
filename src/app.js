@@ -19,6 +19,7 @@ import { canEditRequestFinanceRow } from './core/request-finance-row.js';
 import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 import { saveCanonicalRequest, saveRequestAndWorks } from './core/request-save.js';
+import { flushQueueItems, assertReplayableJobSnapshot } from './core/offline-queue.js';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openTrip,tripStatus:s=>ST_TRIP[s]||s,
@@ -3952,11 +3953,9 @@ function offlineBanner(at){
 // Порядок важен: «взял в работу» должно уйти раньше «завершил», поэтому
 // хранилище с автоключом и строго последовательная отправка.
 //
-// Сетевую ошибку от отказа сервера отличаем по тексту: отказ («статус уже
-// изменился», «нет прав») повторять бессмысленно — такой пункт снимаем
-// с очереди и говорим вслух. Молча копить неотправляемое хуже, чем
-// признать потерю.
-let qCount=0, qFlushing=false;
+// При отказе сервера сохраняем запись на устройстве и останавливаем очередь:
+// дальнейшие действия могут зависеть от отвергнутой записи.
+let qCount=0, qBlocked=null, qFlushing=false;
 // Пока связи не было, визит жил под временным id. При отправке сервер
 // выдаёт настоящий, и «уехал» из очереди должен попасть в ту же строку.
 const qLocalIds={},qSuperseded=new Set();
@@ -3983,18 +3982,38 @@ async function qAll(){
   }catch(e){ return []; }
 }
 async function qDrop(id){
-  try{ const db=await snapDb();
-    await new Promise((res,rej)=>{ const t=db.transaction(Q_STORE,'readwrite');
-      t.objectStore(Q_STORE).delete(id); t.oncomplete=res; t.onerror=()=>rej(t.error); });
-  }catch(e){}
+  const db=await snapDb();
+  await new Promise((res,rej)=>{ const t=db.transaction(Q_STORE,'readwrite');
+    t.objectStore(Q_STORE).delete(id); t.oncomplete=res; t.onerror=()=>rej(t.error); });
 }
-// Снять из очереди прежние сохранения этой заявки. Фото и действия
-// по выезду не трогаем: они не заменяют друг друга.
-async function qDropJob(jobId){
-  const items=await qAll();
-  for(const it of items){
-    if(it.kind==='job'&&it.payload&&it.payload.jobId===jobId) await qDrop(it.id);
-  }
+// The new complete snapshot and removal of older snapshots/parts commit in
+// one IndexedDB transaction. If adding fails, the earlier edits remain.
+async function qReplaceJob(jobId,payload,replaceParts){
+  try{
+    const db=await snapDb();
+    const superseded=await new Promise((res,rej)=>{
+      const t=db.transaction(Q_STORE,'readwrite'), store=t.objectStore(Q_STORE);
+      const removed=[];
+      const rq=store.getAll();
+      rq.onsuccess=()=>{
+        for(const it of rq.result||[]){
+          if(it.payload?.jobId!==jobId)continue;
+          if(it.kind==='job'||(replaceParts&&it.kind==='part')){
+            store.delete(it.id);
+            if(it.kind==='part')removed.push(it.id);
+          }
+        }
+        store.add({kind:'job',payload,at:Date.now()});
+      };
+      rq.onerror=()=>rej(rq.error);
+      t.oncomplete=()=>res(removed);
+      t.onerror=()=>rej(t.error||new Error('Не удалось сохранить очередь'));
+      t.onabort=()=>rej(t.error||new Error('Не удалось сохранить очередь'));
+    });
+    superseded.forEach(id=>qSuperseded.add(id));
+    await qRefresh();
+    return true;
+  }catch(e){return false;}
 }
 // A complete atomic job snapshot supersedes older per-material queue events.
 // Mark their ids so the current qFlush batch skips any entries it already read.
@@ -4017,36 +4036,61 @@ async function qDropPart(localId){
     if(it.kind==='part'&&it.payload&&String(it.payload.localId)===String(localId)) await qDrop(it.id);
   }
 }
-async function qRefresh(){ qCount=(await qAll()).length; paintQueue(); return qCount; }
+async function qBlock(it,error){
+  const db=await snapDb();
+  const message=String(error?.message||error).slice(0,500);
+  await new Promise((res,rej)=>{
+    const t=db.transaction(Q_STORE,'readwrite');
+    t.objectStore(Q_STORE).put({...it,blocked_error:message,blocked_at:Date.now()});
+    t.oncomplete=res; t.onerror=()=>rej(t.error);
+  });
+  notify('Изменение не принято сервером и осталось на устройстве: '+message,'err');
+}
+async function qRefresh(){
+  const items=await qAll();qCount=items.length;
+  qBlocked=items.find(it=>it.blocked_error)||null;
+  paintQueue();return qCount;
+}
 function paintQueue(){
   const el=$('qBadge'); if(!el) return;
   el.style.display=qCount?'':'none';
-  // Глагол склоняем вместе с числом: «1 изменение ждут отправки» —
-  // мелочь, но именно по таким мелочам интерфейс читается как небрежный.
-  el.textContent=qCount+' '+plural(qCount,'изменение ждёт','изменения ждут','изменений ждут')+' отправки';
+  el.classList.toggle('blocked',!!qBlocked);
+  el.textContent=qBlocked
+    ? 'Не отправлено: '+qCount+' · Нажмите, чтобы повторить'
+    : qCount+' '+plural(qCount,'изменение ждёт','изменения ждут','изменений ждут')+' отправки';
+  el.title=qBlocked?'Ошибка отправки: '+qBlocked.blocked_error+' · Нажмите, чтобы повторить'
+    :'Нажмите, чтобы отправить изменения';
 }
+$('qBadge').onclick=async ()=>{
+  if(qFlushing)return;
+  if(qBlocked){
+    try{
+      const db=await snapDb();
+      await new Promise((res,rej)=>{
+        const t=db.transaction(Q_STORE,'readwrite'),store=t.objectStore(Q_STORE);
+        const rq=store.get(qBlocked.id);
+        rq.onsuccess=()=>{if(rq.result){delete rq.result.blocked_error;delete rq.result.blocked_at;store.put(rq.result);}};
+        t.oncomplete=res;t.onerror=()=>rej(t.error);
+      });
+    }catch(e){notify('Не удалось повторить отправку: '+(e.message||e),'err');return;}
+  }
+  await qRefresh();await qFlush();
+};
 // Одна попытка отправки всей очереди. Возвращает, сколько ушло.
 async function qFlush(){
   if(qFlushing) return 0;
   qFlushing=true;
-  let sent=0, dropped=0;
+  let sent=0;
   try{
     const items=await qAll();
-    for(const it of items){
-      if(qSuperseded.has(it.id)){qSuperseded.delete(it.id);continue;}
-      try{
-        await qSendOne(it);
-        await qDrop(it.id); sent++;
-      }catch(e){
-        if(isNetErr(e)) break;                 // связи нет — пробуем позже
-        await qDrop(it.id); dropped++;         // отказ сервера — снимаем
-        notify('Изменение не принято сервером и снято с очереди: '+((e&&e.message)||e),'err');
-      }
-    }
+    ({sent}=await flushQueueItems(items,{send:qSendOne,drop:qDrop,block:qBlock,isNetworkError:isNetErr,
+      isSuperseded:it=>{if(!qSuperseded.has(it.id))return false;qSuperseded.delete(it.id);return true;}}));
+  }catch(e){
+    notify('Не удалось обновить очередь: '+(e.message||e),'err');
   } finally { qFlushing=false; }
   await qRefresh();
   if(sent) showToast('Отправлено: '+sent+' '+plural(sent,'изменение','изменения','изменений'));
-  if(sent&&!dropped){ try{ await loadAll(); }catch(e){} }
+  if(sent){ try{ await loadAll(); }catch(e){} }
   // Открытая заявка держит В ПАМЯТИ строки с временными id (local-…).
   // После отправки настоящие id знает только очередь, и следующая правка
   // такой строки уехала бы вставкой-двойником. Перечитываем то, что
@@ -4113,10 +4157,9 @@ async function qSendOne(it){
   if(it.kind==='job'){
     // New records carry a generation marker; older queue records keep the
     // legacy RPC so clients already offline at deploy time can still replay.
+    assertReplayableJobSnapshot(p);
     const works=p.works_complete&&Array.isArray(p.works)?p.works:null;
     const parts=p.parts_complete&&Array.isArray(p.parts)?p.parts:null;
-    if(!works&&Array.isArray(p.works)&&p.works.length)
-      notify('Старые офлайн-работы не отправлены: в снимке нет стабильных ID. Открой заявку с сетью и внеси правку заново.','err');
     const save=p.canonical_generation===1?saveCanonicalRequest:saveRequestAndWorks;
     await save(sb,{id:p.jobId,record:p.rec,works,parts});
     if(Array.isArray(parts))await qDropPartsForJob(p.jobId);
@@ -5128,13 +5171,9 @@ async function saveJobNow(){
       const works=canEditWorks()?editableWorks.map(({row,index})=>({...jobWorkRow(row),index})):null;
       const editableParts=jobParts.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
       const parts=canEditParts()&&jobPartsComplete?editableParts.filter(x=>partReady(x.row)).map(({row,index})=>({...jobPartRow(row,index),index})):null;
-      // Прежние записи этой же заявки снимаем: в очереди лежит полная
-      // строка, и каждая новая целиком заменяет предыдущую. Иначе правка
-      // часов десять раз подряд дала бы десять одинаковых по смыслу
-      // отправок и счётчик, который врёт о количестве работы.
-      await qDropJob(jobEditId);
-      if(Array.isArray(parts))await qDropPartsForJob(jobEditId);
-      if(await qPush('job',{jobId:jobEditId,canonical_generation:1,rec,works,works_complete:Array.isArray(works),parts,parts_complete:Array.isArray(parts)})){
+      // Новая полная версия заменяет прежнюю атомарно: ошибка хранилища
+      // не удалит предыдущую сохранённую правку.
+      if(await qReplaceJob(jobEditId,{jobId:jobEditId,canonical_generation:1,rec,works,works_complete:Array.isArray(works),parts,parts_complete:Array.isArray(parts)},Array.isArray(parts))){
         await snapJobPatch(jobEditId,rec,works,parts);
         jobSaveState('без связи · отправлю позже');
       } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
