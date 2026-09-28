@@ -56,6 +56,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260928114000_sync_request_status_on_task_start.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260928190000_preserve_started_request_on_stale_replay.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260929010000_guard_legacy_manager_team_replay.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260929020000_freeze_legacy_finance_on_active_task.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -65,7 +66,7 @@ it('accepts old offline notes without reverting a started request or its assignm
   await db.exec('begin');
   try{
     // The compact PGlite fixture omits the production jobs table grants.
-    await db.exec('grant select,update on jobs to authenticated');
+    await db.exec('grant select,update on jobs to authenticated; grant select,update on job_works to authenticated');
     await q("insert into profiles(id,role,active) values($1,'logist',true),($2,'engineer',true)",[id(1),id(2)]);
     await q("update jobs set status='open',scheduled_date='2026-09-29',due_date='2026-09-30',time_window='morning',assigned_engineer=$1,engineer_ids=array[$1,$2]::uuid[],notes='current' where id=$3",[id(1),id(2),id(10)]);
     const [task]=await q("update service_orders set status='assigned',date_from='2026-09-29',date_to='2026-09-30',lead_engineer=$1,engineer_ids=array[$1]::uuid[] where seed_request_id=$2 returning id,revision",[id(2),id(10)]);
@@ -101,6 +102,19 @@ it('accepts old offline notes without reverting a started request or its assignm
       id(10),JSON.stringify({...old,status:'in_progress',assigned_engineer:id(1),engineer_ids:[id(1)],notes:'current manager edit'})]);
     expect((await q('select engineer_ids,notes from jobs where id=$1',[id(10)]))[0])
       .toMatchObject({engineer_ids:[id(1)],notes:'current manager edit'});
+
+    const workBefore=(await q('select hours from job_works where id=$1',[id(60)]))[0].hours;
+    const itemBefore=(await q('select planned_qty from service_order_items where legacy_job_work_id=$1',[id(60)]))[0].planned_qty;
+    await db.exec('savepoint stale_finance');
+    await db.exec('set role authenticated');
+    await expect(q('select public.job_request_save($1,$2::jsonb,$3::jsonb,null)',[
+      id(10),JSON.stringify({...old,status:'in_progress'}),
+      JSON.stringify([{id:id(60),work_id:id(80),title:'',hours:3,billable:true,billable_reason:'',revenue:1200,tariff_profile:'client'}])
+    ])).rejects.toThrow('Состав работ и материалов нельзя менять');
+    await db.exec('rollback to savepoint stale_finance');
+    await db.exec('reset role');
+    expect((await q('select hours from job_works where id=$1',[id(60)]))[0].hours).toBe(workBefore);
+    expect((await q('select planned_qty from service_order_items where legacy_job_work_id=$1',[id(60)]))[0].planned_qty).toBe(itemBefore);
   }finally{await db.exec('reset role; rollback');}
 });
 
