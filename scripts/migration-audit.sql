@@ -18,6 +18,10 @@ with work_rows as (
     (select count(*) from public.service_orders where job_id is not null) as canonical_tasks,
     (select count(*) from public.service_orders where job_id is null and legacy_trip_id is not null) as retained_shadow_tasks,
     (select count(*) from public.trips where deleted_at is null) as trips,
+    (select count(*) from public.trip_stays where status = 'approved') as approved_stays_retained,
+    (select coalesce(sum(minutes_mgr),0) from public.trip_stays where status = 'approved') as approved_stay_minutes_retained,
+    (select count(*) from public.trip_stays s where s.status = 'approved'
+      and exists(select 1 from public.trip_stay_task_allocations a where a.stay_id = s.id)) as approved_stays_allocated_to_tasks,
     (select count(*) from public.jobs j join public.service_orders o on o.seed_request_id=j.id and o.job_id=j.id
       where j.deleted_at is null and j.status='done' and o.status='draft') as historical_done_requests_with_draft_tasks,
     (select count(*) from public.service_order_items i join public.jobs j on j.id=i.job_id
@@ -54,6 +58,9 @@ with work_rows as (
     (select count(*) from public.trip_stays s where s.job_id is not null and s.status = 'approved'
       and s.task_allocations_explicit and not exists
       (select 1 from public.trip_stay_task_allocations a where a.stay_id = s.id)) as explicitly_unallocated_stays,
+    (select coalesce(sum(s.minutes_mgr),0) from public.trip_stays s where s.job_id is not null and s.status = 'approved'
+      and s.task_allocations_explicit and not exists
+      (select 1 from public.trip_stay_task_allocations a where a.stay_id = s.id)) as explicitly_unallocated_stay_minutes,
     (select count(*) from public.service_order_history h join public.service_orders o on o.id = h.order_id
       where o.job_id is null and o.legacy_trip_id is not null) as retained_shadow_history,
     (select count(*) from public.service_order_history h join public.service_orders o on o.id = h.order_id
