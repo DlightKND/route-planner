@@ -658,6 +658,53 @@ it('carries remaining work with request, material and work economics snapshots',
   }finally{await db.exec('rollback');}
 });
 
+it('carries partially completed canonical request work and material without duplicating their facts',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const rec={client_id:id(22),equipment_id:null,status:'open',scheduled_date:null,time_window:'',due_date:null,
+      assigned_engineer:null,engineer_ids:[],notes:'',at_depot:false,depot_id:null};
+    const work={id:id(92),work_id:id(80),hours:1,billable:true,tariff_profile:'client'};
+    const part={id:id(93),name:'Фильтр',sku:'F-QA',unit:'шт',qty:2,billable:true,price:150,cost:80};
+    await q('select public.job_request_save_canonical($1,$2::jsonb,$3::jsonb,$4::jsonb)',[
+      id(12),JSON.stringify(rec),JSON.stringify([work]),JSON.stringify([part])]);
+    const [seed]=await q('select id,revision from service_orders where seed_request_id=$1',[id(12)]);
+    const before=await q('select id,kind,planned_qty,financial_revenue_snapshot,financial_cost_snapshot,unit_price_snapshot,unit_cost_snapshot from service_order_items where order_id=$1 order by kind',[seed.id]);
+    expect(before).toHaveLength(2);
+    expect(before.every(i=>Number(i.planned_qty)>0)).toBe(true);
+    await q("update service_orders set status='in_progress' where id=$1",[seed.id]);
+    await q('update service_order_items set done_qty=case when kind=$2 then 0.25 else 1 end where order_id=$1',[seed.id,'work']);
+    const [current]=await q('select revision from service_orders where id=$1',[seed.id]);
+    const [carried]=await q("select public.service_order_carry($1,$2,'Остаток после частичного выполнения') id",[seed.id,current.revision]);
+    const [task]=await q('select job_id,seed_request_id,status from service_orders where id=$1',[carried.id]);
+    expect(task).toMatchObject({job_id:id(12),seed_request_id:null,status:'draft'});
+    const rows=await q('select source_item_id,kind,planned_qty,done_qty,financial_revenue_snapshot,financial_cost_snapshot,legacy_snapshot from service_order_items where order_id=$1 order by kind',[carried.id]);
+    expect(rows).toHaveLength(2);
+    for(const row of rows){
+      const source=before.find(i=>i.id===row.source_item_id);
+      expect(source).toBeDefined();
+      expect(row.kind).toBe(source.kind);
+      expect(Number(row.planned_qty)).toBe(source.kind==='work'?0.75:1);
+      expect(Number(row.done_qty)).toBe(0);
+      const sourceRevenue=source.financial_revenue_snapshot==null
+        ? Number(source.unit_price_snapshot)*Number(source.planned_qty)
+        : Number(source.financial_revenue_snapshot);
+      const sourceCost=source.financial_cost_snapshot==null
+        ? Number(source.unit_cost_snapshot)*Number(source.planned_qty)
+        : Number(source.financial_cost_snapshot);
+      expect(Number(row.financial_revenue_snapshot)).toBeCloseTo(
+        sourceRevenue*Number(row.planned_qty)/Number(source.planned_qty),2);
+      expect(Number(row.financial_cost_snapshot)).toBeCloseTo(
+        sourceCost*Number(row.planned_qty)/Number(source.planned_qty),2);
+      expect(row.legacy_snapshot?.request_finance_generation).toBeUndefined();
+    }
+    const original=await q('select kind,planned_qty,done_qty,transferred_qty from service_order_items where order_id=$1 order by kind',[seed.id]);
+    expect(original.every(i=>Number(i.done_qty)+Number(i.transferred_qty)===Number(i.planned_qty))).toBe(true);
+    expect(original.map(i=>Number(i.done_qty))).toEqual([1,0.25]);
+  }finally{await db.exec('rollback');}
+});
+
 it('does not guess a request when a legacy multi-request task has remaining work for several requests',async()=>{
   await db.exec('begin');
   try{
