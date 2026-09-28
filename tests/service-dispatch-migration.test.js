@@ -55,6 +55,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260928051000_optimize_legacy_trip_task_events_rls.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260928114000_sync_request_status_on_task_start.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260928190000_preserve_started_request_on_stale_replay.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260929010000_guard_legacy_manager_team_replay.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -89,6 +90,17 @@ it('accepts old offline notes without reverting a started request or its assignm
     await db.exec('reset role');
     expect((await q('select status,assigned_engineer,engineer_ids,notes from jobs where id=$1',[id(10)]))[0])
       .toMatchObject({status:'in_progress',assigned_engineer:id(1),engineer_ids:[id(1),id(2)],notes:'manager note'});
+
+    // An old manager can have the right status but an out-of-date team.
+    await q('select public.job_request_save($1,$2::jsonb,null,null)',[id(10),JSON.stringify({...old,status:'in_progress',notes:'old manager snapshot'})]);
+    expect((await q('select engineer_ids,notes from jobs where id=$1',[id(10)]))[0])
+      .toMatchObject({engineer_ids:[id(1),id(2)],notes:'old manager snapshot'});
+
+    // A current canonical manager edit still has authority to change the team.
+    await q('select public.job_request_save_canonical($1,$2::jsonb,null,null)',[
+      id(10),JSON.stringify({...old,status:'in_progress',assigned_engineer:id(1),engineer_ids:[id(1)],notes:'current manager edit'})]);
+    expect((await q('select engineer_ids,notes from jobs where id=$1',[id(10)]))[0])
+      .toMatchObject({engineer_ids:[id(1)],notes:'current manager edit'});
   }finally{await db.exec('reset role; rollback');}
 });
 
