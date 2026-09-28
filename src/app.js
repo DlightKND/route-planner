@@ -3585,7 +3585,9 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
   curWorksComplete=!id||hasStableJobWorkIds(j?.job_works);
   renderJobWorks();
   const ro=jobRO;
-  ['jbClient','jbEquip','jbEng','jbDate','jbWindow','jbDue','jbNotes','jbWorkPick','jbWorkAdd','jbCustomAdd','jobSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
+  // renderJobWorks already applies both permission and task-status guards to
+  // the work controls. Do not re-enable them with the request-only flag.
+  ['jbClient','jbEquip','jbEng','jbDate','jbWindow','jbDue','jbNotes','jobSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
   // Инженеру — вид «задание»: работы наверх, справочные поля свёрнуты и
   // на чтение. Он их не заполняет — их заполняет диспетчер, когда принимает
   // заявку; а случайно сменить у заявки клиента или исполнителя он мог.
