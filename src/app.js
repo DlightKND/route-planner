@@ -3983,7 +3983,7 @@ function offlineBanner(at){
 //
 // При отказе сервера сохраняем запись на устройстве и останавливаем очередь:
 // дальнейшие действия могут зависеть от отвергнутой записи.
-let qCount=0, qBlocked=null, qDeferred=null, qFlushing=false, qFlushAgain=false;
+let qCount=0, qBlocked=null, qDeferred=null, qFlushing=false, qFlushAgain=false, qRetryT=null;
 // Пока связи не было, визит жил под временным id. При отправке сервер
 // выдаёт настоящий, и «уехал» из очереди должен попасть в ту же строку.
 const qLocalIds={},qSuperseded=new Set();
@@ -4109,7 +4109,19 @@ async function qRefresh(){
   const items=await qAll();qCount=items.length;
   qBlocked=items.find(it=>it.blocked_error)||null;
   qDeferred=items.find(it=>it.kind==='job'&&queuedJobDraftIssue(it.payload))||null;
-  paintQueue();return qCount;
+  paintQueue();qScheduleRetry();return qCount;
+}
+// DevTools Offline / No throttling often changes fetch behavior without an
+// online event. Retry pending valid edits while the page is open; do not retry
+// server-rejected edits or drafts that still need hours.
+function qScheduleRetry(){
+  clearTimeout(qRetryT);qRetryT=null;
+  if(!qCount||qBlocked||qDeferred||!session)return;
+  qRetryT=setTimeout(()=>{
+    qRetryT=null;
+    if(document.hidden||!navigator.onLine||qFlushing){qScheduleRetry();return;}
+    void qFlush();
+  },5000);
 }
 function paintQueue(){
   const el=$('qBadge'); if(!el) return;
