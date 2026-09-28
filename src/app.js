@@ -869,10 +869,15 @@ $('cfgBtn').onclick=()=>{ const o=cfgOverride();
 // открыть — адресом со ?cfg=1.
 (function(){ const need=(!SB_KEY_BUILTIN)||cfgOverride().url||/[?&]cfg=1/.test(location.search);
   if(!need && $('cfgBtn')) $('cfgBtn').style.display='none'; })();
+function cfgRestart(){
+  const url=new URL(location.href);
+  url.searchParams.delete('cfg');
+  location.replace(url.toString());
+}
 $('cfgSave').onclick=()=>{ const url=$('cfgUrl').value.trim(), key=$('cfgKey').value.trim();
   // Оба поля пустые при наличии встроенных значений — снять переопределение.
-  if(!url&&!key&&SB_KEY_BUILTIN){ try{ localStorage.removeItem(LS_URL); localStorage.removeItem(LS_KEY); }catch(e){} location.reload(); return; }
-  if(!url||!key){ $('cfgErr').textContent=SB_KEY_BUILTIN?'Заполни оба поля или очисти оба, чтобы вернуться к встроенным.':'Заполни оба поля.'; return; } try{ localStorage.setItem(LS_URL,url); localStorage.setItem(LS_KEY,key); }catch(e){} location.reload(); };
+  if(!url&&!key&&SB_KEY_BUILTIN){ try{ localStorage.removeItem(LS_URL); localStorage.removeItem(LS_KEY); }catch(e){} cfgRestart(); return; }
+  if(!url||!key){ $('cfgErr').textContent=SB_KEY_BUILTIN?'Заполни оба поля или очисти оба, чтобы вернуться к встроенным.':'Заполни оба поля.'; return; } try{ localStorage.setItem(LS_URL,url); localStorage.setItem(LS_KEY,key); }catch(e){} cfgRestart(); };
 
 // ---------- auth ----------
 try{ const saved=localStorage.getItem(LS_LOGIN_EMAIL)||'';
@@ -8469,7 +8474,11 @@ if($('verCopy')) $('verCopy').onclick=async()=>{
 };
 
 // ---------- boot ----------
-(async function boot(){ const c=loadCfg(); if(!c.url||!c.key){ $('cfgOverlay').classList.add('on'); return; }
+(async function boot(){
+  // ?cfg=1 must open the connection dialog before authentication. Otherwise
+  // the sign-in overlay covers its button and a QA account is sent to prod.
+  if(new URL(location.href).searchParams.get('cfg')==='1'){ $('cfgBtn').onclick(); return; }
+  const c=loadCfg(); if(!c.url||!c.key){ $('cfgOverlay').classList.add('on'); return; }
   try{ sb=window.supabase.createClient(c.url,c.key); }catch(e){ $('cfgOverlay').classList.add('on'); return; }
   watchAuth();
   const { data:{ session:s } }=await sb.auth.getSession(); if(s){ await onSignedIn(); } else { $('authOverlay').classList.add('on'); } })();
