@@ -19,7 +19,7 @@ import { canEditRequestFinanceRow } from './core/request-finance-row.js';
 import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 import { saveCanonicalRequest, saveRequestAndWorks } from './core/request-save.js';
-import { flushQueueItems } from './core/offline-queue.js';
+import { flushQueueItems, assertReplayableJobSnapshot } from './core/offline-queue.js';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openTrip,tripStatus:s=>ST_TRIP[s]||s,
@@ -4157,10 +4157,9 @@ async function qSendOne(it){
   if(it.kind==='job'){
     // New records carry a generation marker; older queue records keep the
     // legacy RPC so clients already offline at deploy time can still replay.
+    assertReplayableJobSnapshot(p);
     const works=p.works_complete&&Array.isArray(p.works)?p.works:null;
     const parts=p.parts_complete&&Array.isArray(p.parts)?p.parts:null;
-    if(!works&&Array.isArray(p.works)&&p.works.length)
-      notify('Старые офлайн-работы не отправлены: в снимке нет стабильных ID. Открой заявку с сетью и внеси правку заново.','err');
     const save=p.canonical_generation===1?saveCanonicalRequest:saveRequestAndWorks;
     await save(sb,{id:p.jobId,record:p.rec,works,parts});
     if(Array.isArray(parts))await qDropPartsForJob(p.jobId);

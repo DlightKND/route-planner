@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {flushQueueItems} from '../src/core/offline-queue.js';
+import {flushQueueItems,assertReplayableJobSnapshot} from '../src/core/offline-queue.js';
 
 describe('offline queue delivery',()=>{
   it('keeps the rejected action and later dependent actions until retry',async()=>{
@@ -43,5 +43,12 @@ describe('offline queue delivery',()=>{
       block:async()=>{blocked=true;},isNetworkError:()=>false,
     })).rejects.toThrow('storage full');
     expect(blocked).toBe(false);
+  });
+
+  it('stops an older snapshot before sending its header if rows would be lost',()=>{
+    expect(()=>assertReplayableJobSnapshot({works:[{title:'repair'}]})).toThrow('офлайн-работы');
+    expect(()=>assertReplayableJobSnapshot({parts:[{title:'seal'}]})).toThrow('офлайн-материалы');
+    expect(()=>assertReplayableJobSnapshot({works:[{id:'stable'}],works_complete:true,
+      parts:[{id:'stable'}],parts_complete:true})).not.toThrow();
   });
 });
