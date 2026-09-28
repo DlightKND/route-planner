@@ -53,6 +53,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260927192300_block_task_closure_with_active_trips.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260928050000_archive_legacy_trip_task_history.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260928051000_optimize_legacy_trip_task_events_rls.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260928114000_sync_request_status_on_task_start.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -97,6 +98,35 @@ it('keeps a shared active trip from being orphaned by closing or cancelling its 
     await db.exec('savepoint planned_trip');
     await expect(q("select public.service_order_transition($1,(select revision from service_orders where id=$1),'cancelled','Причина отмены')",[task.id])).rejects.toThrow(/выезды/);
     await db.exec('rollback to savepoint planned_trip');
+  }finally{await db.exec('rollback');await db.exec('reset role');}
+});
+
+it('starts the parent request atomically with its task and leaves closed requests closed',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'engineer',true)",[id(3)]);
+    const [task]=await q("update service_orders set status='assigned',date_from='2026-09-28',date_to='2026-09-28',lead_engineer=$1,engineer_ids=array[$1]::uuid[] where seed_request_id=$2 returning id,revision",[id(3),id(11)]);
+    await q("insert into service_order_items(order_id,job_id,title,unit,planned_qty,kind) values($1,$2,'Диагностика','ч',1,'work')",[task.id,id(11)]);
+    await q("update jobs set status='planned' where id=$1",[id(11)]);
+    await q("select set_config('test.uid',$1,true)",[id(3)]);
+    await db.exec('set role authenticated');
+    const [started]=await q("select public.service_order_transition($1,$2,'in_progress','') revision",[task.id,task.revision]);
+    await db.exec('reset role');
+    expect((await q('select status from jobs where id=$1',[id(11)]))[0].status).toBe('in_progress');
+    expect((await q('select status from service_orders where id=$1',[task.id]))[0].status).toBe('in_progress');
+    expect((await q("select count(*)::int n from service_order_history where order_id=$1 and reason like 'Статус:%'",[task.id]))[0].n).toBe(1);
+    await db.exec('set role authenticated');
+    await q("select public.service_order_transition($1,$2,'in_progress','')",[task.id,started.revision]);
+    await db.exec('reset role');
+    expect((await q("select count(*)::int n from service_order_history where order_id=$1 and reason like 'Статус:%'",[task.id]))[0].n).toBe(1);
+    await q("update service_orders set status='paused' where id=$1",[task.id]);
+    await q("update jobs set status='done' where id=$1",[id(11)]);
+    await db.exec('set role authenticated');
+    await db.exec('savepoint closed_request');
+    await expect(q("select public.service_order_transition($1,$2,'in_progress','')",[task.id,started.revision])).rejects.toThrow('Завершённая или отменённая заявка');
+    await db.exec('rollback to savepoint closed_request');
+    await db.exec('reset role');
+    expect((await q('select status from jobs where id=$1',[id(11)]))[0].status).toBe('done');
   }finally{await db.exec('rollback');await db.exec('reset role');}
 });
 
