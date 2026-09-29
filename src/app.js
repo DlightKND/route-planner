@@ -6559,7 +6559,7 @@ async function tripAction(id,kind,engineerName){
   // Подтверждение — последняя точка, где пробег ещё можно поправить: сразу
   // после него число уходит в одометр машины и в себестоимость. Поэтому
   // считаем факт ЗДЕСЬ, до RPC, и своими руками.
-  if(kind==='confirm'&&canWriteTrip()){
+  if(kind==='confirm'&&canWriteTrip(row||null)){
     if(!await settleFactKm(id)) return;
   }
   try{
@@ -6573,7 +6573,7 @@ async function tripAction(id,kind,engineerName){
     await loadAll(); await loadVehicles(); await loadFactHours();
     // Порядок важен: факт-часы уже перечитаны, значит снимок соберётся
     // с ними, а не с прошлыми.
-    if(data==='done'&&canWriteTrip()){
+    if(data==='done'&&canWriteTrip(row||null)){
       if(await refreshTripEcon(id)){ await loadAll(); showToast('Экономика выезда пересчитана'); }
       else notify('Выезд подтверждён, но экономику пересчитать не вышло — открой и сохрани его','warn');
     }
@@ -6666,8 +6666,12 @@ function stayBindIcon(stay,index){
   return L.divIcon({className:'',iconSize:[28,28],iconAnchor:[14,14],html:'<div class="cbub" style="width:28px;height:28px;line-height:24px;background:'+bg+';color:'+fg+';border:2px solid '+ringColor()+'">'+(index+1)+'</div>'});
 }
 function stayJobLabel(j){return (j.clients&&j.clients.name)||((j.equipment&&j.equipment.model)||'заявка');}
+function canWriteStayBindingTrip(){
+  const t=stayBindMap&&(getTrip(stayBindMap.tid)||tripCache[stayBindMap.tid]);
+  return !!(t&&canWriteTrip(t));
+}
 function stayBindingPopup(stay,index){
-  if(canWriteTrip())return '<div class="trip-stop-popup"><b>Стоянка '+(index+1)+'</b><div class="meta">'+hhmm(stay.stay_from)+' — '+hhmm(stay.stay_to)+' · '+minText(stay.minutes_raw)+'</div><p class="hint">'+(stay.status==='approved'?'Присутствие подтверждено':stay.status==='rejected'?'Не учитывается':'Требует проверки')+'</p><button type="button" class="btn sm amber" data-stay-edit="'+esc(stay.id)+'">Привязка и присутствие</button><button type="button" class="btn sm ghost" data-stay-select="'+esc(stay.id)+'">Выбрать объект на карте</button></div>';
+  if(canWriteStayBindingTrip())return '<div class="trip-stop-popup"><b>Стоянка '+(index+1)+'</b><div class="meta">'+hhmm(stay.stay_from)+' — '+hhmm(stay.stay_to)+' · '+minText(stay.minutes_raw)+'</div><p class="hint">'+(stay.status==='approved'?'Присутствие подтверждено':stay.status==='rejected'?'Не учитывается':'Требует проверки')+'</p><button type="button" class="btn sm amber" data-stay-edit="'+esc(stay.id)+'">Привязка и присутствие</button><button type="button" class="btn sm ghost" data-stay-select="'+esc(stay.id)+'">Выбрать объект на карте</button></div>';
 
   const jobs=(stayBindMap&&stayBindMap.jobs)||[], current=jobs.find(j=>String(j.id)===String(stay.job_id));
   return '<div class="trip-stop-popup"><b>Стоянка '+(index+1)+'</b><div class="meta">'+hhmm(stay.stay_from)+' — '+hhmm(stay.stay_to)+' · '+minText(stay.minutes_raw)+'</div>'
@@ -6686,14 +6690,14 @@ function drawStayBindingMap(){
 }
 async function attachStayOnMap(stayId,jobId){
   if(!stayBindMap) return;
-  if(canWriteTrip()){map.closePopup();return openPresenceEditor(stayBindMap.tid,stayId,jobId);}
+  if(canWriteStayBindingTrip()){map.closePopup();return openPresenceEditor(stayBindMap.tid,stayId,jobId);}
   try{
     const {data,error}=await sb.rpc('stay_attach',{p_stay:stayId,p_job:jobId||null});
     if(error) throw error;
     if(data==='foreign_job') throw new Error('Эта заявка не входит в выезд.');
     if(data==='already_approved') throw new Error('Утверждённую стоянку менять нельзя.');
     const s=stayBindMap.stays.find(x=>String(x.id)===String(stayId));if(s)s.job_id=jobId||null;
-    stayBindMap.selected=null;if(canWriteTrip())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();await loadFactHours();showToast(jobId?'Стоянка привязана к заявке':'Привязка снята');
+    stayBindMap.selected=null;if(canWriteStayBindingTrip())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();await loadFactHours();showToast(jobId?'Стоянка привязана к заявке':'Привязка снята');
   }catch(e){notify('Не удалось изменить привязку: '+(e.message||e),'err');}
 }
 async function reloadStayBindingData(tid){
@@ -6705,7 +6709,7 @@ async function openStayBindingMap(tid){
   const t=getTrip(tid)||tripCache[tid];
   if(t&&t.status!=='finished'&&t.status!=='done'){notify('Привязка факта доступна после завершения выезда.','warn');return;}
   await showTripOnMap(tid);
-  if(canWriteTrip()){try{await loadTripJobs();await reloadStayBindingData(tid);}catch(e){notify(e.message,'err');}return;}
+  if(canWriteTrip(t||null)){try{await loadTripJobs();await reloadStayBindingData(tid);}catch(e){notify(e.message,'err');}return;}
   try{
     const [{data:stays,error:se},{data:links,error:je}]=await Promise.all([
       sb.from('trip_stays').select('*').eq('trip_id',tid).order('stay_from'),
@@ -7057,7 +7061,7 @@ map.on('popupopen',e=>{
   });
   el.querySelectorAll('[data-stay-edit]').forEach(b=>b.onclick=ev=>{ev.preventDefault();ev.stopPropagation();map.closePopup();openPresenceEditor(stayBindMap.tid,b.dataset.stayEdit);});
   el.querySelectorAll('[data-stay-select]').forEach(b=>b.onclick=ev=>{
-    ev.preventDefault();ev.stopPropagation();if(!stayBindMap)return;stayBindMap.selected=b.dataset.staySelect;map.closePopup();if(canWriteTrip())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();showToast('Теперь нажмите плановую точку заявки');
+    ev.preventDefault();ev.stopPropagation();if(!stayBindMap)return;stayBindMap.selected=b.dataset.staySelect;map.closePopup();if(canWriteStayBindingTrip())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();showToast('Теперь нажмите плановую точку заявки');
   });
   el.querySelectorAll('[data-stay-job]').forEach(b=>b.onclick=ev=>{
     ev.preventDefault();ev.stopPropagation();attachStayOnMap(b.dataset.stayJob,b.dataset.job||null);
