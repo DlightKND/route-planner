@@ -571,6 +571,38 @@ begin
   end if;
 end $$;
 
+-- Related trip actions must follow the same entity authority. Reassigning
+-- tracking affects two trips and therefore requires authority over both.
+do $$
+declare target regprocedure; definition text; old_check text; replacement text;
+begin
+  foreach target in array array[
+    to_regprocedure('public.trip_recalc_fact(uuid)'),
+    to_regprocedure('public.trip_reschedule_decide(uuid,boolean,text)'),
+    to_regprocedure('public.trip_tracking_cancel(uuid)'),
+    to_regprocedure('public.trip_tracking_reassign(uuid,uuid)'),
+    to_regprocedure('dlight_private.trip_stay_task_allocations_save(uuid,uuid,jsonb,text)')
+  ] loop
+    if target is null then continue; end if;
+    definition:=pg_get_functiondef(target);
+    old_check:=case when target=to_regprocedure('dlight_private.trip_stay_task_allocations_save(uuid,uuid,jsonb,text)')
+      then 'auth.uid() is null or coalesce(public.user_role(),'''') not in (''admin'',''logist'')'
+      else 'coalesce(public.user_role(),'''') not in (''admin'',''logist'')' end;
+    if position(old_check in definition)=0 then
+      raise exception 'Unexpected linked trip guard in %; review migration',target;
+    end if;
+    replacement:=case
+      when target=to_regprocedure('public.trip_reschedule_decide(uuid,boolean,text)')
+        then 'not dlight_private.responsibility_manager(''trip'',(select trip_id from public.trip_reschedules where id=p_req))'
+      when target=to_regprocedure('public.trip_tracking_reassign(uuid,uuid)')
+        then 'not (dlight_private.responsibility_manager(''trip'',p_from) and dlight_private.responsibility_manager(''trip'',p_to))'
+      else 'not dlight_private.responsibility_manager(''trip'',p_trip)' end;
+    if target=to_regprocedure('dlight_private.trip_stay_task_allocations_save(uuid,uuid,jsonb,text)')
+    then replacement:='auth.uid() is null or '||replacement; end if;
+    execute replace(definition,old_check,replacement);
+  end loop;
+end $$;
+
 do $$
 declare target regprocedure; definition text; old_check text;
 begin
