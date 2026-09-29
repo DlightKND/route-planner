@@ -413,6 +413,35 @@ begin
   end loop;
 end $$;
 
+-- Starting and finishing still allow assigned engineers; the curator and
+-- owner gain the same controls even when they are not in the crew.
+do $$
+declare target regprocedure; definition text; old_check text;
+begin
+  foreach target in array array[
+    'public.trip_start(uuid)'::regprocedure,
+    'public.trip_finish(uuid)'::regprocedure
+  ] loop
+    definition:=pg_get_functiondef(target);
+    old_check:='public.is_owner_or_mgr(t.lead_engineer) or auth.uid()=any(t.engineer_ids)';
+    if position(old_check in definition)=0 then
+      raise exception 'Unexpected trip action guard in %; review migration',target;
+    end if;
+    execute replace(definition,old_check,
+      'dlight_private.responsibility_manager(''trip'',p_trip) or '
+      ||old_check);
+  end loop;
+
+  target:='public.trip_confirm(uuid)'::regprocedure;
+  definition:=pg_get_functiondef(target);
+  old_check:='if coalesce(public.user_role(),'''') not in (''admin'',''logist'') then';
+  if position(old_check in definition)=0 then
+    raise exception 'Unexpected trip confirmation guard; review migration';
+  end if;
+  execute replace(definition,old_check,
+    'if not dlight_private.responsibility_manager(''trip'',p_trip) then');
+end $$;
+
 do $$
 declare target regprocedure; definition text; old_check text;
 begin
