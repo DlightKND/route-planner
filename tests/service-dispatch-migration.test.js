@@ -145,6 +145,26 @@ it('requires an audited reason for a delegated owner to change a request stage',
   }finally{await db.exec('rollback');}
 });
 
+it('logs a delegated owner trip stage and rejects a direct status write',async()=>{
+  await db.exec('begin');
+  try{
+    await db.exec('grant select,update on trips to authenticated');
+    await q("insert into profiles(id,role,active) values($1,'admin',true),($2,'engineer',true)",[id(1),id(2)]);
+    await q('update trips set owner_id=$1,curator_id=$2 where id=$3',[id(1),id(2),id(30)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await db.exec('set role authenticated');
+    await db.exec('savepoint direct_trip_status');
+    await expect(q("update trips set status='assigned' where id=$1",[id(30)]))
+      .rejects.toThrow(/причину вмешательства/);
+    await db.exec('rollback to savepoint direct_trip_status');
+    await q("select public.entity_status_intervene('trip',$1,'assigned','Назначаю выезд')",[id(30)]);
+    expect((await q('select status from trips where id=$1',[id(30)]))[0].status).toBe('assigned');
+    expect((await q("select reason from entity_status_interventions where entity_kind='trip' and entity_id=$1",[id(30)]))[0].reason)
+      .toBe('Назначаю выезд');
+    await db.exec('reset role');
+  }finally{await db.exec('rollback');}
+});
+
 it('lets a delegated engineer manage only the assigned request finance',async()=>{
   await db.exec('begin');
   try{
