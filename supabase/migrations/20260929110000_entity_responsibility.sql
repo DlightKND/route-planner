@@ -143,6 +143,23 @@ create policy trip_stays_responsibility_read on public.trip_stays
   for select to authenticated using (
     dlight_private.responsibility_manager('trip',trip_id)
   );
+do $$ begin
+  if to_regclass('public.trip_reschedules') is not null then
+    execute $policy$create policy trip_reschedules_responsibility_read on public.trip_reschedules
+      for select to authenticated using (
+        dlight_private.responsibility_manager('trip',trip_id)
+      )$policy$;
+  end if;
+end $$;
+create policy trip_cost_runs_responsibility_read on public.trip_cost_allocation_runs
+  for select to authenticated using (
+    dlight_private.responsibility_manager('trip',trip_id)
+  );
+create policy trip_stay_allocations_responsibility_read on public.trip_stay_task_allocations
+  for select to authenticated using (
+    exists(select 1 from public.trip_stays s where s.id=stay_id
+      and dlight_private.responsibility_manager('trip',s.trip_id))
+  );
 create policy request_void_responsibility_read on public.request_finance_void_events
   for select to authenticated using (
     dlight_private.responsibility_manager('job',job_id)
