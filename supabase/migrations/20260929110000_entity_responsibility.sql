@@ -128,6 +128,15 @@ create policy trip_stays_responsibility_read on public.trip_stays
   for select to authenticated using (
     dlight_private.responsibility_manager('trip',trip_id)
   );
+create policy request_void_responsibility_read on public.request_finance_void_events
+  for select to authenticated using (
+    dlight_private.responsibility_manager('job',job_id)
+  );
+create policy request_correction_responsibility_read on public.request_finance_correction_links
+  for select to authenticated using (
+    exists(select 1 from public.request_finance_void_events e
+      where e.id=event_id and dlight_private.responsibility_manager('job',e.job_id))
+  );
 
 create function dlight_private.responsibility_default() returns trigger
 language plpgsql set search_path='' as $$
@@ -362,6 +371,69 @@ begin
     execute replace(definition,old_check,
       'auth.uid() is null or not dlight_private.responsibility_manager(''order'',p_id)');
   end if;
+end $$;
+
+do $$
+declare target regprocedure; definition text; old_check text;
+begin
+  old_check:='auth.uid() is null or coalesce(public.user_role(),'''') not in (''admin'',''logist'')';
+  foreach target in array array[
+    'public.trip_workbench_read(uuid)'::regprocedure,
+    'public.trip_plan_save(uuid,integer,jsonb,uuid[],text,jsonb)'::regprocedure,
+    'public.trip_presence_save(uuid,integer,jsonb,text)'::regprocedure,
+    'public.trip_presence_detect(uuid,integer)'::regprocedure,
+    'dlight_private.trip_plan_save_tasks(uuid,integer,jsonb,uuid[],text,jsonb)'::regprocedure,
+    'public.trip_cost_allocation_save(uuid,integer,timestamptz,text,jsonb,jsonb)'::regprocedure
+  ] loop
+    definition:=pg_get_functiondef(target);
+    if position(old_check in definition)=0 then
+      raise exception 'Unexpected trip manager check in %; review migration',target;
+    end if;
+    definition:=replace(definition,old_check,
+      case when target='public.trip_plan_save(uuid,integer,jsonb,uuid[],text,jsonb)'::regprocedure
+        or target='dlight_private.trip_plan_save_tasks(uuid,integer,jsonb,uuid[],text,jsonb)'::regprocedure
+      then 'auth.uid() is null or (p_trip is null and public.user_role() not in (''admin'',''logist'')) or (p_trip is not null and not dlight_private.responsibility_manager(''trip'',p_trip))'
+      else 'auth.uid() is null or not dlight_private.responsibility_manager(''trip'',p_trip)' end);
+    execute definition;
+  end loop;
+end $$;
+
+do $$
+declare target regprocedure; definition text; old_check text;
+begin
+  target:='dlight_private.request_finance_save(uuid,jsonb,jsonb,jsonb)'::regprocedure;
+  definition:=pg_get_functiondef(target);
+  old_check:='manager:=coalesce(public.user_role() in (''admin'',''logist''),false);';
+  if position(old_check in definition)=0 then
+    raise exception 'Unexpected canonical request save function; review migration';
+  end if;
+  execute replace(definition,old_check,
+    'manager:=coalesce(public.user_role() in (''admin'',''logist''),false) or (jid is not null and dlight_private.responsibility_manager(''job'',jid));');
+
+  target:='dlight_private.request_finance_approve(uuid,uuid[])'::regprocedure;
+  definition:=pg_get_functiondef(target);
+  old_check:='auth.uid() is null or coalesce(public.user_role() in (''admin'',''logist''),false) is not true';
+  if position(old_check in definition)=0 then
+    raise exception 'Unexpected request approval function; review migration';
+  end if;
+  execute replace(definition,old_check,
+    'auth.uid() is null or not dlight_private.responsibility_manager(''job'',p_job)');
+
+  target:='dlight_private.request_finance_void(uuid,text)'::regprocedure;
+  definition:=pg_get_functiondef(target);
+  if position(old_check in definition)=0 then
+    raise exception 'Unexpected finance void function; review migration';
+  end if;
+  execute replace(definition,old_check,
+    'auth.uid() is null or not dlight_private.responsibility_manager(''job'',(select i.job_id from public.service_order_items i where i.id=p_item))');
+
+  target:='dlight_private.request_finance_link_correction(uuid,uuid)'::regprocedure;
+  definition:=pg_get_functiondef(target);
+  if position(old_check in definition)=0 then
+    raise exception 'Unexpected finance correction function; review migration';
+  end if;
+  execute replace(definition,old_check,
+    'auth.uid() is null or not dlight_private.responsibility_manager(''job'',(select e.job_id from public.request_finance_void_events e where e.id=p_event))');
 end $$;
 
 commit;
