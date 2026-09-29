@@ -57,10 +57,59 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260928190000_preserve_started_request_on_stale_replay.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260929010000_guard_legacy_manager_team_replay.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260929020000_freeze_legacy_finance_on_active_task.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260929110000_entity_responsibility.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
 afterAll(async()=>{await db?.close();});
+
+it('delegates the curator without changing the owner, records the reason and rejects strangers',async()=>{
+  await db.exec('begin');
+  let stage='setup';
+  try{
+    await q("insert into profiles(id,role,active) values($1,'admin',true),($2,'engineer',true),($3,'engineer',true),($4,'logist',false)",[id(1),id(2),id(3),id(4)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    stage='insert';
+    const [job]=await q("insert into jobs(client_id) values($1) returning id,owner_id,curator_id",[id(20)]);
+    expect(job.owner_id).toBe(id(1));
+    expect(job.curator_id).toBe(id(1));
+    await db.exec('set role authenticated');
+    stage='delegate';
+    const [delegated]=await q("select public.entity_responsibility_assign('job',$1,'curator',$2,'Передаю ведение заявки') result",[job.id,id(2)]);
+    expect(delegated.result).toMatchObject({owner_id:id(1),curator_id:id(2)});
+    await db.exec('reset role');
+    stage='audit';
+    expect((await q("select count(*)::int n from entity_responsibility_events where entity_kind='job' and entity_id=$1",[job.id]))[0].n).toBe(1);
+    const [task]=await q("select id,revision from service_orders where job_id=$1 limit 1",[id(10)]);
+    await db.exec('set role authenticated');
+    await q("select public.entity_responsibility_assign('order',$1,'curator',$2,'Передаю ведение задания',$3)",[task.id,id(2),task.revision]);
+    await q("select public.entity_responsibility_assign('trip',$1,'curator',$2,'Передаю ведение выезда')",[id(30),id(2)]);
+    await db.exec('reset role');
+    expect((await q('select owner_id,curator_id,revision from service_orders where id=$1',[task.id]))[0])
+      .toEqual({owner_id:id(2),curator_id:id(2),revision:task.revision+1});
+    expect((await q('select owner_id,curator_id from trips where id=$1',[id(30)]))[0])
+      .toEqual({owner_id:id(2),curator_id:id(2)});
+    await db.exec('set role authenticated');
+    await db.exec('savepoint inactive_assignment');
+    await expect(q("select public.entity_responsibility_assign('job',$1,'curator',$2,'Неактивный куратор')",[job.id,id(4)])).rejects.toThrow(/активного/);
+    await db.exec('rollback to savepoint inactive_assignment');
+    await db.exec('reset role');
+    await q("select set_config('test.uid',$1,true)",[id(3)]);
+    await db.exec('set role authenticated');
+    await db.exec('savepoint rejected_assignment');
+    stage='reject';
+    await expect(q("select public.entity_responsibility_assign('job',$1,'curator',$2,'Попытка подменить куратора')",[job.id,id(3)])).rejects.toThrow(/Куратора меняет/);
+    await db.exec('rollback to savepoint rejected_assignment');
+    await db.exec('reset role');
+    stage='redelegate';
+    await q("select set_config('test.uid',$1,true)",[id(2)]);
+    await db.exec('set role authenticated');
+    await q("select public.entity_responsibility_assign('job',$1,'curator',$2,'Передаю коллеге')",[job.id,id(3)]);
+    await db.exec('reset role');
+    expect((await q('select owner_id,curator_id from jobs where id=$1',[job.id]))[0]).toEqual({owner_id:id(1),curator_id:id(3)});
+  }catch(e){throw new Error(stage+': '+e.message,{cause:e});
+  }finally{await db.exec('rollback');}
+});
 
 it('accepts old offline notes without reverting a started request or its assignment',async()=>{
   await db.exec('begin');
