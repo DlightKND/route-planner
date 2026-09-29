@@ -3536,8 +3536,28 @@ async function renderMine(){
 }
 
 
+function delegatedOwnerIntervenes(row){
+  return !!(row?.id&&row.owner_id===session?.user?.id&&row.curator_id!==session?.user?.id);
+}
+function askInterventionReason(){
+  const reason=window.prompt('Причина вмешательства владельца (не менее 5 символов)','');
+  if(reason===null)return null;
+  if(reason.trim().length<5||reason.trim().length>1000){notify('Укажи причину вмешательства (5–1000 символов).','warn');return null;}
+  return reason.trim();
+}
+async function changeEntityStatus(kind,row,status){
+  if(delegatedOwnerIntervenes(row)){
+    const reason=askInterventionReason();if(reason===null)return false;
+    const {error}=await sb.rpc('entity_status_intervene',{p_kind:kind,p_id:row.id,p_status:status,p_reason:reason});
+    if(error)throw error;
+  }else{
+    const {error}=await sb.from(kind==='job'?'jobs':'trips').update({status}).eq('id',row.id);
+    if(error)throw error;
+  }
+  return true;
+}
 async function jobSetStatus(id,st){ const j=jobs.find(x=>x.id==id);
-  const {error}=await sb.from('jobs').update({status:st}).eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; }
+  try{if(!await changeEntityStatus('job',j,st)){renderJobs();return;}}catch(e){notify('Ошибка: '+e.message,'err');renderJobs();return;}
   if(st==='done') await jobClosed(id,{equipmentId:j&&j.equipment_id,works:(j&&j.job_works)||[]}); showToast('Статус: '+(ST[st]||st)); renderJobs(); }
 function populateEquip(){ const list=eqByClient[$('jbClient').value]||[]; $('jbEquip').innerHTML='<option value="">— без привязки —</option>'+list.map(e=>'<option value="'+e.id+'">'+esc(e.model+(e.serial?' · '+e.serial:''))+'</option>').join(''); }
 $('jbClient').onchange=()=>{ populateEquip(); jobHead(); };
@@ -3572,7 +3592,7 @@ async function fetchJobFull(id){
     return full;
   }catch(e){ console.warn('Заявка не дочитана:',e); return null; }
 }
-let currentJobAuthority=false;
+let currentJobAuthority=false,jobDelegatedOwner=false,jobSavedStatus=null,jobInterventionReason='',jobReasonTarget=null;
 function canWriteJob(j=null){return canWrite()||!!(j?j.id&&[j.owner_id,j.curator_id].includes(session?.user?.id):currentJobAuthority);}
 async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); jobEditId=id; serviceOrders.requestPanel(id);
   let j=null,pendingEdit=false;
@@ -3591,6 +3611,8 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
     }
   }
   currentJobAuthority=!!(j?.id&&[j.owner_id,j.curator_id].includes(session?.user?.id));
+  jobDelegatedOwner=delegatedOwnerIntervenes(j);
+  jobSavedStatus=j?.status||null;jobInterventionReason='';jobReasonTarget=null;
   if(currentJobAuthority&&!canWrite()){
     const finance=await sb.rpc('entity_finance_config',{p_kind:'job',p_id:id});
     if(finance.error)notify('Финансовые профили недоступны: '+finance.error.message,'err');
@@ -4191,7 +4213,7 @@ async function qFlush(){
 async function qSendOne(it){
   const p=it.payload||{};
   if(it.kind==='trip'){
-    const {data,error}=await sb.rpc(TRIP_RPC[p.action],{p_trip:p.tripId});
+    const {data,error}=p.reason?await sb.rpc('entity_status_intervene',{p_kind:'trip',p_id:p.tripId,p_status:TRIP_NEXT_STATUS[p.action],p_reason:p.reason}):await sb.rpc(TRIP_RPC[p.action],{p_trip:p.tripId});
     if(error) throw error;
     if(data==='wrong_status'||data==='not_found') throw new Error(TRIP_SAY[data]||String(data));
     return;
@@ -5128,6 +5150,7 @@ function jobRec(){
   return {client_id:$('jbClient').value,
     equipment_id:$('jbEquip').value||null,
     status:$('jbStatus').value,
+    ...(jobInterventionReason&&jobReasonTarget===$('jbStatus').value?{intervention_reason:jobInterventionReason}:{}),
     scheduled_date:$('jbDate').value||null,
     time_window:$('jbWindow').value.trim(),
     due_date:$('jbDue').value||null,
@@ -5263,6 +5286,11 @@ async function queueCurrentJobSnapshot(){
 async function saveJobNow(){
   clearTimeout(jobSaveT); jobSaveT=null;
   if(!jobEditId) return;
+  if(jobDelegatedOwner&&jobSavedStatus!==$('jbStatus').value&&jobReasonTarget!==$('jbStatus').value){
+    const reason=askInterventionReason();
+    if(reason===null){$('jbStatus').value=jobSavedStatus;jobHead();return;}
+    jobInterventionReason=reason;jobReasonTarget=$('jbStatus').value;
+  }
   const problem=jobProblem();
   if(problem){ jobSaveState('не сохранено · '+problem,'bad'); return; }
   // Одна запись за раз: параллельные удаления и вставки job_works
@@ -5289,7 +5317,7 @@ async function saveJobNow(){
       }
       return;
     }
-    await persistJob(jobRec()); jobsDirty=true; jobSaveState('сохранено');
+    await persistJob(jobRec());jobSavedStatus=$('jbStatus').value;jobInterventionReason='';jobReasonTarget=null;jobsDirty=true;jobSaveState('сохранено');
   }
   catch(e){
     // Нет связи — кладём в очередь и правим местный снимок, чтобы при
@@ -5586,10 +5614,10 @@ function wireKanbanDrag(box,onDrop){ if(!canWrite()) return;
       let id=''; try{ id=e.dataTransfer.getData('text/plain'); }catch(err){}
       const st=col.dataset.kst; if(id&&st) await onDrop(id,st); }); }); }
 async function dropJob(id,st){ const j=jobs.find(x=>x.id==id); if(!j||j.status===st) return; const old=j.status;
-  const {error}=await sb.from('jobs').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); return; }
+  try{if(!await changeEntityStatus('job',j,st)){renderJobs();return;}}catch(e){notify(e.message,'err');renderJobs();return;}
   if(st==='done') await jobClosed(id,{equipmentId:j.equipment_id,works:j.job_works||[]});
   j.status=st; await renderJobs(); await refreshStats();
-  undoToast('Заявка → «'+(ST[st]||st)+'»', async ()=>{ const {error:e2}=await sb.from('jobs').update({status:old}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Статус возвращён'); }); }
+  undoToast('Заявка → «'+(ST[st]||st)+'»', async ()=>{ try{if(!await changeEntityStatus('job',j,old))return;}catch(e){notify(e.message,'err');return;} await renderJobs(); showToast('Статус возвращён'); }); }
 // Канбан и выпадающий список статуса раньше писали статус напрямую.
 // Триггер trg_guard_trip_status это запрещает: переходы в «в работе»,
 // «на проверке» и «завершён» должны идти через trip_start / trip_finish /
@@ -5600,13 +5628,13 @@ const TRIP_KIND={in_progress:'start',finished:'finish',done:'confirm'};
 async function dropTrip(id,st){ const t=trips.find(x=>x.id==id); if(!t||t.status===st) return; const old=t.status;
   const kind=TRIP_KIND[st];
   if(kind){ await tripAction(id,kind); await renderTrips(); return; }
-  const {error}=await sb.from('trips').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); return; }
+  try{if(!await changeEntityStatus('trip',t,st)){renderTrips();return;}}catch(e){notify(e.message,'err');renderTrips();return;}
   t.status=st; await renderTrips();
   // Откат предлагаем, только если возвращаться некуда через RPC: отменить
   // старт, финиш или подтверждение нельзя — они уже записали время, факт
   // и стоянки.
   if(TRIP_KIND[old]){ showToast('Выезд → «'+(ST_TRIP[st]||st)+'»'); return; }
-  undoToast('Выезд → «'+(ST_TRIP[st]||st)+'»', async ()=>{ const {error:e2}=await sb.from('trips').update({status:old}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Статус возвращён'); }); }
+  undoToast('Выезд → «'+(ST_TRIP[st]||st)+'»', async ()=>{ try{if(!await changeEntityStatus('trip',t,old))return;}catch(e){notify(e.message,'err');return;} await renderTrips(); showToast('Статус возвращён'); }); }
 const TRIP_STATUS_ORDER=['planned','assigned','in_progress','finished','done','cancelled'];
 let tripVisible={planned:true,assigned:true,in_progress:true,finished:true,done:false,cancelled:false};
 function renderTripChips(){ const box=$('tripStatusChips'); if(!box) return; box.innerHTML=TRIP_STATUS_ORDER.map(s=>'<span class="chip'+(tripVisible[s]?' on':'')+'" data-ts="'+s+'">'+esc(ST_TRIP[s])+'</span>').join('');
@@ -5653,7 +5681,7 @@ function wireTripCards(box){
   box.querySelectorAll('[data-tstat]').forEach(sel=>sel.onchange=async()=>{ const id=sel.dataset.tstat, st=sel.value;
     const kind=TRIP_KIND[st];
     if(kind){ await tripAction(id,kind); renderTrips(); return; }
-    const {error}=await sb.from('trips').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); renderTrips(); return; } const t=trips.find(x=>x.id==id); if(t) t.status=st; showToast('Статус: '+(ST_TRIP[st]||st)); renderTrips(); }); }
+    try{if(!await changeEntityStatus('trip',trips.find(x=>x.id==id),st)){renderTrips();return;}}catch(e){notify(e.message,'err');renderTrips();return;} const t=trips.find(x=>x.id==id); if(t) t.status=st; showToast('Статус: '+(ST_TRIP[st]||st)); renderTrips(); }); }
 async function renderTrips(){ await ensureRefs(); renderTripChips();
   const {data,error}=await sb.from('trips').select('*, trip_jobs(job_id)').is('deleted_at',null).order('created_at',{ascending:false});
   const box=$('tripList'); if(error){ box.className=''; box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
@@ -6525,6 +6553,9 @@ async function tripAction(id,kind,engineerName){
   const a=TRIP_ASK[kind];
   const question=engineerName?a.q.replace('выезд?', 'выезд '+engineerName+'?'):a.q;
   if(!await confirmDialog(question,{okText:a.ok})) return;
+  const row=trips.find(t=>t.id===id)||getTrip(id)||tripCache[id];
+  const reason=delegatedOwnerIntervenes(row)?askInterventionReason():'';
+  if(reason===null)return;
   // Подтверждение — последняя точка, где пробег ещё можно поправить: сразу
   // после него число уходит в одометр машины и в себестоимость. Поэтому
   // считаем факт ЗДЕСЬ, до RPC, и своими руками.
@@ -6532,7 +6563,7 @@ async function tripAction(id,kind,engineerName){
     if(!await settleFactKm(id)) return;
   }
   try{
-    const { data, error }=await sb.rpc(TRIP_RPC[kind],{p_trip:id});
+    const { data, error }=reason?await sb.rpc('entity_status_intervene',{p_kind:'trip',p_id:id,p_status:TRIP_NEXT_STATUS[kind],p_reason:reason}):await sb.rpc(TRIP_RPC[kind],{p_trip:id});
     if(error) throw error;
     // Сервер отвечает словом, а не молчанием: не сработало — говорим прямо,
     // а не делаем вид, что всё прошло.
@@ -6556,7 +6587,7 @@ async function tripAction(id,kind,engineerName){
     // Нет связи — не теряем действие, а кладём в очередь и сразу двигаем
     // статус в местном снимке: инженер должен видеть, что нажатие
     // засчитано, иначе он нажмёт ещё раз и ещё.
-    if(isNetErr(e) && await qPush('trip',{tripId:id,action:kind})){
+    if(isNetErr(e) && await qPush('trip',{tripId:id,action:kind,reason})){
       await snapTripStatus(id,TRIP_NEXT_STATUS[kind]);
       showToast('Нет связи — отправлю, когда появится');
       if(plannerCur==='mine') renderMine();

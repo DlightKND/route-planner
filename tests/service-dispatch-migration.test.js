@@ -112,6 +112,39 @@ it('delegates the curator without changing the owner, records the reason and rej
   }finally{await db.exec('rollback');}
 });
 
+it('requires an audited reason for a delegated owner to change a request stage',async()=>{
+  await db.exec('begin');
+  try{
+    await db.exec('grant select,update on jobs to authenticated');
+    await q("insert into profiles(id,role,active) values($1,'admin',true),($2,'engineer',true)",[id(1),id(2)]);
+    await q('update jobs set owner_id=$1,curator_id=$2 where id=$3',[id(1),id(2),id(10)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    await db.exec('set role authenticated');
+    await db.exec('savepoint direct_status');
+    await expect(q("update jobs set status='planned' where id=$1",[id(10)])).rejects.toThrow(/причину вмешательства/);
+    await db.exec('rollback to savepoint direct_status');
+    await db.exec('savepoint missing_reason');
+    await expect(q("select public.entity_status_intervene('job',$1,'planned','нет')",[id(10)])).rejects.toThrow(/причину вмешательства/);
+    await db.exec('rollback to savepoint missing_reason');
+    await q("select public.entity_status_intervene('job',$1,'planned','Меняю срок выполнения')",[id(10)]);
+    expect((await q('select status from jobs where id=$1',[id(10)]))[0].status).toBe('planned');
+    expect((await q("select previous_status,next_status,reason from entity_status_interventions where entity_kind='job' and entity_id=$1",[id(10)]))[0])
+      .toEqual({previous_status:'open',next_status:'planned',reason:'Меняю срок выполнения'});
+    const rec={client_id:id(20),equipment_id:null,status:'open',scheduled_date:null,time_window:'',due_date:null,
+      assigned_engineer:null,engineer_ids:[],notes:'Возвращено владельцем',at_depot:false,depot_id:null};
+    await db.exec('savepoint canonical_without_reason');
+    await expect(q('select public.job_request_save_canonical($1,$2::jsonb,null,null)',[id(10),JSON.stringify(rec)]))
+      .rejects.toThrow(/причину вмешательства/);
+    await db.exec('rollback to savepoint canonical_without_reason');
+    await q('select public.job_request_save_canonical($1,$2::jsonb,null,null)',
+      [id(10),JSON.stringify({...rec,intervention_reason:'Возвращаю в новые заявки'})]);
+    expect((await q('select status,notes from jobs where id=$1',[id(10)]))[0])
+      .toEqual({status:'open',notes:'Возвращено владельцем'});
+    expect((await q("select count(*)::int n from entity_status_interventions where entity_kind='job' and entity_id=$1",[id(10)]))[0].n).toBe(2);
+    await db.exec('reset role');
+  }finally{await db.exec('rollback');}
+});
+
 it('lets a delegated engineer manage only the assigned request finance',async()=>{
   await db.exec('begin');
   try{

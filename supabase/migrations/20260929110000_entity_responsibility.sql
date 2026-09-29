@@ -278,6 +278,103 @@ revoke all on function public.entity_responsibility_assign(text,uuid,text,uuid,t
 grant execute on function public.entity_responsibility_assign(text,uuid,text,uuid,text,integer)
   to authenticated;
 
+-- A delegated owner may still move a request or trip, but every such move
+-- carries its reason in the same transaction. Clients cannot insert audit
+-- rows directly, and the guard rejects status writes without one.
+create table public.entity_status_interventions (
+  id bigint generated always as identity primary key,
+  entity_kind text not null check(entity_kind in ('job','trip')),
+  entity_id uuid not null,
+  actor_id uuid not null references public.profiles(id),
+  previous_status text not null,
+  next_status text not null,
+  reason text not null check(length(btrim(reason)) between 5 and 1000),
+  transaction_id bigint not null,
+  created_at timestamptz not null default now()
+);
+create index entity_status_interventions_entity_idx
+  on public.entity_status_interventions(entity_kind,entity_id,created_at desc);
+alter table public.entity_status_interventions enable row level security;
+revoke all on public.entity_status_interventions from public,anon,authenticated;
+grant select on public.entity_status_interventions to authenticated;
+create policy entity_status_interventions_read on public.entity_status_interventions
+  for select to authenticated using (
+    dlight_private.responsibility_access(entity_kind,entity_id)
+  );
+
+create function dlight_private.record_status_intervention(
+  p_kind text,p_id uuid,p_status text,p_reason text
+) returns void language plpgsql security definer set search_path='' as $$
+declare owner uuid; curator uuid; old_status text;
+begin
+  if p_kind='job' then
+    select owner_id,curator_id,status::text into owner,curator,old_status
+      from public.jobs where id=p_id and deleted_at is null for update;
+  elsif p_kind='trip' then
+    select owner_id,curator_id,status::text into owner,curator,old_status
+      from public.trips where id=p_id and deleted_at is null for update;
+  else raise exception 'Некорректный тип вмешательства'; end if;
+  if not found or auth.uid() is null or auth.uid() is distinct from owner
+    or curator is not distinct from owner or not dlight_private.responsibility_manager(p_kind,p_id)
+  then raise exception 'Вмешательство владельца недоступно'; end if;
+  if old_status=p_status then raise exception 'Стадия уже установлена'; end if;
+  if length(btrim(coalesce(p_reason,''))) not between 5 and 1000
+  then raise exception 'Укажи причину вмешательства (5–1000 символов)'; end if;
+  insert into public.entity_status_interventions(
+    entity_kind,entity_id,actor_id,previous_status,next_status,reason,transaction_id)
+  values(p_kind,p_id,auth.uid(),old_status,p_status,btrim(p_reason),txid_current());
+end $$;
+revoke all on function dlight_private.record_status_intervention(text,uuid,text,text)
+  from public,anon,authenticated;
+
+create function dlight_private.status_intervention_guard() returns trigger
+language plpgsql security definer set search_path='' as $$
+declare kind text;
+begin
+  if new.status is not distinct from old.status or auth.uid() is null
+    or auth.uid() is distinct from old.owner_id
+    or old.curator_id is not distinct from old.owner_id then return new; end if;
+  kind:=case tg_table_name when 'jobs' then 'job' else 'trip' end;
+  if not exists(select 1 from public.entity_status_interventions e
+    where e.entity_kind=kind and e.entity_id=old.id and e.actor_id=auth.uid()
+      and e.previous_status=old.status::text and e.next_status=new.status::text
+      and e.transaction_id=txid_current())
+  then raise exception 'Владелец указывает причину вмешательства'; end if;
+  return new;
+end $$;
+revoke all on function dlight_private.status_intervention_guard() from public,anon,authenticated;
+create trigger jobs_status_intervention_guard before update of status on public.jobs
+  for each row execute function dlight_private.status_intervention_guard();
+create trigger trips_status_intervention_guard before update of status on public.trips
+  for each row execute function dlight_private.status_intervention_guard();
+
+create function public.entity_status_intervene(
+  p_kind text,p_id uuid,p_status text,p_reason text
+) returns text language plpgsql security definer set search_path='' as $$
+declare result text;
+begin
+  perform dlight_private.record_status_intervention(p_kind,p_id,p_status,p_reason);
+  if p_kind='job' then
+    update public.jobs set status=p_status::public.job_status where id=p_id;
+    return p_status;
+  end if;
+  if p_status='in_progress' then result:=public.trip_start(p_id);
+  elsif p_status='finished' then result:=public.trip_finish(p_id);
+  elsif p_status='done' then result:=public.trip_confirm(p_id);
+  else
+    update public.trips set status=p_status::public.trip_status where id=p_id;
+    result:=p_status;
+  end if;
+  if result in ('busy','wrong_status','not_found') then
+    raise exception 'Выезд изменён другим пользователем. Обнови данные';
+  end if;
+  return result;
+end $$;
+revoke all on function public.entity_status_intervene(text,uuid,text,text)
+  from public,anon,authenticated;
+grant execute on function public.entity_status_intervene(text,uuid,text,text)
+  to authenticated;
+
 -- Existing clients may still call the original task-curator RPC. Route it
 -- through the same audited transfer instead of leaving a bypass behind.
 create or replace function dlight_private.order_curator_assign(
@@ -365,6 +462,17 @@ begin
     'if p_status in (''paused'',''cancelled'') and length(trim(coalesce(p_reason,'''')))=0',
     'if o.owner_id=auth.uid() and o.curator_id is distinct from auth.uid() and length(btrim(coalesce(p_reason,'''')))<5 then raise exception ''Владелец указывает причину вмешательства''; end if;'||E'\n '||
     'if p_status in (''paused'',''cancelled'') and length(trim(coalesce(p_reason,'''')))=0');
+  old_check:='update public.jobs set status=''in_progress'' where id=request_id and status in (''open'',''planned'');';
+  if position(old_check in definition)=0 then
+    raise exception 'Unexpected request stage sync in task transition';
+  end if;
+  definition:=replace(definition,old_check,
+    'if exists(select 1 from public.jobs j where j.id=request_id '
+    ||'and j.owner_id=auth.uid() and j.curator_id is distinct from auth.uid() '
+    ||'and j.status in (''open'',''planned'')) then '
+    ||'perform dlight_private.record_status_intervention(''job'',request_id,''in_progress'','
+    ||'coalesce(nullif(btrim(p_reason),''''),''Автоматически вслед за запуском задания'')); end if;'||E'\n   '
+    ||old_check);
   execute definition;
 
   target:='dlight_private.order_result(uuid,integer,jsonb,text)'::regprocedure;
@@ -413,15 +521,34 @@ begin
   end loop;
 end $$;
 
+-- A plan save may also move an unstarted trip between planned and assigned.
+-- Its existing reason field becomes the audited intervention reason.
+do $$
+declare target regprocedure; definition text; old_check text;
+begin
+  target:='public.trip_plan_save(uuid,integer,jsonb,uuid[],text,jsonb)'::regprocedure;
+  definition:=pg_get_functiondef(target);
+  old_check:='perform set_config(''dlight.change_reason'',coalesce(nullif(btrim(p_reason),''''),''Создание плана''),true);';
+  if position(old_check in definition)=0 then
+    raise exception 'Unexpected trip plan status write; review migration';
+  end if;
+  execute replace(definition,old_check,
+    'if p_trip is not null and t.owner_id=auth.uid() and t.curator_id is distinct from auth.uid() '
+    ||'and v.status is distinct from t.status then '
+    ||'perform dlight_private.record_status_intervention(''trip'',p_trip,v.status::text,p_reason); end if;'||E'\n  '
+    ||old_check);
+end $$;
+
 -- Starting and finishing still allow assigned engineers; the curator and
 -- owner gain the same controls even when they are not in the crew.
 do $$
 declare target regprocedure; definition text; old_check text;
 begin
   foreach target in array array[
-    'public.trip_start(uuid)'::regprocedure,
-    'public.trip_finish(uuid)'::regprocedure
+    to_regprocedure('public.trip_start(uuid)'),
+    to_regprocedure('public.trip_finish(uuid)')
   ] loop
+    if target is null then continue; end if;
     definition:=pg_get_functiondef(target);
     old_check:='public.is_owner_or_mgr(t.lead_engineer) or auth.uid()=any(t.engineer_ids)';
     if position(old_check in definition)=0 then
@@ -432,14 +559,16 @@ begin
       ||old_check);
   end loop;
 
-  target:='public.trip_confirm(uuid)'::regprocedure;
-  definition:=pg_get_functiondef(target);
-  old_check:='if coalesce(public.user_role(),'''') not in (''admin'',''logist'') then';
-  if position(old_check in definition)=0 then
-    raise exception 'Unexpected trip confirmation guard; review migration';
+  target:=to_regprocedure('public.trip_confirm(uuid)');
+  if target is not null then
+    definition:=pg_get_functiondef(target);
+    old_check:='if coalesce(public.user_role(),'''') not in (''admin'',''logist'') then';
+    if position(old_check in definition)=0 then
+      raise exception 'Unexpected trip confirmation guard; review migration';
+    end if;
+    execute replace(definition,old_check,
+      'if not dlight_private.responsibility_manager(''trip'',p_trip) then');
   end if;
-  execute replace(definition,old_check,
-    'if not dlight_private.responsibility_manager(''trip'',p_trip) then');
 end $$;
 
 do $$
@@ -457,8 +586,17 @@ begin
   if position(old_check in definition)=0 then
     raise exception 'Unexpected request assignee guard; review migration';
   end if;
-  execute replace(definition,old_check,
+  definition:=replace(definition,old_check,
     'not coalesce(auth.uid()=any(coalesce(job.engineer_ids,''{}''::uuid[])) or job.assigned_engineer=auth.uid(),false)');
+  old_check:='update public.jobs set client_id=(p_rec->>''client_id'')::uuid,';
+  if position(old_check in definition)=0 then
+    raise exception 'Unexpected canonical request status write; review migration';
+  end if;
+  execute replace(definition,old_check,
+    'if job.owner_id=auth.uid() and job.curator_id is distinct from auth.uid() '
+    ||'and job.status is distinct from coalesce(nullif(p_rec->>''status'','''')::public.job_status,job.status) '
+    ||'then perform dlight_private.record_status_intervention(''job'',jid,p_rec->>''status'',p_rec->>''intervention_reason''); end if;'||E'\n    '
+    ||old_check);
 
   target:='dlight_private.request_finance_approve(uuid,uuid[])'::regprocedure;
   definition:=pg_get_functiondef(target);
@@ -548,6 +686,17 @@ end $$;
 revoke all on function dlight_private.enqueue_curator_notice(text,uuid,text,text,uuid)
   from public,anon,authenticated;
 
+create function dlight_private.status_intervention_notify() returns trigger
+language plpgsql security definer set search_path='' as $$
+begin
+  perform dlight_private.enqueue_curator_notice(new.entity_kind,new.entity_id,
+    'Владелец изменил стадию',new.previous_status||' → '||new.next_status||' · '||new.reason,null);
+  return null;
+end $$;
+revoke all on function dlight_private.status_intervention_notify() from public,anon,authenticated;
+create trigger entity_status_intervention_notify after insert on public.entity_status_interventions
+  for each row execute function dlight_private.status_intervention_notify();
+
 create function dlight_private.responsibility_notify() returns trigger
 language plpgsql security definer set search_path='' as $$
 begin
@@ -568,6 +717,12 @@ begin
   if new.status is not distinct from old.status then return null; end if;
   kind:=case tg_table_name when 'jobs' then 'job'
     when 'service_orders' then 'order' else 'trip' end;
+  if kind in ('job','trip') and exists(
+    select 1 from public.entity_status_interventions e
+    where e.entity_kind=kind and e.entity_id=new.id and e.actor_id=auth.uid()
+      and e.transaction_id=txid_current()
+      and e.previous_status=old.status::text and e.next_status=new.status::text
+  ) then return null; end if;
   title:=case kind when 'job' then 'Заявка' when 'order' then 'Задание' else 'Выезд' end;
   perform dlight_private.enqueue_curator_notice(kind,new.id,title||' сменил стадию',
     old.status::text||' → '||new.status::text,auth.uid());

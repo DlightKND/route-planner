@@ -27,20 +27,33 @@ export function mountEntityResponsibility({
       <label>Причина <input name="reason" required minlength="5" maxlength="1000" placeholder="Почему передаётся ответственность"></label>
       <button type="submit" class="btn sm">Передать</button><span role="status" class="hint"></span>
     </form>`:''}
-    <div class="responsibility-events" aria-live="polite"><p class="hint">Загружаю историю передачи…</p></div>`;
+    <div class="responsibility-events" aria-live="polite"><p class="hint">Загружаю историю ответственности…</p></div>`;
   const events=root.querySelector('.responsibility-events');
   const refresh=async()=>{
-    const {data,error}=await db.from('entity_responsibility_events')
-      .select('id,actor_id,previous_owner_id,previous_curator_id,owner_id,curator_id,reason,created_at')
-      .eq('entity_kind',kind).eq('entity_id',id).order('created_at',{ascending:false}).limit(30);
+    const [{data,error},interventions]=await Promise.all([
+      db.from('entity_responsibility_events')
+        .select('id,actor_id,previous_owner_id,previous_curator_id,owner_id,curator_id,reason,created_at')
+        .eq('entity_kind',kind).eq('entity_id',id).order('created_at',{ascending:false}).limit(30),
+      kind==='order'?Promise.resolve({data:[]}):db.from('entity_status_interventions')
+        .select('id,actor_id,previous_status,next_status,reason,created_at')
+        .eq('entity_kind',kind).eq('entity_id',id).order('created_at',{ascending:false}).limit(30)
+    ]);
     if(error)throw error;
+    if(interventions.error)throw interventions.error;
     if(root.dataset.responsibilityId!==id)return;
-    events.innerHTML=data?.length?data.map(x=>`<div class="hint">
+    const transfers=(data||[]).map(x=>({at:x.created_at,id:x.id,html:`<div class="hint">
       <time>${esc(new Date(x.created_at).toLocaleString('ru-RU'))}</time> ·
       ${esc(name(x.actor_id))}: ${esc(x.reason)}.
       ${x.owner_id!==x.previous_owner_id?`Владелец → ${esc(name(x.owner_id))}.`:''}
       ${x.curator_id!==x.previous_curator_id?`Куратор → ${esc(name(x.curator_id))}.`:''}
-    </div>`).join(''):'<p class="hint">Передач пока не было.</p>';
+    </div>`}));
+    const status=(interventions.data||[]).map(x=>({at:x.created_at,id:x.id,html:`<div class="hint">
+      <time>${esc(new Date(x.created_at).toLocaleString('ru-RU'))}</time> ·
+      ${esc(name(x.actor_id))}: смена стадии ${esc(x.previous_status)} → ${esc(x.next_status)}.
+      Причина: ${esc(x.reason)}.
+    </div>`}));
+    const list=[...transfers,...status].sort((a,b)=>b.at.localeCompare(a.at)||Number(b.id)-Number(a.id));
+    events.innerHTML=list.length?list.slice(0,30).map(x=>x.html).join(''):'<p class="hint">Событий ответственности пока не было.</p>';
   };
   refresh().catch(e=>{events.textContent='История недоступна: '+e.message;onError(e);});
   const form=root.querySelector('form');
