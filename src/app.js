@@ -1721,7 +1721,7 @@ function flatList(pool,visible,dateOf,card,empty){
 }
 function renderJobChips(){ const box=$('jobStatusChips'); if(!box) return; box.innerHTML=JOB_STATUS_ORDER.map(s=>'<span class="chip'+(jobVisible[s]?' on':'')+'" data-js="'+s+'">'+esc(ST[s])+'</span>').join('');
   box.querySelectorAll('[data-js]').forEach(c=>c.onclick=()=>{ jobVisible[c.dataset.js]=!jobVisible[c.dataset.js]; renderJobChips(); renderJobs(); }); }
-function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.hours||0),0);
+function jobCard(j){ const mayManage=canWriteJob(j); const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.hours||0),0);
   const pm=partsMoney(j);
   const rev=w.reduce((a,x)=>a+(+x.revenue||0),0)+pm.rev;   // и платные, и гарантийные, и запчасти
   const warr=w.some(x=>!x.billable), paid=w.some(x=>x.billable); const engs=engineerNames(jobEngineerIds(j));
@@ -1738,12 +1738,12 @@ function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.
   }
   // Выручку показываем только тем, кто ею распоряжается. Инженеру в поле
   // это не данные для решения, а лишняя строка в карточке.
-  const revTxt=(rev&&canWrite())?(' · выручка '+rev):'';
+  const revTxt=(rev&&mayManage)?(' · выручка '+rev):'';
   const meta='<div class="meta">'+(j.scheduled_date?'визит '+esc(tripPeriod(j.scheduled_date,null))+' · ':'')+dueTxt+w.length+' раб · '+hours.toFixed(2)+' ч'+(j.pending_local?' · ждёт отправки':'')+revTxt+(engs.length?' · '+esc(engs.join(', ')):'')+'</div>';
-  const mv=canWrite()?('<select class="kmove" data-jstat="'+j.id+'" title="Сменить статус">'+JOB_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===j.status?' selected':'')+'>'+esc(ST[s])+'</option>').join('')+'</select>'):'';
+  const mv=mayManage?('<select class="kmove" data-jstat="'+j.id+'" title="Сменить статус">'+JOB_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===j.status?' selected':'')+'>'+esc(ST[s])+'</option>').join('')+'</select>'):'';
   const eb=(assignedTo(j,session.user.id,'assigned_engineer')&&(j.status==='open'||j.status==='planned'))?'<button class="btn sm amber" data-jst="'+j.id+'|in_progress">В работу</button>':'';
   const eb2=(assignedTo(j,session.user.id,'assigned_engineer')&&j.status==='in_progress')?'<button class="btn sm amber" data-jst="'+j.id+'|done">Завершить</button>':'';
-  const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+(canWrite()?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
+  const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+(mayManage?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
   return '<div class="kcard" data-kid="'+j.id+'">'+head+(tags?'<div class="ktags">'+tags+'</div>':'')+meta+acts+'</div>'; }
 function wireJobCards(box){
   box.querySelectorAll('[data-jedit]').forEach(b=>b.onclick=()=>openJob(b.dataset.jedit));
@@ -1763,7 +1763,7 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
   const q=$('jobSearch').value.trim().toLowerCase();
   if($('jobEngFilter') && $('jobEngFilter').dataset.filled!=='1'){ $('jobEngFilter').innerHTML='<option value="">все инженеры</option>'+profilesList.filter(p=>p.role==='engineer').map(p=>'<option value="'+p.id+'">'+esc(p.full_name||'инженер')+'</option>').join(''); $('jobEngFilter').dataset.filled='1'; }
   const ef=$('jobEngFilter')?$('jobEngFilter').value:'';
-  const baseJobs=(role==='engineer')?jobs.filter(j=>assignedTo(j,session.user.id,'assigned_engineer')):jobs;
+  const baseJobs=(role==='engineer')?jobs.filter(j=>assignedTo(j,session.user.id,'assigned_engineer')||canWriteJob(j)):jobs;
   const match=j=>(!ef||assignedTo(j,ef,'assigned_engineer'))&&(!q||((j.clients&&j.clients.name)||'').toLowerCase().includes(q));
   const cols=JOB_STATUS_ORDER.filter(s=>jobVisible[s]);
   if(!cols.length){ box.className=''; box.innerHTML='<div class="hint">Выберите хотя бы один статус выше.</div>'; return; }
@@ -3573,7 +3573,7 @@ async function fetchJobFull(id){
   }catch(e){ console.warn('Заявка не дочитана:',e); return null; }
 }
 let currentJobAuthority=false;
-function canWriteJob(){return canWrite()||currentJobAuthority;}
+function canWriteJob(j=null){return canWrite()||!!(j?j.id&&[j.owner_id,j.curator_id].includes(session?.user?.id):currentJobAuthority);}
 async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); jobEditId=id; serviceOrders.requestPanel(id);
   let j=null,pendingEdit=false;
   if(id){
@@ -5626,7 +5626,7 @@ function tripTitle(t,jobs){
   if(!names.length) return tripPeriod(t.date_from,t.date_to);
   return names.slice(0,2).join(', ')+(names.length>2?(' +'+(names.length-2)):'');
 }
-function tripCard(t){ const e=t.econ_snapshot||{}; const engs=engineerNames(tripEngineerIds(t)); const share=e.totalHours?Math.round((e.warrantyHours/e.totalHours)*100):0;
+function tripCard(t){ const mayManage=canWriteTrip(t); const e=t.econ_snapshot||{}; const engs=engineerNames(tripEngineerIds(t)); const share=e.totalHours?Math.round((e.warrantyHours/e.totalHours)*100):0;
   const pts=(t.route_stops||[]).filter(s=>s&&s.name&&s.type!=='start'&&s.type!=='place'&&s.type!=='wp'&&!/^точка\s*\d+$/i.test(String(s.name).trim())).map(s=>String(s.name).split(' · ')[0].trim()).filter(Boolean);
   // Даты по-человечески: «10 августа–11 сентября», а не «2026-08-10 → 2026-09-11».
   // ISO нужен базе, а не тому, кто смотрит на карточку.
@@ -5634,11 +5634,11 @@ function tripCard(t){ const e=t.econ_snapshot||{}; const engs=engineerNames(trip
   const title=uniq.length?(uniq.slice(0,2).join(', ')+(uniq.length>2?(' +'+(uniq.length-2)):'')):dates;
   const mb=[]; if(uniq.length) mb.push(dates); if(t.vehicle_label) mb.push(t.vehicle_label);
   const head='<h4>'+esc(title)+'</h4>'+(mb.length?'<div class="meta">'+esc(mb.join(' · '))+'</div>':'');
-  const meta=canWrite()
+  const meta=mayManage
     ? '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок · выручка '+(e.revenue||0)+(e.profit!=null?(' · приб. '+Math.round(e.profit)):'')+' · гар. '+share+'%'+(engs.length?' · '+esc(engs.join(', ')):'')+'</div>'
     : '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок'+(e.km!=null?(' · '+(+e.km).toFixed(0)+' км'):'')+(e.driveH!=null?(' · '+(+e.driveH).toFixed(1)+' ч'):'')+'</div>';
-  const mv=canWrite()?('<select class="kmove" data-tstat="'+t.id+'" title="Сменить статус">'+TRIP_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===t.status?' selected':'')+'>'+esc(ST_TRIP[s])+'</option>').join('')+'</select>'):'';
-  const acts=canWrite()
+  const mv=mayManage?('<select class="kmove" data-tstat="'+t.id+'" title="Сменить статус">'+TRIP_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===t.status?' selected':'')+'>'+esc(ST_TRIP[s])+'</option>').join('')+'</select>'):'';
+  const acts=mayManage
     ? '<div class="acts">'+mv+'<button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tmap="'+t.id+'" title="На карте">карта</button>'
       +((t.status==='finished'||t.status==='done')?('<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ км</button>'):'')
       +'<button class="btn sm" data-tgm="'+t.id+'" title="Google Maps">⌖</button><button class="btn sm ghost" data-tdel="'+t.id+'" title="Удалить выезд">×</button></div>'
@@ -5664,7 +5664,7 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
     filter.dataset.filled='1';
   }
   const ef=filter?filter.value:'';
-  const match=t=>(role!=='engineer'||assignedTo(t,session.user.id,'lead_engineer'))&&(!ef||assignedTo(t,ef,'lead_engineer'))&&(!q||((t.vehicle_label||'')+' '+(t.date_from||'')+' '+(t.date_to||'')).toLowerCase().includes(q));
+  const match=t=>(role!=='engineer'||assignedTo(t,session.user.id,'lead_engineer')||canWriteTrip(t))&&(!ef||assignedTo(t,ef,'lead_engineer'))&&(!q||((t.vehicle_label||'')+' '+(t.date_from||'')+' '+(t.date_to||'')).toLowerCase().includes(q));
   const cols=TRIP_STATUS_ORDER.filter(s=>tripVisible[s]);
   if(!cols.length){ box.className=''; box.innerHTML='<div class="hint">Выберите хотя бы один статус выше.</div>'; return; }
   if(!trips.length){ box.className=''; box.innerHTML='<div class="hint">'+(canWrite()?'Выездов нет. Собери первый из заявок на карте.':'На тебя пока не назначены выезды.')+'</div>'; return; }
@@ -6589,7 +6589,7 @@ async function checkTodayTrip(){
       .in('status',['planned','assigned']).lte('date_from',today);
     // Multiple assignees are filtered after loading; legacy lead_engineer remains supported.
     const { data }=await q.order('date_from');
-    const list=(data||[]).filter(t=>((t.date_to||t.date_from)>=today || t.date_from<=today)&& (canWriteTrip()||assignedTo(t,session.user.id,'lead_engineer')));
+    const list=(data||[]).filter(t=>((t.date_to||t.date_from)>=today || t.date_from<=today)&& (canWriteTrip(t)||assignedTo(t,session.user.id,'lead_engineer')));
     if(!list.length) return;
     todayShown=true;
 
@@ -6969,7 +6969,7 @@ async function showTripOnMap(tid){
   tripMapJobs=await loadTripMapJobs(tid);
   // План — в редактор, чтобы точки можно было двигать. Наличие факта этому
   // не мешает: факт про то, как съездили, план про то, как поедут ещё раз.
-  const shown=canWriteTrip()?loadTripIntoPlanner(tid,t):drawTripPlan(t);
+  const shown=canWriteTrip(t)?loadTripIntoPlanner(tid,t):drawTripPlan(t);
   // Факт — сверху плана и только если он есть. Отсутствие факта больше не
   // повод показать пустую карту: у запланированного выезда факта нет по
   // определению, а посмотреть маршрут нужно именно до поездки.

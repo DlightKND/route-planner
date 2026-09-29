@@ -422,8 +422,14 @@ begin
   if position(old_check in definition)=0 then
     raise exception 'Unexpected canonical request save function; review migration';
   end if;
-  execute replace(definition,old_check,
+  definition:=replace(definition,old_check,
     'manager:=coalesce(public.user_role() in (''admin'',''logist''),false) or (jid is not null and dlight_private.responsibility_manager(''job'',jid));');
+  old_check:='not (auth.uid()=any(coalesce(job.engineer_ids,''{}''::uuid[])) or job.assigned_engineer=auth.uid())';
+  if position(old_check in definition)=0 then
+    raise exception 'Unexpected request assignee guard; review migration';
+  end if;
+  execute replace(definition,old_check,
+    'not coalesce(auth.uid()=any(coalesce(job.engineer_ids,''{}''::uuid[])) or job.assigned_engineer=auth.uid(),false)');
 
   target:='dlight_private.request_finance_approve(uuid,uuid[])'::regprocedure;
   definition:=pg_get_functiondef(target);

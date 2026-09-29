@@ -112,6 +112,32 @@ it('delegates the curator without changing the owner, records the reason and rej
   }finally{await db.exec('rollback');}
 });
 
+it('lets a delegated engineer manage only the assigned request finance',async()=>{
+  await db.exec('begin');
+  try{
+    await db.exec('grant select,update on jobs to authenticated');
+    await q("insert into profiles(id,role,active) values($1,'admin',true),($2,'engineer',true),($3,'engineer',true)",[id(1),id(2),id(3)]);
+    await q('update jobs set owner_id=$1,curator_id=$2 where id=$3',[id(1),id(2),id(10)]);
+    const rec={client_id:id(20),equipment_id:null,status:'open',scheduled_date:null,time_window:'',due_date:null,
+      assigned_engineer:null,engineer_ids:[],notes:'От куратора',at_depot:false,depot_id:null};
+    await q("select set_config('test.uid',$1,true)",[id(2)]);
+    await db.exec('set role authenticated');
+    await q('select public.job_request_save_canonical($1,$2::jsonb,null,null)',[id(10),JSON.stringify(rec)]);
+    await db.exec('reset role');
+    expect((await q('select notes from jobs where id=$1',[id(10)]))[0].notes).toBe('От куратора');
+    await q("select set_config('test.uid',$1,true)",[id(3)]);
+    await db.exec('set role authenticated');
+    expect((await q('select auth.uid() uid,public.user_role() role'))[0]).toEqual({uid:id(3),role:'engineer'});
+    expect((await q('select owner_id,curator_id,assigned_engineer,engineer_ids from jobs where id=$1',[id(10)]))[0])
+      .toMatchObject({owner_id:id(1),curator_id:id(2),assigned_engineer:null,engineer_ids:[]});
+    expect((await q("select dlight_private.responsibility_manager('job',$1) value",[id(10)]))[0].value).toBe(false);
+    await db.exec('savepoint stranger_request');
+    await expect(q('select public.job_request_save_canonical($1,$2::jsonb,null,null)',[id(10),JSON.stringify(rec)]))
+      .rejects.toThrow(/доступ|прав/);
+    await db.exec('rollback to savepoint stranger_request');
+  }finally{await db.exec('rollback');}
+});
+
 it('accepts old offline notes without reverting a started request or its assignment',async()=>{
   await db.exec('begin');
   try{
