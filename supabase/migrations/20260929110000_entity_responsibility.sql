@@ -603,6 +603,50 @@ begin
   end loop;
 end $$;
 
+-- Curators need the task-aware presence editor and fact hours even when
+-- they are not travelling as part of the crew. Assigned engineers retain
+-- their existing read and detection privileges.
+do $$
+declare target regprocedure; definition text; old_check text;
+begin
+  target:=to_regprocedure('public.trip_presence_save_tasks(uuid,integer,jsonb,text)');
+  if target is not null then
+    definition:=pg_get_functiondef(target);
+    old_check:='auth.uid() is null or coalesce(public.user_role(),'''') not in (''admin'',''logist'')';
+    if position(old_check in definition)=0 then raise exception 'Unexpected presence task guard'; end if;
+    execute replace(definition,old_check,
+      'auth.uid() is null or not dlight_private.responsibility_manager(''trip'',p_trip)');
+  end if;
+
+  target:=to_regprocedure('public.trip_fact_hours(uuid)');
+  if target is not null then
+    definition:=pg_get_functiondef(target);
+    old_check:='coalesce(public.user_role(),'''')=''engineer'' and not coalesce(auth.uid()=any(t.engineer_ids) or auth.uid()=t.lead_engineer,false)';
+    if position(old_check in definition)=0 then raise exception 'Unexpected trip fact hours guard'; end if;
+    execute replace(definition,old_check,
+      'coalesce(public.user_role(),'''')=''engineer'' and not dlight_private.responsibility_manager(''trip'',p_trip) and not coalesce(auth.uid()=any(t.engineer_ids) or auth.uid()=t.lead_engineer,false)');
+  end if;
+
+  target:=to_regprocedure('public.trip_detect_stays(uuid)');
+  if target is not null then
+    definition:=pg_get_functiondef(target);
+    old_check:='and not coalesce(auth.uid()=any(t.engineer_ids) or auth.uid()=t.lead_engineer,false)';
+    if position(old_check in definition)=0 then raise exception 'Unexpected trip detection guard'; end if;
+    execute replace(definition,old_check,
+      'and not dlight_private.responsibility_manager(''trip'',p_trip) '
+      ||old_check);
+  end if;
+
+  target:=to_regprocedure('public.trip_reschedule_request(uuid,date,date,text)');
+  if target is not null then
+    definition:=pg_get_functiondef(target);
+    old_check:='not public.is_owner_or_mgr(t.lead_engineer)';
+    if position(old_check in definition)=0 then raise exception 'Unexpected reschedule request guard'; end if;
+    execute replace(definition,old_check,
+      'not (dlight_private.responsibility_manager(''trip'',p_trip) or public.is_owner_or_mgr(t.lead_engineer))');
+  end if;
+end $$;
+
 do $$
 declare target regprocedure; definition text; old_check text;
 begin
