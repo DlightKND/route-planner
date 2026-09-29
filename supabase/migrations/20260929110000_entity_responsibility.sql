@@ -77,6 +77,21 @@ returns boolean language sql stable security definer set search_path='' as $$
 $$;
 revoke all on function dlight_private.responsibility_manager(text,uuid) from public,anon;
 grant execute on function dlight_private.responsibility_manager(text,uuid) to authenticated;
+create function public.entity_finance_config(p_kind text,p_id uuid)
+returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare result jsonb;
+begin
+  if not dlight_private.responsibility_manager(p_kind,p_id) then
+    raise exception 'Нет доступа к финансовым настройкам сущности';
+  end if;
+  select case when p_kind='trip' then
+    jsonb_build_object('tariffs',tariffs,'costs',costs,'tariff_profiles',tariff_profiles)
+    else jsonb_build_object('tariff_profiles',tariff_profiles) end into result
+    from public.settings where id=true;
+  return result;
+end $$;
+revoke all on function public.entity_finance_config(text,uuid) from public,anon,authenticated;
+grant execute on function public.entity_finance_config(text,uuid) to authenticated;
 create policy responsibility_events_read on public.entity_responsibility_events
   for select to authenticated using (
     dlight_private.responsibility_access(entity_kind,entity_id)
@@ -434,6 +449,153 @@ begin
   end if;
   execute replace(definition,old_check,
     'auth.uid() is null or not dlight_private.responsibility_manager(''job'',(select e.job_id from public.request_finance_void_events e where e.id=p_event))');
+end $$;
+
+-- Existing trip reminders keep their engineer recipient. The supervisory
+-- recipient becomes the assigned curator instead of every global manager.
+do $$
+declare target regprocedure; definition text; old_join text;
+begin
+  target:=to_regprocedure('public.push_due(text)');
+  if target is null then return; end if;
+  definition:=pg_get_functiondef(target);
+  old_join:='join profiles p on p.role in (''admin'',''logist'') and coalesce(p.active,true)';
+  if position(old_join in definition)=0 then
+    raise exception 'Unexpected push_due recipients; review migration';
+  end if;
+  execute replace(definition,old_join,
+    'join profiles p on p.id=d.curator_id and p.active');
+end $$;
+
+create table public.entity_push_events (
+  id uuid primary key default gen_random_uuid(),
+  entity_kind text not null check(entity_kind in ('job','order','trip')),
+  entity_id uuid not null,
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  title text not null,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+create index entity_push_events_recipient_idx on public.entity_push_events(recipient_id,created_at desc);
+create table public.entity_push_deliveries (
+  event_id uuid not null references public.entity_push_events(id) on delete cascade,
+  subscription_id uuid not null,
+  sent_at timestamptz not null default now(),
+  primary key(event_id,subscription_id)
+);
+alter table public.entity_push_events enable row level security;
+alter table public.entity_push_deliveries enable row level security;
+revoke all on public.entity_push_events,public.entity_push_deliveries from public,anon,authenticated;
+grant select on public.entity_push_events to authenticated;
+create policy entity_push_recipient_read on public.entity_push_events
+  for select to authenticated using (recipient_id=auth.uid());
+
+create function dlight_private.enqueue_curator_notice(
+  p_kind text,p_id uuid,p_title text,p_body text,p_actor uuid
+) returns void language plpgsql security definer set search_path='' as $$
+declare recipient uuid;
+begin
+  if p_kind='job' then
+    select curator_id into recipient from public.jobs where id=p_id;
+  elsif p_kind='order' then
+    select curator_id into recipient from public.service_orders where id=p_id;
+  elsif p_kind='trip' then
+    select curator_id into recipient from public.trips where id=p_id;
+  else
+    raise exception 'Некорректная сущность уведомления';
+  end if;
+  if recipient is null or recipient is not distinct from p_actor
+    or not exists(select 1 from public.profiles p where p.id=recipient and p.active)
+  then return; end if;
+  insert into public.entity_push_events(entity_kind,entity_id,recipient_id,title,body)
+    values(p_kind,p_id,recipient,left(p_title,120),left(p_body,500));
+end $$;
+revoke all on function dlight_private.enqueue_curator_notice(text,uuid,text,text,uuid)
+  from public,anon,authenticated;
+
+create function dlight_private.responsibility_notify() returns trigger
+language plpgsql security definer set search_path='' as $$
+begin
+  if new.curator_id is distinct from new.previous_curator_id then
+    perform dlight_private.enqueue_curator_notice(new.entity_kind,new.entity_id,
+      'Назначено кураторство','Передана ответственность: '||new.reason,new.actor_id);
+  end if;
+  return null;
+end $$;
+revoke all on function dlight_private.responsibility_notify() from public,anon,authenticated;
+create trigger entity_responsibility_notify after insert on public.entity_responsibility_events
+  for each row execute function dlight_private.responsibility_notify();
+
+create function dlight_private.entity_status_notify() returns trigger
+language plpgsql security definer set search_path='' as $$
+declare kind text; title text;
+begin
+  if new.status is not distinct from old.status then return null; end if;
+  kind:=case tg_table_name when 'jobs' then 'job'
+    when 'service_orders' then 'order' else 'trip' end;
+  title:=case kind when 'job' then 'Заявка' when 'order' then 'Задание' else 'Выезд' end;
+  perform dlight_private.enqueue_curator_notice(kind,new.id,title||' сменил стадию',
+    old.status::text||' → '||new.status::text,auth.uid());
+  return null;
+end $$;
+revoke all on function dlight_private.entity_status_notify() from public,anon,authenticated;
+create trigger jobs_status_curator_push after update of status on public.jobs
+  for each row execute function dlight_private.entity_status_notify();
+create trigger orders_status_curator_push after update of status on public.service_orders
+  for each row execute function dlight_private.entity_status_notify();
+create trigger trips_status_curator_push after update of status on public.trips
+  for each row execute function dlight_private.entity_status_notify();
+
+create function dlight_private.deadline_curator_notify() returns trigger
+language plpgsql security definer set search_path='' as $$
+begin
+  perform dlight_private.enqueue_curator_notice('order',new.order_id,
+    'Предложен новый срок задания',new.reason,new.created_by);
+  return null;
+end $$;
+revoke all on function dlight_private.deadline_curator_notify() from public,anon,authenticated;
+create trigger deadline_curator_push after insert on public.service_order_deadline_requests
+  for each row execute function dlight_private.deadline_curator_notify();
+
+-- The Edge Function uses its service key. Browser roles have no EXECUTE.
+create function public.entity_push_due()
+returns table(event_id uuid,sub_id uuid,endpoint text,p256dh text,auth text,
+  user_id uuid,title text,body text)
+language plpgsql security definer set search_path='' as $$
+begin
+  return query
+    select e.id,s.id,s.endpoint,s.p256dh,s.auth,e.recipient_id,e.title,e.body
+    from public.entity_push_events e
+    join public.push_subs s on s.user_id=e.recipient_id and s.fails<5
+    left join public.entity_push_deliveries d on d.event_id=e.id and d.subscription_id=s.id
+    where d.event_id is null and e.created_at>now()-interval '7 days'
+    order by e.created_at,e.id limit 200;
+end $$;
+create function public.entity_push_mark(p_event uuid,p_sub uuid)
+returns void language plpgsql security definer set search_path='' as $$
+begin
+  if not exists(select 1 from public.entity_push_events e
+    join public.push_subs s on s.id=p_sub and s.user_id=e.recipient_id where e.id=p_event)
+  then raise exception 'Подписка не принадлежит адресату'; end if;
+  insert into public.entity_push_deliveries(event_id,subscription_id)
+    values(p_event,p_sub) on conflict do nothing;
+end $$;
+revoke all on function public.entity_push_due(),public.entity_push_mark(uuid,uuid)
+  from public,anon,authenticated;
+grant execute on function public.entity_push_due(),public.entity_push_mark(uuid,uuid)
+  to service_role;
+
+-- Reuse the verified push scheduler URL and secret reference for production;
+-- QA has no push_secret and therefore schedules nothing.
+do $$
+declare command_text text;
+begin
+  if to_regclass('cron.job') is null then return; end if;
+  select command into command_text from cron.job where jobname='trip-today-push' limit 1;
+  if command_text is not null and position('kind=trip_today' in command_text)>0 then
+    perform cron.schedule('entity-curator-push','*/2 * * * *',
+      replace(command_text,'kind=trip_today','kind=entity'));
+  end if;
 end $$;
 
 commit;

@@ -23,7 +23,7 @@ const CONTACT = Deno.env.get("VAPID_CONTACT") ?? "mailto:admin@example.com";
 // Раньше был зашит константой, из-за чего новые виды алертов не отправлялись.
 // Пустой или неизвестный — падаем на trip_today, чтобы старое расписание
 // продолжало работать без изменений.
-const ALLOWED_KINDS = new Set(["trip_today", "trip_move", "trip_late", "trip_start_late", "trip_escalated", "trip_auto_started", "trip_finish_candidate"]);
+const ALLOWED_KINDS = new Set(["trip_today", "trip_move", "trip_late", "trip_start_late", "trip_escalated", "trip_auto_started", "trip_finish_candidate", "entity"]);
 const sb = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"), {
   auth: {
     persistSession: false
@@ -52,9 +52,9 @@ Deno.serve(async (req)=>{
     contactInformation: CONTACT,
     vapidKeys: await webpush.importVapidKeys(JSON.parse(VAPID))
   });
-  const { data, error } = await sb.rpc("push_due", {
-    p_kind: KIND
-  });
+  const { data, error } = KIND === "entity"
+    ? await sb.rpc("entity_push_due")
+    : await sb.rpc("push_due", { p_kind: KIND });
   if (error) {
     console.error("push_due", error.message);
     return new Response("db error", {
@@ -77,18 +77,25 @@ Deno.serve(async (req)=>{
         body: r.body,
         // Один tag на выезд: два устройства одного инженера не дадут
         //два одинаковых уведомления на экране.
-        tag: "trip-" + r.trip_id
+        tag: KIND === "entity" ? "entity-" + r.event_id : "trip-" + r.trip_id
       }), {});
       await sb.rpc("push_ok", {
         p_sub: r.sub_id
       });
-      await sb.rpc("push_mark", {
-        p_trip: r.trip_id,
-        p_user: r.user_id,
-        p_kind: KIND,
-        p_ok: true,
-        p_note: ""
-      });
+      if (KIND === "entity") {
+        const { error: markError } = await sb.rpc("entity_push_mark", {
+          p_event: r.event_id, p_sub: r.sub_id
+        });
+        if (markError) throw markError;
+      } else {
+        await sb.rpc("push_mark", {
+          p_trip: r.trip_id,
+          p_user: r.user_id,
+          p_kind: KIND,
+          p_ok: true,
+          p_note: ""
+        });
+      }
       sent++;
     } catch (e) {
       // 410 Gone = подписки больше нет (переустановили PWA, снесли
