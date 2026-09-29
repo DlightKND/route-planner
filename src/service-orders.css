@@ -4,6 +4,7 @@
 .order-card-title{display:block;text-align:left;border:0;background:none;color:var(--ink);font:inherit;font-weight:600;padding:0;cursor:pointer}
 .order-status-label{margin:8px 0 0;text-transform:none;font:inherit}
 .order-status-label select{margin-top:4px;font-size:12px}
+.order-history-note{border-left:3px solid var(--accent);padding:5px 8px;margin:8px 0;color:var(--ink);font-size:12px;line-height:1.4}
 .order-children{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
 .order-children summary{cursor:pointer;font-size:12px}
 .order-child{display:block;width:100%;text-align:left;padding:8px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;cursor:pointer}
