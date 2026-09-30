@@ -6,14 +6,14 @@ import {validatePresence} from '../src/core/trip-review.js';
 const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 const body=app.slice(app.indexOf('async function openPresenceEditor('),app.indexOf('async function loadWorkbench('));
 const windows=[];afterEach(async()=>{await Promise.all(windows.splice(0).map(w=>w.happyDOM.close()));});
-function setup(patch={},saveError=null){
+function setup(patch={},saveError=null,authority={manager:true,curator:'e1'}){
  const win=new Window();windows.push(win);
  const stay={id:'s1',job_id:null,crew_ids:['e1'],crew_source:'snapshot',stay_from:'2026-09-22T08:00Z',stay_to:'2026-09-22T09:00Z',minutes_raw:60,status:'detected',...patch};
- const data={trip:{id:'t1',workbench_revision:7},stays:[stay],job_ids:['j1'],removed:[]};
+ const data={trip:{id:'t1',workbench_revision:7,owner_id:'owner',curator_id:authority.curator},stays:[stay],job_ids:['j1'],removed:[]};
  const sb={rpc:vi.fn(async(name)=>name==='trip_workbench_read'?{data}:{error:saveError}),from:table=>{const q={select:()=>q,eq:()=>Promise.resolve({data:table==='trip_service_orders'?[{order_id:'o1'}]:[],error:null})};return q;}};
  const tripOrdersAll=[{id:'o1',number:1,title:'Ремонт',job_id:'j1'}];
- const ctx={document:win.document,canWrite:()=>true,tripPlanDirty:false,tripPresenceDirty:false,ensureRefs:async()=>{},loadTripJobs:async()=>{},loadTripOrders:async()=>{},sb,presenceHTML,readPresenceForm,validatePresence,taskAllocationPayload:s=>({id:s.id,job_id:s.job_id,crew_ids:s.crew_ids,minutes_mgr:s.minutes_mgr,status:s.status,task_allocations:s.status==='approved'?s.task_allocations:[]}),validateTaskAllocationShares:rows=>{if(rows.some(s=>(s.task_allocations||[]).reduce((n,x)=>n+x.share,0)>1.000001))throw new Error('Доля превышает 100%');},profilesList:[{id:'e1',role:'engineer',full_name:'Анна'}],tripJobsAll:[{id:'j1',clients:{name:'Объект'}}],tripOrdersAll,curTripOrders:new Set(['o1']),loadFactHours:async()=>{},stayBindMap:null,tripEditId:null,showToast:vi.fn(),notify:vi.fn()};
- const open=new Function(...Object.keys(ctx),'return ('+body+');')(...Object.values(ctx));
+ const ctx={document:win.document,canWrite:()=>authority.manager,session:{user:{id:'e1'}},getTrip:id=>id===data.trip.id?data.trip:null,tripCache:{},tripPlanDirty:false,tripPresenceDirty:false,ensureRefs:async()=>{},loadTripJobs:async()=>{},loadTripOrders:async()=>{},sb,presenceHTML,readPresenceForm,validatePresence,taskAllocationPayload:s=>({id:s.id,job_id:s.job_id,crew_ids:s.crew_ids,minutes_mgr:s.minutes_mgr,status:s.status,task_allocations:s.status==='approved'?s.task_allocations:[]}),validateTaskAllocationShares:rows=>{if(rows.some(s=>(s.task_allocations||[]).reduce((n,x)=>n+x.share,0)>1.000001))throw new Error('Доля превышает 100%');},profilesList:[{id:'e1',role:'engineer',full_name:'Анна'}],tripJobsAll:[{id:'j1',clients:{name:'Объект'}}],tripOrdersAll,curTripOrders:new Set(['o1']),loadFactHours:async()=>{},stayBindMap:null,tripEditId:null,showToast:vi.fn(),notify:vi.fn()};
+ const open=new Function(...Object.keys(ctx),app.slice(app.indexOf('function canWriteTrip('),app.indexOf('\n',app.indexOf('function canWriteTrip(')))+';return ('+body+');')(...Object.values(ctx));
  return {win,open,sb,ctx};
 }
 it('saves attachment, crew and approval in one revision-checked RPC',async()=>{
@@ -32,4 +32,11 @@ it('edits explicit task-hour shares only among tasks for the selected request',a
  const data={trip:{id:'t1'},stays:[stay],jobIds:['j1'],removed:[]};const orders=[{id:'o1',number:1,title:'Ремонт',job_id:'j1'},{id:'o2',number:2,title:'Пуск',job_id:'j1'},{id:'o3',number:3,title:'Чужое задание',job_id:'j2'}];
  win.document.body.innerHTML=presenceHTML(data,[{id:'j1',clients:{name:'Объект'}}],[{id:'e1',role:'engineer',full_name:'Анна'}],{editor:true,orders});
  const parsed=readPresenceForm(win.document,[stay]);expect(parsed[0].task_allocations).toEqual([{order_id:'o1',share:.65},{order_id:'o2',share:.35}]);expect(win.document.body.textContent).not.toContain('Чужое задание');
+});
+
+it('opens presence for a scoped curator and rejects another trip without global manager rights',async()=>{
+ const curator=setup({},null,{manager:false,curator:'e1'});await curator.open('t1','s1','j1');
+ expect(curator.win.document.querySelector('dialog').open).toBe(true);
+ const stranger=setup({},null,{manager:false,curator:'other'});await stranger.open('t1','s1','j1');
+ expect(stranger.sb.rpc).not.toHaveBeenCalled();expect(stranger.win.document.querySelector('dialog')).toBeNull();
 });

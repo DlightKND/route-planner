@@ -39,7 +39,7 @@ export function createServiceOrders(ctx){
  box.className=ctx.isPhone()?'klist':'kanban';
  box.innerHTML=ctx.isPhone()?pool.filter(o=>states.includes(o.status)).sort((a,b)=>(a.date_from||'9999').localeCompare(b.date_from||'9999')).map(card).join(''):states.map(s=>`<section class="kcol" data-kst="${s}"><div class="kcol-h"><span>${ORDER_STATUS[s]}</span><span class="cnt">${pool.filter(o=>o.status===s).length}</span></div><div class="kcol-b">${pool.filter(o=>o.status===s).map(card).join('')||'<div class="kempty">Заданий нет</div>'}</div></section>`).join('');
  if(!box.innerHTML)box.innerHTML='<p class="hint">По выбранным условиям заданий нет.</p>';
- wireChildren(box);box.querySelectorAll('[data-order-status]').forEach(el=>el.onchange=()=>transition(orders.find(o=>o.id===el.dataset.orderStatus),el.value,true));ctx.wireDrag(box,(id,status)=>{const o=orders.find(o=>o.id===id);if(o)return transition(o,status,true);});
+ wireChildren(box);box.querySelectorAll('[data-order-status]').forEach(el=>el.onchange=()=>transition(orders.find(o=>o.id===el.dataset.orderStatus),el.value,true));ctx.wireDrag(box,(id,status)=>{const o=orders.find(o=>o.id===id);if(o)return transition(o,status,true);},id=>manager(orders.find(o=>o.id===id)||null));
  $('orderAdd').hidden=!manager();
  }catch(e){box.innerHTML=`<p class="err">${esc(e.message)}</p><button class="btn" id="orderRetry">Повторить загрузку</button>`;$('orderRetry').onclick=board;}}
  async function transition(o,status,onBoard=false){if(status===o.status)return;if(!nextOrderStates(o.status,manager(o)).includes(status)){ctx.notify('Этот переход недоступен. Используй следующий этап задания.','warn');if(onBoard)await board();return;}

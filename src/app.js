@@ -1780,7 +1780,7 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
     const cards=items.map(j=>jobCard(j)).join('')
       ||'<div class="kempty">'+esc(EMPTY[s]||'Пусто')+'</div>';
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
-  wireJobCards(box); wireKanbanDrag(box,dropJob); await serviceOrders.attachJobs(box); }
+  wireJobCards(box); wireKanbanDrag(box,dropJob,id=>{const j=jobs.find(j=>j.id===id);return !!j&&canWriteJob(j);}); await serviceOrders.attachJobs(box); }
 $('jobSearch').oninput=renderJobs; if($('jobEngFilter')) $('jobEngFilter').onchange=renderJobs; if($('mineDone')) $('mineDone').onchange=renderMine; $('jobAdd').onclick=()=>{ if(canWrite()) openJob(null); };
 
 // ── Корзина заявок и выездов ───────────────────────────────────────────
@@ -2272,11 +2272,12 @@ function gtActionIcon(kind){
 function gtTripAction(b,allowEarly){
   if(b.kind!=='trip') return null;
   const own=(b.engineerIds||[]).includes(session&&session.user&&session.user.id);
-  const mayAct=own||canWrite(),first=(b.pieces||[])[0],startedToday=!first||first.iso<=todayISO();
+  const manager=canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null);
+  const mayAct=own||manager,first=(b.pieces||[])[0],startedToday=!first||first.iso<=todayISO();
   if((b.status==='planned'||b.status==='assigned')&&mayAct&&(startedToday||allowEarly)) return {kind:'start',label:'Начать выезд'};
   if(b.status==='in_progress'&&mayAct) return {kind:'finish',label:'Завершить выезд'};
-  if(b.status==='finished'&&canWrite()) return {kind:'confirm',label:'Подтвердить выезд'};
-  if(b.status==='finished'&&!canWrite()&&own) return {kind:'wait',label:'Ждёт менеджера',passive:true};
+  if(b.status==='finished'&&manager) return {kind:'confirm',label:'Подтвердить выезд'};
+  if(b.status==='finished'&&!manager&&own) return {kind:'wait',label:'Ждёт менеджера',passive:true};
   return null;
 }
 function gtVerticalHtml(key){
@@ -2471,8 +2472,8 @@ function gtPop(key,b){
     +'<button class="btn sm ghost" data-pop-map>Карта</button>'
     +((b.status==='finished'||b.status==='done')?'<button class="btn sm" data-pop-stays>Стоянки</button>':'')
     +((b.status==='finished'||b.status==='done')?'<button class="btn sm amber" data-pop-stay-map>Привязка факта</button>':'')
-    +((b.status==='finished'||b.status==='done')&&canWrite()?'<button class="btn sm" data-pop-km>Пересчитать факт</button>':'')
-    +(canWrite()?'<button class="btn sm" data-pop-open>Открыть выезд</button>':'')+'</div>':'';
+    +((b.status==='finished'||b.status==='done')&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn sm" data-pop-km>Пересчитать факт</button>':'')
+    +(canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn sm" data-pop-open>Открыть выезд</button>':'')+'</div>':'';
   const selected=document.querySelector('.vg-block[data-gb="'+window.CSS.escape(String(b.id))+'"]'),selectedDay=selected&&selected.dataset.blockDay;
   const h='<div class="gpop gpop-compact"><div class="gp-h">'+esc(gtBlockName(b))+'<span class="a-tag '+(cuts.length?'plan':'auto')+'">'+(cuts.length?'вручную':'авто')+'</span></div>'
     +'<div class="gp-s">Перетащите отдельную плашку в увеличенном дне или создайте точку разреза.</div>'
@@ -2484,7 +2485,7 @@ function gtPop(key,b){
   const close=()=>{gtSel=null;pop.remove();gtPaint(key);};pop.querySelector('[data-gclose]').onclick=e=>{e.stopPropagation();close();};
   const reset=pop.querySelector('[data-greset]');if(reset)reset.onclick=e=>{e.stopPropagation();pop.remove();gtSave(b,null);};pop.onclick=e=>e.stopPropagation();
   const tool=(sel,fn)=>{const x=pop.querySelector(sel);if(x)x.onclick=async e=>{e.stopPropagation();pop.remove();await fn();};};
-  tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWrite()?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-stay-map]',()=>openStayBindingMap(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
+  tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-stay-map]',()=>openStayBindingMap(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
   tool('[data-pop-divide]',async()=>{gtZoom[key]=selectedDay;gtPendingDivide={id:String(b.id),iso:selectedDay};gtPaint(key);});
   const el=document.querySelector('[data-gb="'+window.CSS.escape(String(b.id))+'"]');if(el&&!matchMedia('(max-width:600px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-348,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
 }
@@ -2962,7 +2963,7 @@ async function renderFeed(box,o){
           +'<span class="acts">'+(o.mine?tripActs(t)
             :('<button class="btn sm" data-tmap="'+t.id+'">карта</button>'
               +'<button class="btn sm" data-tgm="'+t.id+'">⌖ Google Maps</button>'
-              +(canWrite()?('<button class="btn sm" data-topen="'+t.id+'">открыть</button>'):'')))
+              +(canWriteTrip(t)?('<button class="btn sm" data-topen="'+t.id+'">открыть</button>'):'')))
           +'</span></div>'
           +(o.mine?reschedBanner(t):'');
       }
@@ -3501,17 +3502,17 @@ function tripActs(t){
     if(!reschedByTrip[t.id]) a+='<button class="btn sm" data-tresched="'+t.id+'">Перенести</button>';
   }
   if(t.status==='in_progress') a+='<button class="btn sm amber" data-tfin="'+t.id+'">■ Завершить</button>';
-  if(t.status==='finished' && canWrite()) a+='<button class="btn sm amber" data-tconf="'+t.id+'">✓ Подтвердить</button>';
-  if(t.status==='finished' && !canWrite()) a+='<span class="pill">ждёт менеджера</span>';
+  if(t.status==='finished' && canWriteTrip(t)) a+='<button class="btn sm amber" data-tconf="'+t.id+'">✓ Подтвердить</button>';
+  if(t.status==='finished' && !canWriteTrip(t)) a+='<span class="pill">ждёт менеджера</span>';
   if(t.status==='finished'||t.status==='done') a+='<button class="btn sm" data-tstay="'+t.id+'">⏱ Стоянки</button>';
-  if((t.status==='finished'||t.status==='done')&&canWrite()) a+='<button class="btn sm amber" data-tstaymap="'+t.id+'">Привязка факта на карте</button>';
+  if((t.status==='finished'||t.status==='done')&&canWriteTrip(t)) a+='<button class="btn sm amber" data-tstaymap="'+t.id+'">Привязка факта на карте</button>';
   // Ручной пересчёт. Нужен, когда ORS в момент подтверждения был недоступен
   // или отвечал ошибками: тогда часть точек осудили по кругу или по отказу
   // маршрутизатора, а не по дорогам. Повторный запуск считает всё заново
   // с чистого листа — никакой прошлый результат не подмешивается.
-  if((t.status==='finished'||t.status==='done')&&canWrite())
+  if((t.status==='finished'||t.status==='done')&&canWriteTrip(t))
     a+='<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ Пробег</button>';
-  if(canWrite()) a+='<button class="btn sm" data-topen="'+t.id+'">открыть</button>';
+  if(canWriteTrip(t)) a+='<button class="btn sm" data-topen="'+t.id+'">открыть</button>';
   a+='<button class="btn sm ghost" data-tmap="'+t.id+'">на карте</button>';
   a+='<button class="btn sm ghost" data-tgm="'+t.id+'">Google Maps</button>';
   return a;
@@ -5435,7 +5436,7 @@ async function renderTripCostReview(id){
     const previewForDisplay=preview|| (run?{components:run.components,rows:savedLines||[],diagnostics:run.diagnostics}:null);
     const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
     box.innerHTML=tripCostReviewHTML({trip:{...t,orders:linkedOrders},preview:previewForDisplay,run,stale,
-      canApprove:canWrite()&&t.status==='done'&&!tripPlanDirty&&!tripPresenceDirty&&!!preview,message});
+      canApprove:canWriteTrip(t)&&t.status==='done'&&!tripPlanDirty&&!tripPresenceDirty&&!!preview,message});
     const approve=$('tripAllocationApprove');
     if(approve)approve.onclick=async()=>{
       const reason=$('tripAllocationReason').value.trim();if(!reason){notify('Укажи основание сверки затрат.','warn');return;}
@@ -5452,7 +5453,7 @@ async function renderTripCostReview(id){
   }catch(e){box.innerHTML=`<p class="err">Не удалось загрузить распределение затрат: ${esc(e.message||String(e))}</p>`;}
 }
 async function openPresenceEditor(tid,stayId,jobId){
-  if(!canWrite())return;
+  if(!canWriteTrip(getTrip(tid)||tripCache[tid]||null))return;
   if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки выезда.','warn');return;}
   try{
     await ensureRefs();await loadTripJobs();await loadTripOrders();
@@ -5519,7 +5520,7 @@ async function loadWorkbench(id){
     $('tpRemovedJobs').innerHTML=removedHTML(tripWorkbench,tripJobsAll);
     $('tpHistoryLog').innerHTML=historyHTML(tripWorkbench,profilesList);
     $('tpReviewState').textContent=(ST_TRIP[data.trip.status]||data.trip.status)+' · версия '+data.trip.workbench_revision+' · изменение плана не удаляет трек и посещения';
-    $('tpStatus').disabled=!!data.trip.started_at||!canWrite();
+    $('tpStatus').disabled=!!data.trip.started_at||!canWriteTrip(data.trip);
     $('tpRemainingInfo').textContent=data.trip.remaining_route?'Осталось '+data.trip.remaining_route.km.toFixed(1)+' км · расчёт '+new Date(data.trip.remaining_route.at).toLocaleString('ru-RU'):'';
     $('wbDetect').onclick=async()=>{
       if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки.','warn');return;}
@@ -5603,8 +5604,8 @@ function slimGeometry(g){
   }catch(e){ return g; }
 }
 function routeAll(){ return (tripStart?[{type:'start',name:tripStart.name,lat:tripStart.lat,lng:tripStart.lng}]:[]).concat(tripRouteStops); }
-function wireKanbanDrag(box,onDrop){ if(!canWrite()) return;
-  box.querySelectorAll('.kcard').forEach(card=>{ card.setAttribute('draggable','true');
+function wireKanbanDrag(box,onDrop,mayDrag=()=>canWrite()){
+  box.querySelectorAll('.kcard').forEach(card=>{ if(!mayDrag(card.dataset.kid)){card.removeAttribute('draggable');return;} card.setAttribute('draggable','true');
     card.addEventListener('dragstart',e=>{ card.classList.add('dragging'); try{ e.dataTransfer.setData('text/plain',card.dataset.kid); e.dataTransfer.effectAllowed='move'; }catch(err){} });
     card.addEventListener('dragend',()=>{ card.classList.remove('dragging'); box.querySelectorAll('.kcol').forEach(c=>c.classList.remove('over')); }); });
   box.querySelectorAll('.kcol').forEach(col=>{
@@ -5612,7 +5613,7 @@ function wireKanbanDrag(box,onDrop){ if(!canWrite()) return;
     col.addEventListener('dragleave',()=>col.classList.remove('over'));
     col.addEventListener('drop',async e=>{ e.preventDefault(); col.classList.remove('over');
       let id=''; try{ id=e.dataTransfer.getData('text/plain'); }catch(err){}
-      const st=col.dataset.kst; if(id&&st) await onDrop(id,st); }); }); }
+      const st=col.dataset.kst; if(id&&st&&mayDrag(id)) await onDrop(id,st); }); }); }
 async function dropJob(id,st){ const j=jobs.find(x=>x.id==id); if(!j||j.status===st) return; const old=j.status;
   try{if(!await changeEntityStatus('job',j,st)){renderJobs();return;}}catch(e){notify(e.message,'err');renderJobs();return;}
   if(st==='done') await jobClosed(id,{equipmentId:j.equipment_id,works:j.job_works||[]});
@@ -5707,7 +5708,7 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
     const cards=items.map(t=>tripCard(t)).join('')
       ||'<div class="kempty">'+esc(TEMPTY[s]||'Пусто')+'</div>';
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST_TRIP[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
-  wireTripCards(box); wireKanbanDrag(box,dropTrip); }
+  wireTripCards(box); wireKanbanDrag(box,dropTrip,id=>canWriteTrip(getTrip(id)||tripCache[id]||null)); }
 $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) openTrip(null); };
 if($('tripEngFilter')) $('tripEngFilter').onchange=renderTrips;
 function canWriteTrip(t=getTrip(tripEditId)){return canWrite()||!!(t?.id&&[t.owner_id,t.curator_id].includes(session?.user?.id));}
