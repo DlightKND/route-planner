@@ -850,6 +850,17 @@ begin
     select e.id,s.id,s.endpoint,s.p256dh,s.auth,e.recipient_id,e.title,e.body
     from public.entity_push_events e
     join public.push_subs s on s.user_id=e.recipient_id and s.fails<5
+    join public.profiles p on p.id=e.recipient_id and p.active
+    join lateral (
+      select j.curator_id from public.jobs j
+        where e.entity_kind='job' and j.id=e.entity_id and j.deleted_at is null
+      union all
+      select o.curator_id from public.service_orders o
+        where e.entity_kind='order' and o.id=e.entity_id
+      union all
+      select t.curator_id from public.trips t
+        where e.entity_kind='trip' and t.id=e.entity_id and t.deleted_at is null
+    ) current_entity on current_entity.curator_id=e.recipient_id
     left join public.entity_push_deliveries d on d.event_id=e.id and d.subscription_id=s.id
     where d.event_id is null and e.created_at>now()-interval '7 days'
     order by e.created_at,e.id limit 200;

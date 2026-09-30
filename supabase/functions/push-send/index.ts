@@ -62,7 +62,7 @@ Deno.serve(async (req)=>{
     });
   }
   const rows = data ?? [];
-  let sent = 0, gone = 0, failed = 0;
+  let sent = 0, gone = 0, failed = 0, recordFailed = 0;
   for (const r of rows){
     try {
       const subscriber = server.subscribe({
@@ -79,24 +79,6 @@ Deno.serve(async (req)=>{
         //два одинаковых уведомления на экране.
         tag: KIND === "entity" ? "entity-" + r.event_id : "trip-" + r.trip_id
       }), {});
-      await sb.rpc("push_ok", {
-        p_sub: r.sub_id
-      });
-      if (KIND === "entity") {
-        const { error: markError } = await sb.rpc("entity_push_mark", {
-          p_event: r.event_id, p_sub: r.sub_id
-        });
-        if (markError) throw markError;
-      } else {
-        await sb.rpc("push_mark", {
-          p_trip: r.trip_id,
-          p_user: r.user_id,
-          p_kind: KIND,
-          p_ok: true,
-          p_note: ""
-        });
-      }
-      sent++;
     } catch (e) {
       // 410 Gone = подписки больше нет (переустановили PWA, снесли
       // разрешение). Такую удаляем сразу, а не долбим вечно.
@@ -108,14 +90,33 @@ Deno.serve(async (req)=>{
         p_sub: r.sub_id,
         p_gone: isGone
       });
+      continue;
     // push_mark НЕ ставим: не дошло — пусть попробует завтра.
+    }
+    sent++;
+    // A database failure after successful delivery must not count against
+    // the browser subscription or eventually disable a working endpoint.
+    try {
+      const { error: okError } = await sb.rpc("push_ok", { p_sub: r.sub_id });
+      if (okError) throw okError;
+      const { error: markError } = KIND === "entity"
+        ? await sb.rpc("entity_push_mark", { p_event: r.event_id, p_sub: r.sub_id })
+        : await sb.rpc("push_mark", {
+          p_trip: r.trip_id, p_user: r.user_id, p_kind: KIND,
+          p_ok: true, p_note: ""
+        });
+      if (markError) throw markError;
+    } catch (e) {
+      recordFailed++;
+      console.error("push delivery record failed", String(e));
     }
   }
   const out = {
     due: rows.length,
     sent,
     gone,
-    failed
+    failed,
+    record_failed: recordFailed
   };
   console.log(JSON.stringify(out));
   return new Response(JSON.stringify(out), {

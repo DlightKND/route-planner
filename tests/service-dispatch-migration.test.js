@@ -58,11 +58,45 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260929010000_guard_legacy_manager_team_replay.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260929020000_freeze_legacy_finance_on_active_task.sql',import.meta.url),'utf8'));
   await db.exec('create role service_role');
+  await db.exec(`create table public.push_subs (
+    id uuid primary key, user_id uuid references public.profiles(id),
+    endpoint text, p256dh text, auth text, fails integer not null default 0
+  )`);
   await db.exec(readFileSync(new URL('../supabase/migrations/20260929110000_entity_responsibility.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
 afterAll(async()=>{await db?.close();});
+
+it('sends curator events once per subscription and excludes owners, inactive and former curators',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'admin',true),($2,'engineer',true),($3,'engineer',true)",[id(1),id(2),id(3)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const [job]=await q('insert into jobs(client_id) values($1) returning id',[id(20)]);
+    await q("insert into push_subs(id,user_id,endpoint,p256dh,auth) values($1,$2,'https://push.test/owner','key','auth'),($3,$4,'https://push.test/curator-1','key','auth'),($5,$4,'https://push.test/curator-2','key','auth'),($6,$7,'https://push.test/next','key','auth')",[id(90),id(1),id(91),id(2),id(92),id(93),id(3)]);
+    await q("select entity_responsibility_assign('job',$1,'curator',$2,'Передаю ведение заявки')",[job.id,id(2)]);
+    const due=await q('select * from entity_push_due()');
+    expect(due).toHaveLength(2);
+    expect(due.map(r=>r.user_id)).toEqual([id(2),id(2)]);
+    await q('select entity_push_mark($1,$2)',[due[0].event_id,due[0].sub_id]);
+    await q('select entity_push_mark($1,$2)',[due[0].event_id,due[0].sub_id]);
+    expect(await q('select * from entity_push_due()')).toHaveLength(1);
+    await db.exec('savepoint wrong_sub');
+    await expect(q('select entity_push_mark($1,$2)',[due[0].event_id,id(90)])).rejects.toThrow(/Подписка не принадлежит/);
+    await db.exec('rollback to savepoint wrong_sub');
+    await q('update profiles set active=false where id=$1',[id(2)]);
+    expect(await q('select * from entity_push_due()')).toHaveLength(0);
+    await q('update profiles set active=true where id=$1',[id(2)]);
+    await q("select entity_responsibility_assign('job',$1,'curator',$2,'Передаю другому куратору')",[job.id,id(3)]);
+    const next=await q('select * from entity_push_due()');
+    expect(next).toHaveLength(1);
+    expect(next[0].user_id).toBe(id(3));
+    await q('update jobs set deleted_at=now() where id=$1',[job.id]);
+    expect(await q('select * from entity_push_due()')).toHaveLength(0);
+    expect((await q("select has_function_privilege('authenticated','public.entity_push_due()','execute') allowed"))[0].allowed).toBe(false);
+  }finally{await db.exec('rollback');}
+});
 
 it('delegates the curator without changing the owner, records the reason and rejects strangers',async()=>{
   await db.exec('begin');
