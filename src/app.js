@@ -2171,7 +2171,7 @@ function gtDayHtml(key){
       pcs.forEach(p=>{const y=geo.yOf(p.from),h=Math.max(12,geo.yOf(p.to)-geo.yOf(p.from)),name=p.k==='d'?'Дорога':((p.jobId&&feedCtx.jobName(p.jobId))||gtBlockName(b));
         bars+='<div class="vg-block vg-piece '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(p.pinned?' man':'')+(h<40?' short':'')+'" data-gb="'+esc(b.id)+'" data-piece-at="'+p.at+'" data-piece-from="'+p.from+'" data-piece-to="'+p.to+'" data-piece-iso="'+p.iso+'" style="top:'+y+'px;height:'+h+'px">'
           +(p.k==='d'?'<i class="vg-seg road" style="inset:0"></i>':'')+'<span class="vg-label"><b>'+esc(name)+(p.pinned?' ✎':'')+'</b><small>'+esc(fmtH(p.h)+' · '+clockLabel(p.from)+'–'+clockLabel(p.to))+'</small></span>'
-          +(canWrite()&&p.h>1?'<button class="vg-divide" type="button" data-gdivide aria-label="Разделить участок">÷</button>':'')+'</div>';});
+          +(gtCanEditBlock(b)&&p.h>1?'<button class="vg-divide" type="button" data-gdivide aria-label="Разделить участок">÷</button>':'')+'</div>';});
     });
     const color=loadColor(hours/shift), over=Math.max(0,hours-gtEff());
     const now=scheduleNow(), nowY=geo.yOf(now.t), nowLine=now.iso===iso&&nowY>=0&&nowY<=dayH?'<span class="vg-now" title="Сейчас · '+esc(now.label)+'" style="top:'+nowY+'px"></span>':'';
@@ -2269,6 +2269,14 @@ function gtActionIcon(kind){
   const body=kind==='start'?'<path d="M5.5 3.4 12.8 8 5.5 12.6z"/>':kind==='finish'?'<rect x="4.6" y="4.6" width="6.8" height="6.8" rx="1.2"/>':kind==='confirm'?'<path d="M3.6 8.4 6.6 11.4 12.4 4.9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>':'<circle cx="4.2" cy="8" r="1.35"/><circle cx="8" cy="8" r="1.35"/><circle cx="11.8" cy="8" r="1.35"/>';
   return '<svg viewBox="0 0 16 16" aria-hidden="true">'+body+'</svg>';
 }
+function gtCanEditBlock(b){
+  if(!b||!b.id)return false;
+  const id=String(b.id).slice(1);
+  const row=feedCtx?.recordOf?.(b.id)||(b.kind==='trip'
+    ?getTrip(b.tripId||id)||tripCache[b.tripId||id]
+    :jobs.find(j=>j.id===id));
+  return !!row&&(b.kind==='trip'?canWriteTrip(row):canWriteJob(row));
+}
 function gtTripAction(b,allowEarly){
   if(b.kind!=='trip') return null;
   const own=(b.engineerIds||[]).includes(session&&session.user&&session.user.id);
@@ -2357,7 +2365,7 @@ function gtWire(key,box){
   }
   box.querySelectorAll('[data-gact]').forEach(btn=>{
     btn.onpointerdown=e=>e.stopPropagation();
-    btn.onclick=async e=>{e.preventDefault();e.stopPropagation();const host=btn.closest('[data-gb]'),b=host&&gtFind(host.dataset.gb);if(b&&b.tripId){const own=(b.engineerIds||[]).includes(session.user.id);await tripAction(b.tripId,btn.dataset.gact,!own&&canWrite()?feedCtx.nameOf(b.engineer):'');}};
+    btn.onclick=async e=>{e.preventDefault();e.stopPropagation();const host=btn.closest('[data-gb]'),b=host&&gtFind(host.dataset.gb);if(b&&b.tripId){const own=(b.engineerIds||[]).includes(session.user.id);await tripAction(b.tripId,btn.dataset.gact,!own&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?feedCtx.nameOf(b.engineer):'');}};
   });
   box.querySelectorAll('.vg-gtitle').forEach(title=>title.onclick=e=>{e.stopPropagation();const b=gtFind(title.closest('[data-gb]').dataset.gb);if(b){gtSel=b.id;gtPop(key,b);}});
   box.querySelectorAll('[data-gback]').forEach(b=>b.onclick=e=>{ e.stopPropagation();
@@ -2392,7 +2400,7 @@ function gtWire(key,box){
     };
   });
   box.querySelectorAll('[data-gdivide]').forEach(btn=>btn.onclick=e=>{
-    e.preventDefault();e.stopPropagation();const el=btn.closest('.vg-piece'),b=el&&gtFind(el.dataset.gb);if(!b)return;
+    e.preventDefault();e.stopPropagation();const el=btn.closest('.vg-piece'),b=el&&gtFind(el.dataset.gb);if(!b||!gtCanEditBlock(b))return;
     const from=+el.dataset.pieceFrom,to=+el.dataset.pieceTo,mid=q4((from+to)/2);
     el.classList.add('dividing');el.insertAdjacentHTML('beforeend','<div class="vg-cut"><input type="range" min="'+(from+.25)+'" max="'+(to-.25)+'" step=".25" value="'+mid+'"><span>режем в <b>'+clockLabel(mid)+'</b></span><button data-cut-ok>ОК</button><button data-cut-no>×</button></div>');
     const cut=el.querySelector('.vg-cut'),range=cut.querySelector('input');range.oninput=()=>{cut.querySelector('b').textContent=clockLabel(+range.value);cut.style.top=((+range.value-from)/(to-from)*100)+'%';};
@@ -2401,22 +2409,14 @@ function gtWire(key,box){
   });
   if(zoom&&gtPendingDivide&&gtPendingDivide.iso===zoom){const btn=box.querySelector('[data-gdivide][data-gb="'+window.CSS.escape(String(gtPendingDivide.id))+'"], [data-gb="'+window.CSS.escape(String(gtPendingDivide.id))+'"] [data-gdivide]');gtPendingDivide=null;if(btn)requestAnimationFrame(()=>btn.click());}
   box.querySelectorAll('.vg-piece').forEach(el=>{
-    el.onpointerdown=e=>{if(e.target.closest('button,input,.vg-cut'))return;e.stopPropagation();const lane=el.closest('.vg-day-lane'),R=lane.getBoundingClientRect(),b=gtFind(el.dataset.gb),y0=e.clientY,top0=el.offsetTop;let moved=false;
+    el.onpointerdown=e=>{if(e.target.closest('button,input,.vg-cut'))return;e.stopPropagation();const b=gtFind(el.dataset.gb);if(!b)return;if(!gtCanEditBlock(b)){gtPop(key,b);return;}const lane=el.closest('.vg-day-lane'),R=lane.getBoundingClientRect(),y0=e.clientY,top0=el.offsetTop;let moved=false;
       el.setPointerCapture(e.pointerId);el.onpointermove=ev=>{const dy=ev.clientY-y0;if(Math.abs(dy)>3)moved=true;el.style.top=Math.max(0,Math.min(R.height-el.offsetHeight,top0+dy))+'px';};
       el.onpointerup=async ev=>{el.onpointermove=null;el.onpointerup=null;if(!moved){if(b.kind==='trip')openTrip(String(b.id).slice(1));else gtPop(key,b);return;}const t=q4(Math.max(0,Math.min(24,gtLaneTime(lane,ev.clientY-R.top))));await gtPinPiece(b,{at:+el.dataset.pieceAt},el.dataset.pieceIso,t);};};
   });
-  if(!canWrite()){
-    // Просмотр графика не должен быть тупиком: инженер не может двигать
-    // блок, но может открыть сам выезд и увидеть маршрут, заявки и статус.
-    box.querySelectorAll('.vg-block.trip').forEach(el=>el.onclick=e=>{
-      e.stopPropagation(); const b=gtFind(el.dataset.gb); if(b) gtPop(key,b);
-    });
-    return;
-  }
   box.querySelectorAll('.vg-block:not(.vg-piece)').forEach(el=>{
     el.onpointerdown=e=>{
       if(e.target.closest('button'))return;
-      const b=gtFind(el.dataset.gb);if(!b)return;
+      const b=gtFind(el.dataset.gb);if(!b)return;if(!gtCanEditBlock(b)){gtPop(key,b);return;}
       const movable=b.kind!=='trip'||b.status==='planned'||b.status==='assigned';
       const lane=el.closest('.vg-lane'),laneId=lane&&lane.dataset.vglane,y0=e.clientY,pid=e.pointerId;
       let moved=false,target=null,drop=null;
@@ -2432,7 +2432,7 @@ function gtWire(key,box){
 
 // ── Сохранение расстановки ──────────────────────────────────────────────
 async function gtSave(b,start){
-  if(!canWrite()) return;
+  if(!gtCanEditBlock(b)) return;
   const isTrip=String(b.id)[0]==='t';
   const id=String(b.id).slice(1);
   let plan=start?{start:{d:start.iso,t:q4(start.t)}}:null;
@@ -2455,6 +2455,7 @@ async function gtSave(b,start){
 }
 
 async function gtSaveCuts(b,cuts){
+  if(!gtCanEditBlock(b))return false;
   const isTrip=String(b.id)[0]==='t',id=String(b.id).slice(1);
   const plan={start:{d:b.start.iso,t:q4(b.start.t)},cuts:(cuts||[]).map(c=>({after:q4(c.after),at:{d:c.at.d,t:q4(c.at.t)}})).sort((a,z)=>a.after-z.after)};
   const {error}=await sb.from(isTrip?'trips':'jobs').update({day_plan:plan}).eq('id',id);
@@ -2465,7 +2466,7 @@ async function renderFeedAgain(){if(feedCtx&&feedCtx.mine)await renderMine();els
 function gtPop(key,b){
   const old=document.querySelector('.gpop');if(old)old.remove();
   const cuts=(b.cuts||[]).map(c=>({after:+c.after,at:{d:c.at.d,t:+c.at.t}}));
-  const trip=b.kind==='trip',action=trip?gtTripAction(b,true):null;
+  const editable=gtCanEditBlock(b),trip=b.kind==='trip',action=trip?gtTripAction(b,true):null;
   const tripTools=trip?'<div class="gp-f gp-trip-tools">'
     +(action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'')
     +((b.status==='planned'||b.status==='assigned')&&!reschedByTrip[b.tripId]?'<button class="btn sm" data-pop-resched>Перенести</button>':'')
@@ -2477,9 +2478,9 @@ function gtPop(key,b){
   const selected=document.querySelector('.vg-block[data-gb="'+window.CSS.escape(String(b.id))+'"]'),selectedDay=selected&&selected.dataset.blockDay;
   const h='<div class="gpop gpop-compact"><div class="gp-h">'+esc(gtBlockName(b))+'<span class="a-tag '+(cuts.length?'plan':'auto')+'">'+(cuts.length?'вручную':'авто')+'</span></div>'
     +'<div class="gp-s">Перетащите отдельную плашку в увеличенном дне или создайте точку разреза.</div>'
-    +(selectedDay?'<button class="btn sm" data-pop-divide>Разделить в этом дне</button>':'')
-    +'<div class="gp-days">'+(cuts.length?cuts.map((c,i)=>'<div class="gp-r"><span class="gp-k">после '+fmtH(c.after)+'</span><b class="gp-v">'+shortDate(c.at.d)+' · '+String(Math.floor(c.at.t)).padStart(2,'0')+':'+String(Math.round(c.at.t%1*60)).padStart(2,'0')+'</b><button class="gp-b danger" data-cut-del="'+i+'">×</button></div>').join(''):'<div class="hint">Ручных разрезов нет</div>')+'</div>'
-    +tripTools+'<div class="gp-f"><button class="btn sm ghost" data-gclose>Закрыть</button>'+(b.manual?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div></div>';
+    +(selectedDay&&editable?'<button class="btn sm" data-pop-divide>Разделить в этом дне</button>':'')
+    +'<div class="gp-days">'+(cuts.length?cuts.map((c,i)=>'<div class="gp-r"><span class="gp-k">после '+fmtH(c.after)+'</span><b class="gp-v">'+shortDate(c.at.d)+' · '+String(Math.floor(c.at.t)).padStart(2,'0')+':'+String(Math.round(c.at.t%1*60)).padStart(2,'0')+'</b>'+(editable?'<button class="gp-b danger" data-cut-del="'+i+'">×</button>':'')+'</div>').join(''):'<div class="hint">Ручных разрезов нет</div>')+'</div>'
+    +tripTools+'<div class="gp-f"><button class="btn sm ghost" data-gclose>Закрыть</button>'+(b.manual&&editable?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div></div>';
   document.body.insertAdjacentHTML('beforeend',h);const pop=document.body.lastElementChild;
   pop.querySelectorAll('[data-cut-del]').forEach(x=>x.onclick=async e=>{e.stopPropagation();cuts.splice(+x.dataset.cutDel,1);pop.remove();await gtSaveCuts(b,cuts);});
   const close=()=>{gtSel=null;pop.remove();gtPaint(key);};pop.querySelector('[data-gclose]').onclick=e=>{e.stopPropagation();close();};
@@ -2559,7 +2560,7 @@ async function renderFeed(box,o){
     let list=null, tripOf={}, tripById={}, tripOrd={}, offline=false, snapAt=0, orphanLinks=0;
     try{
       const { data, error }=await sb.from('jobs')
-        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), '+JOB_FINANCE_SELECT)
+        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,owner_id,curator_id,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), '+JOB_FINANCE_SELECT)
         .is('deleted_at',null);
       if(error) throw error;
       list=projectLegacyFinanceRows(data||[]);
@@ -2591,8 +2592,8 @@ async function renderFeed(box,o){
 
     // Инженер видит только свои заявки — как в канбане (см. renderJobs).
     if(o.mine||role==='engineer'){
-      list=list.filter(j=>assignedTo(j,session.user.id,'assigned_engineer'))
-        .map(j=>({...j,assigned_engineer:session.user.id}));
+      list=list.filter(j=>assignedTo(j,session.user.id,'assigned_engineer')||canWriteJob(j)||canWriteTrip(tripById[tripOf[j.id]]||null))
+        .map(j=>assignedTo(j,session.user.id,'assigned_engineer')?({...j,assigned_engineer:session.user.id}):j);
       Object.keys(tripById).forEach(id=>{
         const t=tripById[id];
         if(assignedTo(t,session.user.id,'lead_engineer')) tripById[id]={...t,lead_engineer:session.user.id};
@@ -2810,7 +2811,7 @@ async function renderFeed(box,o){
     // Визуальная сетка получает уже рассчитанные pieces/load. Здесь нет
     // второй арифметики расписания — только группировка готовых данных по неделям.
     feedCtx={plan:ganttPlan,weeks:weeks,dayH:dayH,engN:engN,shift:shift,mine:!!o.mine,
-      nameOf:engName,jobName:id=>{ const j=jobById[id]; return j&&j.clients?j.clients.name:''; }};
+      nameOf:engName,recordOf:id=>String(id)[0]==='t'?tripById[String(id).slice(1)]:jobById[String(id).slice(1)],jobName:id=>{ const j=jobById[id]; return j&&j.clients?j.clients.name:''; }};
     let weekKeys=Object.keys(weeks).sort();
     weekKeys=weekKeys.filter(k=>{const w=weeks[k],a=isoOf(w.w.mon),z=isoOf(w.w.mon+(7*(w.spanWeeks||1)-1)*DAY_MS);return z>=dashRanges.gt.from&&a<=dashRanges.gt.to;});
     if(weekKeys.length&&!weekKeys.some(k=>Object.prototype.hasOwnProperty.call(gtOpen,k))){
@@ -3444,10 +3445,10 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   try{
     await ensureRefs(); await loadStaffDays(); await loadFactHours();
     const {data:js}=await sb.from('jobs')
-      .select('id,status,at_depot,due_date,created_at,assigned_engineer,day_plan, clients(lat,lng), equipment(lat,lng), '+JOB_FINANCE_SELECT)
+      .select('id,status,at_depot,due_date,created_at,assigned_engineer,owner_id,curator_id,day_plan, clients(lat,lng), equipment(lat,lng), '+JOB_FINANCE_SELECT)
       .is('deleted_at',null);
     const jb=projectLegacyFinanceRows(js||[]);
-    const {data:tr}=await sb.from('trips').select('id,econ_snapshot,route_stops,date_from,date_to,lead_engineer,engineer_ids,status,day_plan,started_at,finished_at,fact_km,fact_km_source').is('deleted_at',null);
+    const {data:tr}=await sb.from('trips').select('id,econ_snapshot,route_stops,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,status,day_plan,started_at,finished_at,fact_km,fact_km_source').is('deleted_at',null);
     const trips=tr||[];
     // Кто в каком выезде — планировщику: без этого выезд рассыпается на
     // отдельные заявки, и дорога исчезает из загрузки.
@@ -7449,7 +7450,7 @@ async function loadVehState(){
       .select('vehicle_id,ts,lat,lng,speed,status,lost_since,trip_id,current_depot_id,depot_state,depot_inside_since,depot_outside_since,depot_distance_km');
     if(error) throw error;
     const tracking=await sb.from('trip_tracking_sessions')
-      .select('id,trip_id,vehicle_id,state,planned_start_at,actual_started_at,start_source,finish_candidate_at,trip:trips(id,date_from,date_to,status,vehicle_id,vehicle_label,started_at)')
+      .select('id,trip_id,vehicle_id,state,planned_start_at,actual_started_at,start_source,finish_candidate_at,trip:trips(id,date_from,date_to,status,vehicle_id,vehicle_label,started_at,owner_id,curator_id)')
       .in('state',['armed','active','finish_candidate']);
     if(!tracking.error) vehTrackSessions=tracking.data||[];
     // Старые, уже выполнявшиеся при установке tracking-сессий выезды имеют
@@ -7459,7 +7460,7 @@ async function loadVehState(){
     const activeIds=[...new Set((data||[]).map(r=>r.trip_id).filter(Boolean))];
     vehActiveTrips={};
     if(activeIds.length){
-      const active=await sb.from('trips').select('id,date_from,date_to,status,vehicle_id,vehicle_label,started_at').in('id',activeIds);
+      const active=await sb.from('trips').select('id,date_from,date_to,status,vehicle_id,vehicle_label,started_at,owner_id,curator_id').in('id',activeIds);
       if(!active.error) (active.data||[]).forEach(t=>{ vehActiveTrips[t.id]=t; tripCache[t.id]=t; });
     }
     const prev={}; vehState.forEach(r=>prev[r.vehicle_id]={lat:r.lat,lng:r.lng});
@@ -7585,7 +7586,7 @@ function showVehModal(vid){
   if(tracking&&tracking.state==='armed'){
     h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Трекинг подготовлен с '+esc(new Date(tracking.planned_start_at).toLocaleString('ru'))+'. Ожидаем кнопку «Начать» или подтверждённый выход из депо.</div>'
       +'<div class="row" style="margin-top:var(--sp-3);flex-wrap:wrap"><button class="btn sm amber" id="vehTrackStart">Начать выезд</button>'
-      +(canWrite()?'<button class="btn sm" id="vehTrackMove">Другой выезд</button><button class="btn sm ghost" id="vehTrackCancel">Отменить трек</button>':'')+'</div>';
+      +(canWriteTrip(trip||null)?'<button class="btn sm" id="vehTrackMove">Другой выезд</button><button class="btn sm ghost" id="vehTrackCancel">Отменить трек</button>':'')+'</div>';
   } else if(tracking&&tracking.state==='finish_candidate'){
     h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Машина не менее '+esc(String(appSettings.depot_outside_minutes||60))+' мин находится в депо. Можно завершить выезд.</div><button class="btn sm amber" id="vehTrackFinish" style="margin-top:var(--sp-3)">Завершить выезд</button>';
   }
@@ -7608,15 +7609,17 @@ function showVehModal(vid){
   const start=$('vehTrackStart'); if(start) start.onclick=()=>tripAction(tracking.trip_id,'start');
   const finish=$('vehTrackFinish'); if(finish) finish.onclick=()=>tripAction(tracking.trip_id,'finish');
   const cancel=$('vehTrackCancel'); if(cancel) cancel.onclick=async ()=>{
+    if(!trip||!canWriteTrip(trip))return;
     if(!await confirmDialog('Отменить подготовленный трек? Телеметрия останется в журнале, но отвяжется от выезда.',{danger:true,okText:'Отменить трек'})) return;
     const {error}=await sb.rpc('trip_tracking_cancel',{p_trip:tracking.trip_id}); if(error){ notify(error.message,'err'); return; }
     await loadAll(); await loadVehState(); showVehModal(v.id); showToast('Трек отменён');
   };
   const move=$('vehTrackMove'); if(move) move.onclick=async ()=>{
-    const options=(trips||[]).filter(t=>t.id!==tracking.trip_id&&t.vehicle_id===vid&&['planned','assigned'].includes(t.status))
+    if(!trip||!canWriteTrip(trip))return;
+    const options=(trips||[]).filter(t=>t.id!==tracking.trip_id&&t.vehicle_id===vid&&['planned','assigned'].includes(t.status)&&canWriteTrip(t))
       .map(t=>({value:t.id,label:tripPeriod(t.date_from,t.date_to)+' · '+(t.vehicle_label||v.name)}));
     if(!options.length){ notify('Нет другого ожидающего выезда этой машины.','warn'); return; }
-    const x=await promptDialog('Переназначить трек',[{key:'trip',label:'Выезд',type:'select',options}]); if(!x) return;
+    const x=await promptDialog('Переназначить трек',[{key:'trip',label:'Выезд',type:'select',options}]); if(!x||!options.some(o=>o.value===x.trip)) return;
     const {data,error}=await sb.rpc('trip_tracking_reassign',{p_from:tracking.trip_id,p_to:x.trip});
     if(error){ notify(error.message,'err'); return; }
     await loadAll(); await loadVehState(); showVehModal(v.id);
