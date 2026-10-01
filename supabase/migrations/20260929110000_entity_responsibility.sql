@@ -971,3 +971,19 @@ $definition$;
     grant execute on function public.trip_tracking_reassign_with_reason(uuid,uuid,text) to authenticated;
   end if;
 end $migration$;
+
+-- Clock-time plans store fractional hours. Casting hours to int rounds,
+-- so compute one seconds interval instead of hours plus fractional minutes.
+do $migration$
+begin
+  if to_regprocedure('public.trip_planned_start_at(public.trips)') is not null then
+    execute $definition$
+create or replace function public.trip_planned_start_at(t public.trips)
+returns timestamptz language sql stable set search_path='' as $body$
+  select (coalesce(nullif(t.day_plan#>>'{start,d}','')::date,t.date_from)::timestamp
+    + make_interval(secs=>round(coalesce(nullif(t.day_plan#>>'{start,t}','')::numeric,
+      (select day_start from public.settings where id=true),7)*3600))) at time zone 'Europe/Kyiv'
+$body$;
+$definition$;
+  end if;
+end $migration$;

@@ -1,6 +1,14 @@
 -- QA only: active source, elapsed target, synthetic GPS and rollback.
 begin;
 do $$
+declare actual text;
+begin
+  select to_char(public.trip_planned_start_at(jsonb_populate_record(null::public.trips,
+    '{"date_from":"2026-10-01","day_plan":{"start":{"d":"2026-10-02","t":9.75}}}'))
+    at time zone 'Europe/Kyiv','YYYY-MM-DD HH24:MI') into actual;
+  if actual<>'2026-10-02 09:45' then raise exception 'Fractional cutoff was rounded: %',actual; end if;
+end $$;
+do $$
 declare manager_uid uuid; owner_uid uuid; curator_uid uuid;
   vehicle_uid uuid; source_uid uuid; target_uid uuid; session_uid uuid; cutoff timestamptz;
 begin

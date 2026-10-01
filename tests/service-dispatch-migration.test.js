@@ -1102,3 +1102,10 @@ it('allows curator tracking transitions without owner audit and denies a foreign
     expect((await q("select has_function_privilege('anon','trip_tracking_reassign_with_reason(uuid,uuid,text)','execute') allowed"))[0].allowed).toBe(false);
   }finally{await db.exec('rollback');}
 });
+
+it('uses exact fractional clock hours for tracking cutoff, including late-night rollover',async()=>{
+  for(const [hour,expected] of [[9.25,'2026-10-02 09:15'],[9.5,'2026-10-02 09:30'],[9.75,'2026-10-02 09:45'],[23.75,'2026-10-02 23:45'],[24,'2026-10-03 00:00']]){
+    const [r]=await q("select to_char(public.trip_planned_start_at(jsonb_populate_record(null::public.trips,$1::jsonb)) at time zone 'Europe/Kyiv','YYYY-MM-DD HH24:MI') actual",[JSON.stringify({date_from:'2026-10-01',day_plan:{start:{d:'2026-10-02',t:hour}}})]);
+    expect(r.actual).toBe(expected);
+  }
+});
