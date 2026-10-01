@@ -893,3 +893,81 @@ begin
 end $$;
 
 commit;
+
+-- Reason-aware tracking actions. Legacy RPCs retain their signatures and
+-- remain protected by the status guard; they cannot bypass owner auditing.
+do $migration$
+begin
+  if to_regprocedure('public.trip_tracking_cancel(uuid)') is not null then
+    execute $definition$
+create or replace function public.trip_tracking_cancel_with_reason(p_trip uuid,p_reason text)
+returns text language plpgsql security definer set search_path='' as $body$
+declare s public.trip_tracking_sessions; source public.trips;
+begin
+  if not dlight_private.responsibility_manager('trip',p_trip) then raise exception 'Недостаточно прав'; end if;
+  select * into s from public.trip_tracking_sessions where trip_id=p_trip for update;
+  if not found then return 'not_found'; end if;
+  select * into source from public.trips where id=p_trip and deleted_at is null for update;
+  if not found then return 'not_found'; end if;
+  if source.status='in_progress' and source.owner_id=auth.uid() and source.curator_id is distinct from auth.uid() then
+    perform dlight_private.record_status_intervention('trip',p_trip,'assigned',p_reason);
+  end if;
+  update public.vehicle_positions set trip_id=null where trip_id=p_trip and ts>=s.capture_from;
+  update public.trip_tracking_sessions set state='cancelled',updated_at=now() where id=s.id;
+  perform set_config('dlight.via_rpc','1',true);
+  update public.trips set status='assigned',started_at=null where id=p_trip and status='in_progress';
+  update public.vehicle_state set trip_id=null where vehicle_id=s.vehicle_id and trip_id=p_trip;
+  return 'cancelled';
+end $body$;
+$definition$;
+    revoke all on function public.trip_tracking_cancel_with_reason(uuid,text) from public,anon,authenticated;
+    grant execute on function public.trip_tracking_cancel_with_reason(uuid,text) to authenticated;
+  end if;
+  if to_regprocedure('public.trip_tracking_reassign(uuid,uuid)') is not null then
+    execute $definition$
+create or replace function public.trip_tracking_reassign_with_reason(p_from uuid,p_to uuid,p_reason text)
+returns text language plpgsql security definer set search_path='' as $body$
+declare s public.trip_tracking_sessions; source public.trips; target public.trips;
+  cutoff timestamptz; target_session uuid;
+begin
+  if not (dlight_private.responsibility_manager('trip',p_from) and dlight_private.responsibility_manager('trip',p_to)) then raise exception 'Недостаточно прав'; end if;
+  if p_from=p_to then raise exception 'Выбери другой выезд'; end if;
+  select * into s from public.trip_tracking_sessions where trip_id=p_from for update;
+  select * into source from public.trips where id=p_from and deleted_at is null for update;
+  select * into target from public.trips where id=p_to and deleted_at is null for update;
+  if s.id is null or source.id is null or target.id is null then return 'not_found'; end if;
+  if target.vehicle_id is distinct from s.vehicle_id then raise exception 'У выездов разные машины'; end if;
+  if target.status not in ('planned','assigned') then raise exception 'Целевой выезд уже начат или закрыт'; end if;
+  cutoff:=public.trip_planned_start_at(target);
+  if cutoff is null then raise exception 'У целевого выезда нет времени старта'; end if;
+  if source.status='in_progress' and source.owner_id=auth.uid() and source.curator_id is distinct from auth.uid() then
+    perform dlight_private.record_status_intervention('trip',p_from,'assigned',p_reason);
+  end if;
+  if cutoff<=now() and target.owner_id=auth.uid() and target.curator_id is distinct from auth.uid() then
+    perform dlight_private.record_status_intervention('trip',p_to,'in_progress',p_reason);
+  end if;
+  update public.vehicle_positions set trip_id=null where trip_id=p_from and ts>=s.capture_from;
+  update public.trip_tracking_sessions set state='reassigned',updated_at=now() where id=s.id;
+  insert into public.trip_tracking_sessions(trip_id,vehicle_id,depot_id,state,planned_start_at,capture_from,actual_started_at,start_source)
+  values(target.id,s.vehicle_id,s.depot_id,case when cutoff<=now() then 'active' else 'armed' end,cutoff,cutoff,
+    case when cutoff<=now() then cutoff end,case when cutoff<=now() then 'manual' end)
+  on conflict(trip_id) do update set state=excluded.state,capture_from=cutoff,actual_started_at=excluded.actual_started_at,
+    start_source=excluded.start_source,updated_at=now() returning id into target_session;
+  insert into public.trip_tracking_points(session_id,vehicle_id,ts,lat,lng,speed,status)
+    select target_session,p.vehicle_id,p.ts,p.lat,p.lng,p.speed,p.status from public.trip_tracking_points p
+    where p.session_id=s.id and p.ts>=cutoff on conflict do nothing;
+  if cutoff<=now() then
+    insert into public.vehicle_positions(vehicle_id,trip_id,ts,lat,lng,speed,status,moving,mileage)
+      select p.vehicle_id,target.id,p.ts,p.lat,p.lng,p.speed,p.status,(p.status='moving'),null
+      from public.trip_tracking_points p where p.session_id=target_session and p.ts>=cutoff on conflict(vehicle_id,ts) do update set trip_id=excluded.trip_id;
+  end if;
+  perform set_config('dlight.via_rpc','1',true);
+  update public.trips set status='assigned',started_at=null where id=p_from and status='in_progress';
+  if cutoff<=now() then update public.trips set status='in_progress',started_at=cutoff where id=p_to; end if;
+  return case when cutoff<=now() then 'reassigned_started' else 'reassigned_future' end;
+end $body$;
+$definition$;
+    revoke all on function public.trip_tracking_reassign_with_reason(uuid,uuid,text) from public,anon,authenticated;
+    grant execute on function public.trip_tracking_reassign_with_reason(uuid,uuid,text) to authenticated;
+  end if;
+end $migration$;

@@ -7611,7 +7611,9 @@ function showVehModal(vid){
   const cancel=$('vehTrackCancel'); if(cancel) cancel.onclick=async ()=>{
     if(!trip||!canWriteTrip(trip))return;
     if(!await confirmDialog('Отменить подготовленный трек? Телеметрия останется в журнале, но отвяжется от выезда.',{danger:true,okText:'Отменить трек'})) return;
-    const {error}=await sb.rpc('trip_tracking_cancel',{p_trip:tracking.trip_id}); if(error){ notify(error.message,'err'); return; }
+    const reason=trip.status==='in_progress'&&delegatedOwnerIntervenes(trip)?askInterventionReason():null;
+    if(trip.status==='in_progress'&&delegatedOwnerIntervenes(trip)&&reason===null)return;
+    const {error}=await sb.rpc('trip_tracking_cancel_with_reason',{p_trip:tracking.trip_id,p_reason:reason}); if(error){ notify(error.message,'err'); return; }
     await loadAll(); await loadVehState(); showVehModal(v.id); showToast('Трек отменён');
   };
   const move=$('vehTrackMove'); if(move) move.onclick=async ()=>{
@@ -7620,7 +7622,11 @@ function showVehModal(vid){
       .map(t=>({value:t.id,label:tripPeriod(t.date_from,t.date_to)+' · '+(t.vehicle_label||v.name)}));
     if(!options.length){ notify('Нет другого ожидающего выезда этой машины.','warn'); return; }
     const x=await promptDialog('Переназначить трек',[{key:'trip',label:'Выезд',type:'select',options}]); if(!x||!options.some(o=>o.value===x.trip)) return;
-    const {data,error}=await sb.rpc('trip_tracking_reassign',{p_from:tracking.trip_id,p_to:x.trip});
+    const target=(trips||[]).find(t=>t.id===x.trip);
+    if(!target||!canWriteTrip(target))return;
+    const intervenes=delegatedOwnerIntervenes(trip)||delegatedOwnerIntervenes(target);
+    const reason=intervenes?askInterventionReason():null;if(intervenes&&reason===null)return;
+    const {data,error}=await sb.rpc('trip_tracking_reassign_with_reason',{p_from:tracking.trip_id,p_to:x.trip,p_reason:reason});
     if(error){ notify(error.message,'err'); return; }
     await loadAll(); await loadVehState(); showVehModal(v.id);
     showToast(data==='reassigned_future'?'Трек переназначен; будущие точки начнут новый буфер':'Трек переназначен и обрезан по старту');

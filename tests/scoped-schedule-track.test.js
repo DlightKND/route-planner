@@ -41,7 +41,7 @@ it('preserves owner and global manager scheduling rights without granting crew r
   expect(schedule({user:'crew'}).gtCanEditBlock(block)).toBe(false);
   expect(schedule({user:'manager',role:'logist'}).gtCanEditBlock(block)).toBe(true);
 });
-function vehicle({user='curator',trip=own,answer='target'}={}){
+function vehicle({user='curator',trip=own,answer='target',reason='Перенос по решению владельца'}={}){
   const win=new Window(),doc=win.document;
   doc.body.innerHTML='<div id="vehTitle"></div><div id="vehBody"></div><div id="vehOverlay"></div>';
   const targets=[{...own,id:'target'},{...foreign},{...own,id:'wrong-car',vehicle_id:'other'},{...own,id:'finished',status:'finished'}];
@@ -52,7 +52,7 @@ function vehicle({user='curator',trip=own,answer='target'}={}){
     $:id=>doc.getElementById(id),esc:String,vehTitle:()=> 'Стоит',vehRow:(a,b)=>`<div>${a}: ${b}</div>`,vehAgeText:()=> 'сейчас',clients:[],
     vehTrackSessions:[{trip_id:trip.id,vehicle_id:'car',state:'armed',planned_start_at:'2026-10-01T09:00:00Z',trip}],vehActiveTrips:{},trips:targets,ST_TRIP:{},appSettings:{},
     showToast:vi.fn(),notify:vi.fn(),promptDialog:prompt,sb:{rpc},loadVehicles:vi.fn(),tripAction:vi.fn(),confirmDialog:async()=>true,
-    loadAll:vi.fn(),loadVehState:vi.fn(),tripPeriod:()=> '01.10'};
+    loadAll:vi.fn(),loadVehState:vi.fn(),tripPeriod:()=> '01.10',delegatedOwnerIntervenes:row=>row.owner_id===user&&row.curator_id!==user,askInterventionReason:vi.fn(()=>reason)};
   const show=new Function(...Object.keys(context),rights+section('function showVehModal(vid){',"if($('vehClose'))")+';return showVehModal;')(...Object.values(context));
   show('car');return {win,doc,rpc,prompt};
 }
@@ -62,7 +62,7 @@ it('lets a curator move an armed track only to an authorized pending trip of the
     expect(api.doc.getElementById('vehOdometer')).toBeNull();
     await api.doc.getElementById('vehTrackMove').onclick();
     expect(api.prompt.mock.calls[0][1][0].options.map(x=>x.value)).toEqual(['target']);
-    expect(api.rpc).toHaveBeenCalledWith('trip_tracking_reassign',{p_from:'own',p_to:'target'});
+    expect(api.rpc).toHaveBeenCalledWith('trip_tracking_reassign_with_reason',{p_from:'own',p_to:'target',p_reason:null});
   }finally{await api.win.happyDOM.close();}
 });
 it('does not offer track controls on a foreign source and rejects an invalid selected target',async()=>{
@@ -76,6 +76,15 @@ it('does not offer track controls on a foreign source and rejects an invalid sel
 it('retains owner track cancellation after delegation',async()=>{
   const api=vehicle({user:'owner'});try{
     await api.doc.getElementById('vehTrackCancel').onclick();
-    expect(api.rpc).toHaveBeenCalledWith('trip_tracking_cancel',{p_trip:'own'});
+    expect(api.rpc).toHaveBeenCalledWith('trip_tracking_cancel_with_reason',{p_trip:'own',p_reason:null});
   }finally{await api.win.happyDOM.close();}
+});
+
+it('passes owner intervention reason on reassignment and stops if the reason is cancelled',async()=>{
+  const api=vehicle({user:'owner'}),cancelled=vehicle({user:'owner',reason:null});
+  try{
+    await api.doc.getElementById('vehTrackMove').onclick();
+    expect(api.rpc).toHaveBeenCalledWith('trip_tracking_reassign_with_reason',{p_from:'own',p_to:'target',p_reason:'Перенос по решению владельца'});
+    await cancelled.doc.getElementById('vehTrackMove').onclick();expect(cancelled.rpc).not.toHaveBeenCalled();
+  }finally{await api.win.happyDOM.close();await cancelled.win.happyDOM.close();}
 });
