@@ -10,6 +10,9 @@ import './trip-workbench.css';
 import './service-orders.css';
 import { createServiceOrders } from './service-orders.js';
 import { mountEntityActivity } from './entity-activity.js';
+import { mountEntityResponsibility } from './entity-responsibility.js';
+import { loadEntityPeople } from './entity-people.js';
+import { configureTripPlanStatus } from './trip-plan-status.js';
 import './entity-activity.css';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
@@ -1674,7 +1677,7 @@ async function geocode(){ const q=$('geoQuery').value.trim(); const box=$('geoRe
 
 // ---------- jobs ----------
 let jobs=[], profilesList=[], curWorks=[], jobEditId=null, curWorksComplete=false;
-async function ensureRefs(){ if(!catalog.length) await loadCatalog(); if(!profilesList.length){ const {data}=await sb.from('profiles').select('id,full_name,role'); profilesList=data||[]; } }
+async function ensureRefs(){ if(!catalog.length) await loadCatalog(); if(!profilesList.length) profilesList=await loadEntityPeople(sb); }
 function engineerIds(row,legacyField){
   const ids=Array.isArray(row&&row.engineer_ids)?row.engineer_ids.filter(Boolean):[];
   const legacy=row&&row[legacyField];
@@ -1720,7 +1723,7 @@ function flatList(pool,visible,dateOf,card,empty){
 }
 function renderJobChips(){ const box=$('jobStatusChips'); if(!box) return; box.innerHTML=JOB_STATUS_ORDER.map(s=>'<span class="chip'+(jobVisible[s]?' on':'')+'" data-js="'+s+'">'+esc(ST[s])+'</span>').join('');
   box.querySelectorAll('[data-js]').forEach(c=>c.onclick=()=>{ jobVisible[c.dataset.js]=!jobVisible[c.dataset.js]; renderJobChips(); renderJobs(); }); }
-function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.hours||0),0);
+function jobCard(j){ const mayManage=canWriteJob(j); const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.hours||0),0);
   const pm=partsMoney(j);
   const rev=w.reduce((a,x)=>a+(+x.revenue||0),0)+pm.rev;   // и платные, и гарантийные, и запчасти
   const warr=w.some(x=>!x.billable), paid=w.some(x=>x.billable); const engs=engineerNames(jobEngineerIds(j));
@@ -1737,12 +1740,12 @@ function jobCard(j){ const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.
   }
   // Выручку показываем только тем, кто ею распоряжается. Инженеру в поле
   // это не данные для решения, а лишняя строка в карточке.
-  const revTxt=(rev&&canWrite())?(' · выручка '+rev):'';
+  const revTxt=(rev&&mayManage)?(' · выручка '+rev):'';
   const meta='<div class="meta">'+(j.scheduled_date?'визит '+esc(tripPeriod(j.scheduled_date,null))+' · ':'')+dueTxt+w.length+' раб · '+hours.toFixed(2)+' ч'+(j.pending_local?' · ждёт отправки':'')+revTxt+(engs.length?' · '+esc(engs.join(', ')):'')+'</div>';
-  const mv=canWrite()?('<select class="kmove" data-jstat="'+j.id+'" title="Сменить статус">'+JOB_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===j.status?' selected':'')+'>'+esc(ST[s])+'</option>').join('')+'</select>'):'';
+  const mv=mayManage?('<select class="kmove" data-jstat="'+j.id+'" title="Сменить статус">'+JOB_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===j.status?' selected':'')+'>'+esc(ST[s])+'</option>').join('')+'</select>'):'';
   const eb=(assignedTo(j,session.user.id,'assigned_engineer')&&(j.status==='open'||j.status==='planned'))?'<button class="btn sm amber" data-jst="'+j.id+'|in_progress">В работу</button>':'';
   const eb2=(assignedTo(j,session.user.id,'assigned_engineer')&&j.status==='in_progress')?'<button class="btn sm amber" data-jst="'+j.id+'|done">Завершить</button>':'';
-  const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+(canWrite()?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
+  const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+(mayManage?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
   return '<div class="kcard" data-kid="'+j.id+'">'+head+(tags?'<div class="ktags">'+tags+'</div>':'')+meta+acts+'</div>'; }
 function wireJobCards(box){
   box.querySelectorAll('[data-jedit]').forEach(b=>b.onclick=()=>openJob(b.dataset.jedit));
@@ -1762,7 +1765,7 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
   const q=$('jobSearch').value.trim().toLowerCase();
   if($('jobEngFilter') && $('jobEngFilter').dataset.filled!=='1'){ $('jobEngFilter').innerHTML='<option value="">все инженеры</option>'+profilesList.filter(p=>p.role==='engineer').map(p=>'<option value="'+p.id+'">'+esc(p.full_name||'инженер')+'</option>').join(''); $('jobEngFilter').dataset.filled='1'; }
   const ef=$('jobEngFilter')?$('jobEngFilter').value:'';
-  const baseJobs=(role==='engineer')?jobs.filter(j=>assignedTo(j,session.user.id,'assigned_engineer')):jobs;
+  const baseJobs=(role==='engineer')?jobs.filter(j=>assignedTo(j,session.user.id,'assigned_engineer')||canWriteJob(j)):jobs;
   const match=j=>(!ef||assignedTo(j,ef,'assigned_engineer'))&&(!q||((j.clients&&j.clients.name)||'').toLowerCase().includes(q));
   const cols=JOB_STATUS_ORDER.filter(s=>jobVisible[s]);
   if(!cols.length){ box.className=''; box.innerHTML='<div class="hint">Выберите хотя бы один статус выше.</div>'; return; }
@@ -1779,7 +1782,7 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
     const cards=items.map(j=>jobCard(j)).join('')
       ||'<div class="kempty">'+esc(EMPTY[s]||'Пусто')+'</div>';
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
-  wireJobCards(box); wireKanbanDrag(box,dropJob); await serviceOrders.attachJobs(box); }
+  wireJobCards(box); wireKanbanDrag(box,dropJob,id=>{const j=jobs.find(j=>j.id===id);return !!j&&canWriteJob(j);}); await serviceOrders.attachJobs(box); }
 $('jobSearch').oninput=renderJobs; if($('jobEngFilter')) $('jobEngFilter').onchange=renderJobs; if($('mineDone')) $('mineDone').onchange=renderMine; $('jobAdd').onclick=()=>{ if(canWrite()) openJob(null); };
 
 // ── Корзина заявок и выездов ───────────────────────────────────────────
@@ -2170,7 +2173,7 @@ function gtDayHtml(key){
       pcs.forEach(p=>{const y=geo.yOf(p.from),h=Math.max(12,geo.yOf(p.to)-geo.yOf(p.from)),name=p.k==='d'?'Дорога':((p.jobId&&feedCtx.jobName(p.jobId))||gtBlockName(b));
         bars+='<div class="vg-block vg-piece '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(p.pinned?' man':'')+(h<40?' short':'')+'" data-gb="'+esc(b.id)+'" data-piece-at="'+p.at+'" data-piece-from="'+p.from+'" data-piece-to="'+p.to+'" data-piece-iso="'+p.iso+'" style="top:'+y+'px;height:'+h+'px">'
           +(p.k==='d'?'<i class="vg-seg road" style="inset:0"></i>':'')+'<span class="vg-label"><b>'+esc(name)+(p.pinned?' ✎':'')+'</b><small>'+esc(fmtH(p.h)+' · '+clockLabel(p.from)+'–'+clockLabel(p.to))+'</small></span>'
-          +(canWrite()&&p.h>1?'<button class="vg-divide" type="button" data-gdivide aria-label="Разделить участок">÷</button>':'')+'</div>';});
+          +(gtCanEditBlock(b)&&p.h>1?'<button class="vg-divide" type="button" data-gdivide aria-label="Разделить участок">÷</button>':'')+'</div>';});
     });
     const color=loadColor(hours/shift), over=Math.max(0,hours-gtEff());
     const now=scheduleNow(), nowY=geo.yOf(now.t), nowLine=now.iso===iso&&nowY>=0&&nowY<=dayH?'<span class="vg-now" title="Сейчас · '+esc(now.label)+'" style="top:'+nowY+'px"></span>':'';
@@ -2268,14 +2271,23 @@ function gtActionIcon(kind){
   const body=kind==='start'?'<path d="M5.5 3.4 12.8 8 5.5 12.6z"/>':kind==='finish'?'<rect x="4.6" y="4.6" width="6.8" height="6.8" rx="1.2"/>':kind==='confirm'?'<path d="M3.6 8.4 6.6 11.4 12.4 4.9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>':'<circle cx="4.2" cy="8" r="1.35"/><circle cx="8" cy="8" r="1.35"/><circle cx="11.8" cy="8" r="1.35"/>';
   return '<svg viewBox="0 0 16 16" aria-hidden="true">'+body+'</svg>';
 }
+function gtCanEditBlock(b){
+  if(!b||!b.id)return false;
+  const id=String(b.id).slice(1);
+  const row=feedCtx?.recordOf?.(b.id)||(b.kind==='trip'
+    ?getTrip(b.tripId||id)||tripCache[b.tripId||id]
+    :jobs.find(j=>j.id===id));
+  return !!row&&(b.kind==='trip'?canWriteTrip(row):canWriteJob(row));
+}
 function gtTripAction(b,allowEarly){
   if(b.kind!=='trip') return null;
   const own=(b.engineerIds||[]).includes(session&&session.user&&session.user.id);
-  const mayAct=own||canWrite(),first=(b.pieces||[])[0],startedToday=!first||first.iso<=todayISO();
+  const manager=canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null);
+  const mayAct=own||manager,first=(b.pieces||[])[0],startedToday=!first||first.iso<=todayISO();
   if((b.status==='planned'||b.status==='assigned')&&mayAct&&(startedToday||allowEarly)) return {kind:'start',label:'Начать выезд'};
   if(b.status==='in_progress'&&mayAct) return {kind:'finish',label:'Завершить выезд'};
-  if(b.status==='finished'&&canWrite()) return {kind:'confirm',label:'Подтвердить выезд'};
-  if(b.status==='finished'&&!canWrite()&&own) return {kind:'wait',label:'Ждёт менеджера',passive:true};
+  if(b.status==='finished'&&manager) return {kind:'confirm',label:'Подтвердить выезд'};
+  if(b.status==='finished'&&!manager&&own) return {kind:'wait',label:'Ждёт менеджера',passive:true};
   return null;
 }
 function gtVerticalHtml(key){
@@ -2355,7 +2367,7 @@ function gtWire(key,box){
   }
   box.querySelectorAll('[data-gact]').forEach(btn=>{
     btn.onpointerdown=e=>e.stopPropagation();
-    btn.onclick=async e=>{e.preventDefault();e.stopPropagation();const host=btn.closest('[data-gb]'),b=host&&gtFind(host.dataset.gb);if(b&&b.tripId){const own=(b.engineerIds||[]).includes(session.user.id);await tripAction(b.tripId,btn.dataset.gact,!own&&canWrite()?feedCtx.nameOf(b.engineer):'');}};
+    btn.onclick=async e=>{e.preventDefault();e.stopPropagation();const host=btn.closest('[data-gb]'),b=host&&gtFind(host.dataset.gb);if(b&&b.tripId){const own=(b.engineerIds||[]).includes(session.user.id);await tripAction(b.tripId,btn.dataset.gact,!own&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?feedCtx.nameOf(b.engineer):'');}};
   });
   box.querySelectorAll('.vg-gtitle').forEach(title=>title.onclick=e=>{e.stopPropagation();const b=gtFind(title.closest('[data-gb]').dataset.gb);if(b){gtSel=b.id;gtPop(key,b);}});
   box.querySelectorAll('[data-gback]').forEach(b=>b.onclick=e=>{ e.stopPropagation();
@@ -2390,7 +2402,7 @@ function gtWire(key,box){
     };
   });
   box.querySelectorAll('[data-gdivide]').forEach(btn=>btn.onclick=e=>{
-    e.preventDefault();e.stopPropagation();const el=btn.closest('.vg-piece'),b=el&&gtFind(el.dataset.gb);if(!b)return;
+    e.preventDefault();e.stopPropagation();const el=btn.closest('.vg-piece'),b=el&&gtFind(el.dataset.gb);if(!b||!gtCanEditBlock(b))return;
     const from=+el.dataset.pieceFrom,to=+el.dataset.pieceTo,mid=q4((from+to)/2);
     el.classList.add('dividing');el.insertAdjacentHTML('beforeend','<div class="vg-cut"><input type="range" min="'+(from+.25)+'" max="'+(to-.25)+'" step=".25" value="'+mid+'"><span>режем в <b>'+clockLabel(mid)+'</b></span><button data-cut-ok>ОК</button><button data-cut-no>×</button></div>');
     const cut=el.querySelector('.vg-cut'),range=cut.querySelector('input');range.oninput=()=>{cut.querySelector('b').textContent=clockLabel(+range.value);cut.style.top=((+range.value-from)/(to-from)*100)+'%';};
@@ -2399,22 +2411,14 @@ function gtWire(key,box){
   });
   if(zoom&&gtPendingDivide&&gtPendingDivide.iso===zoom){const btn=box.querySelector('[data-gdivide][data-gb="'+window.CSS.escape(String(gtPendingDivide.id))+'"], [data-gb="'+window.CSS.escape(String(gtPendingDivide.id))+'"] [data-gdivide]');gtPendingDivide=null;if(btn)requestAnimationFrame(()=>btn.click());}
   box.querySelectorAll('.vg-piece').forEach(el=>{
-    el.onpointerdown=e=>{if(e.target.closest('button,input,.vg-cut'))return;e.stopPropagation();const lane=el.closest('.vg-day-lane'),R=lane.getBoundingClientRect(),b=gtFind(el.dataset.gb),y0=e.clientY,top0=el.offsetTop;let moved=false;
+    el.onpointerdown=e=>{if(e.target.closest('button,input,.vg-cut'))return;e.stopPropagation();const b=gtFind(el.dataset.gb);if(!b)return;if(!gtCanEditBlock(b)){gtPop(key,b);return;}const lane=el.closest('.vg-day-lane'),R=lane.getBoundingClientRect(),y0=e.clientY,top0=el.offsetTop;let moved=false;
       el.setPointerCapture(e.pointerId);el.onpointermove=ev=>{const dy=ev.clientY-y0;if(Math.abs(dy)>3)moved=true;el.style.top=Math.max(0,Math.min(R.height-el.offsetHeight,top0+dy))+'px';};
       el.onpointerup=async ev=>{el.onpointermove=null;el.onpointerup=null;if(!moved){if(b.kind==='trip')openTrip(String(b.id).slice(1));else gtPop(key,b);return;}const t=q4(Math.max(0,Math.min(24,gtLaneTime(lane,ev.clientY-R.top))));await gtPinPiece(b,{at:+el.dataset.pieceAt},el.dataset.pieceIso,t);};};
   });
-  if(!canWrite()){
-    // Просмотр графика не должен быть тупиком: инженер не может двигать
-    // блок, но может открыть сам выезд и увидеть маршрут, заявки и статус.
-    box.querySelectorAll('.vg-block.trip').forEach(el=>el.onclick=e=>{
-      e.stopPropagation(); const b=gtFind(el.dataset.gb); if(b) gtPop(key,b);
-    });
-    return;
-  }
   box.querySelectorAll('.vg-block:not(.vg-piece)').forEach(el=>{
     el.onpointerdown=e=>{
       if(e.target.closest('button'))return;
-      const b=gtFind(el.dataset.gb);if(!b)return;
+      const b=gtFind(el.dataset.gb);if(!b)return;if(!gtCanEditBlock(b)){gtPop(key,b);return;}
       const movable=b.kind!=='trip'||b.status==='planned'||b.status==='assigned';
       const lane=el.closest('.vg-lane'),laneId=lane&&lane.dataset.vglane,y0=e.clientY,pid=e.pointerId;
       let moved=false,target=null,drop=null;
@@ -2430,7 +2434,7 @@ function gtWire(key,box){
 
 // ── Сохранение расстановки ──────────────────────────────────────────────
 async function gtSave(b,start){
-  if(!canWrite()) return;
+  if(!gtCanEditBlock(b)) return;
   const isTrip=String(b.id)[0]==='t';
   const id=String(b.id).slice(1);
   let plan=start?{start:{d:start.iso,t:q4(start.t)}}:null;
@@ -2453,6 +2457,7 @@ async function gtSave(b,start){
 }
 
 async function gtSaveCuts(b,cuts){
+  if(!gtCanEditBlock(b))return false;
   const isTrip=String(b.id)[0]==='t',id=String(b.id).slice(1);
   const plan={start:{d:b.start.iso,t:q4(b.start.t)},cuts:(cuts||[]).map(c=>({after:q4(c.after),at:{d:c.at.d,t:q4(c.at.t)}})).sort((a,z)=>a.after-z.after)};
   const {error}=await sb.from(isTrip?'trips':'jobs').update({day_plan:plan}).eq('id',id);
@@ -2463,27 +2468,27 @@ async function renderFeedAgain(){if(feedCtx&&feedCtx.mine)await renderMine();els
 function gtPop(key,b){
   const old=document.querySelector('.gpop');if(old)old.remove();
   const cuts=(b.cuts||[]).map(c=>({after:+c.after,at:{d:c.at.d,t:+c.at.t}}));
-  const trip=b.kind==='trip',action=trip?gtTripAction(b,true):null;
+  const editable=gtCanEditBlock(b),trip=b.kind==='trip',action=trip?gtTripAction(b,true):null;
   const tripTools=trip?'<div class="gp-f gp-trip-tools">'
     +(action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'')
     +((b.status==='planned'||b.status==='assigned')&&!reschedByTrip[b.tripId]?'<button class="btn sm" data-pop-resched>Перенести</button>':'')
     +'<button class="btn sm ghost" data-pop-map>Карта</button>'
     +((b.status==='finished'||b.status==='done')?'<button class="btn sm" data-pop-stays>Стоянки</button>':'')
     +((b.status==='finished'||b.status==='done')?'<button class="btn sm amber" data-pop-stay-map>Привязка факта</button>':'')
-    +((b.status==='finished'||b.status==='done')&&canWrite()?'<button class="btn sm" data-pop-km>Пересчитать факт</button>':'')
-    +(canWrite()?'<button class="btn sm" data-pop-open>Открыть выезд</button>':'')+'</div>':'';
+    +((b.status==='finished'||b.status==='done')&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn sm" data-pop-km>Пересчитать факт</button>':'')
+    +(canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn sm" data-pop-open>Открыть выезд</button>':'')+'</div>':'';
   const selected=document.querySelector('.vg-block[data-gb="'+window.CSS.escape(String(b.id))+'"]'),selectedDay=selected&&selected.dataset.blockDay;
   const h='<div class="gpop gpop-compact"><div class="gp-h">'+esc(gtBlockName(b))+'<span class="a-tag '+(cuts.length?'plan':'auto')+'">'+(cuts.length?'вручную':'авто')+'</span></div>'
     +'<div class="gp-s">Перетащите отдельную плашку в увеличенном дне или создайте точку разреза.</div>'
-    +(selectedDay?'<button class="btn sm" data-pop-divide>Разделить в этом дне</button>':'')
-    +'<div class="gp-days">'+(cuts.length?cuts.map((c,i)=>'<div class="gp-r"><span class="gp-k">после '+fmtH(c.after)+'</span><b class="gp-v">'+shortDate(c.at.d)+' · '+String(Math.floor(c.at.t)).padStart(2,'0')+':'+String(Math.round(c.at.t%1*60)).padStart(2,'0')+'</b><button class="gp-b danger" data-cut-del="'+i+'">×</button></div>').join(''):'<div class="hint">Ручных разрезов нет</div>')+'</div>'
-    +tripTools+'<div class="gp-f"><button class="btn sm ghost" data-gclose>Закрыть</button>'+(b.manual?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div></div>';
+    +(selectedDay&&editable?'<button class="btn sm" data-pop-divide>Разделить в этом дне</button>':'')
+    +'<div class="gp-days">'+(cuts.length?cuts.map((c,i)=>'<div class="gp-r"><span class="gp-k">после '+fmtH(c.after)+'</span><b class="gp-v">'+shortDate(c.at.d)+' · '+String(Math.floor(c.at.t)).padStart(2,'0')+':'+String(Math.round(c.at.t%1*60)).padStart(2,'0')+'</b>'+(editable?'<button class="gp-b danger" data-cut-del="'+i+'">×</button>':'')+'</div>').join(''):'<div class="hint">Ручных разрезов нет</div>')+'</div>'
+    +tripTools+'<div class="gp-f"><button class="btn sm ghost" data-gclose>Закрыть</button>'+(b.manual&&editable?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div></div>';
   document.body.insertAdjacentHTML('beforeend',h);const pop=document.body.lastElementChild;
   pop.querySelectorAll('[data-cut-del]').forEach(x=>x.onclick=async e=>{e.stopPropagation();cuts.splice(+x.dataset.cutDel,1);pop.remove();await gtSaveCuts(b,cuts);});
   const close=()=>{gtSel=null;pop.remove();gtPaint(key);};pop.querySelector('[data-gclose]').onclick=e=>{e.stopPropagation();close();};
   const reset=pop.querySelector('[data-greset]');if(reset)reset.onclick=e=>{e.stopPropagation();pop.remove();gtSave(b,null);};pop.onclick=e=>e.stopPropagation();
   const tool=(sel,fn)=>{const x=pop.querySelector(sel);if(x)x.onclick=async e=>{e.stopPropagation();pop.remove();await fn();};};
-  tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWrite()?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-stay-map]',()=>openStayBindingMap(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
+  tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-stay-map]',()=>openStayBindingMap(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
   tool('[data-pop-divide]',async()=>{gtZoom[key]=selectedDay;gtPendingDivide={id:String(b.id),iso:selectedDay};gtPaint(key);});
   const el=document.querySelector('[data-gb="'+window.CSS.escape(String(b.id))+'"]');if(el&&!matchMedia('(max-width:600px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-348,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
 }
@@ -2557,7 +2562,7 @@ async function renderFeed(box,o){
     let list=null, tripOf={}, tripById={}, tripOrd={}, offline=false, snapAt=0, orphanLinks=0;
     try{
       const { data, error }=await sb.from('jobs')
-        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), '+JOB_FINANCE_SELECT)
+        .select('id,status,due_date,scheduled_date,created_at,assigned_engineer,engineer_ids,owner_id,curator_id,at_depot,day_plan, clients(name,lat,lng,phone), equipment(model,lat,lng), '+JOB_FINANCE_SELECT)
         .is('deleted_at',null);
       if(error) throw error;
       list=projectLegacyFinanceRows(data||[]);
@@ -2589,8 +2594,8 @@ async function renderFeed(box,o){
 
     // Инженер видит только свои заявки — как в канбане (см. renderJobs).
     if(o.mine||role==='engineer'){
-      list=list.filter(j=>assignedTo(j,session.user.id,'assigned_engineer'))
-        .map(j=>({...j,assigned_engineer:session.user.id}));
+      list=list.filter(j=>assignedTo(j,session.user.id,'assigned_engineer')||canWriteJob(j)||canWriteTrip(tripById[tripOf[j.id]]||null))
+        .map(j=>assignedTo(j,session.user.id,'assigned_engineer')?({...j,assigned_engineer:session.user.id}):j);
       Object.keys(tripById).forEach(id=>{
         const t=tripById[id];
         if(assignedTo(t,session.user.id,'lead_engineer')) tripById[id]={...t,lead_engineer:session.user.id};
@@ -2808,7 +2813,7 @@ async function renderFeed(box,o){
     // Визуальная сетка получает уже рассчитанные pieces/load. Здесь нет
     // второй арифметики расписания — только группировка готовых данных по неделям.
     feedCtx={plan:ganttPlan,weeks:weeks,dayH:dayH,engN:engN,shift:shift,mine:!!o.mine,
-      nameOf:engName,jobName:id=>{ const j=jobById[id]; return j&&j.clients?j.clients.name:''; }};
+      nameOf:engName,recordOf:id=>String(id)[0]==='t'?tripById[String(id).slice(1)]:jobById[String(id).slice(1)],jobName:id=>{ const j=jobById[id]; return j&&j.clients?j.clients.name:''; }};
     let weekKeys=Object.keys(weeks).sort();
     weekKeys=weekKeys.filter(k=>{const w=weeks[k],a=isoOf(w.w.mon),z=isoOf(w.w.mon+(7*(w.spanWeeks||1)-1)*DAY_MS);return z>=dashRanges.gt.from&&a<=dashRanges.gt.to;});
     if(weekKeys.length&&!weekKeys.some(k=>Object.prototype.hasOwnProperty.call(gtOpen,k))){
@@ -2961,7 +2966,7 @@ async function renderFeed(box,o){
           +'<span class="acts">'+(o.mine?tripActs(t)
             :('<button class="btn sm" data-tmap="'+t.id+'">карта</button>'
               +'<button class="btn sm" data-tgm="'+t.id+'">⌖ Google Maps</button>'
-              +(canWrite()?('<button class="btn sm" data-topen="'+t.id+'">открыть</button>'):'')))
+              +(canWriteTrip(t)?('<button class="btn sm" data-topen="'+t.id+'">открыть</button>'):'')))
           +'</span></div>'
           +(o.mine?reschedBanner(t):'');
       }
@@ -3442,10 +3447,10 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   try{
     await ensureRefs(); await loadStaffDays(); await loadFactHours();
     const {data:js}=await sb.from('jobs')
-      .select('id,status,at_depot,due_date,created_at,assigned_engineer,day_plan, clients(lat,lng), equipment(lat,lng), '+JOB_FINANCE_SELECT)
+      .select('id,status,at_depot,due_date,created_at,assigned_engineer,owner_id,curator_id,day_plan, clients(lat,lng), equipment(lat,lng), '+JOB_FINANCE_SELECT)
       .is('deleted_at',null);
     const jb=projectLegacyFinanceRows(js||[]);
-    const {data:tr}=await sb.from('trips').select('id,econ_snapshot,route_stops,date_from,date_to,lead_engineer,engineer_ids,status,day_plan,started_at,finished_at,fact_km,fact_km_source').is('deleted_at',null);
+    const {data:tr}=await sb.from('trips').select('id,econ_snapshot,route_stops,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,status,day_plan,started_at,finished_at,fact_km,fact_km_source').is('deleted_at',null);
     const trips=tr||[];
     // Кто в каком выезде — планировщику: без этого выезд рассыпается на
     // отдельные заявки, и дорога исчезает из загрузки.
@@ -3500,17 +3505,17 @@ function tripActs(t){
     if(!reschedByTrip[t.id]) a+='<button class="btn sm" data-tresched="'+t.id+'">Перенести</button>';
   }
   if(t.status==='in_progress') a+='<button class="btn sm amber" data-tfin="'+t.id+'">■ Завершить</button>';
-  if(t.status==='finished' && canWrite()) a+='<button class="btn sm amber" data-tconf="'+t.id+'">✓ Подтвердить</button>';
-  if(t.status==='finished' && !canWrite()) a+='<span class="pill">ждёт менеджера</span>';
+  if(t.status==='finished' && canWriteTrip(t)) a+='<button class="btn sm amber" data-tconf="'+t.id+'">✓ Подтвердить</button>';
+  if(t.status==='finished' && !canWriteTrip(t)) a+='<span class="pill">ждёт менеджера</span>';
   if(t.status==='finished'||t.status==='done') a+='<button class="btn sm" data-tstay="'+t.id+'">⏱ Стоянки</button>';
-  if((t.status==='finished'||t.status==='done')&&canWrite()) a+='<button class="btn sm amber" data-tstaymap="'+t.id+'">Привязка факта на карте</button>';
+  if((t.status==='finished'||t.status==='done')&&canWriteTrip(t)) a+='<button class="btn sm amber" data-tstaymap="'+t.id+'">Привязка факта на карте</button>';
   // Ручной пересчёт. Нужен, когда ORS в момент подтверждения был недоступен
   // или отвечал ошибками: тогда часть точек осудили по кругу или по отказу
   // маршрутизатора, а не по дорогам. Повторный запуск считает всё заново
   // с чистого листа — никакой прошлый результат не подмешивается.
-  if((t.status==='finished'||t.status==='done')&&canWrite())
+  if((t.status==='finished'||t.status==='done')&&canWriteTrip(t))
     a+='<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ Пробег</button>';
-  if(canWrite()) a+='<button class="btn sm" data-topen="'+t.id+'">открыть</button>';
+  if(canWriteTrip(t)) a+='<button class="btn sm" data-topen="'+t.id+'">открыть</button>';
   a+='<button class="btn sm ghost" data-tmap="'+t.id+'">на карте</button>';
   a+='<button class="btn sm ghost" data-tgm="'+t.id+'">Google Maps</button>';
   return a;
@@ -3535,8 +3540,28 @@ async function renderMine(){
 }
 
 
+function delegatedOwnerIntervenes(row){
+  return !!(row?.id&&row.owner_id===session?.user?.id&&row.curator_id!==session?.user?.id);
+}
+function askInterventionReason(){
+  const reason=window.prompt('Причина вмешательства владельца (не менее 5 символов)','');
+  if(reason===null)return null;
+  if(reason.trim().length<5||reason.trim().length>1000){notify('Укажи причину вмешательства (5–1000 символов).','warn');return null;}
+  return reason.trim();
+}
+async function changeEntityStatus(kind,row,status){
+  if(delegatedOwnerIntervenes(row)){
+    const reason=askInterventionReason();if(reason===null)return false;
+    const {error}=await sb.rpc('entity_status_intervene',{p_kind:kind,p_id:row.id,p_status:status,p_reason:reason});
+    if(error)throw error;
+  }else{
+    const {error}=await sb.from(kind==='job'?'jobs':'trips').update({status}).eq('id',row.id);
+    if(error)throw error;
+  }
+  return true;
+}
 async function jobSetStatus(id,st){ const j=jobs.find(x=>x.id==id);
-  const {error}=await sb.from('jobs').update({status:st}).eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; }
+  try{if(!await changeEntityStatus('job',j,st)){renderJobs();return;}}catch(e){notify('Ошибка: '+e.message,'err');renderJobs();return;}
   if(st==='done') await jobClosed(id,{equipmentId:j&&j.equipment_id,works:(j&&j.job_works)||[]}); showToast('Статус: '+(ST[st]||st)); renderJobs(); }
 function populateEquip(){ const list=eqByClient[$('jbClient').value]||[]; $('jbEquip').innerHTML='<option value="">— без привязки —</option>'+list.map(e=>'<option value="'+e.id+'">'+esc(e.model+(e.serial?' · '+e.serial:''))+'</option>').join(''); }
 $('jbClient').onchange=()=>{ populateEquip(); jobHead(); };
@@ -3571,6 +3596,8 @@ async function fetchJobFull(id){
     return full;
   }catch(e){ console.warn('Заявка не дочитана:',e); return null; }
 }
+let currentJobAuthority=false,jobDelegatedOwner=false,jobSavedStatus=null,jobInterventionReason='',jobReasonTarget=null;
+function canWriteJob(j=null){return canWrite()||!!(j?j.id&&[j.owner_id,j.curator_id].includes(session?.user?.id):currentJobAuthority);}
 async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); jobEditId=id; serviceOrders.requestPanel(id);
   let j=null,pendingEdit=false;
   if(id){
@@ -3587,6 +3614,14 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
         service_orders:j?.service_orders||[]};
     }
   }
+  currentJobAuthority=!!(j?.id&&[j.owner_id,j.curator_id].includes(session?.user?.id));
+  jobDelegatedOwner=delegatedOwnerIntervenes(j);
+  jobSavedStatus=j?.status||null;jobInterventionReason='';jobReasonTarget=null;
+  if(currentJobAuthority&&!canWrite()){
+    const finance=await sb.rpc('entity_finance_config',{p_kind:'job',p_id:id});
+    if(finance.error)notify('Финансовые профили недоступны: '+finance.error.message,'err');
+    else appSettings.tariff_profiles=finance.data?.tariff_profiles||[];
+  }
   jobFinanceTaskStatus=(j?.service_orders||[]).find(o=>o.seed_request_id===id)?.status||null;
   $('jbClient').innerHTML=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   $('jbEng').innerHTML=profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
@@ -3601,7 +3636,7 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
     :'<option value="">— депо не заведено —</option>';
   if(j&&j.depot_id) $('jbDepotSel').value=j.depot_id; else if(dl.length) $('jbDepotSel').value=dl[0].id;
   renderDepotUi();
-  jobRO=!canWrite() && !(j&&assignedTo(j,session.user.id,'assigned_engineer'));
+  jobRO=!canWriteJob() && !(j&&assignedTo(j,session.user.id,'assigned_engineer'));
   curWorks=(j&&j.job_works?j.job_works:[]).map(w=>{ const cw=w.work_id?catalog.find(c=>c.id===w.work_id):null; return {id:w.id,canonical_task_item_id:w.canonical_task_item_id||null,work_id:w.work_id||null,title:w.title||'',revenue:+w.revenue||0,name:cw?cw.name:(w.title||'(работа)'),hours:+w.hours||0,override:(w.revenue_override!=null?String(w.revenue_override):''),billable:w.billable!==false,reasons:[],billable_reason:w.billable_reason||'',profile:w.tariff_profile||null,custom:!w.work_id,approved:!!w.approved_at,approved_at:w.approved_at||null,approved_by:w.approved_by||null,legacy_task_item_id:w.legacy_task_item_id||null}; });
   curWorksComplete=!id||hasStableJobWorkIds(j?.job_works);
   renderJobWorks();
@@ -3612,7 +3647,7 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
   // Инженеру — вид «задание»: работы наверх, справочные поля свёрнуты и
   // на чтение. Он их не заполняет — их заполняет диспетчер, когда принимает
   // заявку; а случайно сменить у заявки клиента или исполнителя он мог.
-  setJobMode(!canWrite());
+  setJobMode(!canWriteJob());
   // Кнопка — только для новой заявки; у существующей на её месте
   // состояние автосохранения.
   clearTimeout(jobSaveT); jobSaveT=null; jobSaving=false; jobSaveAgain=false;
@@ -3624,7 +3659,7 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
     // У инженера её нет: его страница — задание, а не форма. Там одно
     // главное действие внизу и автосохранение; вторая кнопка сверху
     // заставляла бы выбирать между двумя способами закончить.
-    $('jobSave').style.display=(ro||(jobEditId&&!canWrite()))?'none':'';
+    $('jobSave').style.display=(ro||(jobEditId&&!canWriteJob()))?'none':'';
     $('jobSave').textContent=jobEditId?'Сохранить':'Создать заявку';
   }
   if($('jobSaveState')){ $('jobSaveState').style.display=(jobEditId&&!ro)?'':'none'; jobSaveState(pendingEdit?'ждёт отправки':'сохранено'); }
@@ -3640,7 +3675,9 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
   jobBackSub=(jobBack==='planner')?plannerCur:null;
   switchTab('job');
   $('jobActivitySection').hidden=!id;
+  $('jobResponsibilitySection').hidden=!id;
   if(id) mountEntityActivity({root:$('jobActivity'),db:sb,entity:'job',id,userId:()=>session?.user?.id,people:()=>profilesList});
+  if(id&&j)mountEntityResponsibility({root:$('jobResponsibilitySection'),db:sb,kind:'job',id,record:j,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,onChange:data=>canWrite()||[data.owner_id,data.curator_id].includes(session?.user?.id)?openJob(id):switchTab('planner','jobs'),onError:e=>notify(e.message,'err')});
   const pane=document.querySelector('.view-job .pane'); if(pane) pane.scrollTop=0; }
 let jobBack='planner', jobBackSub='jobs';
 
@@ -3776,7 +3813,7 @@ function jobHead(){
   const works=curWorks.length+' '+plural(curWorks.length,'работа','работы','работ');
   // Крупно — то, чем человек распоряжается. Менеджеру это деньги, инженеру
   // часы: выручку он не назначает, и в поле она ему ни о чём не говорит.
-  $('jobHeadEcon').innerHTML=canWrite()
+  $('jobHeadEcon').innerHTML=canWriteJob()
     ? ('<div class="te-k">Выручка</div>'
       +'<div class="te-v">'+Math.round(rev).toLocaleString('ru-RU')+' '+cur+'</div>'
       +'<div class="te-s">'+hrs.toFixed(hrs%1?1:0)+' ч · '+works+'</div>')
@@ -3802,8 +3839,8 @@ if($('jbDepot')) $('jbDepot').onchange=()=>{
   renderJobWorks();
 };
 
-window.newJobForClient=function(cid){ if(!canWrite()) return; map.closePopup(); openJob(null,cid); };
-window.newJobForEquip=function(cid,eid){ if(!canWrite()) return; map.closePopup(); openJob(null,cid,eid); };
+window.newJobForClient=function(cid){ if(!canWriteJob()) return; map.closePopup(); openJob(null,cid); };
+window.newJobForEquip=function(cid,eid){ if(!canWriteJob()) return; map.closePopup(); openJob(null,cid,eid); };
 // Место выполнения открытой заявки. Читается workRevenue() при пересчёте
 // строк работ. false для новой заявки — по умолчанию всё на выезде.
 let jobAtDepot=false;
@@ -3850,7 +3887,7 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
     // Инженеру их не показываем вовсе: писать выручку ему всё равно не даёт
     // сервер (guard_job_work_money), а на экране они занимали половину
     // строки и предлагали трогать то, что трогать нельзя.
-    const money=canWrite()
+    const money=canWriteJob()
       ? ('<select data-wp="'+i+'" style="max-width:120px;font-size: var(--fs-2)" title="профиль тарифа (плательщик)"><option value="">— профиль —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'"'+(w.profile===p.id?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select>'
         +'<input type="number" step="0.01" value="'+esc(w.override)+'" data-wo="'+i+'" placeholder="авто" style="width:84px" title="цена вручную (оверрайд)">'
         +'<span class="hint" style="margin: 0">= '+rev.toFixed(0)+'</span>')
@@ -3859,7 +3896,7 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
       '<input type="number" step="0.25" value="'+w.hours+'" data-wh="'+i+'" style="width:74px" title="часы"><span class="hint" style="margin: 0">ч</span>'+
       '<button class="btn sm '+(w.billable?'amber':'ghost')+'" data-wb="'+i+'">'+(w.billable?'платно':'гарантия')+'</button>'+
       money+
-      (w.voided?'<span class="hint">аннулирована</span>':w.legacy_task_item_id||w.approved?'<span class="hint" title="Требуется отдельная аудированная коррекция" style="margin-left:auto">'+(w.legacy_task_item_id?'историческая · защищена':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button>')+(canWrite()&&(w.legacy_task_item_id||w.canonical_task_item_id)&&!w.voided?'<button class="btn sm ghost" data-finance-void-work="'+i+'">Аннулировать</button>':'')+'</div>'+
+      (w.voided?'<span class="hint">аннулирована</span>':w.legacy_task_item_id||w.approved?'<span class="hint" title="Требуется отдельная аудированная коррекция" style="margin-left:auto">'+(w.legacy_task_item_id?'историческая · защищена':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button>')+(canWriteJob()&&(w.legacy_task_item_id||w.canonical_task_item_id)&&!w.voided?'<button class="btn sm ghost" data-finance-void-work="'+i+'">Аннулировать</button>':'')+'</div>'+
       ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top: var(--sp-2)">'+esc(w.reasons.join(' · '))+'</div>':'')+
       (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
     if(!canEditRequestFinanceRow(w,mayW)) d.querySelectorAll('input,select,button:not([data-finance-void-work])').forEach(el=>el.disabled=true);
@@ -3871,12 +3908,12 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   if(wrap){
     const pend=jobEditId&&worksPending()&&curWorks.length;
     const st=$('jbWorksState'), acts=$('jbWorksActs');
-    wrap.style.display=(pend||(!mayW&&jobEditId&&!canWrite()))?'':'none';
+    wrap.style.display=(pend||(!mayW&&jobEditId&&!canWriteJob()))?'':'none';
     if(st){ st.textContent=pend?'работы ждут подтверждения':'работы подтверждены';
       st.className=pend?'pt-wait':'pt-ok'; }
-    if(acts){ const pendingEditable=curWorks.some(w=>!w.approved&&!w.legacy_task_item_id); acts.innerHTML=(pend&&canWrite()&&pendingEditable)
+    if(acts){ const pendingEditable=curWorks.some(w=>!w.approved&&!w.legacy_task_item_id); acts.innerHTML=(pend&&canWriteJob()&&pendingEditable)
         ? '<button class="btn sm amber" id="jbWorksOk">Подтвердить работы</button>'
-        : ((!mayW&&!canWrite())?'<button class="btn sm ghost" id="jbWorksFix">Предложить правку</button>':'');
+        : ((!mayW&&!canWriteJob())?'<button class="btn sm ghost" id="jbWorksFix">Предложить правку</button>':'');
       const ok=$('jbWorksOk'); if(ok) ok.onclick=worksApprove;
       const fx=$('jbWorksFix'); if(fx) fx.onclick=()=>openFixModal('work',null);
     }
@@ -3898,7 +3935,7 @@ function jobTotals(){ jobHead(); jobFootUpdate();
   const h=curWorks.reduce((a,w)=>a+(+w.hours||0),0);
   // Инженеру — только часы: выручку и прибыль он не назначает, а строка
   // с деньгами под его же работой читается как оценка его работы.
-  if(!canWrite()){ $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · '+curWorks.length+' '+plural(curWorks.length,'работа','работы','работ'); foldSums(); return; }
+  if(!canWriteJob()){ $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · '+curWorks.length+' '+plural(curWorks.length,'работа','работы','работ'); foldSums(); return; }
   const r=curWorks.reduce((a,w)=>a+workRevenue(w),0); const c=curWorks.reduce((a,w)=>a+workCost(w),0);
   $('jbTotals').textContent='Итого: '+h.toFixed(2)+' ч · выручка '+r.toFixed(0)+' · труд '+c.toFixed(0)+' · прибыль '+(r-c).toFixed(0)+' (по профилям строк; дорога/суточные — в выезде)';
   foldSums(); }
@@ -4180,7 +4217,7 @@ async function qFlush(){
 async function qSendOne(it){
   const p=it.payload||{};
   if(it.kind==='trip'){
-    const {data,error}=await sb.rpc(TRIP_RPC[p.action],{p_trip:p.tripId});
+    const {data,error}=p.reason?await sb.rpc('entity_status_intervene',{p_kind:'trip',p_id:p.tripId,p_status:TRIP_NEXT_STATUS[p.action],p_reason:p.reason}):await sb.rpc(TRIP_RPC[p.action],{p_trip:p.tripId});
     if(error) throw error;
     if(data==='wrong_status'||data==='not_found') throw new Error(TRIP_SAY[data]||String(data));
     return;
@@ -4634,27 +4671,27 @@ function worksLocked(){ return curWorks.some(w=>w.approved); }
 function canEditWorks(){
   if(jobRO||financeTaskLocked()) return false;
   if(jobEditId&&!curWorksComplete) return false;
-  if(canWrite()) return true;
+  if(canWriteJob()) return true;
   if(!jobEditId) return true;                       // новую заявку заводит менеджер
   if(($('jbStatus')?$('jbStatus').value:'')==='done') return false;
   return !worksLocked();
 }
 function canEditParts(){
   if(!jobEditId||jobRO||financeTaskLocked()) return false;
-  if(canWrite()) return true;
+  if(canWriteJob()) return true;
   return ($('jbStatus')?$('jbStatus').value:'')!=='done';
 }
 // Отдельная строка запчасти: своя, ещё не подтверждённая, заявка открыта.
 function canEditPart(p){
   if(!canEditRequestFinanceRow(p,true)) return false;
-  if(canWrite()) return !jobRO;
+  if(canWriteJob()) return !jobRO;
   return canEditParts() && !p.approved_at
     && (!p.created_by || p.created_by===session.user.id);
 }
 function personName(id){ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'—'):'—'; }
 function renderJobParts(){
   const box=$('jbParts'); if(!box) return;
-  const may=canEditParts(), money=canWrite();
+  const may=canEditParts(), money=canWriteJob();
   if($('jbPartAdd')) $('jbPartAdd').style.display=may?'':'none';
   box.innerHTML='';
   jobParts.forEach((p,i)=>{
@@ -4672,7 +4709,7 @@ function renderJobParts(){
         +'<input type="text" value="'+esc(p.name||'')+'" data-pn="'+i+'" placeholder="наименование">'
         +'<input type="text" value="'+esc(p.sku||'')+'" data-ps="'+i+'" placeholder="артикул">'
         +(p.voided?'<span class="hint">аннулирована</span>':p.legacy_task_item_id||p.approved_at?'<span class="hint" title="Для удаления подтверждённой строки требуется аудированная коррекция">'+(p.legacy_task_item_id?'историческая':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost pt-rm" data-prm="'+i+'" title="Убрать">×</button>')
-        +(canWrite()&&(p.legacy_task_item_id||p.canonical_task_item_id)&&!p.voided?'<button class="btn sm ghost" data-pvoid="'+i+'">Аннулировать</button>':'')
+        +(canWriteJob()&&(p.legacy_task_item_id||p.canonical_task_item_id)&&!p.voided?'<button class="btn sm ghost" data-pvoid="'+i+'">Аннулировать</button>':'')
       +'</div>'
       +'<div class="pt-bot">'
         +'<input type="number" step="0.01" min="0" value="'+esc(String(partQty(p)))+'" data-pq="'+i+'" title="количество">'
@@ -4736,7 +4773,7 @@ function partTotals(){
     : (canEditParts()?'Ничего не ставили — строк нет.':'Запчастей нет.'); foldSums(); return; }
   const cur=appSettings.currency||'';
   const pcs=n+' '+plural(n,'позиция','позиции','позиций');
-  if(!canWrite()){ el.textContent='Итого: '+pcs; foldSums(); return; }
+  if(!canWriteJob()){ el.textContent='Итого: '+pcs; foldSums(); return; }
   const m=partsMoney({job_parts:jobParts}), r=m.rev, c=m.cost;
   el.textContent='Итого: '+pcs+' · продажа '+r.toFixed(0)+' · закупка '+c.toFixed(0)
     +' · наценка '+(r-c).toFixed(0)+' '+cur;
@@ -4779,7 +4816,7 @@ async function partSave(p){
   if(!partReady(p)) return;
   const row={job_id:p.job_id||jobEditId, name:String(p.name).trim(), sku:String(p.sku||'').trim(),
     qty:partQty(p)||1, unit:p.unit||'шт', billable:p.billable!==false};
-  if(canWrite()){ row.price=+p.price||0; row.cost=+p.cost||0; }
+  if(canWriteJob()){ row.price=+p.price||0; row.cost=+p.cost||0; }
   jobSaveState('сохраняю…','busy');
   const add=partLocal(p);
   try{
@@ -4813,7 +4850,7 @@ async function partSave(p){
 // непроверенной». Причину он скажет инженеру словами, для этого есть
 // предложения правок.
 async function partApprove(p,ok){
-  if(!p||!p.id||!canWrite()) return;
+  if(!p||!p.id||!canWriteJob()) return;
   if(!ok){
     if(p.legacy_task_item_id){notify('Перенесённую финансовую строку нельзя удалить до перехода на аннулирование.','warn');return;}
     if(!await confirmDialog('Отклонить «'+String(p.name||'').trim()+'»? Строка будет убрана из заявки.',
@@ -4835,7 +4872,7 @@ async function partApprove(p,ok){
 }
 // Подтверждение работ — блоком: приложение и пишет их блоком.
 async function worksApprove(){
-  if(!canWrite()||!jobEditId) return;
+  if(!canWriteJob()||!jobEditId) return;
   try{
     const ids=curWorks.filter(w=>!w.approved&&!w.legacy_task_item_id&&w.canonical_task_item_id).map(w=>w.canonical_task_item_id);
     if(!ids.length){notify('Историческую строку можно исправить только отдельной аудированной операцией.','warn');return;}
@@ -4848,7 +4885,7 @@ async function worksApprove(){
 }
 
 async function voidRequestFinanceRow(row){
-  if(!canWrite()||!row||!jobEditId)return;
+  if(!canWriteJob()||!row||!jobEditId)return;
   const itemId=row.canonical_task_item_id||row.legacy_task_item_id;
   if(!itemId){notify('Не найден ID канонической финансовой строки.','err');return;}
   const answer=await promptDialog('Аннулировать финансовую строку',[{key:'reason',label:'Причина (обязательно)',type:'textarea'}]);
@@ -4898,7 +4935,7 @@ async function loadFixes(){
         .eq('job_id',jobEditId).order('created_at',{ascending:false});
       jobFixes=data||[];
     }catch(e){ jobFixes=[]; }
-    if(canWrite())try{
+    if(canWriteJob())try{
       const {data,error}=await sb.from('request_finance_void_events')
         .select('id,item_id,actor_id,reason,original_snapshot,created_at')
         .eq('job_id',jobEditId).order('created_at',{ascending:false});
@@ -4917,10 +4954,10 @@ function renderFixes(){
   const box=$('jbFixes'); if(!box) return;
   const card=$('jbFixCard');
   const open=jobFixes.filter(f=>f.status==='open');
-  const show=canWrite()?jobFixes:open;
+  const show=canWriteJob()?jobFixes:open;
   // Инженеру карточка нужна и пустой — когда правка ему уже закрыта, это
   // единственный способ сказать, что в заявке ошибка.
-  const frozen=!canWrite()&&!!jobEditId&&(!canEditWorks()||!canEditParts());
+  const frozen=!canWriteJob()&&!!jobEditId&&(!canEditWorks()||!canEditParts());
   if(card) card.style.display=(show.length||frozen||jobFinanceVoidEvents.length)?'':'none';
   box.innerHTML='';
   if(frozen){
@@ -4935,7 +4972,7 @@ function renderFixes(){
       +'<span class="fix-d">'+esc(shortDate(String(f.created_at).slice(0,10)))+'</span>'
       +(f.status==='open'?'':('<span class="fix-st">'+(f.status==='accepted'?'принято':'отклонено')+'</span>'))+'</div>'
       +'<div class="fix-w">'+esc(f.what)+'</div>'
-      +((canWrite()&&f.status==='open')?('<div class="fix-a">'
+      +((canWriteJob()&&f.status==='open')?('<div class="fix-a">'
         +'<button class="btn sm amber" data-fok="'+f.id+'">Принято</button>'
         +'<button class="btn sm ghost" data-fno="'+f.id+'">Отклонить</button></div>'):'');
     box.appendChild(d);
@@ -4955,7 +4992,7 @@ function renderFixes(){
     d.innerHTML='<div class="fix-h"><span class="fix-who">'+esc(personName(e.actor_id))+'</span><span class="fix-d">'+esc(String(e.created_at||'').slice(0,10))+'</span><span class="fix-st">аннулирована</span></div>'
       +'<div class="fix-w">'+esc(s.title||'Финансовая строка')+' · '+esc(qty)+' '+esc(unit)+esc(money)+'</div><div class="hint">Причина: '+esc(e.reason)+'</div>'
       +(eventLinks.length?eventLinks.map(l=>'<div class="hint">Связана замена: '+esc(replacementLabel(l.replacement_item_id))+'</div>').join(''):'')
-      +(canWrite()&&candidates.length?'<div class="fix-a"><button class="btn sm ghost" data-finance-correction="'+esc(e.id)+'">Связать замену</button></div>':'');
+      +(canWriteJob()&&candidates.length?'<div class="fix-a"><button class="btn sm ghost" data-finance-correction="'+esc(e.id)+'">Связать замену</button></div>':'');
     box.appendChild(d);
   });
   box.querySelectorAll('[data-fok]').forEach(b=>b.onclick=()=>fixDecide(b.dataset.fok,'accepted'));
@@ -4967,7 +5004,7 @@ function replacementLabel(id){
   return row?(row.name||row.title||'Строка')+' · '+String(id).slice(0,8):String(id).slice(0,8);
 }
 async function linkFinanceCorrection(eventId){
-  const ev=jobFinanceVoidEvents.find(e=>e.id===eventId);if(!ev||!canWrite())return;
+  const ev=jobFinanceVoidEvents.find(e=>e.id===eventId);if(!ev||!canWriteJob())return;
   const s=ev.original_snapshot||{},isWork=s.kind==='work',linked=new Set(jobFinanceCorrectionLinks.map(l=>l.replacement_item_id));
   const options=(isWork?curWorks:jobParts).filter(r=>r.canonical_task_item_id&&!r.legacy_task_item_id&&!r.voided&&!linked.has(r.canonical_task_item_id))
     .map(r=>({value:r.canonical_task_item_id,label:(r.name||r.title||'Строка')+' · '+String(r.canonical_task_item_id).slice(0,8)}));
@@ -4980,7 +5017,7 @@ async function linkFinanceCorrection(eventId){
   }catch(e){notify('Не удалось связать замену: '+((e&&e.message)||e),'err');}
 }
 async function fixDecide(id,st){
-  if(!canWrite()) return;
+  if(!canWriteJob()) return;
   try{
     const {error}=await sb.from('job_change_requests')
       .update({status:st,decided_by:session.user.id,decided_at:new Date().toISOString()}).eq('id',id);
@@ -5117,6 +5154,7 @@ function jobRec(){
   return {client_id:$('jbClient').value,
     equipment_id:$('jbEquip').value||null,
     status:$('jbStatus').value,
+    ...(jobInterventionReason&&jobReasonTarget===$('jbStatus').value?{intervention_reason:jobInterventionReason}:{}),
     scheduled_date:$('jbDate').value||null,
     time_window:$('jbWindow').value.trim(),
     due_date:$('jbDue').value||null,
@@ -5148,7 +5186,7 @@ function jobPartRow(p,index){
   if(String(p.id||'').startsWith('local-')){p.id=partStableId();p.local_only=true;}
   return {index,id:p.canonical_task_item_id||p.id,client_new:!!p.local_only,local_only:!!p.local_only,name:String(p.name||'').trim(),sku:String(p.sku||'').trim(),
     qty:partQty(p)||1,unit:p.unit||'шт',billable:p.billable!==false,
-    ...(canWrite()?{price:+p.price||0,cost:+p.cost||0}:{})};
+    ...(canWriteJob()?{price:+p.price||0,cost:+p.cost||0}:{})};
 }
 // Правка местного снимка после постановки в очередь: заявка внутри
 // «График» должен показывать то, что инженер только что ввёл.
@@ -5224,7 +5262,7 @@ async function jobClosed(jobId,opts){
   }catch(e){
     // Функции ещё нет в базе — это не поломка закрытия заявки, а
     // невыполненная миграция. Инженеру про неё знать нечего.
-    if(canWrite()) notify('Гарантия на ремонт не создалась: '+((e&&e.message)||e)+' (выполнен ли sql/19?)','err');
+    if(canWriteJob()) notify('Гарантия на ремонт не создалась: '+((e&&e.message)||e)+' (выполнен ли sql/19?)','err');
   }
   try{ await sb.rpc('register_equipment_visit',{p_job:jobId}); await reloadEquip(); }
   catch(e){ notify('Заявка закрыта, но визит по технике не отметился: '+((e&&e.message)||e),'err'); }
@@ -5252,6 +5290,11 @@ async function queueCurrentJobSnapshot(){
 async function saveJobNow(){
   clearTimeout(jobSaveT); jobSaveT=null;
   if(!jobEditId) return;
+  if(jobDelegatedOwner&&jobSavedStatus!==$('jbStatus').value&&jobReasonTarget!==$('jbStatus').value){
+    const reason=askInterventionReason();
+    if(reason===null){$('jbStatus').value=jobSavedStatus;jobHead();return;}
+    jobInterventionReason=reason;jobReasonTarget=$('jbStatus').value;
+  }
   const problem=jobProblem();
   if(problem){ jobSaveState('не сохранено · '+problem,'bad'); return; }
   // Одна запись за раз: параллельные удаления и вставки job_works
@@ -5278,7 +5321,7 @@ async function saveJobNow(){
       }
       return;
     }
-    await persistJob(jobRec()); jobsDirty=true; jobSaveState('сохранено');
+    await persistJob(jobRec());jobSavedStatus=$('jbStatus').value;jobInterventionReason='';jobReasonTarget=null;jobsDirty=true;jobSaveState('сохранено');
   }
   catch(e){
     // Нет связи — кладём в очередь и правим местный снимок, чтобы при
@@ -5396,7 +5439,7 @@ async function renderTripCostReview(id){
     const previewForDisplay=preview|| (run?{components:run.components,rows:savedLines||[],diagnostics:run.diagnostics}:null);
     const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
     box.innerHTML=tripCostReviewHTML({trip:{...t,orders:linkedOrders},preview:previewForDisplay,run,stale,
-      canApprove:canWrite()&&t.status==='done'&&!tripPlanDirty&&!tripPresenceDirty&&!!preview,message});
+      canApprove:canWriteTrip(t)&&t.status==='done'&&!tripPlanDirty&&!tripPresenceDirty&&!!preview,message});
     const approve=$('tripAllocationApprove');
     if(approve)approve.onclick=async()=>{
       const reason=$('tripAllocationReason').value.trim();if(!reason){notify('Укажи основание сверки затрат.','warn');return;}
@@ -5413,7 +5456,7 @@ async function renderTripCostReview(id){
   }catch(e){box.innerHTML=`<p class="err">Не удалось загрузить распределение затрат: ${esc(e.message||String(e))}</p>`;}
 }
 async function openPresenceEditor(tid,stayId,jobId){
-  if(!canWrite())return;
+  if(!canWriteTrip(getTrip(tid)||tripCache[tid]||null))return;
   if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки выезда.','warn');return;}
   try{
     await ensureRefs();await loadTripJobs();await loadTripOrders();
@@ -5452,6 +5495,7 @@ async function openPresenceEditor(tid,stayId,jobId){
         if(error)throw error;
         dialog.close();showToast(rows[0].status==='approved'?'Стоянка привязана и присутствие подтверждено':'Стоянка исключена из учёта');
         try{await loadFactHours();
+          if(data.trip.status==='done'&&!await refreshTripEcon(tid))throw new Error('Не удалось пересчитать экономику по проверенному присутствию');
           if(stayBindMap?.tid===tid)await reloadStayBindingData(tid);
           if(tripEditId===tid){await loadWorkbench(tid);tripEcon();}
         }catch(refreshError){notify('Проверка сохранена, но обновить отображение не удалось: '+refreshError.message,'warn');}
@@ -5480,7 +5524,7 @@ async function loadWorkbench(id){
     $('tpRemovedJobs').innerHTML=removedHTML(tripWorkbench,tripJobsAll);
     $('tpHistoryLog').innerHTML=historyHTML(tripWorkbench,profilesList);
     $('tpReviewState').textContent=(ST_TRIP[data.trip.status]||data.trip.status)+' · версия '+data.trip.workbench_revision+' · изменение плана не удаляет трек и посещения';
-    $('tpStatus').disabled=!!data.trip.started_at||!canWrite();
+    configureTripPlanStatus($('tpStatus'),data.trip,canWriteTrip(data.trip));
     $('tpRemainingInfo').textContent=data.trip.remaining_route?'Осталось '+data.trip.remaining_route.km.toFixed(1)+' км · расчёт '+new Date(data.trip.remaining_route.at).toLocaleString('ru-RU'):'';
     $('wbDetect').onclick=async()=>{
       if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки.','warn');return;}
@@ -5497,7 +5541,7 @@ async function loadWorkbench(id){
       if(!reason)return;
       $('wbPresenceSave').disabled=true;
       try{validateTaskAllocationShares(rows);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:id,p_expected:tripWorkbench.trip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason.reason});if(error)throw error;
-        tripPresenceDirty=false;await loadFactHours();await loadWorkbench(id);tripEcon();showToast('Человеко-часы присутствия сохранены');}
+        tripPresenceDirty=false;await loadFactHours();if(tripWorkbench.trip.status==='done'&&!await refreshTripEcon(id))throw new Error('Присутствие сохранено, но пересчитать экономику не удалось. Открой выезд заново и повтори проверку.');await loadWorkbench(id);tripEcon();showToast('Человеко-часы присутствия сохранены');}
       catch(e){notify(e.message,'err');if($('wbPresenceSave'))$('wbPresenceSave').disabled=false;}
     };
     await renderTripCostReview(id);
@@ -5564,8 +5608,8 @@ function slimGeometry(g){
   }catch(e){ return g; }
 }
 function routeAll(){ return (tripStart?[{type:'start',name:tripStart.name,lat:tripStart.lat,lng:tripStart.lng}]:[]).concat(tripRouteStops); }
-function wireKanbanDrag(box,onDrop){ if(!canWrite()) return;
-  box.querySelectorAll('.kcard').forEach(card=>{ card.setAttribute('draggable','true');
+function wireKanbanDrag(box,onDrop,mayDrag=()=>canWrite()){
+  box.querySelectorAll('.kcard').forEach(card=>{ if(!mayDrag(card.dataset.kid)){card.removeAttribute('draggable');return;} card.setAttribute('draggable','true');
     card.addEventListener('dragstart',e=>{ card.classList.add('dragging'); try{ e.dataTransfer.setData('text/plain',card.dataset.kid); e.dataTransfer.effectAllowed='move'; }catch(err){} });
     card.addEventListener('dragend',()=>{ card.classList.remove('dragging'); box.querySelectorAll('.kcol').forEach(c=>c.classList.remove('over')); }); });
   box.querySelectorAll('.kcol').forEach(col=>{
@@ -5573,12 +5617,12 @@ function wireKanbanDrag(box,onDrop){ if(!canWrite()) return;
     col.addEventListener('dragleave',()=>col.classList.remove('over'));
     col.addEventListener('drop',async e=>{ e.preventDefault(); col.classList.remove('over');
       let id=''; try{ id=e.dataTransfer.getData('text/plain'); }catch(err){}
-      const st=col.dataset.kst; if(id&&st) await onDrop(id,st); }); }); }
+      const st=col.dataset.kst; if(id&&st&&mayDrag(id)) await onDrop(id,st); }); }); }
 async function dropJob(id,st){ const j=jobs.find(x=>x.id==id); if(!j||j.status===st) return; const old=j.status;
-  const {error}=await sb.from('jobs').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); return; }
+  try{if(!await changeEntityStatus('job',j,st)){renderJobs();return;}}catch(e){notify(e.message,'err');renderJobs();return;}
   if(st==='done') await jobClosed(id,{equipmentId:j.equipment_id,works:j.job_works||[]});
   j.status=st; await renderJobs(); await refreshStats();
-  undoToast('Заявка → «'+(ST[st]||st)+'»', async ()=>{ const {error:e2}=await sb.from('jobs').update({status:old}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Статус возвращён'); }); }
+  undoToast('Заявка → «'+(ST[st]||st)+'»', async ()=>{ try{if(!await changeEntityStatus('job',j,old))return;}catch(e){notify(e.message,'err');return;} await renderJobs(); showToast('Статус возвращён'); }); }
 // Канбан и выпадающий список статуса раньше писали статус напрямую.
 // Триггер trg_guard_trip_status это запрещает: переходы в «в работе»,
 // «на проверке» и «завершён» должны идти через trip_start / trip_finish /
@@ -5589,13 +5633,13 @@ const TRIP_KIND={in_progress:'start',finished:'finish',done:'confirm'};
 async function dropTrip(id,st){ const t=trips.find(x=>x.id==id); if(!t||t.status===st) return; const old=t.status;
   const kind=TRIP_KIND[st];
   if(kind){ await tripAction(id,kind); await renderTrips(); return; }
-  const {error}=await sb.from('trips').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); return; }
+  try{if(!await changeEntityStatus('trip',t,st)){renderTrips();return;}}catch(e){notify(e.message,'err');renderTrips();return;}
   t.status=st; await renderTrips();
   // Откат предлагаем, только если возвращаться некуда через RPC: отменить
   // старт, финиш или подтверждение нельзя — они уже записали время, факт
   // и стоянки.
   if(TRIP_KIND[old]){ showToast('Выезд → «'+(ST_TRIP[st]||st)+'»'); return; }
-  undoToast('Выезд → «'+(ST_TRIP[st]||st)+'»', async ()=>{ const {error:e2}=await sb.from('trips').update({status:old}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Статус возвращён'); }); }
+  undoToast('Выезд → «'+(ST_TRIP[st]||st)+'»', async ()=>{ try{if(!await changeEntityStatus('trip',t,old))return;}catch(e){notify(e.message,'err');return;} await renderTrips(); showToast('Статус возвращён'); }); }
 const TRIP_STATUS_ORDER=['planned','assigned','in_progress','finished','done','cancelled'];
 let tripVisible={planned:true,assigned:true,in_progress:true,finished:true,done:false,cancelled:false};
 function renderTripChips(){ const box=$('tripStatusChips'); if(!box) return; box.innerHTML=TRIP_STATUS_ORDER.map(s=>'<span class="chip'+(tripVisible[s]?' on':'')+'" data-ts="'+s+'">'+esc(ST_TRIP[s])+'</span>').join('');
@@ -5615,7 +5659,7 @@ function tripTitle(t,jobs){
   if(!names.length) return tripPeriod(t.date_from,t.date_to);
   return names.slice(0,2).join(', ')+(names.length>2?(' +'+(names.length-2)):'');
 }
-function tripCard(t){ const e=t.econ_snapshot||{}; const engs=engineerNames(tripEngineerIds(t)); const share=e.totalHours?Math.round((e.warrantyHours/e.totalHours)*100):0;
+function tripCard(t){ const mayManage=canWriteTrip(t); const e=t.econ_snapshot||{}; const engs=engineerNames(tripEngineerIds(t)); const share=e.totalHours?Math.round((e.warrantyHours/e.totalHours)*100):0;
   const pts=(t.route_stops||[]).filter(s=>s&&s.name&&s.type!=='start'&&s.type!=='place'&&s.type!=='wp'&&!/^точка\s*\d+$/i.test(String(s.name).trim())).map(s=>String(s.name).split(' · ')[0].trim()).filter(Boolean);
   // Даты по-человечески: «10 августа–11 сентября», а не «2026-08-10 → 2026-09-11».
   // ISO нужен базе, а не тому, кто смотрит на карточку.
@@ -5623,11 +5667,11 @@ function tripCard(t){ const e=t.econ_snapshot||{}; const engs=engineerNames(trip
   const title=uniq.length?(uniq.slice(0,2).join(', ')+(uniq.length>2?(' +'+(uniq.length-2)):'')):dates;
   const mb=[]; if(uniq.length) mb.push(dates); if(t.vehicle_label) mb.push(t.vehicle_label);
   const head='<h4>'+esc(title)+'</h4>'+(mb.length?'<div class="meta">'+esc(mb.join(' · '))+'</div>':'');
-  const meta=canWrite()
+  const meta=mayManage
     ? '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок · выручка '+(e.revenue||0)+(e.profit!=null?(' · приб. '+Math.round(e.profit)):'')+' · гар. '+share+'%'+(engs.length?' · '+esc(engs.join(', ')):'')+'</div>'
     : '<div class="meta">'+((t.trip_jobs||[]).length)+' заявок'+(e.km!=null?(' · '+(+e.km).toFixed(0)+' км'):'')+(e.driveH!=null?(' · '+(+e.driveH).toFixed(1)+' ч'):'')+'</div>';
-  const mv=canWrite()?('<select class="kmove" data-tstat="'+t.id+'" title="Сменить статус">'+TRIP_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===t.status?' selected':'')+'>'+esc(ST_TRIP[s])+'</option>').join('')+'</select>'):'';
-  const acts=canWrite()
+  const mv=mayManage?('<select class="kmove" data-tstat="'+t.id+'" title="Сменить статус">'+TRIP_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===t.status?' selected':'')+'>'+esc(ST_TRIP[s])+'</option>').join('')+'</select>'):'';
+  const acts=mayManage
     ? '<div class="acts">'+mv+'<button class="btn sm" data-tedit="'+t.id+'">открыть</button><button class="btn sm" data-tmap="'+t.id+'" title="На карте">карта</button>'
       +((t.status==='finished'||t.status==='done')?('<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ км</button>'):'')
       +'<button class="btn sm" data-tgm="'+t.id+'" title="Google Maps">⌖</button><button class="btn sm ghost" data-tdel="'+t.id+'" title="Удалить выезд">×</button></div>'
@@ -5642,7 +5686,7 @@ function wireTripCards(box){
   box.querySelectorAll('[data-tstat]').forEach(sel=>sel.onchange=async()=>{ const id=sel.dataset.tstat, st=sel.value;
     const kind=TRIP_KIND[st];
     if(kind){ await tripAction(id,kind); renderTrips(); return; }
-    const {error}=await sb.from('trips').update({status:st}).eq('id',id); if(error){ notify(error.message,'err'); renderTrips(); return; } const t=trips.find(x=>x.id==id); if(t) t.status=st; showToast('Статус: '+(ST_TRIP[st]||st)); renderTrips(); }); }
+    try{if(!await changeEntityStatus('trip',trips.find(x=>x.id==id),st)){renderTrips();return;}}catch(e){notify(e.message,'err');renderTrips();return;} const t=trips.find(x=>x.id==id); if(t) t.status=st; showToast('Статус: '+(ST_TRIP[st]||st)); renderTrips(); }); }
 async function renderTrips(){ await ensureRefs(); renderTripChips();
   const {data,error}=await sb.from('trips').select('*, trip_jobs(job_id)').is('deleted_at',null).order('created_at',{ascending:false});
   const box=$('tripList'); if(error){ box.className=''; box.innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
@@ -5653,7 +5697,7 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
     filter.dataset.filled='1';
   }
   const ef=filter?filter.value:'';
-  const match=t=>(role!=='engineer'||assignedTo(t,session.user.id,'lead_engineer'))&&(!ef||assignedTo(t,ef,'lead_engineer'))&&(!q||((t.vehicle_label||'')+' '+(t.date_from||'')+' '+(t.date_to||'')).toLowerCase().includes(q));
+  const match=t=>(role!=='engineer'||assignedTo(t,session.user.id,'lead_engineer')||canWriteTrip(t))&&(!ef||assignedTo(t,ef,'lead_engineer'))&&(!q||((t.vehicle_label||'')+' '+(t.date_from||'')+' '+(t.date_to||'')).toLowerCase().includes(q));
   const cols=TRIP_STATUS_ORDER.filter(s=>tripVisible[s]);
   if(!cols.length){ box.className=''; box.innerHTML='<div class="hint">Выберите хотя бы один статус выше.</div>'; return; }
   if(!trips.length){ box.className=''; box.innerHTML='<div class="hint">'+(canWrite()?'Выездов нет. Собери первый из заявок на карте.':'На тебя пока не назначены выезды.')+'</div>'; return; }
@@ -5668,9 +5712,10 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
     const cards=items.map(t=>tripCard(t)).join('')
       ||'<div class="kempty">'+esc(TEMPTY[s]||'Пусто')+'</div>';
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST_TRIP[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
-  wireTripCards(box); wireKanbanDrag(box,dropTrip); }
+  wireTripCards(box); wireKanbanDrag(box,dropTrip,id=>canWriteTrip(getTrip(id)||tripCache[id]||null)); }
 $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) openTrip(null); };
 if($('tripEngFilter')) $('tripEngFilter').onchange=renderTrips;
+function canWriteTrip(t=getTrip(tripEditId)){return canWrite()||!!(t?.id&&[t.owner_id,t.curator_id].includes(session?.user?.id));}
 async function openTrip(id){ if(serviceOrders.isDirty()&&!serviceOrders.leave())return; await ensureRefs(); await loadTripJobs(); await loadTripOrders();
   // econCompute считает дорогу по плательщикам через turf, когда готовых
   // километров в выезде нет. Без turf он молча уйдёт в плоскую ветку и
@@ -5678,15 +5723,22 @@ async function openTrip(id){ if(serviceOrders.isDirty()&&!serviceOrders.leave())
   await ensureTurf().catch(()=>{}); tripEditId=id;
   if(id){ const {data,error}=await sb.from('trips').select('*').eq('id',id).single(); if(error){notify(error.message,'err');return;} const i=trips.findIndex(x=>x.id===id);if(i<0)trips.push(data);else trips[i]=data; }
   const t=id?getTrip(id):null; tripMainJobId=(t&&t.main_job_id)||null;
+  if(t&&canWriteTrip(t)&&!canWrite()){
+    const finance=await sb.rpc('entity_finance_config',{p_kind:'trip',p_id:id});
+    if(finance.error)notify('Финансовые настройки выезда недоступны: '+finance.error.message,'err');
+    else Object.assign(appSettings,finance.data||{});
+  }
   $('tripActivitySection').hidden=!id;
+  $('tripResponsibilitySection').hidden=!id;
   $('tpFrom').value=t?(t.date_from||''):''; $('tpTo').value=t?(t.date_to||''):''; $('tpVeh').innerHTML='<option value="">— авто —</option>'+vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.name+(v.plate?(' · '+v.plate):''))+'</option>').join(''); $('tpVeh').value=t&&t.vehicle_id?t.vehicle_id:''; updateVehInfo(); $('tpVeh').onchange=()=>{ updateVehInfo(); tripHead(); }; $('tpNotes').value=t?(t.notes||''):'';
   $('tpEng').innerHTML=profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
-  setEngineerSelect('tpEng',t?tripEngineerIds(t):[]); $('tpStatus').value=t?t.status:'planned';
+  setEngineerSelect('tpEng',t?tripEngineerIds(t):[]);
   if($('tpStayMap')) $('tpStayMap').style.display=t?'':'none';
   curTripOrders=new Set(); if(t){const {data,error}=await sb.from('trip_service_orders').select('order_id').eq('trip_id',id);if(error){notify(error.message,'err');return;}(data||[]).forEach(r=>curTripOrders.add(r.order_id));}
   if(t&&!curTripOrders.size){const {data}=await sb.from('trip_jobs').select('job_id').eq('trip_id',id);const ids=new Set((data||[]).map(r=>r.job_id));tripOrdersAll.filter(o=>ids.has(o.job_id)&&o.seed_request_id===o.job_id).forEach(o=>curTripOrders.add(o.id));}
   syncTripJobsFromOrders();if(tripMainJobId&&!curTripJobs.has(tripMainJobId))tripMainJobId=null;
-  const ro=!canWrite(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
+  const ro=!canWriteTrip(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
+  configureTripPlanStatus($('tpStatus'),t,!ro);
   const es=(t&&(t.plan_econ_snapshot||t.econ_snapshot))||{}; tripRoute={km:es.km||0,driveH:es.driveH||0,geometry:(t&&t.route_geometry)||null,legs:es.legs||[]}; tripVariants=[];
   const ovs=(t&&t.overrides)||{}; tripOverrides={revenue:(ovs.revenue!=null?String(ovs.revenue):''),cost:(ovs.cost!=null?String(ovs.cost):''),road:(ovs.road||{})}; $('tpOvRev').value=tripOverrides.revenue; $('tpOvCost').value=tripOverrides.cost;
   const saved=(t&&t.route_stops)?t.route_stops:[]; const st=saved.find(x=>x.type==='start'); tripStart=st?{name:st.name,lat:st.lat,lng:st.lng}:null;
@@ -5696,7 +5748,7 @@ async function openTrip(id){ if(serviceOrders.isDirty()&&!serviceOrders.leave())
   drawTripMap(t);
   renderTripJobs(); $('tripErr').textContent=''; tripEcon(); switchTab('trip');
   $('tpChangeReason').value=''; tripPlanDirty=false; tripRemainingRoute=t?.remaining_route||null;
-  setTripPane('plan'); await loadWorkbench(id); if(id)mountEntityActivity({root:$('tripActivity'),db:sb,entity:'trip',id,userId:()=>session?.user?.id,people:()=>profilesList}); await serviceOrders.tripParent(t);
+  setTripPane('plan'); await loadWorkbench(id); if(id)mountEntityActivity({root:$('tripActivity'),db:sb,entity:'trip',id,userId:()=>session?.user?.id,people:()=>profilesList}); if(id&&t)mountEntityResponsibility({root:$('tripResponsibilitySection'),db:sb,kind:'trip',id,record:t,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,onChange:data=>canWrite()||[data.owner_id,data.curator_id].includes(session?.user?.id)?openTrip(id):switchTab('planner','trips'),onError:e=>notify(e.message,'err')}); await serviceOrders.tripParent(t);
   const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
 // Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
 // было собирать глазами из четырёх мест модалки.
@@ -5711,7 +5763,7 @@ async function openTrip(id){ if(serviceOrders.isDirty()&&!serviceOrders.leave())
 function renderTpFactKm(){
   const box=$('tpFactBox'); if(!box) return;
   const t=tripEditId?trips.find(x=>x.id==tripEditId):null;
-  if(!t||!canWrite()){ box.innerHTML=''; if($('tpKmAction'))$('tpKmAction').innerHTML=''; return; }
+  if(!t||!canWriteTrip()){ box.innerHTML=''; if($('tpKmAction'))$('tpKmAction').innerHTML=''; return; }
   const val=t.fact_km!=null
     ? ('<b>'+Math.round(t.fact_km)+' км</b>'+esc(factSrcRu(t.fact_km_source)))
     : '<span class="fg-t">не сведён</span>';
@@ -5835,7 +5887,7 @@ $('tripCancel').onclick=async()=>{if((tripPlanDirty||tripPresenceDirty)&&!await 
 ['tpFrom','tpTo','tpEng','tpStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',tripEcon); });
 $('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
 $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
-  if(!canWrite())return;
+  if(!canWriteTrip())return;
   let presenceChanges=null;
   if(tripPresenceDirty){
     presenceChanges=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>['approved','rejected'].includes(s.status));
@@ -6034,7 +6086,7 @@ async function renderUsersAdmin(){
 // ---------- пуш-уведомления ----------
 // Ключ публичный по определению: он и так уезжает в браузер каждого
 // пользователя. Приватный лежит только в секретах Edge Function.
-const VAPID_PUBLIC='BMwNqmBgU83e_tapC1EbQxF_mnjErQqsvzAFZACpVw7RmexLI8Xj4qhOJFvB01VNJybovSV2Klq-58kpmymeGAM';
+const VAPID_PUBLIC=import.meta.env.VITE_VAPID_PUBLIC||'BMwNqmBgU83e_tapC1EbQxF_mnjErQqsvzAFZACpVw7RmexLI8Xj4qhOJFvB01VNJybovSV2Klq-58kpmymeGAM';
 
 function b64ToU8(b64){
   const pad='='.repeat((4-b64.length%4)%4);
@@ -6214,7 +6266,7 @@ function reschedBanner(t){
         '<b>⏳ Просьба перенести на '+dates+'</b>'+
         (r.reason?('<br><span style="color:var(--ink-dim)">'+esc(r.reason)+'</span>'):'')+
         '<br><span class="hint" style="margin: 0">'+esc(who)+'</span>';
-  if(canWrite()){
+  if(canWriteTrip()){
     h+='<div class="row" style="margin-top: var(--sp-3)"><button class="btn sm amber" data-rok="'+r.id+'">Утвердить</button>'+
        '<button class="btn sm ghost" data-rno="'+r.id+'">Отклонить</button></div>';
   } else {
@@ -6245,7 +6297,7 @@ function minText(m){ if(m==null) return '—'; const h=Math.floor(m/60), r=Math.
 const STAY_ST={detected:'посчитано',engineer_ok:'подтвердил инженер',approved:'утверждено',rejected:'не работа'};
 
 async function openStaysModal(tid){
-  if(canWrite()){$('staysOverlay').classList.remove('on');await openTrip(tid);return;}
+  if(canWriteTrip()){$('staysOverlay').classList.remove('on');await openTrip(tid);return;}
   staysModalTripId=tid;
   const t=getTrip(tid);
   $('staysTitle').textContent='Стоянки на выезде'+(t&&t.date_from?(' '+t.date_from):'');
@@ -6266,7 +6318,7 @@ async function openStaysModal(tid){
     name:(r.jobs&&r.jobs.clients&&r.jobs.clients.name)||'заявка без клиента'}));
   if(!list.length){ $('staysBody').innerHTML='<div class="hint">Стоянок не найдено. Либо машина нигде не стояла дольше порога, либо трек не писался.</div>'; return; }
 
-  const mgr=canWrite();
+  const mgr=canWriteTrip();
   let h='<div class="hint" style="margin-bottom: var(--sp-3)">Идёт только в себестоимость. Нормочасы в заявках это не меняет.</div>';
 
   list.forEach(s=>{
@@ -6432,7 +6484,7 @@ async function refreshTripEcon(tripId){
 // Считаем ЗАНОВО, с нуля: прошлые достроенные отрезки не подмешиваем, иначе
 // повтор наследовал бы ровно те ошибки, ради которых его и запускают.
 async function remeasureTrip(tid){
-  if(!canWrite()) return;
+  if(!canWriteTrip()) return;
   const t=trips.find(x=>x.id==tid);
   const wasDone=t&&t.status==='done';
   if(!await confirmDialog(
@@ -6507,14 +6559,17 @@ async function tripAction(id,kind,engineerName){
   const a=TRIP_ASK[kind];
   const question=engineerName?a.q.replace('выезд?', 'выезд '+engineerName+'?'):a.q;
   if(!await confirmDialog(question,{okText:a.ok})) return;
+  const row=trips.find(t=>t.id===id)||getTrip(id)||tripCache[id];
+  const reason=delegatedOwnerIntervenes(row)?askInterventionReason():'';
+  if(reason===null)return;
   // Подтверждение — последняя точка, где пробег ещё можно поправить: сразу
   // после него число уходит в одометр машины и в себестоимость. Поэтому
   // считаем факт ЗДЕСЬ, до RPC, и своими руками.
-  if(kind==='confirm'&&canWrite()){
+  if(kind==='confirm'&&canWriteTrip(row||null)){
     if(!await settleFactKm(id)) return;
   }
   try{
-    const { data, error }=await sb.rpc(TRIP_RPC[kind],{p_trip:id});
+    const { data, error }=reason?await sb.rpc('entity_status_intervene',{p_kind:'trip',p_id:id,p_status:TRIP_NEXT_STATUS[kind],p_reason:reason}):await sb.rpc(TRIP_RPC[kind],{p_trip:id});
     if(error) throw error;
     // Сервер отвечает словом, а не молчанием: не сработало — говорим прямо,
     // а не делаем вид, что всё прошло.
@@ -6524,7 +6579,7 @@ async function tripAction(id,kind,engineerName){
     await loadAll(); await loadVehicles(); await loadFactHours();
     // Порядок важен: факт-часы уже перечитаны, значит снимок соберётся
     // с ними, а не с прошлыми.
-    if(data==='done'&&canWrite()){
+    if(data==='done'&&canWriteTrip(row||null)){
       if(await refreshTripEcon(id)){ await loadAll(); showToast('Экономика выезда пересчитана'); }
       else notify('Выезд подтверждён, но экономику пересчитать не вышло — открой и сохрани его','warn');
     }
@@ -6538,7 +6593,7 @@ async function tripAction(id,kind,engineerName){
     // Нет связи — не теряем действие, а кладём в очередь и сразу двигаем
     // статус в местном снимке: инженер должен видеть, что нажатие
     // засчитано, иначе он нажмёт ещё раз и ещё.
-    if(isNetErr(e) && await qPush('trip',{tripId:id,action:kind})){
+    if(isNetErr(e) && await qPush('trip',{tripId:id,action:kind,reason})){
       await snapTripStatus(id,TRIP_NEXT_STATUS[kind]);
       showToast('Нет связи — отправлю, когда появится');
       if(plannerCur==='mine') renderMine();
@@ -6571,7 +6626,7 @@ async function checkTodayTrip(){
       .in('status',['planned','assigned']).lte('date_from',today);
     // Multiple assignees are filtered after loading; legacy lead_engineer remains supported.
     const { data }=await q.order('date_from');
-    const list=(data||[]).filter(t=>((t.date_to||t.date_from)>=today || t.date_from<=today)&& (canWrite()||assignedTo(t,session.user.id,'lead_engineer')));
+    const list=(data||[]).filter(t=>((t.date_to||t.date_from)>=today || t.date_from<=today)&& (canWriteTrip(t)||assignedTo(t,session.user.id,'lead_engineer')));
     if(!list.length) return;
     todayShown=true;
 
@@ -6617,8 +6672,12 @@ function stayBindIcon(stay,index){
   return L.divIcon({className:'',iconSize:[28,28],iconAnchor:[14,14],html:'<div class="cbub" style="width:28px;height:28px;line-height:24px;background:'+bg+';color:'+fg+';border:2px solid '+ringColor()+'">'+(index+1)+'</div>'});
 }
 function stayJobLabel(j){return (j.clients&&j.clients.name)||((j.equipment&&j.equipment.model)||'заявка');}
+function canWriteStayBindingTrip(){
+  const t=stayBindMap&&(getTrip(stayBindMap.tid)||tripCache[stayBindMap.tid]);
+  return !!(t&&canWriteTrip(t));
+}
 function stayBindingPopup(stay,index){
-  if(canWrite())return '<div class="trip-stop-popup"><b>Стоянка '+(index+1)+'</b><div class="meta">'+hhmm(stay.stay_from)+' — '+hhmm(stay.stay_to)+' · '+minText(stay.minutes_raw)+'</div><p class="hint">'+(stay.status==='approved'?'Присутствие подтверждено':stay.status==='rejected'?'Не учитывается':'Требует проверки')+'</p><button type="button" class="btn sm amber" data-stay-edit="'+esc(stay.id)+'">Привязка и присутствие</button><button type="button" class="btn sm ghost" data-stay-select="'+esc(stay.id)+'">Выбрать объект на карте</button></div>';
+  if(canWriteStayBindingTrip())return '<div class="trip-stop-popup"><b>Стоянка '+(index+1)+'</b><div class="meta">'+hhmm(stay.stay_from)+' — '+hhmm(stay.stay_to)+' · '+minText(stay.minutes_raw)+'</div><p class="hint">'+(stay.status==='approved'?'Присутствие подтверждено':stay.status==='rejected'?'Не учитывается':'Требует проверки')+'</p><button type="button" class="btn sm amber" data-stay-edit="'+esc(stay.id)+'">Привязка и присутствие</button><button type="button" class="btn sm ghost" data-stay-select="'+esc(stay.id)+'">Выбрать объект на карте</button></div>';
 
   const jobs=(stayBindMap&&stayBindMap.jobs)||[], current=jobs.find(j=>String(j.id)===String(stay.job_id));
   return '<div class="trip-stop-popup"><b>Стоянка '+(index+1)+'</b><div class="meta">'+hhmm(stay.stay_from)+' — '+hhmm(stay.stay_to)+' · '+minText(stay.minutes_raw)+'</div>'
@@ -6637,14 +6696,14 @@ function drawStayBindingMap(){
 }
 async function attachStayOnMap(stayId,jobId){
   if(!stayBindMap) return;
-  if(canWrite()){map.closePopup();return openPresenceEditor(stayBindMap.tid,stayId,jobId);}
+  if(canWriteStayBindingTrip()){map.closePopup();return openPresenceEditor(stayBindMap.tid,stayId,jobId);}
   try{
     const {data,error}=await sb.rpc('stay_attach',{p_stay:stayId,p_job:jobId||null});
     if(error) throw error;
     if(data==='foreign_job') throw new Error('Эта заявка не входит в выезд.');
     if(data==='already_approved') throw new Error('Утверждённую стоянку менять нельзя.');
     const s=stayBindMap.stays.find(x=>String(x.id)===String(stayId));if(s)s.job_id=jobId||null;
-    stayBindMap.selected=null;if(canWrite())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();await loadFactHours();showToast(jobId?'Стоянка привязана к заявке':'Привязка снята');
+    stayBindMap.selected=null;if(canWriteStayBindingTrip())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();await loadFactHours();showToast(jobId?'Стоянка привязана к заявке':'Привязка снята');
   }catch(e){notify('Не удалось изменить привязку: '+(e.message||e),'err');}
 }
 async function reloadStayBindingData(tid){
@@ -6656,7 +6715,7 @@ async function openStayBindingMap(tid){
   const t=getTrip(tid)||tripCache[tid];
   if(t&&t.status!=='finished'&&t.status!=='done'){notify('Привязка факта доступна после завершения выезда.','warn');return;}
   await showTripOnMap(tid);
-  if(canWrite()){try{await loadTripJobs();await reloadStayBindingData(tid);}catch(e){notify(e.message,'err');}return;}
+  if(canWriteTrip(t||null)){try{await loadTripJobs();await reloadStayBindingData(tid);}catch(e){notify(e.message,'err');}return;}
   try{
     const [{data:stays,error:se},{data:links,error:je}]=await Promise.all([
       sb.from('trip_stays').select('*').eq('trip_id',tid).order('stay_from'),
@@ -6951,7 +7010,7 @@ async function showTripOnMap(tid){
   tripMapJobs=await loadTripMapJobs(tid);
   // План — в редактор, чтобы точки можно было двигать. Наличие факта этому
   // не мешает: факт про то, как съездили, план про то, как поедут ещё раз.
-  const shown=canWrite()?loadTripIntoPlanner(tid,t):drawTripPlan(t);
+  const shown=canWriteTrip(t)?loadTripIntoPlanner(tid,t):drawTripPlan(t);
   // Факт — сверху плана и только если он есть. Отсутствие факта больше не
   // повод показать пустую карту: у запланированного выезда факта нет по
   // определению, а посмотреть маршрут нужно именно до поездки.
@@ -7008,7 +7067,7 @@ map.on('popupopen',e=>{
   });
   el.querySelectorAll('[data-stay-edit]').forEach(b=>b.onclick=ev=>{ev.preventDefault();ev.stopPropagation();map.closePopup();openPresenceEditor(stayBindMap.tid,b.dataset.stayEdit);});
   el.querySelectorAll('[data-stay-select]').forEach(b=>b.onclick=ev=>{
-    ev.preventDefault();ev.stopPropagation();if(!stayBindMap)return;stayBindMap.selected=b.dataset.staySelect;map.closePopup();if(canWrite())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();showToast('Теперь нажмите плановую точку заявки');
+    ev.preventDefault();ev.stopPropagation();if(!stayBindMap)return;stayBindMap.selected=b.dataset.staySelect;map.closePopup();if(canWriteStayBindingTrip())drawStops();else drawTripPlan(factTrip||tripCache[stayBindMap.tid]);drawStayBindingMap();showToast('Теперь нажмите плановую точку заявки');
   });
   el.querySelectorAll('[data-stay-job]').forEach(b=>b.onclick=ev=>{
     ev.preventDefault();ev.stopPropagation();attachStayOnMap(b.dataset.stayJob,b.dataset.job||null);
@@ -7395,7 +7454,7 @@ async function loadVehState(){
       .select('vehicle_id,ts,lat,lng,speed,status,lost_since,trip_id,current_depot_id,depot_state,depot_inside_since,depot_outside_since,depot_distance_km');
     if(error) throw error;
     const tracking=await sb.from('trip_tracking_sessions')
-      .select('id,trip_id,vehicle_id,state,planned_start_at,actual_started_at,start_source,finish_candidate_at,trip:trips(id,date_from,date_to,status,vehicle_id,vehicle_label,started_at)')
+      .select('id,trip_id,vehicle_id,state,planned_start_at,actual_started_at,start_source,finish_candidate_at,trip:trips(id,date_from,date_to,status,vehicle_id,vehicle_label,started_at,owner_id,curator_id)')
       .in('state',['armed','active','finish_candidate']);
     if(!tracking.error) vehTrackSessions=tracking.data||[];
     // Старые, уже выполнявшиеся при установке tracking-сессий выезды имеют
@@ -7405,7 +7464,7 @@ async function loadVehState(){
     const activeIds=[...new Set((data||[]).map(r=>r.trip_id).filter(Boolean))];
     vehActiveTrips={};
     if(activeIds.length){
-      const active=await sb.from('trips').select('id,date_from,date_to,status,vehicle_id,vehicle_label,started_at').in('id',activeIds);
+      const active=await sb.from('trips').select('id,date_from,date_to,status,vehicle_id,vehicle_label,started_at,owner_id,curator_id').in('id',activeIds);
       if(!active.error) (active.data||[]).forEach(t=>{ vehActiveTrips[t.id]=t; tripCache[t.id]=t; });
     }
     const prev={}; vehState.forEach(r=>prev[r.vehicle_id]={lat:r.lat,lng:r.lng});
@@ -7531,7 +7590,7 @@ function showVehModal(vid){
   if(tracking&&tracking.state==='armed'){
     h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Трекинг подготовлен с '+esc(new Date(tracking.planned_start_at).toLocaleString('ru'))+'. Ожидаем кнопку «Начать» или подтверждённый выход из депо.</div>'
       +'<div class="row" style="margin-top:var(--sp-3);flex-wrap:wrap"><button class="btn sm amber" id="vehTrackStart">Начать выезд</button>'
-      +(canWrite()?'<button class="btn sm" id="vehTrackMove">Другой выезд</button><button class="btn sm ghost" id="vehTrackCancel">Отменить трек</button>':'')+'</div>';
+      +(canWriteTrip(trip||null)?'<button class="btn sm" id="vehTrackMove">Другой выезд</button><button class="btn sm ghost" id="vehTrackCancel">Отменить трек</button>':'')+'</div>';
   } else if(tracking&&tracking.state==='finish_candidate'){
     h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Машина не менее '+esc(String(appSettings.depot_outside_minutes||60))+' мин находится в депо. Можно завершить выезд.</div><button class="btn sm amber" id="vehTrackFinish" style="margin-top:var(--sp-3)">Завершить выезд</button>';
   }
@@ -7554,16 +7613,24 @@ function showVehModal(vid){
   const start=$('vehTrackStart'); if(start) start.onclick=()=>tripAction(tracking.trip_id,'start');
   const finish=$('vehTrackFinish'); if(finish) finish.onclick=()=>tripAction(tracking.trip_id,'finish');
   const cancel=$('vehTrackCancel'); if(cancel) cancel.onclick=async ()=>{
+    if(!trip||!canWriteTrip(trip))return;
     if(!await confirmDialog('Отменить подготовленный трек? Телеметрия останется в журнале, но отвяжется от выезда.',{danger:true,okText:'Отменить трек'})) return;
-    const {error}=await sb.rpc('trip_tracking_cancel',{p_trip:tracking.trip_id}); if(error){ notify(error.message,'err'); return; }
+    const reason=trip.status==='in_progress'&&delegatedOwnerIntervenes(trip)?askInterventionReason():null;
+    if(trip.status==='in_progress'&&delegatedOwnerIntervenes(trip)&&reason===null)return;
+    const {error}=await sb.rpc('trip_tracking_cancel_with_reason',{p_trip:tracking.trip_id,p_reason:reason}); if(error){ notify(error.message,'err'); return; }
     await loadAll(); await loadVehState(); showVehModal(v.id); showToast('Трек отменён');
   };
   const move=$('vehTrackMove'); if(move) move.onclick=async ()=>{
-    const options=(trips||[]).filter(t=>t.id!==tracking.trip_id&&t.vehicle_id===vid&&['planned','assigned'].includes(t.status))
+    if(!trip||!canWriteTrip(trip))return;
+    const options=(trips||[]).filter(t=>t.id!==tracking.trip_id&&t.vehicle_id===vid&&['planned','assigned'].includes(t.status)&&canWriteTrip(t))
       .map(t=>({value:t.id,label:tripPeriod(t.date_from,t.date_to)+' · '+(t.vehicle_label||v.name)}));
     if(!options.length){ notify('Нет другого ожидающего выезда этой машины.','warn'); return; }
-    const x=await promptDialog('Переназначить трек',[{key:'trip',label:'Выезд',type:'select',options}]); if(!x) return;
-    const {data,error}=await sb.rpc('trip_tracking_reassign',{p_from:tracking.trip_id,p_to:x.trip});
+    const x=await promptDialog('Переназначить трек',[{key:'trip',label:'Выезд',type:'select',options}]); if(!x||!options.some(o=>o.value===x.trip)) return;
+    const target=(trips||[]).find(t=>t.id===x.trip);
+    if(!target||!canWriteTrip(target))return;
+    const intervenes=delegatedOwnerIntervenes(trip)||delegatedOwnerIntervenes(target);
+    const reason=intervenes?askInterventionReason():null;if(intervenes&&reason===null)return;
+    const {data,error}=await sb.rpc('trip_tracking_reassign_with_reason',{p_from:tracking.trip_id,p_to:x.trip,p_reason:reason});
     if(error){ notify(error.message,'err'); return; }
     await loadAll(); await loadVehState(); showVehModal(v.id);
     showToast(data==='reassigned_future'?'Трек переназначен; будущие точки начнут новый буфер':'Трек переназначен и обрезан по старту');

@@ -1,5 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {calculateTripCostAllocation} from '../src/core/trip-cost-allocation.js';
+import {economicSnapshot} from '../src/core/economic-snapshot.js';
 
 const trip={id:'t1',status:'done',fact_km:60,workbench_revision:8,tariffs_snapshot:{costs:{km:10,hour:20}},
   econ_snapshot:{cost_basis:'fact',presence_basis:'person_hours_v1',cKm:600,cLabor:40,cDay:20,cNight:0,costComputed:660,cost:680},
@@ -13,6 +14,18 @@ const track={at:'2026-09-20T12:00:00Z',segments:[
 ]};
 
 describe('trip cost allocation',()=>{
+  it('uses a real economic snapshot without inventing a manual cost override',()=>{
+    const tariffs={costs:{hour:50},tariffs:{},shift_hours:8};
+    const snapshot=economicSnapshot([],0,0,tariffs,{}, {factKm:10,factWorkH:1});
+    expect(snapshot.costComputed).toBe(50);
+    const input={trip:{status:'done',fact_km:10,tariffs_snapshot:tariffs,econ_snapshot:snapshot,overrides:{}},stays:[],taskOrderIds:[]};
+    expect(calculateTripCostAllocation(input).components.manual_adjustment.total).toBe(0);
+    delete snapshot.costComputed;
+    expect(calculateTripCostAllocation(input).rows.some(x=>x.cost_type==='manual_adjustment')).toBe(false);
+    input.trip.econ_snapshot=economicSnapshot([],0,0,tariffs,{cost:70},{factKm:10,factWorkH:1});
+    input.trip.overrides={cost:70};
+    expect(calculateTripCostAllocation(input).components.manual_adjustment.total).toBe(20);
+  });
   it('splits confirmed route sections and person-hours by explicit task shares',()=>{
     const result=calculateTripCostAllocation({trip,track,stays,taskOrderIds:['o1','o2']});
     expect(result.components).toEqual({
