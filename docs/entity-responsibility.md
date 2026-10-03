@@ -139,3 +139,10 @@ Production и Pages пока не изменены. PR остаётся draft д
 - Подготовленный генератор scripts/qa-push-config.mjs остаётся способом создать независимую конфигурацию; для него ещё нужен реальный VAPID contact email. Не подставлять выдуманный контакт. После ручной установки трёх секретов продолжить matching QA frontend key, подписку и реальную доставку, затем остаточные UI gate и выпуск по таблице. Production не изменён.
 
 - Dashboard production Backups/Scheduled проверен read-only: проект anqfbljgfimoaziztdxe, Free Plan does not include project backups. Плановая точка восстановления отсутствует по тарифу. Не покупать Pro автоматически; до DDL требуется отдельная проверенная резервная копия (например, полный pg_dump в авторизованной среде). Audit/контрольные counts не заменяют backup.
+
+
+### QA push configuration prepared, 03.10.2026
+
+- Пользователь предоставил контакт knd@dlight.com.ua. Генератор один раз создал независимые QA PUSH_SECRET/VAPID_KEYS/VAPID_CONTACT=mailto:knd@dlight.com.ua в игнорируемом .qa-push/edge-secrets.env; ключи не печатались и не добавлены в git. Файл 0600; P-256 и согласованность public/private JWK проверены. Повторно не генерировать и не заменять существующие ключи.
+- Matching VITE_VAPID_PUBLIC записан в игнорируемый .env.local; sites-preview запущен с этой конфигурацией. Browser application gate не закрыт этим запуском.
+- edge-secrets.env подготовлен для пользователя как приватный файл; Dashboard QA Secrets доступен в сохранённой вкладке 2 и пока показывает отсутствие custom secrets. Следующий шаг — пользователь вручную вводит/сохраняет эти три значения в QA Dashboard согласно browser credential handoff policy. Нельзя считать секреты установленными до свежей проверки списка/подписки/реальной доставки.
