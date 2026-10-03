@@ -6086,7 +6086,7 @@ async function renderUsersAdmin(){
 // ---------- пуш-уведомления ----------
 // Ключ публичный по определению: он и так уезжает в браузер каждого
 // пользователя. Приватный лежит только в секретах Edge Function.
-const VAPID_PUBLIC='BMwNqmBgU83e_tapC1EbQxF_mnjErQqsvzAFZACpVw7RmexLI8Xj4qhOJFvB01VNJybovSV2Klq-58kpmymeGAM';
+const VAPID_PUBLIC=import.meta.env.VITE_VAPID_PUBLIC||'BMwNqmBgU83e_tapC1EbQxF_mnjErQqsvzAFZACpVw7RmexLI8Xj4qhOJFvB01VNJybovSV2Klq-58kpmymeGAM';
 
 function b64ToU8(b64){
   const pad='='.repeat((4-b64.length%4)%4);

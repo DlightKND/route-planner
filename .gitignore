@@ -4,3 +4,5 @@ dist/
 .DS_Store
 
 supabase/.temp/
+.env.local
+.qa-push/
