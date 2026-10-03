@@ -80,11 +80,76 @@ beforeAll(async()=>{
   const planned=depot.slice(depot.indexOf('create or replace function public.trip_planned_start_at('),depot.indexOf('create or replace function public.vehicle_depot_track('));
   const tracking=depot.slice(depot.indexOf('create or replace function public.trip_tracking_cancel('));
   await db.exec(planned+tracking.replaceAll("public.user_role() not in ('admin','logist')","coalesce(public.user_role(),'') not in ('admin','logist')"));
+  await db.exec('alter table profiles add column full_name text');
+  await db.exec(readFileSync(new URL('../supabase/migrations/20260923212724_entity_activity_comments.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260929110000_entity_responsibility.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
 afterAll(async()=>{await db?.close();});
+
+it('allows trip owner and curator comments, stamps the actor and rejects unrelated staff',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'engineer',true),($2,'engineer',true),($3,'engineer',true)",[id(198),id(199),id(200)]);
+    await q("select set_config('test.uid',$1,true)",[id(198)]);
+    const [trip]=await q('insert into trips default values returning id');
+    await q("select entity_responsibility_assign('trip',$1,'curator',$2,'Independent curator')",[trip.id,id(199)]);
+    await db.exec('set local role authenticated');
+    for(const actor of [id(198),id(199)]){
+      await q("select set_config('test.uid',$1,true)",[actor]);
+      const [comment]=await q("insert into trip_comments(trip_id,author_id,created_at,body) values($1,$2,'2000-01-01','  QA comment  ') returning author_id,created_at,body",[trip.id,id(200)]);
+      expect(comment.author_id).toBe(actor);
+      expect(comment.body).toBe('QA comment');
+      expect(new Date(comment.created_at).getFullYear()).toBeGreaterThan(2000);
+    }
+    expect(await q('select id from trip_comments where trip_id=$1',[trip.id])).toHaveLength(2);
+    await q("select set_config('test.uid',$1,true)",[id(200)]);
+    expect(await q('select id from trip_comments where trip_id=$1',[trip.id])).toEqual([]);
+    await db.exec('savepoint forbidden_comment');
+    await expect(q("insert into trip_comments(trip_id,body) values($1,'Forbidden')",[trip.id])).rejects.toThrow(/row-level security/);
+    await db.exec('rollback to savepoint forbidden_comment');
+  }finally{await db.exec('rollback');}
+});
+
+it('keeps a delegated task readable through its trip without granting task editing rights',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'admin',true),($2,'engineer',true),($3,'engineer',true)",[id(195),id(196),id(197)]);
+    await q("select set_config('test.uid',$1,true)",[id(195)]);
+    const [job]=await q('insert into jobs(client_id) values($1) returning id',[id(20)]);
+    const [order]=await q("insert into service_orders(job_id,title) values($1,'Independent curator') returning id",[job.id]);
+    const [trip]=await q('insert into trips(service_order_id) values($1) returning id',[order.id]);
+    await q("select entity_responsibility_assign('order',$1,'curator',$2,'Other task curator',0)",[order.id,id(197)]);
+    await q("select entity_responsibility_assign('trip',$1,'curator',$2,'Trip curator only')",[trip.id,id(196)]);
+    await q("select set_config('test.uid',$1,true)",[id(196)]);
+    await db.exec('set local role authenticated');
+    expect(await q('select id from service_orders where id=$1',[order.id])).toEqual([{id:order.id}]);
+    expect(await q('select order_id from trip_service_orders where trip_id=$1',[trip.id])).toEqual([{order_id:order.id}]);
+    expect((await q("select dlight_private.responsibility_manager('order',$1) allowed",[order.id]))[0].allowed).toBe(false);
+    await db.exec('savepoint forbidden_task_edit');
+    await expect(q("select service_order_save_one($1,1,$2::jsonb,$3,'[]'::jsonb)",[order.id,JSON.stringify({title:'Forbidden edit',work_mode:'onsite',engineer_ids:[],instructions:''}),job.id])).rejects.toThrow('Только диспетчер меняет план задания');
+    await db.exec('rollback to savepoint forbidden_task_edit');
+    expect((await q('select title from service_orders where id=$1',[order.id]))[0].title).toBe('Independent curator');
+  }finally{await db.exec('rollback');}
+});
+
+it('exposes only directory metadata to active staff and denies anonymous or inactive callers',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active,full_name) values($1,'engineer',true,'Анна'),($2,'engineer',false,'Богдан')",[id(191),id(192)]);
+    await q("select set_config('test.uid',$1,true)",[id(191)]);
+    await db.exec('set local role authenticated');
+    const rows=await q('select * from entity_people()');
+    expect(rows.find(p=>p.id===id(192))).toEqual({id:id(192),full_name:'Богдан',role:'engineer',active:false});
+    expect(Object.keys(rows[0]).sort()).toEqual(['active','full_name','id','role']);
+    await q("select set_config('test.uid',$1,true)",[id(192)]);
+    expect(await q('select * from entity_people()')).toEqual([]);
+    await q("select set_config('test.uid','',true)");
+    expect(await q('select * from entity_people()')).toEqual([]);
+    expect((await q("select has_function_privilege('anon','public.entity_people()','execute') allowed"))[0].allowed).toBe(false);
+  }finally{await db.exec('rollback');}
+});
 
 it('sends curator events once per subscription and excludes owners, inactive and former curators',async()=>{
   await db.exec('begin');

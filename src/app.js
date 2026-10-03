@@ -11,6 +11,8 @@ import './service-orders.css';
 import { createServiceOrders } from './service-orders.js';
 import { mountEntityActivity } from './entity-activity.js';
 import { mountEntityResponsibility } from './entity-responsibility.js';
+import { loadEntityPeople } from './entity-people.js';
+import { configureTripPlanStatus } from './trip-plan-status.js';
 import './entity-activity.css';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
@@ -1675,7 +1677,7 @@ async function geocode(){ const q=$('geoQuery').value.trim(); const box=$('geoRe
 
 // ---------- jobs ----------
 let jobs=[], profilesList=[], curWorks=[], jobEditId=null, curWorksComplete=false;
-async function ensureRefs(){ if(!catalog.length) await loadCatalog(); if(!profilesList.length){ const {data}=await sb.from('profiles').select('id,full_name,role'); profilesList=data||[]; } }
+async function ensureRefs(){ if(!catalog.length) await loadCatalog(); if(!profilesList.length) profilesList=await loadEntityPeople(sb); }
 function engineerIds(row,legacyField){
   const ids=Array.isArray(row&&row.engineer_ids)?row.engineer_ids.filter(Boolean):[];
   const legacy=row&&row[legacyField];
@@ -3675,7 +3677,7 @@ async function openJob(id,presetClient,presetEquip){ if(serviceOrders.isDirty()&
   $('jobActivitySection').hidden=!id;
   $('jobResponsibilitySection').hidden=!id;
   if(id) mountEntityActivity({root:$('jobActivity'),db:sb,entity:'job',id,userId:()=>session?.user?.id,people:()=>profilesList});
-  if(id&&j)mountEntityResponsibility({root:$('jobResponsibilitySection'),db:sb,kind:'job',id,record:j,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,onChange:()=>openJob(id),onError:e=>notify(e.message,'err')});
+  if(id&&j)mountEntityResponsibility({root:$('jobResponsibilitySection'),db:sb,kind:'job',id,record:j,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,onChange:data=>canWrite()||[data.owner_id,data.curator_id].includes(session?.user?.id)?openJob(id):switchTab('planner','jobs'),onError:e=>notify(e.message,'err')});
   const pane=document.querySelector('.view-job .pane'); if(pane) pane.scrollTop=0; }
 let jobBack='planner', jobBackSub='jobs';
 
@@ -5493,6 +5495,7 @@ async function openPresenceEditor(tid,stayId,jobId){
         if(error)throw error;
         dialog.close();showToast(rows[0].status==='approved'?'Стоянка привязана и присутствие подтверждено':'Стоянка исключена из учёта');
         try{await loadFactHours();
+          if(data.trip.status==='done'&&!await refreshTripEcon(tid))throw new Error('Не удалось пересчитать экономику по проверенному присутствию');
           if(stayBindMap?.tid===tid)await reloadStayBindingData(tid);
           if(tripEditId===tid){await loadWorkbench(tid);tripEcon();}
         }catch(refreshError){notify('Проверка сохранена, но обновить отображение не удалось: '+refreshError.message,'warn');}
@@ -5521,7 +5524,7 @@ async function loadWorkbench(id){
     $('tpRemovedJobs').innerHTML=removedHTML(tripWorkbench,tripJobsAll);
     $('tpHistoryLog').innerHTML=historyHTML(tripWorkbench,profilesList);
     $('tpReviewState').textContent=(ST_TRIP[data.trip.status]||data.trip.status)+' · версия '+data.trip.workbench_revision+' · изменение плана не удаляет трек и посещения';
-    $('tpStatus').disabled=!!data.trip.started_at||!canWriteTrip(data.trip);
+    configureTripPlanStatus($('tpStatus'),data.trip,canWriteTrip(data.trip));
     $('tpRemainingInfo').textContent=data.trip.remaining_route?'Осталось '+data.trip.remaining_route.km.toFixed(1)+' км · расчёт '+new Date(data.trip.remaining_route.at).toLocaleString('ru-RU'):'';
     $('wbDetect').onclick=async()=>{
       if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки.','warn');return;}
@@ -5538,7 +5541,7 @@ async function loadWorkbench(id){
       if(!reason)return;
       $('wbPresenceSave').disabled=true;
       try{validateTaskAllocationShares(rows);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:id,p_expected:tripWorkbench.trip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason.reason});if(error)throw error;
-        tripPresenceDirty=false;await loadFactHours();await loadWorkbench(id);tripEcon();showToast('Человеко-часы присутствия сохранены');}
+        tripPresenceDirty=false;await loadFactHours();if(tripWorkbench.trip.status==='done'&&!await refreshTripEcon(id))throw new Error('Присутствие сохранено, но пересчитать экономику не удалось. Открой выезд заново и повтори проверку.');await loadWorkbench(id);tripEcon();showToast('Человеко-часы присутствия сохранены');}
       catch(e){notify(e.message,'err');if($('wbPresenceSave'))$('wbPresenceSave').disabled=false;}
     };
     await renderTripCostReview(id);
@@ -5729,12 +5732,13 @@ async function openTrip(id){ if(serviceOrders.isDirty()&&!serviceOrders.leave())
   $('tripResponsibilitySection').hidden=!id;
   $('tpFrom').value=t?(t.date_from||''):''; $('tpTo').value=t?(t.date_to||''):''; $('tpVeh').innerHTML='<option value="">— авто —</option>'+vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.name+(v.plate?(' · '+v.plate):''))+'</option>').join(''); $('tpVeh').value=t&&t.vehicle_id?t.vehicle_id:''; updateVehInfo(); $('tpVeh').onchange=()=>{ updateVehInfo(); tripHead(); }; $('tpNotes').value=t?(t.notes||''):'';
   $('tpEng').innerHTML=profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
-  setEngineerSelect('tpEng',t?tripEngineerIds(t):[]); $('tpStatus').value=t?t.status:'planned';
+  setEngineerSelect('tpEng',t?tripEngineerIds(t):[]);
   if($('tpStayMap')) $('tpStayMap').style.display=t?'':'none';
   curTripOrders=new Set(); if(t){const {data,error}=await sb.from('trip_service_orders').select('order_id').eq('trip_id',id);if(error){notify(error.message,'err');return;}(data||[]).forEach(r=>curTripOrders.add(r.order_id));}
   if(t&&!curTripOrders.size){const {data}=await sb.from('trip_jobs').select('job_id').eq('trip_id',id);const ids=new Set((data||[]).map(r=>r.job_id));tripOrdersAll.filter(o=>ids.has(o.job_id)&&o.seed_request_id===o.job_id).forEach(o=>curTripOrders.add(o.id));}
   syncTripJobsFromOrders();if(tripMainJobId&&!curTripJobs.has(tripMainJobId))tripMainJobId=null;
   const ro=!canWriteTrip(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
+  configureTripPlanStatus($('tpStatus'),t,!ro);
   const es=(t&&(t.plan_econ_snapshot||t.econ_snapshot))||{}; tripRoute={km:es.km||0,driveH:es.driveH||0,geometry:(t&&t.route_geometry)||null,legs:es.legs||[]}; tripVariants=[];
   const ovs=(t&&t.overrides)||{}; tripOverrides={revenue:(ovs.revenue!=null?String(ovs.revenue):''),cost:(ovs.cost!=null?String(ovs.cost):''),road:(ovs.road||{})}; $('tpOvRev').value=tripOverrides.revenue; $('tpOvCost').value=tripOverrides.cost;
   const saved=(t&&t.route_stops)?t.route_stops:[]; const st=saved.find(x=>x.type==='start'); tripStart=st?{name:st.name,lat:st.lat,lng:st.lng}:null;
@@ -5744,7 +5748,7 @@ async function openTrip(id){ if(serviceOrders.isDirty()&&!serviceOrders.leave())
   drawTripMap(t);
   renderTripJobs(); $('tripErr').textContent=''; tripEcon(); switchTab('trip');
   $('tpChangeReason').value=''; tripPlanDirty=false; tripRemainingRoute=t?.remaining_route||null;
-  setTripPane('plan'); await loadWorkbench(id); if(id)mountEntityActivity({root:$('tripActivity'),db:sb,entity:'trip',id,userId:()=>session?.user?.id,people:()=>profilesList}); if(id&&t)mountEntityResponsibility({root:$('tripResponsibilitySection'),db:sb,kind:'trip',id,record:t,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,onChange:()=>openTrip(id),onError:e=>notify(e.message,'err')}); await serviceOrders.tripParent(t);
+  setTripPane('plan'); await loadWorkbench(id); if(id)mountEntityActivity({root:$('tripActivity'),db:sb,entity:'trip',id,userId:()=>session?.user?.id,people:()=>profilesList}); if(id&&t)mountEntityResponsibility({root:$('tripResponsibilitySection'),db:sb,kind:'trip',id,record:t,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,onChange:data=>canWrite()||[data.owner_id,data.curator_id].includes(session?.user?.id)?openTrip(id):switchTab('planner','trips'),onError:e=>notify(e.message,'err')}); await serviceOrders.tripParent(t);
   const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
 // Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
 // было собирать глазами из четырёх мест модалки.

@@ -20,7 +20,7 @@ export function economicSnapshot(jobs, km, driveH, T, ov = {}, ctx = {}, jobCoun
     // cost/profit/margin — лучшее известное: факт, если он есть, иначе план.
     // Оба пути записи дают теперь одно и то же, поэтому дашборд складывает
     // сопоставимые величины.
-    cost:best.cost, profit:best.profit, margin:best.margin,
+    cost:best.cost, costComputed:best.costComputed, profit:best.profit, margin:best.margin,
     cost_basis:completeFact?'fact':(fact?'partial':'plan'),
     presence_basis:hasHours?'person_hours_v1':null,
     cost_plan:plan.cost, profit_plan:plan.profit, margin_plan:plan.margin,

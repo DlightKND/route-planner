@@ -1,3 +1,5 @@
+import { entityPersonLabel } from './entity-people.js';
+
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
 }[c]));
@@ -9,7 +11,7 @@ export function mountEntityResponsibility({
 }){
   if(!root||!id)return;
   const person=pid=>people().find(p=>p.id===pid);
-  const name=pid=>pid?(person(pid)?.full_name||'Неактивный пользователь'):'Не назначен';
+  const name=pid=>pid?entityPersonLabel(person(pid)):'Не назначен';
   let owner=record.owner_id||null,curator=record.curator_id||null;
   const actor=userId(),admin=role()==='admin',logist=role()==='logist';
   const canOwner=admin||owner===actor||(!owner&&logist);
@@ -23,7 +25,7 @@ export function mountEntityResponsibility({
         ${canCurator?'<option value="curator">Кураторство</option>':''}
         ${canOwner?'<option value="owner">Владение</option>':''}
       </select></label>
-      <label>Кому <select name="person">${people().filter(p=>p.active!==false).map(p=>`<option value="${esc(p.id)}">${esc(p.full_name||'Сотрудник')}</option>`).join('')}</select></label>
+      <label>Кому <select name="person">${people().filter(p=>p.active!==false).map(p=>`<option value="${esc(p.id)}">${esc(entityPersonLabel(p))}</option>`).join('')}</select></label>
       <label>Причина <input name="reason" required minlength="5" maxlength="1000" placeholder="Почему передаётся ответственность"></label>
       <button type="submit" class="btn sm">Передать</button><span role="status" class="hint"></span>
     </form>`:''}
@@ -74,6 +76,7 @@ export function mountEntityResponsibility({
       root.querySelector('[data-owner]').textContent=name(owner);
       root.querySelector('[data-curator]').textContent=name(curator);
       form.elements.reason.value='';status.textContent='Передано';
+      if(!admin&&owner!==actor&&curator!==actor)form.remove();
       await refresh();await onChange?.(data);
     }catch(e){status.textContent=e.message||'Не удалось передать';onError(e);}
     finally{button.disabled=false;}

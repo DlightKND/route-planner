@@ -9,10 +9,10 @@ const windows=[];afterEach(async()=>{await Promise.all(windows.splice(0).map(w=>
 function setup(patch={},saveError=null,authority={manager:true,curator:'e1'}){
  const win=new Window();windows.push(win);
  const stay={id:'s1',job_id:null,crew_ids:['e1'],crew_source:'snapshot',stay_from:'2026-09-22T08:00Z',stay_to:'2026-09-22T09:00Z',minutes_raw:60,status:'detected',...patch};
- const data={trip:{id:'t1',workbench_revision:7,owner_id:'owner',curator_id:authority.curator},stays:[stay],job_ids:['j1'],removed:[]};
+ const data={trip:{id:'t1',workbench_revision:7,owner_id:'owner',curator_id:authority.curator,status:authority.status},stays:[stay],job_ids:['j1'],removed:[]};
  const sb={rpc:vi.fn(async(name)=>name==='trip_workbench_read'?{data}:{error:saveError}),from:table=>{const q={select:()=>q,eq:()=>Promise.resolve({data:table==='trip_service_orders'?[{order_id:'o1'}]:[],error:null})};return q;}};
  const tripOrdersAll=[{id:'o1',number:1,title:'Ремонт',job_id:'j1'}];
- const ctx={document:win.document,canWrite:()=>authority.manager,session:{user:{id:'e1'}},getTrip:id=>id===data.trip.id?data.trip:null,tripCache:{},tripPlanDirty:false,tripPresenceDirty:false,ensureRefs:async()=>{},loadTripJobs:async()=>{},loadTripOrders:async()=>{},sb,presenceHTML,readPresenceForm,validatePresence,taskAllocationPayload:s=>({id:s.id,job_id:s.job_id,crew_ids:s.crew_ids,minutes_mgr:s.minutes_mgr,status:s.status,task_allocations:s.status==='approved'?s.task_allocations:[]}),validateTaskAllocationShares:rows=>{if(rows.some(s=>(s.task_allocations||[]).reduce((n,x)=>n+x.share,0)>1.000001))throw new Error('Доля превышает 100%');},profilesList:[{id:'e1',role:'engineer',full_name:'Анна'}],tripJobsAll:[{id:'j1',clients:{name:'Объект'}}],tripOrdersAll,curTripOrders:new Set(['o1']),loadFactHours:async()=>{},stayBindMap:null,tripEditId:null,showToast:vi.fn(),notify:vi.fn()};
+ const ctx={document:win.document,canWrite:()=>authority.manager,session:{user:{id:'e1'}},getTrip:id=>id===data.trip.id?data.trip:null,tripCache:{},tripPlanDirty:false,tripPresenceDirty:false,ensureRefs:async()=>{},loadTripJobs:async()=>{},loadTripOrders:async()=>{},sb,presenceHTML,readPresenceForm,validatePresence,taskAllocationPayload:s=>({id:s.id,job_id:s.job_id,crew_ids:s.crew_ids,minutes_mgr:s.minutes_mgr,status:s.status,task_allocations:s.status==='approved'?s.task_allocations:[]}),validateTaskAllocationShares:rows=>{if(rows.some(s=>(s.task_allocations||[]).reduce((n,x)=>n+x.share,0)>1.000001))throw new Error('Доля превышает 100%');},profilesList:[{id:'e1',role:'engineer',full_name:'Анна'}],tripJobsAll:[{id:'j1',clients:{name:'Объект'}}],tripOrdersAll,curTripOrders:new Set(['o1']),loadFactHours:vi.fn(async()=>{}),refreshTripEcon:vi.fn(async()=>true),stayBindMap:null,tripEditId:null,showToast:vi.fn(),notify:vi.fn()};
  const open=new Function(...Object.keys(ctx),app.slice(app.indexOf('function canWriteTrip('),app.indexOf('\n',app.indexOf('function canWriteTrip(')))+';return ('+body+');')(...Object.values(ctx));
  return {win,open,sb,ctx};
 }
@@ -39,4 +39,13 @@ it('opens presence for a scoped curator and rejects another trip without global 
  expect(curator.win.document.querySelector('dialog').open).toBe(true);
  const stranger=setup({},null,{manager:false,curator:'other'});await stranger.open('t1','s1','j1');
  expect(stranger.sb.rpc).not.toHaveBeenCalled();expect(stranger.win.document.querySelector('dialog')).toBeNull();
+});
+
+it('refreshes confirmed trip economics after the presence RPC and fresh fact hours',async()=>{
+ const {win,open,sb,ctx}=setup({},null,{manager:false,curator:'e1',status:'done'});
+ await open('t1','s1','j1');await win.document.querySelector('[data-presence-submit]').onclick();
+ expect(ctx.refreshTripEcon).toHaveBeenCalledWith('t1');
+ expect(sb.rpc.mock.invocationCallOrder[1]).toBeLessThan(ctx.loadFactHours.mock.invocationCallOrder[0]);
+ expect(ctx.loadFactHours.mock.invocationCallOrder[0]).toBeLessThan(ctx.refreshTripEcon.mock.invocationCallOrder[0]);
+ expect(ctx.notify).not.toHaveBeenCalled();
 });

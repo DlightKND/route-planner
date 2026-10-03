@@ -114,7 +114,8 @@ returns boolean language sql stable security definer set search_path='' as $$
       and exists(select 1 from public.trip_service_orders l
         join public.trips t on t.id=l.trip_id
         where l.order_id=p_id and
-          (t.lead_engineer=auth.uid() or auth.uid()=any(t.engineer_ids)))
+          (t.lead_engineer=auth.uid() or auth.uid()=any(t.engineer_ids)
+            or (t.deleted_at is null and auth.uid() in (t.owner_id,t.curator_id))))
     )
     or (
       auth.uid() is not null and public.user_role()='engineer'
@@ -143,6 +144,15 @@ create policy trip_stays_responsibility_read on public.trip_stays
   for select to authenticated using (
     dlight_private.responsibility_manager('trip',trip_id)
   );
+-- Curators participate in the trip timeline independently of crew membership.
+do $$ begin
+  if to_regclass('public.trip_comments') is not null then
+    create policy trip_comments_entity_read on public.trip_comments for select to authenticated
+      using (dlight_private.responsibility_manager('trip',trip_id));
+    create policy trip_comments_entity_add on public.trip_comments for insert to authenticated
+      with check (dlight_private.responsibility_manager('trip',trip_id));
+  end if;
+end $$;
 do $$ begin
   if to_regclass('public.trip_reschedules') is not null then
     execute $policy$create policy trip_reschedules_responsibility_read on public.trip_reschedules
@@ -987,3 +997,16 @@ $body$;
 $definition$;
   end if;
 end $migration$;
+
+-- Only assignment/display metadata is shared with active staff. Never return
+-- contact details, preferences, employee-org data or full profile rows here.
+create or replace function public.entity_people()
+returns table(id uuid,full_name text,role text,active boolean)
+language sql stable security definer set search_path='' as $$
+  select p.id,p.full_name,p.role,p.active from public.profiles p
+  where exists(select 1 from public.profiles actor
+    where actor.id=auth.uid() and actor.active)
+  order by p.full_name,p.id
+$$;
+revoke all on function public.entity_people() from public,anon;
+grant execute on function public.entity_people() to authenticated;
