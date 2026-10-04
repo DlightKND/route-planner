@@ -168,3 +168,12 @@ Production и Pages пока не изменены. PR остаётся draft д
 - Конечные последовательные suite: 489/489 в обычной зоне и 489/489 в America/Los_Angeles, 41 файл. Lint, build, smoke, diff-check прошли.
 
 Актуальный остаток: CI этого изменения; реальная подписка/доставка на HTTPS QA с установленными независимыми ключами; полная резервная копия production, свежий preflight и выпуск по docs/entity-responsibility-release.md; проверка выпуска и очистка только синтетических fixture. PR остаётся draft. Установка секретов и sender HTTP 200 подтверждены; доставка push пока не подтверждена.
+
+
+### HTTPS QA и CI, 04.10.2026
+
+- Remote code commit ae5af6407f86c7fa15e62a5ee70bbaba18d92db3, tree 184a33b116c27820de058a62d63e4cd9ced0cf42; CI #486 completed/success. PR #129 остаётся draft, mergeable.
+- Создан отдельный owner-private Sites для HTTPS QA: https://route-planner-qa-push-20261004.kolenkonikita79.chatgpt.site . Deployment appgdep_6ac265dcd77c81919b3b96c6cc807f54 succeeded, project appgprj_6ac2659567c88191929e9a973b485665, version appgprj_6ac2659567c88191929e9a973b485665~appgver_040361a740f48191bee8a815e0ca6620, pushed source e37f6ce603ad1fa5a0fe3453ddc819886ace230b.
+- Статический артефакт построен из проверенного дерева: изменены только публичные builtin URL/key на QA cbwgqimrnogoahuqvrrw, public VAPID соответствует установленному QA private key. Production исходные defaults не менялись. Private ключи и PUSH_SECRET не включены в Site. Источник Site сохраняется в отдельном git, не дублировать его регистрацию.
+- Managed preview reference Sites прямо сообщает: deployed Sites URLs are unreachable from that browser. Не пытаться обходить это другой браузерной поверхностью. Пользователю нужен собственный браузер: открыть HTTPS URL, войти QA-инженером qa-replay-20260928@dlight.test, открыть Уведомления и включить их/разрешить браузеру. По состоянию 04.10 14:43 UTC push_subs=0; реальная доставка ещё не проверена. После появления подписки продолжить генерацию синтетического назначения/вмешательства, sender и подтверждение получения; проверить отсутствие доставки бывшему ответственному.
+- Production полный backup по-прежнему не подтверждён; Free Plan без scheduled backups. Не выполнять production DDL/merge/frontend release до backup и фактической доставки.
