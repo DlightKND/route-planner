@@ -4,7 +4,7 @@ import {it,expect,vi,afterEach} from 'vitest';
 import {presenceHTML,readPresenceForm} from '../src/trip-workbench.js';
 import {validatePresence} from '../src/core/trip-review.js';
 const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
-const body=app.slice(app.indexOf('async function openPresenceEditor('),app.indexOf('async function loadWorkbench('));
+const body=app.slice(app.indexOf('async function openPresenceEditor('),app.indexOf('function renderTripReviewSummary('));
 const windows=[];afterEach(async()=>{await Promise.all(windows.splice(0).map(w=>w.happyDOM.close()));});
 function setup(patch={},saveError=null,authority={manager:true,curator:'e1'}){
  const win=new Window();windows.push(win);

@@ -2339,7 +2339,7 @@
          на 18–20 px рассыпалась на несвязанные штрихи и читалась как солнце. -->
     <button class="nav-i" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.6-1.25-1.8-3.1-1.9.8a8 8 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.45a8 8 0 0 0-2.6 1.5L6 6.15l-1.8 3.1L5.8 10.5a7.8 7.8 0 0 0 0 3l-1.6 1.25L6 17.85l1.9-.8a8 8 0 0 0 2.6 1.5l.3 2.45h3.6l.3-2.45a8 8 0 0 0 2.6-1.5l1.9.8 1.8-3.1-1.6-1.25z"/></svg><span>Настройки</span></button>
     <button class="nav-i" id="pushBtn" title="Уведомления"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span>Уведомления</span></button>
-    <button class="nav-i" id="themeBtn" title="Внешний вид"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg><span>Вид</span></button>
+    <button class="nav-i" id="themeBtn" aria-expanded="false" title="Внешний вид"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg><span>Вид</span></button>
     <button class="nav-i" id="cfgBtn" title="Подключение"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 7h14M5 17h14"/></svg><span>Связь</span></button>
     <button class="nav-i" id="logoutBtn" style="display:none" title="Выйти"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h10"/></svg><span>Выйти</span></button>
     <!-- «Ещё» существует только на телефоне: на широком экране рельс
@@ -2415,7 +2415,7 @@
                те же самые кнопки, только по размеру содержимого и в одну
                строку с прокруткой вбок. -->
           <div id="sideTools">
-          <input type="search" id="search" placeholder="искать по названию…">
+          <input type="search" id="search" aria-label="Поиск клиента или точки" placeholder="искать по названию…">
           <div class="chiprow">
             <div class="seg chipseg" id="mapScope"><button class="on" data-ms="work">в работе</button><button data-ms="all">весь справочник</button></div>
             <span class="chipsep"></span>
@@ -2430,7 +2430,7 @@
                Шторкой прячут всё сразу; здесь остаются поиск и фильтры,
                а список уходит, и под панелью открывается карта. Это два
                разных движения, и оба нужны. -->
-          <div class="listhead" id="listHead"><span id="listHeadT">свернуть список</span><span class="chev"></span></div>
+          <div class="listhead" id="listHead" role="button" tabindex="0" aria-expanded="true"><span id="listHeadT">свернуть список</span><span class="chev"></span></div>
           <div class="listbox" id="pointsBox">
             <div id="workFeed"></div>
             <div id="list"></div>
@@ -2677,7 +2677,7 @@
       <button class="btn" role="tab" id="tpTabEconomy" data-trip-tab="economy" aria-selected="false" aria-controls="tpEconomyPane">Экономика</button>
       <button class="btn" role="tab" id="tpTabHistory" data-trip-tab="history" aria-selected="false" aria-controls="tpHistoryPane">История</button>
     </div>
-    <div class="wb-note" id="tpReviewState" role="status"></div>
+    <div class="wb-note" id="tpReviewState" role="status"></div><div id="tpReviewSummary" class="wb-note" role="status"></div><p class="hint">Поездка, присутствие и выполнение работ проверяются отдельно. Часы на объекте не заменяют результат задания.</p>
     <div id="tpPlanPane" role="tabpanel" aria-labelledby="tpTabPlan" data-trip-pane="plan">
     <label for="tpChangeReason">Причина изменения плана</label><input id="tpChangeReason" type="text" placeholder="Например: объект Б перенесён, едем сразу на В">
     <div class="trip-grid">
@@ -2762,17 +2762,17 @@
            два яруса вместо одного и своя черта во всю ширину, которой
            больше нигде нет. -->
       <div id="catWorks">
-      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Материалы и цены</div></div>
+      <div class="subtabs"><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="models">Техника</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
       <div class="pane-head"><h2>Нормированные работы</h2>
-        <div class="searchbox"><input type="search" id="catSearch" placeholder="поиск работы…"></div>
-        <select id="catFilter" style="width:160px"><option value="">все</option><option value="warranty">гарантийные</option><option value="paid">только платные</option><option value="maint">ТО / сервис</option></select>
+        <div class="searchbox"><input type="search" id="catSearch" aria-label="Поиск работы" placeholder="поиск работы…"></div>
+        <select id="catFilter" aria-label="Тип работ" style="width:160px"><option value="">все</option><option value="warranty">гарантийные</option><option value="paid">только платные</option><option value="maint">ТО / сервис</option></select>
         <button class="btn sm amber" id="catAdd">+ Работа</button></div>
       <div id="catList"></div>
       </div>
       <div id="catModels" style="display:none">
-      <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Материалы и цены</div></div>
+      <div class="subtabs"><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="models">Техника</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
       <div class="pane-head"><h2>Техника <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Справочник моделей: производитель → тип → модель. Гарантия и сервисный интервал по умолчанию нужны для привязки к технике клиентов и к работам.</span></span></h2>
-        <div class="searchbox"><input type="search" id="emSearch" placeholder="поиск модели…"></div>
+        <div class="searchbox"><input type="search" id="emSearch" aria-label="Поиск модели техники" placeholder="поиск модели…"></div>
         <button class="btn sm amber" id="emShowAdd">+ Модель</button></div>
       
       <div id="emList" style="margin-top: var(--sp-3)"></div>
@@ -2786,9 +2786,9 @@
       </div>
       </div>
       <div id="catMaterials" style="display:none">
-        <div class="subtabs"><div class="subtab" data-csub="works">Работы</div><div class="subtab" data-csub="models">Техника</div><div class="subtab" data-csub="materials">Материалы и цены</div></div>
+        <div class="subtabs"><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="models">Техника</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
         <div class="pane-head"><h2>Материалы и запчасти</h2>
-          <div class="searchbox"><input type="search" id="stockSearch" placeholder="поиск по названию или артикулу…"></div>
+          <div class="searchbox"><input type="search" id="stockSearch" aria-label="Поиск материала по названию или артикулу" placeholder="поиск по названию или артикулу…"></div>
           <label class="stock-state"><input type="checkbox" id="stockShowInactive" style="width:auto">показать архив</label>
           <button class="btn sm amber" id="stockAdd">+ Позиция</button></div>
         <div class="hint">Справочник материалов, цен продажи и себестоимости. Цены в уже сохранённых заданиях не меняются.</div>
@@ -2817,23 +2817,23 @@
         <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
         <div class="pane-head">
           <select id="jobEngFilter" style="width:150px"><option value="">все инженеры</option></select>
-          <div class="searchbox"><input type="search" id="jobSearch" placeholder="поиск по клиенту…"></div>
+          <div class="searchbox"><input type="search" id="jobSearch" aria-label="Поиск заявки" placeholder="поиск по клиенту…"></div>
           <button class="btn sm ghost" id="jobTrash" title="Удалённые заявки">Корзина</button>
-          <button class="btn sm amber" id="jobAdd">+ Заявка</button></div>
+          <select id="jobLayout" aria-label="Представление заявок"><option value="kanban">Канбан</option><option value="list">Список</option></select><button class="btn sm amber" id="jobAdd">+ Заявка</button></div>
         <div class="chips" id="jobStatusChips"></div>
       </div>
       <div id="jobList"></div>
     </div>
     <div id="plOrders" style="display:none"><div class="stickyhead">
       <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
-      <div class="pane-head"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"><select id="orderEngineer" aria-label="Фильтр по инженеру"></select><button class="btn sm amber" id="orderAdd">+ Задание</button></div>
+      <div class="pane-head"><input type="search" id="orderSearch" aria-label="Поиск задания" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"><select id="orderEngineer" aria-label="Фильтр по инженеру"></select><select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select><button class="btn sm amber" id="orderAdd">+ Задание</button></div>
       <div id="orderScope" hidden><span id="orderScopeText"></span><button class="btn sm ghost" id="orderScopeClear">Все задания</button></div>
-      <label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label>
+      <label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p>
     </div><div id="orderList"></div></div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
         <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
-        <div class="pane-head"><select id="tripEngFilter" style="width:150px"><option value="">все инженеры</option></select><div class="searchbox"><input type="search" id="tripSearch" placeholder="поиск по авто/датам…"></div><button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
+        <div class="pane-head"><select id="tripEngFilter" style="width:150px"><option value="">все инженеры</option></select><div class="searchbox"><input type="search" id="tripSearch" aria-label="Поиск выезда" placeholder="поиск по авто/датам…"></div><button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button><select id="tripLayout" aria-label="Представление выездов"><option value="kanban">Канбан</option><option value="list">Список</option></select><button class="btn sm amber" id="tripAdd">+ Выезд</button></div>
         <div class="chips" id="tripStatusChips"></div>
       </div>
       <div id="tripList"></div>
@@ -2881,7 +2881,7 @@
            только в секрете Edge Function ors, наружу не отдаётся. -->
       <label style="margin-top: var(--sp-4)">Гарантия на ремонт по умолчанию, дней</label><input type="number" id="stWarrDays" placeholder="90">
       <label style="margin-top: var(--sp-4)">Период регулярного контакта, дней (0 — выкл)</label><input type="number" id="stContact" placeholder="0">
-      <button class="btn sm amber" id="stSave" style="margin-top: var(--sp-4)">Сохранить</button><span class="hint" id="stStatus" style="margin-left: var(--sp-3)"></span>
+      <button class="btn sm amber" id="stSave" style="margin-top: var(--sp-4)">Сохранить</button><span class="hint" id="stStatus" role="status" style="margin-left: var(--sp-3)"></span>
     </div>
     <div class="card" data-sec-panel="tariffs"><h3 class="cardhead">Профили тарифов <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Профиль — это плательщик со своими ставками. Две ветки: платно и гарантия; на строку работ в заявке подставляется по её признаку. Флажки «по умолчанию» задают, какой профиль ставить автоматически. Дорожные ставки понадобятся в расчёте выезда.</span></span></h3>
       <div id="tpList" style="margin-top: var(--sp-3)"></div>

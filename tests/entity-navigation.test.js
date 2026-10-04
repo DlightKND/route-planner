@@ -6,7 +6,7 @@ const code=source.slice(source.indexOf('function leaveTripEditor(){'),source.ind
 function navigation(win,{dirty=true,confirm=false}={}){
  const orders={currentId:()=> 'task-1',open:vi.fn()},openJob=vi.fn(),openTrip=vi.fn(),switchTab=vi.fn();
  win.confirm=vi.fn(()=>confirm);
- const nav=new Function('document','window','serviceOrders','openJob','openTrip','switchTab',`let tripPlanDirty=${dirty},tripPresenceDirty=false,plannerCur='orders',jobEditId='request-1',tripEditId='trip-1';`+code+';return {leaveTripEditor,cardOrigin,returnToCard,dirty:()=>tripPlanDirty};')(win.document,win,orders,openJob,openTrip,switchTab);
+ const nav=new Function('document','window','serviceOrders','openJob','openTrip','switchTab','restoreCardRoute',`let tripPlanDirty=${dirty},tripPresenceDirty=false,plannerCur='orders',jobEditId='request-1',tripEditId='trip-1';`+code+';return {leaveTripEditor,cardOrigin,returnToCard,dirty:()=>tripPlanDirty};')(win.document,win,orders,openJob,openTrip,switchTab,vi.fn());
  return {nav,orders,openJob,openTrip,switchTab};
 }
 it('preserves trip edits when navigation is cancelled, and clears them only on confirmed discard',async()=>{
