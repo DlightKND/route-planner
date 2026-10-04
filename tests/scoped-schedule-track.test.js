@@ -4,7 +4,7 @@ import {it,expect,vi} from 'vitest';
 
 const source=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 const section=(from,to)=>source.slice(source.indexOf(from),source.indexOf(to,source.indexOf(from)));
-const rights=section('function canWrite(){','\n')+section('function canWriteTrip(','\n')+section('function canWriteJob(','\n');
+const rights=section('function canWrite(){','\n')+section('function canWriteTrip(','\n')+section('function canWriteJob(','\n')+section('function engineerIds(row,legacyField){','function selectedEngineerIds(');
 const own={id:'own',owner_id:'owner',curator_id:'curator',vehicle_id:'car',status:'assigned'};
 const foreign={...own,id:'foreign',owner_id:'other',curator_id:'other'};
 function schedule({user='curator',role='engineer',rows=[own,foreign]}={}){
@@ -50,13 +50,13 @@ function vehicle({user='curator',trip=own,answer='target',reason='Перенос
     vehState:[{vehicle_id:'car',ts:'2026-09-30T12:00:00Z',lat:50,lng:30}],vehicles:[{id:'car',name:'Car'}],
     vehModalId:null,vehClass:()=> 'idle',vehAgeMin:()=>0,todayISO:()=> '2026-09-30',VEH_STALE_MIN:60,
     $:id=>doc.getElementById(id),esc:String,vehTitle:()=> 'Стоит',vehRow:(a,b)=>`<div>${a}: ${b}</div>`,vehAgeText:()=> 'сейчас',clients:[],
-    vehTrackSessions:[{trip_id:trip.id,vehicle_id:'car',state:'armed',planned_start_at:'2026-10-01T09:00:00Z',trip}],vehActiveTrips:{},trips:targets,ST_TRIP:{},appSettings:{},
-    showToast:vi.fn(),notify:vi.fn(),promptDialog:prompt,sb:{rpc},loadVehicles:vi.fn(),tripAction:vi.fn(),confirmDialog:async()=>true,
+    vehTrackSessions:[{trip_id:trip.id,vehicle_id:'car',state:'armed',planned_start_at:'2026-10-01T09:00:00Z',trip}],vehActiveTrips:{},trips:[],ST_TRIP:{},appSettings:{},
+    showToast:vi.fn(),notify:vi.fn(),promptDialog:prompt,sb:{rpc,from:()=>({select(){return this;},eq(){return this;},in(){return this;},is:async()=>({data:targets,error:null})})},loadVehicles:vi.fn(),tripAction:vi.fn(),confirmDialog:async()=>true,
     loadAll:vi.fn(),loadVehState:vi.fn(),tripPeriod:()=> '01.10',delegatedOwnerIntervenes:row=>row.owner_id===user&&row.curator_id!==user,askInterventionReason:vi.fn(()=>reason)};
   const show=new Function(...Object.keys(context),rights+section('function showVehModal(vid){',"if($('vehClose'))")+';return showVehModal;')(...Object.values(context));
   show('car');return {win,doc,rpc,prompt};
 }
-it('lets a curator move an armed track only to an authorized pending trip of the same vehicle',async()=>{
+it('loads target trips from the map without an open board and only offers authorized pending trips of the same vehicle',async()=>{
   const api=vehicle();try{
     expect(api.doc.getElementById('vehTrackCancel')).not.toBeNull();
     expect(api.doc.getElementById('vehOdometer')).toBeNull();
@@ -70,6 +70,7 @@ it('does not offer track controls on a foreign source and rejects an invalid sel
   try{
     expect(foreignApi.doc.getElementById('vehTrackMove')).toBeNull();
     expect(foreignApi.doc.getElementById('vehTrackCancel')).toBeNull();
+    expect(foreignApi.doc.getElementById('vehTrackStart')).toBeNull();
     await forged.doc.getElementById('vehTrackMove').onclick();expect(forged.rpc).not.toHaveBeenCalled();
   }finally{await foreignApi.win.happyDOM.close();await forged.win.happyDOM.close();}
 });
@@ -87,4 +88,32 @@ it('passes owner intervention reason on reassignment and stops if the reason is 
     expect(api.rpc).toHaveBeenCalledWith('trip_tracking_reassign_with_reason',{p_from:'own',p_to:'target',p_reason:'Перенос по решению владельца'});
     await cancelled.doc.getElementById('vehTrackMove').onclick();expect(cancelled.rpc).not.toHaveBeenCalled();
   }finally{await api.win.happyDOM.close();await cancelled.win.happyDOM.close();}
+});
+
+it('keeps a curator trip on its actual crew lane in the personal schedule',()=>{
+  const blocks=[
+    {engineer:'crew',pieces:[{iso:'2026-10-06'}]},
+    {engineer:null,pieces:[{iso:'2026-10-06'}]},
+    {engineer:'outside-week',pieces:[{iso:'2026-10-20'}]}
+  ];
+  const ctx={weeks:{week:{}},mine:true,nameOf:id=>id==='crew'?'QA Engineer':id};
+  const api=new Function('feedCtx','session','gtBlocks','gtPieces','gtWeekDays','profilesList',
+    section('function gtBusyWeekLanes(key){','function gtWeekLanes(key){')+';return gtBusyWeekLanes;')
+    (ctx,{user:{id:'curator'}},()=>blocks,b=>b.pieces,()=>['2026-10-06'],[]);
+  expect(api('week')).toEqual([
+    {id:'curator',name:'Мои работы'},
+    {id:'crew',name:'QA Engineer'},
+    {id:' free',name:'Без инженера'}
+  ]);
+  expect(blocks[0].engineer).toBe('crew');
+  expect(api('week').some(l=>l.id==='outside-week')).toBe(false);
+});
+
+it('keeps crew start rights without granting crew track reassignment or cancellation',async()=>{
+  const api=vehicle({user:'crew',trip:{...foreign,lead_engineer:'other',engineer_ids:['crew']}});
+  try{
+    expect(api.doc.getElementById('vehTrackStart')).not.toBeNull();
+    expect(api.doc.getElementById('vehTrackMove')).toBeNull();
+    expect(api.doc.getElementById('vehTrackCancel')).toBeNull();
+  }finally{await api.win.happyDOM.close();}
 });

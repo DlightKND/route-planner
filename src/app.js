@@ -585,7 +585,7 @@ function applyTabs(){
 // и отдельным пунктом панели не бывают ни у кого.
 function navKey(b){ return b.id?('#'+b.id):(b.dataset.tab+(b.dataset.sub?(':'+b.dataset.sub):'')); }
 function secondaryNav(){
-  const base=['#themeBtn','#cfgBtn','#logoutBtn'];
+  const base=['#themeBtn','#pushBtn','#cfgBtn','#logoutBtn'];
   return new Set(base.concat(['catalog','settings']));
 }
 function applyMobileNav(){
@@ -2188,13 +2188,14 @@ function gtDayHtml(key){
     +'<div class="vg-scroll"><div class="vg-grid vg-day-grid" style="--day-h:'+dayH+'px;--lanes:'+Math.max(1,lanes.length)+';--lane-min:'+laneMin+'px">'
     +axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
     +'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="road"></i>дорога</span>'
-    +(canWrite()?'<span>нажми участок — разрыв · перетащи — шаг 30 мин</span>':'<span>только просмотр</span>')+'<span>✎ — расставлено вручную</span></div>';
+    +(gtBlocks().some(b=>gtCanEditBlock(b)&&gtPieces(b).some(p=>p.iso===iso))?'<span>нажми участок — разрыв · перетащи — шаг 15 мин</span>':'<span>только просмотр</span>')+'<span>✎ — расставлено вручную</span></div>';
 }
 function gtWeekDays(it){ const out=[]; for(let i=0;i<7*(it.spanWeeks||1);i++) out.push(isoOf(it.w.mon+i*DAY_MS)); return out; }
 function gtBusyWeekLanes(key){
   const it=feedCtx.weeks[key], days=gtWeekDays(it), used={};
   gtBlocks().forEach(b=>gtPieces(b).forEach(p=>{ if(days.includes(p.iso)) used[b.engineer||' free']=1; }));
-  if(feedCtx.mine) return [{id:session.user.id,name:'Мои работы'}];
+  if(feedCtx.mine) return [...new Set([session.user.id,...Object.keys(used)])]
+    .map(id=>({id,name:id===session.user.id?'Мои работы':id===' free'?'Без инженера':feedCtx.nameOf(id)}));
   const named=new Set((profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim()).map(p=>p.id));
   return Object.keys(used).filter(id=>id===' free'||named.has(id))
     .map(id=>({id,name:id===' free'?'Без инженера':feedCtx.nameOf(id)}));
@@ -6105,6 +6106,18 @@ function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent); }
 function isStandalone(){ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }
 
 let swReg=null;
+// Device notifications belong to every signed-in user, independently of
+// administrative settings or entity responsibilities.
+if($('pushBtn')) $('pushBtn').onclick=()=>{
+  if(!session) return;
+  $('pushOverlay').classList.add('on');
+  $('pushClose').focus();
+  initPush();
+};
+function closePush(){ $('pushOverlay').classList.remove('on'); $('pushBtn').focus(); }
+if($('pushClose')) $('pushClose').onclick=closePush;
+if($('pushOverlay')) $('pushOverlay').addEventListener('click',e=>{ if(e.target===$('pushOverlay')) closePush(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('pushOverlay')?.classList.contains('on')) closePush(); });
 // Регистрация воркера переехала в index.html отдельным инлайн-скриптом:
 // раньше она жила внутри initPush, и у того, кто не включил уведомления,
 // воркера не было вовсе — а вместе с ним и кэша оболочки. Инлайн, а не
@@ -6114,7 +6127,7 @@ async function initPush(){
   const st=$('pushState'), help=$('pushHelp');
   if(!st) return;
   if(!('serviceWorker' in navigator) || !('PushManager' in window)){
-    st.textContent='Браузер не умеет пуш.';
+    st.textContent=window.isSecureContext?'Браузер не умеет пуш.':'Для уведомлений открой приложение по HTTPS.';
     if(isIOS() && !isStandalone()){
       help.innerHTML='<b>Это iPhone.</b> Пуш работает только у приложения, добавленного на домашний экран: «Поделиться» → «На экран „Домой“», затем открой DLIGHT с иконки и вернись сюда.';
     }
@@ -7454,7 +7467,7 @@ async function loadVehState(){
       .select('vehicle_id,ts,lat,lng,speed,status,lost_since,trip_id,current_depot_id,depot_state,depot_inside_since,depot_outside_since,depot_distance_km');
     if(error) throw error;
     const tracking=await sb.from('trip_tracking_sessions')
-      .select('id,trip_id,vehicle_id,state,planned_start_at,actual_started_at,start_source,finish_candidate_at,trip:trips(id,date_from,date_to,status,vehicle_id,vehicle_label,started_at,owner_id,curator_id)')
+      .select('id,trip_id,vehicle_id,state,planned_start_at,actual_started_at,start_source,finish_candidate_at,trip:trips(id,date_from,date_to,status,vehicle_id,vehicle_label,started_at,owner_id,curator_id,lead_engineer,engineer_ids)')
       .in('state',['armed','active','finish_candidate']);
     if(!tracking.error) vehTrackSessions=tracking.data||[];
     // Старые, уже выполнявшиеся при установке tracking-сессий выезды имеют
@@ -7572,6 +7585,7 @@ function showVehModal(vid){
   const linkedTripId=(tracking&&tracking.trip_id)||r.trip_id||null;
   const trip=(tracking&&tracking.trip)||vehActiveTrips[linkedTripId]
     ||((trips||[]).find(t=>String(t.id)===String(linkedTripId))||tripCache[linkedTripId]||null);
+  const canRunTrip=!!trip&&(canWriteTrip(trip)||assignedTo(trip,session?.user?.id,'lead_engineer'));
   h+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Выезд</div>';
   if(trip){
     h+=vehRow('Дата', esc(trip.date_from||'—')+(trip.date_to&&trip.date_to!==trip.date_from?(' — '+esc(trip.date_to)):''));
@@ -7589,10 +7603,10 @@ function showVehModal(vid){
   }
   if(tracking&&tracking.state==='armed'){
     h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Трекинг подготовлен с '+esc(new Date(tracking.planned_start_at).toLocaleString('ru'))+'. Ожидаем кнопку «Начать» или подтверждённый выход из депо.</div>'
-      +'<div class="row" style="margin-top:var(--sp-3);flex-wrap:wrap"><button class="btn sm amber" id="vehTrackStart">Начать выезд</button>'
+      +'<div class="row" style="margin-top:var(--sp-3);flex-wrap:wrap">'+(canRunTrip?'<button class="btn sm amber" id="vehTrackStart">Начать выезд</button>':'')
       +(canWriteTrip(trip||null)?'<button class="btn sm" id="vehTrackMove">Другой выезд</button><button class="btn sm ghost" id="vehTrackCancel">Отменить трек</button>':'')+'</div>';
   } else if(tracking&&tracking.state==='finish_candidate'){
-    h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Машина не менее '+esc(String(appSettings.depot_outside_minutes||60))+' мин находится в депо. Можно завершить выезд.</div><button class="btn sm amber" id="vehTrackFinish" style="margin-top:var(--sp-3)">Завершить выезд</button>';
+    h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Машина не менее '+esc(String(appSettings.depot_outside_minutes||60))+' мин находится в депо.</div>'+(canRunTrip?'<button class="btn sm amber" id="vehTrackFinish" style="margin-top:var(--sp-3)">Завершить выезд</button>':'');
   }
 
   h+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Координаты</div>';
@@ -7622,11 +7636,14 @@ function showVehModal(vid){
   };
   const move=$('vehTrackMove'); if(move) move.onclick=async ()=>{
     if(!trip||!canWriteTrip(trip))return;
-    const options=(trips||[]).filter(t=>t.id!==tracking.trip_id&&t.vehicle_id===vid&&['planned','assigned'].includes(t.status)&&canWriteTrip(t))
+    const {data:targets,error:targetError}=await sb.from('trips').select('id,vehicle_id,vehicle_label,date_from,date_to,status,owner_id,curator_id')
+      .eq('vehicle_id',vid).in('status',['planned','assigned']).is('deleted_at',null);
+    if(targetError){notify('Не загрузились выезды: '+targetError.message,'err');return;}
+    const options=(targets||[]).filter(t=>t.id!==tracking.trip_id&&t.vehicle_id===vid&&['planned','assigned'].includes(t.status)&&canWriteTrip(t))
       .map(t=>({value:t.id,label:tripPeriod(t.date_from,t.date_to)+' · '+(t.vehicle_label||v.name)}));
     if(!options.length){ notify('Нет другого ожидающего выезда этой машины.','warn'); return; }
     const x=await promptDialog('Переназначить трек',[{key:'trip',label:'Выезд',type:'select',options}]); if(!x||!options.some(o=>o.value===x.trip)) return;
-    const target=(trips||[]).find(t=>t.id===x.trip);
+    const target=(targets||[]).find(t=>t.id===x.trip);
     if(!target||!canWriteTrip(target))return;
     const intervenes=delegatedOwnerIntervenes(trip)||delegatedOwnerIntervenes(target);
     const reason=intervenes?askInterventionReason():null;if(intervenes&&reason===null)return;
