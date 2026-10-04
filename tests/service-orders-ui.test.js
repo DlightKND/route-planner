@@ -1,4 +1,12 @@
 import {Window} from 'happy-dom';
+
+it('requires preparation of an open request before task execution and keeps the source link available',async()=>{
+ order.status='assigned';order.jobs.status='open';order.date_from='2026-10-04';order.date_to='2026-10-05';
+ await ui.open('order1');const button=doc.querySelector('[data-order-next="in_progress"]');
+ expect(button.disabled).toBe(true);expect(button.title).toContain('Сначала подготовь заявку');
+ doc.getElementById('orderRequest').click();expect(ctx.openJob).toHaveBeenCalledWith(job);expect(rpcCalls).toHaveLength(0);
+ for(const status of ['planned','in_progress']){order.jobs.status=status;await ui.open('order1');expect(doc.querySelector('[data-order-next="in_progress"]').disabled).toBe(false);}
+});
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {createServiceOrders,nextOrderStates,remainingQty,visibleTripCount,materialTotals,workTotals} from '../src/service-orders.js';
 let win,doc,ui,ctx,rpcCalls,order,stock,works,taskProfiles,selectCalls,settingsCalls;

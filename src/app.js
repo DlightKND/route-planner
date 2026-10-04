@@ -1734,7 +1734,8 @@ function jobCard(j){ const mayManage=canWriteJob(j); const w=j.job_works||[]; co
   const pm=partsMoney(j);
   const rev=w.reduce((a,x)=>a+(+x.revenue||0),0)+pm.rev;   // и платные, и гарантийные, и запчасти
   const warr=w.some(x=>!x.billable), paid=w.some(x=>x.billable); const engs=engineerNames(jobEngineerIds(j));
-  const head='<h4>'+esc(j.clients?j.clients.name:'—')+'</h4>'+(j.equipment?'<div class="meta">'+esc(j.equipment.model||'')+'</div>':'');
+  const head='<h4><button class="crumb" data-jedit="'+j.id+'">'+esc(j.clients?j.clients.name:'—')+'</button></h4>'+(j.equipment?'<div class="meta">'+esc(j.equipment.model||'')+'</div>':'');
+  const subject=[...new Set(w.map(x=>x.title||x.name).filter(Boolean))].join(' · ');
   const tags=(warr?'<span class="pill warn">гар.</span>':'')+(paid?'<span class="pill good">платно</span>':'');
   // Срок пишем так, как его читают: «до 11 сентября · 14 дн», а не
   // «SLA 2026-09-11». Остаток дней важнее самой даты — по нему принимают
@@ -1753,7 +1754,7 @@ function jobCard(j){ const mayManage=canWriteJob(j); const w=j.job_works||[]; co
   const eb=(assignedTo(j,session.user.id,'assigned_engineer')&&(j.status==='open'||j.status==='planned'))?'<button class="btn sm amber" data-jst="'+j.id+'|in_progress">В работу</button>':'';
   const eb2=(assignedTo(j,session.user.id,'assigned_engineer')&&j.status==='in_progress')?'<button class="btn sm amber" data-jst="'+j.id+'|done">Завершить</button>':'';
   const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+(mayManage?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
-  return '<div class="kcard" data-kid="'+j.id+'">'+head+(tags?'<div class="ktags">'+tags+'</div>':'')+meta+acts+'</div>'; }
+  return '<div class="kcard" data-kid="'+j.id+'">'+head+(subject?'<div class="meta">'+esc(subject)+'</div>':'')+(tags?'<div class="ktags">'+tags+'</div>':'')+meta+acts+'</div>'; }
 function wireJobCards(box){
   box.querySelectorAll('[data-jedit]').forEach(b=>b.onclick=()=>openJob(b.dataset.jedit));
   box.querySelectorAll('[data-jst]').forEach(b=>b.onclick=()=>{ const a=b.dataset.jst.split('|'); jobSetStatus(a[0],a[1]); });
