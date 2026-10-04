@@ -1,5 +1,9 @@
 # Владелец и куратор заявки, задания и выезда
 
+## Актуальное состояние: выпущено 04.10.2026
+
+PR #129 слит и опубликован в production. Исторические разделы ниже описывают ход QA; прежние блокеры закрыты. Итог выпуска и границы проверки — в последнем разделе этого файла.
+
 Согласованная модель (29.09.2026):
 
 - Каждая новая сущность получает владельца и куратора в лице активного создателя. Исторические записи остаются без назначения: `created_by` не доказывает ответственность.
@@ -195,3 +199,19 @@ Production и Pages пока не изменены. PR остаётся draft д
 
 
 - После подтверждения доставки повторён production read-only preflight: historical_backfill_consistent=true; 17 requests, 18 canonical tasks, 7 trips, 19 approved stays / 3122 min; все восемь function guard блоков совпадают. Production не изменён. Backup API среди доступных MCP отсутствует; pg_dump и CLI credentials отсутствуют. Не считать audit резервной копией. Для следующего шага требуется полный backup из авторизованной среды или безопасное предоставление готового dump пользователем; database password не запрашивать в чат.
+
+## Production release completed, 04.10.2026
+
+- Пользователь исправил подключение на production и сообщил «Копия есть — работаем». Backup gate закрыт его подтверждением; агент не получал dump, не проверял его содержимое и не выполнял пробное восстановление. При восстановлении использовать пользовательские roles/schema/data dumps; точные пути находятся у пользователя. Сохранить последующие production записи перед восстановлением, не выполнять DROP rollback автоматически.
+- Непосредственно перед DDL повторены migration-audit.sql и qa-responsibility-release-preflight.sql: historical_backfill_consistent=true, все восемь legacy guard блоков совпадают. CI конечного head f01266aff514c83374e3fe0fe9a53b47024f8493: #489 completed/success.
+- Исходная миграция supabase/migrations/20260929110000_entity_responsibility.sql применена один раз в anqfbljgfimoaziztdxe. Серверная версия истории миграций: **20261004180339**, name entity_responsibility. QA corrective migrations в production не повторялись.
+- Исторические назначения не выдуманы: owner_id/curator_id остаются NULL у всех прежних записей, включая удалённую заявку и shadow tasks. Все четыре новые таблицы имеют RLS. Anon assignment RPC закрыт, authenticated assignment RPC открыт с внутренней проверкой, authenticated sender RPC закрыт.
+- Транзакционная production проверка с откатом подтвердила defaults новых заявки/задания/выезда, передачу куратора всех трёх сущностей, authenticated вмешательство владельца заявки/выезда, отклонение короткой причины, две записи аудита, адресование текущему куратору и его scoped manager access. Проверочные сущности и события не сохранены.
+- push-send обновлён до **v10**, verify_jwt=false сохранён: отправщик проверяет существующий PUSH_SECRET. Production secrets/VAPID не заменялись. Исходный trip-today-push активен, */15; entity-curator-push активен, */2, kind=entity. Разовый запуск точной cron-команды (request 11291) вернул HTTP 200, due=0/sent=0/gone=0/failed=0/record_failed=0. Плановые запуски 18:04 и 18:06 UTC succeeded. Это production smoke и проверка расписания, не новый показ уведомления в ОС: реальный показ всех 8 был подтверждён пользователем в QA.
+- PR #129 слит с проверкой ожидаемого head. Release merge **f9f82f6e7a7fa80aa3883c4c98a8084df703ad34**, сообщение [deploy]. Actions **#490**, run **37223085909**: build и deploy completed/success; обе зоны тестов, lint, build, smoke прошли. Pages deployment ID совпадает с merge SHA, success 18:07:33 UTC.
+- https://dlightknd.github.io/route-planner/ реально отдаёт assets/index-Cul0xEAo.js. В опубликованном бандле build stamp **b1a2110**, время сборки 2026-10-04T18:07:15.278Z; stamp совпал с исходниками. Production project ref присутствует, QA ref отсутствует, assignment RPC присутствует. Smoke выполнен на скачанных HTML/JS и прошёл. Повторный authenticated браузерный проход production в этом выпуске не выполнялся; live QA уже завершён до выпуска.
+- Финальный production финансовый аудит после публикации: 17 requests, 18 canonical tasks, 7 trips, 19 approved stays / 3122 min; historical_backfill_consistent=true; missing/mismatch=0, canonical_item_job_mismatch=0. Единственная явно нераспределённая стоянка 11 min сохранена.
+- Синтетические QA fixture a3100300 и их дочерние записи удалены транзакционно: 4 заявки, 9 заданий (включая автоматически созданные), 6 выездов, 2 автомобиля, история/назначения/очередь/журнал delivery. Проверки количества и отсутствия связей с исходными сущностями выполнены до удаления. Остались исходные **2 заявки, 3 задания**, 0 выездов/автомобилей/push events. Настоящая браузерная подписка QA сохранена. Первый cleanup полностью откатился из-за старого legacy guard, возвращающего NEW при DELETE с sync=on; исправлена только процедура удаления синтетических строк, production код guard не менялся.
+- Security/performance advisors выполнены. Новые sender grants и RLS проверены отдельно. Сохраняются ранее документированные definer views job_totals/settings_public, legacy mutable search_path и публичные legacy definer RPC, отключённая leaked-password protection; адресные authenticated RPC отмечаются как definer по назначению. Это не чистый security audit всей старой системы. Справочник: https://supabase.com/docs/guides/database/database-linter .
+
+Выпуск модели ответственности завершён. Дальнейшая работа — отдельный этап UI и следующие продуктовые изменения; SQL/merge/deploy этого выпуска повторно не выполнять. Для пользовательского smoke открыть рабочий сайт, проверить build b1a2110 и при необходимости включить уведомления на рабочем домене: QA-подписка другого домена не переносится автоматически.
