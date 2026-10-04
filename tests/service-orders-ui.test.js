@@ -8,6 +8,68 @@ beforeEach(()=>{win=new Window();doc=win.document;stock=[];works=[];taskProfiles
  const db={from:table=>{const data=table==='jobs'?[{id:job,clients:{name:'Клиент'},at_depot:false}]:table==='service_orders'?[structuredClone(order)]:table==='stock_catalog'?structuredClone(stock):table==='work_catalog'?structuredClone(works):table==='settings'?[{tariff_profiles:structuredClone(taskProfiles)}]:[];const b={select:query=>{if(table==='service_orders')selectCalls.push(query);return b;},is:()=>b,order:()=>b,eq:()=>b,not:()=>b,limit:()=>b,single:()=>{if(table==='settings'){settingsCalls++;if(!ctx.canWrite())return Promise.resolve({data:null,error:{message:'Cannot coerce the result to a single JSON object'}});}return Promise.resolve({data:data[0],error:null});},then:(resolve,reject)=>Promise.resolve({data,error:null}).then(resolve,reject)};return b;},rpc:async(fn,args)=>{rpcCalls.push({fn,args});return {data:fn==='service_order_save_one'?'order1':3,error:null};}};
  ctx={db:()=>db,canWrite:()=>true,role:()=>ctx.canWrite()?'admin':'engineer',userId:()=>person,profiles:()=>[{id:person,full_name:'Анна',role:'engineer',active:true}],ensureRefs:async()=>{},isPhone:()=>false,wireDrag:vi.fn(),notify:vi.fn(),showBoard:vi.fn(),showOrder:vi.fn(),openJob:vi.fn(),openTrip:vi.fn(),tripStatus:s=>s,confirmLeave:()=>false,reason:async()=>null};ui=createServiceOrders(ctx);ui.init();});
 afterEach(async()=>{await win.happyDOM.close();vi.unstubAllGlobals();});
+it('explains stage prerequisites before calling the server and prevents closing over an active shared trip',async()=>{
+ order.status='draft';order.engineer_ids=[];order.lead_engineer=null;await ui.open('order1');
+ expect(doc.querySelector('[data-order-next="assigned"]').disabled).toBe(true);
+ expect(doc.querySelector('[data-order-next="assigned"]').title).toContain('команда');
+ order.status='review';order.service_order_items[0].done_qty=2;
+ order.trip_service_orders=[{trips:{id:'shared-trip',status:'in_progress',deleted_at:null}}];
+ await ui.open('order1');expect(doc.querySelector('[data-order-next="completed"]').disabled).toBe(true);
+ expect(doc.querySelector('[data-order-next="completed"]').title).toContain('связанные выезды');
+ order.trip_service_orders[0].trips.status='done';await ui.open('order1');
+ expect(doc.querySelector('[data-order-next="completed"]').disabled).toBe(false);
+});
+it('does not count transferred or voided work and material lines as completed work',async()=>{
+ order.service_order_items=[
+  {id:'full',kind:'work',title:'Full',planned_qty:2,done_qty:2,transferred_qty:0},
+  {id:'carry',kind:'work',title:'Carry',planned_qty:2,done_qty:0,transferred_qty:2},
+  {id:'partial',kind:'work',title:'Partial',planned_qty:2,done_qty:1,transferred_qty:1},
+  {id:'material',kind:'material',planned_qty:4,done_qty:4},
+  {id:'void',kind:'work',planned_qty:1,done_qty:0,request_finance_void_event_id:'void'}
+ ];await ui.board();
+ const text=doc.querySelector('.kcard').textContent;
+ expect(text).toContain('1 из 3 работ выполнено');expect(text).toContain('частично 1');
+ expect(text).toContain('остаток перенесён по 2 работам');expect(text).toContain('материалов использовано 1 из 1');
+});
+it('opens the source request even from the global task board and clears a stale request scope',async()=>{
+ await ui.open('order1',job);await ui.open('order1');
+ expect(doc.getElementById('orderBack').textContent).toBe('Диспетчер → задания');
+ doc.getElementById('orderRequest').click();expect(ctx.openJob).toHaveBeenCalledWith(job);
+});
+it('keeps the request filter when opening a task from its filtered board',async()=>{
+ await ui.open('order1',job);await ui.board();
+ await doc.querySelector('[data-order-open]').onclick({stopPropagation(){}});
+ expect(doc.getElementById('orderBack').textContent).toBe('Заявка → задания');
+});
+it('shows task children immediately inside a request while keeping kanban children collapsed',async()=>{
+ doc.body.insertAdjacentHTML('beforeend','<section id="jobOrders"></section>');
+ await ui.requestPanel(job);expect(doc.querySelector('#jobOrders details').open).toBe(true);
+ expect(doc.querySelector('#jobOrders [data-order-new]').textContent).toContain('Создать задание');
+});
+it('does not open a task or load its data when the trip leave guard is declined',async()=>{
+ await ui.open('order1');ctx.beforeOpen=vi.fn(()=>false);ctx.ensureRefs=vi.fn();
+ await ui.open(null,job);expect(ctx.beforeOpen).toHaveBeenCalledOnce();
+ expect(ctx.ensureRefs).not.toHaveBeenCalled();expect(doc.querySelector('h2').textContent).toBe('Задание №1');
+});
+it('guards expense links and disables stage actions while the task result is unsaved',async()=>{
+ ctx.tripCostSummary=vi.fn(async()=>[{trip_id:'trip1',distance_cost:120}]);ctx.confirmLeave=vi.fn(()=>false);
+ await ui.open('order1');await new Promise(r=>setTimeout(r,0));
+ doc.querySelector('[data-result-qty]').value='1';doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));
+ expect(doc.querySelector('[data-order-next="review"]').disabled).toBe(true);
+ expect(doc.querySelector('[data-order-next="review"]').textContent).toBe('Передать на проверку');
+ doc.querySelector('#orderTripCostAllocation [data-order-trip]').click();
+ expect(ctx.confirmLeave).toHaveBeenCalledOnce();expect(ctx.openTrip).not.toHaveBeenCalled();expect(ui.isDirty()).toBe(true);
+});
+it('keeps unavailable plan controls disabled after a failed save',async()=>{
+ await ui.open(null);expect(doc.getElementById('orderItemAdd').disabled).toBe(true);
+ await doc.getElementById('orderSave').onclick();
+ expect(doc.getElementById('orderError').textContent).toContain('Выбери одну заявку');
+ expect(doc.getElementById('orderItemAdd').disabled).toBe(true);expect(doc.getElementById('orderMaterialAdd').disabled).toBe(true);
+});
+it('does not offer a carry when there is no available remaining work',async()=>{
+ order.service_order_items[0].done_qty=2;await ui.open('order1');
+ expect(doc.getElementById('orderCarry').disabled).toBe(true);
+});
 it('keeps kanban columns and shows the originating request name',async()=>{await ui.board();expect(doc.querySelectorAll('.kcol')).toHaveLength(5);expect(doc.querySelector('.kcard').dataset.kid).toBe('order1');expect(doc.querySelector('.kcard').textContent).toContain('Заявка: Клиент');expect(ctx.wireDrag).toHaveBeenCalledOnce();});
 it('counts only visible, non-deleted linked trips on engineer task cards',()=>{expect(visibleTripCount({trip_service_orders:[{trip_id:'hidden',trips:null},{trip_id:'deleted',trips:{id:'deleted',deleted_at:'2026-09-01'}},{trip_id:'visible',trips:{id:'visible',deleted_at:null}}]})).toBe(1);});
 it('loads optional provenance columns without coupling the screen to a specific schema version',async()=>{order.service_order_items[0].legacy_job_work_id='legacy-work';await ui.board();expect(selectCalls[0]).toContain('service_order_items(*)');expect(doc.querySelector('.kcard').textContent).toContain('1 исторических строк, факт не переносился');});
