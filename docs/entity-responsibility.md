@@ -146,3 +146,12 @@ Production и Pages пока не изменены. PR остаётся draft д
 - Пользователь предоставил контакт knd@dlight.com.ua. Генератор один раз создал независимые QA PUSH_SECRET/VAPID_KEYS/VAPID_CONTACT=mailto:knd@dlight.com.ua в игнорируемом .qa-push/edge-secrets.env; ключи не печатались и не добавлены в git. Файл 0600; P-256 и согласованность public/private JWK проверены. Повторно не генерировать и не заменять существующие ключи.
 - Matching VITE_VAPID_PUBLIC записан в игнорируемый .env.local; sites-preview запущен с этой конфигурацией. Browser application gate не закрыт этим запуском.
 - edge-secrets.env подготовлен для пользователя как приватный файл; Dashboard QA Secrets доступен в сохранённой вкладке 2 и пока показывает отсутствие custom secrets. Следующий шаг — пользователь вручную вводит/сохраняет эти три значения в QA Dashboard согласно browser credential handoff policy. Нельзя считать секреты установленными до свежей проверки списка/подписки/реальной доставки.
+
+
+## QA secrets verified and sender smoke, 04.10.2026
+
+- После пользовательского сохранения Dashboard QA Secrets обновлён. В cbwgqimrnogoahuqvrrw присутствуют PUSH_SECRET, VAPID_KEYS, VAPID_CONTACT; все три SHA256 digest совпали с локальной независимой конфигурацией. Значения не читались из Dashboard и не печатались.
+- Разовый QA push-send?kind=entity, используя локальный PUSH_SECRET без печати URL/секрета, вернул HTTP 200: due=0, sent=0, gone=0, failed=0, record_failed=0. Ключи импортируются и sender RPC работает. Это smoke конфигурации, не доказательство фактической доставки. push_subs=0.
+- sites-preview снова запущен с matching VITE_VAPID_PUBLIC. Новая штатная вкладка HTTP предпросмотра загрузилась; отказ доступа к error URL не обходился. QA URL/public key восстановлены через экран ?cfg=1, после сброса браузера override отсутствовал. В приложение ещё не входили, production не использовался для QA авторизации.
+- browserAuth на видимых auEmail/auPass дважды вернул locator_invalid (повтор после свежей проверки формы/handle). Низкоуровневый ввод credentials не выполнялся. Приложение передано для ручного входа под прежним QA-инженером qa-replay-20260928@dlight.test. Снимок docs/qa-resumed-login-20261004.jpg; сохранить вкладку 3 handoff для продолжения.
+- После входа следующий шаг — настоящая browser subscription и фактическая доставка назначения/вмешательства; затем остаточный ручной график/перенос трека. В production бесплатный тариф без scheduled backup, нужен отдельный полный backup перед миграцией. PR/production release gate пока открыт.
