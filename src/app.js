@@ -6123,9 +6123,27 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('pushOverlay')?.
 // воркера не было вовсе — а вместе с ним и кэша оболочки. Инлайн, а не
 // здесь, потому что этот файл может и не выполниться (не загрузился
 // leaflet, упала строка выше) — а кэш нужен именно в такие моменты.
+let pushBusy=false;
+async function pushWait(promise,stage,ms=15000){
+  let timer;
+  try{
+    return await Promise.race([promise,new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(new Error(stage+': браузер не ответил. Перезагрузи страницу и повтори.')),ms);
+    })]);
+  }finally{ clearTimeout(timer); }
+}
+async function getPushRegistration(){
+  const reg=await pushWait(navigator.serviceWorker.register('sw.js'),'Регистрация service worker');
+  if(!reg.active){
+    await pushWait(navigator.serviceWorker.ready,'Активация service worker');
+    if(!reg.active) throw new Error('Service worker приложения не активирован. Перезагрузи страницу.');
+  }
+  swReg=reg;
+  return reg;
+}
 async function initPush(){
   const st=$('pushState'), help=$('pushHelp');
-  if(!st) return;
+  if(!st || pushBusy) return;
   if(!('serviceWorker' in navigator) || !('PushManager' in window)){
     st.textContent=window.isSecureContext?'Браузер не умеет пуш.':'Для уведомлений открой приложение по HTTPS.';
     if(isIOS() && !isStandalone()){
@@ -6135,17 +6153,19 @@ async function initPush(){
     return;
   }
   try{
-    // Воркер уже зарегистрирован инлайн-скриптом — здесь только дожидаемся.
-    swReg=await navigator.serviceWorker.ready.catch(()=>null)
-       || await navigator.serviceWorker.register('sw.js');
-    const sub=await swReg.pushManager.getSubscription();
+    st.textContent='Проверяем подписку…';
+    const reg=await getPushRegistration();
+    const sub=await pushWait(reg.pushManager.getSubscription(),'Чтение подписки');
+    if(pushBusy) return;
+    $('pushErr').textContent='';
     setPushUI(!!sub);
     // Подписки на iOS умеют молча протухать после пары недель простоя.
     // Раз уже подписаны — тихо перезаливаем на сервер при каждом входе.
     if(sub) sendSub(sub).catch(()=>{});
   }catch(e){
-    st.textContent='Service worker не поднялся.';
-    help.textContent='Проверь, что sw.js лежит рядом с dlight-app.html и сайт открыт по https.';
+    if(pushBusy) return;
+    st.textContent='Не удалось проверить подписку.';
+    help.textContent='Попробуй включить уведомления кнопкой ниже.';
     $('pushErr').textContent=e.message||String(e);
   }
 }
@@ -6172,17 +6192,35 @@ async function sendSub(sub){
 }
 
 if($('pushOn')) $('pushOn').onclick=async ()=>{
+  if(pushBusy) return;
+  pushBusy=true;
+  $('pushOn').disabled=true;
+  $('pushOff').disabled=true;
   $('pushErr').textContent='';
+  let stage='Разрешение уведомлений';
   try{
-    if(!swReg) swReg=await navigator.serviceWorker.register('sw.js');
-    // Разрешение просим строго по клику: спросишь при загрузке — человек
-    // отмахнётся, и во второй раз спросить уже не дадут.
-    const perm=await Notification.requestPermission();
-    if(perm!=='granted'){ $('pushErr').textContent='Разрешение не выдано. Включить можно в настройках сайта в браузере.'; return; }
-    const sub=await swReg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(VAPID_PUBLIC)});
-    await sendSub(sub);
+    $('pushState').textContent='Разреши уведомления в запросе браузера…';
+    // Запрос разрешения запускаем непосредственно по клику, до ожидания воркера.
+    const perm=await pushWait(Notification.requestPermission(),stage,30000);
+    if(perm!=='granted') throw new Error('Разрешение не выдано. Включить можно в настройках сайта в браузере.');
+    stage='Service worker';
+    $('pushState').textContent='Подготавливаем уведомления…';
+    const reg=await getPushRegistration();
+    stage='Подписка браузера';
+    $('pushState').textContent='Создаём подписку браузера…';
+    const sub=await pushWait(reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(VAPID_PUBLIC)}),stage,30000);
+    stage='Сохранение подписки';
+    $('pushState').textContent='Сохраняем подписку…';
+    await pushWait(sendSub(sub),stage);
     setPushUI(true); showToast('Уведомления включены');
-  }catch(e){ $('pushErr').textContent=e.message||String(e); }
+  }catch(e){
+    $('pushState').textContent='Уведомления не включены.';
+    $('pushErr').textContent=stage+': '+(e.message||String(e));
+  }finally{
+    pushBusy=false;
+    $('pushOn').disabled=false;
+    $('pushOff').disabled=false;
+  }
 };
 
 if($('pushOff')) $('pushOff').onclick=async ()=>{
