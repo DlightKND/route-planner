@@ -2,6 +2,8 @@
 
 Контрольная точка: `entity-responsibility.md`. PR: https://github.com/DlightKND/route-planner/pull/129.
 
+**Статус 04.10.2026: выпуск завершён.** Production migration 20261004180339, push-send v10, merge f9f82f6e7a7fa80aa3883c4c98a8084df703ad34, успешные Actions #490 и Pages build b1a2110. QA fixture очищены, исходные 2 заявки/3 задания сохранены. Шаги ниже — исторический runbook, не инструкция повторного применения. Итоговые доказательства и границы проверки находятся в последнем разделе entity-responsibility.md.
+
 ## QA push
 
 Подготовка выполняется в checkout QA, используя отдельные тестовые ключи. Генератор не печатает секреты, не заменяет существующий каталог и создаёт файлы с правами 0600. `VAPID_KEYS` использует формат publicKey/privateKey JWK библиотеки @negrel/webpush. Источник формата: https://jsr.io/@negrel/webpush/doc.
