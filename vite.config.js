@@ -47,6 +47,10 @@ function buildStamp() {
 // ровно это и давало серый экран: HTML грузился, а бандл с картой нет.
 export default defineConfig({
   base: './',
+  server: {
+    host: '0.0.0.0',
+    allowedHosts: ['terminal.local'],
+  },
   define: {
     // Имя нарочно необщеупотребимое: define подменяет текст, и короткое
     // слово вроде __BUILD__ рискует попасть внутрь чужой строки.

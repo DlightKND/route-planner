@@ -2338,6 +2338,7 @@
     <!-- Шестерёнка одним контуром: прежняя «звёздочка» из отдельных чёрточек
          на 18–20 px рассыпалась на несвязанные штрихи и читалась как солнце. -->
     <button class="nav-i" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.6-1.25-1.8-3.1-1.9.8a8 8 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.45a8 8 0 0 0-2.6 1.5L6 6.15l-1.8 3.1L5.8 10.5a7.8 7.8 0 0 0 0 3l-1.6 1.25L6 17.85l1.9-.8a8 8 0 0 0 2.6 1.5l.3 2.45h3.6l.3-2.45a8 8 0 0 0 2.6-1.5l1.9.8 1.8-3.1-1.6-1.25z"/></svg><span>Настройки</span></button>
+    <button class="nav-i" id="pushBtn" title="Уведомления"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span>Уведомления</span></button>
     <button class="nav-i" id="themeBtn" title="Внешний вид"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg><span>Вид</span></button>
     <button class="nav-i" id="cfgBtn" title="Подключение"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 7h14M5 17h14"/></svg><span>Связь</span></button>
     <button class="nav-i" id="logoutBtn" style="display:none" title="Выйти"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h10"/></svg><span>Выйти</span></button>
@@ -2627,6 +2628,7 @@
         <div class="ph-grid" id="jbPhotoList"></div>
       </div>
     </div>
+    <section class="card trip-wide" id="jobResponsibilitySection" hidden></section>
     <section class="card trip-wide entity-activity" id="jobActivitySection" hidden><h3>История заявки и комментарии</h3><div id="jobActivity"></div></section>
     <!-- Подпись заказчика. Отдельным окном при закрытии заявки: это
          последний шаг, и он должен быть один на экране, без соседей. -->
@@ -2747,6 +2749,7 @@
     </div>
     <div id="tpHistoryPane" role="tabpanel" aria-labelledby="tpTabHistory" data-trip-pane="history" hidden>
       <div id="tpHistoryLog"></div>
+      <section class="card trip-wide" id="tripResponsibilitySection" hidden></section>
       <section class="card trip-wide entity-activity" id="tripActivitySection" hidden><h3>Комментарии к выезду</h3><div id="tripActivity"></div></section>
     </div>
   </div></div>
@@ -2895,12 +2898,6 @@
       <div class="row" style="margin-top: var(--sp-3)"><button class="btn sm amber grow" id="vhAdd">Добавить машину</button><button class="btn sm ghost" id="vhCancel" style="display:none">Отмена</button></div>
       <div class="err" id="vhErr"></div>
     </div>
-    <div class="card" data-sec-panel="tariffs"><h3 class="cardhead">Уведомления на телефон <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Пуш о выезде в день начала. Настраивается на каждом устройстве отдельно.</span></span></h3>
-      <div id="pushState" class="hint" style="margin-top: var(--sp-3)">—</div>
-      <div class="row" style="margin-top: var(--sp-3)"><button class="btn sm amber" id="pushOn">Включить на этом устройстве</button><button class="btn sm ghost" id="pushOff" style="display:none">Выключить</button></div>
-      <div id="pushHelp" class="hint" style="margin-top: var(--sp-3)"></div>
-      <div class="err" id="pushErr"></div>
-    </div>
     <div class="card" data-sec-panel="users" style="display:none"><h3 class="cardhead">Сотрудники и роли <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Сотрудник связывается с учётной записью Supabase. Укажи должность и прямого руководителя; сотрудник не может руководить сам собой или подчиняться человеку без активной учётной записи.</span></span></h3>
       <div class="hint" style="margin-top:var(--sp-2)">Имя, должность, прямой руководитель и роль. Руководитель может быть инженером, если так устроена внутренняя структура.</div>
       <div id="usersList" style="margin-top: var(--sp-3)"></div>
@@ -2996,6 +2993,16 @@
   <h3 id="promptTitle">Ввод</h3>
   <div id="promptFields"></div>
   <div class="row" style="margin-top: var(--sp-5)"><button class="btn ghost grow" id="promptNo">Отмена</button><button class="btn amber grow" id="promptYes">Сохранить</button></div>
+</div></div>
+
+<div class="overlay" id="pushOverlay" role="dialog" aria-modal="true" aria-labelledby="pushTitle"><div class="modal s">
+  <h3 id="pushTitle">Уведомления на этом устройстве</h3>
+  <p class="hint">Назначения, изменения и вмешательства по вашим заявкам, заданиям и выездам. Настраиваются отдельно на каждом устройстве.</p>
+  <div id="pushState" class="hint" style="margin-top:var(--sp-3)">—</div>
+  <div class="row" style="margin-top:var(--sp-3)"><button class="btn sm amber" id="pushOn">Включить на этом устройстве</button><button class="btn sm ghost" id="pushOff" style="display:none">Выключить</button></div>
+  <div id="pushHelp" class="hint" style="margin-top:var(--sp-3)"></div>
+  <div class="err" id="pushErr"></div>
+  <div class="row" style="margin-top:var(--sp-4)"><button class="btn ghost grow" id="pushClose">Закрыть</button></div>
 </div></div>
 
 <!-- connection -->

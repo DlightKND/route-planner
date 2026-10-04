@@ -123,7 +123,8 @@ export function calculateTripCostAllocation({trip,track,stays=[],taskOrderIds=[]
 
   const fixed=[['per_diem',snapshot.cDay,'суточные не распределяются по километрам'],['overnight',snapshot.cNight,'ночлег требует отдельного правила']];
   for(const [cost_type,value,basis] of fixed){if(round(value)!==0)rows.push({cost_type,service_order_id:null,quantity:1,unit_rate:round(value),amount:round(value),basis,source_ref:'trip_economics_snapshot'});}
-  const costComputed=round(snapshot.costComputed),costTotal=round(snapshot.cost),adjustment=round(costTotal-costComputed);
+  const costComputed=round(snapshot.costComputed),costTotal=round(snapshot.cost);
+  const adjustment=finite(trip.overrides?.cost)&&trip.overrides.cost!==''?round(costTotal-costComputed):0;
   if(adjustment!==0)rows.push({cost_type:'manual_adjustment',service_order_id:null,quantity:1,unit_rate:adjustment,amount:adjustment,
     basis:trip.overrides?.cost_reason||'старое ручное переопределение без указанного основания',source_ref:'cost_override'});
 
