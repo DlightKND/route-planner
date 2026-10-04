@@ -14,6 +14,8 @@ import { mountEntityResponsibility } from './entity-responsibility.js';
 import { loadEntityPeople } from './entity-people.js';
 import { configureTripPlanStatus } from './trip-plan-status.js';
 import './entity-activity.css';
+import './visual-system.css';
+import { loadChartHTML } from './dashboard-chart.js';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
@@ -134,8 +136,8 @@ let theme={mode:'dark',accent:'#ffe100'};
 // ---------- theme ----------
 const THEMES={
   dark:{
-    '--bg':'#101114', '--panel':'#1a1c20', '--panel-2':'#24262b', '--line':'#33373e',
-    '--ink':'#e7e9ee', '--ink-dim':'#9aa1ad', '--ink-faint':'#6b7280', 
+    '--bg':'#111418', '--panel':'#1b2027', '--panel-2':'#252c35', '--line':'#465161',
+    '--ink':'#eef2f6', '--ink-dim':'#b8c1cd', '--ink-faint':'#98a4b4', '--cyan':'#6ccbd5', '--green':'#66d99a', '--red':'#ff8585', '--warning':'#f6bc6a', '--danger-ink':'#141414',
     '--accent':'#ffe100', '--accent-ink':'#ffe100', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)',
     // Указатель «где я» и кольцо фокуса — разные задачи, и в тёмной теме
     // их закрывает один и тот же жёлтый, а в светлой нет: жёлтая линия
@@ -144,20 +146,8 @@ const THEMES={
     '--accent-line':'#ffe100', '--focus':'#ffe100',
     '--nav-bg':'#24262b', '--nav-ink':'#ffe100',
     '--shadow-sm':'0 2px 8px rgba(0,0,0,.20)', '--shadow-md':'0 6px 18px rgba(0,0,0,.30)', '--shadow-lg':'0 12px 28px rgba(0,0,0,.38)',
-    // Матовое стекло. Тон СВОЙ У КАЖДОЙ поверхности и равен её же сплошному
-    // цвету: стекло делает панель прозрачной, а не перекрашивает её. Общий
-    // тон на всё выглядел бы как смена темы — где-то светлее, где-то темнее,
-    // чего никто не просил.
-    //   --glass-panel — для того, что раньше было --panel (рельс, модалки,
-    //                   всплывашки, тосты, панель карты);
-    //   --glass-bg    — для того, что было --bg (липкие шапки разделов).
-    //
-    // Плотность ОДНА на всё приложение: 0.76. Раньше её было две — 0.58
-    // у рельса и модалок и 0.90 у панели карты, — и рядом на одном экране
-    // они читались как разный материал: панель почти сплошная, рельс рядом
-    // с ней заметно темнее. Стекло, у которого плотность зависит от места,
-    // перестаёт быть стеклом. 0.76 — середина между этими двумя.
-    '--glass-panel':'rgba(26,28,32,0.76)', '--glass-bg':'rgba(16,17,20,0.76)'
+    // Почти непрозрачные поверхности сохраняют контраст текста над картой.
+    '--glass-panel':'rgba(27,32,39,0.96)', '--glass-bg':'rgba(17,20,24,0.96)'
   },
   light:{
     // Светлая тема была вдвое площе тёмной: bg → panel-2 давали контраст
@@ -166,8 +156,8 @@ const THEMES={
     // и всё сливалось в одну заливку. Шаги подобраны по контрастам тёмной
     // темы, а нейтраль уведена из синевы в тёплую: холодный серый спорил
     // с фирменным жёлтым.
-    '--bg':'#e2e6ec', '--panel':'#ffffff', '--panel-2':'#f2f5f9', '--line':'#ccd4de',
-    '--ink':'#0f141b', '--ink-dim':'#4e5866', '--ink-faint':'#7d8896',
+    '--bg':'#eef1f4', '--panel':'#ffffff', '--panel-2':'#f4f6f8', '--line':'#c8d0da',
+    '--ink':'#18212b', '--ink-dim':'#526071', '--ink-faint':'#647184', '--cyan':'#0c6775', '--green':'#147344', '--red':'#aa2d2d', '--warning':'#855000', '--danger-ink':'#ffffff',
     // Указатель остаётся фирменным жёлтым — под тёмным текстом он читается.
     // Фокус и выделение уходят в чернила: их работа — быть заметными,
     // а не фирменными. Горчица #b39400 давала на белом 2.94 — ниже порога
@@ -179,10 +169,8 @@ const THEMES={
     '--shadow-sm':'0 1px 2px rgba(15,20,27,.07), 0 2px 8px rgba(15,20,27,.07)',
     '--shadow-md':'0 4px 8px rgba(15,20,27,.07), 0 8px 20px rgba(15,20,27,.09)',
     '--shadow-lg':'0 8px 16px rgba(15,20,27,.07), 0 18px 40px rgba(15,20,27,.14)',
-    // Те же цвета, что у сплошных поверхностей светлой темы: #ffffff и
-    // #e2e6ec. Плотность чуть выше тёмной — на светлом фоне тонкая плёнка
-    // слабее отделяет панель от подложки.
-    '--glass-panel':'rgba(255,255,255,0.76)', '--glass-bg':'rgba(226,230,236,0.76)'
+    // Та же нейтральная палитра и плотность 0.96, что в тёмной теме.
+    '--glass-panel':'rgba(255,255,255,0.96)', '--glass-bg':'rgba(238,241,244,0.96)'
   }
 };
 function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
@@ -2798,8 +2786,7 @@ async function renderFeed(box,o){
     ganttPlan.blocks.forEach(b=>{ const jd=b.jobDays||{};
       (b.jobIds||[]).forEach(id=>{ const d=jd[id]||b.workTo; if(d) dayJobs[d]=(dayJobs[d]||0)+1; }); });
     const engN=o.mine?1:engineersCount(plan);
-    const dayCap=shift*engN;
-    // В личном графике дорожка одна, поэтому чип может честно показать
+      // В личном графике дорожка одна, поэтому чип может честно показать
     // порядок внутри смены (дорога → работа → дорога), а не только суммы
     // двух цветов. Для отдела с несколькими инженерами оставляем сводную
     // шкалу: их параллельные часы в одну временную ось складывать нельзя.
@@ -3115,8 +3102,8 @@ function defaultRange(kind){
 function loadRangeState(kind){try{const v=JSON.parse(localStorage.getItem('dl_range_'+kind)||'null');if(v&&v.from&&v.to)return v;}catch(e){}return defaultRange(kind);}
 const dashRanges={rev:loadRangeState('rev'),load:loadRangeState('load'),gt:loadRangeState('gt')};
 function saveRange(kind){try{localStorage.setItem('dl_range_'+kind,JSON.stringify(dashRanges[kind]));}catch(e){}}
-function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<div class="rangebar" data-rk="'+kind+'">'
-  +'<input type="date" data-rf value="'+esc(r.from)+'"><span class="rdash">—</span><input type="date" data-rt value="'+esc(r.to)+'">'
+function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<div class="rangebar" role="group" aria-label="'+(kind==='gt'?'Период графика':kind==='load'?'Период загрузки':'Период финансов и работ')+'" data-rk="'+kind+'">'
+  +'<input type="date" aria-label="Начало периода" data-rf value="'+esc(r.from)+'"><span class="rdash">—</span><input type="date" aria-label="Конец периода" data-rt value="'+esc(r.to)+'">'
   +'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
   +meta.lengths.map(x=>'<button data-rlen="'+x[0]+'">'+x[1]+'</button>').join('')+'</span></div>';}
 function setRange(kind,from,to){if(!from||!to)return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderAttention();}else renderDashboard();}
@@ -3150,13 +3137,13 @@ function dashEngineersSave(){try{localStorage.setItem('dl_dash_engineers',JSON.s
 function dashEngineerList(){return (profilesList||[]).filter(p=>p&&p.role==='engineer'&&p.active!==false&&String(p.full_name||'').trim());}
 function dashEnsureEngineers(){const all=dashEngineerList();if(!dashEngineers.size)all.forEach(p=>dashEngineers.add(String(p.id)));else{const valid=new Set(all.map(p=>String(p.id)));dashEngineers=new Set(Array.from(dashEngineers).filter(id=>valid.has(String(id))));if(!dashEngineers.size)all.forEach(p=>dashEngineers.add(String(p.id)));}return all;}
 function dashTripInScope(t){const ids=[t.lead_engineer].concat(t.engineer_ids||[]).filter(Boolean).map(String);return ids.some(id=>dashEngineers.has(id));}
-function engineerScopeHtml(){const all=dashEnsureEngineers(),on=all.length&&dashEngineers.size===all.length;if(all.length<=5)return '<div class="echips"><button class="echip all'+(on?' on':'')+'" data-eall>все инженеры</button>'+all.map(p=>'<button class="echip'+(dashEngineers.has(String(p.id))?'':' off')+'" data-eng="'+p.id+'"><i class="dot" style="background:'+esc(p.color||'var(--cyan)')+'"></i>'+esc(p.full_name)+'</button>').join('')+'</div>';
-  return '<div class="echips"><button class="echip all" data-epop>Инженеры · '+dashEngineers.size+' из '+all.length+'</button><div class="ctxmenu engineer-pop" hidden><button data-eall>Все</button>'+all.map(p=>'<button class="'+(dashEngineers.has(String(p.id))?'':'off')+'" data-eng="'+p.id+'">'+esc(p.full_name)+'</button>').join('')+'</div></div>';}
+function engineerScopeHtml(){const all=dashEnsureEngineers(),on=all.length&&dashEngineers.size===all.length;if(all.length<=5)return '<div class="echips"><span class="scope-label">Команда статистики</span><button class="echip all'+(on?' on':'')+'" data-eall>все инженеры</button>'+all.map(p=>'<button class="echip'+(dashEngineers.has(String(p.id))?'':' off')+'" aria-pressed="'+dashEngineers.has(String(p.id))+'" data-eng="'+p.id+'"><i class="dot" style="background:'+esc(p.color||'var(--cyan)')+'"></i>'+esc(p.full_name)+'</button>').join('')+'</div>';
+  return '<div class="echips"><span class="scope-label">Команда статистики</span><button class="echip all" data-epop>Инженеры · '+dashEngineers.size+' из '+all.length+'</button><div class="ctxmenu engineer-pop" hidden><button data-eall>Все</button>'+all.map(p=>'<button class="'+(dashEngineers.has(String(p.id))?'':'off')+'" aria-pressed="'+dashEngineers.has(String(p.id))+'" data-eng="'+p.id+'">'+esc(p.full_name)+'</button>').join('')+'</div></div>';}
 function metricDelta(plan,fact,dir){if(fact==null||!(plan>0))return {pct:null,cls:'nofact',text:'—'};const pct=(fact-plan)/plan*100;if(Math.abs(pct)<5)return {pct,cls:'flat',text:deltaSign(pct)+Math.abs(pct).toFixed(1)+'%'};const good=dir==='up'?pct>0:pct<0;return {pct,cls:good?'good':'bad',text:deltaSign(pct)+Math.abs(pct).toFixed(1)+'%'};}
 function deltaSign(v){return v>1e-9?'+':v<-1e-9?'−':'±';}
-function metricRow({name,plan,fact,unit='',dir='down',sub='',single=false}){if(single)return '<div class="mrow"><div class="m-top"><span class="m-n">'+esc(name)+'</span><span class="m-v">'+esc(fact)+'<span class="m-u">'+esc(unit)+'</span></span><span class="m-d flat">одно число</span></div></div>';
+function metricRow({name,plan,fact,unit='',dir='down',sub='',single=false}){if(single)return '<div class="mrow"><div class="m-top"><span class="m-n">'+esc(name)+'</span><span class="m-v">'+esc(fact)+'<span class="m-u">'+esc(unit)+'</span></span></div></div>';
   const d=metricDelta(plan,fact,dir),fv=fact==null?'—':fmtMetric(fact),pv=fmtMetric(plan),width=fact==null?66:Math.min(100,Math.max(0,66*fact/Math.max(.0001,plan)));
-  return '<div class="mrow"><div class="m-top"><span class="m-n">'+esc(name)+'</span><span class="m-v"><span class="desktop-value">'+esc(fv)+'</span><span class="mobile-pair pair"><span class="pl">'+esc(pv)+'</span><span class="ar">→</span><span class="fc">'+esc(fv)+'</span></span><span class="m-u">'+esc(unit)+'</span></span><span class="m-d '+d.cls+'">'+esc(d.text)+'</span></div><div class="m-rail '+(fact==null?'nofact':'')+'"><i class="'+d.cls+'" style="width:'+width.toFixed(1)+'%"></i><b style="left:66%"></b></div><div class="m-sub">план '+esc(pv)+' '+esc(unit)+(sub?' · '+esc(sub):'')+'</div></div>';}
+  return '<div class="mrow"><div class="m-top"><span class="m-n">'+esc(name)+'</span><span class="m-v"><span class="desktop-value"><span class="m-u">Факт </span>'+esc(fv)+'</span><span class="mobile-pair pair"><span class="pl">'+esc(pv)+'</span><span class="ar">→</span><span class="fc">'+esc(fv)+'</span></span><span class="m-u">'+esc(unit)+'</span></span><span class="m-d '+d.cls+'">'+esc(d.text)+'</span></div><div class="m-rail '+(fact==null?'nofact':'')+'"><i class="'+d.cls+'" style="width:'+width.toFixed(1)+'%"></i><b style="left:66%"></b></div><div class="m-sub">План '+esc(pv)+' '+esc(unit)+(sub?' · '+esc(sub):'')+'</div></div>';}
 function fmtMetric(v){return (+v||0).toLocaleString('ru-RU',{maximumFractionDigits:1});}
 let dashOrder=(function(){
   try{ const v=JSON.parse(localStorage.getItem('dl_dash_order')||'null');
@@ -3233,7 +3220,7 @@ function wireDashDrag(box){
 // экран, а остальные приходится искать прокруткой. Состояние живёт в том же
 // наборе folded: это положение рук, а не данные.
 function foldxBtn(key,label){
-  return '<button class="foldx-btn'+(folded.has(key)?' off':'')+'" type="button" data-foldx="'+esc(key)+'">'
+  return '<button class="foldx-btn'+(folded.has(key)?' off':'')+'" type="button" aria-expanded="'+!folded.has(key)+'" data-foldx="'+esc(key)+'">'
     +esc(label)+'</button>';
 }
 function foldxBox(key,html){
@@ -3242,6 +3229,7 @@ function foldxBox(key,html){
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-foldx]'); if(!b) return;
   const k=b.dataset.foldx;
+  b.setAttribute('aria-expanded',String(folded.has(k)));
   const box=document.querySelector('.foldx[data-foldxk="'+k+'"]');
   if(folded.has(k)){ folded.delete(k); b.classList.remove('off'); if(box) box.hidden=false; }
   else { folded.add(k); b.classList.add('off'); if(box) box.hidden=true; }
@@ -3293,7 +3281,7 @@ function financeCard(jb,trips){
     +'<div class="m-sub">по плану было '+fmtMetric(profitPlan)+' '+esc(cur)+' и '+fmtMetric(marginPlan)+'%</div><div class="sect">Из чего сложилось</div>'
     +metricRow({name:'Себестоимость',plan:costPlan,fact:covered.length?costFact:null,unit:cur,dir:'down'})
     +metricRow({name:'Прибыль',plan:profitPlan,fact:covered.length?profitFact:null,unit:cur,dir:'up'})
-    +metricRow({name:'Маржа',plan:marginPlan,fact:covered.length?marginFact:null,unit:'%',dir:'up'})
+    +metricRow({name:'Маржа',plan:marginPlan,fact:covered.length&&revenue?marginFact:null,unit:'%',dir:'up'})
     +'<div class="sect">Оплачиваемость</div>'+metricRow({name:'Выручка · договорная',fact:fmtMetric(revenue),unit:cur,single:true})
     +'<div class="foldx-h">'+breakdown+'</div></div>';
 }
@@ -3312,7 +3300,7 @@ function worksCard(jb,trips,tripOf){
   const timed=scopedTrips.filter(t=>t.started_at&&t.finished_at),tripPlanH=timed.reduce((n,t)=>n+Math.max(0,(utcOf(t.date_to||t.date_from)-utcOf(t.date_from))/36e5+gtWindowHours()),0),tripFactH=timed.reduce((n,t)=>n+Math.max(0,(new Date(t.finished_at)-new Date(t.started_at))/36e5),0);
   const planNights=snap(scopedTrips,'nights'),factNights=timed.reduce((n,t)=>n+Math.max(0,Math.ceil((new Date(t.finished_at)-new Date(t.started_at))/DAY_MS)-1),0);
   const byst={open:0,planned:0,in_progress:0,done:0,cancelled:0};shown.forEach(j=>byst[j.status]=(byst[j.status]||0)+1);let bar='',leg='';const total=Math.max(1,shown.length);
-  WORK_STATUS_META.forEach(([status,lbl,col])=>{const n=byst[status]||0,on=workStatusVisible.has(status);if(on&&n)bar+='<i style="width:'+(n/total*100)+'%;background:'+col+'"></i>';leg+='<button type="button" class="stat-filter'+(on?'':' off')+'" data-work-status="'+status+'"><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</button>';});
+  WORK_STATUS_META.forEach(([status,lbl,col])=>{const n=byst[status]||0,on=workStatusVisible.has(status);if(on&&n)bar+='<i style="width:'+(n/total*100)+'%;background:'+col+'"></i>';leg+='<button type="button" class="stat-filter'+(on?'':' off')+'" aria-pressed="'+on+'" data-work-status="'+status+'"><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</button>';});
   const src=Array.from(new Set(withKm.map(t=>factSrcRu(t.fact_km_source)).filter(Boolean))).join(', ');
   return '<div class="card foldable f-any statuscard" data-fold="dashWork" data-dcard="work"><h3 class="cardhead">'+dashGrip('work')+'Работа в поле <span class="mc-note">'+esc(shortDate(per.from)+' — '+shortDate(per.to))+'</span></h3>'
     +rangeBar('rev')+engineerScopeHtml()+'<div class="coverage">факт по '+withHours.length+' из '+scopedTrips.length+' выездов</div>'
@@ -3368,14 +3356,14 @@ function loadCard(list,tripOf,tripById,tripOrd){
   const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
   const rowHtml=(nm,r,cap,cls)=>{
     const t=r.w+r.d, p=cap>0?t/cap:0, pct=p*100;
-    const col=loadColor(p), fillPct=Math.min(100,p/1.75*100);
+    const col=p>1?'var(--red)':'var(--ink)', fillPct=Math.min(100,p/1.75*100);
     const parts=[num(r.w)+' ч работ']; if(r.d) parts.push(num(r.d)+' ч дороги');
     if(r.fKnown)parts.push('присутствие '+num(r.f)+' чел.-ч');
     parts.push(r.n+' '+plural(r.n,'заявка','заявки','заявок'));
     return '<div class="elrow'+(cls?(' '+cls):'')+'">'
       +'<div class="el-n">'+esc(nm)+'</div>'
       +'<div class="el-v" style="color:'+col+'">'+num(t)+' / '+num(cap)+' ч · '+Math.round(pct)+'%</div>'
-      +'<div class="el-t"><i class="data-fill" style="width:'+fillPct.toFixed(1)+'%;background:'+rampCss(p)+'"></i></div>'
+      +'<div class="el-t"><i class="data-fill" style="width:'+fillPct.toFixed(1)+'%;background:'+(p>1?'var(--red)':'var(--cyan)')+'"></i></div>'
       +'<div class="el-s">'+esc(parts.join(' · '))+'</div></div>';
   };
 
@@ -3400,7 +3388,6 @@ function loadCard(list,tripOf,tripById,tripOrd){
 
   // График загрузки по дням периода. Длинный период рисуется неделями:
   // сорок столбиков шириной в волос не читаются.
-  const dayCap=shift*engN;
   // Днями рисуем до полутора месяцев, дальше — неделями: сорок столбиков
   // шириной в волос не читаются. Числа над столбиками убираем раньше — они
   // начинают переноситься в две строки и превращаются в кашу; значение
@@ -3411,28 +3398,15 @@ function loadCard(list,tripOf,tripById,tripOrd){
     let cur=null;
     for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){ const iso=isoOf(x);
       const w=weekOf(iso); if(!w) continue;
-      if(!cur||cur.key!==w.key){ cur={key:w.key,label:'н'+w.n,v:0,f:0,cap:0}; cells.push(cur); }
-      cur.cap+=dayCapacity[iso]||0;
-      cur.v+=day[iso]||0;cur.f+=factDay[iso]||0; }
+      if(!cur||cur.key!==w.key){ cur={key:w.key,label:'н'+w.n,v:0,f:0,cap:0,known:false,periodLabel:'Неделя '+w.n,from:iso,to:iso}; cells.push(cur); }
+      cur.to=iso;cur.periodLabel='Неделя '+w.n+' · '+cur.from+'–'+cur.to;cur.cap+=dayCapacity[iso]||0;
+      cur.v+=day[iso]||0;cur.f+=factDay[iso]||0;cur.known=cur.known||Object.hasOwn(factDay,iso); }
   } else {
     for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){ const iso=isoOf(x);
       const d=new Date(x).getUTCDay();
-      cells.push({key:iso,label:String(iso.slice(8)),v:day[iso]||0,f:factDay[iso]||0,cap:dayCapacity[iso]||0,we:(d===0||d===6)}); }
+      cells.push({key:iso,label:String(iso.slice(8)),v:day[iso]||0,f:factDay[iso]||0,known:Object.hasOwn(factDay,iso),cap:dayCapacity[iso]||0,we:(d===0||d===6)}); }
   }
-  const maxV=Math.max(1,...cells.map(c=>Math.max(c.v,c.f||0,c.cap)));
-  const showVals=cells.length<=16;
-  let chart='<div class="revbars loadbars'+(showVals?'':' novals')+'">';
-  cells.forEach(c=>{ const hR=c.v>0?Math.max(4,Math.round(c.v/maxV*100)):0;
-    const over=c.cap>0&&c.v>c.cap+1e-6;
-    chart+='<div class="revbar'+(c.we?' we':'')+'" title="'+esc(c.key+' · план '+num(c.v)+' ч'+(c.f?(' · факт работ '+num(c.f)+' ч'):'')+(c.cap?(' · фонд '+num(c.cap)+' ч'):''))+'">'
-      +(showVals?('<div class="rb-v">'+(c.v>0?num(c.v):'')+'</div>'):'')
-      +'<div class="rb-c">'+(c.cap>0?('<div class="rb-cap" style="height:'+Math.round(c.cap/maxV*100)+'%"></div>'):'')
-        +'<div class="rb-f data-fill vertical'+(over?' bad':'')+'" style="height:'+hR+'%;background:'+rampCss(c.cap>0?c.v/c.cap:(c.v>0?1.75:0),'0deg')+'"></div>'
-        +(c.f?'<div class="rb-fact data-fill vertical" style="height:'+Math.max(3,Math.round(c.f/maxV*100))+'%"></div>':'')+'</div>'
-      +'<div class="rb-l">'+esc(c.label)+'</div></div>'; });
-  chart+='</div>';
-  chart+='<div class="cap-note">пунктир — 100% загрузки: '+num(dayCap)+' ч в день · широкая заливка — план · тёмная узкая — записанный факт работ'
-    +(long?(' · столбик — неделя'):'')+'</div>';
+  const chart=loadChartHTML(cells,{weekly:long});
   const hzTxt=shortDate(fromIso)+'–'+shortDate(toIso);
   return '<div class="card elcard foldable f-any" data-fold="dashLoad" data-dcard="load">'
     +'<h3 class="cardhead">'+dashGrip('load')+'Загрузка отдела <span class="el-hz">'+esc(hzTxt)+'</span>'
@@ -3462,7 +3436,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   if(grid) grid.classList.remove('one-col');
   if(box) box.style.display='';
   if(seg) seg.style.display='';
-  if(attnCaps) attnCaps.textContent='Требует внимания';
+  if(attnCaps) attnCaps.textContent='График и внимание';
   box.innerHTML='<div class="shim" role="status" aria-label="Загрузка данных"></div>';
   try{
     await ensureRefs(); await loadStaffDays(); await loadFactHours();
@@ -3507,7 +3481,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   const seg=$('dashSeg'); if(!seg) return;
   seg.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return;
     const grid=document.querySelector('.dash-grid'); if(!grid) return;
-    seg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    seg.querySelectorAll('button').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b));});
     grid.classList.toggle('show-feed',b.dataset.dv==='feed');
     grid.classList.toggle('show-cards',b.dataset.dv==='cards');
   });
