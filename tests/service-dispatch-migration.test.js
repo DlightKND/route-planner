@@ -83,6 +83,7 @@ beforeAll(async()=>{
   await db.exec('alter table profiles add column full_name text');
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923212724_entity_activity_comments.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260929110000_entity_responsibility.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261004191211_independent_request_task_stages.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -314,7 +315,7 @@ it('accepts old offline notes without reverting a started request or its assignm
     // The compact PGlite fixture omits the production jobs table grants.
     await db.exec('grant select,update on jobs to authenticated; grant select,update on job_works to authenticated');
     await q("insert into profiles(id,role,active) values($1,'logist',true),($2,'engineer',true)",[id(1),id(2)]);
-    await q("update jobs set status='open',scheduled_date='2026-09-29',due_date='2026-09-30',time_window='morning',assigned_engineer=$1,engineer_ids=array[$1,$2]::uuid[],notes='current' where id=$3",[id(1),id(2),id(10)]);
+    await q("update jobs set status='in_progress',scheduled_date='2026-09-29',due_date='2026-09-30',time_window='morning',assigned_engineer=$1,engineer_ids=array[$1,$2]::uuid[],notes='current' where id=$3",[id(1),id(2),id(10)]);
     const [task]=await q("update service_orders set status='assigned',date_from='2026-09-29',date_to='2026-09-30',lead_engineer=$1,engineer_ids=array[$1]::uuid[] where seed_request_id=$2 returning id,revision",[id(2),id(10)]);
     await q("select set_config('test.uid',$1,true)",[id(2)]);
     await db.exec('set role authenticated');
@@ -406,18 +407,27 @@ it('keeps a shared active trip from being orphaned by closing or cancelling its 
   }finally{await db.exec('rollback');await db.exec('reset role');}
 });
 
-it('starts the parent request atomically with its task and leaves closed requests closed',async()=>{
+it('requires a prepared request, starts its task independently, and leaves closed requests closed',async()=>{
   await db.exec('begin');
   try{
     await q("insert into profiles(id,role,active) values($1,'engineer',true)",[id(3)]);
     const [task]=await q("update service_orders set status='assigned',date_from='2026-09-28',date_to='2026-09-28',lead_engineer=$1,engineer_ids=array[$1]::uuid[] where seed_request_id=$2 returning id,revision",[id(3),id(11)]);
     await q("insert into service_order_items(order_id,job_id,title,unit,planned_qty,kind) values($1,$2,'Диагностика','ч',1,'work')",[task.id,id(11)]);
+    await q("update jobs set status='open' where id=$1",[id(11)]);
+    await q("select set_config('test.uid',$1,true)",[id(3)]);
+    await db.exec('set role authenticated');
+    await db.exec('savepoint open_request');
+    await expect(q("select public.service_order_transition($1,$2,'in_progress','')",[task.id,task.revision])).rejects.toThrow('Сначала подготовь заявку');
+    await db.exec('rollback to savepoint open_request');
+    await db.exec('reset role');
+    expect((await q('select status,revision from service_orders where id=$1',[task.id]))[0]).toEqual({status:'assigned',revision:task.revision});
+    expect((await q("select count(*)::int n from service_order_history where order_id=$1",[task.id]))[0].n).toBe(0);
     await q("update jobs set status='planned' where id=$1",[id(11)]);
     await q("select set_config('test.uid',$1,true)",[id(3)]);
     await db.exec('set role authenticated');
     const [started]=await q("select public.service_order_transition($1,$2,'in_progress','') revision",[task.id,task.revision]);
     await db.exec('reset role');
-    expect((await q('select status from jobs where id=$1',[id(11)]))[0].status).toBe('in_progress');
+    expect((await q('select status from jobs where id=$1',[id(11)]))[0].status).toBe('planned');
     expect((await q('select status from service_orders where id=$1',[task.id]))[0].status).toBe('in_progress');
     expect((await q("select count(*)::int n from service_order_history where order_id=$1 and reason like 'Статус:%'",[task.id]))[0].n).toBe(1);
     await db.exec('set role authenticated');
