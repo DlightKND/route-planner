@@ -182,3 +182,16 @@ Production и Pages пока не изменены. PR остаётся draft д
 ### Диагностика browser subscription, 04.10.2026
 
 Пользователь сообщил Firefox Error retrieving push subscription и отсутствие реакции кнопки в Edge. QA push_subs всё ещё 0; matching public key и sw.js в HTTPS артефакте повторно подтверждены. Причина браузерного сбоя пока не установлена. Исправлены выявленные проблемы обработчика: запрос Notification permission теперь запускается непосредственно по клику до ожидания воркера; сначала регистрируется собственный sw.js, ожидание ready/subscribe/RPC ограничено; каждый шаг отображает статус, ошибка содержит шаг, параллельные нажатия блокируются. Регрессия воспроизводит зависший браузерный push-сервис и проверяет возврат управления. 490/490 тестов, lint/build/smoke/diff-check прошли. Перепубликовать тот же приватный QA Site, затем пользователь обновляет страницу и сообщает статус/ошибку. Реальная доставка и production backup остаются gate.
+
+
+### Реальная подписка и push transport, 04.10.2026
+
+- Пользователь включил уведомления в Edge на private HTTPS QA Site после обновления обработчика. push_subs содержит одну настоящую подписку bf1580b0-ec1e-4c24-8680-d7327fe5b5c7. Endpoint/auth/key не читались в вывод.
+- На синтетической заявке a3100300-0000-4000-8000-000000000071 владелец-logist через настоящие RPC назначил текущего инженера куратором и вмешался в стадию open→planned с явной причиной QA HTTPS. Добавить 071 и дочерние history/events/delivery в очистку fixture после выпуска.
+- QA sender HTTP 200: due=8, sent=8, gone=0, failed=0, record_failed=0. Шесть старых QA событий и два новых приняты реальным push-сервисом. Для 071 журнал содержит по одному delivery record для Назначено кураторство и Владелец изменил стадию; entity_push_due теперь 0. Это подтверждение transport/provider, не доказательство показа ОС пользователю. Пользователь подтвердил получение всех 8 уведомлений 04.10 в 18:00 Europe/Kyiv. Gate фактической доставки закрыт.
+- В rollback-проверке с настоящей подпиской: для нового синтетического 072 current curator due=1, после передачи away former curator due=0; для 073 actual subscribed owner не адресат curator notices. Обе записи и события откатились, реальных сообщений negative-проверка не отправляла.
+- CI code commit 504b3b6cdebcf74f7c04c7fa0b952dfc09be3667: #488 completed/success. HTTPS Site source 50338a30e0b55bd01f22aa22eb71ca31606ac711, deployment appgdep_6ac268a327948191a190866179a7ad8e succeeded.
+- Остаток: verified full production backup; свежий preflight/совместимость main; production migration/sender/frontend release; post-release checks и синтетическая очистка. Production не изменён.
+
+
+- После подтверждения доставки повторён production read-only preflight: historical_backfill_consistent=true; 17 requests, 18 canonical tasks, 7 trips, 19 approved stays / 3122 min; все восемь function guard блоков совпадают. Production не изменён. Backup API среди доступных MCP отсутствует; pg_dump и CLI credentials отсутствуют. Не считать audit резервной копией. Для следующего шага требуется полный backup из авторизованной среды или безопасное предоставление готового dump пользователем; database password не запрашивать в чат.
