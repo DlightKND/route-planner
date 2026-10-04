@@ -126,3 +126,5 @@ it('shows execution before administrative fields for engineers and keeps a reada
 it('waits for the request navigation guard and keeps the current task when it refuses',async()=>{
  ctx.beforeOpen=vi.fn(async()=>true);await ui.open('order1');const previous=doc.getElementById('orderTitle');const result=doc.querySelector('[data-result-qty]');ctx.beforeOpen=vi.fn(async()=>false);await ui.open(null,job);expect(doc.getElementById('orderTitle')).toBe(previous);expect(doc.querySelector('[data-result-qty]')).toBe(result);expect(ui.currentId()).toBe('order1');
 });
+
+it('routes changes to the base request scope through the estimate and leaves additions to separate tasks',async()=>{order.status='draft';await ui.open('order1');expect(doc.getElementById('orderItemAdd')).toBeNull();expect(doc.getElementById('orderMaterialAdd')).toBeNull();expect(doc.querySelector('.order-item-fields').hidden).toBe(true);expect(doc.getElementById('orderExtra')).not.toBeNull();order.seed_request_id=null;await ui.open('order1');expect(doc.getElementById('orderItemAdd')).not.toBeNull();expect(doc.querySelector('.order-item-fields').hidden).toBe(false);});
