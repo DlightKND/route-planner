@@ -5,6 +5,15 @@ import {PGlite} from '@electric-sql/pglite';
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 let db;const q=async(s,a=[])=>(await db.query(s,a)).rows;
 
+it('executes the dashboard task and item projections against the migrated schema',async()=>{
+  const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
+  const projection=app.match(/dashboardRead\('service_orders','([^']+)'\)/)?.[1];
+  expect(projection).toBeTruthy();
+  const [fields,itemFields]=projection.split(',service_order_items(');
+  await expect(q(`select ${fields} from public.service_orders limit 0`)).resolves.toEqual([]);
+  await expect(q(`select ${itemFields.slice(0,-1)} from public.service_order_items limit 0`)).resolves.toEqual([]);
+});
+
 beforeAll(async()=>{
   db=new PGlite();
   await db.exec(readFileSync(new URL('./fixtures/trip-workbench-base.sql',import.meta.url),'utf8'));

@@ -3415,7 +3415,7 @@ async function renderDashboard(){ const version=++dashboardRenderVersion,box=$('
     // Initialise the selected team before computing totals, including first load.
     dashEnsureEngineers();
     const [tasks,taskLinks] = await Promise.all([
-      dashboardRead('service_orders','id,status,work_mode,date_from,lead_engineer,engineer_ids,deleted_at,service_order_items(id,kind,unit,planned_qty,done_qty,transferred_qty,billable,legacy_snapshot,request_finance_void_event_id)').then(rows=>rows.filter(o=>!o.deleted_at)),
+      dashboardRead('service_orders','id,status,work_mode,date_from,lead_engineer,engineer_ids,service_order_items(id,kind,unit,planned_qty,done_qty,transferred_qty,billable,legacy_snapshot,request_finance_void_event_id)'),
       dashboardRead('trip_service_orders','trip_id,order_id')
     ]);
     const scopedIds=trips.filter(t=>['done','finished','in_progress'].includes(t.status)&&t.date_from>=dashRanges.rev.from&&t.date_from<=dashRanges.rev.to&&dashTripInScope(t)).map(t=>t.id);
