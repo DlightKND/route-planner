@@ -129,6 +129,32 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     const {active,audit}=await openScene(page,context,testInfo,role,scene);
     if(scene.name==='request')for(const action of await active.locator('.th-acts .btn:visible').all())await visibleTarget(action);
     if(scene.name==='catalog')await expect(active.locator('#catList')).toContainText('Диагностика гидросистемы');
+    if(scene.view==='catalog'){
+      const tab=active.locator('.subtab.active:visible');
+      await expect(tab).toHaveCount(1);
+      const style=await tab.evaluate(el=>{const s=getComputedStyle(el);return {radius:s.borderBottomLeftRadius,border:s.borderBottomStyle,width:parseFloat(s.borderBottomWidth)};});
+      expect(style.radius,'Catalog underline has square corners').toBe('0px');
+      expect(style.border).toBe('solid');
+      expect(style.width).toBeGreaterThanOrEqual(2);
+    }
+    if(scene.name==='map'){
+      const checkCards=async selector=>{
+        const cards=active.locator(selector);
+        await expect(cards.first()).toBeVisible();
+        for(const card of await cards.all()){
+          const style=await card.evaluate(el=>{const s=getComputedStyle(el);return {background:s.backgroundColor,borders:[s.borderTopWidth,s.borderRightWidth,s.borderBottomWidth].map(parseFloat),left:parseFloat(s.borderLeftWidth)};});
+          expect(style.background,'Map cards have a visible surface').not.toBe('rgba(0, 0, 0, 0)');
+          expect(Math.min(...style.borders),'Map cards have a complete frame').toBeGreaterThanOrEqual(1);
+          expect(style.left,'Status/client color retains its left edge').toBe(3);
+        }
+      };
+      await checkCards('#workFeed .wf-row');
+      await shot(page,testInfo,'logist-map-work-cards');
+      await active.locator('#mapScope [data-ms=all]').click();
+      await checkCards('#list .pt');
+      await shot(page,testInfo,'logist-map-directory-cards');
+      await active.locator('#mapScope [data-ms=work]').click();
+    }
     if(scene.statistics){
       await expect(active.locator('[data-dcard=fin] .finance-scope-summary')).toContainText('подтверждено 1 из 2');
       await expect(active.locator('[data-dcard=fin] .hero')).toContainText('350');
