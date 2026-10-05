@@ -1,3 +1,4 @@
+import {presenceHTML} from '../src/trip-workbench.js';
 import { describe, it, expect } from 'vitest';
 import { presenceSummary, validatePresence, planMembership, remainingStops, presenceDaily, sameEditablePlan } from '../src/core/trip-review.js';
 
@@ -55,4 +56,10 @@ describe('trip presence review', () => {
     const rows=presenceDaily([stay({stay_from:'2026-09-21T20:00:00Z',stay_to:'2026-09-21T22:00:00Z',minutes_mgr:60})],'2026-09-22','2026-09-22',new Set(['b']));
     expect(rows).toHaveLength(1);expect(rows[0].hours).toBe(.5);
   });
+});
+
+it('does not render preserved historical minutes as zero person hours when the crew is unknown',()=>{
+ const data={trip:{fact_km:416.2},jobIds:['job'],removed:[],stays:[{id:'s',status:'approved',job_id:'job',minutes_mgr:215,minutes_raw:215,crew_ids:[],crew_source:'legacy_unverified'}]};
+ const html=presenceHTML(data,[{id:'job',clients:{name:'Объект'}}],[],{readonly:true});
+ expect(html).toContain('<b>— чел.-ч</b>');expect(html).toContain('215');expect(html).toContain('Проверено · присутствие');expect(html).toContain('Подтверждённая часть присутствия');
 });

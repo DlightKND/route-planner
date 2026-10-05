@@ -20,6 +20,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('./fixtures/trip-workbench-base.sql',import.meta.url),'utf8'));
   await db.exec("create schema dlight_private; create type public.user_role as enum('admin','logist','engineer'); alter table public.profiles add column full_name text; alter table public.profiles alter column role type public.user_role using role::public.user_role; create or replace function public.user_role() returns text language sql stable security definer set search_path=public as $$ select role::text from profiles where id=auth.uid() and active $$; alter table public.profiles enable row level security; grant select,update on public.profiles to authenticated; create policy profiles_admin_all on public.profiles for all to authenticated using (public.user_role()='admin') with check (public.user_role()='admin'); create policy profiles_mgr_read on public.profiles for select to authenticated using (public.user_role() in ('admin','logist'));");
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923144500_employee_org_structure.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261005185611_account_profile_org_read.sql',import.meta.url),'utf8'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -77,4 +78,23 @@ it('denies the save RPC to engineers and anonymous callers',async()=>{
   await fails("select public.employee_org_save($1,'Сотрудник 3','engineer'::public.user_role,'',null)",[id(3)],'Только администратор');
   await q("select set_config('test.uid','',true)");
   await fails("select public.employee_org_save($1,'Сотрудник 3','engineer'::public.user_role,'',null)",[id(3)],'Только администратор');
+});
+
+it('reads only the caller, direct manager and active direct reports under an engineer session',async()=>{
+  await q("update profiles set full_name='Сотрудник '||right(id::text,1)");
+  await q('update employee_org set manager_id=$1 where profile_id=$2',[id(1),id(2)]);
+  await q('update employee_org set manager_id=$1 where profile_id=any($2::uuid[])',[id(2),[id(3),id(4)]]);
+  await as(2);
+  const org=(await q('select account_org_read() as org'))[0].org;
+  expect(org.manager.id).toBe(id(1));expect(org.reports.map(p=>p.id)).toEqual([id(3)]);
+  expect(JSON.stringify(org)).not.toContain(id(4));
+  expect(await q('select * from employee_org')).toEqual([]);
+});
+it('rejects anonymous and inactive profile reads and cannot accept another profile ID',async()=>{
+  await as(4);await fails('select account_org_read()',[],'активная');
+  await q('reset role');await q("select set_config('test.uid','',true)");
+  await fails('select account_org_read()',[],'активная');
+  expect((await q("select has_function_privilege('anon','public.account_org_read()','execute') as allowed"))[0].allowed).toBe(false);
+  expect((await q("select prosecdef,array_to_string(proconfig,',') as config from pg_proc where oid='public.account_org_read()'::regprocedure"))[0]).toEqual({prosecdef:true,config:'search_path=""'});
+  await fails('select account_org_read($1::uuid)',[id(1)],'does not exist');
 });

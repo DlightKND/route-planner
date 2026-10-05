@@ -1,3 +1,5 @@
+import { openAccountProfile, roleName, initials } from './account-profile.js';
+import { resolveFactTrack } from './core/fact-track.js';
 // Приложение DLIGHT. Пока это цельный перенос боевого index.html в сборку:
 // код тот же, но теперь это модуль: ядро подключается импортом.
 // Обработчики вешаются из JS (.onclick=), инлайновых onclick в разметке нет,
@@ -186,7 +188,12 @@ function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
   theme.accent=pal['--accent']||'#ffe100';
   $('modeDark').classList.toggle('on',theme.mode==='dark'); $('modeLight').classList.toggle('on',theme.mode==='light');
   setBaseLayer(theme.mode==='dark'?'dark':'light'); }
-async function saveTheme(){ if(!sb||!session) return; try{ await sb.from('profiles').update({theme}).eq('id',session.user.id); }catch(e){} }
+async function saveTheme(){
+  if(!sb||!session)return;
+  const status=$('personalThemeStatus');if(status)status.textContent='Сохраняю…';
+  try{const {error}=await sb.from('profiles').update({theme}).eq('id',session.user.id);if(error)throw error;profile.theme={...theme};if(status)status.textContent='Сохранено для моего аккаунта';}
+  catch(e){if(status)status.textContent='Не удалось сохранить тему: '+(e.message||e);}
+}
 let toastT=null; function showToast(msg){ const t=$('toast'); if(!t) return; t.textContent=msg; t.classList.remove('err','warn'); t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),2500); }
 // Индикатор долгой работы. Пересчёт трека ходит в сеть и занимает секунды:
 // без него человек видит замершую кнопку и решает, что сломалось. Доля
@@ -227,13 +234,20 @@ function factSrcRu(src){
 }
 function orsKeyMissing(){ return !(appSettings.ors_proxy||'').trim(); }
 function orsMissing(el){ if(el) el.innerHTML='Маршрутизация не настроена. <span class="lnk" onclick="gotoSettings()">Указать ключ ORS или адрес прокси в настройках</span>'; }
-$('themeBtn').onclick=e=>{ e.stopPropagation(); $('themePop').classList.toggle('on');$('themeBtn').setAttribute('aria-expanded',String($('themePop').classList.contains('on'))); };
-document.addEventListener('click',e=>{ const p=$('themePop'); if(p.classList.contains('on') && !p.contains(e.target) && e.target!==$('themeBtn')) {p.classList.remove('on');$('themeBtn').setAttribute('aria-expanded','false');} });
-$('modeDark').onclick=()=>{ theme.mode='dark'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); if(document.querySelector('.view-dash.active')) renderDashboard(); if(plannerCur==='mine') renderMine(); $('themePop').classList.remove('on');$('themeBtn').setAttribute('aria-expanded','false'); };
-$('modeLight').onclick=()=>{ theme.mode='light'; applyTheme(theme); saveTheme(); if(typeof render==='function'&&clients&&clients.length) render(); if(typeof drawStops==='function') drawStops(); if(document.querySelector('.view-dash.active')) renderDashboard(); if(plannerCur==='mine') renderMine(); $('themePop').classList.remove('on');$('themeBtn').setAttribute('aria-expanded','false'); };
+async function choosePersonalTheme(mode){
+  theme.mode=mode;applyTheme(theme);await saveTheme();
+  if(typeof render==='function'&&clients&&clients.length)render();
+  if(typeof drawStops==='function')drawStops();
+  if(plannerCur==='mine')renderMine();
+}
+$('modeDark').onclick=()=>choosePersonalTheme('dark');
+$('modeLight').onclick=()=>choosePersonalTheme('light');
+$('profileBtn').onclick=()=>openAccountProfile({profile,user:session.user,trigger:$('profileBtn'),
+  logout:logoutAccount,settings:()=>{switchTab('settings');settingsNav('theme');},
+  readOrg:async()=>{const {data,error}=await sb.rpc('account_org_read');if(error)throw error;return data;}});
 // закрытие модалок по фону и Esc
 ['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay','stockOverlay'].forEach(id=>{ const o=$(id); if(o) o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('on'); }); });
-document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; ['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay','stockOverlay'].forEach(id=>{ const o=$(id); if(o&&o.classList.contains('on')) o.classList.remove('on'); }); const tp=$('themePop'); if(tp) tp.classList.remove('on'); });
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; ['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay','stockOverlay'].forEach(id=>{ const o=$(id); if(o&&o.classList.contains('on')) o.classList.remove('on'); }); });
 
 // ---------- logo ----------
 (function(){ const lg=$('logoImg'); lg.onload=()=>{lg.style.display='block';$('wordmark').style.display='none';}; lg.onerror=()=>{lg.style.display='none';$('wordmark').style.display='';}; lg.src='./logo.png'; })();
@@ -552,7 +566,7 @@ function wireSheetDrag(){
   if(sheetIsSheet()) sheetSnapTo(1);
 }
 wireSheetDrag();
-function tabAllowed(name){ if(name==='catalog'||name==='dash') return canWrite(); if(name==='settings') return role==='admin'; return true; }
+function tabAllowed(name){ if(name==='catalog'||name==='dash') return canWrite(); if(name==='settings') return !!role; return true; }
 // Пункт «Мой день» нужен инженеру; менеджеру он дублирует сводку.
 function navAllowed(el){
   if(!tabAllowed(el.dataset.tab)) return false;
@@ -579,7 +593,7 @@ function applyTabs(){
 // и отдельным пунктом панели не бывают ни у кого.
 function navKey(b){ return b.id?('#'+b.id):(b.dataset.tab+(b.dataset.sub?(':'+b.dataset.sub):'')); }
 function secondaryNav(){
-  const base=['#themeBtn','#pushBtn','#cfgBtn','#logoutBtn'];
+  const base=['#pushBtn','#cfgBtn','#profileBtn'];
   return new Set(base.concat(['catalog','settings']));
 }
 function applyMobileNav(){
@@ -686,8 +700,8 @@ function buildMoreSheet(){
     const svg=b.querySelector('svg'), lab=b.querySelector('span');
     const r=document.createElement('button');
     r.type='button';
-    r.className='sheet-row'+(b.id==='logoutBtn'?' danger':'');
-    r.innerHTML=(svg?svg.outerHTML:'')+'<span>'+esc(lab?lab.textContent:'')+'</span>';
+    r.className='sheet-row';
+    r.innerHTML=(svg?svg.outerHTML:'')+'<span>'+esc(b.id==='profileBtn'?'Мой профиль':lab?lab.textContent:'')+'</span>';
     // Клик по исходному пункту — СЛЕДУЮЩИМ тактом. Иначе он срабатывает
     // внутри обработки текущего касания, и то же самое касание, продолжая
     // всплывать до document, тут же закрывает открытое им окно: обработчик
@@ -809,7 +823,7 @@ function switchTab(name, sub){ if(!tabAllowed(name)) return;
 document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
   el.onclick=()=>switchTab(el.dataset.tab, el.dataset.sub||null);
 });
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeMore();$('themePop').classList.remove('on');$('themeBtn').setAttribute('aria-expanded','false');}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeMore();}});
 let catCur='works';
 function catSub(name){ catCur=name; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; $('catMaterials').style.display=name==='materials'?'':'none'; if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else renderStockCatalog(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
@@ -891,9 +905,9 @@ let authLeaving=false;
 // Выход — с подтверждением. В нижнем меню он стоял вплотную к разделам,
 // и промах пальцем выбрасывал инженера из приложения посреди выезда;
 // обратно он попадёт только через пароль, которого может не помнить.
-$('logoutBtn').onclick=async ()=>{
+async function logoutAccount(){
   if(!await confirmDialog('Выйти из приложения? Чтобы вернуться, понадобится пароль.',{okText:'Выйти',danger:true})) return;
-  authLeaving=true; notifications.reset();await sb.auth.signOut(); location.reload(); };
+  authLeaving=true; notifications.reset();await sb.auth.signOut(); location.reload(); }
 
 // Истечение сессии раньше выглядело как случайно опустевшие экраны: запросы
 // начинали возвращать ошибки RLS, а те глотались пустыми catch. Теперь
@@ -931,11 +945,10 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   if(p.theme && p.theme.mode) theme=p.theme; else if(appSettings.default_theme && appSettings.default_theme.mode) theme=appSettings.default_theme;
   applyTheme(theme);
   $('authOverlay').classList.remove('on');
-  // В рельсе 76 px: полный адрес не влезает, показываем имя до @ и роль.
-  const em=String(session.user.email||''); const short=em.split('@')[0];
-  $('whoLabel').innerHTML=esc(short)+'<b>'+esc(role)+'</b>';
-  $('whoLabel').title=em+' · '+role;
-  $('logoutBtn').style.display=''; $('appRoot').style.display='block'; document.querySelector('.view-map').classList.add('active');
+  const em=String(session.user.email||''),name=p.full_name||em.split('@')[0]||'Мой профиль';
+  $('whoLabel').innerHTML='<span>'+esc(name)+'</span><b>'+esc(role==='admin'?'Админ':roleName(role))+'</b>';
+  $('profileAvatar').textContent=initials(name);$('profileBtn').title=name+' · '+roleName(role);
+  $('profileBtn').style.display=''; $('appRoot').style.display='block'; document.querySelector('.view-map').classList.add('active');
   ['pointTools','pointToolsFab'].forEach(id=>{ const el=$(id); if(el) el.style.display=canWrite()?'':'none'; });
   $('routeBlock').style.display=canWrite()?'':'none';
   // Вкладка «Маршрут» уходит вместе со своим блоком: инженер маршруты
@@ -5521,8 +5534,9 @@ async function openPresenceEditor(tid,stayId,jobId){
 function renderTripReviewSummary(){
  const box=$('tpReviewSummary');if(!box)return;const t=tripWorkbench?.trip||getTrip(tripEditId);if(!t){box.textContent='Новый план: сначала сохрани выезд.';return;}
  const stays=tripWorkbench?.stays;const pending=stays?.filter(s=>!['approved','rejected'].includes(s.status)).length;const tasks=tripOrdersAll.filter(o=>curTripOrders.has(o.id)),accepted=tasks.filter(o=>o.status==='completed').length;
- const presence=stays?(pending?'Требуется проверка: '+pending+' '+plural(pending,'стоянка','стоянки','стоянок'):stays.length?'Проверено: '+stays.length+' '+plural(stays.length,'стоянка','стоянки','стоянок'):'Подтверждённых записей нет'):'Загружается';
- const states=[['Поездка',ST_TRIP[t.status]||t.status,'neutral'],['Присутствие',presence,pending?'pending':'neutral'],['Затраты',tripCostReviewState,tripCostReviewState==='подтверждены'?'confirmed':'pending'],['Выполнение работ',tasks.length?'Принято '+accepted+' из '+tasks.length+' заданий':'Задания не добавлены','neutral']];
+ const approved=stays?.filter(s=>s.status==='approved').length||0;
+ const presence=stays?(pending?'Подтверждено: '+approved+' · на проверке: '+pending:stays.length?'Проверено: '+stays.length+' '+plural(stays.length,'стоянка','стоянки','стоянок'):'Подтверждённых записей нет'):'Загружается';
+ const states=[['Поездка',ST_TRIP[t.status]||t.status,'neutral'],['Присутствие',presence,pending?'pending':'neutral'],['Распределение затрат',tripCostReviewState,tripCostReviewState==='подтверждены'?'confirmed':'pending'],['Выполнение работ',tasks.length?'Принято '+accepted+' из '+tasks.length+' заданий':'Задания не добавлены','neutral']];
  box.innerHTML='<dl class="trip-review-grid">'+states.map(([label,value,state])=>'<div class="trip-review-item" data-review-state="'+state+'"><dt>'+esc(label)+'</dt><dd>'+esc(value)+'</dd></div>').join('')+'</dl><div class="order-line-adds trip-review-actions"><button type="button" class="btn sm" id="tpReviewPresence">Открыть присутствие</button><button type="button" class="btn sm" id="tpReviewCosts">'+(canWriteTrip()?'Сверить затраты':'Открыть затраты')+'</button></div>';
  $('tpReviewPresence').onclick=()=>{setTripPane('presence');const details=$('tpPresence').closest('details');if(details)details.open=true;};$('tpReviewCosts').onclick=()=>{setTripPane('economy');$('tpTripAllocation').scrollIntoView({block:'start'});};
 }
@@ -5546,6 +5560,16 @@ async function loadWorkbench(id){
     const index=trips.findIndex(t=>t.id===id);if(index>=0)trips[index]=data.trip;
     const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
     $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{readonly:!canWriteTrip(data.trip),orders:linkedOrders});renderTripReviewSummary();
+    const retained=document.createElement('section');retained.className='retained-trip-fact';retained.innerHTML='<h3>Сохранённый факт выезда</h3><p role="status">Проверяю сохранённый трек…</p>';$('tpPresence').prepend(retained);
+    sb.from('trip_tracks').select('km,updated_at,data').eq('trip_id',id).maybeSingle().then(({data:track,error})=>{
+      if(!retained.isConnected)return;
+      const approved=tripWorkbench.stays.filter(s=>s.status==='approved'),minutes=approved.reduce((n,s)=>n+Number(s.minutes_mgr||0),0);
+      retained.innerHTML='<h3>Сохранённый факт выезда</h3><p>Подтверждённые стоянки: <b>'+approved.length+'</b> · '+minutes.toLocaleString('ru-RU')+' мин</p>'
+        +(error?'<p class="err">Не удалось загрузить сохранённый трек: '+esc(error.message)+'</p>':track?'<p>Сохранённый разбор трека · '+new Date(track.updated_at).toLocaleDateString('ru-RU')+' · <b>'+Number(track.km).toLocaleString('ru-RU',{maximumFractionDigits:1})+' км</b></p>':'<p class="hint">Сохранённого разбора нет'+(data.trip.fact_km!=null?' · факт-пробег '+Number(data.trip.fact_km).toLocaleString('ru-RU')+' км'+esc(factSrcRu(data.trip.fact_km_source)):'')+'</p>')
+        +(track?'<button type="button" class="btn sm" data-retained-track>Открыть сохранённый трек на карте</button>':'');
+      retained.querySelector('[data-retained-track]')?.addEventListener('click',()=>showTripOnMap(id));
+    });
+
     $('tpRemovedJobs').innerHTML=removedHTML(tripWorkbench,tripJobsAll);
     $('tpHistoryLog').innerHTML=historyHTML(tripWorkbench,profilesList);
     $('tpRevisionInfo').textContent=(ST_TRIP[data.trip.status]||data.trip.status)+' · версия '+data.trip.workbench_revision+' · изменение плана не удаляет трек и посещения';
@@ -6055,7 +6079,12 @@ document.querySelector('.view-settings')?.addEventListener('input',e=>{
 });
 document.querySelector('.view-settings')?.addEventListener('change',e=>{if(e.target.closest('.staff-row'))e.target.closest('.staff-row').dataset.dirty='1';if(e.target.id==='dtMode'){settingsThemeDirty=true;$('dtStatus').textContent='Изменено · не сохранено';}});
 window.addEventListener('beforeunload',e=>{if(settingsParamsDirty||settingsThemeDirty||document.querySelector('.staff-row[data-dirty]')){e.preventDefault();e.returnValue='';}});
-function renderSettings(){ const s=appSettings; $('stShift').value=s.shift_hours; $('stDev').value=s.deviation_pct;
+function renderSettings(){
+  document.querySelectorAll('#settingsNav [data-sec]').forEach(b=>b.hidden=role!=='admin'&&b.dataset.sec!=='theme');
+  document.querySelectorAll('.settings-body [data-admin-settings]').forEach(p=>p.hidden=role!=='admin');
+  settingsNav(role==='admin'?document.querySelector('#settingsNav .son.on')?.dataset.sec||'tariffs':'theme');
+  if(role!=='admin')return;
+  const s=appSettings; $('stShift').value=s.shift_hours; $('stDev').value=s.deviation_pct;
   if($('stDayStart')) $('stDayStart').value=(s.day_start==null?7:s.day_start); if($('stDayEnd')) $('stDayEnd').value=(s.day_end==null?16:s.day_end); if($('stTolerance')) $('stTolerance').value=(s.tolerance_h==null?1:s.tolerance_h); $('stCur').value=s.currency||'';
   const c=s.costs||{}; $('csKm').value=c.km||0;$('csHour').value=c.hour||0;$('csDay').value=c.day||0;$('csNight').value=c.night||0;
   if($('stStayRad')) $('stStayRad').value=(s.stay_radius_m==null?300:s.stay_radius_m);
@@ -6076,11 +6105,11 @@ function renderProfiles(){ const box=$('tpList'); if(!box) return; const list=tp
   box.querySelectorAll('[data-pedit]').forEach(b=>b.onclick=()=>profileEdit(b.dataset.pedit));
   box.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=()=>profileDel(b.dataset.pdel)); }
 function profileResetForm(){ profEditId=null; if($('tpFormTitle')) $('tpFormTitle').textContent='Новый профиль'; if($('tpfSave')) $('tpfSave').textContent='Добавить профиль'; if($('tpfCancel')) $('tpfCancel').style.display='';
-  ['tpfName','tpfPaidRate','tpfWarrRate','tpfKmRate','tpfDayRate','tpfNightRate','tpfReq'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
+  ['tpfName','tpfPaidRate','tpfWarrRate','tpfDepotRate','tpfKmRate','tpfDayRate','tpfNightRate','tpfReq'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
   if($('tpfDefWarr')) $('tpfDefWarr').checked=false; if($('tpfDefPaid')) $('tpfDefPaid').checked=false; if($('tpfErr')) $('tpfErr').textContent=''; }
 function profileEdit(id){ const p=tpProfiles().find(x=>x.id===id); if(!p) return; profEditId=id; $('tpFormTitle').textContent='Профиль: '+(p.name||''); $('tpfSave').textContent='Сохранить'; $('tpfCancel').style.display='';
   const wp=p.work_paid||{}, ww=p.work_warr||{}, wd=p.work_depot||{}, rd=p.road||{}; const sv=(id,v)=>{ $(id).value=(v==null?'':v); };
-  sv('tpfName',p.name); sv('tpfPaidRate',wp.rate); sv('tpfWarrRate',ww.rate);
+  sv('tpfName',p.name); sv('tpfPaidRate',wp.rate); sv('tpfWarrRate',ww.rate);sv('tpfDepotRate',wd.rate);
   sv('tpfKmRate',rd.km_rate); sv('tpfDayRate',rd.day_rate); sv('tpfNightRate',rd.night_rate);
   sv('tpfReq',p.requisites); $('tpfDefWarr').checked=!!p.def_warranty; $('tpfDefPaid').checked=!!p.def_paid; $('profOverlay').classList.add('on'); setTimeout(()=>{ try{ $('tpfName').focus(); }catch(e){} },40); }
 async function profileSave(){ const name=$('tpfName').value.trim(); if(!name){ $('tpfErr').textContent='Укажи название.'; return; }
@@ -6095,13 +6124,13 @@ async function profileSave(){ const name=$('tpfName').value.trim(); if(!name){ $
 async function profileDel(id){ if(!await confirmDialog('Удалить профиль тарифа?',{danger:true,okText:'Удалить'})) return; const list=tpProfiles().filter(x=>x.id!==id); const {error}=await sb.from('settings').update({tariff_profiles:list}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.tariff_profiles=list; renderProfiles(); if(profEditId===id) profileResetForm(); }
 if($('tpfSave')) $('tpfSave').onclick=profileSave; if($('tpfCancel')) $('tpfCancel').onclick=()=>{ profileResetForm(); $('profOverlay').classList.remove('on'); };
 if($('profCreate')) $('profCreate').onclick=()=>{ profileResetForm(); $('profOverlay').classList.add('on'); setTimeout(()=>{ try{ $('tpfName').focus(); }catch(e){} },40); };
-function settingsNav(sec){ document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
+function settingsNav(sec){ if(role!=='admin')sec='theme'; document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
 document.querySelectorAll('#settingsNav .son').forEach(b=>b.onclick=()=>settingsNav(b.dataset.sec));
 document.querySelectorAll('.settings-body > .card > h3').forEach(h=>h.onclick=e=>{if(!e.target.closest('.q'))h.parentElement.classList.toggle('collapsed');});
-$('stSave').onclick=async ()=>{ const invalid=document.querySelector('[data-sec-panel="tariffs"] input:invalid');if(invalid){invalid.reportValidity();return;}const negative=[...document.querySelectorAll('[data-sec-panel="tariffs"] input[type=number]')].find(el=>Number(el.value)<0);if(negative){notify('Значение не может быть отрицательным','warn');negative.focus();return;}const start=parseFloat($('stDayStart').value),end=parseFloat($('stDayEnd').value); if(!(end>start)){notify('Конец рабочего дня должен быть позже начала','warn');return;} const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:start,day_end:end,tolerance_h:Math.max(0,parseFloat($('stTolerance').value)||0),currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,depot_radius_m:parseInt($('stDepotRad').value)||5000,depot_exit_margin_m:Math.max(0,parseInt($('stDepotMargin').value)||0),depot_outside_minutes:parseInt($('stDepotOut').value)||60,updated_at:new Date().toISOString()};
+$('stSave').onclick=async ()=>{ if(role!=='admin')return; const invalid=document.querySelector('[data-sec-panel="tariffs"] input:invalid');if(invalid){const details=invalid.closest('details');if(details)details.open=true;invalid.reportValidity();return;}const negative=[...document.querySelectorAll('[data-sec-panel="tariffs"] input[type=number]')].find(el=>Number(el.value)<0);if(negative){notify('Значение не может быть отрицательным','warn');const details=negative.closest('details');if(details)details.open=true;negative.focus();return;}const start=parseFloat($('stDayStart').value),end=parseFloat($('stDayEnd').value); if(!(end>start)){notify('Конец рабочего дня должен быть позже начала','warn');return;} const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:start,day_end:end,tolerance_h:Math.max(0,parseFloat($('stTolerance').value)||0),currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,depot_radius_m:parseInt($('stDepotRad').value)||5000,depot_exit_margin_m:Math.max(0,parseInt($('stDepotMargin').value)||0),depot_outside_minutes:parseInt($('stDepotOut').value)||60,updated_at:new Date().toISOString()};
   if(!hasDayStart) delete rec.day_start;
   const generation=settingsGeneration;$('stSave').disabled=true;$('stStatus').textContent='Сохраняю…';let error;try{({error}=await sb.from('settings').update(rec).eq('id',true));}catch(e){error=e;}finally{$('stSave').disabled=false;}if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } settingsParamsDirty=generation!==settingsGeneration;appSettings=Object.assign(appSettings,rec);$('stStatus').textContent=settingsParamsDirty?'Сохранён предыдущий вариант · новые изменения не сохранены':'Сохранено'; };
-$('dtSave').onclick=async ()=>{ const dt={mode:$('dtMode').value,accent:'#ffe100'}; const {error}=await sb.from('settings').update({default_theme:dt}).eq('id',true); if(error){ $('dtStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } settingsThemeDirty=false;appSettings.default_theme=dt; $('dtStatus').innerHTML='<span class="ok">Сохранено</span>'; };
+$('dtSave').onclick=async ()=>{ if(role!=='admin')return; const dt={mode:$('dtMode').value,accent:'#ffe100'}; const {error}=await sb.from('settings').update({default_theme:dt}).eq('id',true); if(error){ $('dtStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } settingsThemeDirty=false;appSettings.default_theme=dt; $('dtStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 async function renderUsersAdmin(){
   const box=$('usersList');
   const [profileResult,orgResult]=await Promise.all([
@@ -7304,22 +7333,11 @@ async function showTripFact(tid,opt){
   const quiet=!!(opt&&opt.quiet);
   factClear();
   try{
-    const raw=(await loadTripPositions(tid)).filter(p=>p.lat!=null&&p.lng!=null);
-    if(!raw.length){ setTimeout(()=>map.invalidateSize(),60); if(!quiet) showToast('Фактического трека нет'); return false; }
-
-    // Если выезд только что сводили, показываем ТОТ ЖЕ результат: карта и
-    // деньги обязаны быть про одно. Если нет — считаем тем же проходом, но
-    // без маршрутизатора: показ трека не должен стоить квоты. Отрезки, для
-    // которых маршрут не строился, честно помечены.
     const t=(opt&&opt.trip)||trips.find(x=>x.id==tid)||tripCache[tid]||null;
-    // Порядок важен. Свежий разбор этой вкладки — самый верный. Дальше
-    // сохранённый: он посчитан с маршрутизатором, и это ровно то, что ушло
-    // в деньги. И только если ни того ни другого нет — считаем на месте,
-    // без запросов, помечая отрезки как непостроенные.
-    // Активный выезд всегда строим из свежего raw: сохранённый разбор — это
-    // снимок прошлого и он не должен останавливать live-линию.
-    const m=(t&&t.status==='in_progress') ? await measureTrip(raw,trackOpts(),tripEnds(t),null)
-      : (lastMeasure[tid]||await readFactTrack(tid)||await measureTrip(raw,trackOpts(),tripEnds(t),null));
+    const resolved=await resolveFactTrack({trip:t,cached:lastMeasure[tid],readStored:()=>readFactTrack(tid),
+      readPositions:()=>loadTripPositions(tid),measure:raw=>measureTrip(raw,trackOpts(),tripEnds(t),null)});
+    if(!resolved){setTimeout(()=>map.invalidateSize(),60);if(!quiet)showToast('Фактического трека нет');return false;}
+    const {measure:m,raw}=resolved;
     if(!m.segments.length&&!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
     factTripId=tid; factTrip=t; factRaw=raw; factFrom=null; factTo=null;
 
@@ -7332,12 +7350,12 @@ async function showTripFact(tid,opt){
     (m.points||[]).forEach(p=>bpts.push([p.lat,p.lng]));
     if(bpts.length) setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(bpts).getBounds(),fitPadL(fitPad(40))); },60);
     showFactLegend(m);
-    const bits=['Факт: '+Math.round(m.km)+' км по '+m.points.length+' точкам'];
+    const bits=['Факт: '+Math.round(m.km)+' км'+(m.stored?' · сохранённый разбор':' по '+raw.length+' точкам')];
     if(m.dropped.length) bits.push('вырезано '+(m.droppedTotal||m.dropped.length));
     if(m.jitterKm>=0.5) bits.push('дрожание '+m.jitterKm.toFixed(1)+' км');
     if(m.stored) bits.push('разбор от '+new Date(m.at).toLocaleString('ru'));
     if(t&&t.fact_km!=null) bits.push('записано '+Math.round(t.fact_km)+' км'+factSrcRu(t.fact_km_source));
-    showToast(bits.join(' · '));
+    showToast(bits.join(' · '));return true;
   }catch(e){ notify('Трек не загрузился: '+(e.message||e),'err'); }
 }
 
@@ -7520,10 +7538,10 @@ async function writeFactTrack(tid,m){
 async function readFactTrack(tid){
   try{
     const {data,error}=await sb.from('trip_tracks').select('data').eq('trip_id',tid).maybeSingle();
-    if(error||!data||!data.data) return null;
+    if(error)throw error;if(!data||!data.data)return null;
     const d=data.data;
     return Object.assign({points:[],dropped:[],segments:[]},d,{stored:true});
-  }catch(e){ return null; }
+  }catch(e){ throw e; }
 }
 
 // ---------- машины на карте (трекинг Wialon) ----------

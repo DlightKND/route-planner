@@ -21,7 +21,7 @@ const scenes = [
   {name:'settings',route:'settings',view:'settings',ready:'#stCur',admin:true},
   {name:'settings-fleet',route:'settings',view:'settings',section:'fleet',ready:'#vehList .pt',admin:true},
   {name:'settings-users',route:'settings',view:'settings',section:'users',ready:'#usersList .staff-row',admin:true},
-  {name:'settings-appearance',route:'settings',view:'settings',section:'theme',ready:'#dtMode',admin:true},
+  {name:'settings-appearance',route:'settings',view:'settings',section:'theme',ready:'#modeDark',allRoles:true},
 ];
 const forRole = (scene,role) => scene.allRoles || (role==='admin' ? scene.admin : role==='logist' ? !scene.admin : ['dashboard-graph','request','task','task-active','trip'].includes(scene.name));
 async function selectedContrast(locator){
@@ -92,6 +92,26 @@ async function integrity(page,active,audit,testInfo) {
   for(const field of await active.locator(':is(.entity-activity-form,.responsibility-form) label>:is(input,select,textarea):visible').all()){
     expect(await field.evaluate(el=>parseFloat(getComputedStyle(el).marginTop)),'Comment and responsibility fields have a full label gap').toBeGreaterThanOrEqual(8);
   }
+  const labelOverflow=await active.evaluate(root=>{
+    const failures=[];
+    const buttons=root.querySelectorAll('button.btn,.seg>button,.summary-view-switch>button,.notice-tabs>button,.rquick>button,.subtab,.son');
+    for(const button of buttons){
+      if(!button.getClientRects().length)continue;
+      const r=button.getBoundingClientRect(),walker=document.createTreeWalker(button,NodeFilter.SHOW_TEXT);
+      while(walker.nextNode()){
+        const node=walker.currentNode;if(!node.textContent.trim()||!node.parentElement.getClientRects().length)continue;
+        const range=document.createRange();range.selectNodeContents(node);
+        for(const t of range.getClientRects()){
+          // A named field may deliberately ellipsize inside its label; actions may not.
+          const parent=node.parentElement,style=getComputedStyle(parent),clip=style.textOverflow==='ellipsis'&&style.overflowX==='hidden'?parent.getBoundingClientRect():null;
+          const left=clip?Math.max(t.left,clip.left):t.left,right=clip?Math.min(t.right,clip.right):t.right;
+          if(t.width&&t.height&&(left<r.left-1||right>r.right+1||t.top<r.top-1||t.bottom>r.bottom+1))failures.push(button.id||button.textContent.trim());
+        }
+      }
+    }
+    return [...new Set(failures)];
+  });
+  expect(labelOverflow,'Every action and switch label stays inside its control').toEqual([]);
   const reasonGap=await active.evaluate(root=>{
     const reason=root.querySelector('#tpChangeReasonGroup'),notes=root.querySelector('#tpNotes');
     if(!reason||!notes||!reason.getClientRects().length||!notes.getClientRects().length)return null;
@@ -137,6 +157,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
   const scene=role==='engineer'&&source.name==='dashboard-graph'?{...source,route:'planner/mine',view:'planner',ready:'#plMine .vg-feed'}:source;
   test(`${role} ${scene.name}`,async({page,context},testInfo)=>{
     const {active,audit}=await openScene(page,context,testInfo,role,scene);
+    if(scene.name==='settings'){await active.locator('.settings-advanced').evaluateAll(list=>list.forEach(d=>d.open=true));await expect(active.locator('#stTrkKmh')).toBeVisible();await expect(active.locator('#verBtn')).toBeVisible();}
     if(scene.name==='request')for(const action of await active.locator('.th-acts .btn:visible').all())await visibleTarget(action);
     if(scene.name==='catalog')await expect(active.locator('#catList')).toContainText('Диагностика гидросистемы');
     if(scene.view==='catalog'){
@@ -342,7 +363,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await visibleTarget(active.locator('#tpPresenceTitle'));
       await expect(active.locator('.wb-table')).toBeVisible();
       if(role==='engineer'){
-        await expect(active.locator('#tpPresence input,#tpPresence select,#tpPresence textarea,#tpPresence button:not(.qm)')).toHaveCount(0);
+        await expect(active.locator('#tpPresence input,#tpPresence select,#tpPresence textarea,#tpPresence button:not(.qm):not([data-retained-track])')).toHaveCount(0);
         await expect(active.locator('#wbPresenceSave,#wbDetect,[data-presence-edit]')).toHaveCount(0);
         await expect(active.locator('#tpPresence')).toContainText('Ожидает проверки');
       }else{await expect(active.locator('#wbPresenceSave')).toBeVisible();}
@@ -400,4 +421,32 @@ test('keyboard focus in dispatcher',async({page,context},testInfo)=>{
   if(testInfo.project.use.viewport.width<=760)expect(style.bottom).toBeLessThanOrEqual(style.rail+1);
   await shot(page,testInfo,'logist-keyboard-focus');
   await integrity(page,active,audit,testInfo);
+});
+
+for(const role of ['admin','logist','engineer'])test(`${role} account profile and personal settings`,async({page,context},testInfo)=>{
+  const {audit}=await openScene(page,context,testInfo,role,{route:'map',view:'map',ready:'.leaflet-container'});
+  expect(await page.locator('#themeBtn,#logoutBtn').count(),'Rail actions are consolidated').toBe(0);
+  if(testInfo.project.use.viewport.width<=760){await page.locator('#moreBtn').click();await page.locator('#moreList').getByRole('button',{name:'Мой профиль'}).click();}
+  else await page.locator('#profileBtn').click();
+  const profile=page.getByRole('dialog',{name:'Мой профиль'});
+  await expect(profile).toBeVisible();await expect(profile.locator('.account-org')).toContainText('Руководитель');
+  await expect(profile.locator('.account-identity')).toContainText(role==='engineer'?'Анна Смирнова':'Демо · диспетчер');
+  await expect(profile.getByRole('button',{name:'Выйти',exact:true})).toBeVisible();
+  await expect(profile.locator('.account-org')).toContainText(role==='engineer'?'Руководитель сервиса':'Анна Смирнова');
+  await shot(page,testInfo,role+'-profile');
+  await page.keyboard.press('Escape');await expect(profile).toHaveCount(0);
+  if(testInfo.project.use.viewport.width>760)await expect(page.locator('#profileBtn')).toBeFocused();
+  await page.goto('/#/settings');const active=page.locator('.view-settings.active');
+  await expect(active).toBeVisible();if(role==='admin')await active.locator('[data-sec=theme]').click();
+  await expect(active.locator('#modeDark')).toBeVisible();await expect(active.locator('#modeLight')).toBeVisible();
+  if(role!=='admin'){await expect(active.locator('[data-admin-settings]:visible')).toHaveCount(0);await expect(active.locator('[data-sec=tariffs]:visible')).toHaveCount(0);}
+  await integrity(page,active,audit,testInfo);
+});
+test('retained trip track remains visible without raw GPS',async({page,context},testInfo)=>{
+  const {active,audit}=await openScene(page,context,testInfo,'logist',{route:'trip/30000000-0000-4000-8000-000000000002/map',view:'map',ready:'.mleg'});
+  await expect(active.locator('.mleg')).toContainText('128');
+  const reads=await page.evaluate(()=>window.__visualQA.reads);
+  expect(reads).toContain('trip_tracks');expect(reads).not.toContain('vehicle_positions');
+  expect(audit.errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
+  await shot(page,testInfo,'retained-track');
 });

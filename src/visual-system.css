@@ -538,7 +538,8 @@ body { font-size:var(--fs-body); }
  border-radius:var(--control-radius);background:var(--panel-2);width:fit-content;max-width:100%;overflow:visible;
 }
 .summary-view-switch>button,.notice-tabs>button,:is(.view,.modal,.map-pop,.pop) .seg.seg>button {
- flex:1;min-height:var(--control-h);padding:var(--sp-2) var(--sp-4);border:1px solid transparent;
+ flex:1 1 auto;min-width:0;max-width:100%;height:auto;min-height:var(--control-h);padding:var(--sp-2) var(--sp-4);border:1px solid transparent;
+ display:flex;align-items:center;justify-content:center;text-align:center;white-space:normal;overflow-wrap:anywhere;
  background:transparent;color:var(--ink-dim);border-radius:var(--control-radius);
  font:500 var(--fs-body)/1.35 var(--sans);letter-spacing:normal;text-transform:none;cursor:pointer;box-shadow:none;
 }
@@ -628,3 +629,50 @@ body { font-size:var(--fs-body); }
  .view-dash .vg-feed>.rangebar .rquick { flex:0 0 auto; }
  .view-dash .vg-feed>.rangebar .rquick button { padding:var(--sp-3) var(--sp-2); }
 }
+
+/* Action labels can reflow; card buttons and coordinate controls retain their anatomy. */
+.btn { height:auto;min-height:var(--control-h);white-space:normal;overflow-wrap:anywhere;text-align:center;justify-content:center;align-items:center;flex-shrink:1; }
+.btn>svg { flex:none; }
+.view :is(.row,.acts,.order-line-adds,.trip-review-actions):has(>.btn) { flex-wrap:wrap; }
+.view :is(.subtab,.rquick button,.chip,.rchip,.echip,.stat-filter,.foldx-btn) { display:inline-flex;align-items:center;justify-content:center;text-align:center;max-width:100%;white-space:normal;overflow-wrap:anywhere; }
+.view .settings-nav .son { display:flex;align-items:center;min-width:0;white-space:normal;overflow-wrap:anywhere; }
+.view .settings-nav [hidden],.settings-body [hidden] { display:none!important; }
+.view .settings-advanced { margin:var(--sp-5) 0;padding:var(--sp-4);background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-sm); }
+.view .settings-advanced>summary { min-height:var(--control-h);display:flex;align-items:center;cursor:pointer;font-weight:600; }
+.view .settings-advanced[open]>summary { margin-bottom:var(--sp-4); }
+.profile-trigger.profile-trigger { margin-top:var(--sp-3);max-width:100%;padding:var(--sp-3) var(--sp-1); }
+.profile-avatar { display:grid;place-items:center;width:32px;height:32px;flex:none;background:var(--panel-2);border:1px solid var(--line);border-radius:50%;font:600 12px var(--sans);color:var(--ink); }
+.rail .profile-trigger .who { display:block;margin:0;padding:0;width:100%;min-width:0;font:11px/1.4 var(--sans);overflow-wrap:anywhere;color:var(--ink-dim); }
+.rail .profile-trigger .who>span { display:block;max-height:2.8em;overflow:hidden; }
+.rail .profile-trigger .who b { font-size:10px;text-transform:none;font-weight:400; }
+dialog.account-profile { margin:auto;width:min(480px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box;padding:var(--sp-5);background:var(--panel);border:1px solid var(--line);color:var(--ink);font:var(--fs-body)/1.5 var(--sans); }
+dialog.account-profile::backdrop { background:rgba(0,0,0,.5); }
+.account-profile :is(h2,h3,p) { margin:0;overflow-wrap:anywhere; }
+.account-profile-head,.account-profile-actions { display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3); }
+.account-profile-head h2 { font-size:20px; }
+.account-identity { display:flex;align-items:center;gap:var(--sp-4);margin:var(--sp-5) 0; }
+.account-identity>div:last-child { min-width:0; }
+.account-identity h3 { font-size:18px; }
+.account-identity p,.account-person span,.account-details dt { color:var(--ink-dim); }
+.account-avatar { position:relative;display:grid;place-items:center;flex:none;width:64px;height:64px;background:var(--panel-2);border:1px solid var(--line);border-radius:50%;overflow:hidden;font-size:22px;font-weight:600; }
+.account-avatar img { position:absolute;inset:0;width:100%;height:100%;object-fit:cover; }
+.account-details { display:grid;gap:var(--sp-3);margin:var(--sp-4) 0; }
+.account-details dd { margin:var(--sp-1) 0 0;overflow-wrap:anywhere; }
+.account-org h3 { margin:var(--sp-4) 0 var(--sp-2);font-size:14px; }
+.account-person { display:grid;gap:var(--sp-1);padding:var(--sp-3);margin-bottom:var(--sp-2);border-radius:var(--r-sm);background:var(--panel-2);overflow-wrap:anywhere; }
+.account-profile-actions { flex-wrap:wrap;margin-top:var(--sp-5); }
+.retained-trip-fact { padding:var(--sp-4);margin-bottom:var(--sp-4);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2); }
+.retained-trip-fact p { margin:var(--sp-3) 0;overflow-wrap:anywhere; }
+@media(max-width:760px) {
+ .view .settings-nav .son { flex:0 0 auto;white-space:nowrap; }
+ .profile-trigger.profile-trigger.nav-sec { display:none; }
+ .account-profile-actions .btn { flex:1 1 140px; }
+}
+@media(pointer:coarse) { .btn,.account-profile .btn { min-height:44px; } }
+
+.rail .nav-i>span { max-width:100%;overflow-wrap:anywhere;hyphens:auto; }
+
+.rail .profile-trigger .who>span { white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:none; }
+.rail .profile-trigger .who b { white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+
+.account-profile-actions { align-items:stretch; }
