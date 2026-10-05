@@ -1,3 +1,4 @@
+import { infoHint } from './info-hints.js';
 import { presenceSummary } from './core/trip-review.js';
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -56,8 +57,8 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
   }).join('');
   const table = `<div class="wb-table-scroll" role="region" aria-label="Стоянки на объектах" tabindex="0"><table class="wb-table"><thead><tr><th>Интервал</th><th>Объект / заявка</th><th>Команда</th><th>Задание · доля часов</th><th>Минуты на человека</th><th>Проверка</th>${editor||readonly?'':'<th></th>'}</tr></thead><tbody>${editor||readonly?rows:rows.replaceAll('</tr>','<td><button type="button" class="btn sm" data-presence-edit>Изменить</button></td></tr>')}</tbody></table></div>`;
   if (editor) return table;
-  return `<div class="wb-metrics"><div><span>Присутствие · проверено</span><b>${n(summary.approved)} чел.-ч</b></div><div><span>Стоянки на проверке</span><b>${summary.pending}</b></div><div><span>Факт-пробег</span><b>${n(t.fact_km)} км</b></div></div>
-    <p class="hint">Всё время на объекте × присутствовавшие инженеры. Ожидание включено. Нормочасы работ не изменяются. Время указано по Киеву.</p>
+  return `<div class="wb-metrics"><div><span>Присутствие · проверено ${infoHint('Всё время на объекте × присутствовавшие инженеры. Ожидание включено. Нормочасы работ не изменяются. Время указано по Киеву.', 'О проверенном присутствии')}</span><b>${n(summary.approved)} чел.-ч</b></div><div><span>Стоянки на проверке</span><b>${summary.pending}</b></div><div><span>Факт-пробег</span><b>${n(t.fact_km)} км</b></div></div>
+
     ${rows?table:'<p class="hint">Стоянок пока нет. Отсутствие данных не означает нулевое присутствие.</p>'}
     ${readonly?'<p class="hint">Проверку присутствия выполняет куратор выезда.</p>':`<div class="row"><button type="button" class="btn" id="wbDetect">Обновить стоянки по треку</button>${rows?'<button type="button" class="btn amber" id="wbPresenceSave">Сохранить проверку присутствия</button>':''}</div>`}
     <div class="hint" id="wbPresenceMessage" role="status"></div>`;
@@ -106,7 +107,7 @@ export function tripCostReviewHTML({trip,preview,run,stale=false,canApprove=fals
   const taskRows=[...byTask].map(([id,x])=>`<tr><td>${esc((trip.orders||[]).find(o=>o.id===id)?.title||'Задание '+id.slice(0,8))}</td><td>${n(x.distance)} ₴</td><td>${n(x.hours)} ч · ${n(x.labor)} ₴</td></tr>`).join('');
   const state=stale?'Сохранённое распределение устарело · нужна повторная сверка':run?`Подтверждено ${new Date(run.approved_at).toLocaleString('ru-RU')} · ${esc(run.approval_reason)}`:'Распределение ещё не подтверждено';
   const gps=preview?.diagnostics;
-  return `<div class="trip-allocation-head"><div><h3>Выездные затраты по заданиям</h3><div class="hint">Только подтверждённые часы и транспортная часть. Запчасти и выручка остаются в расчёте задания и заявки.</div></div><span class="trip-allocation-state ${stale?'is-stale':run?'is-saved':''}">${state}</span></div>
+  return `<div class="trip-allocation-head"><div><h3>Выездные затраты по заданиям ${infoHint('Только подтверждённые часы и транспортная часть. Запчасти и выручка остаются в расчёте задания и заявки.', 'О разделе «Выездные затраты по заданиям»')}</h3></div><span class="trip-allocation-state ${stale?'is-stale':run?'is-saved':''}">${state}</span></div>
     ${message?`<p class="hint">${esc(message)}</p>`:''}
     ${components.distance?`<div class="trip-allocation-metrics">${component('distance','Километраж · себестоимость')}${component('labor','Присутствие · себестоимость')}${component('fixed','Суточные и ночлег')}${component('manual_adjustment','Ручная корректировка')}</div>`:''}
     ${taskRows?`<div class="wb-table-scroll"><table class="wb-table trip-allocation-table"><thead><tr><th>Задание</th><th>Километраж</th><th>Присутствие</th></tr></thead><tbody>${taskRows}</tbody></table></div>`:'<p class="hint">Пока нет подтверждённых часов или участков трека, привязанных к заданиям.</p>'}

@@ -229,6 +229,30 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     if(scene.view==='dash'&&role==='logist'){
       expect(await active.locator('#dashSeg .on').evaluate(el=>getComputedStyle(el).boxShadow),'No crescent in dashboard switch').toBe('none');
     }
+    for(const button of await active.locator(':is(.seg,.summary-view-switch,.notice-tabs)>button.on:visible').all()){
+      await selectedContrast(button);
+      const style=await button.evaluate(el=>{const s=getComputedStyle(el);return {background:s.backgroundColor,color:s.color,shadow:s.boxShadow,radius:s.borderRadius,font:s.fontFamily};});
+      expect(style.shadow,'Switch selection has no curved underline').toBe('none');
+      expect(style.radius).toBe('8px');
+      expect(style.font).toMatch(/IBM Plex Sans/);
+      // All segments use the same neutral selected surface and foreground.
+      await expect.poll(()=>button.evaluate(el=>{const probe=document.createElement('span');probe.style.cssText='background:var(--ink);color:var(--panel)';el.append(probe);const expected=getComputedStyle(probe),actual=getComputedStyle(el),same=expected.backgroundColor===actual.backgroundColor&&expected.color===actual.color;probe.remove();return same;}),{message:'All selected segments use the shared neutral colors'}).toBe(true);
+    }
+    const info=active.locator('.qm:visible:not(:disabled)').first();
+    if(await info.count()){
+      await reveal(info);await info.click();
+      await expect(info).toHaveAttribute('aria-expanded','true');
+      const popup=page.locator('.q.on>.qbody');
+      await expect(popup).toBeVisible();await expect(popup).toBeInViewport({ratio:1});
+      const bounds=await popup.boundingBox(),viewport=testInfo.project.use.viewport;
+      expect(bounds.x).toBeGreaterThanOrEqual(7);expect(bounds.y).toBeGreaterThanOrEqual(7);
+      expect(bounds.x+bounds.width).toBeLessThanOrEqual(viewport.width-7);
+      expect(bounds.y+bounds.height).toBeLessThanOrEqual(viewport.height-7);
+      await popup.click({position:{x:12,y:12}});await expect(popup).toBeVisible();
+      await shot(page,testInfo,`${role}-${scene.name}-help`);
+      await page.keyboard.press('Escape');await expect(popup).toHaveCount(0);
+      await expect(info).toBeFocused();
+    }
     const paths=await shot(page,testInfo,`${role}-${scene.name}`);
     writeFileSync(join(paths,`${role}-${scene.name}.json`),JSON.stringify(await integrity(page,active,audit,testInfo),null,2));
     if(scene.statistics){

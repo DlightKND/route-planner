@@ -17,6 +17,7 @@ import { createEntityTabs } from './entity-tabs.js';
 import './entity-activity.css';
 import './visual-system.css';
 import { loadChartHTML } from './dashboard-chart.js';
+import { installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
 import { dashboardSummaryHTML } from './dashboard-summary.js';
 import { createNotifications } from './notifications.js';
@@ -448,7 +449,7 @@ function personLabel(p){
 
 // ---------- tabs ----------
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
-document.querySelectorAll('.block.collapsible > h2.ch').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('collapsed'));
+document.querySelectorAll('.block.collapsible > h2.ch').forEach(h=>h.onclick=e=>{if(!e.target.closest('.q'))h.parentElement.classList.toggle('collapsed');});
 
 // ---------- панель карты: вкладки и перетаскивание ----------
 //
@@ -837,23 +838,7 @@ try{
 // Подсказки по «?». Делегирование, а не обработчик на каждую: часть кружков
 // приезжает из JS вместе с перерисовкой, и вешать их поштучно значило бы
 // терять обработчик при каждом рендере.
-document.addEventListener('click',e=>{
-  const btn=e.target.closest('.qm');
-  const open=document.querySelector('.q.on');
-  if(open && (!btn || open!==btn.parentElement)) open.classList.remove('on','flip');
-  if(!btn) return;
-  e.preventDefault(); e.stopPropagation();
-  const q=btn.parentElement; const on=!q.classList.contains('on');
-  q.classList.toggle('on',on);
-  if(on){
-    // Ближе к правому краю окно уезжает за экран — разворачиваем влево.
-    const body=q.querySelector('.qbody');
-    q.classList.remove('flip');
-    if(body && body.getBoundingClientRect().right>window.innerWidth-8) q.classList.add('flip');
-  }
-});
-document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return;
-  const o=document.querySelector('.q.on'); if(o) o.classList.remove('on','flip'); });
+installInfoHints();
 // Тень под закреплённой шапкой появляется только когда под неё что-то уехало.
 // Постоянная линия на нетронутом списке — это шум, которого нечем объяснить.
 (function(){
@@ -6112,7 +6097,7 @@ if($('tpfSave')) $('tpfSave').onclick=profileSave; if($('tpfCancel')) $('tpfCanc
 if($('profCreate')) $('profCreate').onclick=()=>{ profileResetForm(); $('profOverlay').classList.add('on'); setTimeout(()=>{ try{ $('tpfName').focus(); }catch(e){} },40); };
 function settingsNav(sec){ document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
 document.querySelectorAll('#settingsNav .son').forEach(b=>b.onclick=()=>settingsNav(b.dataset.sec));
-document.querySelectorAll('.settings-body > .card > h3').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('collapsed'));
+document.querySelectorAll('.settings-body > .card > h3').forEach(h=>h.onclick=e=>{if(!e.target.closest('.q'))h.parentElement.classList.toggle('collapsed');});
 $('stSave').onclick=async ()=>{ const invalid=document.querySelector('[data-sec-panel="tariffs"] input:invalid');if(invalid){invalid.reportValidity();return;}const negative=[...document.querySelectorAll('[data-sec-panel="tariffs"] input[type=number]')].find(el=>Number(el.value)<0);if(negative){notify('Значение не может быть отрицательным','warn');negative.focus();return;}const start=parseFloat($('stDayStart').value),end=parseFloat($('stDayEnd').value); if(!(end>start)){notify('Конец рабочего дня должен быть позже начала','warn');return;} const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:start,day_end:end,tolerance_h:Math.max(0,parseFloat($('stTolerance').value)||0),currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,depot_radius_m:parseInt($('stDepotRad').value)||5000,depot_exit_margin_m:Math.max(0,parseInt($('stDepotMargin').value)||0),depot_outside_minutes:parseInt($('stDepotOut').value)||60,updated_at:new Date().toISOString()};
   if(!hasDayStart) delete rec.day_start;
   const generation=settingsGeneration;$('stSave').disabled=true;$('stStatus').textContent='Сохраняю…';let error;try{({error}=await sb.from('settings').update(rec).eq('id',true));}catch(e){error=e;}finally{$('stSave').disabled=false;}if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } settingsParamsDirty=generation!==settingsGeneration;appSettings=Object.assign(appSettings,rec);$('stStatus').textContent=settingsParamsDirty?'Сохранён предыдущий вариант · новые изменения не сохранены':'Сохранено'; };

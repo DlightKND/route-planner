@@ -1,3 +1,4 @@
+import { infoHint } from './info-hints.js';
 import { entityPersonLabel } from './entity-people.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({
@@ -17,9 +18,8 @@ export function mountEntityResponsibility({
   const canOwner=admin||owner===actor||(!owner&&logist);
   const canCurator=canOwner||curator===actor||(!curator&&logist);
   root.dataset.responsibilityId=id;
-  root.innerHTML=`<h3>Ответственность</h3>
+  root.innerHTML=`<h3>Ответственность ${infoHint('Куратор ведёт стадии, рассматривает изменения и получает уведомления. Владелец сохраняет права редактирования.', 'О владельце и кураторе')}</h3>
     <p class="hint">Владелец: <b data-owner>${esc(name(owner))}</b> · куратор: <b data-curator>${esc(name(curator))}</b></p>
-    <p class="hint">Куратор ведёт стадии, рассматривает изменения и получает уведомления. Владелец сохраняет права редактирования.</p>
     ${canOwner||canCurator?`<form class="responsibility-form">
       <label>Передать <select name="field">
         ${canCurator?'<option value="curator">Кураторство</option>':''}

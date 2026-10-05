@@ -56,7 +56,7 @@ it('renders readonly presence as recorded values and statuses without suggesting
  const base={job_id:'j1',crew_ids:['e1','e2'],crew_source:'manager',stay_from:'2026-09-22T08:00Z',stay_to:'2026-09-22T09:00Z',minutes_raw:60};
  const stays=[{...base,id:'approved',status:'approved',minutes_mgr:30,task_allocations:[{order_id:'o1',share:1}]},{...base,id:'pending',status:'detected',crew_source:'snapshot',minutes_raw:20},{...base,id:'rejected',status:'rejected',minutes_mgr:0}];
  win.document.body.innerHTML=presenceHTML({trip:{id:'t1',fact_km:0},stays,jobIds:['j1'],removed:[]},[{id:'j1',clients:{name:'<Объект>'}}],[{id:'e1',role:'engineer',full_name:'Анна'},{id:'e2',role:'engineer',full_name:'Иван'}],{readonly:true,orders:[{id:'o1',number:7,title:'Работа <насос>',job_id:'j1'}]});
- expect(win.document.querySelectorAll('input,select,textarea,button')).toHaveLength(0);
+ expect(win.document.querySelectorAll('input,select,textarea,button:not(.qm)')).toHaveLength(0);
  const rows=win.document.querySelectorAll('tbody tr');
  expect(rows[0].querySelector('[data-label="Команда"]').textContent).toBe('Анна, Иван');
  expect(rows[0].querySelector('[data-label="Минуты на человека"]').textContent).toContain('30');
