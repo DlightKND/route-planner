@@ -25,12 +25,11 @@ const scenes = [
 ];
 const forRole = (scene,role) => scene.allRoles || (role==='admin' ? scene.admin : role==='logist' ? !scene.admin : ['dashboard-graph','request','task','task-active','trip'].includes(scene.name));
 async function selectedContrast(locator){
-  const ratio=await locator.evaluate(el=>{
+  await expect.poll(()=>locator.evaluate(el=>{
     const luminance=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4;});return rgb[0]*0.2126+rgb[1]*0.7152+rgb[2]*0.0722;};
     const style=getComputedStyle(el),a=luminance(style.color),b=luminance(style.backgroundColor);
     return (Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);
-  });
-  expect(ratio,'Selected control labels remain readable in both themes').toBeGreaterThanOrEqual(4.5);
+  }),{message:'Selected control labels remain readable after the color settles'}).toBeGreaterThanOrEqual(4.5);
 }
 async function openScene(page,context,testInfo,role,scene) {
   const audit={errors:[],remoteAPIs:[]};
