@@ -24,6 +24,14 @@ const scenes = [
   {name:'settings-appearance',route:'settings',view:'settings',section:'theme',ready:'#dtMode',admin:true},
 ];
 const forRole = (scene,role) => scene.allRoles || (role==='admin' ? scene.admin : role==='logist' ? !scene.admin : ['dashboard-graph','request','task','task-active','trip'].includes(scene.name));
+async function selectedContrast(locator){
+  const ratio=await locator.evaluate(el=>{
+    const luminance=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4;});return rgb[0]*0.2126+rgb[1]*0.7152+rgb[2]*0.0722;};
+    const style=getComputedStyle(el),a=luminance(style.color),b=luminance(style.backgroundColor);
+    return (Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);
+  });
+  expect(ratio,'Selected control labels remain readable in both themes').toBeGreaterThanOrEqual(4.5);
+}
 async function openScene(page,context,testInfo,role,scene) {
   const audit={errors:[],remoteAPIs:[]};
   page.on('pageerror',e=>audit.errors.push(e.message));
@@ -160,6 +168,12 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     if(scene.name==='notifications'){
       await expect(active.locator('.notice-row')).toHaveCount(3);await expect(active).not.toContainText('Чужое уведомление');
       await expect(page.locator('#noticeBadge')).toHaveText('2');
+      await selectedContrast(active.locator('[data-notice-filter=all]'));
+      if(testInfo.project.use.viewport.width>760){
+        await selectedContrast(page.locator('#noticeBadge'));
+        const anchored=await page.locator('#noticeBadge').evaluate(el=>{const b=el.getBoundingClientRect(),p=el.closest('button').getBoundingClientRect();return b.left>=p.left&&b.right<=p.right+1&&b.top>=p.top&&b.bottom<=p.bottom+1;});
+        expect(anchored,'Unread badge stays on its notification button').toBe(true);
+      }
       await visibleTarget(active.locator('[data-notice-push]'));
       await active.locator('[data-notice-push]').click();await expect(page.locator('#pushOverlay')).toHaveClass(/on/);
       await page.keyboard.press('Escape');await expect(active.locator('[data-notice-push]')).toBeFocused();
@@ -174,6 +188,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await shot(page,testInfo,'logist-dashboard-diagrams');
       if(testInfo.project.use.viewport.width>=1181){const aligned=await active.locator('#dashBody .rangebar').evaluate(el=>{const date=el.querySelector('input').getBoundingClientRect(),quick=el.querySelector('.rquick').getBoundingClientRect();return Math.abs(date.top-quick.top)<2;});expect(aligned,'Dates and month arrows share a row').toBe(true);}
       await expect(active.locator('[data-summary-view=charts]')).toHaveAttribute('aria-pressed','true');
+      await selectedContrast(active.locator('[data-summary-view=charts]'));
       await active.locator('[data-summary-view=tables]').click();
       await expect(active.locator('[data-summary-mode=charts]').first()).toBeHidden();
       await expect(active.locator('[data-summary-mode=tables]').first()).toBeVisible();
