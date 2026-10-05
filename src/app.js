@@ -19,7 +19,6 @@ import './visual-system.css';
 import { loadChartHTML } from './dashboard-chart.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
 import { dashboardSummaryHTML } from './dashboard-summary.js';
-import { createNotifications } from './notifications.js';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
@@ -36,7 +35,6 @@ const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profil
  tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
  beforeOpen:async()=>leaveSettingsEditor()&&leaveTripEditor()&&await leaveJobEditor(),confirmLeave:()=>{const ok=window.confirm('Выйти без сохранения изменений задания?');if(!ok)restoreCardRoute();return ok;},reason:async title=>window.prompt(title,'')});
 serviceOrders.init();
-const notifications=createNotifications({db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
 
 // ── Аварийный перехватчик ────────────────────────────────────────────────────
 // Если что-то падает при старте, модуль обрывается и остаётся серый экран
@@ -761,7 +759,7 @@ async function applyRoute(){
       return;
     }
     if(p[0]==='planner'&&['mine','jobs','trips','orders'].includes(p[1])){ switchTab('planner',p[1]); return; }
-    if(['dash','map','catalog','settings','notifications'].includes(p[0])){ switchTab(p[0]); return; }
+    if(['dash','map','catalog','settings'].includes(p[0])){ switchTab(p[0]); return; }
     notify('Ссылка не распознана. Открыта сводка.','warn');
     const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
     switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub)));
@@ -801,8 +799,6 @@ function switchTab(name, sub){ if(!tabAllowed(name)) return;
   // в прошлый раз: уводить его каждый раз на «Заявки» значило бы терять
   // место в работе на ровном месте.
   if(name==='planner') plannerSub(sub==='disp'?dispCur:(sub||plannerCur));
-  $('pushBtn')?.classList.toggle('active',name==='notifications');
-  if(name==='notifications')notifications.open();
   if(name==='dash') renderDashboard(); if(name==='settings') renderSettings();
   routeSet(routeForView(name,sub)); }
 document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
@@ -908,7 +904,7 @@ let authLeaving=false;
 // обратно он попадёт только через пароль, которого может не помнить.
 $('logoutBtn').onclick=async ()=>{
   if(!await confirmDialog('Выйти из приложения? Чтобы вернуться, понадобится пароль.',{okText:'Выйти',danger:true})) return;
-  authLeaving=true; notifications.reset();await sb.auth.signOut(); location.reload(); };
+  authLeaving=true; await sb.auth.signOut(); location.reload(); };
 
 // Истечение сессии раньше выглядело как случайно опустевшие экраны: запросы
 // начинали возвращать ошибки RLS, а те глотались пустыми catch. Теперь
@@ -939,7 +935,7 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   // читающие политики его не пускают, а ошибки RLS глотаются молча.
   // Строгое === false: если колонки почему-то нет, значение undefined
   // и проверка не мешает.
-  if(p.active===false){ authLeaving=true; notifications.reset();await sb.auth.signOut(); authLeaving=false; session=null; profile=null; role=null;
+  if(p.active===false){ authLeaving=true; await sb.auth.signOut(); authLeaving=false; session=null; profile=null; role=null;
     $('authErr').textContent='Доступ ещё не выдан. Попроси администратора активировать учётную запись.';
     $('authOverlay').classList.add('on'); return; }
   profile=p; role=p.role; await loadSettings();
@@ -969,7 +965,7 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   // Очередь: показать, сколько лежит, и сразу попробовать отправить —
   // приложение чаще всего открывают уже вернувшись в зону связи.
   qFlush();
-  checkTodayTrip(); initPush(); notifications.start();
+  checkTodayTrip(); initPush();
   // Сначала поднимаем все формы, справочники и права, и только потом
   // открываем deep link: /trip/:id без этого выглядел бы пустым выездом.
   routeReady=true; await applyRoute(); }
@@ -2750,7 +2746,7 @@ async function renderFeed(box,o){
       : '';
 
     const firstMotion=!motionPainted.has(box);
-    let h='<div class="vg-feed'+(firstMotion?' first-enter':'')+'">'+rangeBar('gt')+(offline?offlineBanner(snapAt):'')+orphanNote+pendNote;
+    let h=(offline?offlineBanner(snapAt):'')+orphanNote+pendNote+'<div class="vg-feed'+(firstMotion?' first-enter':'')+'">'+rangeBar('gt');
 
     // ── Просрочка: колода ────────────────────────────────────────────────
     //
@@ -3392,7 +3388,6 @@ async function dashboardRead(table,columns,tripIds){
 }
 
 let dashboardRenderVersion=0;
-let summaryMode=localStorage.getItem('dlight-summary-mode')==='tables'?'tables':'charts';
 async function renderDashboard(){ const version=++dashboardRenderVersion,box=$('dashBody'); if(!box) return;
   renderAttention();
   // Ролевая раскладка. Инженер видит только «График» — ленту на всю ширину,
@@ -3429,11 +3424,9 @@ async function renderDashboard(){ const version=++dashboardRenderVersion,box=$('
     const metrics=dashboardMetrics({trips,orders:tasks,links:taskLinks,tracks,period:dashRanges.rev,engineerIds:[...dashEngineers],factHours:factHByTrip});
     if(version!==dashboardRenderVersion)return;
     const teamCount=dashEngineers.size;
-    box.innerHTML='<div class="summary-controls"><h2>Результаты отдела</h2>'+rangeBar('rev')+'<div class="summary-view-switch" role="group" aria-label="Представление статистики"><button type="button" data-summary-view="charts">Диаграммы</button><button type="button" data-summary-view="tables">Таблицы</button></div><details class="summary-team"><summary>Команда · '+teamCount+' '+plural(teamCount,'инженер','инженера','инженеров')+'</summary>'+engineerScopeHtml()+'</details></div>'
-      +dashboardSummaryHTML(metrics,dashboardLoad(trips,tasks,tracks),{currency:appSettings.currency||'грн',mode:summaryMode})
+    box.innerHTML='<div class="summary-controls"><h2>Результаты отдела</h2>'+rangeBar('rev')+'<details class="summary-team"><summary>Команда · '+teamCount+' '+plural(teamCount,'инженер','инженера','инженеров')+'</summary>'+engineerScopeHtml()+'</details></div>'
+      +dashboardSummaryHTML(metrics,dashboardLoad(trips,tasks,tracks),{currency:appSettings.currency||'грн'})
       +(trackUnavailable?'<p class="summary-note" role="status">Не удалось загрузить GPS-участки; средняя скорость недоступна.</p>':'');
-    const paintSummaryMode=()=>{box.querySelectorAll('[data-summary-mode]').forEach(p=>p.hidden=p.dataset.summaryMode!==summaryMode);box.querySelectorAll('[data-summary-view]').forEach(b=>{b.classList.toggle('on',b.dataset.summaryView===summaryMode);b.setAttribute('aria-pressed',String(b.dataset.summaryView===summaryMode));});};
-    paintSummaryMode();box.querySelectorAll('[data-summary-view]').forEach(b=>b.onclick=()=>{summaryMode=b.dataset.summaryView;localStorage.setItem('dlight-summary-mode',summaryMode);paintSummaryMode();});
     paintFirstMotion(box);
     wireRangeBar(box);box.querySelectorAll('[data-review-trips]').forEach(b=>b.onclick=()=>{for(const status of TRIP_STATUS_ORDER)tripVisible[status]=status!=='cancelled';tripLayout='list';$('tripLayout').value='list';$('tripSearch').value='';$('tripEngFilter').value='';switchTab('planner','trips');});
     box.querySelectorAll('[data-epop]').forEach(b=>b.onclick=e=>{e.stopPropagation();const p=b.parentElement.querySelector('.engineer-pop');if(p)p.hidden=!p.hidden;});
@@ -6177,14 +6170,13 @@ function isStandalone(){ return window.matchMedia('(display-mode: standalone)').
 let swReg=null;
 // Device notifications belong to every signed-in user, independently of
 // administrative settings or entity responsibilities.
-if($('pushBtn')) $('pushBtn').onclick=()=>{if(session)switchTab('notifications');};
-let pushOrigin=null;
-function openPush(){
-  if(!session)return;
-  pushOrigin=document.activeElement;
-  $('pushOverlay').classList.add('on');$('pushClose').focus();initPush();
-}
-function closePush(){ $('pushOverlay').classList.remove('on'); (pushOrigin?.isConnected?pushOrigin:$('pushBtn')).focus(); }
+if($('pushBtn')) $('pushBtn').onclick=()=>{
+  if(!session) return;
+  $('pushOverlay').classList.add('on');
+  $('pushClose').focus();
+  initPush();
+};
+function closePush(){ $('pushOverlay').classList.remove('on'); $('pushBtn').focus(); }
 if($('pushClose')) $('pushClose').onclick=closePush;
 if($('pushOverlay')) $('pushOverlay').addEventListener('click',e=>{ if(e.target===$('pushOverlay')) closePush(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('pushOverlay')?.classList.contains('on')) closePush(); });

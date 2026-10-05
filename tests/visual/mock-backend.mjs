@@ -305,12 +305,6 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
       email: role + "@example.invalid",
     },
   };
-  tables.notification_inbox=[
-    {id:'event:demo-1',recipient_id:session.user.id,entity_kind:'trip',entity_id:trip,title:'Выезд требует внимания',body:'Изменена дата начала выезда. Проверьте план и маршрут.',created_at:stamp,source:'event',read_at:null},
-    {id:'event:demo-2',recipient_id:session.user.id,entity_kind:'order',entity_id:order,title:'Изменение задания',body:'Обновлены сроки выполнения задания и состав команды. Подробности доступны в карточке.',created_at:'2026-10-04T16:00:00Z',source:'event',read_at:null},
-    {id:'push:demo-3',recipient_id:session.user.id,entity_kind:'trip',entity_id:trip,title:'Выезд сегодня',body:'Отправлено напоминание на 05.10.2026.',created_at:'2026-10-04T12:00:00Z',source:'push',read_at:stamp},
-    {id:'event:foreign',recipient_id:other,entity_kind:'job',entity_id:job,title:'Чужое уведомление',body:'Не показывать',created_at:stamp,source:'event',read_at:null},
-  ].map(n=>({...n,search_text:n.title+' '+n.body}));
   const db = {
     auth: {
       getSession: async () => ({ data: { session }, error: null }),
@@ -377,7 +371,6 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
           return b;
         },
         or: () => b,
-        ilike: (key,value) => {const text=value.slice(1,-1).replace(/\\([%_\\])/g,'$1').toLocaleLowerCase();rows=rows.filter(r=>String(r[key]||'').toLocaleLowerCase().includes(text));return b;},
         contains: () => b,
         order: () => b,
         limit: (n) => {
@@ -414,16 +407,8 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
         };
       return b;
     },
-    async rpc(name,args={}) {
+    async rpc(name) {
       audit.reads.push("rpc:" + name);
-      if(name==='notification_set_read'){
-        const row=tables.notification_inbox.find(n=>n.id===args.p_id&&n.recipient_id===session.user.id);
-        if(!row)return {data:null,error:{message:'Уведомление недоступно'}};
-        row.read_at=args.p_read?stamp:null;return {data:null,error:null};
-      }
-      if(name==='notification_mark_all_read'){
-        let count=0;tables.notification_inbox.forEach(n=>{if(n.recipient_id===session.user.id&&!n.read_at&&n.created_at<=args.p_before){n.read_at=stamp;count++;}});return {data:count,error:null};
-      }
       const reads = {
         entity_people: people,
         entity_finance_config: settings,

@@ -1,4 +1,3 @@
-import { comparisonChartHTML } from './dashboard-visuals.js';
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = (v, digits = 1) => v == null ? '—' : Number(v).toLocaleString('ru-RU', {maximumFractionDigits: digits});
 function row(name, plan, fact, unit = '', emphasis = false) {
@@ -10,7 +9,7 @@ function table(rows, label) {
 }
 const kpi = (label, value, unit, note) => `<div class="summary-kpi"><dt>${esc(label)}</dt><dd>${fmt(value)}${value == null?'':` <small>${esc(unit)}</small>`}</dd><div>${esc(note)}</div></div>`;
 
-export function dashboardSummaryHTML(metrics, load, {currency = 'грн', mode = 'charts'} = {}) {
+export function dashboardSummaryHTML(metrics, load, {currency = 'грн'} = {}) {
   const m=metrics, p=m.financePlan, f=m.financeFact;
   const operations = row('Выполненные работы',m.normPlan,m.normFact,'нормо-ч')
     +row('Присутствие на объектах',m.presencePlan,m.presenceFact,'чел.-ч')
@@ -21,18 +20,14 @@ export function dashboardSummaryHTML(metrics, load, {currency = 'грн', mode =
     +row('Выручка',p.revenue,f.revenue,currency,true)+row('Себестоимость',p.cost,f.cost,currency)+row('Прибыль',p.profit,f.profit,currency,true)+row('Маржа',p.margin,f.margin,'%');
   const costs = row('Работы · труд',p.labor,f.labor,currency)+row('Дорога, суточные, ночлег',p.travelCost,f.travelCost,currency)+row('Запчасти',p.partsCost,f.partsCost,currency)
     +((Math.abs(p.costAdjustment || 0)>0.01||Math.abs(f.costAdjustment || 0)>0.01)?row('Корректировка затрат',p.costAdjustment,f.costAdjustment,currency):'');
-  const chart = (rows,label,commonScale=false) => comparisonChartHTML(rows,{label,commonScale});
-  const panel = (kind,html) => `<div data-summary-mode="${kind}"${mode===kind?'':' hidden'}>${html}</div>`;
-  const workChart = chart([{label:'Выполненные работы',unit:'нормо-ч',plan:m.normPlan,fact:m.normFact},{label:'Присутствие на объектах',unit:'чел.-ч',plan:m.presencePlan,fact:m.presenceFact},{label:'Пробег',unit:'км',plan:m.kmPlan,fact:m.kmFact},{label:'Загрузка с дорогой',unit:'%',plan:load.planPercent,fact:load.factPercent}],'План и факт работ, пробега и загрузки');
-  const financeChart = chart([{label:'Работы',unit:currency,plan:p.work,fact:f.work},{label:'Дорога и суточные',unit:currency,plan:p.road,fact:f.road},{label:'Запчасти',unit:currency,plan:p.parts,fact:f.parts}],'План и факт выручки по составляющим',true);
   return `<section class="card summary-section" data-dcard="work"><header><span class="summary-step">01</span><h3>План–факт</h3></header>
-    ${panel('charts',workChart)}${panel('tables',table(operations,'План и факт работ, пробега и загрузки'))}
+    ${table(operations,'План и факт работ, пробега и загрузки')}
     <p class="summary-note">Принято ${m.accepted} из ${m.tasks} заданий · подтверждено ${m.completed} из ${m.trips} выездов. Присутствие — ${m.hoursKnown}/${m.completed}, пробег — ${m.kmKnown}/${m.completed}.</p>
     <details class="summary-details"><summary>Как читать показатели</summary><p>Работы — нормочасы принятых заданий, присутствие — проверенное время команды на объектах. Загрузка — работы и дорога / рабочий фонд выбранных инженеров. План берётся из сохранённых снимков выездов; нормочасы распределяются поровну между плановыми участниками, дорога считается для каждого. В факте используются проверенное присутствие и измеренные GPS-интервалы без достроек; экипаж берётся из согласованных стоянок. При пропусках трека, изменении состава экипажа или пересечении движения со стоянками процент факта не рассчитывается. «—» означает, что полного источника факта пока нет.</p><p>Выезды сгруппированы по дате начала; задания на объектах — по связи с этими выездами, задания в депо и удалённые — по дате начала. Факт отражает текущее подтверждённое состояние, а не исторический снимок на конец периода.</p></details>
     </section>
     <section class="card summary-section" data-dcard="fin"><header><span class="summary-step">02</span><h3>Финансы</h3><span class="summary-unit">${esc(currency)}</span></header>
     <div class="finance-scope-summary">подтверждено ${m.financeKnown} из ${m.trips} выездов · договорная выручка и подтверждённые затраты</div>
-    ${panel('charts',financeChart+table(row('Выручка',p.revenue,f.revenue,currency,true)+row('Себестоимость',p.cost,f.cost,currency)+row('Прибыль',p.profit,f.profit,currency,true)+row('Маржа',p.margin,f.margin,'%'),'Итоги финансов'))}${panel('tables',table(revenue,'План и факт финансов по работам, дороге и запчастям'))}
+    ${table(revenue,'План и факт финансов по работам, дороге и запчастям')}
     <details class="summary-details"><summary>Себестоимость по составляющим</summary>${table(costs,'Разбивка себестоимости')}<p>План — все выезды периода; факт — выезды с подтверждённой экономикой. Выручка берётся из согласованного снимка выезда. Неизвестные компоненты старых снимков не подменяются нулём.</p></details>
     ${m.financeKnown<m.trips?'<button type="button" class="btn sm ghost summary-review" data-review-trips>Выезды для проверки</button>':''}
     </section>
