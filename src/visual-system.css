@@ -6,6 +6,8 @@ html:root {
   --fs-caption:12px;
   --pad-card:var(--sp-5);
   --gap-card:var(--sp-6);
+  --control-radius:var(--r-sm);
+  --control-motion:120ms var(--ease);
 }
 html[data-theme=dark] { color-scheme:dark; }
 html[data-theme=light] { color-scheme:light; }
@@ -292,4 +294,118 @@ body { font-size:var(--fs-body); }
  .view-catalog .emname { grid-column:1/-1; }
  .view-catalog .emmeta { justify-self:start; }
  .view .settings-nav { scrollbar-width:thin; }
+}
+
+/* One control family. Pills remain status labels, never action buttons. */
+.btn, .entity-tabs [role=tab], .view :is(.chip,.rchip,.echip,.chip-check,.subtab,.son,.stat-filter,.foldx-btn,.crumb),
+.view .seg button, .view .rquick button, .rail .nav-i {
+ font-family:var(--sans);letter-spacing:normal;text-transform:none;
+ border-radius:var(--control-radius);
+ transition:background-color var(--control-motion),color var(--control-motion),border-color var(--control-motion),box-shadow var(--control-motion);
+}
+.btn { font-size:var(--fs-body);font-weight:600; }
+.btn::before { content:none; }
+.btn:active:not(:disabled) { transform:none;box-shadow:none; }
+.btn.ghost:hover:not(:disabled), .btn.ghost:active:not(:disabled) { box-shadow:none;background:var(--panel-2); }
+.view .btn.sm { font-weight:600; }
+.view :is(.chip,.rchip,.echip,.chip-check,.subtab,.son,.stat-filter,.foldx-btn),
+.view .seg button,.view .seg.chipseg button,.view .rquick button,.view .echip.all {
+ font-family:var(--sans);font-size:var(--fs-body);letter-spacing:normal;text-transform:none;
+ border-radius:var(--control-radius);line-height:1.35;
+}
+.view :is(.chip,.rchip,.echip,.chip-check) { min-height:var(--control-h);padding:var(--sp-3) var(--sp-4); }
+.view :is(.chip,.rchip,.echip).on,.view .seg.chipseg button.on {
+ background:var(--panel-2);color:var(--ink);border-color:var(--ink-dim);box-shadow:inset 0 -2px var(--focus);
+}
+.rail .nav-i { text-transform:none;letter-spacing:normal; }
+.view :is(.icobtn,.qm,.ph-close,.dmove,.route-mini-fit),.gpop [data-gclose],.map-pop .lay {
+ border-radius:var(--control-radius);font-family:var(--sans);text-transform:none;letter-spacing:normal;
+}
+.view .btn.engineer-picker { height:var(--control-h);min-height:var(--control-h);max-height:none;line-height:1.4;font-size:var(--fs-body);font-weight:400; }
+.view :is([data-order-next],#orderSave,#orderResultSave,#tpReviewPresence,#tpReviewCosts,#tpStayMap,#wbPresenceSave,#wbDetect) {
+ font-size:var(--fs-body);font-weight:600;
+}
+.view #orderEditor:has(#orderSave.amber) [data-order-next="in_progress"] { background:var(--panel-2);color:var(--ink);border-color:var(--line); }
+.view #orderEditor:has(#orderResultSave.amber) [data-order-next="in_progress"] { background:var(--panel-2);color:var(--ink);border-color:var(--line); }
+.view button,.modal button,.pop button,.ctxmenu button { font-family:var(--sans);text-transform:none;letter-spacing:normal; }
+.view :is(.seg,.dashseg) { border-radius:var(--control-radius); }
+.view :is(.dashseg button,.side-tabs .stab) { font-family:var(--sans);text-transform:none;letter-spacing:normal;border-radius:var(--control-radius); }
+/* Untyped inputs are text fields too; previously they received native square styling. */
+:is(.view,.modal,.presence-editor,.engineer-options) :is(input:not([type]),input[type=text],input[type=email],input[type=password],input[type=search],input[type=date],input[type=number],input[type=tel],input[type=url],input[type=time],input[type=datetime-local],select,textarea) {
+ border-radius:var(--control-radius);background:var(--panel-2);border:1px solid var(--line);
+ color:var(--ink);font-family:var(--sans);font-size:var(--fs-body);line-height:1.4;
+ padding:var(--sp-3) var(--sp-4);min-width:0;max-width:100%;min-height:var(--control-h);
+ transition:border-color var(--control-motion),background-color var(--control-motion),box-shadow var(--control-motion);
+}
+:is(.view,.modal,.presence-editor) input:not([type]) { width:100%; }
+:is(.view,.modal,.presence-editor) :is(input:not([type]),input,select,textarea):focus { border-color:var(--focus);background:var(--panel); }
+.view :is(.th-sub,.th-econ .te-k,.savestate,.crumbs,.crumb,.emtree-kh,.kcol-h) { font-family:var(--sans);letter-spacing:normal;text-transform:none; }
+.view :is(.th-sub,.savestate) { font-size:var(--fs-caption);line-height:1.5; }
+:is(.view-job,.view-order,.view-trip) .hint { line-height:1.5; }
+.view .trip-head h2 { line-height:1.3; }
+.view .trip-head { margin-bottom:var(--sp-5); }
+.view .card { margin-bottom:var(--gap-card); }
+.view :is(.trip-grid,.order-grid) { gap:var(--gap-card); }
+.view .order-grid { align-items:start; }
+.view #orderEditor .card { margin-bottom:var(--gap-card); }
+.view #orderEditor .order-grid>.card { margin-bottom:0; }
+.view .trip-grid>.job-ref>.card { margin-bottom:0; }
+.view :is(.entity-tab-panel,[data-entity-panel])>:is(.trip-grid,.order-grid):has(+.card:not([hidden])) { margin-bottom:var(--gap-card); }
+.view :is(.trip-grid,.order-grid)>.card { margin-bottom:0; }
+.view .card>h3 { margin:0 0 var(--sp-4); }
+.view .card>.row+.row { margin-top:var(--sp-2); }
+.view .card>label { margin-top:var(--sp-5); }
+.view .card>input+.card { margin-top:var(--gap-card); }
+.view #tpChangeReasonGroup { margin-top:var(--sp-5); }
+.view #orderEditor label { margin-top:var(--sp-5);margin-bottom:var(--sp-3); }
+.view #orderEditor label :is(input,select,textarea) { margin-top:var(--sp-3); }
+.view :is(.entity-activity-form,.responsibility-form) label>:is(input,select,textarea) { display:block;margin-top:var(--sp-3); }
+.view #tpHistoryLog:not(:empty) { margin-bottom:var(--gap-card); }
+.view .order-brief { font-family:var(--sans);font-size:var(--fs-body);line-height:1.5;margin-bottom:var(--sp-4); }
+.view .order-brief .hint { font-size:var(--fs-caption); }
+.entity-toolbar { position:sticky;top:calc(-1 * var(--entity-toolbar-inset,24px));z-index:12;background:var(--bg);padding:var(--sp-3) 0;margin-bottom:var(--gap-card);border-bottom:1px solid var(--line); }
+.view .entity-tabs { display:flex;flex-wrap:nowrap;gap:var(--sp-3);max-width:100%;min-width:0;margin:0;overflow-x:auto;padding:var(--sp-2);scrollbar-width:thin; }
+.view .entity-tabs [role=tab] { flex:0 0 auto;min-height:var(--control-h);border:1px solid var(--line);border-radius:var(--control-radius);padding:var(--sp-3) var(--sp-4);background:var(--panel);color:var(--ink-dim);font-family:var(--sans);font-size:var(--fs-body);font-weight:500;line-height:1.3;letter-spacing:normal;text-transform:none;white-space:nowrap; }
+.entity-tabs [role=tab][aria-selected=true] { color:var(--ink);font-weight:600;border-color:var(--ink-dim);background:var(--panel-2);box-shadow:inset 0 -2px var(--focus); }
+.entity-tabs [role=tab]:disabled { color:var(--ink-faint);background:transparent;border-color:var(--line);box-shadow:none;cursor:not-allowed; }
+.entity-tabs [role=tab]:hover:not(:disabled) { color:var(--ink);border-color:var(--ink-dim); }
+.entity-tab-panel { min-width:0; }
+.entity-tab-panel,#tpPresenceTitle,#tpTripAllocation,.view #orderEditor section[id] { scroll-margin-top:calc(var(--entity-toolbar-h,64px) + var(--gap-card)); }
+.entity-tab-panel[hidden], [data-entity-panel][hidden] { display:none!important; }
+.entity-toolbar .order-savebar { position:static;background:transparent;border-bottom:0;margin:0;padding:var(--sp-3) var(--sp-2) 0; }
+.entity-toolbar .savestate { margin:0; }
+.entity-savebar { display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--sp-4);padding:var(--sp-3) var(--sp-2) 0; }
+.entity-savebar .savestate { flex:1; }
+.entity-toolbar>.err:empty { display:none; }
+.view :is(.entity-tab-panel,[data-entity-panel])>.card:last-child { margin-bottom:0; }
+.view .job-ref-read dl { grid-template-columns:auto minmax(0,1fr); }
+.view .job-ref-read dt,.view .job-foot-h { font-family:var(--sans);text-transform:none;letter-spacing:normal;font-size:var(--fs-caption); }
+.view .job-ref-read dd { min-width:0;overflow-wrap:anywhere; }
+.view :is(.request-estimate-summary,.trip-economy-summary) { text-align:left;padding:var(--sp-4) var(--pad-card);margin-bottom:var(--gap-card);border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel); }
+.view #tpPresencePane>.card>.wb-section { border-top:0;margin-top:0;padding-top:0; }
+.view #tpPresenceTitle { font-family:var(--sans);font-size:var(--fs-6);font-weight:600;line-height:1.4; }
+.view :is([data-wb],[data-pb]).amber { background:var(--panel-2);color:var(--ink);border-color:var(--ink-dim);box-shadow:inset 0 -2px var(--focus); }
+.view .job-foot { margin-inline:0;padding-inline:0; }
+@media(max-width:760px) {
+ html:root { --gap-card:var(--sp-5); }
+ .view .entity-tabs [role=tab] { flex:1 0 auto;min-height:var(--touch-h); }
+ .entity-toolbar { top:calc(-1 * var(--entity-toolbar-inset,16px)); }
+ :is(.view,.modal,.presence-editor) :is(input:not([type]),input[type=text],input[type=email],input[type=password],input[type=search],input[type=date],input[type=number],input[type=tel],input[type=url],input[type=time],input[type=datetime-local],select,textarea) { font-size:var(--fs-6); }
+ .view .btn.engineer-picker { height:var(--touch-h);min-height:var(--touch-h);font-size:var(--fs-6); }
+ .view .trip-head { gap:var(--sp-4); }
+ .view .job-foot { margin-inline:calc(var(--sp-4) * -1);padding-inline:var(--sp-4); }
+ .entity-toolbar { margin-bottom:var(--sp-5); }
+ .view .trip-review-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-4); }
+ .view .trip-review-item { display:block; }
+ .view .trip-review-item dt { margin-bottom:var(--sp-2); }
+ .view .trip-review-item dd { font-size:var(--fs-caption);line-height:1.4; }
+ .view .trip-review-summary { margin:var(--sp-4) 0;padding:var(--sp-4) 0; }
+}
+@media(pointer:coarse) {
+ .view .entity-tabs [role=tab] { min-height:var(--touch-h); }
+ :is(.view,.modal,.presence-editor) :is(input:not([type]),input[type=text],input[type=email],input[type=password],input[type=search],input[type=date],input[type=number],input[type=tel],input[type=url],input[type=time],input[type=datetime-local],select,textarea) { min-height:var(--touch-h);font-size:var(--fs-6); }
+ .view .btn.engineer-picker { height:var(--touch-h);min-height:var(--touch-h); }
+}
+@media(prefers-reduced-motion:reduce) {
+ .btn,.entity-tabs [role=tab],.view :is(.chip,.rchip,.echip,.subtab,.son),.view .seg button,.view .rquick button { transition:none; }
 }
