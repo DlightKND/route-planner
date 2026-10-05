@@ -214,7 +214,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         const panel=active.locator(`[data-request-pane="${key}"]`);
         await expect(panel).toBeVisible();await expect(active.locator('[data-request-pane]:not([hidden])')).toHaveCount(1);
         await checkedPane(page,active,panel,audit,testInfo);
-        const heading=panel.locator('h3:visible').first();if(await heading.count())await visibleTarget(heading);
+        const heading=panel.locator('h3:visible').first();if(await heading.count())await reveal(heading);
         await shot(page,testInfo,`${role}-request-${key}`);
       }
     }
