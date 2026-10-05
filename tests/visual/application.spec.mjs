@@ -157,9 +157,17 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     }
     if(scene.statistics){
       await expect(active.locator('[data-dcard=fin] .finance-scope-summary')).toContainText('подтверждено 1 из 2');
-      await expect(active.locator('[data-dcard=fin] .hero')).toContainText('350');
+      await expect(active.locator('[data-dcard=fin] .summary-total').last()).toContainText('350');
+      await expect(active.locator('#dashBody .rangebar')).toHaveCount(1);
+      await expect(active.locator('#dashBody .summary-section')).toHaveCount(3);
     }
     if(scene.name==='trip'){
+      if(testInfo.project.use.viewport.width>1050){
+        const bounds=await active.evaluate(root=>['.wb-plan-card','.wb-route-card'].map(selector=>{const r=root.querySelector(selector).getBoundingClientRect();return {top:r.top,height:r.height,width:r.width};}));
+        expect(Math.abs(bounds[0].top-bounds[1].top),'Plan and route share a baseline').toBeLessThan(1);
+        expect(Math.abs(bounds[0].height-bounds[1].height),'Plan and route share a height').toBeLessThan(1);
+        expect(bounds[1].width/bounds[0].width,'Balanced route/plan widths').toBeLessThan(1.5);
+      }
       await visibleTarget(active.locator('#tpFrom'));
       if(role==='engineer'){
         await expect(active.locator('#tpSave')).toBeHidden();
@@ -169,10 +177,25 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         await expect(active.locator('#tpChangeReasonGroup')).toBeVisible();
       }
     }
+    if(testInfo.project.use.viewport.width<=390&&scene.name.startsWith('dispatcher')){
+      expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Compact mobile dispatcher header').toBeLessThanOrEqual(190);
+      const filter=active.locator('.planner-filter-menu:visible');
+      if(await filter.count()){
+        await filter.locator('summary').click();await expect(filter.locator('select').first()).toBeVisible();
+        await visibleTarget(filter.locator('select').first());
+        await shot(page,testInfo,role+'-'+scene.name+'-filters');
+        await page.keyboard.press('Escape');
+        await expect(filter).not.toHaveAttribute('open','');
+        await expect(filter.locator('summary')).toBeFocused();
+      }
+    }
+    if(scene.view==='dash'&&role==='logist'){
+      expect(await active.locator('#dashSeg .on').evaluate(el=>getComputedStyle(el).boxShadow),'No crescent in dashboard switch').toBe('none');
+    }
     const paths=await shot(page,testInfo,`${role}-${scene.name}`);
     writeFileSync(join(paths,`${role}-${scene.name}.json`),JSON.stringify(await integrity(page,active,audit,testInfo),null,2));
     if(scene.statistics){
-      if(!(await active.locator('.load-chart').isVisible()))await active.getByRole('button',{name:'По дням',exact:true}).click();
+      if(!(await active.locator('.load-chart').isVisible()))await active.locator('.summary-load-details>summary').click();
       await reveal(active.locator('.chart-plot'));
       await expect(active.locator('.chart-y-axis')).toContainText('0');
       await shot(page,testInfo,`${role}-${scene.name}-chart`);
