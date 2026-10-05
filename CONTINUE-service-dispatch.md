@@ -1,3 +1,9 @@
+# Production UI опубликован, 05.10.2026
+
+По запросу пользователя PR #132 объединён и опубликован на https://dlightknd.github.io/route-planner/. Merge: `2e19e2fbb25962619a34566d4c6f17cb69e19932`; исходный UI-коммит: `07296a639ae9c60acd6f18edf1019f0253fff1ee`; live build: `d77e7b6`. Build и deploy в Actions `37271803660` успешны. На публичном сайте получен HTTP 200, загружен новый bundle и подтверждены build `d77e7b6` и текст readonly-присутствия. Supabase, миграции и серверные разрешения не менялись. Ниже сохранён аудит до публикации; его указание «без production-деплоя» относится к прошлой контрольной точке.
+
+---
+
 # UI-кандидат 2026-10-05: аудит по свежим PNG
 
 Ветка `ui/coherent-visual-system-20261004`, [PR #132](https://github.com/DlightKND/route-planner/pull/132). Решения и обсуждение трёх экспертов: `docs/ui-visual-audit-20261005.md`; система: `docs/visual-system-20261004.md`; запуск: `docs/visual-qa.md`.
