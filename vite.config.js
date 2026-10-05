@@ -47,6 +47,7 @@ function buildStamp() {
 // ровно это и давало серый экран: HTML грузился, а бандл с картой нет.
 export default defineConfig({
   base: './',
+  test: { exclude: ['**/node_modules/**','**/dist/**','tests/visual/**'] },
   server: {
     host: '0.0.0.0',
     allowedHosts: ['terminal.local'],

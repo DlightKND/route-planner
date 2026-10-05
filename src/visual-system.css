@@ -45,7 +45,7 @@ body { font-size:var(--fs-body); }
 .view-dash .dash-grid { gap:var(--sp-6); }
 .view-dash .acaps { font-family:var(--sans);font-size:var(--fs-6);text-transform:none;letter-spacing:normal;color:var(--ink);margin-bottom:var(--sp-4); }
 .view-dash .rangebar { gap:var(--sp-3);margin:var(--sp-4) 0; }
-.view-dash .rangebar input { border-radius:var(--r-sm);padding:var(--sp-3);font-size:var(--fs-caption); }
+.view .rangebar input { width:170px;border-radius:var(--r-sm);padding:var(--sp-3);font-size:var(--fs-caption); }
 .view-dash .rquick { gap:var(--sp-2); }
 .view-dash .rquick button { padding:var(--sp-3) var(--sp-4);border-radius:var(--r-sm); }
 .view-dash .echips { gap:var(--sp-2);margin:var(--sp-4) 0; }
@@ -86,7 +86,8 @@ body { font-size:var(--fs-body); }
 .chart-data summary { cursor:pointer;min-height:var(--control-h);display:flex;align-items:center;font-size:var(--fs-body);font-weight:600; }
 .chart-data summary::before { content:'+';margin-right:var(--sp-3); }
 .chart-data[open] summary::before { content:'−'; }
-.chart-data table { width:100%;border-collapse:collapse;font-size:var(--fs-caption); }
+.chart-data table { width:100%;min-width:560px;border-collapse:collapse;font-size:var(--fs-caption); }
+.chart-data th[scope=row] { white-space:nowrap; }
 .chart-data :is(th,td) { padding:var(--sp-3);border-bottom:1px solid var(--line);text-align:left; }
 .chart-data caption { text-align:left;padding:var(--sp-4) 0;color:var(--ink-dim); }
 @media (max-width:1050px) {
@@ -103,7 +104,7 @@ body { font-size:var(--fs-body); }
  .view .order-item-top { grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:var(--sp-3); }
  .view .order-item-snapshot { padding-left:0; }
  .view .order-item-unit { margin-left:0;padding-left:0; }
- .view-dash .rangebar input { width:calc(50% - var(--sp-5));font-size:var(--fs-6); }
+ .view .rangebar input { width:170px;font-size:var(--fs-6); }
  .view-dash .rangebar .rquick { flex-basis:100%; }
  .view-dash .m-n { flex-basis:100%; }
  .view-dash .m-d { margin-left:auto; }
@@ -155,3 +156,18 @@ body { font-size:var(--fs-body); }
 .view-dash .vg-block.urgent { border-left-color:var(--red); }
 .view-dash .vg-block.cont-up { border-top-left-radius:0;border-top-right-radius:0; }
 .view-dash .vg-block.cont-down { border-bottom-left-radius:0;border-bottom-right-radius:0; }
+
+/* Full-bleed sticky headers match the actual pane inset instead of 40px. */
+.view .stickyhead::before { left:calc(-1 * var(--pad-window));right:calc(-1 * var(--pad-window)); }
+@media(max-width:760px) {
+ .view .stickyhead::before { left:calc(-1 * max(var(--sp-4),env(safe-area-inset-left)));right:calc(-1 * max(var(--sp-4),env(safe-area-inset-right))); }
+}
+@media(pointer:coarse) and (min-width:761px) {
+ .view .stickyhead::before { left:calc(-1 * max(var(--sp-5),env(safe-area-inset-left)));right:calc(-1 * max(var(--sp-5),env(safe-area-inset-right))); }
+}
+/* Native date controls must fit the year and calendar icon at touch font size. */
+@media(max-width:420px) {
+ .view .rangebar { gap:var(--sp-2); }
+ .view .rangebar input { width:calc(50% - 13px);padding:var(--sp-2); }
+ .view .rangebar .rquick { flex-basis:100%; }
+}

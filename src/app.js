@@ -3456,6 +3456,8 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
     (tj||[]).forEach(r=>{ const t=tripById[r.trip_id];
       if(t&&t.status!=='cancelled'){ tripOf[r.job_id]=r.trip_id; tripOrd[r.job_id]=(+r.ord||0); } });
 
+    // Initialise the selected team before computing totals, including first load.
+    dashEnsureEngineers();
     const made={fin:financeCard(jb,trips),work:worksCard(jb,trips,tripOf),load:loadCard(jb,tripOf,tripById,tripOrd)};
     box.innerHTML=dashOrder.map(k=>made[k]||'').join('');
     paintFirstMotion(box);
