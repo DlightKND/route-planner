@@ -93,6 +93,11 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20260923212724_entity_activity_comments.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20260929110000_entity_responsibility.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20261004191211_independent_request_task_stages.sql',import.meta.url),'utf8'));
+  await db.exec(`create table public.push_log(id uuid primary key default gen_random_uuid(),trip_id uuid,user_id uuid,kind text,on_date date,sent_at timestamptz default now(),ok boolean,note text);
+    alter table public.push_log enable row level security;
+    grant select on public.push_log,public.profiles to authenticated;
+    create policy push_log_read on public.push_log for select using(coalesce(user_role(),'') in ('admin','logist') or user_id=auth.uid());`);
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261005133906_personal_notification_inbox.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -1192,4 +1197,42 @@ it('uses exact fractional clock hours for tracking cutoff, including late-night 
     const [r]=await q("select to_char(public.trip_planned_start_at(jsonb_populate_record(null::public.trips,$1::jsonb)) at time zone 'Europe/Kyiv','YYYY-MM-DD HH24:MI') actual",[JSON.stringify({date_from:'2026-10-01',day_plan:{start:{d:'2026-10-02',t:hour}}})]);
     expect(r.actual).toBe(expected);
   }
+});
+
+
+it('keeps notification lists and read state personal, including administrator, without a push subscription',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'engineer',true),($2,'engineer',true),($3,'admin',true),($4,'engineer',false)",[id(901),id(902),id(903),id(904)]);
+    for(const [actor,event] of [[901,911],[902,912],[903,913],[904,914]]){
+      await q("insert into entity_push_events(id,entity_kind,entity_id,recipient_id,title,body,created_at) values($1,'trip',$2,$3,'Личное событие','Без подписки','2026-10-01T10:00Z')",[id(event),id(30),id(actor)]);
+      await q("insert into push_log(id,trip_id,user_id,kind,ok,sent_at) values($1,$2,$3,'trip_today',true,'2026-10-02T10:00Z')",[id(event+10),id(30),id(actor)]);
+    }
+    await q("insert into push_log(id,user_id,kind,ok) values($1,$2,'trip_today',false)",[id(931),id(901)]);
+    await db.exec('set local role authenticated');
+    for(const [actor,event] of [[901,911],[902,912],[903,913]]){
+      await q("select set_config('test.uid',$1,true)",[id(actor)]);
+      const list=await q('select id,recipient_id,read_at from notification_inbox order by created_at');
+      expect(list).toHaveLength(2);expect(list.every(n=>n.recipient_id===id(actor)&&n.read_at===null)).toBe(true);
+      const notice='event:'+id(event);
+      await q('select notification_set_read($1,true)',[notice]);await q('select notification_set_read($1,true)',[notice]);
+      expect((await q('select read_at from notification_inbox where id=$1',[notice]))[0].read_at).not.toBeNull();
+      await q('select notification_set_read($1,false)',[notice]);
+      expect((await q('select read_at from notification_inbox where id=$1',[notice]))[0].read_at).toBeNull();
+      expect((await q("select notification_mark_all_read('2026-10-01T12:00Z') as count"))[0].count).toBe(1);
+      expect((await q('select id from notification_inbox where read_at is null'))).toHaveLength(1);
+      await db.exec('savepoint foreign_notice');
+      await expect(q('select notification_set_read($1,true)',['event:'+id(actor===901?912:911)])).rejects.toThrow(/недоступно/);
+      await db.exec('rollback to savepoint foreign_notice');
+      await db.exec('savepoint foreign_state');
+      await expect(q('insert into notification_read_state(recipient_id,notice_id) values($1,$2)',[id(actor),'event:'+id(actor===901?912:911)])).rejects.toThrow(/row-level security/);
+      await db.exec('rollback to savepoint foreign_state');
+      expect(await q('select notice_id from notification_read_state where recipient_id<>auth.uid()')).toEqual([]);
+    }
+    await q("select set_config('test.uid',$1,true)",[id(904)]);expect(await q('select * from notification_inbox')).toEqual([]);
+    await db.exec('savepoint inactive');await expect(q('select notification_set_read($1,true)',['event:'+id(914)])).rejects.toThrow(/недоступно/);await db.exec('rollback to savepoint inactive');
+    await db.exec('set local role anon');await db.exec('savepoint anonymous');
+    await expect(q('select * from notification_inbox')).rejects.toThrow(/permission denied/);await db.exec('rollback to savepoint anonymous');
+    expect((await q("select has_function_privilege('anon','notification_set_read(text,boolean)','execute') allowed"))[0].allowed).toBe(false);
+  }finally{await db.exec('rollback');}
 });
