@@ -6,3 +6,8 @@ dist/
 supabase/.temp/
 .env.local
 .qa-push/
+
+# Generated browser QA artifacts; keep deliberate baselines separate.
+test-results/
+playwright-report/
+.qa-visual/

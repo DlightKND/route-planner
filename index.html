@@ -2376,7 +2376,7 @@
          вверху, куда бы ни уехала прокрутка. -->
     <div class="stickyhead">
       <div class="pane-head"><h2>Сводка</h2>
-        <span class="seg dashseg" id="dashSeg"><button class="on" data-dv="feed">График</button><button data-dv="cards">Инфокарты</button></span>
+        <span class="seg dashseg" id="dashSeg"><button class="on" aria-pressed="true" data-dv="feed">График</button><button aria-pressed="false" data-dv="cards">Статистика</button></span>
       </div>
     </div>
     <div class="dash-grid show-feed"><div class="dash-attn"><h3 class="acaps">График</h3><div id="attnBody"></div></div><div id="dashBody"></div></div>
@@ -2677,9 +2677,9 @@
       <button class="btn" role="tab" id="tpTabEconomy" data-trip-tab="economy" aria-selected="false" aria-controls="tpEconomyPane">Экономика</button>
       <button class="btn" role="tab" id="tpTabHistory" data-trip-tab="history" aria-selected="false" aria-controls="tpHistoryPane">История</button>
     </div>
-    <div class="wb-note" id="tpReviewState" role="status"></div><div id="tpReviewSummary" class="wb-note" role="status"></div><p class="hint">Поездка, присутствие и выполнение работ проверяются отдельно. Часы на объекте не заменяют результат задания.</p>
+    <div class="wb-note" id="tpReviewState" role="status"></div><div id="tpReviewSummary" class="trip-review-summary" role="status"></div><p class="hint">Поездка, присутствие и выполнение работ проверяются отдельно. Часы на объекте не заменяют результат задания.</p>
     <div id="tpPlanPane" role="tabpanel" aria-labelledby="tpTabPlan" data-trip-pane="plan">
-    <label for="tpChangeReason">Причина изменения плана</label><input id="tpChangeReason" type="text" placeholder="Например: объект Б перенесён, едем сразу на В">
+    <div id="tpChangeReasonGroup"><label for="tpChangeReason">Причина изменения плана</label><input id="tpChangeReason" type="text" placeholder="Например: объект Б перенесён, едем сразу на В"></div>
     <div class="trip-grid">
       <div class="card wb-plan-card"><h3>План выезда</h3>
         <div class="row"><div class="grow"><label>Дата с</label><input type="date" id="tpFrom"></div><div class="grow"><label>Дата по</label><input type="date" id="tpTo"></div></div>
@@ -2826,9 +2826,9 @@
     </div>
     <div id="plOrders" style="display:none"><div class="stickyhead">
       <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
-      <div class="pane-head"><input type="search" id="orderSearch" aria-label="Поиск задания" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"><select id="orderEngineer" aria-label="Фильтр по инженеру"></select><select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select><button class="btn sm amber" id="orderAdd">+ Задание</button></div>
+      <div class="pane-head order-board-toolbar"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"><select id="orderEngineer" aria-label="Фильтр по инженеру"></select><button class="btn sm amber" id="orderAdd">+ Задание</button></div>
       <div id="orderScope" hidden><span id="orderScopeText"></span><button class="btn sm ghost" id="orderScopeClear">Все задания</button></div>
-      <label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p>
+      <details class="order-board-options"><summary id="orderBoardOptionsSummary">Представление и архив</summary><label>Представление заданий<select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select></label><label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p></details>
     </div><div id="orderList"></div></div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">

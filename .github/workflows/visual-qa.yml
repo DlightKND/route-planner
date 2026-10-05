@@ -1,0 +1,32 @@
+name: visual-qa
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - run: npm run qa:visual
+      - name: Keep screenshots, measurements, traces and HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-qa-${{ github.run_id }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: warn
