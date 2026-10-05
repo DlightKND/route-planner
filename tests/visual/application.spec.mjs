@@ -56,6 +56,7 @@ async function integrity(page,active,audit,testInfo) {
   expect(audit.remoteAPIs,'No production API traffic').toEqual([]);
   expect(audit.errors,'No runtime errors').toEqual([]);
   expect(measurements.blockedWrites,'No attempted fixture writes').toEqual([]);
+  expect(await page.evaluate(()=>window.__visualQA.queryErrors),'Task projections match the database schema').toEqual([]);
   expect(measurements.documentWidth,'No document horizontal overflow').toBeLessThanOrEqual(measurements.viewport+1);
   expect(measurements.bodyWidth,'No body horizontal overflow').toBeLessThanOrEqual(measurements.viewport+1);
   if(measurements.paneWidth)expect(measurements.paneScrollWidth,'Only local schedule/table/kanban regions may scroll horizontally').toBeLessThanOrEqual(measurements.paneWidth+1);

@@ -287,6 +287,7 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
   tables.trip_revision_history=history;
   const audit = (window.__visualQA = {
     reads: [],
+    queryErrors: [],
     blockedWrites: [],
     ready: true,
   });
@@ -314,17 +315,26 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
     },
     from(table) {
       audit.reads.push(table);
-      let rows = structuredClone(tables[table] || []),
+      let rows = structuredClone(tables[table] || []), queryError = null,
         single = false,
         head = false;
       const result = () => ({
-        data: head ? null : single ? rows[0] || null : rows,
+        data: queryError || head ? null : single ? rows[0] || null : rows,
         count: rows.length,
-        error: null,
+        error: queryError,
       });
       const b = {
         select: (_cols, opts) => {
           head = !!opts?.head;
+          if(table==='service_orders'&&_cols){
+            // Canonical task columns, verified against production schema.
+            // Embedded relationships have their own fields; do not treat them as task columns.
+            const columns=new Set('id,number,title,status,work_mode,date_from,date_to,lead_engineer,engineer_ids,instructions,result_note,revision,legacy_trip_id,legacy_snapshot,created_by,created_at,updated_at,job_id,seed_request_id,curator_id,owner_id'.split(','));
+            let depth=0,part='',parts=[];
+            for(const char of _cols){if(char==='(')depth++;if(char===')')depth--;if(char===','&&!depth){parts.push(part);part='';}else part+=char;}parts.push(part);
+            const missing=parts.filter(p=>!p.includes('(')).map(p=>p.trim().split(':').at(-1).split('->')[0]).find(p=>p!=='*'&&!columns.has(p));
+            if(missing){queryError={code:'42703',message:`column ${table}.${missing} does not exist`};audit.queryErrors.push(queryError.message);}
+          }
           return b;
         },
         eq: (k, v) => {
