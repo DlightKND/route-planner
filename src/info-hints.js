@@ -9,6 +9,8 @@ export function installInfoHints(doc = document, win = window) {
   let current = null, sequence = 0;
   const close = () => {
     if (!current) return;
+    const body = current.querySelector('.qbody');
+    if (body.hidePopover && body.matches(':popover-open')) body.hidePopover();
     current.classList.remove('on', 'flip');
     current.querySelector('.qm').setAttribute('aria-expanded', 'false');
     current = null;
@@ -45,6 +47,12 @@ export function installInfoHints(doc = document, win = window) {
     button.setAttribute('aria-controls', body.id);
     button.setAttribute('aria-expanded', 'true');
     current.classList.add('on');
+    // Use the same top layer as the engineer picker: scrolling/stacking
+    // containers must not clip help on the mobile schedule.
+    if (body.showPopover) {
+      body.setAttribute('popover', 'manual');
+      body.showPopover();
+    }
     position();
   });
   doc.addEventListener('keydown', event => {

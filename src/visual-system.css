@@ -605,7 +605,7 @@ body { font-size:var(--fs-body); }
 .q { vertical-align:middle; }
 :is(.view,.modal,.map-pop,.pop) .q>.qm { border-radius:50%;font:500 var(--fs-caption)/1 var(--sans); }
 .q:not(.on)>.qbody { display:none; }
-.q.on>.qbody { display:block;position:fixed;left:8px;top:8px;width:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;overscroll-behavior:contain;z-index:2000; }
+.q.on>.qbody { display:block;position:fixed;left:8px;top:8px;right:auto;bottom:auto;margin:0;width:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;overscroll-behavior:contain;z-index:2000; }
 .qbody { text-transform:none;letter-spacing:normal; }
 .summary-kpi dt { display:flex;align-items:center;gap:var(--sp-2); }
 .summary-chart figcaption>.q { margin-left:auto; }
