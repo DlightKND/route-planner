@@ -433,7 +433,7 @@ body { font-size:var(--fs-body); }
 .summary-table th:first-child { width:38%;text-align:left;padding-left:0; }
 .summary-table thead th { color:var(--ink-faint);font-size:var(--fs-caption);font-weight:400;padding-top:0;padding-bottom:var(--sp-4); }
 .summary-table tbody th { font-weight:400;color:var(--ink-dim); }
-.summary-table td { font-family:var(--mono);font-size:var(--fs-caption);font-variant-numeric:tabular-nums; }
+.summary-table td { font-family:var(--mono);font-size:var(--fs-caption);font-variant-numeric:tabular-nums;white-space:nowrap; }
 .summary-table small { display:block;font:var(--fs-caption)/1.4 var(--sans);color:var(--ink-faint);margin-top:var(--sp-1); }
 .summary-table .summary-fact { font-weight:600;color:var(--ink);background:color-mix(in srgb,var(--panel-2) 70%,transparent); }
 .summary-table .summary-delta { color:var(--ink-faint);font-size:11px; }
@@ -448,6 +448,14 @@ body { font-size:var(--fs-body); }
 .summary-kpi dd small { font:var(--fs-caption) var(--sans);color:var(--ink-dim); }
 .summary-kpi>div { font-size:11px;color:var(--ink-faint);line-height:1.5; }
 .summary-load-details .elrow { margin-top:var(--sp-4); }
+@media(max-width:480px) {
+ .summary-table { table-layout:auto;font-size:12px; }
+ .summary-table th:first-child { width:auto;overflow-wrap:normal; }
+ .summary-table th,.summary-table td { padding-left:4px;padding-right:4px; }
+ .summary-table td { font-size:11px; }
+ .summary-table .summary-delta { font-size:10px; }
+ .summary-table th:last-child,.summary-table td:last-child { padding-right:0; }
+}
 
 /* Selection uses surface and frame; rounded controls no longer bend an inset line. */
 .view .seg button.on,.view .seg.chipseg button.on,.view .rquick button[data-rnow],

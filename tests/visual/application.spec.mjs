@@ -195,6 +195,9 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     const paths=await shot(page,testInfo,`${role}-${scene.name}`);
     writeFileSync(join(paths,`${role}-${scene.name}.json`),JSON.stringify(await integrity(page,active,audit,testInfo),null,2));
     if(scene.statistics){
+      for(const cell of await active.locator('.summary-table td').all()){
+        expect(await cell.evaluate(el=>({wrap:getComputedStyle(el).whiteSpace,fits:el.scrollWidth<=el.clientWidth+1})), 'Complete financial numbers stay on one line').toEqual({wrap:'nowrap',fits:true});
+      }
       if(!(await active.locator('.load-chart').isVisible()))await active.locator('.summary-load-details>summary').click();
       await reveal(active.locator('.chart-plot'));
       await expect(active.locator('.chart-y-axis')).toContainText('0');
