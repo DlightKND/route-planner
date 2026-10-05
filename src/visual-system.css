@@ -533,23 +533,23 @@ body { font-size:var(--fs-body); }
 .comparison-track i { position:absolute;top:0;height:100%;border-radius:2px; }
 .comparison-zero { position:absolute;height:12px;top:-2px;width:1px;background:var(--ink-faint); }
 .comparison-scale { display:flex;justify-content:space-between;margin-right:calc(80px + var(--sp-3));color:var(--ink-faint);font:var(--fs-caption) var(--mono); }
-.summary-view-switch,.notice-tabs,:is(.view,.modal,.map-pop) .seg.seg {
+.summary-view-switch,.notice-tabs,:is(.view,.modal,.map-pop,.pop) .seg.seg {
  display:flex;flex-wrap:wrap;gap:var(--sp-1);padding:var(--sp-1);border:1px solid var(--line);
  border-radius:var(--control-radius);background:var(--panel-2);width:fit-content;max-width:100%;overflow:visible;
 }
-.summary-view-switch>button,.notice-tabs>button,:is(.view,.modal,.map-pop) .seg.seg>button {
+.summary-view-switch>button,.notice-tabs>button,:is(.view,.modal,.map-pop,.pop) .seg.seg>button {
  flex:1;min-height:var(--control-h);padding:var(--sp-2) var(--sp-4);border:1px solid transparent;
  background:transparent;color:var(--ink-dim);border-radius:var(--control-radius);
  font:500 var(--fs-body)/1.35 var(--sans);letter-spacing:normal;text-transform:none;cursor:pointer;box-shadow:none;
 }
-.summary-view-switch>button.on,.notice-tabs>button.on,:is(.view,.modal,.map-pop) .seg.seg>button.on {
+.summary-view-switch>button.on,.notice-tabs>button.on,:is(.view,.modal,.map-pop,.pop) .seg.seg>button.on {
  background:var(--ink);color:var(--panel);border-color:var(--ink);font-weight:600;box-shadow:none;
 }
 .summary-view-switch>button:not(.on):not(:disabled):hover,.notice-tabs>button:not(.on):not(:disabled):hover,
-:is(.view,.modal,.map-pop) .seg.seg>button:not(.on):not(:disabled):hover { background:var(--panel);color:var(--ink); }
-:is(.view,.modal,.map-pop) .seg.seg>button:disabled { color:var(--ink-faint);cursor:not-allowed; }
+:is(.view,.modal,.map-pop,.pop) .seg.seg>button:not(.on):not(:disabled):hover { background:var(--panel);color:var(--ink); }
+:is(.view,.modal,.map-pop,.pop) .seg.seg>button:disabled { color:var(--ink-faint);cursor:not-allowed; }
 .summary-view-switch>button::before,.summary-view-switch>button::after,.notice-tabs>button::before,.notice-tabs>button::after,
-:is(.view,.modal,.map-pop) .seg.seg>button::before,:is(.view,.modal,.map-pop) .seg.seg>button::after { content:none; }
+:is(.view,.modal,.map-pop,.pop) .seg.seg>button::before,:is(.view,.modal,.map-pop,.pop) .seg.seg>button::after { content:none; }
 .summary-controls .summary-view-switch { margin:var(--sp-3) 0; }
 .notice-host { width:min(100%,1000px);margin:0 auto;padding:var(--sp-5); }
 .notice-header { display:flex;justify-content:space-between;align-items:center;gap:var(--sp-4);margin-bottom:var(--sp-5); }
@@ -603,7 +603,7 @@ body { font-size:var(--fs-body); }
 .notice-content a { color:var(--ink);font-weight:500;text-decoration-color:var(--ink-dim); }
 /* Keep the established help circle small, with a viewport-bound readable popup. */
 .q { vertical-align:middle; }
-:is(.view,.modal,.map-pop) .q>.qm { border-radius:50%;font:500 var(--fs-caption)/1 var(--sans); }
+:is(.view,.modal,.map-pop,.pop) .q>.qm { border-radius:50%;font:500 var(--fs-caption)/1 var(--sans); }
 .q:not(.on)>.qbody { display:none; }
 .q.on>.qbody { display:block;position:fixed;left:8px;top:8px;width:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;overscroll-behavior:contain;z-index:2000; }
 .qbody { text-transform:none;letter-spacing:normal; }
@@ -611,14 +611,14 @@ body { font-size:var(--fs-body); }
 .summary-chart figcaption>.q { margin-left:auto; }
 .load-chart figcaption>.q { margin-left:var(--sp-2); }
 @media(pointer:coarse) {
- :is(.view,.modal,.map-pop) .q>.qm { width:32px;height:32px; }
- .summary-view-switch>button,.notice-tabs>button,:is(.view,.modal,.map-pop) .seg.seg>button { min-height:var(--touch-h); }
+ :is(.view,.modal,.map-pop,.pop) .q>.qm { width:32px;height:32px; }
+ .summary-view-switch>button,.notice-tabs>button,:is(.view,.modal,.map-pop,.pop) .seg.seg>button { min-height:var(--touch-h); }
 }
 @media(max-width:1180px) {
  .view-dash .seg.dashseg { width:100%; }
 }
 @media(prefers-reduced-motion:reduce) {
- .summary-view-switch>button,.notice-tabs>button,:is(.view,.modal,.map-pop) .seg.seg>button { transition:none; }
+ .summary-view-switch>button,.notice-tabs>button,:is(.view,.modal,.map-pop,.pop) .seg.seg>button { transition:none; }
 }
 .view-dash .dash-attn .acaps { font:600 var(--fs-6)/1.4 var(--sans);margin:0 0 var(--sp-4); }
 .view-dash .vg-feed>.rangebar { margin-top:0; }

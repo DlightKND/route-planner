@@ -342,7 +342,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await visibleTarget(active.locator('#tpPresenceTitle'));
       await expect(active.locator('.wb-table')).toBeVisible();
       if(role==='engineer'){
-        await expect(active.locator('#tpPresence input,#tpPresence select,#tpPresence textarea,#tpPresence button')).toHaveCount(0);
+        await expect(active.locator('#tpPresence input,#tpPresence select,#tpPresence textarea,#tpPresence button:not(.qm)')).toHaveCount(0);
         await expect(active.locator('#wbPresenceSave,#wbDetect,[data-presence-edit]')).toHaveCount(0);
         await expect(active.locator('#tpPresence')).toContainText('Ожидает проверки');
       }else{await expect(active.locator('#wbPresenceSave')).toBeVisible();}
