@@ -12,7 +12,7 @@ it('offers device notifications to a signed-in engineer without opening admin se
     const tabStart=source.indexOf('function tabAllowed('),tabEnd=source.indexOf('// Пункт «Мой день»',tabStart);
     const bind=new Function('$','session','document','initPush','role','canWrite','switchTab',source.slice(start,end)+source.slice(tabStart,tabEnd)+';return {tabAllowed,openPush};');
     const {tabAllowed,openPush}=bind($,{user:{id:'curator'}},win.document,initPush,'engineer',()=>false,switchTab);
-    expect(tabAllowed('settings')).toBe(false);
+    expect(tabAllowed('settings')).toBe(true); // Personal appearance is available; admin panels remain role-gated.
     expect($('pushOverlay').closest('.tab')).toBeNull();
     expect($('pushBtn').dataset.tab).toBeUndefined();
     $('pushBtn').click();

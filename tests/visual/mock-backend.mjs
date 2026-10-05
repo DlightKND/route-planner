@@ -256,6 +256,7 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
     date_from: "2026-09-30",
     date_to: "2026-09-30",
     fact_km: 128,
+    fact_km_source: "track",
     econ_snapshot: {
       km: 128,
       revenue: 1250000,rWork:850000,rParts:200000,rTravel:200000,rPerDiem:0,workH:6,driveH:2,days:1,nights:0,cLabor:500000,cKm:300000,cDay:0,cNight:0,cParts:100000,
@@ -271,7 +272,7 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
   const completedTask={...task,id:'task-completed',status:'completed',date_from:'2026-09-30',date_to:'2026-09-30',service_order_items:[{...item,id:'item-completed',order_id:'task-completed',done_qty:6,billable:false}]};
   tables.service_orders.push(completedTask);tables.service_order_items.push(...completedTask.service_order_items);
   tables.trip_service_orders.push({trip_id:pastTrip.id,order_id:completedTask.id,service_orders:completedTask});
-  tables.trip_tracks=[{trip_id:pastTrip.id,segments:[{kind:'track',km:128,fromTs:'2026-09-30T03:00:00Z',toTs:'2026-09-30T05:00:00Z',ms:7200000}],data:{segments:[{kind:'track',km:128,fromTs:'2026-09-30T03:00:00Z',toTs:'2026-09-30T05:00:00Z',ms:7200000}]}}];
+  tables.trip_tracks=[{trip_id:pastTrip.id,segments:[{kind:'track',km:128,fromTs:'2026-09-30T03:00:00Z',toTs:'2026-09-30T05:00:00Z',ms:7200000,fromPt:{lat:49.99,lng:36.23},toPt:{lat:50.4,lng:36.8},line:[[36.23,49.99],[36.8,50.4]]}],data:{km:128,trackKm:128,roadKm:0,lineKm:0,jitterKm:0,at:stamp,points:[],dropped:[],segments:[{kind:'track',km:128,fromTs:'2026-09-30T03:00:00Z',toTs:'2026-09-30T05:00:00Z',ms:7200000,fromPt:{lat:49.99,lng:36.23},toPt:{lat:50.4,lng:36.8},line:[[36.23,49.99],[36.8,50.4]]}]}}];
   tables.trips.push(pastTrip);
   tables.trip_stays.push({
     ...stays[0],
@@ -425,6 +426,7 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
         let count=0;tables.notification_inbox.forEach(n=>{if(n.recipient_id===session.user.id&&!n.read_at&&n.created_at<=args.p_before){n.read_at=stamp;count++;}});return {data:count,error:null};
       }
       const reads = {
+        account_org_read: {job_title:role==='engineer'?'Выездной инженер':'Руководитель сервиса',manager:role==='engineer'?{...people[0],job_title:'Руководитель сервиса'}:null,reports:role==='engineer'?[]:people.slice(1).map(p=>({...p,job_title:'Сервисный инженер'}))},
         entity_people: people,
         entity_finance_config: settings,
         service_order_trip_cost_summary: [],
