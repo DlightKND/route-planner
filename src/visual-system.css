@@ -317,6 +317,9 @@ body { font-size:var(--fs-body); }
 .view :is(.chip,.rchip,.echip).on,.view .seg.chipseg button.on {
  background:var(--panel-2);color:var(--ink);border-color:var(--ink-dim);box-shadow:inset 0 -2px var(--focus);
 }
+/* Underlined navigation needs a straight baseline rather than rounded corners. */
+.view .subtab { border-radius:0; }
+.view .subtab.active { background:var(--panel-2);color:var(--ink);border-bottom-color:var(--focus); }
 .rail .nav-i { text-transform:none;letter-spacing:normal; }
 .view :is(.icobtn,.qm,.ph-close,.dmove,.route-mini-fit),.gpop [data-gclose],.map-pop .lay {
  border-radius:var(--control-radius);font-family:var(--sans);text-transform:none;letter-spacing:normal;
