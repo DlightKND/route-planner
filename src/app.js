@@ -17,6 +17,8 @@ import { createEntityTabs } from './entity-tabs.js';
 import './entity-activity.css';
 import './visual-system.css';
 import { loadChartHTML } from './dashboard-chart.js';
+import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
+import { dashboardSummaryHTML } from './dashboard-summary.js';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
@@ -3098,6 +3100,7 @@ const RANGE_META={
 };
 function defaultRange(kind){
   const len=kind==='rev'?30:14,t=todayISO();
+  if(kind==='rev')return {from:t.slice(0,7)+'-01',to:monthEndIso(t.slice(0,7))};
   return RANGE_META[kind].dir==='back'?{from:isoOf(utcOf(t)-(len-1)*DAY_MS),to:t}:{from:t,to:isoOf(utcOf(t)+(len-1)*DAY_MS)};
 }
 function loadRangeState(kind){try{const v=JSON.parse(localStorage.getItem('dl_range_'+kind)||'null');if(v&&v.from&&v.to)return v;}catch(e){}return defaultRange(kind);}
@@ -3105,14 +3108,19 @@ const dashRanges={rev:loadRangeState('rev'),load:loadRangeState('load'),gt:loadR
 function saveRange(kind){try{localStorage.setItem('dl_range_'+kind,JSON.stringify(dashRanges[kind]));}catch(e){}}
 function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<div class="rangebar" role="group" aria-label="'+(kind==='gt'?'Период графика':kind==='load'?'Период загрузки':'Период финансов и работ')+'" data-rk="'+kind+'">'
   +'<input type="date" aria-label="Начало периода" data-rf value="'+esc(r.from)+'"><span class="rdash">—</span><input type="date" aria-label="Конец периода" data-rt value="'+esc(r.to)+'">'
-  +'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
-  +meta.lengths.map(x=>'<button data-rlen="'+x[0]+'">'+x[1]+'</button>').join('')+'</span></div>';}
+  +(kind==='rev'?'<span class="rquick"><button data-rmonth="-1" aria-label="Предыдущий месяц">←</button><button data-rmonth="0">Этот месяц</button><button data-rmonth="1" aria-label="Следующий месяц">→</button></span>':'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
+  +meta.lengths.map(x=>'<button data-rlen="'+x[0]+'">'+x[1]+'</button>').join('')+'</span>')+'</div>';}
 function setRange(kind,from,to){if(!from||!to)return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderAttention();}else renderDashboard();}
 function wireRangeBar(box){box.querySelectorAll('.rangebar').forEach(bar=>{const kind=bar.dataset.rk,read=()=>[bar.querySelector('[data-rf]').value,bar.querySelector('[data-rt]').value];
   bar.querySelectorAll('input').forEach(i=>i.onchange=()=>setRange(kind,...read()));
   bar.querySelectorAll('[data-rshift]').forEach(b=>b.onclick=()=>{const r=dashRanges[kind],n=Math.round((utcOf(r.to)-utcOf(r.from))/DAY_MS)+1,d=(+b.dataset.rshift)*n;setRange(kind,isoOf(utcOf(r.from)+d*DAY_MS),isoOf(utcOf(r.to)+d*DAY_MS));});
-  bar.querySelector('[data-rnow]').onclick=()=>{const r=dashRanges[kind],n=Math.round((utcOf(r.to)-utcOf(r.from))/DAY_MS)+1,t=todayISO();setRange(kind,RANGE_META[kind].dir==='back'?isoOf(utcOf(t)-(n-1)*DAY_MS):t,RANGE_META[kind].dir==='back'?t:isoOf(utcOf(t)+(n-1)*DAY_MS));};
+  bar.querySelectorAll('[data-rmonth]').forEach(b=>b.onclick=()=>{const current=+b.dataset.rmonth===0?todayISO():dashRanges[kind].from;const [year,month]=current.split('-').map(Number);const start=new Date(Date.UTC(year,month-1+(+b.dataset.rmonth),1));setRange(kind,isoOf(start),isoOf(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,0)));});
+  const now=bar.querySelector('[data-rnow]');if(now)now.onclick=()=>{const r=dashRanges[kind],n=Math.round((utcOf(r.to)-utcOf(r.from))/DAY_MS)+1,t=todayISO();setRange(kind,RANGE_META[kind].dir==='back'?isoOf(utcOf(t)-(n-1)*DAY_MS):t,RANGE_META[kind].dir==='back'?t:isoOf(utcOf(t)+(n-1)*DAY_MS));};
   bar.querySelectorAll('[data-rlen]').forEach(b=>b.onclick=()=>{const n=+b.dataset.rlen,t=todayISO();setRange(kind,RANGE_META[kind].dir==='back'?isoOf(utcOf(t)-(n-1)*DAY_MS):t,RANGE_META[kind].dir==='back'?t:isoOf(utcOf(t)+(n-1)*DAY_MS));});});}
+// Native details keep controls mounted; dismiss the compact filter panel predictably.
+document.addEventListener('click',e=>document.querySelectorAll('.planner-filter-menu[open]').forEach(panel=>{if(!panel.contains(e.target))panel.open=false;}));
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;const panel=document.querySelector('.planner-filter-menu[open]');if(panel){panel.open=false;panel.querySelector('summary').focus();}});
+
 // ── Порядок карточек сводки ─────────────────────────────────────────────
 // Что важнее — деньги, работы или загрузка, — зависит от дня и от человека.
 // Порядок переставляется теми же двумя способами, что точки в маршруте:
@@ -3264,58 +3272,6 @@ const JOB_AHEAD=j=>j.status==='open'||j.status==='planned'||j.status==='in_progr
 // его нет — день заведения: другой у нас просто не записан.
 const jobDate=j=>j.due_date||String(j.created_at||'').slice(0,10);
 
-function financeCard(jb,trips){
-  if(!canWrite()) return '';
-  const per=dashRanges.rev,cur=appSettings.currency||'',inP=d=>d&&d>=per.from&&d<=per.to;
-  const scope=trips.filter(t=>inP(t.date_from)&&t.status!=='cancelled'&&dashTripInScope(t));
-  const covered=scope.filter(t=>{const e=t.econ_snapshot||{};return t.status==='done'&&e.cost_basis==='fact'&&e.presence_basis==='person_hours_v1'&&factHByTrip[t.id]!=null&&e.cost_fact!=null&&e.profit_fact!=null;});
-  const sum=(rows,key)=>rows.reduce((n,t)=>n+(+(t.econ_snapshot||{})[key]||0),0);
-  const revenue=sum(covered,'revenue'),costPlan=sum(covered,'cost_plan'),costFact=sum(covered,'cost_fact');
-  const profitPlan=sum(covered,'profit_plan'),profitFact=sum(covered,'profit_fact');
-  const marginPlan=revenue?profitPlan/revenue*100:0,marginFact=revenue?profitFact/revenue*100:0;
-  const cov=scope.length?(scope.length>covered.length?'Остальные выезды ожидают полной проверки.':'Факт выбранных выездов подтверждён.'):'В выбранном периоде и по выбранной команде выездов нет.';
-  const allEngineers=dashEnsureEngineers(),teamScope=allEngineers.length&&dashEngineers.size===allEngineers.length?'Все инженеры':dashEngineers.size?'Выбрано '+dashEngineers.size+' из '+allEngineers.length+' инженеров':'Инженеры не выбраны';
-  const breakdown=foldxBtn('dashFinBreak','разбивка')+foldxBox('dashFinBreak','<div class="hint">Работы и запчасти остаются в сохранённых экономических снимках выездов.</div>');
-  return '<div class="card foldable f-any" data-fold="dashFin" data-dcard="fin"><h3 class="cardhead">'+dashGrip('fin')+'Деньги <span class="mc-note">'+esc(shortDate(per.from)+' — '+shortDate(per.to))+'</span></h3>'
-    +'<div class="finance-scope-summary">Команда статистики: '+esc(teamScope)+' · подтверждено '+covered.length+' из '+scope.length+' выездов</div>'
-    +'<div class="hero"><div><div class="hk">прибыль · подтверждено</div><div class="hv">'+(covered.length?fmtMetric(profitFact)+' '+esc(cur):'—')+'</div></div><div><div class="hk">маржа</div><div class="hv">'+(covered.length&&revenue?fmtMetric(marginFact)+'%':'—')+'</div></div></div>'
-    +'<div class="coverage">'+esc(cov)+'</div><div class="m-sub">по плану было '+fmtMetric(profitPlan)+' '+esc(cur)+' и '+fmtMetric(marginPlan)+'%</div>'
-    +rangeBar('rev')+engineerScopeHtml()
-    +(scope.length>covered.length?'<button type="button" class="btn sm" data-review-trips>Открыть выезды для проверки</button>':'')
-    +'<div class="sect">Из чего сложилось</div>'
-    +metricRow({name:'Себестоимость',plan:costPlan,fact:covered.length?costFact:null,unit:cur,dir:'down'})
-    +metricRow({name:'Прибыль',plan:profitPlan,fact:covered.length?profitFact:null,unit:cur,dir:'up'})
-    +metricRow({name:'Маржа',plan:marginPlan,fact:covered.length&&revenue?marginFact:null,unit:'%',dir:'up'})
-    +'<div class="sect">Оплачиваемость</div>'+metricRow({name:'Выручка · договорная',fact:fmtMetric(revenue),unit:cur,single:true})
-    +'<div class="foldx-h">'+breakdown+'</div></div>';
-}
-
-// ── Работы ──────────────────────────────────────────────────────────────
-function worksCard(jb,trips,tripOf){
-  if(!canWrite()) return '';
-  const per=dashRanges.rev,inP=d=>d&&d>=per.from&&d<=per.to;
-  const scopedTrips=trips.filter(t=>inP(t.date_from)&&t.status!=='cancelled'&&dashTripInScope(t));
-  const shown=jb.filter(j=>inP(jobDate(j))&&workStatusVisible.has(j.status)&&(!j.assigned_engineer||dashEngineers.has(String(j.assigned_engineer))));
-  const withHours=scopedTrips.filter(t=>factHByTrip[t.id]!=null),withKm=scopedTrips.filter(t=>t.fact_km!=null);
-  const snap=(rows,key)=>rows.reduce((n,t)=>n+(+(t.econ_snapshot||{})[key]||0),0);
-  const workPlan=snap(withHours,'workH'),workFact=withHours.reduce((n,t)=>n+(+factHByTrip[t.id]||0),0);
-  const kmPlan=snap(withKm,'km'),kmFact=withKm.reduce((n,t)=>n+(+t.fact_km||0),0);
-  const drivePlan=snap(scopedTrips,'driveH');
-  const timed=scopedTrips.filter(t=>t.started_at&&t.finished_at),tripPlanH=timed.reduce((n,t)=>n+Math.max(0,(utcOf(t.date_to||t.date_from)-utcOf(t.date_from))/36e5+gtWindowHours()),0),tripFactH=timed.reduce((n,t)=>n+Math.max(0,(new Date(t.finished_at)-new Date(t.started_at))/36e5),0);
-  const planNights=snap(scopedTrips,'nights'),factNights=timed.reduce((n,t)=>n+Math.max(0,Math.ceil((new Date(t.finished_at)-new Date(t.started_at))/DAY_MS)-1),0);
-  const byst={open:0,planned:0,in_progress:0,done:0,cancelled:0};shown.forEach(j=>byst[j.status]=(byst[j.status]||0)+1);let bar='',leg='';const total=Math.max(1,shown.length);
-  WORK_STATUS_META.forEach(([status,lbl,col])=>{const n=byst[status]||0,on=workStatusVisible.has(status);if(on&&n)bar+='<i style="width:'+(n/total*100)+'%;background:'+col+'"></i>';leg+='<button type="button" class="stat-filter'+(on?'':' off')+'" aria-pressed="'+on+'" data-work-status="'+status+'"><i class="ldot" style="background:'+col+'"></i>'+lbl+' '+n+'</button>';});
-  const src=Array.from(new Set(withKm.map(t=>factSrcRu(t.fact_km_source)).filter(Boolean))).join(', ');
-  return '<div class="card foldable f-any statuscard" data-fold="dashWork" data-dcard="work"><h3 class="cardhead">'+dashGrip('work')+'Работа в поле <span class="mc-note">'+esc(shortDate(per.from)+' — '+shortDate(per.to))+'</span></h3>'
-    +rangeBar('rev')+engineerScopeHtml()+'<div class="coverage">факт по '+withHours.length+' из '+scopedTrips.length+' выездов</div>'
-    +'<div class="hero"><div><div class="hk">присутствие · факт</div><div class="hv">'+(withHours.length?fmtMetric(workFact)+' чел.-ч':'—')+'</div></div><div><div class="hk">отклонение от норматива</div><div class="hv">'+(withHours.length?metricDelta(workPlan,workFact,'down').text:'—')+'</div></div></div>'
-    +'<div class="sect">Ресурсы</div>'+metricRow({name:'Присутствие команды',plan:workPlan,fact:withHours.length?workFact:null,unit:'чел.-ч',dir:'down',sub:'План — норматив; факт — проверенное присутствие'})
-    +metricRow({name:'Километры',plan:kmPlan,fact:withKm.length?kmFact:null,unit:'км',dir:'down',sub:(src||'источник не указан')+' · '+withKm.length+' из '+scopedTrips.length})
-    +metricRow({name:'Время выезда',plan:tripPlanH,fact:timed.length?tripFactH:null,unit:'ч',dir:'down'})+metricRow({name:'Часы дороги',plan:drivePlan,fact:null,unit:'ч',dir:'down',sub:'источника факта пока нет'})
-    +'<div class="sect">Объём</div>'+metricRow({name:'Выездов',fact:String(scopedTrips.length),single:true})+metricRow({name:'Заявок',fact:String(shown.length),single:true})+metricRow({name:'Ночёвок',plan:planNights,fact:timed.length?factNights:null,dir:'down'})
-    +'<div class="statbar">'+(bar||'<i style="width:100%;background:var(--line)"></i>')+'</div><div class="statleg">'+leg+'</div></div>';
-}
-
 // ── Загрузка отдела ─────────────────────────────────────────────────────
 //
 // Считается тем же планировщиком, что рисует ленту: часы лежат в тех днях,
@@ -3326,11 +3282,13 @@ function worksCard(jb,trips,tripOf){
 // Фонд отдела — все действующие инженеры: смена × рабочие дни периода ×
 // число инженеров. Отдельной строкой сверху, потому что вопрос «можем ли
 // мы взять ещё работу» задаётся отделу, а не человеку.
-function loadCard(list,tripOf,tripById,tripOrd){
+function dashboardLoad(trips,tasks,tracks=[]){
   if(!canWrite()) return '';
   const shift=gtWindowHours();
-  const fromIso=dashRanges.load.from,toIso=dashRanges.load.to;
-  const plan=planOfData(list,tripOf,tripById,tripOrd).plan;
+  const fromIso=dashRanges.rev.from,toIso=dashRanges.rev.to;
+  const tripById=Object.fromEntries(trips.filter(t=>t.status!=='cancelled').map(t=>[t.id,t]));
+  const input=statisticsPlanBlocks(trips.filter(dashTripInScope),tasks.filter(dashTripInScope),dashRanges.rev);
+  const plan=planSchedule(input.blocks,gtSettings(input.blocks),{today:todayISO()});
   const engs=dashEnsureEngineers().filter(p=>dashEngineers.has(String(p.id)));
   const engIds=new Set(engs.map(p=>p.id));
   const capByEngineer={},dayCapacity={};
@@ -3356,14 +3314,16 @@ function loadCard(list,tripOf,tripById,tripOrd){
     r.f+=p.hours;r.fKnown=1;factDay[p.date]=(factDay[p.date]||0)+p.hours;
   });
 
+  const road=roadPersonHours({trips:Object.values(tripById).filter(t=>dashTripInScope(t)),tracks,presence:factPresenceRows,period:dashRanges.rev,engineerIds:[...engIds]});
+  road.daily.forEach(p=>{const r=lane[p.engineer]||(lane[p.engineer]={w:0,d:0,n:0,f:0,fKnown:0});r.f+=p.hours;r.fKnown=1;factDay[p.date]=(factDay[p.date]||0)+p.hours;});
   const num=v=>v.toFixed(v%1?1:0);
   const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
   const rowHtml=(nm,r,cap,cls)=>{
     const t=r.w+r.d, p=cap>0?t/cap:0, pct=p*100;
     const col=p>1?'var(--red)':'var(--ink)', fillPct=Math.min(100,p/1.75*100);
     const parts=[num(r.w)+' ч работ']; if(r.d) parts.push(num(r.d)+' ч дороги');
-    if(r.fKnown)parts.push('присутствие '+num(r.f)+' чел.-ч');
-    parts.push(r.n+' '+plural(r.n,'заявка','заявки','заявок'));
+    if(r.fKnown)parts.push('занятость '+num(r.f)+' чел.-ч');
+    parts.push(r.n+' '+plural(r.n,'запись плана','записи плана','записей плана'));
     return '<div class="elrow'+(cls?(' '+cls):'')+'">'
       +'<div class="el-n">'+esc(nm)+'</div>'
       +'<div class="el-v" style="color:'+col+'">'+num(t)+' / '+num(cap)+' ч · '+Math.round(pct)+'%</div>'
@@ -3378,9 +3338,9 @@ function loadCard(list,tripOf,tripById,tripOrd){
   if(!people.length) people=Object.keys(lane).filter(k=>k!==' free')
     .map(id=>({id:id,name:name(id)}));
   // Знаменатель — тот же, что у полоски недель в ленте.
-  const engN=engineersCount(plan);
+  const engN=engs.length;
   if(!engs.length)for(let x=utcOf(fromIso);x<=utcOf(toIso);x+=DAY_MS){const iso=isoOf(x),d=new Date(x).getUTCDay();dayCapacity[iso]=(d===0||d===6)?0:shift*engN;}
-  const fund=people.reduce((n,p)=>n+(capByEngineer[p.id]||0),0)||(capEach*engN);
+  const fund=engs.length?people.reduce((n,p)=>n+(capByEngineer[p.id]||0),0):0;
   const tot={w:0,d:0,n:0,f:0,fKnown:0};
   Object.keys(lane).forEach(k=>{ tot.w+=lane[k].w; tot.d+=lane[k].d; tot.n+=lane[k].n;tot.f+=lane[k].f||0;tot.fKnown+=lane[k].fKnown||0; });
   let body=rowHtml('Отдел · '+engN+' '+plural(engN,'инженер','инженера','инженеров'),
@@ -3410,18 +3370,25 @@ function loadCard(list,tripOf,tripById,tripOrd){
       const d=new Date(x).getUTCDay();
       cells.push({key:iso,label:String(iso.slice(8)),v:day[iso]||0,f:factDay[iso]||0,known:Object.hasOwn(factDay,iso),cap:dayCapacity[iso]||0,we:(d===0||d===6)}); }
   }
-  const chart=loadChartHTML(cells,{weekly:long});
-  const hzTxt=shortDate(fromIso)+'–'+shortDate(toIso);
-  return '<div class="card elcard foldable f-any" data-fold="dashLoad" data-dcard="load">'
-    +'<h3 class="cardhead">'+dashGrip('load')+'Загрузка отдела <span class="el-hz">'+esc(hzTxt)+'</span>'
-    +'</h3>'+rangeBar('load')+engineerScopeHtml()
-    +body
-    +'<div class="foldx-h">'+foldxBtn('dashLoadChart',long?'По неделям':'По дням')+'</div>'
-    +foldxBox('dashLoadChart',chart)
-    +'</div>';
+  const chart=loadChartHTML(cells,{weekly:long,withDriving:true});
+  const nonFieldUnknown=tasks.filter(o=>o.status==='completed'&&['depot','remote'].includes(o.work_mode)&&o.date_from>=fromIso&&o.date_from<=toIso&&dashTripInScope(o)&&(o.service_order_items||[]).some(i=>i.kind==='work'&&Number(i.done_qty)>0)).length;
+  const presenceUnknown=Object.values(tripById).filter(t=>t.status==='done'&&dashTripInScope(t)&&t.date_from>=fromIso&&t.date_from<=toIso&&!(t.econ_snapshot?.workH===0)&&factHByTrip[t.id]==null).length;
+  return {fund,body,chart,nonFieldUnknown,presenceUnknown,totalPlan:tot.w+tot.d,totalPlanPercent:fund>0?(tot.w+tot.d)/fund*100:null,
+    planUnknown:input.unknown,planPercent:fund>0&&!input.unknown?(tot.w+tot.d)/fund*100:null,factPercent:fund>0&&tot.fKnown&&road.complete&&!nonFieldUnknown&&!presenceUnknown?tot.f/fund*100:null,roadKnown:road.known,roadUnknown:road.unknown};
 }
 
-async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
+async function dashboardRead(table,columns,tripIds){
+  const rows=[];
+  for(let start=0;;start+=1000){
+    let query=sb.from(table).select(columns).order(['service_orders','jobs','trips'].includes(table)?'id':'trip_id');
+    if(tripIds)query=query.in('trip_id',tripIds);
+    const {data,error}=await query.range(start,start+999);if(error)throw error;
+    rows.push(...(data||[]));if(!data||data.length<1000)return rows;
+  }
+}
+
+let dashboardRenderVersion=0;
+async function renderDashboard(){ const version=++dashboardRenderVersion,box=$('dashBody'); if(!box) return;
   renderAttention();
   // Ролевая раскладка. Инженер видит только «График» — ленту на всю ширину,
   // без денег и без правой колонки. Менеджер и админ — двухколоночно.
@@ -3444,32 +3411,27 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
   box.innerHTML='<div class="shim" role="status" aria-label="Загрузка данных"></div>';
   try{
     await ensureRefs(); await loadStaffDays(); await loadFactHours();
-    const {data:js,error:jobError}=await sb.from('jobs')
-      .select('id,status,at_depot,due_date,created_at,assigned_engineer,owner_id,curator_id,day_plan, clients(lat,lng), equipment(lat,lng), '+JOB_FINANCE_SELECT)
-      .is('deleted_at',null);
-    if(jobError)throw jobError;
-    const jb=projectLegacyFinanceRows(js||[]);
-    const {data:tr,error:tripError}=await sb.from('trips').select('id,econ_snapshot,route_stops,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,status,day_plan,started_at,finished_at,fact_km,fact_km_source').is('deleted_at',null);
-    if(tripError)throw tripError;
-    const trips=tr||[];
-    // Кто в каком выезде — планировщику: без этого выезд рассыпается на
-    // отдельные заявки, и дорога исчезает из загрузки.
-    const tripOf={}, tripById={}, tripOrd={};
-    trips.forEach(t=>{ tripById[t.id]=t; });
-    const {data:tj,error:linkError}=await sb.from('trip_jobs').select('job_id,trip_id,ord');if(linkError)throw linkError;
-    (tj||[]).forEach(r=>{ const t=tripById[r.trip_id];
-      if(t&&t.status!=='cancelled'){ tripOf[r.job_id]=r.trip_id; tripOrd[r.job_id]=(+r.ord||0); } });
-
+    const trips=(await dashboardRead('trips','id,econ_snapshot,plan_econ_snapshot,tariffs_snapshot,route_stops,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,status,day_plan,started_at,finished_at,fact_km,fact_km_source,deleted_at')).filter(t=>!t.deleted_at);
     // Initialise the selected team before computing totals, including first load.
     dashEnsureEngineers();
-    const made={fin:financeCard(jb,trips),work:worksCard(jb,trips,tripOf),load:loadCard(jb,tripOf,tripById,tripOrd)};
-    box.innerHTML=dashOrder.map(k=>made[k]||'').join('');
+    const [tasks,taskLinks] = await Promise.all([
+      dashboardRead('service_orders','id,status,work_mode,date_from,lead_engineer,engineer_ids,deleted_at,service_order_items(id,kind,unit,planned_qty,done_qty,transferred_qty,billable,legacy_snapshot,request_finance_void_event_id)').then(rows=>rows.filter(o=>!o.deleted_at)),
+      dashboardRead('trip_service_orders','trip_id,order_id')
+    ]);
+    const scopedIds=trips.filter(t=>['done','finished','in_progress'].includes(t.status)&&t.date_from>=dashRanges.rev.from&&t.date_from<=dashRanges.rev.to&&dashTripInScope(t)).map(t=>t.id);
+    let tracks=[],trackUnavailable=false;
+    if(scopedIds.length)try{tracks=await dashboardRead('trip_tracks','trip_id,segments:data->segments',scopedIds);}catch(e){trackUnavailable=true;}
+    const metrics=dashboardMetrics({trips,orders:tasks,links:taskLinks,tracks,period:dashRanges.rev,engineerIds:[...dashEngineers],factHours:factHByTrip});
+    if(version!==dashboardRenderVersion)return;
+    const teamCount=dashEngineers.size;
+    box.innerHTML='<div class="summary-controls"><h2>Результаты отдела</h2>'+rangeBar('rev')+'<details class="summary-team"><summary>Команда · '+teamCount+' '+plural(teamCount,'инженер','инженера','инженеров')+'</summary>'+engineerScopeHtml()+'</details></div>'
+      +dashboardSummaryHTML(metrics,dashboardLoad(trips,tasks,tracks),{currency:appSettings.currency||'грн'})
+      +(trackUnavailable?'<p class="summary-note" role="status">Не удалось загрузить GPS-участки; средняя скорость недоступна.</p>':'');
     paintFirstMotion(box);
     wireRangeBar(box);box.querySelectorAll('[data-review-trips]').forEach(b=>b.onclick=()=>{for(const status of TRIP_STATUS_ORDER)tripVisible[status]=status!=='cancelled';tripLayout='list';$('tripLayout').value='list';$('tripSearch').value='';$('tripEngFilter').value='';switchTab('planner','trips');});
     box.querySelectorAll('[data-epop]').forEach(b=>b.onclick=e=>{e.stopPropagation();const p=b.parentElement.querySelector('.engineer-pop');if(p)p.hidden=!p.hidden;});
     box.querySelectorAll('[data-eall]').forEach(b=>b.onclick=()=>{const all=dashEngineerList();dashEngineers=new Set(all.map(p=>String(p.id)));dashEngineersSave();renderDashboard();});
     box.querySelectorAll('[data-eng]').forEach(b=>b.onclick=()=>{const id=String(b.dataset.eng);if(dashEngineers.has(id)){if(dashEngineers.size===1){notify('Оставь хотя бы одного инженера.','warn');return;}dashEngineers.delete(id);}else dashEngineers.add(id);dashEngineersSave();renderDashboard();});
-    wireDashDrag(box);
     foldApply();
     box.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>dashNav(el.dataset.nav));
     box.querySelectorAll('[data-work-status]').forEach(el=>el.onclick=()=>{
@@ -3480,7 +3442,7 @@ async function renderDashboard(){ const box=$('dashBody'); if(!box) return;
       } else workStatusVisible.add(status);
       workStatusSave(); renderDashboard();
     });
-  }catch(e){listLoadError(box,e,renderDashboard);} }
+  }catch(e){if(version===dashboardRenderVersion)listLoadError(box,e,renderDashboard);} }
 // Чипы сводки на узком экране: две колонки туда не помещаются, и вместо
 // того чтобы гнать инфокарты в подвал ленты, показываем одну из двух.
 (function(){

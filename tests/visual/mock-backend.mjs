@@ -155,8 +155,8 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
         lng: client.lng,
       },
     ],
-    econ_snapshot: { km: 128, driveH: 2, legs: [] },
-    plan_econ_snapshot: { km: 128, driveH: 2, legs: [] },
+    econ_snapshot: { km:128,driveH:2,workH:6,legs:[],days:1,nights:0,revenue:10000,rWork:7500,rParts:500,rTravel:1600,rPerDiem:400,cLabor:4500,cKm:1280,cDay:400,cNight:0,cParts:240,cost_plan:6420,profit_plan:3580,cost_basis:"plan" },
+    plan_econ_snapshot: { km:128,driveH:2,workH:6,legs:[],days:1,nights:0,revenue:10000,rWork:7500,rParts:500,rTravel:1600,rPerDiem:400,cLabor:4500,cKm:1280,cDay:400,cNight:0,cParts:240,cost_plan:6420,profit_plan:3580,cost_basis:"plan" },
     notes: "Демонстрационный выезд",
     fact_km: null,
   };
@@ -258,7 +258,7 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
     fact_km: 128,
     econ_snapshot: {
       km: 128,
-      revenue: 1250000,
+      revenue: 1250000,rWork:850000,rParts:200000,rTravel:200000,rPerDiem:0,workH:6,driveH:2,days:1,nights:0,cLabor:500000,cKm:300000,cDay:0,cNight:0,cParts:100000,
       cost_plan: 850000,
       cost_fact: 900000,
       profit_plan: 400000,
@@ -267,6 +267,11 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
       presence_basis: "person_hours_v1",
     },
   };
+  pastTrip.plan_econ_snapshot={...pastTrip.econ_snapshot,cLabor:450000,cost_basis:'plan'};
+  const completedTask={...task,id:'task-completed',status:'completed',date_from:'2026-09-30',date_to:'2026-09-30',service_order_items:[{...item,id:'item-completed',order_id:'task-completed',done_qty:6,billable:false}]};
+  tables.service_orders.push(completedTask);tables.service_order_items.push(...completedTask.service_order_items);
+  tables.trip_service_orders.push({trip_id:pastTrip.id,order_id:completedTask.id,service_orders:completedTask});
+  tables.trip_tracks=[{trip_id:pastTrip.id,segments:[{kind:'track',km:128,fromTs:'2026-09-30T03:00:00Z',toTs:'2026-09-30T05:00:00Z',ms:7200000}],data:{segments:[{kind:'track',km:128,fromTs:'2026-09-30T03:00:00Z',toTs:'2026-09-30T05:00:00Z',ms:7200000}]}}];
   tables.trips.push(pastTrip);
   tables.trip_stays.push({
     ...stays[0],
