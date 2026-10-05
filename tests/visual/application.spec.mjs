@@ -239,6 +239,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await expect.poll(()=>button.evaluate(el=>{const probe=document.createElement('span');probe.style.cssText='background:var(--ink);color:var(--panel)';el.append(probe);const expected=getComputedStyle(probe),actual=getComputedStyle(el),same=expected.backgroundColor===actual.backgroundColor&&expected.color===actual.color;probe.remove();return same;}),{message:'All selected segments use the shared neutral colors'}).toBe(true);
     }
     const info=active.locator('.qm:visible:not(:disabled)').first();
+    for(const body of await active.locator('.q:not(.on)>.qbody').all())await expect(body,'Closed hints never appear as persistent captions').toBeHidden();
     if(await info.count()){
       await reveal(info);await info.click();
       await expect(info).toHaveAttribute('aria-expanded','true');
@@ -251,6 +252,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await popup.click({position:{x:12,y:12}});await expect(popup).toBeVisible();
       await shot(page,testInfo,`${role}-${scene.name}-help`);
       await page.keyboard.press('Escape');await expect(popup).toHaveCount(0);
+      for(const body of await active.locator('.qbody').all())await expect(body).toBeHidden();
       await expect(info).toBeFocused();
     }
     const paths=await shot(page,testInfo,`${role}-${scene.name}`);

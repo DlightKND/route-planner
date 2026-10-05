@@ -520,7 +520,7 @@ body { font-size:var(--fs-body); }
 /* Comparison charts and personal inbox */
 .summary-chart { margin:var(--sp-4) 0; }
 .summary-chart figcaption { display:flex;gap:var(--sp-5);font-size:var(--fs-caption);color:var(--ink-dim);margin-bottom:var(--sp-4); }
-.summary-chart figcaption span { display:flex;gap:var(--sp-2);align-items:center; }
+.summary-chart figcaption>span:not(.q) { display:flex;gap:var(--sp-2);align-items:center; }
 .summary-chart figcaption i { width:18px;height:7px;border-radius:2px; }
 .summary-chart .plan { background:var(--ink-faint); }
 .summary-chart .fact { background:var(--accent); }
@@ -604,7 +604,8 @@ body { font-size:var(--fs-body); }
 /* Keep the established help circle small, with a viewport-bound readable popup. */
 .q { vertical-align:middle; }
 :is(.view,.modal,.map-pop) .q>.qm { border-radius:50%;font:500 var(--fs-caption)/1 var(--sans); }
-.q.on>.qbody { position:fixed;left:8px;top:8px;width:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;overscroll-behavior:contain;z-index:2000; }
+.q:not(.on)>.qbody { display:none; }
+.q.on>.qbody { display:block;position:fixed;left:8px;top:8px;width:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;overscroll-behavior:contain;z-index:2000; }
 .qbody { text-transform:none;letter-spacing:normal; }
 .summary-kpi dt { display:flex;align-items:center;gap:var(--sp-2); }
 .summary-chart figcaption>.q { margin-left:auto; }
