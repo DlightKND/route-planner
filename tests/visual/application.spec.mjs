@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const scenes = [
+  {name:'notifications',route:'notifications',view:'notifications',ready:'.notice-row',allRoles:true},
   {name:'dashboard-graph',route:'dash',view:'dash',ready:'#attnBody .vg-feed'},
   {name:'dashboard-statistics',route:'dash',view:'dash',ready:'#dashBody .card[data-dcard=fin]',statistics:true},
   {name:'dispatcher',route:'planner/orders',view:'planner',ready:'#orderList .kcard'},
@@ -22,7 +23,7 @@ const scenes = [
   {name:'settings-users',route:'settings',view:'settings',section:'users',ready:'#usersList .staff-row',admin:true},
   {name:'settings-appearance',route:'settings',view:'settings',section:'theme',ready:'#dtMode',admin:true},
 ];
-const forRole = (scene,role) => role==='admin' ? scene.admin : role==='logist' ? !scene.admin : ['dashboard-graph','request','task','task-active','trip'].includes(scene.name);
+const forRole = (scene,role) => scene.allRoles || (role==='admin' ? scene.admin : role==='logist' ? !scene.admin : ['dashboard-graph','request','task','task-active','trip'].includes(scene.name));
 async function openScene(page,context,testInfo,role,scene) {
   const audit={errors:[],remoteAPIs:[]};
   page.on('pageerror',e=>audit.errors.push(e.message));
@@ -156,7 +157,27 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await shot(page,testInfo,'logist-map-directory-cards');
       await active.locator('#mapScope [data-ms=work]').click();
     }
+    if(scene.name==='notifications'){
+      await expect(active.locator('.notice-row')).toHaveCount(3);await expect(active).not.toContainText('Чужое уведомление');
+      await expect(page.locator('#noticeBadge')).toHaveText('2');
+      await visibleTarget(active.locator('[data-notice-push]'));
+      await active.locator('[data-notice-push]').click();await expect(page.locator('#pushOverlay')).toHaveClass(/on/);
+      await page.keyboard.press('Escape');await expect(active.locator('[data-notice-push]')).toBeFocused();
+      await active.locator('[data-notice-filter=unread]').click();await expect(active.locator('.notice-row')).toHaveCount(2);
+      await active.locator('[data-notice-read]').first().click();await expect(active.locator('.notice-row')).toHaveCount(1);await expect(page.locator('#noticeBadge')).toHaveText('1');
+      await active.locator('#noticeSearch').fill('Нет совпадений');await expect(active.locator('.notice-status')).toContainText('ничего не найдено');
+      await active.locator('#noticeSearch').fill('');await expect(active.locator('.notice-row')).toHaveCount(1);
+      await active.locator('[data-notice-filter=all]').click();await expect(active.locator('.notice-row')).toHaveCount(3);
+    }
     if(scene.statistics){
+      await expect(active.locator('[data-summary-mode=charts] .summary-chart')).toHaveCount(2);
+      await shot(page,testInfo,'logist-dashboard-diagrams');
+      if(testInfo.project.use.viewport.width>=1181){const aligned=await active.locator('#dashBody .rangebar').evaluate(el=>{const date=el.querySelector('input').getBoundingClientRect(),quick=el.querySelector('.rquick').getBoundingClientRect();return Math.abs(date.top-quick.top)<2;});expect(aligned,'Dates and month arrows share a row').toBe(true);}
+      await expect(active.locator('[data-summary-view=charts]')).toHaveAttribute('aria-pressed','true');
+      await active.locator('[data-summary-view=tables]').click();
+      await expect(active.locator('[data-summary-mode=charts]').first()).toBeHidden();
+      await expect(active.locator('[data-summary-mode=tables]').first()).toBeVisible();
+
       await expect(active.locator('[data-dcard=fin] .finance-scope-summary')).toContainText('подтверждено 1 из 2');
       await expect(active.locator('[data-dcard=fin] .summary-total').last()).toContainText('350');
       await expect(active.locator('#dashBody .rangebar')).toHaveCount(1);

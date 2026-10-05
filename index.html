@@ -2338,7 +2338,7 @@
     <!-- Шестерёнка одним контуром: прежняя «звёздочка» из отдельных чёрточек
          на 18–20 px рассыпалась на несвязанные штрихи и читалась как солнце. -->
     <button class="nav-i" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.6-1.25-1.8-3.1-1.9.8a8 8 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.45a8 8 0 0 0-2.6 1.5L6 6.15l-1.8 3.1L5.8 10.5a7.8 7.8 0 0 0 0 3l-1.6 1.25L6 17.85l1.9-.8a8 8 0 0 0 2.6 1.5l.3 2.45h3.6l.3-2.45a8 8 0 0 0 2.6-1.5l1.9.8 1.8-3.1-1.6-1.25z"/></svg><span>Настройки</span></button>
-    <button class="nav-i" id="pushBtn" title="Уведомления"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span>Уведомления</span></button>
+    <button class="nav-i" id="pushBtn" title="Уведомления"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span>Уведомления</span><b id="noticeBadge" class="notice-badge" hidden></b></button>
     <button class="nav-i" id="themeBtn" aria-expanded="false" title="Внешний вид"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg><span>Вид</span></button>
     <button class="nav-i" id="cfgBtn" title="Подключение"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 7h14M5 17h14"/></svg><span>Связь</span></button>
     <button class="nav-i" id="logoutBtn" style="display:none" title="Выйти"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h10"/></svg><span>Выйти</span></button>
@@ -2369,6 +2369,7 @@
 <div class="views" id="appRoot" style="display:none">
 
   <!-- MAP / CLIENTS -->
+  <div class="view view-notifications"><div class="pane scrollp"><div id="noticeHost" class="notice-host"></div></div></div>
   <div class="view view-dash"><div class="pane scrollp">
     <!-- Чипы «График / Инфокарты» — только на узком экране: там две колонки
          не помещаются, и вместо того чтобы гнать инфокарты в подвал ленты,
