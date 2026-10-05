@@ -4,9 +4,10 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const n = v => v == null ? '—' : (+v).toLocaleString('ru-RU',{maximumFractionDigits:2});
 const time = v => v ? new Date(v).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Kyiv'}) : '—';
 
-export function presenceHTML(data, jobs, profiles, {editor = false, orders = []} = {}) {
+export function presenceHTML(data, jobs, profiles, {editor = false, orders = [], readonly = false} = {}) {
   const summary = presenceSummary(data.stays), t = data.trip;
   const jobName = id => jobs.find(j=>j.id===id)?.clients?.name || data.removed.find(j=>j.job_id===id)?.snapshot?.client_name || 'Заявка '+String(id).slice(0,8);
+  const presenceStatus = {approved:'Проверено · присутствие', rejected:'Не учитывается', detected:'Ожидает проверки', engineer_ok:'Подтверждено инженером · ожидает проверки'};
   const taskName = id => {const o=orders.find(x=>x.id===id);return o?`№${o.number} · ${o.title}`:'Задание '+String(id).slice(0,8);};
   const allocationRows = stay => {
     const source=Array.isArray(stay.task_allocations)?stay.task_allocations
@@ -16,10 +17,10 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = []}
   const allocationCell = (stay, edit) => {
     const current=allocationRows(stay), candidates=orders.filter(o=>o.job_id===stay.job_id);
     if(!edit){
-      const labels=current.map(x=>`${taskName(x.order_id)} · ${Math.round(Number(x.share)*100)}%`);
+      const labels=current.map(x=>({title:taskName(x.order_id),percent:Math.round(Number(x.share)*100)}));
       const remainder=Math.max(0,1-current.reduce((sum,x)=>sum+(Number(x.share)||0),0));
-      if(remainder>0.000001)labels.push(`Не распределено · ${Math.round(remainder*100)}%`);
-      return labels.length?labels.map(x=>`<span class="wb-task-share">${esc(x)}</span>`).join(' '):'<span class="hint">Не распределено</span>';
+      if(remainder>0.000001)labels.push({title:'Не распределено',percent:Math.round(remainder*100)});
+      return labels.length?labels.map(x=>`<span class="wb-task-share"><span>${esc(x.title)}</span><b>${esc(x.percent)}%</b></span>`).join(' '):'<span class="hint">Не распределено</span>';
     }
     return `<div class="wb-task-share-list">${candidates.length?candidates.map(o=>{
       const share=Number(current.find(x=>x.order_id===o.id)?.share||0),checked=share>0;
@@ -33,6 +34,19 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = []}
     const mins = s.minutes_mgr ?? s.minutes_raw;
     const hrs = mins != null && crew.length ? mins*crew.length/60 : null;
     const suggested=s.status==='detected'&&s.job_id&&s.stay_to&&crew.length&&s.crew_source==='snapshot';
+    if(readonly){
+      const recordedMinutes=['approved','rejected'].includes(s.status)?s.minutes_mgr:s.minutes_raw;
+      const knownCrew=['snapshot','manager'].includes(s.crew_source);
+      const uniqueCrew=[...new Set(crew)];
+      const crewLabel=uniqueCrew.map(id=>profiles.find(p=>p.id===id)?.full_name||'Инженер '+String(id).slice(0,8)).join(', ');
+      const recordedHours=recordedMinutes!=null&&uniqueCrew.length&&knownCrew?recordedMinutes*uniqueCrew.length/60:null;
+      return `<tr data-presence-id="${esc(s.id)}"><td data-label="Интервал">${time(s.stay_from)}<br>${time(s.stay_to)}<div class="hint">GPS: ${n(s.minutes_raw)} мин</div></td>
+        <td data-label="Объект / заявка">${esc(s.job_id?jobName(s.job_id):'Не привязана')}</td>
+        <td data-label="Команда">${esc(crewLabel||'Состав не указан')}${!knownCrew?'<div class="hint">Состав не подтверждён</div>':''}</td>
+        <td data-label="Задание · доля человеко-часов">${allocationCell(s,false)}</td>
+        <td data-label="Минуты на человека">${n(recordedMinutes)}<div class="hint">${n(recordedHours)} чел.-ч${['approved','rejected'].includes(s.status)?'':' · по записи, до проверки'}</div></td>
+        <td data-label="Проверка">${esc(presenceStatus[s.status]||'Не проверено')}</td></tr>`;
+    }
     return `<tr data-presence-id="${esc(s.id)}"><td data-label="Интервал">${time(s.stay_from)}<br>${time(s.stay_to)}<div class="hint">GPS: ${n(s.minutes_raw)} мин</div></td>
       <td data-label="Объект / заявка"><select data-presence="job_id" aria-label="Заявка стоянки"><option value="">Не привязана</option>${candidateJobs.map(j=>`<option value="${esc(j.id)}" ${j.id===s.job_id?'selected':''}>${esc(j.name)}</option>`).join('')}</select></td>
       <td data-label="Команда"><select data-presence="crew_ids" multiple aria-label="Присутствовавшие инженеры">${profiles.filter(p=>p.role==='engineer'||crew.includes(p.id)).map(p=>`<option value="${esc(p.id)}" ${crew.includes(p.id)?'selected':''}>${esc(p.full_name||'Инженер')}</option>`).join('')}</select>${s.crew_source==='legacy_unverified'?'<div class="hint">Исторический состав не подтверждён</div>':''}</td>
@@ -40,12 +54,12 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = []}
       <td data-label="Минуты на человека"><input data-presence="minutes_mgr" aria-label="Минуты присутствия" type="number" min="0" step="1" value="${esc(mins??'')}"><div class="hint">${n(hrs)} чел.-ч</div></td>
       <td data-label="Проверка"><select data-presence="status" aria-label="Результат проверки"><option value="" ${!suggested&&!['approved','rejected'].includes(s.status)?'selected':''}>Проверить позже</option><option value="approved" ${suggested||s.status==='approved'?'selected':''}>${suggested?'Присутствие · предложено':'Присутствие'}</option><option value="rejected" ${s.status==='rejected'?'selected':''}>Не учитывать</option></select></td></tr>`;
   }).join('');
-  const table = `<div class="wb-table-scroll" role="region" aria-label="Стоянки на объектах" tabindex="0"><table class="wb-table"><thead><tr><th>Интервал</th><th>Объект / заявка</th><th>Команда</th><th>Задание · доля часов</th><th>Минуты на человека</th><th>Проверка</th>${editor?'':'<th></th>'}</tr></thead><tbody>${editor?rows:rows.replaceAll('</tr>','<td><button type="button" class="btn sm" data-presence-edit>Изменить</button></td></tr>')}</tbody></table></div>`;
+  const table = `<div class="wb-table-scroll" role="region" aria-label="Стоянки на объектах" tabindex="0"><table class="wb-table"><thead><tr><th>Интервал</th><th>Объект / заявка</th><th>Команда</th><th>Задание · доля часов</th><th>Минуты на человека</th><th>Проверка</th>${editor||readonly?'':'<th></th>'}</tr></thead><tbody>${editor||readonly?rows:rows.replaceAll('</tr>','<td><button type="button" class="btn sm" data-presence-edit>Изменить</button></td></tr>')}</tbody></table></div>`;
   if (editor) return table;
   return `<div class="wb-metrics"><div><span>Присутствие · проверено</span><b>${n(summary.approved)} чел.-ч</b></div><div><span>Стоянки на проверке</span><b>${summary.pending}</b></div><div><span>Факт-пробег</span><b>${n(t.fact_km)} км</b></div></div>
     <p class="hint">Всё время на объекте × присутствовавшие инженеры. Ожидание включено. Нормочасы работ не изменяются. Время указано по Киеву.</p>
     ${rows?table:'<p class="hint">Стоянок пока нет. Отсутствие данных не означает нулевое присутствие.</p>'}
-    <div class="row"><button type="button" class="btn" id="wbDetect">Обновить стоянки по треку</button>${rows?'<button type="button" class="btn amber" id="wbPresenceSave">Сохранить проверку присутствия</button>':''}</div>
+    ${readonly?'<p class="hint">Проверку присутствия выполняет куратор выезда.</p>':`<div class="row"><button type="button" class="btn" id="wbDetect">Обновить стоянки по треку</button>${rows?'<button type="button" class="btn amber" id="wbPresenceSave">Сохранить проверку присутствия</button>':''}</div>`}
     <div class="hint" id="wbPresenceMessage" role="status"></div>`;
 }
 

@@ -210,7 +210,9 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
     clients: [client],
     equipment: [equipment],
     work_catalog: [work],
-    stock_items: [
+    equipment_models: [{id:"model-a", manufacturer:"Демонстрационный производитель", kind:"насос", model:"Сервисная насосная станция с длинным названием модели", warranty_months:24, service_interval_hours:1500}],
+    employee_org: [{profile_id:engineer,manager_id:manager,job_title:"Выездной инженер"},{profile_id:other,manager_id:manager,job_title:"Сервисный инженер"}],
+    stock_catalog: [
       {
         id: "stock-a",
         name: "Уплотнение насоса",
@@ -219,6 +221,7 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
         price: 250,
         cost: 120,
         active: true,
+        current_since: stamp,
       },
     ],
     jobs: [request],
@@ -272,6 +275,11 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
     stay_from: "2026-09-30T06:00:00Z",
     stay_to: "2026-09-30T10:00:00Z",
   });
+  const activeTask = {...task,id:"20000000-0000-4000-8000-000000000002",number:102,status:"in_progress",service_order_items:[{...item,id:"task-active-item",order_id:"20000000-0000-4000-8000-000000000002",done_qty:2,financial_revenue_snapshot:7500,financial_cost_snapshot:4500,result_note:"Выполнена диагностика; замена уплотнения запланирована."},{...item,id:"task-active-material",order_id:"20000000-0000-4000-8000-000000000002",kind:"material",title:"Уплотнение насоса и комплект монтажных материалов",work_catalog_id:null,stock_catalog_id:"stock-a",unit:"шт",planned_qty:2,done_qty:1,unit_price_snapshot:250,unit_cost_snapshot:120,result_note:"Использовано одно уплотнение."}],trip_service_orders:[]};
+  tables.service_orders.push(activeTask);
+  tables.service_order_items.push(...activeTask.service_order_items);
+  const history=[{id:"history-a",trip_id:trip,revision:0,recorded_at:stamp,actor_id:manager,reason:"Уточнён порядок посещения объектов",snapshot:{date_from:ride.date_from,job_ids:[job],route_stops:ride.route_stops,econ_snapshot:ride.econ_snapshot}}];
+  tables.trip_revision_history=history;
   const audit = (window.__visualQA = {
     reads: [],
     blockedWrites: [],
@@ -338,7 +346,15 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
           rows = rows.filter((r) => r[k] <= v);
           return b;
         },
-        not: () => b,
+        not: (key, operator, value) => {
+          if(operator==='is')rows=rows.filter(row=>(row[key]??null)!==value);
+          else if(operator==='eq')rows=rows.filter(row=>row[key]!==value);
+          else if(operator==='in'){
+            const values=String(value).replace(/^\(|\)$/g,'').split(',').map(x=>x.trim().replace(/^"|"$/g,''));
+            rows=rows.filter(row=>!values.includes(String(row[key])));
+          }else throw Error('Visual QA: unsupported not operator '+operator);
+          return b;
+        },
         or: () => b,
         contains: () => b,
         order: () => b,
@@ -388,7 +404,7 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
           job_ids: [job],
           stays: stays.filter((s) => s.trip_id === trip),
           removed: [],
-          history: [],
+          history,
         },
       };
       return Object.hasOwn(reads, name)
@@ -421,4 +437,5 @@ export const fixtureIDs = {
   job: "10000000-0000-4000-8000-000000000001",
   order: "20000000-0000-4000-8000-000000000001",
   trip: "30000000-0000-4000-8000-000000000001",
+  activeOrder: "20000000-0000-4000-8000-000000000002",
 };

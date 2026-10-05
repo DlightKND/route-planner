@@ -1233,7 +1233,7 @@ function renderWorkFeed(){
   const buckets=attentionBuckets(jobsLite,new Date());
   const dated=buckets.dated;
   if(dated.length){
-    h+='<div class="wf-h">Требует внимания <span class="cnt">'+dated.length+'</span></button>';
+    h+='<div class="wf-h">Требует внимания <span class="cnt">'+dated.length+'</span></div>';
     dated.slice(0,12).forEach(({job,u})=>{
       const col=urgHue(u);
       const badge=u.level==='overdue'?('−'+(-u.left)+' дн'):(u.left+' дн');
@@ -1251,7 +1251,7 @@ function renderWorkFeed(){
     });
   }
   if(buckets.cold.length){
-    h+='<div class="wf-h" style="margin-top: var(--sp-5)">Без срока <span class="cnt">'+buckets.cold.length+'</span></button>';
+    h+='<div class="wf-h" style="margin-top: var(--sp-5)">Без срока <span class="cnt">'+buckets.cold.length+'</span></div>';
     buckets.cold.slice(0,6).forEach(j=>{
       h+='<button type="button" class="wf-row" data-jfly="'+esc(j.client_id)+'" data-jid="'+esc(j.id)+'">'
         +'<div style="flex:1"><div class="wf-t">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
@@ -1564,7 +1564,7 @@ function renderCwModelsTree(){ const box=$('cwModelsTree'); if(!box) return; if(
   box.innerHTML=h; box.querySelectorAll('[data-cwm]').forEach(c=>c.onchange=()=>{ if(c.checked) cwModelSel.add(c.dataset.cwm); else cwModelSel.delete(c.dataset.cwm); }); }
 document.querySelectorAll('#cwScope [data-cs]').forEach(b=>b.onclick=()=>setCwScope(b.dataset.cs));
 function catGrp(title,inner){ return '<div class="emtree-manu"><div class="emtree-h" data-emg="'+esc(title)+'">▾ '+esc(title)+'</div><div class="emtree-body">'+inner+'</div></div>'; }
-function workRow(w){ const estR=((+w.norm_hours||0)*((appSettings.tariffs&&appSettings.tariffs.hour)||0)); return '<div class="emrow"><span class="emname">'+esc(w.name)+' · '+(+w.norm_hours||0)+'ч'+(w.warranty_eligible?'':' · платно')+'</span><span class="emmeta">'+(w.price?('оверр. '+(+w.price)):('≈'+estR.toFixed(0)))+'</span><button class="btn sm" data-cwedit="'+w.id+'">ред.</button><button class="btn sm ghost" data-cwdel="'+w.id+'" title="Удалить">×</button></div>'; }
+function workRow(w){ const estR=((+w.norm_hours||0)*((appSettings.tariffs&&appSettings.tariffs.hour)||0)); return '<div class="emrow"><span class="emname">'+esc(w.name)+' · '+(+w.norm_hours||0)+'ч'+(w.warranty_eligible?'':' · платно')+'</span><span class="emmeta">'+(w.price?('оверр. '+(+w.price)):('≈'+estR.toFixed(0)))+' '+esc(appSettings.currency||'грн')+'</span><button class="btn sm" data-cwedit="'+w.id+'">ред.</button><button class="btn sm ghost" data-cwdel="'+w.id+'" title="Удалить">×</button></div>'; }
 async function renderCatalog(){ if(!catalog.length) await loadCatalog(); if(!eqModels.length) await loadEqModels(); const q=$('catSearch').value.trim().toLowerCase(); const fil=$('catFilter')?$('catFilter').value:''; const box=$('catList');if(catalogError){listLoadError(box,catalogError,async()=>{await loadCatalog();renderCatalog();});return;}
   const res=catalog.filter(w=>{ const mn=workModelNames(w); const hay=(w.name+' '+((w.applicable_kinds||[]).join(' '))+' '+mn.join(' ')).toLowerCase(); if(q&&!hay.includes(q)) return false; if(fil==='warranty'&&!w.warranty_eligible) return false; if(fil==='paid'&&w.warranty_eligible) return false; if(fil==='maint'&&!w.is_maintenance) return false; return true; });
   if(!res.length){
@@ -1615,7 +1615,7 @@ async function renderStockCatalog(){
   const q=$('stockSearch').value.trim().toLowerCase(),showInactive=$('stockShowInactive').checked;
   const rows=stockCatalog.filter(x=>(showInactive||x.active)&&(!q||(x.name+' '+x.sku).toLowerCase().includes(q)));
   const mayManage=role==='admin'||role==='logist'; $('stockAdd').hidden=!mayManage;
-  box.innerHTML=rows.map(x=>'<div class="eqitem stock-row"><div class="stock-title"><b>'+esc(x.name)+'</b><small>'+(x.sku?'Артикул '+esc(x.sku):'Без артикула')+' · '+esc(x.unit)+'</small><small>Цены актуальны с '+esc(new Date(x.current_since).toLocaleDateString('ru-RU'))+(x.legacy_part_id?' · перенесено из старой строки':'')+'</small></div><div class="stock-cell"><small>Продажа</small><b>'+Number(x.price||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b></div><div class="stock-cell"><small>Себестоимость</small><b>'+Number(x.cost||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b></div><div class="stock-cell stock-state">'+(x.active?'Активна':'В архиве')+'</div><div class="stock-actions">'+(mayManage?'<button type="button" class="btn sm ghost" data-stock-edit="'+x.id+'">Изменить</button>':'')+'</div></div>').join('')||'<div class="kempty">'+(q?'Ничего не найдено.':'В этой выборке пока нет позиций.')+'</div>';
+  box.innerHTML=rows.map(x=>'<div class="eqitem stock-row"><div class="stock-title"><b>'+esc(x.name)+'</b><small>'+(x.sku?'Артикул '+esc(x.sku):'Без артикула')+' · '+esc(x.unit)+'</small><small>Цены актуальны с '+esc(new Date(x.current_since).toLocaleDateString('ru-RU'))+(x.legacy_part_id?' · перенесено из старой строки':'')+'</small></div><div class="stock-cell"><small>Продажа, '+esc(appSettings.currency||'грн')+'</small><b>'+Number(x.price||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b></div><div class="stock-cell"><small>Себестоимость, '+esc(appSettings.currency||'грн')+'</small><b>'+Number(x.cost||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b></div><div class="stock-cell stock-state">'+(x.active?'Активна':'В архиве')+'</div><div class="stock-actions">'+(mayManage?'<button type="button" class="btn sm ghost" data-stock-edit="'+x.id+'">Изменить</button>':'')+'</div></div>').join('')||'<div class="kempty">'+(q?'Ничего не найдено.':'В этой выборке пока нет позиций.')+'</div>';
   box.querySelectorAll('[data-stock-edit]').forEach(b=>b.onclick=()=>openStockItem(b.dataset.stockEdit));
 }
 function openStockItem(id){
@@ -3272,13 +3272,16 @@ function financeCard(jb,trips){
   const revenue=sum(covered,'revenue'),costPlan=sum(covered,'cost_plan'),costFact=sum(covered,'cost_fact');
   const profitPlan=sum(covered,'profit_plan'),profitFact=sum(covered,'profit_fact');
   const marginPlan=revenue?profitPlan/revenue*100:0,marginFact=revenue?profitFact/revenue*100:0;
-  const cov=scope.length?'подтверждённый факт по '+covered.length+' из '+scope.length+' '+plural(scope.length,'выезда','выездов','выездов')+' · остальные ожидают полной проверки':'В выбранном периоде и по выбранной команде выездов нет.';
+  const cov=scope.length?(scope.length>covered.length?'Остальные выезды ожидают полной проверки.':'Факт выбранных выездов подтверждён.'):'В выбранном периоде и по выбранной команде выездов нет.';
+  const allEngineers=dashEnsureEngineers(),teamScope=allEngineers.length&&dashEngineers.size===allEngineers.length?'Все инженеры':dashEngineers.size?'Выбрано '+dashEngineers.size+' из '+allEngineers.length+' инженеров':'Инженеры не выбраны';
   const breakdown=foldxBtn('dashFinBreak','разбивка')+foldxBox('dashFinBreak','<div class="hint">Работы и запчасти остаются в сохранённых экономических снимках выездов.</div>');
   return '<div class="card foldable f-any" data-fold="dashFin" data-dcard="fin"><h3 class="cardhead">'+dashGrip('fin')+'Деньги <span class="mc-note">'+esc(shortDate(per.from)+' — '+shortDate(per.to))+'</span></h3>'
-    +rangeBar('rev')+engineerScopeHtml()+'<div class="coverage">'+esc(cov)+'</div>'
-    +(scope.length>covered.length?'<button type="button" class="btn sm" data-review-trips>Открыть выезды для проверки</button>':'')
+    +'<div class="finance-scope-summary">Команда статистики: '+esc(teamScope)+' · подтверждено '+covered.length+' из '+scope.length+' выездов</div>'
     +'<div class="hero"><div><div class="hk">прибыль · подтверждено</div><div class="hv">'+(covered.length?fmtMetric(profitFact)+' '+esc(cur):'—')+'</div></div><div><div class="hk">маржа</div><div class="hv">'+(covered.length&&revenue?fmtMetric(marginFact)+'%':'—')+'</div></div></div>'
-    +'<div class="m-sub">по плану было '+fmtMetric(profitPlan)+' '+esc(cur)+' и '+fmtMetric(marginPlan)+'%</div><div class="sect">Из чего сложилось</div>'
+    +'<div class="coverage">'+esc(cov)+'</div><div class="m-sub">по плану было '+fmtMetric(profitPlan)+' '+esc(cur)+' и '+fmtMetric(marginPlan)+'%</div>'
+    +rangeBar('rev')+engineerScopeHtml()
+    +(scope.length>covered.length?'<button type="button" class="btn sm" data-review-trips>Открыть выезды для проверки</button>':'')
+    +'<div class="sect">Из чего сложилось</div>'
     +metricRow({name:'Себестоимость',plan:costPlan,fact:covered.length?costFact:null,unit:cur,dir:'down'})
     +metricRow({name:'Прибыль',plan:profitPlan,fact:covered.length?profitFact:null,unit:cur,dir:'up'})
     +metricRow({name:'Маржа',plan:marginPlan,fact:covered.length&&revenue?marginFact:null,unit:'%',dir:'up'})
@@ -5482,6 +5485,7 @@ async function renderTripCostReview(id){
 async function openPresenceEditor(tid,stayId,jobId){
   if(!canWriteTrip(getTrip(tid)||tripCache[tid]||null))return;
   if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки выезда.','warn');return;}
+  const openedTripId=tripEditId;
   try{
     await ensureRefs();await loadTripJobs();await loadTripOrders();
     const {data:taskLinks,error:taskLinkError}=await sb.from('trip_service_orders').select('order_id').eq('trip_id',tid);if(taskLinkError)throw taskLinkError;
@@ -5489,6 +5493,7 @@ async function openPresenceEditor(tid,stayId,jobId){
     if(!linkedIds.size){const {data:legacyLinks,error:legacyError}=await sb.from('trip_jobs').select('job_id').eq('trip_id',tid);if(legacyError)throw legacyError;const jobs=new Set((legacyLinks||[]).map(x=>x.job_id));tripOrdersAll.filter(o=>jobs.has(o.job_id)&&o.seed_request_id===o.job_id).forEach(o=>linkedIds.add(o.id));}
     const ordersForTrip=tripOrdersAll.filter(o=>linkedIds.has(o.id));
     const {data,error}=await sb.rpc('trip_workbench_read',{p_trip:tid});if(error)throw error;
+    if(tripEditId!==openedTripId||!canWriteTrip(data.trip)){notify('Доступ или выезд изменился. Открой присутствие заново.','warn');return;}
     const source=data.stays.find(s=>String(s.id)===String(stayId));if(!source)throw new Error('Стоянка не найдена');
     const {data:shareRows,error:shareError}=await sb.from('trip_stay_task_allocations').select('service_order_id,share').eq('stay_id',source.id);
     if(shareError)throw shareError;
@@ -5499,6 +5504,7 @@ async function openPresenceEditor(tid,stayId,jobId){
     // interval and explicitly known crew. No historic team is guessed.
     if(stay.stay_to&&stay.status!=='rejected')stay.status='approved';
     const dialog=document.createElement('dialog');dialog.className='presence-editor';
+    const canSave=()=>dialog.isConnected&&dialog.open&&tripEditId===openedTripId&&canWriteTrip(getTrip(tid)||tripCache[tid]||data.trip);
     dialog.innerHTML='<form method="dialog"><div class="presence-editor-head"><h3>Привязка и присутствие</h3><button class="btn sm" type="submit" aria-label="Закрыть">✕</button></div></form>'
       +presenceHTML({...data,jobIds:data.job_ids,stays:[stay]},tripJobsAll,profilesList,{editor:true,orders:ordersForTrip})
       +'<label>Комментарий<input class="presence-reason" value="Проверено по треку и составу команды"></label><p class="presence-error err" role="alert"></p><div class="presence-editor-foot"><button type="button" class="btn amber" data-presence-submit>Привязать и подтвердить</button></div>';
@@ -5510,10 +5516,12 @@ async function openPresenceEditor(tid,stayId,jobId){
     status.addEventListener('change',label);label();
     save.onclick=async()=>{
       const output=dialog.querySelector('.presence-error');output.textContent='';
+      if(!canSave()){output.textContent='Доступ или выезд изменился. Открой присутствие заново.';return;}
       const rows=readPresenceForm(dialog,[original]);
       if(!rows[0].status){dialog.close();return;}
       try{
         validatePresence(rows);validateTaskAllocationShares(rows);const reason=dialog.querySelector('.presence-reason').value.trim();if(!reason)throw new Error('Укажи комментарий проверки');
+        if(!canSave())throw new Error('Доступ или выезд изменился. Открой присутствие заново.');
         save.disabled=true;
         const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:tid,p_expected:data.trip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason});
         if(error)throw error;
@@ -5530,7 +5538,9 @@ async function openPresenceEditor(tid,stayId,jobId){
 function renderTripReviewSummary(){
  const box=$('tpReviewSummary');if(!box)return;const t=tripWorkbench?.trip||getTrip(tripEditId);if(!t){box.textContent='Новый план: сначала сохрани выезд.';return;}
  const stays=tripWorkbench?.stays;const pending=stays?.filter(s=>!['approved','rejected'].includes(s.status)).length;const tasks=tripOrdersAll.filter(o=>curTripOrders.has(o.id)),accepted=tasks.filter(o=>o.status==='completed').length;
- box.innerHTML='<div>Поездка: '+esc(ST_TRIP[t.status]||t.status)+' · присутствие: '+(stays?(pending?'требует проверки '+pending+' стоянок':'проверено, '+stays.length+' стоянок'):'загружается')+' · затраты: '+esc(tripCostReviewState)+' · работы: принято '+accepted+' из '+tasks.length+' заданий.</div><div class="order-line-adds"><button type="button" class="btn sm" id="tpReviewPresence">Открыть присутствие</button><button type="button" class="btn sm" id="tpReviewCosts">Сверить затраты</button></div>';
+ const presence=stays?(pending?'Требуется проверка: '+pending+' '+plural(pending,'стоянка','стоянки','стоянок'):stays.length?'Проверено: '+stays.length+' '+plural(stays.length,'стоянка','стоянки','стоянок'):'Подтверждённых записей нет'):'Загружается';
+ const states=[['Поездка',ST_TRIP[t.status]||t.status,'neutral'],['Присутствие',presence,pending?'pending':'neutral'],['Затраты',tripCostReviewState,tripCostReviewState==='подтверждены'?'confirmed':'pending'],['Выполнение работ',tasks.length?'Принято '+accepted+' из '+tasks.length+' заданий':'Задания не добавлены','neutral']];
+ box.innerHTML='<dl class="trip-review-grid">'+states.map(([label,value,state])=>'<div class="trip-review-item" data-review-state="'+state+'"><dt>'+esc(label)+'</dt><dd>'+esc(value)+'</dd></div>').join('')+'</dl><div class="order-line-adds trip-review-actions"><button type="button" class="btn sm" id="tpReviewPresence">Открыть присутствие</button><button type="button" class="btn sm" id="tpReviewCosts">'+(canWriteTrip()?'Сверить затраты':'Открыть затраты')+'</button></div>';
  $('tpReviewPresence').onclick=()=>{setTripPane('plan');const details=$('tpPresence').closest('details');if(details)details.open=true;$('tpPresenceTitle').scrollIntoView({block:'start'});};$('tpReviewCosts').onclick=()=>{setTripPane('economy');$('tpTripAllocation').scrollIntoView({block:'start'});};
 }
 function listLoadError(box,error,retry){box.className='';box.innerHTML='<p class="err" role="alert">Не удалось загрузить данные: '+esc(error.message)+'</p><button type="button" class="btn sm" data-list-retry>Повторить загрузку</button>';box.querySelector('[data-list-retry]').onclick=retry;}
@@ -5551,29 +5561,36 @@ async function loadWorkbench(id){
     tripWorkbench={...data,jobIds:data.job_ids,stays:(data.stays||[]).map(s=>({...s,task_allocations:allocationByStay.get(s.id)||[]}))};
     const index=trips.findIndex(t=>t.id===id);if(index>=0)trips[index]=data.trip;
     const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
-    $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{orders:linkedOrders});renderTripReviewSummary();
+    $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{readonly:!canWriteTrip(data.trip),orders:linkedOrders});renderTripReviewSummary();
     $('tpRemovedJobs').innerHTML=removedHTML(tripWorkbench,tripJobsAll);
     $('tpHistoryLog').innerHTML=historyHTML(tripWorkbench,profilesList);
     $('tpReviewState').textContent=(ST_TRIP[data.trip.status]||data.trip.status)+' · версия '+data.trip.workbench_revision+' · изменение плана не удаляет трек и посещения';
     configureTripPlanStatus($('tpStatus'),data.trip,canWriteTrip(data.trip));
     $('tpRemainingInfo').textContent=data.trip.remaining_route?'Осталось '+data.trip.remaining_route.km.toFixed(1)+' км · расчёт '+new Date(data.trip.remaining_route.at).toLocaleString('ru-RU'):'';
-    $('wbDetect').onclick=async()=>{
+    const canReview=()=>tripEditId===id&&tripWorkbench?.trip?.id===id&&canWriteTrip(getTrip(id)||tripWorkbench.trip);
+    const detect=$('wbDetect');
+    if(detect)detect.onclick=async()=>{
+      if(!detect.isConnected||!canReview()){notify('Доступ или выезд изменился. Открой карточку заново.','warn');return;}
       if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки.','warn');return;}
-      $('wbDetect').disabled=true;
-      try{const {error}=await sb.rpc('trip_presence_detect',{p_trip:id,p_expected:tripWorkbench.trip.workbench_revision});if(error)throw error;await loadWorkbench(id);}
-      catch(e){notify(e.message,'err');if($('wbDetect'))$('wbDetect').disabled=false;}
+      detect.disabled=true;
+      try{const {error}=await sb.rpc('trip_presence_detect',{p_trip:id,p_expected:tripWorkbench.trip.workbench_revision});if(error)throw error;if(canReview())await loadWorkbench(id);}
+      catch(e){notify(e.message,'err');if(detect.isConnected&&canReview())detect.disabled=false;}
     };
-    if($('wbPresenceSave'))$('wbPresenceSave').onclick=async()=>{
+    const presenceSave=$('wbPresenceSave');
+    if(presenceSave)presenceSave.onclick=async()=>{
+      if(!presenceSave.isConnected||!canReview()){notify('Доступ или выезд изменился. Открой карточку заново.','warn');return;}
       if(tripPlanDirty){notify('Сохрани план и проверку вместе верхней кнопкой «Сохранить план».','warn');return;}
+      const reviewedTrip=tripWorkbench.trip;
       const rows=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>['approved','rejected'].includes(s.status));
       try{if(!rows.length)throw new Error('Выбери стоянки для проверки. Незакрытое присутствие можно проверить позже.');validatePresence(rows);}
       catch(e){notify(e.message,'warn');return;}
       const reason=await promptDialog('Проверка присутствия',[{key:'reason',label:'Причина / комментарий',value:'Проверено по треку и составу команды'}]);
       if(!reason)return;
-      $('wbPresenceSave').disabled=true;
-      try{validateTaskAllocationShares(rows);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:id,p_expected:tripWorkbench.trip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason.reason});if(error)throw error;
-        tripPresenceDirty=false;await loadFactHours();if(tripWorkbench.trip.status==='done'&&!await refreshTripEcon(id))throw new Error('Присутствие сохранено, но пересчитать экономику не удалось. Открой выезд заново и повтори проверку.');await loadWorkbench(id);tripEcon();showToast('Человеко-часы присутствия сохранены');}
-      catch(e){notify(e.message,'err');if($('wbPresenceSave'))$('wbPresenceSave').disabled=false;}
+      if(!presenceSave.isConnected||!canReview()){notify('Доступ или выезд изменился. Открой карточку заново.','warn');return;}
+      presenceSave.disabled=true;
+      try{validateTaskAllocationShares(rows);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:id,p_expected:reviewedTrip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason.reason});if(error)throw error;
+        if(canReview())tripPresenceDirty=false;await loadFactHours();if(reviewedTrip.status==='done'&&!await refreshTripEcon(id))throw new Error('Присутствие сохранено, но пересчитать экономику не удалось. Открой выезд заново и повтори проверку.');if(canReview()){await loadWorkbench(id);tripEcon();}showToast('Человеко-часы присутствия сохранены');}
+      catch(e){notify(e.message,'err');if(presenceSave.isConnected&&canReview())presenceSave.disabled=false;}
     };
     await renderTripCostReview(id);
   }catch(e){$('tpPresence').textContent='Не удалось загрузить проверку выезда: '+e.message;$('tpSave').disabled=true;$('tpReviewState').textContent='Данные недоступны. Сохранение заблокировано до успешной загрузки.';}
@@ -5773,6 +5790,9 @@ async function openTrip(id,{includeOrderId=null}={}){ if(!leaveSettingsEditor())
   if(t&&!curTripOrders.size){const {data}=await sb.from('trip_jobs').select('job_id').eq('trip_id',id);const ids=new Set((data||[]).map(r=>r.job_id));tripOrdersAll.filter(o=>ids.has(o.job_id)&&o.seed_request_id===o.job_id).forEach(o=>curTripOrders.add(o.id));}
   syncTripJobsFromOrders();if(tripMainJobId&&!curTripJobs.has(tripMainJobId))tripMainJobId=null;
   const ro=!canWriteTrip(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
+  $('tpSave').hidden=ro;
+  $('tripHeadEcon').hidden=ro;
+  $('tpChangeReasonGroup').hidden=ro;
   configureTripPlanStatus($('tpStatus'),t,!ro);
   const es=(t&&(t.plan_econ_snapshot||t.econ_snapshot))||{}; tripRoute={km:es.km||0,driveH:es.driveH||0,geometry:(t&&t.route_geometry)||null,legs:es.legs||[]}; tripVariants=[];
   const ovs=(t&&t.overrides)||{}; tripOverrides={revenue:(ovs.revenue!=null?String(ovs.revenue):''),cost:(ovs.cost!=null?String(ovs.cost):''),road:(ovs.road||{})}; $('tpOvRev').value=tripOverrides.revenue; $('tpOvCost').value=tripOverrides.cost;
@@ -5825,7 +5845,8 @@ function tripHead(){
   parts.push(e.jobCount+' '+plural(e.jobCount,'заявка','заявки','заявок'));
   if(e.km>0) parts.push(e.km.toFixed(0)+' км · '+(e.driveH+e.workH).toFixed(1)+' ч');
   $('tripSub').innerHTML=parts.join(' · ')||'—';
-  const pc=e.profit>=0?'var(--green)':'var(--red)';
+  $('tripHeadEcon').hidden=!canWriteTrip();
+  const pc=e.profit>=0?'var(--ink)':'var(--red)';
   $('tripHeadEcon').innerHTML='<div class="te-k">Прибыль · предварительно</div>'
     +'<div class="te-v" style="color:'+pc+'">'+Math.round(e.profit).toLocaleString('ru-RU')+' '+e.cur+'</div>'
     +'<div class="te-s">маржа '+e.margin.toFixed(0)+'% · выручка '+Math.round(e.rev).toLocaleString('ru-RU')+'</div>';
