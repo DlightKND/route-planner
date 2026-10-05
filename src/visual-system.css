@@ -561,6 +561,7 @@ body { font-size:var(--fs-body); }
 .notice-meta { display:flex;flex-direction:column;align-items:center;gap:var(--sp-2);color:var(--ink-dim);font-size:var(--fs-caption); }
 .notice-read { min-height:44px;min-width:44px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:var(--r-sm);font-size:20px;cursor:pointer; }
 .notice-more { display:block;margin:var(--sp-5) auto; }
+#pushBtn { position:relative; }
 .notice-badge { position:absolute;right:4px;top:3px;font:11px var(--sans);min-width:18px;padding:2px 4px;background:var(--accent);color:var(--on-accent);border-radius:10px; }
 [data-summary-mode][hidden],.notice-host [hidden],.notice-badge[hidden] { display:none!important; }
 @media(min-width:1181px) {

@@ -169,7 +169,11 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await expect(active.locator('.notice-row')).toHaveCount(3);await expect(active).not.toContainText('Чужое уведомление');
       await expect(page.locator('#noticeBadge')).toHaveText('2');
       await selectedContrast(active.locator('[data-notice-filter=all]'));
-      if(testInfo.project.use.viewport.width>760)await selectedContrast(page.locator('#noticeBadge'));
+      if(testInfo.project.use.viewport.width>760){
+        await selectedContrast(page.locator('#noticeBadge'));
+        const anchored=await page.locator('#noticeBadge').evaluate(el=>{const b=el.getBoundingClientRect(),p=el.closest('button').getBoundingClientRect();return b.left>=p.left&&b.right<=p.right+1&&b.top>=p.top&&b.bottom<=p.bottom+1;});
+        expect(anchored,'Unread badge stays on its notification button').toBe(true);
+      }
       await visibleTarget(active.locator('[data-notice-push]'));
       await active.locator('[data-notice-push]').click();await expect(page.locator('#pushOverlay')).toHaveClass(/on/);
       await page.keyboard.press('Escape');await expect(active.locator('[data-notice-push]')).toBeFocused();
