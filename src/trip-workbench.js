@@ -7,6 +7,8 @@ const time = v => v ? new Date(v).toLocaleString('ru-RU',{day:'2-digit',month:'2
 
 export function presenceHTML(data, jobs, profiles, {editor = false, orders = [], readonly = false} = {}) {
   const summary = presenceSummary(data.stays), t = data.trip;
+  const knownApproved=(data.stays||[]).some(s=>s.status==='approved'&&s.job_id&&s.minutes_mgr!=null&&['snapshot','manager'].includes(s.crew_source)&&s.crew_ids?.length);
+  const presenceHours=knownApproved?summary.approved:null;
   const jobName = id => jobs.find(j=>j.id===id)?.clients?.name || data.removed.find(j=>j.job_id===id)?.snapshot?.client_name || 'Заявка '+String(id).slice(0,8);
   const presenceStatus = {approved:'Проверено · присутствие', rejected:'Не учитывается', detected:'Ожидает проверки', engineer_ok:'Подтверждено инженером · ожидает проверки'};
   const taskName = id => {const o=orders.find(x=>x.id===id);return o?`№${o.number} · ${o.title}`:'Задание '+String(id).slice(0,8);};
@@ -57,7 +59,7 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
   }).join('');
   const table = `<div class="wb-table-scroll" role="region" aria-label="Стоянки на объектах" tabindex="0"><table class="wb-table"><thead><tr><th>Интервал</th><th>Объект / заявка</th><th>Команда</th><th>Задание · доля часов</th><th>Минуты на человека</th><th>Проверка</th>${editor||readonly?'':'<th></th>'}</tr></thead><tbody>${editor||readonly?rows:rows.replaceAll('</tr>','<td><button type="button" class="btn sm" data-presence-edit>Изменить</button></td></tr>')}</tbody></table></div>`;
   if (editor) return table;
-  return `<div class="wb-metrics"><div><span>Присутствие · проверено ${infoHint('Всё время на объекте × присутствовавшие инженеры. Ожидание включено. Нормочасы работ не изменяются. Время указано по Киеву.', 'О проверенном присутствии')}</span><b>${n(summary.approved)} чел.-ч</b></div><div><span>Стоянки на проверке</span><b>${summary.pending}</b></div><div><span>Факт-пробег</span><b>${n(t.fact_km)} км</b></div></div>
+  return `<div class="wb-metrics"><div><span>${summary.complete?'Присутствие · проверено':'Подтверждённая часть присутствия'} ${infoHint('Всё время на объекте × присутствовавшие инженеры. Ожидание включено. Нормочасы работ не изменяются. Подтверждённые минуты сохраняются; без известного состава человеко-часы не вычисляются. При незавершённой проверке показана только подтверждённая часть. Время указано по Киеву.', 'О проверенном присутствии')}</span><b>${n(presenceHours)} чел.-ч</b></div><div><span>Стоянки на проверке</span><b>${summary.pending}</b></div><div><span>Факт-пробег</span><b>${n(t.fact_km)} км</b></div></div>
 
     ${rows?table:'<p class="hint">Стоянок пока нет. Отсутствие данных не означает нулевое присутствие.</p>'}
     ${readonly?'<p class="hint">Проверку присутствия выполняет куратор выезда.</p>':`<div class="row"><button type="button" class="btn" id="wbDetect">Обновить стоянки по треку</button>${rows?'<button type="button" class="btn amber" id="wbPresenceSave">Сохранить проверку присутствия</button>':''}</div>`}
