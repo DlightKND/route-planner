@@ -9,7 +9,7 @@ const scenes = [
   {name:'dispatcher',route:'planner/orders',view:'planner',ready:'#orderList .kcard'},
   {name:'dispatcher-requests',route:'planner/jobs',view:'planner',ready:'#jobList .kcard'},
   {name:'dispatcher-trips',route:'planner/trips',view:'planner',ready:'#tripList .kcard'},
-  {name:'request',route:'job/'+fixtureIDs.job,view:'job',ready:'#jobOrders .order-children'},
+  {name:'request',route:'job/'+fixtureIDs.job,view:'job',ready:'#jobTitle'},
   {name:'task',route:'order/'+fixtureIDs.order,view:'order',ready:'#orderEditor .order-grid'},
   {name:'task-active',route:'order/'+fixtureIDs.activeOrder,view:'order',ready:'#orderResultSave'},
   {name:'trip',route:'trip/'+fixtureIDs.trip,view:'trip',ready:'#tpReviewSummary'},
@@ -22,7 +22,7 @@ const scenes = [
   {name:'settings-users',route:'settings',view:'settings',section:'users',ready:'#usersList .staff-row',admin:true},
   {name:'settings-appearance',route:'settings',view:'settings',section:'theme',ready:'#dtMode',admin:true},
 ];
-const forRole = (scene,role) => role==='admin' ? scene.admin : role==='logist' ? !scene.admin : ['dashboard-graph','task','task-active','trip'].includes(scene.name);
+const forRole = (scene,role) => role==='admin' ? scene.admin : role==='logist' ? !scene.admin : ['dashboard-graph','request','task','task-active','trip'].includes(scene.name);
 async function openScene(page,context,testInfo,role,scene) {
   const audit={errors:[],remoteAPIs:[]};
   page.on('pageerror',e=>audit.errors.push(e.message));
@@ -60,6 +60,43 @@ async function integrity(page,active,audit,testInfo) {
   expect(measurements.bodyWidth,'No body horizontal overflow').toBeLessThanOrEqual(measurements.viewport+1);
   if(measurements.paneWidth)expect(measurements.paneScrollWidth,'Only local schedule/table/kanban regions may scroll horizontally').toBeLessThanOrEqual(measurements.paneWidth+1);
   expect(measurements.theme).toBe(testInfo.project.metadata.theme);
+  for(const nav of await active.locator('.entity-tabs:visible').all()){
+    expect(await nav.evaluate(el=>getComputedStyle(el).flexWrap),'Entity tabs remain one locally scrollable row').toBe('nowrap');
+    const touch=await page.evaluate(()=>matchMedia('(pointer:coarse)').matches);
+    for(const tab of await nav.getByRole('tab').all())expect((await tab.boundingBox()).height,'Tab touch target').toBeGreaterThanOrEqual(touch?44:40);
+  }
+  const controls=await active.evaluate(root=>{
+    const visible=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';};
+    const fields='input:not([type]),input[type=text],input[type=date],input[type=number],input[type=search],input[type=email],input[type=tel],select,textarea';
+    return [...root.querySelectorAll(fields+',button.btn,.entity-tabs button')].filter(visible).filter(el=>!el.closest('.leaflet-control,.vg-grid,.gt-grid')).map(el=>{
+      const s=getComputedStyle(el);return {label:el.id||el.getAttribute('aria-label')||el.textContent.trim().slice(0,50)||el.tagName,field:el.matches(fields),btn:el.matches('button.btn'),radius:parseFloat(s.borderTopLeftRadius),font:s.fontFamily,transform:s.textTransform,padding:[s.paddingTop,s.paddingRight,s.paddingBottom,s.paddingLeft].map(parseFloat),before:getComputedStyle(el,'::before').content};
+    });
+  });
+  for(const control of controls){
+    expect(control.radius,`${control.label}: rounded control`).toBeGreaterThanOrEqual(8);
+    expect(control.font,`${control.label}: shared Sans font`).toMatch(/IBM Plex Sans/i);
+    expect(control.transform,`${control.label}: sentence case`).toBe('none');
+    if(control.field)expect(Math.min(...control.padding),`${control.label}: readable inner padding`).toBeGreaterThanOrEqual(8);
+    else if(control.btn)expect(control.before,`${control.label}: no animated gradient pseudo-element`).toBe('none');
+  }
+  for(const field of await active.locator(':is(.entity-activity-form,.responsibility-form) label>:is(input,select,textarea):visible').all()){
+    expect(await field.evaluate(el=>parseFloat(getComputedStyle(el).marginTop)),'Comment and responsibility fields have a full label gap').toBeGreaterThanOrEqual(8);
+  }
+  const reasonGap=await active.evaluate(root=>{
+    const reason=root.querySelector('#tpChangeReasonGroup'),notes=root.querySelector('#tpNotes');
+    if(!reason||!notes||!reason.getClientRects().length||!notes.getClientRects().length)return null;
+    return {gap:reason.getBoundingClientRect().top-notes.getBoundingClientRect().bottom,minimum:16};
+  });
+  if(reasonGap)expect(reasonGap.gap,'Plan change reason is grouped inside its card with a full field gap').toBeGreaterThanOrEqual(reasonGap.minimum-0.5);
+  const sectionGaps=await active.evaluate(root=>[...root.querySelectorAll(':is(.entity-tab-panel,[data-entity-panel])>:is(.trip-grid,.order-grid)')].flatMap(grid=>{
+    const next=grid.nextElementSibling;
+    if(!next?.matches('.card')||!grid.getClientRects().length||!next.getClientRects().length)return [];
+    return [{id:next.id,gap:next.getBoundingClientRect().top-grid.getBoundingClientRect().bottom,minimum:innerWidth<=760?16:24}];
+  }));
+  for(const item of sectionGaps)expect(item.gap,`${item.id}: full gap after the form grid`).toBeGreaterThanOrEqual(item.minimum-0.5);
+  const historyGap=await active.evaluate(root=>{const log=root.querySelector('#tpHistoryLog'),card=root.querySelector('#tripResponsibilitySection');return log?.getClientRects().length&&card?.getClientRects().length?card.getBoundingClientRect().top-log.getBoundingClientRect().bottom:null;});
+  if(historyGap!==null)expect(historyGap,'Trip history is separated from its responsibility card').toBeGreaterThanOrEqual((testInfo.project.use.viewport.width<=760?16:24)-0.5);
+
   await expect(page.locator('#authOverlay')).not.toHaveClass(/\bon\b/);
   await expect(active).not.toContainText('Не удалось загрузить');
   return measurements;
@@ -72,21 +109,32 @@ async function shot(page,testInfo,name) {
   await testInfo.attach(name,{path:file,contentType:'image/png'});
   return path;
 }
+async function visibleTarget(locator) {
+  await expect(locator).toBeInViewport({ratio:1});
+  await expect.poll(()=>locator.evaluate(el=>{const r=el.getBoundingClientRect(),x=Math.min(8,r.width/4),y=Math.min(8,r.height/4);return [[r.left+r.width/2,r.top+r.height/2],[r.left+x,r.top+y],[r.right-x,r.top+y],[r.left+x,r.bottom-y],[r.right-x,r.bottom-y]].every(([px,py])=>el.contains(document.elementFromPoint(px,py)));}),{message:'Revealed target must not sit behind sticky UI'}).toBe(true);
+}
 async function reveal(locator) {
   await locator.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}));
-  await expect(locator).toBeInViewport({ratio:1});
-  await expect.poll(()=>locator.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2));}),{message:'Revealed target must not sit behind sticky UI'}).toBe(true);
+  await visibleTarget(locator);
+}
+async function checkedPane(page,active,panel,audit,testInfo) {
+  await expect(panel).toBeVisible();
+  const minimum=await page.evaluate(()=>innerWidth<=760?16:24);
+  await expect.poll(()=>panel.evaluate(el=>{const toolbar=el.closest('.view').querySelector('.entity-toolbar');return el.getBoundingClientRect().top-toolbar.getBoundingClientRect().bottom;}),{message:'Active panel starts below sticky toolbar with the shared card gap'}).toBeGreaterThanOrEqual(minimum-0.5);
+  await integrity(page,active,audit,testInfo);
 }
 for(const role of ['logist','engineer','admin'])for(const source of scenes.filter(scene=>forRole(scene,role))) {
   const scene=role==='engineer'&&source.name==='dashboard-graph'?{...source,route:'planner/mine',view:'planner',ready:'#plMine .vg-feed'}:source;
   test(`${role} ${scene.name}`,async({page,context},testInfo)=>{
     const {active,audit}=await openScene(page,context,testInfo,role,scene);
+    if(scene.name==='request')for(const action of await active.locator('.th-acts .btn:visible').all())await visibleTarget(action);
     if(scene.name==='catalog')await expect(active.locator('#catList')).toContainText('Диагностика гидросистемы');
     if(scene.statistics){
       await expect(active.locator('[data-dcard=fin] .finance-scope-summary')).toContainText('подтверждено 1 из 2');
       await expect(active.locator('[data-dcard=fin] .hero')).toContainText('350');
     }
     if(scene.name==='trip'){
+      await visibleTarget(active.locator('#tpFrom'));
       if(role==='engineer'){
         await expect(active.locator('#tpSave')).toBeHidden();
         await expect(active.locator('#tpChangeReasonGroup')).toBeHidden();
@@ -107,13 +155,41 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await reveal(header.locator("th").first());
       await shot(page,testInfo,`${role}-${scene.name}-data`);
     }
+    if(scene.name==='request'){
+      await expect(active.locator('[data-request-pane]:not([hidden])')).toHaveAttribute('data-request-pane',role==='engineer'?'execution':'overview');
+      for(const key of ['estimate','execution','history','overview']){
+        await active.locator(`[data-request-tab="${key}"]`).click();
+        const panel=active.locator(`[data-request-pane="${key}"]`);
+        await expect(panel).toBeVisible();await expect(active.locator('[data-request-pane]:not([hidden])')).toHaveCount(1);
+        await checkedPane(page,active,panel,audit,testInfo);
+        const heading=panel.locator('h3:visible').first();if(await heading.count())await visibleTarget(heading);
+        await shot(page,testInfo,`${role}-request-${key}`);
+      }
+    }
     if(['task','task-active'].includes(scene.name)){
-      await active.locator('a[href="#orderExecution"]').click();
+      const expectedDefault=scene.name==='task'?'scope':'result';
+      await expect(active.locator(`[data-entity-panel="${expectedDefault}"]`)).toBeVisible();
+      for(const [key,label] of [['travel','Выезды'],['history','История'],['scope','Состав'],['result','Результат']]){
+        await active.getByRole('tab',{name:label,exact:true}).click();
+        await expect(active.locator(`[data-entity-panel="${key}"]`)).toBeVisible();
+        await expect(active.locator('[data-entity-panel]:not([hidden])')).toHaveCount(1);
+        await checkedPane(page,active,active.locator(`[data-entity-panel="${key}"]`),audit,testInfo);
+        await visibleTarget(active.locator(`[data-entity-panel="${key}"] h3:visible`).first());
+        await shot(page,testInfo,`${role}-${scene.name}-${key}`);
+      }
+      const historyTab=active.getByRole('tab',{name:'История',exact:true});await historyTab.focus();await page.keyboard.press('Home');
+      await expect(active.getByRole('tab',{name:'Состав',exact:true})).toBeFocused();
+      await checkedPane(page,active,active.locator('#orderPane-scope'),audit,testInfo);
+      await page.keyboard.press('ArrowRight');await expect(active.getByRole('tab',{name:'Результат',exact:true})).toBeFocused();
+      await checkedPane(page,active,active.locator('#orderPane-result'),audit,testInfo);
+      await shot(page,testInfo,`${role}-${scene.name}-tab-focus`);
+      await active.getByRole('tab',{name:'Результат',exact:true}).click();
       await reveal(active.locator('#orderExecution > h3'));
       if(scene.name==='task-active')await expect(active.locator('[data-result-qty]').first()).toBeEnabled();
       else await expect(active.locator('[data-result-qty]').first()).toBeDisabled();
       await shot(page,testInfo,`${role}-${scene.name}-result`);
-      await active.locator('a[href="#orderComposition"]').click();
+      await active.getByRole('tab',{name:'Состав',exact:true}).click();
+      await checkedPane(page,active,active.locator('#orderPane-scope'),audit,testInfo);
       await reveal(active.locator('#orderComposition > h3'));
       await shot(page,testInfo,`${role}-${scene.name}-composition`);
       if(role==='logist'&&scene.name==='task'){
@@ -147,8 +223,8 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     }
     if(scene.name==='trip'){
       await active.locator('#tpReviewPresence').click();
-      await expect(active.locator('#tpPlanPane')).toBeVisible();
-      await reveal(active.locator('#tpPresenceTitle'));
+      await checkedPane(page,active,active.locator('#tpPresencePane'),audit,testInfo);
+      await visibleTarget(active.locator('#tpPresenceTitle'));
       await expect(active.locator('.wb-table')).toBeVisible();
       if(role==='engineer'){
         await expect(active.locator('#tpPresence input,#tpPresence select,#tpPresence textarea,#tpPresence button')).toHaveCount(0);
@@ -159,13 +235,21 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await shot(page,testInfo,`${role}-trip-presence`);
       await reveal(active.locator('.wb-task-share').first());
       await shot(page,testInfo,`${role}-trip-presence-task-share`);
+      await active.locator('#tpTabEconomy').click();
+      await checkedPane(page,active,active.locator('#tpEconomyPane'),audit,testInfo);
+      await visibleTarget(active.locator('#tpEconomyPane h3:visible').first());
+      await shot(page,testInfo,`${role}-trip-economics-tab`);
+      await active.locator('#tpTabPlan').click();
+      await checkedPane(page,active,active.locator('#tpPlanPane'),audit,testInfo);
+      await shot(page,testInfo,`${role}-trip-plan-return`);
       await reveal(active.locator('#tpReviewCosts'));
       await active.locator('#tpReviewCosts').click();
       await expect(active.locator('#tpEconomyPane')).toBeVisible();
-      await reveal(active.locator('#tpTripAllocation h3').first());
+      await checkedPane(page,active,active.locator('#tpTripAllocation'),audit,testInfo);
+      await visibleTarget(active.locator('#tpTripAllocation h3').first());
       await shot(page,testInfo,`${role}-trip-economics`);
       await active.locator('#tpTabHistory').click();
-      await expect(active.locator('#tpHistoryPane')).toBeVisible();
+      await checkedPane(page,active,active.locator('#tpHistoryPane'),audit,testInfo);
       await reveal(active.locator('#tpHistoryLog > h3'));
       await expect(active.locator('#tpHistoryLog')).toContainText('Уточнён порядок');
       await shot(page,testInfo,`${role}-trip-history`);

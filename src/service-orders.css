@@ -46,3 +46,9 @@ button.wf-row{width:100%;text-align:left;background:transparent;color:inherit;fo
 button.subtab{background:transparent;border-top:0;border-left:0;border-right:0;}
 
 @media(max-width:760px){.order-work-billable{margin-left:0}.order-item-unit{padding-left:0}}
+
+/* Panels stay mounted so tab changes preserve form values and pending edits. */
+#orderEditor [data-entity-panel][hidden]{display:none!important}
+#orderEditor .order-toolbar .order-savebar{position:static}
+#orderEditor .order-toolbar .err:empty{display:none}
+#orderEditor [data-entity-panel]>.order-grid{margin-top:0}

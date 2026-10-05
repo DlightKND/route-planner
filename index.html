@@ -2552,20 +2552,24 @@
         <!-- Действия «на месте». Пустой блок не занимает высоты: скрывается
              из jobHead(), когда у точки нет ни телефона, ни координат. -->
         <div class="th-acts" id="jobActs" style="display:none"></div>
-        <!-- Состояние автосохранения — под подзаголовком, а не рядом с
-             деньгами: это про страницу, а не про заявку. -->
-        <div class="savestate" id="jobSaveState" style="display:none"></div>
       </div>
-      <div class="th-econ" id="jobHeadEcon"></div>
-      <!-- Кнопка нужна только для НОВОЙ заявки: существующая сохраняется
-           сама. -->
-      <button class="btn amber" id="jobSave">Создать заявку</button>
+
     </div>
-    <div class="err" id="jobErr"></div><section class="card" id="jobOrders" hidden></section>
+    <div class="entity-toolbar request-toolbar">
+      <nav class="entity-tabs" role="tablist" aria-label="Разделы заявки">
+        <button type="button" role="tab" id="jobTabOverview" data-request-tab="overview" data-entity-tab="overview" aria-controls="jobOverviewPane" aria-selected="true">Обзор</button>
+        <button type="button" role="tab" id="jobTabEstimate" data-request-tab="estimate" data-entity-tab="estimate" aria-controls="jobEstimatePane" aria-selected="false">Смета</button>
+        <button type="button" role="tab" id="jobTabExecution" data-request-tab="execution" data-entity-tab="execution" aria-controls="jobExecutionPane" aria-selected="false">Выполнение</button>
+        <button type="button" role="tab" id="jobTabHistory" data-request-tab="history" data-entity-tab="history" aria-controls="jobHistoryPane" aria-selected="false">История</button>
+      </nav>
+      <div class="entity-savebar"><span class="savestate" id="jobSaveState" role="status" style="display:none"></span><button class="btn amber" id="jobSave">Создать заявку</button></div>
+      <div class="err" id="jobErr" role="alert"></div>
+    </div>
+    <p class="hint" id="jobUnsavedPanelsNotice" hidden>Сначала создай заявку — после этого появятся задания и история.</p>
+    <section class="entity-tab-panel request-panel" id="jobOverviewPane" data-request-pane="overview" data-entity-panel="overview" role="tabpanel" aria-labelledby="jobTabOverview">
     <div class="trip-grid">
-      <!-- Кнопка «Подробности» появляется только у инженера: ему справочные
-           поля показываются свёрнутыми и на чтение. -->
-      <button class="btn ghost job-ref-toggle" id="jobRefToggle" type="button" aria-expanded="false">Подробности заявки</button>
+      <!-- ID старого переключателя сохранён; справка теперь доступна во вкладке «Обзор». -->
+      <button class="btn ghost job-ref-toggle" style="display:none" id="jobRefToggle" type="button" aria-expanded="false">Подробности заявки</button>
       <!-- Инженеру справочные поля показываем ТЕКСТОМ, а не отключёнными
            полями: отключённый выпадающий список и системный ввод даты —
            это форма, притворяющаяся справкой, и заодно единственное место,
@@ -2587,6 +2591,11 @@
       </div>
       </div>
 
+    </div>
+    <section class="card trip-wide" id="jobResponsibilitySection" hidden></section>
+    </section>
+    <section class="entity-tab-panel request-panel" id="jobEstimatePane" data-request-pane="estimate" data-entity-panel="estimate" role="tabpanel" aria-labelledby="jobTabEstimate" hidden>
+      <div class="th-econ request-estimate-summary" id="jobHeadEcon"></div>
       <div class="card trip-wide job-works foldable" data-fold="jbWorks" data-fold-word="работа|работы|работ"><h3>Работы<span class="foldsum"></span></h3>
         <!-- Отметка присутствия — рядом с часами, а не отдельной карточкой:
              это одно и то же действие, разнесённое во времени. -->
@@ -2609,10 +2618,9 @@
         <div class="hint" id="jbPartTotals" style="margin-top: var(--sp-3)"></div>
       </div>
 
-      <div class="card trip-wide foldable" id="jbFixCard" data-fold="jbFixes" style="display:none"><h3 class="cardhead">История правок и аннулирований <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Предложения инженеров, решения диспетчера и финансовые строки, исключённые из расчётов с сохранением исходных сумм и причины.</span></span><span class="foldsum"></span></h3>
-        <div id="jbFixes" style="margin-top: var(--sp-3)"></div>
-      </div>
-
+    </section>
+    <section class="entity-tab-panel request-panel" id="jobExecutionPane" data-request-pane="execution" data-entity-panel="execution" role="tabpanel" aria-labelledby="jobTabExecution" hidden>
+      <section class="card" id="jobOrders" hidden></section>
       <div class="card trip-wide job-photos foldable" data-fold="jbPhotoList" data-fold-word="снимок|снимка|снимков"><h3 class="cardhead">Фото <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Снимок «до» отвечает на «оно уже было сломано», «после» — на «вы не сделали», «дефект» — на «деталь была бракованной». Это доказательная база к гарантии на ремонт, а не украшение. Снимок ужимается перед отправкой, чтобы уходил и на слабой связи.</span></span><span class="foldsum"></span></h3>
         <div class="ph-add" id="jbPhotoAdd">
           <button class="btn sm" type="button" data-ph="before">+ до</button>
@@ -2627,9 +2635,14 @@
         <input type="file" id="jbPhotoFile" accept="image/*" multiple hidden>
         <div class="ph-grid" id="jbPhotoList"></div>
       </div>
-    </div>
-    <section class="card trip-wide" id="jobResponsibilitySection" hidden></section>
+    </section>
+    <section class="entity-tab-panel request-panel" id="jobHistoryPane" data-request-pane="history" data-entity-panel="history" role="tabpanel" aria-labelledby="jobTabHistory" hidden>
+      <div class="card trip-wide foldable" id="jbFixCard" data-fold="jbFixes" style="display:none"><h3 class="cardhead">История правок и аннулирований <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Предложения инженеров, решения диспетчера и финансовые строки, исключённые из расчётов с сохранением исходных сумм и причины.</span></span><span class="foldsum"></span></h3>
+        <div id="jbFixes" style="margin-top: var(--sp-3)"></div>
+      </div>
+
     <section class="card trip-wide entity-activity" id="jobActivitySection" hidden><h3>История заявки и комментарии</h3><div id="jobActivity"></div></section>
+    </section>
     <!-- Подпись заказчика. Отдельным окном при закрытии заявки: это
          последний шаг, и он должен быть один на экране, без соседей. -->
     <div class="overlay" id="signOverlay"><div class="modal sign-modal">
@@ -2668,24 +2681,23 @@
         <h2 id="tripTitle">Выезд</h2>
         <div class="th-sub" id="tripSub"></div>
       </div>
-      <div class="th-econ" id="tripHeadEcon"></div>
-      <button class="btn amber" id="tpSave">Сохранить план</button>
     </div>
-    <div id="tripOrderParent"></div><div class="err" id="tripErr"></div>
-    <div class="wb-tabs" role="tablist" aria-label="Разделы выезда">
-      <button class="btn" role="tab" id="tpTabPlan" data-trip-tab="plan" aria-selected="true" aria-controls="tpPlanPane">План и факт</button>
-      <button class="btn" role="tab" id="tpTabEconomy" data-trip-tab="economy" aria-selected="false" aria-controls="tpEconomyPane">Экономика</button>
-      <button class="btn" role="tab" id="tpTabHistory" data-trip-tab="history" aria-selected="false" aria-controls="tpHistoryPane">История</button>
-    </div>
-    <div class="wb-note" id="tpReviewState" role="status"></div><div id="tpReviewSummary" class="trip-review-summary" role="status"></div><p class="hint">Поездка, присутствие и выполнение работ проверяются отдельно. Часы на объекте не заменяют результат задания.</p>
-    <div id="tpPlanPane" role="tabpanel" aria-labelledby="tpTabPlan" data-trip-pane="plan">
-    <div id="tpChangeReasonGroup"><label for="tpChangeReason">Причина изменения плана</label><input id="tpChangeReason" type="text" placeholder="Например: объект Б перенесён, едем сразу на В"></div>
+    <div id="tripOrderParent"></div>
+    <div class="entity-toolbar trip-toolbar"><nav class="wb-tabs entity-tabs" role="tablist" aria-label="Разделы выезда">
+      <button class="btn" role="tab" id="tpTabPlan" data-trip-tab="plan" data-entity-tab="plan" aria-selected="true" aria-controls="tpPlanPane">План</button>
+      <button type="button" class="btn" role="tab" id="tpTabPresence" data-trip-tab="presence" data-entity-tab="presence" aria-selected="false" aria-controls="tpPresencePane">Присутствие</button>
+      <button class="btn" role="tab" id="tpTabEconomy" data-trip-tab="economy" data-entity-tab="economy" aria-selected="false" aria-controls="tpEconomyPane">Экономика</button>
+      <button class="btn" role="tab" id="tpTabHistory" data-trip-tab="history" data-entity-tab="history" aria-selected="false" aria-controls="tpHistoryPane">История</button>
+    </nav><div class="entity-savebar"><span class="grow"></span><button class="btn amber" id="tpSave">Сохранить план</button></div><div class="err" id="tripErr" role="alert"></div><div class="wb-note" id="tpReviewState" role="status" hidden></div></div>
+    <div id="tpReviewSummary" class="trip-review-summary" role="status"></div>
+    <div class="entity-tab-panel" id="tpPlanPane" data-entity-panel="plan" role="tabpanel" aria-labelledby="tpTabPlan" data-trip-pane="plan">
     <div class="trip-grid">
       <div class="card wb-plan-card"><h3>План выезда</h3>
         <div class="row"><div class="grow"><label>Дата с</label><input type="date" id="tpFrom"></div><div class="grow"><label>Дата по</label><input type="date" id="tpTo"></div></div>
         <div class="row"><div class="grow"><label>Авто</label><select id="tpVeh"></select><div class="hint" id="tpVehInfo" style="margin-top: var(--sp-2)"></div></div></div>
         <div class="row"><div class="grow"><label>Инженеры</label><select id="tpEng" class="multi-eng" multiple aria-describedby="tpEngHint"></select><div class="hint" id="tpEngHint">Команда будущих посещений. Проверенное присутствие сохраняется отдельно.</div></div><div class="grow"><label>Статус</label><select id="tpStatus"><option value="planned">план</option><option value="assigned">назначен</option><option value="in_progress">в работе</option><option value="finished">на проверке</option><option value="done">подтверждён</option><option value="cancelled">отменён</option></select></div></div>
         <label style="margin-top: var(--sp-3)">Заметка</label><input type="text" id="tpNotes">
+        <div id="tpChangeReasonGroup"><label for="tpChangeReason">Причина изменения плана</label><input id="tpChangeReason" type="text" placeholder="Например: объект Б перенесён, едем сразу на В"></div>
       <div class="wb-section"><h3>Задания выезда <span class="cnt" id="tpJobsCnt">0</span></h3>
         <label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim);margin: var(--sp-1) 0 var(--sp-3)"><input type="checkbox" id="tpJobsRoute" checked style="width:auto">показывать только заявки по точкам маршрута</label>
         <!-- Два разных переключателя на строке, и оба раньше были без подписи.
@@ -2700,7 +2712,7 @@
       </div>
 
       </div>
-      <div class="card wb-route-card"><h3 class="cardhead">Маршрут и присутствие <span class="cnt" id="tpRouteKm">—</span><span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Построение маршрута, старт и депо, буфер и изохрона — в планировщике на вкладке «Карта».</span></span></h3>
+      <div class="card wb-route-card"><h3 class="cardhead">Маршрут <span class="cnt" id="tpRouteKm">—</span><span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Построение маршрута, старт и депо, буфер и изохрона — в планировщике на вкладке «Карта».</span></span></h3>
         <!-- В макете карта тут была, и не для красоты: список остановок
              не показывает ни формы круга, ни того, что точка стоит в стороне
              от него. Пунктир — план, сплошная — где машина прошла на самом деле. -->
@@ -2718,16 +2730,19 @@
             <div id="tpKmAction"></div>
           </div></details>
         </div>
-        <!-- Факт-пробег стоит здесь, у маршрута, а не в «Экономике»: это
-             результат разбора трека, и рядом с ним нужна кнопка пересчёта. -->
-        <div id="tpFactBox" style="margin-top: var(--sp-4)"></div>
 
         <div class="hint" id="tpRemainingInfo"></div>
-        <details class="wb-section wb-presence-details"><summary id="tpPresenceTitle">Присутствие на объектах · стоянки и проверка</summary><div id="tpPresence"></div></details>
       </div>
     </div>
     </div>
-    <div id="tpEconomyPane" role="tabpanel" aria-labelledby="tpTabEconomy" data-trip-pane="economy" hidden>
+    <section class="entity-tab-panel" id="tpPresencePane" data-trip-pane="presence" data-entity-panel="presence" role="tabpanel" aria-labelledby="tpTabPresence" hidden>
+      <div class="card trip-wide">
+        <details class="wb-section wb-presence-details" open><summary id="tpPresenceTitle">Присутствие на объектах · стоянки и проверка</summary><div id="tpPresence"></div></details>
+        <div id="tpFactBox" style="margin-top: var(--sp-4)"></div>
+      </div>
+    </section>
+    <div class="entity-tab-panel" id="tpEconomyPane" data-entity-panel="economy" role="tabpanel" aria-labelledby="tpTabEconomy" data-trip-pane="economy" hidden>
+      <div class="th-econ trip-economy-summary" id="tripHeadEcon"></div>
       <div class="wb-note">Расчёт по текущему плану и доступному факту. Окончательное подтверждение экономики требует полной проверки выезда.</div>
       <!-- Ручные суммы стоят рядом с разбивкой, на которую влияют: раньше
            это были разные половины окна, и связь приходилось держать в уме. -->
@@ -2747,7 +2762,8 @@
         <p class="hint">Сначала загрузите подтверждённый выезд.</p>
       </section>
     </div>
-    <div id="tpHistoryPane" role="tabpanel" aria-labelledby="tpTabHistory" data-trip-pane="history" hidden>
+    <div class="entity-tab-panel" id="tpHistoryPane" data-entity-panel="history" role="tabpanel" aria-labelledby="tpTabHistory" data-trip-pane="history" hidden>
+      <div class="card"><h3>Проверка выезда</h3><p class="hint" id="tpRevisionInfo"></p><p class="hint">Поездка, присутствие и выполнение работ проверяются отдельно. Часы на объекте не заменяют результат задания.</p></div>
       <div id="tpHistoryLog"></div>
       <section class="card trip-wide" id="tripResponsibilitySection" hidden></section>
       <section class="card trip-wide entity-activity" id="tripActivitySection" hidden><h3>Комментарии к выезду</h3><div id="tripActivity"></div></section>
