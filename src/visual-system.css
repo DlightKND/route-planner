@@ -6,6 +6,7 @@ html:root {
   --fs-caption:12px;
   --pad-card:var(--sp-5);
   --gap-card:var(--sp-6);
+  --gap-list:var(--sp-4);
   --control-radius:var(--r-sm);
   --control-motion:120ms var(--ease);
 }
@@ -835,9 +836,26 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 
 @media(max-width:760px){#vehBody .veh-kv .btn{min-height:var(--touch-h)}}
 
-/* The journal button belongs to the Trips heading and adds no toolbar row. */
+/* Trips keeps journal and trash actions in its shared heading. */
 .trip-heading{display:flex;align-items:center;gap:var(--gap-row);margin-bottom:var(--gap-row)}
 .view-planner .trip-heading>.subtabs{flex:1;min-width:0;margin:0}
-.view-planner .trip-heading>[data-trip-section]{flex:none;min-height:44px;font-size:var(--fs-caption);padding:var(--sp-3) var(--sp-4)}
-.view-planner .trip-heading>[data-trip-section].on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.view-planner .trip-heading-actions [data-trip-section]{flex:none;min-height:44px;font-size:var(--fs-caption);padding:var(--sp-3) var(--sp-4)}
+.view-planner .trip-heading-actions [data-trip-section].on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
 @media(max-width:760px){.view-planner .trip-heading .subtab{padding:var(--sp-3);font-size:var(--fs-caption)}}
+
+/* Repeated list rows share one rhythm; large content panels retain gap-card. */
+.view-planner .klist{gap:var(--gap-list)}
+.trip-heading-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-3)}
+.view .order-board-toolbar>input{flex:1 1 220px;min-width:0}
+.view .order-board-toolbar>label{display:flex;align-items:center;gap:var(--sp-3);font-size:var(--fs-caption);color:var(--ink-dim)}
+.view .order-board-toolbar>label select{width:auto;min-width:110px}
+
+.view-planner .planner-toolbar:has(#jobTrash){grid-template-columns:minmax(0,1fr) auto auto auto}
+.view-planner .planner-toolbar>#jobAdd{grid-column:4}
+@media(max-width:760px){
+ .trip-heading{flex-wrap:wrap}
+ .trip-heading-actions{width:100%;justify-content:flex-end}
+ .view-planner .planner-toolbar:has(#jobTrash){grid-template-columns:minmax(0,1fr) auto auto}
+ .view-planner .planner-toolbar>#jobTrash{grid-column:2;grid-row:2}
+ .view-planner .planner-toolbar>#jobAdd{grid-column:3;grid-row:2}
+}
