@@ -18,7 +18,7 @@ export function openAccountProfile({profile, user, readOrg, logout, settings, tr
   // Close first so the established sign-out confirmation is above the page.
   dialog.querySelector('[data-profile-logout]').onclick=()=>{dialog.close();logout();};
   dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
-  dialog.addEventListener('close',()=>{dialog.remove();if(trigger?.isConnected)trigger.focus();});
+  dialog.addEventListener('close',()=>{dialog.remove();if(trigger?.isConnected)trigger.focus({preventScroll:true});});
   document.body.append(dialog);dialog.showModal();
   const box=dialog.querySelector('.account-org');
   readOrg().then(org=>{

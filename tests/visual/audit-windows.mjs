@@ -24,6 +24,7 @@ window.__windowAudit={confirmDialog,promptDialog,openVersion,askSignature,openRe
  leaflet:async html=>{await window.__windowAudit.settleMap();L.popup({maxWidth:320}).setLatLng([49.99,36.23]).setContent(html).openOn(map);},
  vehicle:()=>{vehState=[{vehicle_id:'vehicle-a',ts:new Date().toISOString(),lat:49.99,lng:36.23,speed:0,depot_state:'outside',last_move_at:'2026-10-05T06:00:00Z',odometer:50232}];showVehModal('vehicle-a');},
  depotPopup:async()=>{await window.__windowAudit.settleMap();const c={...clients[0],id:'audit-depot',name:'Депо · демонстрационная база',is_base:true};clients.push(c);renderMarkers();markerById[c.id].openPopup();clients.pop();},
+ largeTeam:async()=>{await switchTab('dash');const person=profilesList.find(p=>p.role==='engineer');for(let i=0;i<6;i++)profilesList.push({...person,id:'audit-engineer-'+i,full_name:'Инженер команды '+(i+1)});await renderDashboard();document.querySelector('#dashSeg [data-dv=cards]')?.click();},
  orgProfile:()=>document.getElementById('profileBtn').click(),
  closeAll:()=>{document.querySelectorAll('.overlay.on,.sheet.on,.sheet-back.on,.map-pop.on,.ctxmenu.on').forEach(x=>x.classList.remove('on'));document.querySelectorAll('dialog').forEach(x=>x.close());document.querySelectorAll('.gpop').forEach(x=>x.remove());document.querySelectorAll('.planner-filter-menu').forEach(x=>x.open=false);document.getElementById('phView').hidden=true;map.closePopup();document.body.click();},
 };`;
@@ -77,9 +78,11 @@ const cases=[
  {id:'map-segment',selector:'.leaflet-popup',html:call('segPopup',{km:128,fromTs:'2026-09-30T03:00:00Z',toTs:'2026-09-30T05:00:00Z',ms:7200000,kind:'track'},'достроено по дорогам')},
  {id:'map-avoid',selector:'.leaflet-popup',template:true,htmlText:'<b>Объезд 1</b><br>радиус 150 м'},
  {id:'map-position',selector:'.leaflet-popup',template:true,htmlText:'<b>Текущая позиция</b><br>ещё не записана в историю выезда'},
+ {id:'factLegend-open',selector:'.mleg-body',before:call('openStayBindingMap',past),click:'.mleg-details > summary'},
+ {id:'engineer-scope-large',selector:'.engineer-pop',template:true,before:call('largeTeam'),click:'.summary-team > summary',afterClick:'[data-epop]'},
  {id:'map-point-diagnostics',selector:'.leaflet-popup',template:true,htmlText:'<b>09:30</b><br>отброшено: неверная скорость'},
 ];
-const dimensions=[{name:'mobile-360',width:360,height:800,touch:true},{name:'mobile-390',width:390,height:844,touch:true},{name:'mobile-short',width:390,height:500,touch:true},{name:'desktop-1440',width:1440,height:900,touch:false}];
+const dimensions=[{name:'mobile-360',width:360,height:800,touch:true},{name:'mobile-390',width:390,height:844,touch:true},{name:'mobile-short',width:390,height:500,touch:true},{name:'mobile-landscape',width:720,height:390,touch:true},{name:'tablet-768',width:768,height:1024,touch:true},{name:'desktop-1024',width:1024,height:768,touch:false},{name:'desktop-1440',width:1440,height:900,touch:false}];
 const results=[];
 const runCases=process.env.WINDOW_AUDIT_CASES?cases.filter(c=>process.env.WINDOW_AUDIT_CASES.split(',').includes(c.id)):cases;
 const invoke=async(page,method,wait=true)=>{
@@ -125,7 +128,7 @@ for(const d of dimensions)for(const theme of ['light','dark']){
   const data={page,context,errors,remote};pages.set(role,data);return data;
  }
  for(const c of runCases){
-  if(c.mobileOnly&&!d.touch)continue;
+  if(c.mobileOnly&&d.width>760)continue;
   rmSync(join(folder,c.id+'.png'),{force:true});rmSync(join(folder,c.id+'-bottom.png'),{force:true});
   const {page,errors,remote}=await getPage(c.role||'admin');
   const entry={case:c.id,project:d.name+'-'+theme,role:c.role||'admin',template:!!c.template};
@@ -141,6 +144,7 @@ for(const d of dimensions)for(const theme of ['light','dark']){
    if(c.selector==='.leaflet-popup')await page.waitForTimeout(400);
    await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
    entry.measure=await root.evaluate(inspect);
+   if(c.id==='gpop'&&d.width<=760)entry.navigationOverlap=await root.evaluate(el=>el.getBoundingClientRect().bottom>document.querySelector('.rail').getBoundingClientRect().top+1);
    await page.screenshot({path:join(folder,c.id+'.png'),animations:'disabled',caret:'hide'});
    // End of scroll: are final actions reachable without moving the backdrop?
    await root.evaluate(el=>{const modal=el.matches('.overlay')?el.querySelector('.modal'):el;modal.scrollTop=modal.scrollHeight;});

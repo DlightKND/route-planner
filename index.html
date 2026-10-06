@@ -2530,7 +2530,7 @@
              в этом окне — «что я на этом вижу». -->
         <div class="lay-t">Подложка</div>
         <div class="seg" id="mapStyleSeg"><button class="on" data-mstyle="map">обычная</button><button data-mstyle="sat">спутник</button></div>
-        <div class="hint" id="mapStyleHint" style="display:none">Спутник выключен: в этой сборке нет ключа MapTiler. Нужен репозиторный секрет VITE_MAPTILER_KEY (Settings → Secrets and variables → Actions), затем пересобрать.</div>
+        <div class="hint" id="mapStyleHint" style="display:none">Спутниковая карта сейчас недоступна. Используйте обычную подложку.</div>
         <div class="lay-t">Цвет точек</div>
         <div class="seg" id="colorMode"><button class="on" data-cm="urgency">срочность</button><button data-cm="profit">прибыль</button><button data-cm="own">свой</button></div>
         <div class="lay-legend" id="profitLegend"></div>
@@ -2651,6 +2651,7 @@
       <div class="row" style="margin-top: var(--sp-4)">
         <button class="btn" id="signClear" type="button">Стереть</button>
         <span class="grow"></span>
+        <button class="btn ghost" id="signCancel" type="button">Отмена завершения</button>
         <button class="btn" id="signSkip" type="button">Без подписи</button>
         <button class="btn amber" id="signOk" type="button">Готово</button>
       </div>
@@ -2753,7 +2754,6 @@
             <span class="fg-t">Суммы вручную <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Пусто — сумма считается из тарифов и себестоимости. Заполнено — берётся фиксированная сумма.</span></span></span>
             <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>Выручка, ₴</label><input type="number" id="tpOvRev" placeholder="авто"></div><div class="grow"><label>Затраты, ₴</label><input type="number" id="tpOvCost" placeholder="авто"></div></div>
             <div id="tpRoadGroups"></div>
-            
           </div>
           <div id="tpEconBody"></div>
         </div>
@@ -2836,8 +2836,7 @@
           <details class="planner-filter-menu"><summary class="btn sm ghost" aria-label="Фильтры заявок">Фильтры</summary><div class="planner-filter-panel">
             <label>Инженер<select id="jobEngFilter"><option value="">все инженеры</option></select></label>
             <label>Представление<select id="jobLayout" aria-label="Представление заявок"><option value="kanban">Канбан</option><option value="list">Список</option></select></label>
-            <button class="btn sm ghost" id="jobTrash" title="Удалённые заявки">Корзина</button>
-          </div></details><button class="btn sm amber" id="jobAdd">+ Заявка</button>
+          </div></details><button class="btn sm ghost" id="jobTrash" title="Удалённые заявки">Корзина</button><button class="btn sm amber" id="jobAdd">+ Заявка</button>
         </div>
         <div class="chips" id="jobStatusChips"></div>
       </div>
@@ -2857,8 +2856,7 @@
           <details class="planner-filter-menu"><summary class="btn sm ghost" aria-label="Фильтры выездов">Фильтры</summary><div class="planner-filter-panel">
             <label>Инженер<select id="tripEngFilter"><option value="">все инженеры</option></select></label>
             <label>Представление<select id="tripLayout" aria-label="Представление выездов"><option value="kanban">Канбан</option><option value="list">Список</option></select></label>
-            <button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button>
-          </div></details><button class="btn sm amber" id="tripAdd">+ Выезд</button>
+          </div></details><button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button><button class="btn sm amber" id="tripAdd">+ Выезд</button>
         </div>
         <div class="chips" id="tripStatusChips"></div>
       </div>
@@ -2993,12 +2991,12 @@
   <h3 id="baseTitle">Старт — депо</h3>
   <div class="sub" id="baseSub"></div>
   <div id="baseList" style="max-height:200px;overflow:auto"></div>
-  <label style="margin-top: var(--sp-3)">Новое депо</label>
+<details class="modal-group"><summary>Создать депо</summary>  <label style="margin-top: var(--sp-3)">Новое депо</label>
   <input type="text" id="baseNew" placeholder="адрес депо для поиска координат">
   <div class="row" style="margin-top: var(--sp-3)"><input type="text" id="baseNewName" class="grow" placeholder="название (необязательно)"><input type="text" id="baseNewDesc" class="grow" placeholder="описание"></div>
   <button class="btn sm" id="baseNewAdd" style="margin-top: var(--sp-3);width:100%">Создать депо</button>
   <div id="baseNewRes"></div>
-  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="baseSkip">Не нужно</button></div>
+</details>  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="baseSkip">Не нужно</button></div>
 </div></div>
 
 <!-- link job prompt -->
@@ -3043,7 +3041,7 @@
 
   <label>Project URL</label><input type="text" id="cfgUrl" placeholder="https://xxxx.supabase.co">
   <label>Publishable / anon key</label><input type="text" id="cfgKey" placeholder="sb_publishable_... или eyJ...">
-  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="cfgSave">Сохранить и подключиться</button></div>
+  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost" id="cfgCancel" type="button">Отмена</button><button class="btn amber grow" id="cfgSave">Сохранить и подключиться</button></div>
   <div class="err" id="cfgErr"></div>
 </div></div>
 
@@ -3072,17 +3070,17 @@
 
 <!-- edit client -->
 <div class="overlay" id="profOverlay"><div class="modal">
-  <h3 id="tpFormTitle">Новый профиль</h3>
+  <h3 id="tpFormTitle">Новый тариф</h3>
   <label>Название</label><input type="text" id="tpfName" placeholder="Производство / Клиент / Отдел продаж">
-  <div class="meta" style="margin-top: var(--sp-3)">Ставки за час работ (выручка). Себестоимость — общая, задаётся в «Общих параметрах».</div>
+  <div class="meta" style="margin-top: var(--sp-3)">Работы · выручка за час</div>
   <div class="row"><div class="grow"><label>платно, за час</label><input type="number" id="tpfPaidRate" step="0.01"></div><div class="grow"><label>гарантия, за час (обычно 0)</label><input type="number" id="tpfWarrRate" step="0.01"></div></div>
   <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>в депо, за час <span class="q"><button class="qm" type="button" aria-label="О ставке в депо" aria-expanded="false">?</button><span class="qbody">Пусто или 0 — работа в депо считается по ставке «платно». Гарантия в депо идёт по гарантийной ставке.</span></span></label><input type="number" id="tpfDepotRate" step="0.01"></div></div>
-  <div class="meta" style="margin-top: var(--sp-3)">Дорога и суточные — выручка этого плательщика:</div>
+  <div class="meta" style="margin-top: var(--sp-3)">Дорога и суточные · выручка</div>
   <div class="row"><div class="grow"><label>за км</label><input type="number" id="tpfKmRate" step="0.01"></div><div class="grow"><label>за сутки</label><input type="number" id="tpfDayRate" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="tpfNightRate" step="0.01"></div></div>
-  <label style="margin-top: var(--sp-3)">Реквизиты плательщика</label><textarea id="tpfReq" placeholder="Название, адрес, ЕДРПОУ/ИНН, банк…"></textarea>
+<details class="modal-group"><summary>Реквизиты и использование по умолчанию</summary>  <label style="margin-top: var(--sp-3)">Реквизиты плательщика</label><textarea id="tpfReq" placeholder="Название, адрес, ЕДРПОУ/ИНН, банк…"></textarea>
   <label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;margin-top: var(--sp-3);font-size: var(--fs-4)"><input type="checkbox" id="tpfDefWarr" style="width:auto">профиль по умолчанию для гарантийных работ</label>
   <label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;margin-top: var(--sp-3);font-size: var(--fs-4)"><input type="checkbox" id="tpfDefPaid" style="width:auto">профиль по умолчанию для платных работ</label>
-  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="tpfSave">Добавить профиль</button><button class="btn ghost" id="tpfCancel">Отмена</button></div>
+</details>  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="tpfSave">Добавить тариф</button><button class="btn ghost" id="tpfCancel">Отмена</button></div>
   <div class="err" id="tpfErr"></div>
 </div></div>
 
@@ -3118,29 +3116,29 @@
   <label>Название</label><input type="text" id="eName">
   <label>Телефон на месте <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Кого набирать по приезде. Виден инженеру в шапке заявки и в попапе точки на карте — оттуда набирается одним нажатием.</span></span></label><input type="tel" id="ePhone" inputmode="tel" autocomplete="tel" placeholder="+380 …">
   <label>Описание</label><textarea id="eDesc"></textarea>
-  <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет</label><input type="color" id="eColor"></div><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;padding-bottom: var(--sp-3);white-space:nowrap"><input type="checkbox" id="eBase" style="width:auto">депо</label></div>
+<details class="modal-group"><summary>Тариф, подписант и положение на карте</summary>  <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет</label><input type="color" id="eColor"></div><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;padding-bottom: var(--sp-3);white-space:nowrap"><input type="checkbox" id="eBase" style="width:auto">депо</label></div>
   <label style="margin-top: var(--sp-3)">Профиль тарифа по умолчанию (для платных работ этого клиента)</label><select id="eProfile"></select>
   <label style="margin-top: var(--sp-3)">Подписант заказчика</label><input type="text" id="eSigner" placeholder="Директор Петров П.П.">
-  <div class="row"><div class="grow"><label>Широта</label><input type="text" id="eLat"></div><div class="grow"><label>Долгота</label><input type="text" id="eLng"></div></div>
-  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="eSave">Сохранить</button><button class="btn ghost" id="eCancel">Отмена</button></div>
+  <div class="row"><div class="grow"><label>Широта</label><input type="text" inputmode="decimal" id="eLat"></div><div class="grow"><label>Долгота</label><input type="text" inputmode="decimal" id="eLng"></div></div>
+</details>  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="eSave">Сохранить</button><button class="btn ghost" id="eCancel">Отмена</button></div>
 </div></div>
 
 <!-- equipment of a client -->
 <div class="overlay" id="eqOverlay"><div class="modal">
   <h3 id="eqTitle">Техника клиента</h3>
   <div id="eqList"></div>
-  <div class="card" style="margin-top: var(--sp-3);padding: var(--sp-4)"><h3 id="eqFormTitle" style="font-family:var(--mono);font-size: var(--fs-2);color:var(--accent-ink)">Добавить технику</h3>
+  <button type="button" class="btn amber" id="eqAdd">Добавить технику</button><div class="card" id="eqFormPane" hidden style="margin-top: var(--sp-3);padding: var(--sp-4)"><h3 id="eqFormTitle" >Добавить технику</h3>
     <label>Модель из каталога</label><select id="eqModelId"></select>
-    <label style="margin-top: var(--sp-3)">Модель (текст)</label><input type="text" id="eqModel">
+    <label style="margin-top: var(--sp-3)">Название модели</label><input type="text" id="eqModel" placeholder="Если модели нет в каталоге">
     <div class="row"><div class="grow"><label>Тип/бренд</label><input type="text" id="eqKind" placeholder="для навыков инженера"></div><div class="grow"><label>Серийник</label><input type="text" id="eqSerial"></div></div>
-    <div class="row"><div class="grow"><label>Дата установки</label><input type="date" id="eqInstalled"></div><div class="grow"><label>Гарантия до</label><input type="date" id="eqWarranty"></div></div>
+<details class="modal-group"><summary>Установка, гарантия и заметки</summary>    <div class="row"><div class="grow"><label>Дата установки</label><input type="date" id="eqInstalled"></div><div class="grow"><label>Гарантия до</label><input type="date" id="eqWarranty"></div></div>
     <label>Заметки</label><input type="text" id="eqNotes">
-    <label>Координаты (если отличаются от адреса клиента) <span class="q"><button class="qm" type="button" aria-label="О координатах техники" aria-expanded="false">?</button><span class="qbody">Пусто — техника в точке клиента. Заполнено — появится своя точка при клике на клиента.</span></span></label>
+</details><details class="modal-group"><summary>Положение техники на карте</summary>    <label>Координаты (если отличаются от адреса клиента) <span class="q"><button class="qm" type="button" aria-label="О координатах техники" aria-expanded="false">?</button><span class="qbody">Пусто — техника в точке клиента. Заполнено — появится своя точка при клике на клиента.</span></span></label>
     <div class="row"><input type="text" id="eqGeo" placeholder="найти по адресу" class="grow"><button class="btn sm" id="eqGeoBtn">Найти</button></div>
     <div id="eqGeoRes"></div>
-    <div class="row"><div class="grow"><label>Широта</label><input type="text" id="eqLat"></div><div class="grow"><label>Долгота</label><input type="text" id="eqLng"></div></div>
+    <div class="row"><div class="grow"><label>Широта</label><input type="text" inputmode="decimal" id="eqLat"></div><div class="grow"><label>Долгота</label><input type="text" inputmode="decimal" id="eqLng"></div></div>
 
-    <div class="row" style="margin-top: var(--sp-3)"><button class="btn amber grow" id="eqSave">Сохранить технику</button><button class="btn ghost" id="eqFormCancel" style="display:none">Отмена правки</button></div>
+</details>    <div class="row" style="margin-top: var(--sp-3)"><button class="btn amber grow" id="eqSave">Сохранить технику</button><button class="btn ghost" id="eqFormCancel" style="display:none">Отмена правки</button></div>
     <div class="err" id="eqErr"></div>
   </div>
   <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="eqClose">Закрыть</button></div>
@@ -3150,17 +3148,17 @@
 <div class="overlay" id="catOverlay"><div class="modal">
   <h3 id="catFormTitle">Работа</h3>
   <label>Название</label><input type="text" id="cwName">
-  <div class="row"><div class="grow"><label>Норма, ч</label><input type="number" id="cwHours" step="0.25"></div><div class="grow"><label>Цена вручную (оверрайд)</label><input type="number" id="cwPrice" step="0.01" placeholder="иначе часы×тариф"></div></div>
+  <div class="row"><div class="grow"><label>Норма, ч</label><input type="number" id="cwHours" step="0.25"></div><div class="grow"><label>Цена вручную</label><input type="number" id="cwPrice" step="0.01" placeholder="иначе часы×тариф"></div></div>
   <label style="display:flex;align-items:center;gap: var(--sp-3);text-transform:none;letter-spacing:0;color:var(--ink)"><input type="checkbox" id="cwWarranty" style="width:auto"> Может быть гарантийной</label>
   <label style="display:flex;align-items:center;gap: var(--sp-3);text-transform:none;letter-spacing:0;color:var(--ink)"><input type="checkbox" id="cwMaint" style="width:auto"> Это ТО / сервис (фиксирует «последнее ТО»)</label>
   <label>Применимость</label>
   <div class="seg" id="cwScope"><button data-cs="all" class="on">Общий набор</button><button data-cs="kinds">По типам</button><button data-cs="models">По моделям</button></div>
   <div id="cwKindsBox" style="display:none;margin-top: var(--sp-3)"><input type="text" id="cwKinds" placeholder="типы через запятую: насос, компрессор"></div>
   <div id="cwModelsBox" style="display:none;margin-top: var(--sp-3)"><div class="hint" style="margin: 0 0 var(--sp-3)">Отметь модели, к которым применима работа:</div><div id="cwModelsTree" style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius: var(--r-sm);padding: var(--sp-3)"></div></div>
-  <label>Материалы (по строке: название;кол-во;ед.)</label><textarea id="cwMaterials" placeholder="фильтр;1;шт"></textarea>
+<details class="modal-group"><summary>Материалы, инструкции и примечание</summary>  <label>Материалы (по строке: название;кол-во;ед.)</label><textarea id="cwMaterials" placeholder="фильтр;1;шт"></textarea>
   <label>Порядок проведения</label><textarea id="cwProc"></textarea>
   <label>Мануалы (по строке: название|ссылка)</label><textarea id="cwManuals" placeholder="Инструкция|https://..."></textarea>
-  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="cwSave">Сохранить</button><button class="btn ghost" id="cwCancel">Отмена</button></div>
+</details>  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="cwSave">Сохранить</button><button class="btn ghost" id="cwCancel">Отмена</button></div>
   <div class="err" id="cwErr"></div>
 </div></div>
 
@@ -3178,9 +3176,9 @@
 <link rel="shortcut icon" href="favicon.png">
 <meta name="theme-color" content="#0f1115">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<div class="toast" id="toast"></div>
-<div class="busy" id="busy"><div class="busy-t"><span class="busy-s"></span><span id="busyText">Работаю…</span></div><div class="busy-bar"><i id="busyBar"></i></div></div>
-<div class="toast undo" id="undoToast"><span id="undoMsg"></span><button class="btn sm amber" id="undoBtn">Отменить</button></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="busy" id="busy" role="status" aria-live="polite"><div class="busy-t"><span class="busy-s"></span><span id="busyText">Работаю…</span></div><div class="busy-bar"><i id="busyBar"></i></div></div>
+<div class="toast undo" id="undoToast" role="status"><span id="undoMsg"></span><button class="btn sm amber" id="undoBtn">Отменить</button></div>
 <div class="ctxmenu" id="ctxMenu"></div>
 <!-- Сколько изменений ещё не уехало. Видно на любом экране: инженер должен
      знать, что его работа пока лежит в телефоне, а не в базе. -->
