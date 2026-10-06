@@ -269,7 +269,7 @@ const SIGNATURE_CANCELLED=Symbol('signature-cancelled');
 const modalUI=installModalShell({
   dirtyIds:['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay','stockOverlay','profOverlay','pointOverlay','reschedOverlay','fixOverlay','cfgOverlay','promptOverlay'],
   canDismiss:id=>id!=='authOverlay' && (id!=='cfgOverlay'||!!session?.user),
-  dismiss:{moreSheet:()=>closeMore(),phView:()=>{$('phView').hidden=true;$('phViewImg').src='';},confirmOverlay:()=>_cdDone(false),promptOverlay:()=>_pdDone(false),signOverlay:()=>signDone(SIGNATURE_CANCELLED),pointOverlay:()=>{$('cancelBtn').click();}},
+  dismiss:{pushOverlay:()=>closePush(),moreSheet:()=>closeMore(),phView:()=>{$('phView').hidden=true;$('phViewImg').src='';},confirmOverlay:()=>_cdDone(false),promptOverlay:()=>_pdDone(false),signOverlay:()=>signDone(SIGNATURE_CANCELLED),pointOverlay:()=>{$('cancelBtn').click();}},
   confirmDiscard:()=>confirmDialog('Изменения в этом окне ещё не сохранены. Закрыть и отменить их?',{title:'Несохранённые изменения',okText:'Отменить изменения',cancelText:'Продолжить ввод',danger:true})
 });
 
@@ -473,7 +473,7 @@ function ctxAction(a){ if(!ctxLatLng) return; const ll=ctxLatLng;
 map.on('contextmenu',e=>{ if(e.originalEvent) e.originalEvent.preventDefault(); showCtxMenu(e); });
 map.on('click',()=>$('ctxMenu').classList.remove('on'));
 document.addEventListener('click',e=>{ const m=$('ctxMenu'); if(m.classList.contains('on') && !m.contains(e.target)) m.classList.remove('on'); });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const m=$('ctxMenu'); if(m) m.classList.remove('on'); } });
+
 function canWrite(){ return role==='admin'||role==='logist'; }
 // Роль в списках и подписях — словом, а не идентификатором из базы:
 // «Гречка Р.І. (engineer)» в шапке заявки читал инженер, которому это
@@ -742,7 +742,7 @@ function openMore(){ buildMoreSheet(); $('moreSheet').classList.add('on'); $('mo
 function closeMore(){ $('moreSheet').classList.remove('on'); $('moreBack').classList.remove('on'); }
 if($('moreBtn')) $('moreBtn').onclick=openMore;
 if($('moreBack')) $('moreBack').onclick=closeMore;
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeMore(); });
+
 // В рельсе «График» и «Диспетчер» — разные пункты, но ведут в один и тот
 // же view-planner. Поэтому у них есть data-sub, и подсветка идёт по паре
 // (tab, sub), а не по одному tab.
@@ -852,7 +852,7 @@ async function switchTab(name, sub){ if(!tabAllowed(name)) return;
 document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
   el.onclick=()=>switchTab(el.dataset.tab, el.dataset.sub||null);
 });
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeMore();}});
+
 let catCur='works';
 function catSub(name){ catCur=name; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; $('catMaterials').style.display=name==='materials'?'':'none'; if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else renderStockCatalog(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
@@ -2534,7 +2534,7 @@ function gtPop(key,b){
   const tool=(sel,fn)=>{const x=pop.querySelector(sel);if(x)x.onclick=async e=>{e.stopPropagation();pop.remove();await fn();};};
   tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-stay-map]',()=>openStayBindingMap(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
   tool('[data-pop-divide]',async()=>{gtZoom[key]=selectedDay;gtPendingDivide={id:String(b.id),iso:selectedDay};gtPaint(key);});
-  const el=document.querySelector('[data-gb="'+window.CSS.escape(String(b.id))+'"]');if(el&&!matchMedia('(max-width:600px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-348,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
+  const el=document.querySelector('[data-gb="'+window.CSS.escape(String(b.id))+'"]');if(el&&!matchMedia('(max-width:760px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-348,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
   openContextPanel(pop,{trigger:el,label:gtBlockName(b),remove:true,onClose:()=>{gtSel=null;}});
 }
 async function gtPinPiece(b,piece,iso,t){
@@ -3154,7 +3154,7 @@ function wireRangeBar(box){box.querySelectorAll('.rangebar').forEach(bar=>{const
   bar.querySelectorAll('[data-rlen]').forEach(b=>b.onclick=()=>{const n=+b.dataset.rlen,t=todayISO();setRange(kind,RANGE_META[kind].dir==='back'?isoOf(utcOf(t)-(n-1)*DAY_MS):t,RANGE_META[kind].dir==='back'?t:isoOf(utcOf(t)+(n-1)*DAY_MS));});});}
 // Native details keep controls mounted; dismiss the compact filter panel predictably.
 document.addEventListener('click',e=>document.querySelectorAll('.planner-filter-menu[open]').forEach(panel=>{if(!panel.contains(e.target))panel.open=false;}));
-document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;const panel=document.querySelector('.planner-filter-menu[open]');if(panel){panel.open=false;panel.querySelector('summary').focus();}});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape'||document.querySelector('dialog[open],:popover-open'))return;const panel=document.querySelector('.planner-filter-menu[open]');if(panel){panel.open=false;panel.querySelector('summary').focus();}});
 
 // ── Порядок карточек сводки ─────────────────────────────────────────────
 // Что важнее — деньги, работы или загрузка, — зависит от дня и от человека.
@@ -4468,7 +4468,7 @@ async function delJobPhoto(id){
   inp.onchange=()=>{ const files=[...(inp.files||[])]; inp.value=''; addJobPhotos(files,kind); };
   if($('phClose')) $('phClose').onclick=()=>{ $('phView').hidden=true; $('phViewImg').src=''; };
   if($('phView')) $('phView').onclick=e=>{ if(e.target===$('phView')){ $('phView').hidden=true; $('phViewImg').src=''; } };
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('phView')&&!$('phView').hidden){ $('phView').hidden=true; $('phViewImg').src=''; } });
+
 })();
 
 // ---------- «я на месте» ----------
@@ -6244,7 +6244,7 @@ function openPush(){
 function closePush(){ $('pushOverlay').classList.remove('on'); (pushOrigin?.isConnected?pushOrigin:$('pushBtn')).focus(); }
 if($('pushClose')) $('pushClose').onclick=closePush;
 if($('pushOverlay')) $('pushOverlay').addEventListener('click',e=>{ if(e.target===$('pushOverlay')) closePush(); });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('pushOverlay')?.classList.contains('on')) closePush(); });
+
 // Регистрация воркера переехала в index.html отдельным инлайн-скриптом:
 // раньше она жила внутри initPush, и у того, кто не включил уведомления,
 // воркера не было вовсе — а вместе с ним и кэша оболочки. Инлайн, а не
@@ -7244,10 +7244,22 @@ map.on('popupopen',e=>{
   const el=e.popup&&e.popup.getElement&&e.popup.getElement();
   if(!el) return;
   factLegendEl?.querySelector('details')?.removeAttribute('open');
-  if(matchMedia('(max-width:760px)').matches){
+  const mapBox=map.getContainer().getBoundingClientRect(),side=document.querySelector('.view-map .side').getBoundingClientRect();
+  const safeLeft=Math.max(mapBox.left+16,side.right+16),available=mapBox.right-16-safeLeft;
+  if(matchMedia('(max-width:760px)').matches||available<260){
     popupFocus.set(el,document.activeElement);el.setAttribute('popover','manual');el.setAttribute('role','dialog');el.setAttribute('aria-label','Информация на карте');el.tabIndex=-1;
     el.showPopover();el.focus({preventScroll:true});
     el.addEventListener('keydown',ev=>{if(ev.key==='Escape'){ev.preventDefault();ev.stopImmediatePropagation();map.closePopup();}});
+  }else{
+    // The desktop directory also overlays the map. Fit against its visible edge,
+    // using public Leaflet update/pan APIs, with no change to marker coordinates.
+    map.stop();const popup=e.popup,autoPan=popup.options.autoPan;popup.options.autoPan=false;
+    popup.options.maxWidth=Math.max(180,Math.min(320,available-64));popup.update();
+    const r=el.getBoundingClientRect(),top=mapBox.top+72,bottom=mapBox.bottom-16;
+    const dx=r.left<safeLeft?r.left-safeLeft:r.right>mapBox.right-16?r.right-(mapBox.right-16):0;
+    const dy=r.top<top?r.top-top:r.bottom>bottom?r.bottom-bottom:0;
+    if(dx||dy)map.panBy([dx,dy],{animate:false});
+    popup.update();popup.options.autoPan=autoPan;
   }
   el.querySelectorAll('[data-map-job]').forEach(b=>b.onclick=ev=>{
     ev.preventDefault(); ev.stopPropagation(); window.openTripMapJob(b.dataset.mapJob);

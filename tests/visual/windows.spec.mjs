@@ -8,6 +8,7 @@ import {installMockBackend} from './mock-backend.mjs';
 // QA-only entry points exercise the production functions; never shipped.
 const hooks=`
 window.__windowTests={openJob,openTrip,openEquip:window.openEquip,editClient:window.editClient,switchTab,ensureRefs,
+ nestedPush:()=>{openPush();confirmDialog('Подтвердить изменение?',{okText:'Подтвердить'});},
  prompt:()=>{window.__promptResult='pending';promptDialog('Записать замер',[{key:'km',label:'Пробег, км',type:'number',inputmode:'decimal',min:0,required:true},{key:'date',label:'Дата',type:'date'}],{okText:'Записать показание'}).then(v=>window.__promptResult=v);},
  sign:()=>{window.__signResult='pending';askSignature('Заказчик').then(v=>window.__signResult=v===SIGNATURE_CANCELLED?'cancelled':v===null?'unsigned':'signed');},
  mapClient:async()=>{await switchTab('map');map.invalidateSize({animate:false});map.setView([49.99,36.23],12,{animate:false});markerById['client-a'].openPopup();}
@@ -117,4 +118,10 @@ test('typed application prompt validates numeric input and uses its action label
  await km.fill('-1');await page.locator('#promptYes').click();await expect(page.locator('#promptOverlay')).toBeVisible();expect(await page.evaluate(()=>window.__promptResult)).toBe('pending');
  await km.fill('128.5');await date.fill('2026-10-06');await page.locator('#promptYes').click();
  await expect.poll(()=>page.evaluate(()=>window.__promptResult)).toEqual({km:'128.5',date:'2026-10-06'});await expect(page.locator('#promptOverlay')).toBeHidden();
+});
+
+
+test('Escape closes only the top confirmation and keeps its parent dialog open',async({page})=>{
+ await open(page,'nestedPush');await expect(page.locator('#confirmOverlay')).toBeVisible();await page.keyboard.press('Escape');
+ await expect(page.locator('#confirmOverlay')).toBeHidden();await expect(page.locator('#pushOverlay')).toBeVisible();await page.keyboard.press('Escape');await expect(page.locator('#pushOverlay')).toBeHidden();
 });

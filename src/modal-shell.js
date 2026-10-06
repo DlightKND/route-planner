@@ -43,18 +43,6 @@ export function installModalShell({dismiss = {}, canDismiss = () => true, confir
     },true);
     node.addEventListener('cancel',e=>{e.preventDefault();api.requestClose(node.id);});
     node.addEventListener('click',e=>{if(e.target===node){e.stopImmediatePropagation();api.requestClose(node.id);}},true);
-    new window.MutationObserver(()=>{
-      const on=node.id==='phView'?!node.hidden:node.classList.contains('on');
-      if(on&&!node.open) {
-        state.trigger=document.activeElement;state.baseline=snapshot(node);
-        const close=node.querySelector('.modal-close');if(close)close.hidden=!canDismiss(node.id);
-        if(node.id==='cfgOverlay')node.querySelector('#cfgCancel').hidden=!canDismiss(node.id);
-        // Focus the form or neutral cancel action, never a destructive action.
-        node.showModal();
-        const first=[...node.querySelectorAll('input:not([type=hidden]):not(:disabled),textarea:not(:disabled),select:not(:disabled),button.ghost:not(:disabled)')].find(el=>el.getClientRects().length) || close || node.querySelector('button:not(:disabled)');
-        first?.focus({preventScroll:true});
-      } else if(!on&&node.open) node.close();
-    }).observe(node,{attributes:true,attributeFilter:['class','hidden']});
     node.addEventListener('close',()=>{
       if(node.open)return;
       node.classList.remove('on');if(node.id==='phView')node.hidden=true;
@@ -63,6 +51,23 @@ export function installModalShell({dismiss = {}, canDismiss = () => true, confir
     const lastRows=[...modal?.querySelectorAll('.row') || []].filter(row=>row.querySelector('button') && [...row.querySelectorAll('button')].some(b=>/^(Отмена|Закрыть|Позже|Сохранить|Подтвердить)$/.test(b.textContent.trim())));
     lastRows.at(-1)?.classList.add('modal-actions');
   }
+  // One observer preserves mutation order when a parent and child open in the
+  // same turn. Separate observers delivered in DOM order can invert the stack.
+  new window.MutationObserver(records=>{
+    const changed=new Map();
+    for(const record of records){const state=states.get(record.target.id);if(state?.node===record.target){changed.delete(record.target.id);changed.set(record.target.id,state);}}
+    for(const state of changed.values()){
+      const node=state.node,on=node.id==='phView'?!node.hidden:node.classList.contains('on');
+      if(on&&!node.open){
+        state.trigger=document.activeElement;state.baseline=snapshot(node);
+        const close=node.querySelector('.modal-close');if(close)close.hidden=!canDismiss(node.id);
+        if(node.id==='cfgOverlay')node.querySelector('#cfgCancel').hidden=!canDismiss(node.id);
+        node.showModal();
+        const first=[...node.querySelectorAll('input:not([type=hidden]):not(:disabled),textarea:not(:disabled),select:not(:disabled),button.ghost:not(:disabled)')].find(el=>el.getClientRects().length) || close || node.querySelector('button:not(:disabled)');
+        first?.focus({preventScroll:true});
+      }else if(!on&&node.open)node.close();
+    }
+  }).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class','hidden']});
   return api;
 }
 

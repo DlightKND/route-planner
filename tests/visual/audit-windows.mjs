@@ -82,7 +82,7 @@ const cases=[
  {id:'engineer-scope-large',selector:'.engineer-pop',template:true,before:call('largeTeam'),click:'.summary-team > summary',afterClick:'[data-epop]'},
  {id:'map-point-diagnostics',selector:'.leaflet-popup',template:true,htmlText:'<b>09:30</b><br>отброшено: неверная скорость'},
 ];
-const dimensions=[{name:'mobile-360',width:360,height:800,touch:true},{name:'mobile-390',width:390,height:844,touch:true},{name:'mobile-short',width:390,height:500,touch:true},{name:'mobile-landscape',width:720,height:390,touch:true},{name:'desktop-1440',width:1440,height:900,touch:false}];
+const dimensions=[{name:'mobile-360',width:360,height:800,touch:true},{name:'mobile-390',width:390,height:844,touch:true},{name:'mobile-short',width:390,height:500,touch:true},{name:'mobile-landscape',width:720,height:390,touch:true},{name:'tablet-768',width:768,height:1024,touch:true},{name:'desktop-1024',width:1024,height:768,touch:false},{name:'desktop-1440',width:1440,height:900,touch:false}];
 const results=[];
 const runCases=process.env.WINDOW_AUDIT_CASES?cases.filter(c=>process.env.WINDOW_AUDIT_CASES.split(',').includes(c.id)):cases;
 const invoke=async(page,method,wait=true)=>{
@@ -128,7 +128,7 @@ for(const d of dimensions)for(const theme of ['light','dark']){
   const data={page,context,errors,remote};pages.set(role,data);return data;
  }
  for(const c of runCases){
-  if(c.mobileOnly&&!d.touch)continue;
+  if(c.mobileOnly&&d.width>760)continue;
   rmSync(join(folder,c.id+'.png'),{force:true});rmSync(join(folder,c.id+'-bottom.png'),{force:true});
   const {page,errors,remote}=await getPage(c.role||'admin');
   const entry={case:c.id,project:d.name+'-'+theme,role:c.role||'admin',template:!!c.template};
@@ -144,6 +144,7 @@ for(const d of dimensions)for(const theme of ['light','dark']){
    if(c.selector==='.leaflet-popup')await page.waitForTimeout(400);
    await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
    entry.measure=await root.evaluate(inspect);
+   if(c.id==='gpop'&&d.width<=760)entry.navigationOverlap=await root.evaluate(el=>el.getBoundingClientRect().bottom>document.querySelector('.rail').getBoundingClientRect().top+1);
    await page.screenshot({path:join(folder,c.id+'.png'),animations:'disabled',caret:'hide'});
    // End of scroll: are final actions reachable without moving the backdrop?
    await root.evaluate(el=>{const modal=el.matches('.overlay')?el.querySelector('.modal'):el;modal.scrollTop=modal.scrollHeight;});

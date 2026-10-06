@@ -22,7 +22,7 @@ it('offers device notifications to a signed-in engineer without opening admin se
     $('pushBtn').focus();openPush();
     expect($('pushOverlay').classList.contains('on')).toBe(true);
     expect(initPush).toHaveBeenCalledOnce();
-    win.document.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Escape'}));
+    $('pushClose').click();
     expect($('pushOverlay').classList.contains('on')).toBe(false);
     expect(win.document.activeElement).toBe($('pushBtn'));
     bind($,null,win.document,initPush,'engineer',()=>false,switchTab);
