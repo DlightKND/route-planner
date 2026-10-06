@@ -56,7 +56,7 @@ export function createServiceOrders(ctx){
  const states=Object.keys(ORDER_STATUS).filter(s=>showClosed||!['completed','cancelled'].includes(s));
  $('orderScope').hidden=!scope;$('orderScopeText').textContent=scope?'Задания выбранной заявки':'';if($('orderHistoricalNote')){const n=orders.filter(o=>o.job_id&&historicalClosedDraft(o)).length;$('orderHistoricalNote').textContent=n?'Исторических черновиков закрытых заявок: '+n+'. Это не подтверждённый факт выполнения.':'';}
  const ef=$('orderEngineer');if(!ef.dataset.ready){ef.innerHTML='<option value="">Вся команда</option>'+ctx.profiles().filter(p=>p.role==='engineer'&&p.active!==false).map(p=>`<option value="${p.id}">${esc(p.full_name)}</option>`).join('');ef.dataset.ready='1';}
- const listView=ctx.isPhone()||viewMode==='list'||showClosed;box.className=listView?'klist':'kanban';
+ const listView=viewMode==='list';box.className=listView?'klist':'kanban';
  if($('orderBoardOptionsSummary'))$('orderBoardOptionsSummary').textContent='Представление и архив · '+(listView?'список':'канбан')+(showClosed?' · завершённые и отменённые':'')+(showHistorical?' · исторические черновики':'');
  box.innerHTML=listView?pool.filter(o=>states.includes(o.status)).sort((a,b)=>(a.date_from||'9999').localeCompare(b.date_from||'9999')).map(card).join(''):states.map(s=>`<section class="kcol" data-kst="${s}"><div class="kcol-h"><span>${ORDER_STATUS[s]}</span><span class="cnt">${pool.filter(o=>o.status===s).length}</span></div><div class="kcol-b">${pool.filter(o=>o.status===s).map(card).join('')||'<div class="kempty">Заданий нет</div>'}</div></section>`).join('');
  if(!box.innerHTML)box.innerHTML='<p class="hint">По выбранным условиям заданий нет.</p>';

@@ -1769,7 +1769,7 @@ function flatList(pool,visible,dateOf,card,empty){
   return arr.length?arr.map(card).join(''):'<div class="hint">'+esc(empty)+'</div>';
 }
 function renderJobChips(){ const box=$('jobStatusChips'); if(!box) return; box.innerHTML=JOB_STATUS_ORDER.map(s=>'<button type="button" aria-pressed="'+jobVisible[s]+'" class="chip'+(jobVisible[s]?' on':'')+'" data-js="'+s+'">'+esc(ST[s])+'</button>').join('');
-  box.querySelectorAll('[data-js]').forEach(c=>c.onclick=()=>{ jobVisible[c.dataset.js]=!jobVisible[c.dataset.js];if(jobVisible[c.dataset.js]&&['done','cancelled'].includes(c.dataset.js)){jobLayout='list';$('jobLayout').value='list';} renderJobChips(); renderJobs(); }); }
+  box.querySelectorAll('[data-js]').forEach(c=>c.onclick=()=>{ jobVisible[c.dataset.js]=!jobVisible[c.dataset.js]; renderJobChips(); renderJobs(); }); }
 function jobCard(j){ const mayManage=canWriteJob(j); const w=j.job_works||[]; const hours=w.reduce((a,x)=>a+(+x.hours||0),0);
   const pm=partsMoney(j);
   const rev=w.reduce((a,x)=>a+(+x.revenue||0),0)+pm.rev;   // и платные, и гарантийные, и запчасти
@@ -1820,7 +1820,7 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
   const pool=baseJobs.filter(match);
   if(!pool.length){ box.className=''; box.innerHTML='<div class="hint">Заявок нет. Создай первую.</div>'; return; }
   chipCounts($('jobStatusChips'),'js',pool);
-  if(isPhone()||jobLayout==='list'){ box.className='klist'; box.innerHTML=flatList(pool,jobVisible,j=>j.due_date,jobCard,'По выбранным статусам заявок нет.'); wireJobCards(box); await serviceOrders.attachJobs(box); return; }
+  if(jobLayout==='list'){ box.className='klist'; box.innerHTML=flatList(pool,jobVisible,j=>j.due_date,jobCard,'По выбранным статусам заявок нет.'); wireJobCards(box); await serviceOrders.attachJobs(box); return; }
   box.className='kanban';
   box.innerHTML=cols.map(s=>{ const items=pool.filter(j=>j.status===s);
     // Тире — это не пустое состояние, это отсутствие ответа. Строка о том,
@@ -3491,7 +3491,7 @@ async function renderDashboard(){ const version=++dashboardRenderVersion,box=$('
     const paintSummaryMode=()=>{box.querySelectorAll('[data-summary-mode]').forEach(p=>p.hidden=p.dataset.summaryMode!==summaryMode);box.querySelectorAll('[data-summary-view]').forEach(b=>{b.classList.toggle('on',b.dataset.summaryView===summaryMode);b.setAttribute('aria-pressed',String(b.dataset.summaryView===summaryMode));});};
     paintSummaryMode();box.querySelectorAll('[data-summary-view]').forEach(b=>b.onclick=()=>{summaryMode=b.dataset.summaryView;localStorage.setItem('dlight-summary-mode',summaryMode);paintSummaryMode();});
     paintFirstMotion(box);
-    wireRangeBar(box);box.querySelectorAll('[data-review-trips]').forEach(b=>b.onclick=()=>{for(const status of TRIP_STATUS_ORDER)tripVisible[status]=status!=='cancelled';tripLayout='list';$('tripLayout').value='list';$('tripSearch').value='';$('tripEngFilter').value='';switchTab('planner','trips');});
+    wireRangeBar(box);box.querySelectorAll('[data-review-trips]').forEach(b=>b.onclick=()=>{for(const status of TRIP_STATUS_ORDER)tripVisible[status]=status!=='cancelled';$('tripSearch').value='';$('tripEngFilter').value='';switchTab('planner','trips');});
     box.querySelectorAll('[data-epop]').forEach(b=>b.onclick=e=>{e.stopPropagation();const p=b.parentElement.querySelector('.engineer-pop');if(!p)return;if(p.matches(':popover-open')){p.hidePopover();p.hidden=true;return;}p.hidden=false;const r=b.getBoundingClientRect();p.style.left=Math.max(16,Math.min(r.left,window.innerWidth-296))+'px';p.style.top=Math.max(16,Math.min(r.bottom+8,window.innerHeight-336))+'px';openContextPanel(p,{trigger:b,label:'Команда статистики',onClose:()=>{p.hidden=true;}});});
     box.querySelectorAll('[data-eall]').forEach(b=>b.onclick=()=>{const all=dashEngineerList();dashEngineers=new Set(all.map(p=>String(p.id)));dashEngineersSave();renderDashboard();});
     box.querySelectorAll('[data-eng]').forEach(b=>b.onclick=()=>{const id=String(b.dataset.eng);if(dashEngineers.has(id)){if(dashEngineers.size===1){notify('Оставь хотя бы одного инженера.','warn');return;}dashEngineers.delete(id);}else dashEngineers.add(id);dashEngineersSave();renderDashboard();});
@@ -5763,7 +5763,7 @@ const TRIP_STATUS_ORDER=['planned','assigned','in_progress','finished','done','c
 let tripLayout='kanban';
 let tripVisible={planned:true,assigned:true,in_progress:true,finished:true,done:false,cancelled:false};
 function renderTripChips(){ const box=$('tripStatusChips'); if(!box) return; box.innerHTML=TRIP_STATUS_ORDER.map(s=>'<button type="button" aria-pressed="'+tripVisible[s]+'" class="chip'+(tripVisible[s]?' on':'')+'" data-ts="'+s+'">'+esc(ST_TRIP[s])+'</button>').join('');
-  box.querySelectorAll('[data-ts]').forEach(c=>c.onclick=()=>{ tripVisible[c.dataset.ts]=!tripVisible[c.dataset.ts];if(tripVisible[c.dataset.ts]&&['done','cancelled'].includes(c.dataset.ts)){tripLayout='list';$('tripLayout').value='list';} renderTripChips(); renderTrips(); }); }
+  box.querySelectorAll('[data-ts]').forEach(c=>c.onclick=()=>{ tripVisible[c.dataset.ts]=!tripVisible[c.dataset.ts]; renderTripChips(); renderTrips(); }); }
 // Имя выезда — это КУДА он едет, а не КОГДА. Человек опознаёт выезд по
 // клиенту; диапазон дат в ISO не опознаётся вообще, а на телефоне он ещё
 // и занимает всю строку заголовка. Даты уходят в подпись.
@@ -5823,7 +5823,7 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
   if(!trips.length){ box.className=''; box.innerHTML='<div class="hint">'+(canWrite()?'Выездов нет. Собери первый из заявок на карте.':'На тебя пока не назначены выезды.')+'</div>'; return; }
   const tpool=trips.filter(match);
   chipCounts($('tripStatusChips'),'ts',tpool);
-  if(isPhone()||tripLayout==='list'){ box.className='klist'; box.innerHTML=flatList(tpool,tripVisible,t=>t.date_from,tripCard,'По выбранным статусам выездов нет.'); wireTripCards(box); return; }
+  if(tripLayout==='list'){ box.className='klist'; box.innerHTML=flatList(tpool,tripVisible,t=>t.date_from,tripCard,'По выбранным статусам выездов нет.'); wireTripCards(box); return; }
   box.className='kanban';
   box.innerHTML=cols.map(s=>{ const items=trips.filter(t=>t.status===s&&match(t));
     const TEMPTY={planned:'Запланированных выездов нет',assigned:'Назначенных нет',
