@@ -8,6 +8,8 @@ import {installMockBackend} from './mock-backend.mjs';
 // QA-only entry points exercise the production functions; never shipped.
 const hooks=`
 window.__windowTests={openJob,openTrip,openEquip:window.openEquip,editClient:window.editClient,switchTab,ensureRefs,
+ vehicle:()=>{vehState=[{vehicle_id:'vehicle-a',ts:new Date().toISOString(),lat:49.99,lng:36.23,speed:12,depot_state:'outside'}];vehTrackSessions=[];vehActiveTrips={};showVehModal('vehicle-a');},
+ routePanel:async()=>{await switchTab('map');document.querySelector('[data-sb=route]').click();},
  nestedPush:()=>{openPush();confirmDialog('Подтвердить изменение?',{okText:'Подтвердить'});},
  prompt:()=>{window.__promptResult='pending';promptDialog('Записать замер',[{key:'km',label:'Пробег, км',type:'number',inputmode:'decimal',min:0,required:true},{key:'date',label:'Дата',type:'date'}],{okText:'Записать показание'}).then(v=>window.__promptResult=v);},
  sign:()=>{window.__signResult='pending';askSignature('Заказчик').then(v=>window.__signResult=v===SIGNATURE_CANCELLED?'cancelled':v===null?'unsigned':'signed');},
@@ -80,7 +82,8 @@ test('timeline primary action stays readable and help does not compete with trip
 
 test('map actions remain touch-sized and hit-testable above the mobile bottom sheet',async({page})=>{
  await open(page,'mapClient');const popup=page.locator('.leaflet-popup').last();await expect(popup).toBeVisible();
- for(const action of await popup.locator('.btn').all()){
+ await popup.locator('.client-popup-more summary').click();
+ for(const action of await popup.locator('.btn:visible').all()){
   await action.scrollIntoViewIfNeeded();const r=await action.boundingBox();expect(r.height).toBeGreaterThanOrEqual(44);
   expect(await action.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);
  }
@@ -124,4 +127,32 @@ test('typed application prompt validates numeric input and uses its action label
 test('Escape closes only the top confirmation and keeps its parent dialog open',async({page})=>{
  await open(page,'nestedPush');await expect(page.locator('#confirmOverlay')).toBeVisible();await page.keyboard.press('Escape');
  await expect(page.locator('#confirmOverlay')).toBeHidden();await expect(page.locator('#pushOverlay')).toBeVisible();await page.keyboard.press('Escape');await expect(page.locator('#pushOverlay')).toBeHidden();
+});
+
+test('vehicle summary is compact, corners clip correctly and GPS details remain usable',async({page},info)=>{
+ await open(page,'vehicle');const modal=page.locator('#vehOverlay .modal');await expect(modal).toBeVisible();
+ await expect(page.locator('#vehOdometer')).toBeHidden();await expect(page.locator('#vehCopy')).toBeHidden();
+ const shape=await modal.evaluate(el=>{const s=getComputedStyle(el);return {overflow:s.overflow,radii:[s.borderTopLeftRadius,s.borderTopRightRadius,s.borderBottomRightRadius,s.borderBottomLeftRadius],shadow:s.boxShadow};});
+ expect(shape.overflow).toBe('hidden');expect(shape.radii).toEqual(['16px','16px','16px','16px']);expect(shape.shadow).not.toBe('none');
+ await page.locator('.vehicle-details summary').click();await expect(page.locator('#vehCopy')).toBeVisible();await expect(page.locator('#vehOdometer')).toBeVisible();
+ await page.locator('#vehOdometer').click();await expect(page.locator('#promptOverlay')).toBeVisible();await page.keyboard.press('Escape');await expect(modal).toBeVisible();
+ await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-vehicle.png'});
+ await page.locator('#vehJournal').click();await expect(page.locator('#vehOverlay')).toBeHidden();await expect(page.locator('#plUnassigned')).toBeVisible();
+});
+test('client popup keeps primary actions in a row and exposes secondary actions on demand',async({page},info)=>{
+ await open(page,'mapClient');const pop=page.locator('.leaflet-popup:visible');await expect(pop).toBeVisible();
+ await expect(pop.getByRole('button',{name:'Редактировать клиента',exact:true})).toBeHidden();
+ const geometry=await pop.locator('.client-popup-primary').evaluate(el=>Array.from(el.children,x=>{const r=x.getBoundingClientRect();return {top:r.top,height:r.height,width:r.width};}));
+ expect(geometry).toHaveLength(2);expect(geometry[0].top).toBe(geometry[1].top);for(const r of geometry){expect(r.height).toBeGreaterThanOrEqual(44);expect(r.width).toBeGreaterThan(90);}
+ await pop.locator('.client-popup-more summary').click();await expect(pop.getByRole('button',{name:'Техника',exact:true})).toBeVisible();await expect(pop.getByRole('button',{name:'Создать заявку',exact:true})).toBeVisible();
+ await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-client.png'});
+ await pop.getByRole('button',{name:'Редактировать клиента',exact:true}).click();await expect(page.locator('#editOverlay')).toBeVisible();
+});
+test('route panel shows one primary action and collapses advanced settings',async({page},info)=>{
+ await open(page,'routePanel');await expect(page.locator('#rBuild')).toBeVisible();await expect(page.locator('#rSaveTrip')).toBeVisible();
+ await expect(page.locator('#rPref')).toBeHidden();await expect(page.locator('#chipAvoid')).toBeHidden();await expect(page.locator('#rClear')).toBeHidden();
+ const buttons=await page.locator('.route-primary>.btn').evaluateAll(xs=>xs.map(el=>{const r=el.getBoundingClientRect();return {top:r.top,height:r.height};}));expect(buttons[0].top).toBe(buttons[1].top);for(const b of buttons)expect(b.height).toBeGreaterThanOrEqual(44);
+ await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-route.png'});
+ await page.locator('.route-settings summary').click();await expect(page.locator('#rPref')).toBeVisible();await page.locator('#chipAvoid').click();await expect(page.locator('#avoidBody')).toBeVisible();
+ await page.locator('#chipOpt').click();await expect(page.locator('#chipOpt')).toHaveAttribute('aria-pressed','true');
 });

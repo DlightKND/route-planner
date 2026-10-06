@@ -1,11 +1,11 @@
 import {test,expect} from '@playwright/test';
 import {installMockBackend} from './mock-backend.mjs';
 const errors=[];
-async function open(page,info,role='admin'){
+async function open(page,info,role='admin',unassignedCount=1){
  errors.length=0;page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());
- await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,unassignedJourney:true});
- await page.goto('/#/planner/tracking');await expect(page.locator('#unassignedHost .unassigned-card')).toBeVisible();
+ await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,unassignedJourney:true,unassignedCount});
+ await page.goto('/#/planner/tracking');await expect(page.locator('#unassignedHost .unassigned-card').first()).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
 }
 async function clean(page){expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);}
@@ -37,4 +37,21 @@ test('engineer sees own charge without manager resolution controls',async({page}
  await open(page,info,'engineer');await expect(page.locator('.unassigned-card')).toContainText('Списание инженеру');
  await expect(page.getByRole('button',{name:'Создать цепочку'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Посмотреть трек'})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Отменить списание'})).toHaveCount(0);await clean(page);
+});
+
+test('GPS journal is nested under trips, has standard card gaps and scrolls to the last record',async({page},info)=>{
+ await open(page,info,'admin',14);
+ await expect(page.locator('#plTrips')).toBeVisible();await expect(page.locator('#plTrips .subtab[data-sub=trips]')).toHaveAttribute('aria-pressed','true');
+ await expect(page.locator('.subtab[data-sub=tracking]')).toHaveCount(0);
+ await expect(page.locator('#tripBoard')).toBeHidden();await expect(page.locator('.unassigned-card')).toHaveCount(14);
+ const gap=await page.locator('.unassigned-list').evaluate(el=>{const [a,b]=el.children;return b.getBoundingClientRect().top-a.getBoundingClientRect().bottom;});
+ expect(gap).toBe(page.viewportSize().width>760?24:16);
+ const scroll=page.viewportSize().width>760?page.locator('#plUnassigned'):page.locator('.view-planner .pane');
+ expect(await scroll.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+ await scroll.evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.unassigned-card').last()).toBeInViewport();
+ await scroll.evaluate(el=>el.scrollTop=0);
+ await page.locator('[data-trip-section=board]').click();await expect(page.locator('#tripBoard')).toBeVisible();await expect(page.locator('#plUnassigned')).toBeHidden();
+ await page.locator('[data-trip-section=tracking]').click();await expect(page).toHaveURL(/#\/planner\/trips\/tracking$/);await expect(page.locator('#plUnassigned')).toBeVisible();
+ await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('#plTrips .subtab[data-sub=trips]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.unassigned-card')).toHaveCount(14);
+ await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-journal.png'});await clean(page);
 });

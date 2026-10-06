@@ -162,7 +162,7 @@ const THEMES={
     // Поэтому токена два.
     '--accent-line':'#ffe100', '--focus':'#ffe100',
     '--nav-bg':'#262626', '--nav-ink':'#ffe100',
-    '--shadow-sm':'0 2px 8px rgba(0,0,0,.20)', '--shadow-md':'0 6px 18px rgba(0,0,0,.30)', '--shadow-lg':'0 12px 28px rgba(0,0,0,.38)',
+    '--shadow-sm':'0 1px 2px rgba(0,0,0,.28), 0 3px 10px rgba(0,0,0,.18)', '--shadow-md':'0 3px 6px rgba(0,0,0,.28), 0 10px 24px rgba(0,0,0,.30)', '--shadow-lg':'0 6px 12px rgba(0,0,0,.30), 0 20px 48px rgba(0,0,0,.45)',
     // Почти непрозрачные поверхности сохраняют контраст текста над картой.
     '--glass-panel':'rgba(30,30,30,0.96)', '--glass-bg':'rgba(20,20,20,0.96)'
   },
@@ -773,7 +773,7 @@ function routeForView(name,sub){
   if(name==='order'&&serviceOrders.currentId()) return 'order/'+encodeURIComponent(serviceOrders.currentId());
   if(name==='job'&&jobEditId) return 'job/'+encodeURIComponent(jobEditId);
   if(name==='trip'&&tripEditId) return 'trip/'+encodeURIComponent(tripEditId);
-  if(name==='planner') return 'planner/'+(sub==='disp'?dispCur:(sub||plannerCur));
+  if(name==='planner'){const section=sub==='disp'?dispCur:(sub||(plannerCur==='trips'&&dispCur==='tracking'?'tracking':plannerCur));return section==='tracking'?'planner/trips/tracking':'planner/'+section;}
   return name;
 }
 async function routeTrip(id){
@@ -806,7 +806,7 @@ async function applyRoute(){
       if(p[2]==='map') await showTripOnMap(p[1]); else await openTrip(p[1]);
       return;
     }
-    if(p[0]==='planner'&&['mine','jobs','trips','orders','tracking'].includes(p[1])){ await switchTab('planner',p[1]); return; }
+    if(p[0]==='planner'&&['mine','jobs','trips','orders','tracking'].includes(p[1])){ await switchTab('planner',p[1]==='trips'&&p[2]==='tracking'?'tracking':p[1]); return; }
     if(['dash','map','catalog','settings','notifications'].includes(p[0])){ await switchTab(p[0]); return; }
     notify('Ссылка не распознана. Открыта сводка.','warn');
     const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
@@ -866,13 +866,15 @@ document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catS
 let plannerCur='jobs';
 let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
 function renderTripsView(){ renderTrips(); }
-function plannerSub(name){ plannerCur=name;
+function plannerSub(name){ const journal=name==='tracking';plannerCur=journal?'trips':name;
   if(name==='jobs'||name==='trips'||name==='orders'||name==='tracking') dispCur=name;
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
-  document.querySelectorAll('.view-planner .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.sub===name);t.setAttribute('aria-pressed',String(t.dataset.sub===name));});
-  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; $('plOrders').style.display=name==='orders'?'':'none'; $('plUnassigned').style.display=name==='tracking'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else if(name==='orders') serviceOrders.board(); else if(name==='tracking')unassignedTracks.open(); else renderTripsView();
-  routeSet('planner/'+name); }
+  document.querySelectorAll('.view-planner .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.sub===plannerCur);t.setAttribute('aria-pressed',String(t.dataset.sub===plannerCur));});
+  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=plannerCur==='trips'?'':'none';$('tripBoard').style.display=journal?'none':'';$('tripBoardToolbar').style.display=journal?'none':''; $('plOrders').style.display=name==='orders'?'':'none'; $('plUnassigned').style.display=name==='tracking'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else if(name==='orders') serviceOrders.board(); else if(name==='tracking')unassignedTracks.open(); else renderTripsView();
+  document.querySelectorAll('[data-trip-section]').forEach(b=>{if(b.classList.contains('subtab'))return;const on=journal?b.dataset.tripSection==='tracking':b.dataset.tripSection==='board';b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});
+  routeSet(journal?'planner/trips/tracking':'planner/'+name); }
+document.querySelectorAll('[data-trip-section]').forEach(b=>b.onclick=()=>plannerSub(b.dataset.tripSection==='tracking'?'tracking':'trips'));
 // Поворот телефона и открытие на планшете меняют раскладку списков —
 // перерисовываем, когда пересекли границу, а не на каждый пиксель.
 try{
@@ -1169,15 +1171,20 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
     }
     const s=clientStats[c.id]; if(s){ const cur=appSettings.currency||'грн'; html+='<details class="map-popup-stats"><summary>Показатели клиента</summary><span style="display:block;margin-top: var(--sp-2);font-size: var(--fs-2);color:var(--ink-dim);line-height:1.6">выручка <b style="color:var(--ink)">'+Math.round(s.rev)+' '+esc(cur)+'</b> · прибыль <b style="color:'+(s.profit>=0?'var(--green)':'var(--red)')+'">'+Math.round(s.profit)+'</b><br>гарантия '+s.warrShare+'% · заявок '+s.jobs+(s.done?(' · закрыто '+s.done):'')+'</span></details>'; }
     if(c.phone) html+='<br><span style="color:var(--ink-dim)">тел. '+esc(c.phone)+'</span>';
-    // «Позвонить» и «Проехать» — первыми и всем, включая инженера: на месте
-    // это единственные две кнопки, которые вообще нужны.
     const tel=telHref(c.phone);
-    html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3);flex-wrap:wrap">';
-    if(tel) html+='<a href="'+esc(tel)+'" class="btn amber">Позвонить</a>';
-    html+='<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn">Проехать</a>';
-    html+='<button onclick="openEquip(\''+c.id+'\')" class="btn">техника</button>';
-    if(canWrite()){ html+='<button onclick="addClientToRoute(\''+c.id+'\')" class="btn amber">+ маршрут</button><button onclick="newJobForClient(\''+c.id+'\')" class="btn">+ заявка</button><button onclick="editClient(\''+c.id+'\')" class="btn">Редактировать</button>'; }
-    html+='</span>'; m.bindPopup(html);
+    html+='<div class="client-popup-actions"><div class="client-popup-primary"><a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn">Проехать</a>';
+    if(canWrite()) html+='<button onclick="addClientToRoute(\''+c.id+'\')" class="btn amber">+ маршрут</button>';
+    else if(tel) html+='<a href="'+esc(tel)+'" class="btn amber">Позвонить</a>';
+    else html+='<button onclick="openEquip(\''+c.id+'\')" class="btn">Техника</button>';
+    html+='</div>';
+    if(canWrite()||tel){
+      html+='<details class="client-popup-more"><summary class="btn ghost">Ещё действия</summary><div class="client-popup-menu">';
+      if(canWrite()&&tel) html+='<a href="'+esc(tel)+'" class="btn ghost">Позвонить</a>';
+      html+='<button onclick="openEquip(\''+c.id+'\')" class="btn ghost">Техника</button>';
+      if(canWrite()) html+='<button onclick="newJobForClient(\''+c.id+'\')" class="btn ghost">Создать заявку</button><button onclick="editClient(\''+c.id+'\')" class="btn ghost">Редактировать клиента</button>';
+      html+='</div></details>';
+    }
+    html+='</div>';m.bindPopup(html);
     m.on('click',()=>{ revealedClient=(revealedClient===c.id)?null:c.id; renderEqMarkers(); });
     if(dim) m.setOpacity(.25);
     markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); }); }
@@ -7264,18 +7271,21 @@ window.openTripMapJob=function(id){
   try{ map.closePopup(); }catch(e){}
   openJob(id);
 };
-const popupFocus=new WeakMap();
+const popupFocus=new WeakMap(),popupRefit=new WeakMap();
 map.on('popupopen',e=>{
   const el=e.popup&&e.popup.getElement&&e.popup.getElement();
   if(!el) return;
   factLegendEl?.querySelector('details')?.removeAttribute('open');
+  // Leaflet reassigns string HTML on update; retain the DOM so disclosure state
+  // and handlers survive layout/pan updates after opening an action menu.
+  const popupContent=el.querySelector('.leaflet-popup-content');
+  if(popupContent&&typeof e.popup.getContent()==='string'){
+    const content=document.createElement('div');while(popupContent.firstChild)content.append(popupContent.firstChild);
+    const autoPan=e.popup.options.autoPan;e.popup.options.autoPan=false;e.popup.setContent(content);e.popup.options.autoPan=autoPan;
+  }
   const mapBox=map.getContainer().getBoundingClientRect(),side=document.querySelector('.view-map .side').getBoundingClientRect();
   const safeLeft=Math.max(mapBox.left+16,side.right+16),available=mapBox.right-16-safeLeft;
-  if(matchMedia('(max-width:760px)').matches||available<260){
-    popupFocus.set(el,document.activeElement);el.setAttribute('popover','manual');el.setAttribute('role','dialog');el.setAttribute('aria-label','Информация на карте');el.tabIndex=-1;
-    el.showPopover();el.focus({preventScroll:true});
-    el.addEventListener('keydown',ev=>{if(ev.key==='Escape'){ev.preventDefault();ev.stopImmediatePropagation();map.closePopup();}});
-  }else{
+  const fitDesktop=()=>{
     // The desktop directory also overlays the map. Fit against its visible edge,
     // using public Leaflet update/pan APIs, with no change to marker coordinates.
     map.stop();const popup=e.popup,autoPan=popup.options.autoPan;popup.options.autoPan=false;
@@ -7285,6 +7295,16 @@ map.on('popupopen',e=>{
     const dy=r.top<top?r.top-top:r.bottom>bottom?r.bottom-bottom:0;
     if(dx||dy)map.panBy([dx,dy],{animate:false});
     popup.update();popup.options.autoPan=autoPan;
+  };
+  if(matchMedia('(max-width:760px)').matches||available<260){
+    popupFocus.set(el,document.activeElement);el.setAttribute('popover','manual');el.setAttribute('role','dialog');el.setAttribute('aria-label','Информация на карте');el.tabIndex=-1;
+    el.showPopover();el.focus({preventScroll:true});
+    el.addEventListener('keydown',ev=>{if(ev.key==='Escape'){ev.preventDefault();ev.stopImmediatePropagation();map.closePopup();}});
+  }else{
+    fitDesktop();
+    const previous=popupRefit.get(el);if(previous)el.removeEventListener('toggle',previous,true);
+    const refit=event=>{if(event.target.matches('details'))fitDesktop();};
+    popupRefit.set(el,refit);el.addEventListener('toggle',refit,true);
   }
   el.querySelectorAll('[data-map-job]').forEach(b=>b.onclick=ev=>{
     ev.preventDefault(); ev.stopPropagation(); window.openTripMapJob(b.dataset.mapJob);
@@ -7298,7 +7318,7 @@ map.on('popupopen',e=>{
   });
 });
 
-map.on('popupclose',e=>{const el=e.popup?.getElement();if(el?.matches(':popover-open')){const ownedFocus=el.contains(document.activeElement);el.hidePopover();if(ownedFocus){const trigger=popupFocus.get(el);(trigger?.isConnected?trigger:map.getContainer()).focus({preventScroll:true});}}});
+map.on('popupclose',e=>{const el=e.popup?.getElement();const refit=el&&popupRefit.get(el);if(refit){el.removeEventListener('toggle',refit,true);popupRefit.delete(el);}if(el?.matches(':popover-open')){const ownedFocus=el.contains(document.activeElement);el.hidePopover();if(ownedFocus){const trigger=popupFocus.get(el);(trigger?.isConnected?trigger:map.getContainer()).focus({preventScroll:true});}}});
 
 // Отрисовка факта. Отдельно от загрузки, потому что её зовёт ещё и фильтр
 // времени: там данные те же, меняется только окно.
@@ -7757,23 +7777,23 @@ function showVehModal(vid){
   const stale=!!r.lost_since || age>VEH_STALE_MIN;
 
   $('vehTitle').textContent=v.name+(v.plate?(' · '+v.plate):'');
-  let h='<div style="font-size: var(--fs-5);font-weight:600;color:'+col+';margin-bottom: var(--sp-3)">'+esc(vehTitle(r))+'</div>';
+  let h='<div class="vehicle-state" style="color:'+col+'">'+esc(vehTitle(r))+'</div>';let telemetry='';
 
   h+=vehRow('Данные получены', hhmm+' <span class="hint" style="margin: 0">('+vehAgeText(age)+')</span>');
   if(stale) h+='<div class="vm-stale">Ниже — на момент последней связи, не текущее состояние.</div>';
   const dimv=v=>stale?('<span style="color:var(--ink-faint)">'+v+'</span>'):v;
-  if(cls!=='idle') h+=vehRow('Скорость', dimv(Math.round(+r.speed||0)+' км/ч'));
+  if(cls!=='idle') telemetry+=vehRow('Скорость', dimv(Math.round(+r.speed||0)+' км/ч'));
   const depot=clients.find(c=>String(c.id)===String(r.current_depot_id));
   if(depot){
     const depotText=r.depot_state==='inside'?'в депо':r.depot_state==='outside_candidate'
       ? 'вне зоны '+Math.max(0,Math.floor((Date.now()-new Date(r.depot_outside_since||r.ts))/60000))+' мин':'вне депо';
     h+=vehRow('Депо',dimv(esc(depot.name)+' · '+depotText));
   } else h+=vehRow('Депо','<span style="color:var(--ink-faint)">не определено</span>');
-  h+=vehRow('Одометр',Math.round(+v.odometer||0)+' км'+(canWrite()?' <button class="btn sm ghost" id="vehOdometer">изменить</button>':''));
+  telemetry+=vehRow('Одометр',Math.round(+v.odometer||0)+' км'+(canWrite()?' <button class="btn sm ghost" id="vehOdometer">изменить</button>':''));
 
   // Связь и занятие — разные строки. Машина у клиента с заглушенным мотором
   // стоит И молчит одновременно; склеив это в одну строку, соврём про оба.
-  h+=vehRow('Связь', r.lost_since
+  telemetry+=vehRow('Связь', r.lost_since
       ? '<span style="color:var(--red)">потеряна с '+(()=>{ const L=new Date(r.lost_since);
           return (todayISO(L)===todayISO()?'':pad(L.getDate())+'.'+pad(L.getMonth()+1)+' ')
             +pad(L.getHours())+':'+pad(L.getMinutes()); })()+'</span>'
@@ -7799,7 +7819,7 @@ function showVehModal(vid){
       ?'Телеметрия сохраняется во временный трек до старта выезда.'
       :tracking&&tracking.state==='finish_candidate'?'Возвращение подтверждено · запись трека остановлена. Выезд ожидает проверки.':'Активный выезд найден · трек пишется в историю.')+'</div>';
   } else {
-    h+='<div class="hint" style="margin-top: var(--sp-1)">Активного выезда нет. GPS сохраняется в журнале непривязанных поездок для разбора диспетчером.</div>';
+    h+='<p class="hint">Активного выезда нет · GPS сохраняется в журнале.</p>'+(['admin','logist'].includes(role)?'<button type="button" class="btn sm ghost" id="vehJournal">Открыть GPS-журнал</button>':'');
   }
   if(tracking&&tracking.state==='armed'){
     h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Трекинг подготовлен с '+esc(new Date(tracking.planned_start_at).toLocaleString('ru'))+'. Ожидаем кнопку «Начать» или подтверждённый выход из депо.</div>'
@@ -7809,11 +7829,13 @@ function showVehModal(vid){
     h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Машина не менее '+esc(String(appSettings.depot_outside_minutes||60))+' мин находится в депо.</div>'+(canRunTrip?'<button class="btn sm amber" id="vehTrackFinish" style="margin-top:var(--sp-3)">Завершить выезд</button>':'');
   }
 
-  h+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Координаты</div>';
-  h+='<div class="veh-kv"><span style="font-family:var(--mono);font-size: var(--fs-2)">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
+  telemetry+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Координаты</div>';
+  telemetry+='<div class="veh-kv"><span style="font-family:var(--mono);font-size: var(--fs-2)">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
      '<span><button class="btn sm ghost" id="vehCopy">копировать</button></span></div>';
 
+  h+='<details class="vehicle-details"><summary>Данные машины и GPS</summary>'+telemetry+'</details>';
   $('vehBody').innerHTML=h;
+  if($('vehJournal'))$('vehJournal').onclick=()=>{$('vehOverlay').classList.remove('on');switchTab('planner','tracking');};
   const cp=$('vehCopy'); if(cp) cp.onclick=()=>{ const t=(+r.lat).toFixed(6)+', '+(+r.lng).toFixed(6);
     try{ navigator.clipboard.writeText(t); }catch(e){} showToast('Координаты: '+t); };
   const odo=$('vehOdometer'); if(odo) odo.onclick=async ()=>{
@@ -7955,7 +7977,7 @@ function routePtCard(tag,s,idx,num,movable,role){
   return d;
 }
 function renderRoutePanel(){ $('rCount').textContent=routeStopsAll().length; const box=$('rStops'); box.innerHTML='';
-  if(!rStart && !rStops.length){ box.innerHTML='<div class="hint">Точек нет. Добавь точку на карте, по адресу, из существующих или через «+ маршрут» в попапах.</div>'; drawStops(); return; }
+  if(!rStart && !rStops.length){ box.innerHTML='<div class="hint">Добавьте минимум две точки — по адресу, на карте или из карточки клиента.</div>'; drawStops(); return; }
   let n=0;
   // Старт стоит первым и не перетаскивается: он не «одна из точек», а
   // начало отсчёта. Финиш — последняя остановка-депо, её кнопка «сменить»
