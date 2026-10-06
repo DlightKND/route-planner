@@ -10,7 +10,8 @@ permissions:
 jobs:
   chromium:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The 440-case matrix takes about 16 minutes on the two-worker CI runner.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
