@@ -11,8 +11,8 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #141414; --panel: #1e1e1e; --panel-2: #262626; --line: #333333;
-    --ink: #e7e9ee; --ink-dim: #9aa1ad; --ink-faint: #6b7280;
+    --bg: #141414; --panel: #1e1e1e; --panel-2: #262626; --line: #504c44;
+    --ink: #eeede8; --ink-dim: #c4c0b7; --ink-faint: #aaa397;
     --accent: #ffe100; --accent-ink: #ffe100; --on-accent: #141414; --edge: rgba(0,0,0,0);
     /* Отдельный токен для линий и указателей. Фирменный #ffe100 на белом
        даёт контраст 1.31:1 — для заливки кнопки с тёмным текстом это
@@ -20,7 +20,7 @@
        «где я», в светлой теме им почти не рисуется. В тёмной оставляем
        фирменный, в светлой уводим в охру. */
     --accent-line: #ffe100; --focus: #ffe100;
-    --nav-bg: #24262b; --nav-ink: #ffe100;
+    --nav-bg: #262626; --nav-ink: #ffe100;
     --cyan: #27d3c4; --red: #ff5d5d; --green: #4ec97a;
     --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2); --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.3); --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
@@ -1492,7 +1492,7 @@
 .vg-tolerance{position:absolute;z-index:1;left:0;right:0;background:rgba(255,143,46,.14);pointer-events:none}
 .vg-day-end{position:absolute;z-index:2;left:0;right:0;height:1px;background:var(--line);pointer-events:none}
 .vg-rail{position:absolute;z-index:2;left:7px;top:4px;bottom:4px;width:11px;border-radius:999px;background:color-mix(in srgb,var(--ink-faint) 14%,transparent);overflow:hidden}
-.vg-rail>i{position:absolute;left:0;right:0;bottom:0;min-height:12%;border-radius:inherit;background:var(--rail-color)}
+.vg-rail>i{position:absolute;left:0;right:0;top:0;min-height:12%;border-radius:inherit;background:var(--rail-color)}
 .vg-rail>i{animation:railFill .55s var(--ease) both}
 @keyframes railFill{from{height:0}}
 .vg-rail.over{overflow:visible;box-shadow:0 0 0 1.5px #d5342a}
@@ -1540,11 +1540,11 @@
 .vg-cut button{position:relative;float:right;transform:translateY(-50%);margin-left:3px;padding:3px 5px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);cursor:pointer}
 .vg-now{position:absolute;z-index:9;left:0;right:0;height:2px;background:var(--cyan);pointer-events:none;box-shadow:0 0 0 1px color-mix(in srgb,var(--panel) 55%,transparent)}
 .vg-now::before{content:'';position:absolute;left:0;top:-3px;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:6px solid var(--cyan)}
-.vg-day-grid{grid-template-rows:34px var(--day-h,270px)}
+.vg-day-grid{grid-template-rows:34px var(--day-h,270px);padding-bottom:20px}
 .vg-day-axis{display:block;padding-top:34px}
 .vg-day-axis .vg-axis-head{position:absolute;left:0;right:0;top:0;height:34px}
 .vg-hour-label{left:0;right:0;display:flex;justify-content:flex-end;padding:2px var(--sp-3) 0 0;border-top:1px solid var(--line);font-family:var(--mono);font-size:9px;color:var(--ink-faint);transform:translateY(-1px)}
-.vg-hour-label:last-child{transform:translateY(-100%)}
+.vg-hour-label:last-child{transform:translateY(-1px)}
 .vg-day-lane{height:var(--day-h,270px);background:var(--panel)}
 .vg-auto{font:var(--fs-1)/1 var(--mono);color:var(--ink-faint)}
 .vg-hour-line{position:absolute;z-index:1;left:0;right:0;height:1px;background:var(--line);pointer-events:none}
@@ -1562,15 +1562,15 @@
 .vg-scale-bar{height:12px;border:1px solid var(--line);border-radius:var(--r-pill)}
 .vg-scale-labels{position:relative;height:15px;margin-top:3px;font:9px/1 var(--mono);color:var(--ink-faint)}
 .vg-scale-labels span{position:absolute;transform:translateX(-50%);white-space:nowrap}.vg-scale-labels span:first-child{transform:none}.vg-scale-labels span:last-child{transform:translateX(-100%)}
-[data-theme="dark"] .gtwrap{background:#1e2126}
-[data-theme="dark"] .vg-scroll,[data-theme="dark"] .vg-axis,[data-theme="dark"] .vg-date{background:#17191d;border-color:#2f343b}
-[data-theme="dark"] .vg-lane,[data-theme="dark"] .vg-heads,[data-theme="dark"] .vg-cell{border-color:#2f343b}
-[data-theme="dark"] .vg-cell.we{background-image:repeating-linear-gradient(135deg,transparent 0 7px,rgba(233,236,241,.035) 7px 8px)}
-[data-theme="dark"] .vg-block{background:linear-gradient(90deg,var(--block-tint,transparent) 0,transparent 56px),#22262c;border-color:#343a42;box-shadow:0 1px 1px rgba(0,0,0,.5),0 6px 16px rgba(0,0,0,.45)}
-[data-theme="dark"] .vg-week-road{background-image:repeating-linear-gradient(135deg,rgba(233,236,241,.16) 0 4px,transparent 4px 9px)}
-[data-theme="dark"] .vg-date{color:#b8bec8}[data-theme="dark"] .vg-date b,[data-theme="dark"] .vg-lane-head b{color:#e1e5eb}
-[data-theme="dark"] .vg-label b,[data-theme="dark"] .vg-gtitle{color:#f2f4f7}[data-theme="dark"] .vg-label small{color:#b8bec8}
-[data-theme="dark"] .vg-date.today{background:color-mix(in srgb,#ffe100 8%,#17191d)}
+[data-theme="dark"] .gtwrap{background:var(--panel)}
+[data-theme="dark"] .vg-scroll,[data-theme="dark"] .vg-axis,[data-theme="dark"] .vg-date{background:var(--panel);border-color:var(--line)}
+[data-theme="dark"] .vg-lane,[data-theme="dark"] .vg-heads,[data-theme="dark"] .vg-cell{border-color:var(--line)}
+[data-theme="dark"] .vg-cell.we{background-image:repeating-linear-gradient(135deg,transparent 0 7px,rgba(238,237,232,.035) 7px 8px)}
+[data-theme="dark"] .vg-block{background:linear-gradient(90deg,var(--block-tint,transparent) 0,transparent 56px),var(--panel-2);border-color:var(--line);box-shadow:0 1px 1px rgba(0,0,0,.5),0 6px 16px rgba(0,0,0,.45)}
+[data-theme="dark"] .vg-week-road{background-image:repeating-linear-gradient(135deg,rgba(238,237,232,.16) 0 4px,transparent 4px 9px)}
+[data-theme="dark"] .vg-date{color:var(--ink-dim)}[data-theme="dark"] .vg-date b,[data-theme="dark"] .vg-lane-head b{color:var(--ink)}
+[data-theme="dark"] .vg-label b,[data-theme="dark"] .vg-gtitle{color:var(--ink)}[data-theme="dark"] .vg-label small{color:var(--ink-dim)}
+[data-theme="dark"] .vg-date.today{background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
 [data-theme="dark"] .vg-date.today::before{background:#ffe100}
 [data-theme="dark"] .vg-cell.today{box-shadow:inset 0 1px #ffe100}
 [data-theme="dark"] .vg-tolerance{background:rgba(255,148,51,.12)}
@@ -3174,7 +3174,7 @@
 </div></div>
 
 <link rel="shortcut icon" href="favicon.png">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#141414">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="busy" id="busy" role="status" aria-live="polite"><div class="busy-t"><span class="busy-s"></span><span id="busyText">Работаю…</span></div><div class="busy-bar"><i id="busyBar"></i></div></div>

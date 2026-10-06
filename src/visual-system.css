@@ -11,6 +11,10 @@ html:root {
 }
 html[data-theme=dark] { color-scheme:dark; }
 html[data-theme=light] { color-scheme:light; }
+.vg-block:focus-visible { outline:2px solid var(--focus);outline-offset:2px; }
+.vg-block[data-readonly=true] { cursor:pointer;touch-action:pan-x pan-y; }
+.vg-block[data-readonly=true] .vg-seg { cursor:inherit;pointer-events:none; }
+.vg-win-line:disabled { cursor:default; }
 body { font-size:var(--fs-body); }
 .view .pane-head h2 { font-family:var(--sans);font-size:var(--fs-7);letter-spacing:normal;text-transform:none;line-height:1.3; }
 .view .card { border-radius:var(--r-md);padding:var(--pad-card);box-shadow:none;margin-bottom:var(--sp-5); }

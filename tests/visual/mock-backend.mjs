@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light" } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -161,6 +161,7 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
     fact_km: null,
   };
   task.trip_service_orders = [{ trip_id: trip, trips: ride }];
+  if(legacyCrewMissing){ride.lead_engineer=null;ride.engineer_ids=[];ride.status='done';}
   const stays = [
     {
       id: "stay-a",
@@ -325,6 +326,7 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
       let rows = structuredClone(tables[table] || []), queryError = null,
         single = false,
         head = false;
+      if(legacyCrewMissing&&role==='engineer'&&table==='trips')rows=rows.filter(t=>t.id!==trip);
       const result = () => ({
         data: queryError || head ? null : single ? rows[0] || null : rows,
         count: rows.length,
@@ -426,6 +428,7 @@ export function installMockBackend({ role = "logist", theme = "light" } = {}) {
         let count=0;tables.notification_inbox.forEach(n=>{if(n.recipient_id===session.user.id&&!n.read_at&&n.created_at<=args.p_before){n.read_at=stamp;count++;}});return {data:count,error:null};
       }
       const reads = {
+        legacy_personal_schedule_read:legacyCrewMissing&&role==='engineer'&&(args.p_trips||[]).includes(trip)?[{id:trip,status:'done',date_from:ride.date_from,date_to:ride.date_to,day_plan:ride.day_plan,engineer_ids:[],lead_engineer:null,schedule_only:true,route_stops:ride.route_stops.map(s=>({type:s.type,lat:s.lat,lng:s.lng})),econ_snapshot:{driveH:ride.econ_snapshot.driveH,legs:[]}}]:[],
         account_org_read: {job_title:role==='engineer'?'Выездной инженер':'Руководитель сервиса',manager:role==='engineer'?{...people[0],job_title:'Руководитель сервиса'}:null,reports:role==='engineer'?[]:people.slice(1).map(p=>({...p,job_title:'Сервисный инженер'}))},
         entity_people: people,
         entity_finance_config: settings,
