@@ -35,17 +35,20 @@ export function installEngineerPickers(root = document) {
           }
           if (!select.options.length) { const empty=document.createElement('p');empty.textContent='Нет доступных инженеров';panel.append(empty); }
           const done=document.createElement('button');done.type='button';done.className='btn sm';done.textContent='Готово';panel.append(done);
-          done.onclick=()=>{close();button.focus();};
+          done.onclick=()=>{close();button.focus({preventScroll:true});};
           (select.closest('dialog') || document.body).append(panel);
-          active={panel,button,select};button.setAttribute('aria-expanded','true');
+          active={panel,button,select,opening:true};button.setAttribute('aria-expanded','true');
           const box=button.getBoundingClientRect(),width=Math.min(Math.max(box.width,240),window.innerWidth-16);
           panel.style.width=width+'px';panel.style.left=Math.max(8,Math.min(box.left,window.innerWidth-width-8))+'px';
           panel.style.maxHeight=Math.max(120,Math.min(320,window.innerHeight-32))+'px';
           if (panel.showPopover) panel.showPopover();
           const height=panel.getBoundingClientRect().height;
-          panel.style.top=Math.max(8,box.bottom+height+8<window.innerHeight?box.bottom+4:box.top-height-4)+'px';
+          panel.style.top=Math.max(8,Math.min(window.innerHeight-height-8,box.bottom+height+8<window.innerHeight?box.bottom+4:box.top-height-4))+'px';
           panel.addEventListener('toggle',e=>{if(e.newState==='closed'&&active?.panel===panel){panel.remove();button.setAttribute('aria-expanded','false');active=null;}});
-          (panel.querySelector('input:not(:disabled)') || done).focus();
+          (panel.querySelector('input:not(:disabled)') || done).focus({preventScroll:true});
+          // Native popover opening and focus can enqueue an ancestor scroll.
+          // Allow that opening frame, then keep deliberate external scrolling as dismissal.
+          window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{if(active?.panel===panel)active.opening=false;}));
         };
       }
       const names=[...select.options].filter(o=>o.selected).map(o=>o.textContent.trim());
@@ -60,6 +63,8 @@ export function installEngineerPickers(root = document) {
   root.addEventListener('keydown',e=>{if(e.key==='Escape'&&active){e.preventDefault();e.stopPropagation();const b=active.button;close();b.focus();}},true);
   root.addEventListener('pointerdown',e=>{if(active&&!active.panel.contains(e.target)&&!active.button.contains(e.target))close();},true);
   window.addEventListener('resize',close);
-  root.addEventListener('scroll',e=>{if(active&&!active.panel.contains(e.target))close();},true);
+  root.addEventListener('wheel',e=>{if(active&&!active.panel.contains(e.target))close();},{capture:true,passive:true});
+  root.addEventListener('touchmove',e=>{if(active&&!active.panel.contains(e.target))close();},{capture:true,passive:true});
+  root.addEventListener('scroll',e=>{if(active&&!active.opening&&!active.panel.contains(e.target))close();},true);
   scan();
 }

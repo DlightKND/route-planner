@@ -8,11 +8,11 @@ function editor(win,{persist=async()=>{},online=true,queue=async()=>({}),id='req
  win.document.body.innerHTML='<section class="view-job active"><select id="jbStatus"><option value="planned">planned</option></select><div id="jobSaveState"></div></section>';
  win.confirm=vi.fn(()=>false);const restore=vi.fn(),notify=vi.fn();
  const code=state.replace(/function restoreCardRoute\(\)\{[^\n]+\}/,'')+save;
- const api=new Function('document','window','$','navigator','persistJob','queueCurrentJobSnapshot','restoreCardRoute','notify',`
+ const api=new Function('document','window','$','navigator','persistJob','queueCurrentJobSnapshot','restoreCardRoute','notify','confirmDialog',`
  let jobEditId=${JSON.stringify(id)},partT={},jobParts=[],jobDelegatedOwner=false,jobSavedStatus='planned',jobReasonTarget=null,jobInterventionReason='',curWorks=[];
  const qAll=async()=>[],qFlush=async()=>{},jobProblem=()=>'',jobRec=()=>({generation:jobEditGeneration}),jobHead=()=>{},isNetErr=()=>false;
  const jobSaveState=(txt,cls)=>{const el=$('jobSaveState');el.textContent=txt;el.className=cls||'';};const queuedJobDraftIssue=()=> 'черновик';
- `+code+`;return {saveJobNow,leaveJobEditor,edit:()=>{jobEditorDirty=true;jobEditGeneration++;if(jobSaving)jobSaveAgain=true;},dirty:()=>jobEditorDirty};`)(win.document,win,id=>win.document.getElementById(id),{onLine:online},persist,queue,restore,notify);
+ `+code+`;return {saveJobNow,leaveJobEditor,edit:()=>{jobEditorDirty=true;jobEditGeneration++;if(jobSaving)jobSaveAgain=true;},dirty:()=>jobEditorDirty};`)(win.document,win,id=>win.document.getElementById(id),{onLine:online},persist,queue,restore,notify,async()=>win.confirm());
  return {...api,restore,notify};
 }
 it('waits for an in-flight request save before navigating',async()=>{
