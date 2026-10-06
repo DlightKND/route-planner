@@ -2,14 +2,17 @@
 // must not turn a preview into a write; a tap opens the same context as a week.
 export function wireSchedulePieceDrag({el,canMove,onOpen,onDrop,timeOfY,maxY}){
   const doc=el.ownerDocument;
+  let dragging=false;
   el.onclick=e=>{if(!e.target.closest('button,input')&&!canMove()){e.stopPropagation();onOpen();}};
   el.onpointerdown=e=>{
+    if(dragging){e.stopPropagation();return;}
     if(e.target.closest('button,input,.vg-cut')||!canMove())return;
+    dragging=true;
     e.stopPropagation();
     const startY=e.clientY,top=parseFloat(el.style.top)||0,id=e.pointerId;
     let moved=false,preview=top,active=true;
     const cleanup=()=>{
-      if(!active)return;active=false;
+      if(!active)return;active=false;dragging=false;
       el.style.top=top+'px';el.classList.remove('dragging');
       el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',up);
       el.removeEventListener('pointercancel',cancel);el.removeEventListener('lostpointercapture',cancel);

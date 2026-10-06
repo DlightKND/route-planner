@@ -10,7 +10,8 @@ function fixture(canMove=true){
 }
 it('preserves the grab offset when moving a day piece and ignores a second pointer',async()=>{
   const f=fixture();try{
-    f.pointer('pointerdown',190);f.pointer('pointermove',300,2);expect(f.el.style.top).toBe('160px');
+    f.pointer('pointerdown',190);f.pointer('pointerdown',280,2);f.pointer('pointermove',300,2);f.pointer('pointerup',300,2);
+    expect(f.el.style.top).toBe('160px');expect(f.onDrop).not.toHaveBeenCalled();expect(f.onOpen).not.toHaveBeenCalled();
     f.pointer('pointermove',210);f.pointer('pointerup',210);
     expect(f.onDrop).toHaveBeenCalledWith(9); // 08:00 + one hour, not cursor time 10:30.
     expect(f.el.style.top).toBe('160px');expect(f.onOpen).not.toHaveBeenCalled();
