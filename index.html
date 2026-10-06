@@ -1471,7 +1471,7 @@
 .vg-grid{position:relative;display:grid;grid-template-columns:96px minmax(calc(var(--lanes)*var(--lane-min)),1fr);grid-template-rows:34px var(--week-h,315px);min-width:calc(96px + var(--lanes)*var(--lane-min))}
 .vg-axis{grid-column:1;grid-row:1/3;position:sticky;left:0;z-index:10;display:grid;grid-template-rows:34px repeat(7,40px);background:var(--panel);border-right:1px solid var(--line)}
 .vg-axis-head{pointer-events:none}
-.vg-date{pointer-events:auto;border:0;border-top:1px solid var(--line);padding:0 var(--sp-3);background:var(--panel);color:var(--ink-dim);font-family:var(--mono);font-size:var(--fs-2);text-align:right;cursor:zoom-in;white-space:nowrap}
+.vg-date{pointer-events:auto;border:0;padding:0 var(--sp-3);background:var(--panel);color:var(--ink-dim);font-family:var(--mono);font-size:var(--fs-2);text-align:right;cursor:zoom-in;white-space:nowrap}
 .vg-date:hover{color:var(--ink);background:var(--panel-2)}
 .vg-date.we{color:var(--ink-faint)}
 .vg-date b{text-transform:lowercase;color:var(--ink);margin-right:3px}
@@ -1484,9 +1484,9 @@
 .vg-lane-head>span{margin-left:auto;flex:none;font-size:9px;color:var(--ink-faint);white-space:nowrap}
 .vg-tracks{grid-column:2;grid-row:2}
 .vg-lane{position:relative;height:var(--week-h,315px);border-left:1px solid var(--line);touch-action:pan-x pan-y;container-type:inline-size}
-.vg-cell{position:relative;height:40px;box-sizing:border-box;border-top:1px solid var(--line);background:transparent}
+.vg-cell{position:relative;height:40px;box-sizing:border-box;background:transparent}
 .vg-cell.we{background-image:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,var(--ink-faint) 7%,transparent) 7px 8px)}
-.vg-cell.today{box-shadow:inset 0 1px #0f141b}
+.vg-cell.today{box-shadow:none}
 .vg-cell.dragging{pointer-events:none}.vg-block.dragging{pointer-events:none;z-index:9;opacity:.92;box-shadow:var(--shadow-md)}.vg-cell.drop{box-shadow:inset 0 0 0 2px var(--accent-line)}
 .vg-date.opened small{display:block;font:8px/1.1 var(--mono);color:var(--accent-line)}
 .vg-tolerance{position:absolute;z-index:1;left:0;right:0;background:rgba(255,143,46,.14);pointer-events:none}
@@ -1543,11 +1543,11 @@
 .vg-day-grid{grid-template-rows:34px var(--day-h,270px);padding-bottom:20px}
 .vg-day-axis{display:block;padding-top:34px}
 .vg-day-axis .vg-axis-head{position:absolute;left:0;right:0;top:0;height:34px}
-.vg-hour-label{left:0;right:0;display:flex;justify-content:flex-end;padding:2px var(--sp-3) 0 0;border-top:1px solid var(--line);font-family:var(--mono);font-size:9px;color:var(--ink-faint);transform:translateY(-1px)}
+.vg-hour-label{left:0;right:0;display:flex;justify-content:flex-end;padding:2px var(--sp-3) 0 0;font-family:var(--mono);font-size:9px;color:var(--ink-faint);transform:translateY(-1px)}
 .vg-hour-label:last-child{transform:translateY(-1px)}
 .vg-day-lane{height:var(--day-h,270px);background:var(--panel)}
 .vg-auto{font:var(--fs-1)/1 var(--mono);color:var(--ink-faint)}
-.vg-hour-line{position:absolute;z-index:1;left:0;right:0;height:1px;background:var(--line);pointer-events:none}
+.vg-hour-line{display:none;position:absolute;z-index:1;left:0;right:0;height:1px;background:var(--line);pointer-events:none}
 .vg-off{position:absolute;z-index:1;left:0;right:0;background:repeating-linear-gradient(135deg,var(--grain,rgba(0,0,0,.04)) 0 5px,transparent 5px 10px);pointer-events:none}
 .vg-win-line{position:absolute;z-index:8;left:0;right:0;width:100%;height:9px;margin-top:-4px;padding:0;border:0;border-top:1px solid var(--line);background:transparent;cursor:ns-resize;touch-action:none}
 .vg-win-line i{position:absolute;right:4px;top:-13px;padding:1px 4px;border-radius:4px;background:var(--panel);color:var(--ink-faint);font:8px/1 var(--mono);font-style:normal;pointer-events:none}
@@ -1572,7 +1572,7 @@
 [data-theme="dark"] .vg-label b,[data-theme="dark"] .vg-gtitle{color:var(--ink)}[data-theme="dark"] .vg-label small{color:var(--ink-dim)}
 [data-theme="dark"] .vg-date.today{background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
 [data-theme="dark"] .vg-date.today::before{background:#ffe100}
-[data-theme="dark"] .vg-cell.today{box-shadow:inset 0 1px #ffe100}
+[data-theme="dark"] .vg-cell.today{box-shadow:none}
 [data-theme="dark"] .vg-tolerance{background:rgba(255,148,51,.12)}
 @media(prefers-reduced-motion:reduce){.vg-scroll.hl .vg-block,.vg-act::before{transition:none}}
 @media(pointer:coarse){
@@ -2830,7 +2830,7 @@
     </div>
     <div id="plJobs">
       <div class="stickyhead">
-        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
+        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button><button class="subtab" data-sub="tracking">GPS-журнал</button></div>
         <div class="pane-head planner-toolbar">
           <div class="searchbox"><input type="search" id="jobSearch" aria-label="Поиск заявки" placeholder="поиск по клиенту…"></div>
           <details class="planner-filter-menu"><summary class="btn sm ghost" aria-label="Фильтры заявок">Фильтры</summary><div class="planner-filter-panel">
@@ -2843,14 +2843,15 @@
       <div id="jobList"></div>
     </div>
     <div id="plOrders" style="display:none"><div class="stickyhead">
-      <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
+      <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button><button class="subtab" data-sub="tracking">GPS-журнал</button></div>
       <div class="pane-head order-board-toolbar"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"><button class="btn sm amber" id="orderAdd">+ Задание</button></div>
       <div id="orderScope" hidden><span id="orderScopeText"></span><button class="btn sm ghost" id="orderScopeClear">Все задания</button></div>
       <details class="order-board-options"><summary id="orderBoardOptionsSummary">Фильтры и представление</summary><label>Инженер<select id="orderEngineer" aria-label="Фильтр по инженеру"></select></label><label>Представление заданий<select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select></label><label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p></details>
     </div><div id="orderList"></div></div>
+    <div id="plUnassigned" style="display:none"><div class="stickyhead"><div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button><button class="subtab" data-sub="tracking">GPS-журнал</button></div></div><div id="unassignedHost"></div></div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
-        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
+        <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button><button class="subtab" data-sub="tracking">GPS-журнал</button></div>
         <div class="pane-head planner-toolbar">
           <div class="searchbox"><input type="search" id="tripSearch" aria-label="Поиск выезда" placeholder="поиск по авто/датам…"></div>
           <details class="planner-filter-menu"><summary class="btn sm ghost" aria-label="Фильтры выездов">Фильтры</summary><div class="planner-filter-panel">

@@ -20,10 +20,15 @@ async function openDay(page){
 async function clean(page,errors){expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);}
 for(const role of ['admin','engineer'])test(role+' keeps legacy trip edges, road/work and the final full hour',async({page},info)=>{
  const errors=await openGraph(page,info,{role,legacy:true});
+ expect(await page.locator('.vg-cell').first().evaluate(el=>getComputedStyle(el).borderTopWidth)).toBe('0px');
+ expect(await page.locator('.vg-date').first().evaluate(el=>getComputedStyle(el).borderTopWidth)).toBe('0px');
  const first=page.locator('.vg-block[data-gb="t'+trip+'"]').first();await expect(first).toHaveClass(/\btrip\b/);
  expect(await first.evaluate(el=>getComputedStyle(el).borderLeftColor)).toBe('rgb(255, 225, 0)');
  await expect(first.locator('.vg-week-road')).not.toHaveCount(0);
  const week=await openDay(page),pieces=week.locator('.vg-piece[data-gb="t'+trip+'"]');
+ expect(await week.locator('.vg-hour-label').first().evaluate(el=>getComputedStyle(el).borderTopWidth)).toBe('0px');
+ expect(await week.locator('.vg-hour-line').first().evaluate(el=>getComputedStyle(el).display)).toBe('none');
+ await expect(week.locator('[data-winline=start]')).toBeVisible();await expect(week.locator('[data-winline=end]')).toBeVisible();
  await expect(pieces.locator('.road')).not.toHaveCount(0);await expect(pieces.filter({hasNot:page.locator('.road')})).not.toHaveCount(0);
  const clock=await week.locator('.vg-hour-label').evaluateAll(labels=>labels.slice(-3).map(el=>{const r=el.getBoundingClientRect();return {label:el.textContent,top:r.top,bottom:r.bottom};}));
  expect(clock.map(x=>x.label)).toEqual(['22:00','23:00','24:00']);expect(clock[1].top-clock[0].top).toBeCloseTo(20,0);expect(clock[2].top-clock[1].top).toBeCloseTo(20,0);
