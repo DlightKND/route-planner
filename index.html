@@ -2840,20 +2840,20 @@
     </div>
     <div id="plOrders" style="display:none"><div class="stickyhead">
       <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
-      <div class="pane-head order-board-toolbar"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"><button class="btn sm amber" id="orderAdd">+ Задание</button></div>
+      <div class="pane-head order-board-toolbar"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"><label>Представление заданий<select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select></label><button class="btn sm ghost" id="orderTrash" title="Удалённые заявки и выезды">Корзина</button><button class="btn sm amber" id="orderAdd">+ Задание</button></div>
       <div id="orderScope" hidden><span id="orderScopeText"></span><button class="btn sm ghost" id="orderScopeClear">Все задания</button></div>
-      <details class="order-board-options"><summary id="orderBoardOptionsSummary">Фильтры и представление</summary><label>Инженер<select id="orderEngineer" aria-label="Фильтр по инженеру"></select></label><label>Представление заданий<select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select></label><label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p></details>
+      <details class="order-board-options"><summary id="orderBoardOptionsSummary">Фильтры и представление</summary><label>Инженер<select id="orderEngineer" aria-label="Фильтр по инженеру"></select></label><label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p></details>
     </div><div id="orderList"></div></div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
-        <div class="trip-heading"><div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips" data-trip-section="board">Выезды</button></div><button type="button" class="btn sm ghost" data-trip-section="tracking">GPS-журнал</button></div>
+        <div class="trip-heading"><div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips" data-trip-section="board">Выезды</button></div><div class="trip-heading-actions"><button type="button" class="btn sm ghost" data-trip-section="tracking">GPS-журнал</button><button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button></div></div>
         <div id="tripBoardToolbar">
         <div class="pane-head planner-toolbar">
           <div class="searchbox"><input type="search" id="tripSearch" aria-label="Поиск выезда" placeholder="поиск по авто/датам…"></div>
           <details class="planner-filter-menu"><summary class="btn sm ghost" aria-label="Фильтры выездов">Фильтры</summary><div class="planner-filter-panel">
             <label>Инженер<select id="tripEngFilter"><option value="">все инженеры</option></select></label>
             <label>Представление<select id="tripLayout" aria-label="Представление выездов"><option value="kanban">Канбан</option><option value="list">Список</option></select></label>
-          </div></details><button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button><button class="btn sm amber" id="tripAdd">+ Выезд</button>
+          </div></details><button class="btn sm amber" id="tripAdd">+ Выезд</button>
         </div>
         <div class="chips" id="tripStatusChips"></div>
         </div>

@@ -997,7 +997,7 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
     if(rt) rt.style.display=canWrite()?'':'none';
     if(tb) tb.classList.toggle('solo',!canWrite());
     if(!canWrite()) sideTab('points'); }
-  if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobTrash')) $('jobTrash').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; if($('tripTrash')) $('tripTrash').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
+  if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobTrash')) $('jobTrash').style.display=canWrite()?'':'none'; if($('orderTrash')) $('orderTrash').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; if($('tripTrash')) $('tripTrash').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
   // Show durable pending edits before any network-dependent screen loads.
   await qRefresh();
   setTimeout(()=>{ map.invalidateSize(); fitUkraine(); },80);
@@ -1896,6 +1896,7 @@ async function purgeTrash(id){
   showToast('Удалено безвозвратно'); await renderTrash();
 }
 $('jobTrash').onclick=()=>openTrash('jobs');
+$('orderTrash').onclick=()=>openTrash('jobs');
 $('tripTrash').onclick=()=>openTrash('trips');
 $('trashClose').onclick=()=>$('trashOverlay').classList.remove('on');
 $('trashTabs').querySelectorAll('[data-trash-kind]').forEach(b=>b.onclick=()=>{ trashKind=b.dataset.trashKind; renderTrash(); });

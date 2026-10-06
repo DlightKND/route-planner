@@ -45,7 +45,7 @@ test('GPS journal is nested under trips, has standard card gaps and scrolls to t
  await expect(page.locator('.subtab[data-sub=tracking]')).toHaveCount(0);
  await expect(page.locator('#tripBoard')).toBeHidden();await expect(page.locator('.unassigned-card')).toHaveCount(14);
  const gap=await page.locator('.unassigned-list').evaluate(el=>{const [a,b]=el.children;return b.getBoundingClientRect().top-a.getBoundingClientRect().bottom;});
- expect(gap).toBe(page.viewportSize().width>760?24:16);
+ expect(gap).toBe(12);
  const scroll=page.viewportSize().width>760?page.locator('#plUnassigned'):page.locator('.view-planner .pane');
  expect(await scroll.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
  await scroll.evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.unassigned-card').last()).toBeInViewport();

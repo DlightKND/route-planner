@@ -18,7 +18,7 @@
 @media(max-width:600px){.unassigned-actions>.btn{flex:1 1 140px;white-space:normal}.unassigned-actions>details{flex-basis:100%}.unassigned-toolbar h2{font-size:var(--fs-5)}}
 /* Trips owns the section; only the journal content scrolls on a wide screen. */
 .trip-section-switch{margin-bottom:var(--gap-block)}
-.unassigned-list{gap:var(--gap-card);align-content:start}
+.unassigned-list{gap:var(--gap-list);align-content:start}
 .view .unassigned-card{margin:0}
 .unassigned-status:empty{display:none}
 #plUnassigned{min-width:0;min-height:0}

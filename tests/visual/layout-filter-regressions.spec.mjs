@@ -1,8 +1,8 @@
 import {test,expect} from '@playwright/test';
 import {installMockBackend} from './mock-backend.mjs';
-async function open(page,info,route){
+async function open(page,info,route,unassignedJourney=false){
  await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());
- await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme});
+ await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,unassignedJourney});
  await page.goto('/#/'+route);await expect(page.locator('.view.active')).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await page.evaluate(()=>document.fonts.ready);
@@ -35,4 +35,18 @@ test('dispatcher filters preserve kanban and explicitly selected list',async({pa
  await page.locator('.order-board-options summary').click();await page.locator('#orderClosed').check();await expect(page.locator('#orderList')).toHaveClass('kanban');
  await page.locator('#orderViewMode').selectOption('list');await expect(page.locator('#orderList')).toHaveClass('klist');
  await page.locator('#orderClosed').uncheck();await expect(page.locator('#orderList')).toHaveClass('klist');
+});
+
+test('list spacing matches the journal and dispatcher trash controls are reachable',async({page},info)=>{
+ await open(page,info,'planner/jobs',true);
+ await page.locator('#jobTrash').click();await expect(page.locator('#trashOverlay')).toBeVisible();await expect(page.locator('#trashTitle')).toHaveText('Корзина заявок');await page.locator('#trashClose').click();
+ await page.locator('.planner-filter-menu:visible summary').click();await page.locator('#jobLayout').selectOption('list');
+ const listGap=await page.locator('#jobList').evaluate(el=>parseFloat(getComputedStyle(el).gap));expect(listGap).toBe(12);
+ await page.goto('/#/planner/orders');await expect(page.locator('#orderViewMode')).toBeVisible();await page.locator('#orderViewMode').selectOption('list');await expect(page.locator('#orderList')).toHaveClass('klist');
+ await page.locator('#orderTrash').click();await expect(page.locator('#trashOverlay')).toBeVisible();await expect(page.locator('#trashTabs')).toContainText('Выезды');await page.locator('#trashClose').click();
+ await page.goto('/#/planner/trips/tracking');await expect(page.locator('.unassigned-list')).toBeVisible();
+ expect(await page.locator('.unassigned-list').evaluate(el=>parseFloat(getComputedStyle(el).gap))).toBe(listGap);
+ await page.locator('#tripTrash').click();await expect(page.locator('#trashTitle')).toHaveText('Корзина выездов');await page.locator('#trashClose').click();
+ expect(await page.locator('.view-planner .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+ await page.screenshot({path:'test-results/list-consistency/'+info.project.name+'.png'});
 });
