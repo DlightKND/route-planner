@@ -1,6 +1,8 @@
 import { openContextPanel } from './context-panels.js';
 import { wireSchedulePieceDrag } from './schedule-interactions.js';
 import { readPersonalScheduleTrips } from './personal-schedule.js';
+import { createUnassignedTracks } from './unassigned-tracks.js';
+import './unassigned-tracks.css';
 import { installModalShell, protectNativeForm } from './modal-shell.js';
 import { openAccountProfile, roleName, initials } from './account-profile.js';
 import { resolveFactTrack } from './core/fact-track.js';
@@ -44,6 +46,9 @@ const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profil
  beforeOpen:async()=>await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});
 serviceOrders.init();
 const notifications=createNotifications({db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
+const unassignedTracks=createUnassignedTracks({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
+ ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
+ reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
 
 // ── Аварийный перехватчик ────────────────────────────────────────────────────
 // Если что-то падает при старте, модуль обрывается и остаётся серый экран
@@ -753,7 +758,7 @@ if($('moreBack')) $('moreBack').onclick=closeMore;
 // соответствует ОДИН пункт data-sub="disp": navSub() и переводит состояние
 // страницы в ключ пункта меню. Без этого перехода на «Выездах» не
 // подсвечивалось бы ничего.
-function navSub(s){ return (s==='jobs'||s==='trips'||s==='orders')?'disp':s; }
+function navSub(s){ return (s==='jobs'||s==='trips'||s==='orders'||s==='tracking')?'disp':s; }
 // URL живёт в hash, чтобы прямые ссылки работали и на GitHub Pages: серверу
 // не приходится знать маршруты SPA. Пароль/сессия в ссылку не попадают.
 let routeReady=false, routeApplying=false;
@@ -801,7 +806,7 @@ async function applyRoute(){
       if(p[2]==='map') await showTripOnMap(p[1]); else await openTrip(p[1]);
       return;
     }
-    if(p[0]==='planner'&&['mine','jobs','trips','orders'].includes(p[1])){ await switchTab('planner',p[1]); return; }
+    if(p[0]==='planner'&&['mine','jobs','trips','orders','tracking'].includes(p[1])){ await switchTab('planner',p[1]); return; }
     if(['dash','map','catalog','settings','notifications'].includes(p[0])){ await switchTab(p[0]); return; }
     notify('Ссылка не распознана. Открыта сводка.','warn');
     const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
@@ -862,11 +867,11 @@ let plannerCur='jobs';
 let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
 function renderTripsView(){ renderTrips(); }
 function plannerSub(name){ plannerCur=name;
-  if(name==='jobs'||name==='trips'||name==='orders') dispCur=name;
+  if(name==='jobs'||name==='trips'||name==='orders'||name==='tracking') dispCur=name;
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
   document.querySelectorAll('.view-planner .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.sub===name);t.setAttribute('aria-pressed',String(t.dataset.sub===name));});
-  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; $('plOrders').style.display=name==='orders'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else if(name==='orders') serviceOrders.board(); else renderTripsView();
+  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=name==='trips'?'':'none'; $('plOrders').style.display=name==='orders'?'':'none'; $('plUnassigned').style.display=name==='tracking'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else if(name==='orders') serviceOrders.board(); else if(name==='tracking')unassignedTracks.open(); else renderTripsView();
   routeSet('planner/'+name); }
 // Поворот телефона и открытие на планшете меняют раскладку списков —
 // перерисовываем, когда пересекли границу, а не на каждый пиксель.
@@ -939,7 +944,7 @@ let authLeaving=false;
 // обратно он попадёт только через пароль, которого может не помнить.
 async function logoutAccount(){
   if(!await confirmDialog('Выйти из приложения? Чтобы вернуться, понадобится пароль.',{okText:'Выйти',danger:true})) return;
-  authLeaving=true; notifications.reset();await sb.auth.signOut(); location.reload(); }
+  authLeaving=true; notifications.reset();unassignedTracks.reset();await sb.auth.signOut(); location.reload(); }
 
 // Истечение сессии раньше выглядело как случайно опустевшие экраны: запросы
 // начинали возвращать ошибки RLS, а те глотались пустыми catch. Теперь
@@ -970,7 +975,7 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   // читающие политики его не пускают, а ошибки RLS глотаются молча.
   // Строгое === false: если колонки почему-то нет, значение undefined
   // и проверка не мешает.
-  if(p.active===false){ authLeaving=true; notifications.reset();await sb.auth.signOut(); authLeaving=false; session=null; profile=null; role=null;
+  if(p.active===false){ authLeaving=true; notifications.reset();unassignedTracks.reset();await sb.auth.signOut(); authLeaving=false; session=null; profile=null; role=null;
     $('authErr').textContent='Доступ ещё не выдан. Попроси администратора активировать учётную запись.';
     $('authOverlay').classList.add('on'); return; }
   profile=p; role=p.role; await loadSettings();
@@ -7792,11 +7797,9 @@ function showVehModal(vid){
     h+=vehRow('Статус', esc(trackingStatus));
     h+='<div class="hint" style="margin-top: var(--sp-2)">'+(tracking&&tracking.state==='armed'
       ?'Телеметрия сохраняется во временный трек до старта выезда.'
-      :'Активный выезд найден · трек пишется в историю.')+'</div>';
+      :tracking&&tracking.state==='finish_candidate'?'Возвращение подтверждено · запись трека остановлена. Выезд ожидает проверки.':'Активный выезд найден · трек пишется в историю.')+'</div>';
   } else {
-    // Не молчим об этом: без активного выезда история не пишется, и это
-    // штатно. Иначе потом ищешь трек, которого никогда не было.
-    h+='<div class="hint" style="margin-top: var(--sp-1)">Активного выезда нет — трек в историю не пишется. Поставь выезду статус «в работе».</div>';
+    h+='<div class="hint" style="margin-top: var(--sp-1)">Активного выезда нет. GPS сохраняется в журнале непривязанных поездок для разбора диспетчером.</div>';
   }
   if(tracking&&tracking.state==='armed'){
     h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Трекинг подготовлен с '+esc(new Date(tracking.planned_start_at).toLocaleString('ru'))+'. Ожидаем кнопку «Начать» или подтверждённый выход из депо.</div>'
