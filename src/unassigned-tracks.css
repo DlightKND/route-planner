@@ -16,3 +16,14 @@
 .unassigned-charge strong{font-family:var(--mono);font-size:var(--fs-5)}.unassigned-charge span{color:var(--ink-dim)}
 .unassigned-event{padding:var(--sp-2) 0;color:var(--ink-dim);font-size:var(--fs-2)}
 @media(max-width:600px){.unassigned-actions>.btn{flex:1 1 140px;white-space:normal}.unassigned-actions>details{flex-basis:100%}.unassigned-toolbar h2{font-size:var(--fs-5)}}
+/* Trips owns the section; only the journal content scrolls on a wide screen. */
+.trip-section-switch{margin-bottom:var(--gap-block)}
+.unassigned-list{gap:var(--gap-card);align-content:start}
+.view .unassigned-card{margin:0}
+.unassigned-status:empty{display:none}
+#plUnassigned{min-width:0;min-height:0}
+@media(min-width:761px){
+ #tripBoard{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0}
+ #plUnassigned{flex:1;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:var(--sp-2)}
+}
+.view-planner #unassignedHost .unassigned-card{margin:0}

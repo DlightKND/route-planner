@@ -785,3 +785,59 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 @media(min-width:1181px) {
  .view-dash .summary-controls .rangebar { flex-wrap:wrap; }
 }
+
+/* Elevation follows function: content 1, transient panels 2, windows 3.
+   Controls, tabs and metrics inside cards stay on their parent surface. */
+.view :is(.card,.kcard,.notice-row,.wkrow){box-shadow:var(--shadow-sm)}
+.view .card .card{box-shadow:none}
+:is(.planner-filter-panel,.engineer-pop,.ctxmenu,.pop,.wb-route-menu){box-shadow:var(--shadow-md)}
+:is(.modal,.presence-editor,.engineer-options,.gpop,.map-pop,.mleg-body,.leaflet-popup-content-wrapper){box-shadow:var(--shadow-lg)}
+.view-map :is(.map-tools>.btn,.veh-btn,.map-toggle){box-shadow:var(--shadow-sm)}
+@media(max-width:900px){.view-map .side{box-shadow:var(--shadow-lg)}}
+
+/* Compact route flow: add points, build/save, optional settings. */
+#routeBlock .route-address{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--gap-row)}
+#routeBlock #rWpMode{margin-top:var(--gap-row);width:100%;background:transparent}
+#routeBlock .route-primary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--gap-row)}
+#routeBlock .route-primary>.btn{width:100%;font-size:var(--fs-body);padding:var(--pad-row);min-height:44px}
+.route-settings{margin-top:var(--gap-block);border-top:1px solid var(--line);padding-top:var(--gap-row)}
+.route-settings>summary{min-height:44px;align-content:center;cursor:pointer;font-weight:500;color:var(--ink-dim)}
+.route-settings:not([open])>:not(summary){display:none!important}
+#routeBlock #rStatus:empty{display:none}
+#routeBlock .rparams{gap:var(--gap-row)}
+
+/* The client popup exposes two actions and one disclosure, across widths. */
+.client-popup-actions{margin-top:var(--gap-block);display:grid;gap:var(--gap-row)}
+.client-popup-primary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--gap-row)}
+.leaflet-popup .client-popup-actions .btn{font:500 var(--fs-body)/1.3 var(--sans);letter-spacing:normal;min-height:44px;width:100%;padding:var(--pad-row);white-space:normal}
+.client-popup-more>summary{list-style:none;cursor:pointer}
+.client-popup-more>summary::-webkit-details-marker{display:none}
+.client-popup-more>summary::after{content:'▾';position:static;transform:none;background:none;margin-left:auto}
+.client-popup-more[open]>summary::after{content:'▴'}
+.client-popup-more:not([open])>.client-popup-menu{display:none!important}
+.client-popup-menu{display:grid;gap:var(--gap-tight);padding:var(--gap-row);margin-top:var(--gap-row);background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-sm)}
+.leaflet-popup .client-popup-menu>.btn{justify-content:flex-start;text-align:left}
+
+/* The vehicle window clips all corners; its content owns the scrollbar. */
+#vehOverlay .modal{width:480px;display:flex;flex-direction:column;overflow:hidden;scrollbar-gutter:auto;padding:var(--pad-window);border-radius:var(--r-lg)}
+#vehOverlay .modal-head{flex:none;align-items:center;margin-bottom:var(--gap-block)}
+#vehOverlay .modal-head h3{font-size:var(--fs-6);line-height:1.4}
+#vehBody{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding-right:var(--gap-tight)}
+#vehOverlay .modal-actions{flex:none;margin-top:var(--gap-block)}
+.vehicle-state{font-size:var(--fs-6);font-weight:600;margin-bottom:var(--gap-block)}
+#vehBody .veh-kv{display:grid;grid-template-columns:minmax(80px,.7fr) minmax(0,1.3fr);align-items:start;gap:var(--gap-row);padding:var(--gap-row) 0;font-size:var(--fs-body)}
+#vehBody .veh-kv>span:last-child{text-align:right;min-width:0;overflow-wrap:anywhere}
+#vehBody .veh-kv .btn{min-height:var(--control-h);padding:var(--sp-2) var(--sp-3);font-size:var(--fs-caption)}
+.vehicle-details{margin-top:var(--gap-block);border-top:1px solid var(--line)}
+.vehicle-details>summary{min-height:44px;align-content:center;cursor:pointer;font-weight:500;color:var(--ink-dim)}
+.vehicle-details:not([open])>:not(summary){display:none!important}
+@media(max-width:760px){#vehOverlay .modal{padding:var(--pad-card)}}
+
+@media(max-width:760px){#vehBody .veh-kv .btn{min-height:var(--touch-h)}}
+
+/* The journal button belongs to the Trips heading and adds no toolbar row. */
+.trip-heading{display:flex;align-items:center;gap:var(--gap-row);margin-bottom:var(--gap-row)}
+.view-planner .trip-heading>.subtabs{flex:1;min-width:0;margin:0}
+.view-planner .trip-heading>[data-trip-section]{flex:none;min-height:44px;font-size:var(--fs-caption);padding:var(--sp-3) var(--sp-4)}
+.view-planner .trip-heading>[data-trip-section].on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+@media(max-width:760px){.view-planner .trip-heading .subtab{padding:var(--sp-3);font-size:var(--fs-caption)}}

@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1 } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -316,6 +316,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   const unassignedID='60000000-0000-4000-8000-000000000001';
   const unknownVehicle=tables.vehicles[0]?.id||'vehicle-a';
   tables.unassigned_tracks=unassignedJourney?[{id:unassignedID,vehicle_id:unknownVehicle,started_at:'2026-10-04T07:00:00Z',last_ts:'2026-10-04T09:00:00Z',ended_at:'2026-10-04T09:00:00Z',state:role==='engineer'?'charged':'review',revision:0,review_note:'Историческая поездка: проверь границы и пробег',engineer_id:engineer,resolution:{cost:1500,km:120,rate:12.5,currency:'грн',reason:'Подтверждённая личная поездка'}}]:[];
+  if(unassignedJourney&&unassignedCount>1)tables.unassigned_tracks=Array.from({length:unassignedCount},(_,i)=>({...tables.unassigned_tracks[0],id:i?`40000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`:unassignedID}));
   tables.vehicle_telemetry_archive=unassignedJourney?[{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:00:00Z',lat:49.99,lng:36.23},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:01:00Z',lat:50.01,lng:36.25},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T09:00:00Z',lat:49.99,lng:36.23}]:[];
   tables.unassigned_track_events=[];
   const db = {
