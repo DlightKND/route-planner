@@ -27,3 +27,14 @@
  #plUnassigned{flex:1;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:var(--sp-2)}
 }
 .view-planner #unassignedHost .unassigned-card{margin:0}
+.unassigned-select{display:flex;align-items:center;gap:var(--sp-3);min-height:44px;cursor:pointer;font-size:var(--fs-caption);margin:0}
+.unassigned-select input{width:auto;margin:0}
+.unassigned-merge-order{padding-left:var(--sp-6);margin:var(--sp-4) 0}
+.unassigned-merge-order li{padding:var(--sp-3) 0;border-bottom:1px solid var(--line)}
+.unassigned-merge-order li>span{display:inline-block;vertical-align:middle;width:calc(100% - 100px);min-width:0;overflow-wrap:anywhere}
+.unassigned-merge-order small{display:block;color:var(--ink-dim);font-size:var(--fs-caption);margin-top:var(--sp-2)}
+.unassigned-merge-order li>div{display:inline-flex;gap:var(--sp-2);vertical-align:middle}
+.unassigned-merge-order button{min-width:44px;min-height:44px}
+.unassigned-merge-preview{margin-top:var(--sp-4)}
+@media(max-width:760px){.unassigned-merge>.row{display:grid;grid-template-columns:1fr 1fr}.unassigned-merge>.row button{white-space:normal}}
+@media(max-width:760px){.unassigned-merge>.row [data-ut-preview]{grid-column:1/-1}}

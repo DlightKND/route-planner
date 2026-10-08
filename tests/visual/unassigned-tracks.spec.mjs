@@ -55,3 +55,17 @@ test('GPS journal is nested under trips, has standard card gaps and scrolls to t
  await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('#plTrips .subtab[data-sub=trips]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.unassigned-card')).toHaveCount(14);
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-journal.png'});await clean(page);
 });
+
+test('manager orders selected tracks and reviews separate GPS pieces before merging',async({page},info)=>{
+ await open(page,info,'admin',3);
+ const choices=page.locator('[data-ut-select]');await choices.nth(1).check();await choices.nth(0).check();
+ await expect(page.locator('[data-ut-preview]')).toBeDisabled();await expect(page.locator('.unassigned-merge')).toContainText('по времени');
+ await page.locator('[data-ut-move="1"][data-step="-1"]').click();await expect(page.locator('[data-ut-preview]')).toBeEnabled();
+ await page.locator('[data-ut-preview]').click();await expect(page.locator('[data-ut-merge]')).toBeVisible();
+ await expect(page.locator('.unassigned-merge-preview polyline')).toHaveCount(4);
+ await page.locator('[data-ut-merge]').click();await expect(page.locator('#promptOverlay')).toContainText('Основание объединения');await page.keyboard.press('Escape');
+ await expect(page.locator('[data-ut-merge]')).toBeVisible();
+ await page.screenshot({path:'test-results/merge-tracks/'+info.project.name+'.png'});
+ await page.locator('[data-ut-clear]').click();await expect(page.locator('.unassigned-merge')).toHaveCount(0);for(const c of await choices.all())await expect(c).not.toBeChecked();
+ await clean(page);
+});

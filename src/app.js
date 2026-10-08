@@ -807,6 +807,7 @@ async function applyRoute(){
       return;
     }
     if(p[0]==='planner'&&['mine','jobs','trips','orders','tracking'].includes(p[1])){ await switchTab('planner',p[1]==='trips'&&p[2]==='tracking'?'tracking':p[1]); return; }
+    if(p[0]==='dash'&&role==='engineer'){await switchTab('planner','mine');return;}
     if(['dash','map','catalog','settings','notifications'].includes(p[0])){ await switchTab(p[0]); return; }
     notify('Ссылка не распознана. Открыта сводка.','warn');
     const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
@@ -2536,7 +2537,7 @@ async function gtSaveCuts(b,cuts){
   if(error){notify('Не сохранилось: '+error.message,'err');return false;}
   showToast('Ручная раскладка сохранена');await renderFeedAgain();return true;
 }
-async function renderFeedAgain(){if(feedCtx&&feedCtx.mine)await renderMine();else await renderAttention();}
+async function renderFeedAgain(){if(document.querySelector('.view-dash.active'))await renderAttention();else if(plannerCur==='mine')await renderMine();else await renderAttention();}
 function gtPop(key,b,trigger){
   const old=document.querySelector('.gpop');if(old)old.remove();
   const cuts=(b.cuts||[]).map(c=>({after:+c.after,at:{d:c.at.d,t:+c.at.t}}));
@@ -2740,9 +2741,9 @@ async function renderFeed(box,o){
     // Холодные, попавшие в выезд, из холодных уходят: они уже запланированы.
     cold=cold.filter(j=>!blockOf[j.id]);
     if(!groups.length && !(o.cold&&cold.length)){
-      box.innerHTML=(offline?offlineBanner(snapAt):'')
-        +'<div class="aempty">'+(o.mine?'Работы на тебе нет.':'Заявок нет.')+'</div>';
-      return;
+      box.innerHTML='<div class="vg-feed">'+rangeBar('gt')+(offline?offlineBanner(snapAt):'')
+        +'<div class="aempty">'+(o.mine?'Работы на тебе нет.':'Заявок нет.')+'</div></div>';
+      wireRangeBar(box);return;
     }
 
     // ── Лента: градиент по остроте групп сверху вниз ─────────────────────
@@ -3115,7 +3116,7 @@ async function renderFeed(box,o){
     gtApply();
   }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||e)+'</div>'; }
 }
-function renderAttention(){ return renderFeed($('attnBody'),{cold:true}); }
+function renderAttention(){ return renderFeed($('attnBody'),role==='engineer'?{mine:true,lead:true,done:!!$('mineDone')?.checked}:{cold:true}); }
 
 // Обработчики кнопок выезда. Отдельной функцией: их вешают и лента
 // «График», и всё, что перерисовывает её кусками.
@@ -3178,7 +3179,7 @@ function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<
   +'<input type="date" aria-label="Начало периода" data-rf value="'+esc(r.from)+'"><span class="rdash">—</span><input type="date" aria-label="Конец периода" data-rt value="'+esc(r.to)+'">'
   +(kind==='rev'?'<span class="rquick"><button data-rmonth="-1" aria-label="Предыдущий месяц">←</button><button data-rmonth="0">Этот месяц</button><button data-rmonth="1" aria-label="Следующий месяц">→</button></span>':'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
   +meta.lengths.map(x=>'<button data-rlen="'+x[0]+'">'+x[1]+'</button>').join('')+'</span>')+'</div>';}
-function setRange(kind,from,to){if(!from||!to)return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderAttention();}else renderDashboard();}
+function setRange(kind,from,to){if(!from||!to)return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderFeedAgain();}else renderDashboard();}
 function wireRangeBar(box){box.querySelectorAll('.rangebar').forEach(bar=>{const kind=bar.dataset.rk,read=()=>[bar.querySelector('[data-rf]').value,bar.querySelector('[data-rt]').value];
   bar.querySelectorAll('input').forEach(i=>i.onchange=()=>setRange(kind,...read()));
   bar.querySelectorAll('[data-rshift]').forEach(b=>b.onclick=()=>{const r=dashRanges[kind],n=Math.round((utcOf(r.to)-utcOf(r.from))/DAY_MS)+1,d=(+b.dataset.rshift)*n;setRange(kind,isoOf(utcOf(r.from)+d*DAY_MS),isoOf(utcOf(r.to)+d*DAY_MS));});

@@ -1,0 +1,24 @@
+begin;
+select set_config('request.jwt.claim.sub',(select id::text from profiles where role in ('admin','logist') and active limit 1),true);
+do $qa$ declare v uuid;c uuid;e uuid;a uuid;b uuid;skipped uuid;m uuid; r jsonb;q jsonb; expected jsonb;at timestamptz:=date_trunc('minute',now()-interval '8 hours');tid uuid;
+begin
+select id into e from profiles where active and role='engineer' limit 1;
+insert into vehicles(name,cost_per_km)values('QA merge rollback',12.5)returning id into v;
+insert into clients(name,lat,lng)values('QA merge rollback',50,30)returning id into c;
+insert into unassigned_tracks(vehicle_id,started_at,last_ts,ended_at,state)values(v,at,at+interval '1 minute',at+interval '1 minute','review')returning id into a;
+insert into unassigned_tracks(vehicle_id,started_at,last_ts,ended_at,state)values(v,at+interval '2 minutes',at+interval '3 minutes',at+interval '3 minutes','review')returning id into skipped;
+insert into unassigned_tracks(vehicle_id,started_at,last_ts,ended_at,state)values(v,at+interval '4 minutes',at+interval '5 minutes',at+interval '5 minutes','review')returning id into b;
+insert into vehicle_telemetry_archive(vehicle_id,ts,lat,lng,speed,status)select v,at+make_interval(mins=>i),50+i*.0001,30,20,'moving' from generate_series(0,5)i;
+expected:=jsonb_build_object(a::text,unassigned_track_quote(a),b::text,unassigned_track_quote(b));
+r:=unassigned_track_merge(array[a,b],expected,'QA merge smoke');
+m:=(r->>'track_id')::uuid;q:=unassigned_track_quote(m);
+if (q->>'points')::integer<>4 then raise exception 'unselected GPS imported';end if;
+if (select count(*) from unassigned_track_points(m,0,1000))<>4 then raise exception 'points paging failed';end if;
+r:=unassigned_track_resolve(m,0,'chain',jsonb_build_object('client',c,'title','QA composite rollback','engineer',e,'reason','QA merge import smoke','points',q->'points','km',q->'km'));
+tid:=(r->>'trip_id')::uuid;
+if (select count(*) from vehicle_positions where trip_id=tid)<>4 then raise exception 'wrong imported point count';end if;
+if not exists(select 1 from trip_tracks where trip_id=tid and jsonb_array_length(data->'segments')=2 and jsonb_array_length(data->'source_ranges')=2)then raise exception 'stored segment boundaries lost';end if;
+if not exists(select 1 from unassigned_tracks where id=skipped and state='review')then raise exception 'unselected source changed';end if;
+end $qa$;
+select 'merge/import/scoped points/stored segments passed; all data rolled back' result;
+rollback;

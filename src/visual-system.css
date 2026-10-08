@@ -220,7 +220,7 @@ body { font-size:var(--fs-body); }
 .view .order-board-options[open]>summary { color:var(--ink);margin-bottom:var(--sp-3); }
 .view .order-board-options label { display:flex;align-items:center;gap:var(--sp-3);min-height:var(--control-h); }
 .view .order-board-options label input { flex:none; }
-:is(.view-dash,#plMine) .wkrow { box-shadow:none;border-radius:var(--r-md); }
+:is(.view-dash,#plMine) .wkrow { border-radius:var(--r-md); }
 :is(.view-dash,#plMine) .wk-h { min-height:var(--control-h); }
 :is(.view-dash,#plMine) .wk-h :is(b,small) { font-size:var(--fs-caption); }
 :is(.view-dash,#plMine) :is(.wk-copy>span,.wk-pct,.planwarn b,.planwarn ul) { font-size:var(--fs-caption); }
@@ -789,11 +789,16 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 
 /* Elevation follows function: content 1, transient panels 2, windows 3.
    Controls, tabs and metrics inside cards stay on their parent surface. */
-.view :is(.card,.kcard,.notice-row,.wkrow){box-shadow:var(--shadow-sm)}
-.view .card .card{box-shadow:none}
-:is(.planner-filter-panel,.engineer-pop,.ctxmenu,.pop,.wb-route-menu){box-shadow:var(--shadow-md)}
-:is(.modal,.presence-editor,.engineer-options,.gpop,.map-pop,.mleg-body,.leaflet-popup-content-wrapper){box-shadow:var(--shadow-lg)}
-.view-map :is(.map-tools>.btn,.veh-btn,.map-toggle){box-shadow:var(--shadow-sm)}
+/* Elevation expresses a surface's role, consistently in both themes.
+   Content 1, temporary choice 2, blocking/floating window 3; inner rows 0. */
+.view :is(.card,.kcard,.notice-row,.wkrow,.emtree-manu,.eqitem,.staff-row,.stat){box-shadow:var(--shadow-sm)}
+.view :is(.card,.wkrow,.emtree-manu,.eqitem) :is(.card,.kcard,.eqitem,.stat,.staff-row,.order-child,.emrow,.wf-row),.modal :is(.card,.eqitem,.stat){box-shadow:none}
+.view-catalog .emtree-manu{background:var(--panel);border-radius:var(--r-md)}
+:is(.planner-filter-panel,.engineer-pop,.engineer-options,.ctxmenu,.pop,.wb-route-menu,.qbody,.leaflet-control-layers){box-shadow:var(--shadow-md)}
+:is(.modal,.presence-editor,.gpop,.map-pop,.mleg-body,.leaflet-popup-content-wrapper,.nav-sheet,.toast,.undo-toast,.busy){box-shadow:var(--shadow-lg)}
+.leaflet-popup-tip,.leaflet-popup[popover] .leaflet-popup-content-wrapper{box-shadow:none}
+.view-map :is(.map-tools>.btn,.veh-btn,.map-toggle,.leaflet-bar){box-shadow:var(--shadow-sm)}
+
 @media(max-width:900px){.view-map .side{box-shadow:var(--shadow-lg)}}
 
 /* Compact route flow: add points, build/save, optional settings. */
@@ -858,4 +863,11 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
  .view-planner .planner-toolbar:has(#jobTrash){grid-template-columns:minmax(0,1fr) auto auto}
  .view-planner .planner-toolbar>#jobTrash{grid-column:2;grid-row:2}
  .view-planner .planner-toolbar>#jobAdd{grid-column:3;grid-row:2}
+}
+@media(max-width:760px){
+ .view .order-board-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--sp-2);margin-bottom:var(--sp-2)}
+ .view .order-board-toolbar>input{grid-column:1/-1;width:100%}
+ .view .order-board-toolbar>label{font-size:0;gap:0}
+ .view .order-board-toolbar>label select{width:100%;min-width:0;font-size:var(--fs-body)}
+ .view .order-board-options{margin:0 0 var(--sp-2)}
 }
