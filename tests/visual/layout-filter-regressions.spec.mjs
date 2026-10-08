@@ -42,7 +42,7 @@ test('list spacing matches the journal and dispatcher trash controls are reachab
  await page.locator('#jobTrash').click();await expect(page.locator('#trashOverlay')).toBeVisible();await expect(page.locator('#trashTitle')).toHaveText('Корзина заявок');await page.locator('#trashClose').click();
  await page.locator('.planner-filter-menu:visible summary').click();await page.locator('#jobLayout').selectOption('list');
  const listGap=await page.locator('#jobList').evaluate(el=>parseFloat(getComputedStyle(el).gap));expect(listGap).toBe(12);
- await page.goto('/#/planner/orders');await expect(page.locator('#orderViewMode')).toBeVisible();await page.locator('#orderViewMode').selectOption('list');await expect(page.locator('#orderList')).toHaveClass('klist');
+ await page.goto('/#/planner/orders');await page.locator('.order-board-options summary').click();await expect(page.locator('#orderViewMode')).toBeVisible();await page.locator('#orderViewMode').selectOption('list');await expect(page.locator('#orderList')).toHaveClass('klist');
  await page.locator('#orderTrash').click();await expect(page.locator('#trashOverlay')).toBeVisible();await expect(page.locator('#trashTabs')).toContainText('Выезды');await page.locator('#trashClose').click();
  await page.goto('/#/planner/trips/tracking');await expect(page.locator('.unassigned-list')).toBeVisible();
  expect(await page.locator('.unassigned-list').evaluate(el=>parseFloat(getComputedStyle(el).gap))).toBe(listGap);
@@ -66,4 +66,36 @@ test('dispatcher search geometry matches across requests, tasks and trips',async
  }
  for(const box of dimensions.slice(1)){expect(Math.abs(box.x-dimensions[0].x)).toBeLessThanOrEqual(1);expect(Math.abs(box.y-dimensions[0].y)).toBeLessThanOrEqual(1);expect(Math.abs(box.width-dimensions[0].width)).toBeLessThanOrEqual(1);expect(Math.abs(box.height-dimensions[0].height)).toBeLessThanOrEqual(1);}
  if(page.viewportSize().width>760)expect(dimensions[0].width).toBe(420);
+});
+
+
+test('dispatcher actions keep stable mobile slots and task status chips control both views',async({page},info)=>{
+ await open(page,info,'planner/jobs',true);
+ const layouts=[];
+ for(const [route,prefix] of [['jobs','job'],['orders','order'],['trips','trip']]){
+  await page.goto('/#/planner/'+route);
+  const actions=page.locator('#'+prefix+'Search').locator('xpath=ancestor::*[contains(@class,"dispatcher-toolbar")]').locator('.dispatcher-actions');
+  await expect(actions).toBeVisible();
+  if(page.viewportSize().width<=760){const empty=page.locator('#'+prefix+'List .kcol').filter({has:page.locator('.kempty')}).first();if(await empty.count())expect((await empty.boundingBox()).height).toBeLessThan(150);}
+  const boxes=await Promise.all([actions.locator('summary'),page.locator('#'+prefix+'Trash'),page.locator('#'+prefix+'Add')].map(el=>el.boundingBox()));
+  for(const b of boxes){expect(b.height).toBeGreaterThanOrEqual(page.viewportSize().width<=760?44:36);expect(b.x).toBeGreaterThanOrEqual(0);expect(b.x+b.width).toBeLessThanOrEqual(page.viewportSize().width);expect(Math.abs(b.y+b.height/2-boxes[0].y-boxes[0].height/2)).toBeLessThanOrEqual(1);}
+  if(page.viewportSize().width<=760){layouts.push(boxes);for(let i=1;i<boxes.length;i++)expect(boxes[i].x).toBeGreaterThanOrEqual(boxes[i-1].x+boxes[i-1].width);}
+  await actions.locator('summary').click();await expect(actions.locator('.planner-filter-panel')).toBeVisible();
+  const panel=await actions.locator('.planner-filter-panel').boundingBox();expect(panel.x).toBeGreaterThanOrEqual(0);expect(panel.x+panel.width).toBeLessThanOrEqual(page.viewportSize().width);
+  await page.keyboard.press('Escape');
+  await page.screenshot({path:'test-results/mobile-dispatcher/'+info.project.name+'-'+route+'.png'});
+ }
+ for(const row of layouts.slice(1))for(let i=0;i<row.length;i++){expect(row[i].x).toBeCloseTo(layouts[0][i].x,0);expect(row[i].width).toBeCloseTo(layouts[0][i].width,0);expect(row[i].y).toBeCloseTo(layouts[0][i].y,0);}
+ const tripTrash=await page.locator('#tripTrash').boundingBox();await page.locator('[data-trip-section=tracking]').click();await expect(page.locator('.unassigned-list')).toBeVisible();
+ if(page.viewportSize().width<=760)expect((await page.locator('#tripTrash').boundingBox()).x).toBeCloseTo(tripTrash.x,0);
+ await expect(page.locator('#tripJournalRefresh')).toBeVisible();await page.locator('#tripJournalRefresh').click();await expect(page.locator('.unassigned-card')).toBeVisible();
+ await page.screenshot({path:'test-results/mobile-dispatcher/'+info.project.name+'-journal.png'});
+ await page.goto('/#/planner/orders');await expect(page.locator('#orderStatusChips [data-os]')).toHaveCount(7);
+ await page.locator('[data-os=assigned]').click();await expect(page.locator('#orderList [data-kst=assigned]')).toHaveCount(0);await expect(page.locator('[data-os=assigned]')).toHaveAttribute('aria-pressed','false');
+ await page.locator('[data-os=completed]').click();await expect(page.locator('#orderList [data-kst=completed]')).toHaveCount(1);
+ await page.locator('.order-board-options summary').click();await page.locator('#orderViewMode').selectOption('list');await page.keyboard.press('Escape');
+ await expect(page.locator('#orderList')).toHaveClass('klist');
+ for(const status of ['draft','in_progress','paused','review','completed'])await page.locator('[data-os='+status+']').click();
+ await expect(page.locator('#orderList .kcard')).toHaveCount(0);await expect(page.locator('#orderList')).toContainText('По выбранным условиям');
+ expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });

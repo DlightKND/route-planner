@@ -2840,9 +2840,9 @@
     </div>
     <div id="plOrders" style="display:none"><div class="stickyhead">
       <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
-      <div class="pane-head order-board-toolbar dispatcher-toolbar"><div class="searchbox"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"></div><div class="dispatcher-actions"><label>Представление заданий<select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select></label><button class="btn sm ghost" id="orderTrash" title="Удалённые заявки и выезды">Корзина</button><button class="btn sm amber" id="orderAdd">+ Задание</button></div></div>
+      <div class="pane-head order-board-toolbar dispatcher-toolbar"><div class="searchbox"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"></div><div class="dispatcher-actions"><details class="planner-filter-menu order-board-options"><summary class="btn sm ghost" id="orderBoardOptionsSummary" aria-label="Фильтры заданий">Фильтры</summary><div class="planner-filter-panel"><label>Представление заданий<select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select></label><label>Инженер<select id="orderEngineer" aria-label="Фильтр по инженеру"></select></label><label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p></div></details><button class="btn sm ghost" id="orderTrash" title="Удалённые заявки и выезды">Корзина</button><button class="btn sm amber" id="orderAdd">+ Задание</button></div></div>
       <div id="orderScope" hidden><span id="orderScopeText"></span><button class="btn sm ghost" id="orderScopeClear">Все задания</button></div>
-      <details class="order-board-options"><summary id="orderBoardOptionsSummary">Фильтры и представление</summary><label>Инженер<select id="orderEngineer" aria-label="Фильтр по инженеру"></select></label><label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p></details>
+      <div class="chips" id="orderStatusChips" role="group" aria-label="Видимые статусы заданий"></div>
     </div><div id="orderList"></div></div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
@@ -2858,6 +2858,7 @@
             <button type="button" class="btn sm ghost" data-trip-section="tracking">GPS-журнал</button>
             <button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button>
             <button class="btn sm amber" id="tripAdd" data-trip-board-only>+ Выезд</button>
+            <button type="button" class="btn sm ghost" id="tripJournalRefresh" data-trip-journal-only style="display:none">Обновить</button>
           </div>
         </div>
         <div id="tripBoardToolbar"><div class="chips" id="tripStatusChips"></div></div>

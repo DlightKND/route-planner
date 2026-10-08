@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, signedOut = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, signedOut = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -291,6 +291,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     reads: [],
     queryErrors: [],
     blockedWrites: [],
+    scheduleWrites: [],
     ready: true,
   });
   const reject = (name) => {
@@ -422,6 +423,11 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
             },
           };
         };
+      if(scheduleJourney&&['trips','jobs'].includes(table))b.update=record=>{
+        if(Object.keys(record).some(k=>k!=='day_plan'))return {eq:()=>Promise.resolve(reject(table+'.update'))};
+        return {eq:async(key,id)=>{const target=tables[table].find(row=>row[key]===id);if(!target)return {error:{message:'Missing synthetic row'}};
+          target.day_plan=structuredClone(record.day_plan);audit.scheduleWrites.push({table,id,record:structuredClone(record)});return {data:null,error:null};}};
+      };
       return b;
     },
     async rpc(name,args={}) {

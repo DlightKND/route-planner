@@ -2,11 +2,11 @@ import {test,expect} from '@playwright/test';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 import {mkdirSync} from 'node:fs';
 const trip=fixtureIDs.trip;
-async function openGraph(page,info,{role='admin',legacy=false}={}){
+async function openGraph(page,info,{role='admin',legacy=false,scheduleJourney=false}={}){
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());
  await page.clock.setFixedTime(new Date('2026-10-06T07:00:00Z'));
- await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,legacyCrewMissing:legacy});
+ await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,legacyCrewMissing:legacy,scheduleJourney});
  await page.goto('/#/dash');await expect(page.locator('#appRoot')).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await expect(page.locator('.vg-feed')).toBeVisible();await expect(page.locator('.vg-block[data-gb="t'+trip+'"]').first()).toBeVisible();
@@ -73,4 +73,28 @@ test('split action targets the selected work piece and Escape cancels its previe
  const input=cut.locator('input');expect(Number(await input.getAttribute('min'))).toBeCloseTo(from+.25);
  await expect(input).toBeFocused();await page.keyboard.press('ArrowRight');await page.keyboard.press('Escape');
  await expect(cut).toHaveCount(0);await clean(page,errors);
+});
+
+
+test('split saves the selected work part, moving its continuation keeps hours and rejects overlap',async({page},info)=>{
+ const errors=await openGraph(page,info,{scheduleJourney:true});let week=await openDay(page);
+ let pieces=week.locator('.vg-piece[data-gb="t'+trip+'"]');
+ const original=await pieces.evaluateAll(els=>els.map(el=>({from:Number(el.dataset.pieceFrom),to:Number(el.dataset.pieceTo)})));
+ const hours=original.reduce((n,p)=>n+p.to-p.from,0);
+ const work=pieces.filter({hasNot:page.locator('.road')}).first(),from=Number(await work.getAttribute('data-piece-from')),to=Number(await work.getAttribute('data-piece-to'));
+ await work.focus();await page.keyboard.press('Enter');await page.locator('.gpop .gp-layout summary').click();await page.locator('.gpop [data-pop-divide]').click();
+ const cut=week.locator('.vg-cut'),range=cut.locator('input'),split=Math.round((from+to)*2)/4;
+ await range.evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));},String(split));await cut.locator('[data-cut-ok]').click();
+ await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(1);
+ const saved=await page.evaluate(()=>window.__visualQA.scheduleWrites[0].record.day_plan);expect(saved.cuts[0].at).toEqual({d:'2026-10-05',t:split});
+ await expect(pieces.filter({hasNot:page.locator('.road')})).toHaveCount(2);
+ const tail=week.locator('.vg-piece[data-gb="t'+trip+'"][data-piece-from="'+split+'"]');
+ const at=await tail.getAttribute('data-piece-at');const box=await tail.boundingBox();
+ await page.mouse.move(box.x+8,box.y+3);await page.mouse.down();await page.mouse.move(box.x+8,box.y+13);await page.mouse.up();
+ await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(2);
+ let moved=week.locator('.vg-piece[data-gb="t'+trip+'"][data-piece-at="'+at+'"]');await expect(moved).toHaveAttribute('data-piece-from',String(split+.5));
+ const total=await pieces.evaluateAll(els=>els.reduce((n,el)=>n+Number(el.dataset.pieceTo)-Number(el.dataset.pieceFrom),0));expect(total).toBeCloseTo(hours);
+ const before=await moved.boundingBox();await page.mouse.move(before.x+8,before.y+3);await page.mouse.down();await page.mouse.move(before.x+8,before.y-17);await page.mouse.up();
+ await expect(page.locator('#toast')).toContainText('после предыдущей');expect(await page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(2);await expect(moved).toHaveAttribute('data-piece-from',String(split+.5));
+ await page.screenshot({path:'test-results/schedule-regressions/'+info.project.name+'-split-saved.png'});await clean(page,errors);
 });

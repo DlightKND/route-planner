@@ -415,12 +415,15 @@ export function planSchedule(blocks, settings, opts) {
     });
   };
   const laneOf = b => (b.engineer || ' free');
+  const lanesOf=b=>[...new Set([b.engineer,...(b.engineerIds||[])].filter(Boolean))].concat(b.engineer||(b.engineerIds||[]).length?[]:[' free|'+b.id]);
+  const available=(b,pieces)=>lanesOf(b).every(key=>busyFree(busy,key,pieces));
 
   const norm = (blocks || []).map(b => Object.assign({
     kind: 'job', workH: 0, driveToH: 0, driveBackH: 0, driveMidH: 0, jobIds: []
   }, b));
 
-  const fixed = norm.filter(b => b.from);
+  const pinned=b=>{const m=manualStart(b,s);return !!(m&&!m.stale);};
+  const fixed = norm.filter(b => b.from).sort((a,b)=>Number(pinned(b))-Number(pinned(a))||(dayMs(a.from)-dayMs(b.from)));
   const free = norm.filter(b => !b.from);
   // Выезды раньше одиночных заявок: выезд уже спланирован как поездка, и
   // подвинуть проще одиночную работу, чем разобрать выезд.
@@ -435,7 +438,13 @@ export function planSchedule(blocks, settings, opts) {
     const baseSegs = segsOf(b);
     const cuts=(b.plan&&b.plan.cuts)||[];
     const staleCuts=cuts.filter(c=>!c||!(+c.after>0)||+c.after>=baseSegs.reduce((n,x)=>n+(+x.h||0),0)||!c.at||!dayWindow(b.engineer,c.at.d,s)||(b.from&&(dayMs(c.at.d)<dayMs(b.from)||dayMs(c.at.d)>dayMs(b.to||b.from))));
-    const validCuts=cuts.filter(c=>!staleCuts.includes(c));
+    const validCuts=[];
+    cuts.filter(c=>!staleCuts.includes(c)).sort((a,z)=>a.after-z.after).forEach(c=>{
+      const before=piecesOf(start,baseSegs,s,b.engineer,validCuts).find(p=>p.at<c.after&&p.at+p.h>=c.after-1e-6);
+      const target=normPos({iso:c.at.d,t:+c.at.t,engineer:b.engineer},s);
+      if(!Number.isFinite(+c.at.t)||!before||validCuts.some(x=>Math.abs(x.after-c.after)<1e-6)||dayMs(target.iso)<dayMs(before.iso)||(target.iso===before.iso&&target.t<before.from+c.after-before.at-1e-6))staleCuts.push(c);
+      else validCuts.push(c);
+    });
     const pieces = piecesOf(start,baseSegs,s,b.engineer,validCuts);
     const days = cellsOf(pieces);
     const wp = pieces.filter(p => p.k === 'w');
@@ -451,7 +460,11 @@ export function planSchedule(blocks, settings, opts) {
       ok: true, why: '', manualParts: validCuts.length>0, cuts:validCuts
     }, extra || {});
     const key = laneOf(b);
-    busyAdd(busy, key, pieces); put(key, pieces);
+    if(!available(b,pieces)){
+      rec.ok=false;rec.why='overlap';
+      warnings.push({kind:'overlap',blockId:b.id,engineer:b.engineer||null,date:rec.from,fixed:!!b.from,text:'Рабочее время пересекается с другим блоком команды. Измените время или состав команды.'});
+    }
+    lanesOf(b).forEach(lane=>busyAdd(busy,lane,pieces));put(key,pieces);
     // Перегруз: день, в котором сумма всех дорожек этого инженера вышла за
     // смену. Считается по итогу дня, а не по одному блоку.
     const over = days.filter(d => {
@@ -459,7 +472,7 @@ export function planSchedule(blocks, settings, opts) {
       return l && (l.workH + l.driveH) > l.ceiling + 1e-6;
     });
     if (over.length) {
-      rec.ok = false; rec.why = 'overflow';
+      rec.ok = false; rec.why = rec.why || 'overflow';
       warnings.push({
         kind: 'overflow', blockId: b.id, engineer: b.engineer || null, date: over[0].iso,
         fixed: !!b.from, days: over.length, sla: b.sla || null,
@@ -495,6 +508,9 @@ export function planSchedule(blocks, settings, opts) {
     return rec;
   };
 
+  // Explicit starts reserve time before any automatic block.
+  free.filter(pinned).forEach(b=>finish(b,manualStart(b,s).pos,{fixed:false,manual:true,stalePlan:false}));
+
   // ── Выезды с ручными датами ──────────────────────────────────────────
   fixed.forEach(b => {
     const man = manualStart(b, s);
@@ -504,18 +520,26 @@ export function planSchedule(blocks, settings, opts) {
       warnings.push({kind:'snapped',blockId:b.id,engineer:b.engineer,date:auto.iso,
         text:'Дата выезда '+b.from+' закрыта у инженера, выезд стоит с '+auto.iso+'.'});
     }
-    const start = (man && !man.stale) ? man.pos : auto;
+    let start = (man && !man.stale) ? man.pos : auto;
+    if(!(man&&!man.stale)&&!available(b,piecesOf(start,segsOf(b),s,b.engineer,b.plan?.cuts||[]))){
+      const last=dayMs(b.to||b.from),segs=segsOf(b);let candidate=start;
+      // Keep the dispatcher dates; search free quarter-hour slots inside them.
+      for(let i=0;i<90*96&&dayMs(candidate.iso)<=last;i++){
+        const pcs=piecesOf(candidate,segs,s,b.engineer,b.plan?.cuts||[]);
+        if(available(b,pcs)&&(!pcs.length||dayMs(pcs[pcs.length-1].iso)<=last)){start=candidate;break;}
+        candidate=addHours(candidate,.25,s,b.engineer);
+      }
+    }
     finish(b, start, { fixed: true, manual: !!(man && !man.stale), stalePlan: !!(man && man.stale) });
   });
 
   // ── Всё остальное ────────────────────────────────────────────────────
-  free.forEach(b => {
+  free.filter(b=>!pinned(b)).forEach(b => {
     const man = manualStart(b, s);
     if (man && !man.stale) {
       finish(b, man.pos, { fixed: false, manual: true, stalePlan: false });
       return;
     }
-    const key = laneOf(b);
     const segs = segsOf(b);
     const n = daysNeeded((+b.workH || 0) + (+b.driveMidH || 0), s);
     const sla = dayMs(b.sla);
@@ -549,7 +573,7 @@ export function planSchedule(blocks, settings, opts) {
       const cands = candidates(endDay);
       for (let c = 0; c < cands.length; c++) {
         const st = cands[c], pcs = piecesOf(st,segs,s,b.engineer,[]);
-        if (!busyFree(busy, key, pcs)) continue;
+        if (!available(b, pcs)) continue;
         if (!anyFree) anyFree = st;
         const inTime = sla == null || dayMs(workEnd(pcs)) <= sla;
         if (!inTime) continue;
@@ -568,7 +592,7 @@ export function planSchedule(blocks, settings, opts) {
       let e = stepWork(sla != null ? snapWork(sla, -1, s.weekend) : floor, 1, s.weekend);
       for (let i = 0; i < 90; i++) {
         const cands = candidates(e);
-        const ok = cands.find(st => busyFree(busy,key,piecesOf(st,segs,s,b.engineer,[])));
+        const ok = cands.find(st => available(b,piecesOf(st,segs,s,b.engineer,[])));
         if (ok) { start = ok; break; }
         e = stepWork(e, 1, s.weekend);
       }
@@ -592,4 +616,18 @@ export function driveOfLegs(legs) {
   const toH = +l[0].h || 0, backH = +l[l.length - 1].h || 0;
   const midH = l.slice(1, -1).reduce((a, x) => a + (+x.h || 0), 0);
   return { toH: toH, backH: backH, midH: midH, km: km };
+}
+
+
+export function schedulePlacementIssue({block,start,cuts,settings,others=[]}) {
+  const trial=planSchedule([{...block,plan:{start:{d:start.iso,t:start.t},cuts:cuts||[]}}],settings,{today:start.iso});
+  if(trial.warnings.some(w=>w.kind==='stale'))return 'Продолжение должно идти после предыдущей части и оставаться в датах блока.';
+  const pieces=trial.blocks[0].pieces;
+  const crew=b=>[...new Set([b.engineer,...(b.engineerIds||[])].filter(Boolean))];
+  const team=crew(block);
+  for(const other of others){
+    if(other.id===block.id||!team.some(id=>crew(other).includes(id)))continue;
+    if(pieces.some(p=>(other.pieces||[]).some(q=>q.iso===p.iso&&p.from<q.to-1e-6&&p.to>q.from+1e-6)))return 'В это время участник команды занят другим блоком. Выберите свободное время.';
+  }
+  return '';
 }
