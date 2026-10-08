@@ -12,3 +12,8 @@ it('breaks the GPS line across radio gaps and safely handles a large raw archive
  const preview=trackPreview(points);expect(preview.match(/<polyline/g)).toHaveLength(2);
  expect(preview).not.toContain('NaN');expect(preview).not.toContain('Infinity');
 });
+
+it('shows an explicit break between selected parts even when timestamps are close',()=>{
+ const points=[{lat:50,lng:30,ts:'2026-10-01T07:00:00Z',part:1},{lat:50.001,lng:30,ts:'2026-10-01T07:01:00Z',part:1},{lat:51,lng:30,ts:'2026-10-01T07:02:00Z',part:2}];
+ expect(trackPreview(points).match(/<polyline/g)).toHaveLength(2);
+});

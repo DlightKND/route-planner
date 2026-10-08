@@ -61,6 +61,20 @@ async function integrity(page,active,audit,testInfo) {
     const view=document.querySelector('.view.active'),pane=view.querySelector('.pane');
     return {viewport:innerWidth,documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,viewWidth:Math.round(view.getBoundingClientRect().width),paneWidth:pane?.clientWidth,paneScrollWidth:pane?.scrollWidth,theme:document.documentElement.dataset.theme,blockedWrites:window.__visualQA.blockedWrites,reads:window.__visualQA.reads};
   });
+  const elevationFailures=await active.evaluate(root=>{
+    const failures=[],style=getComputedStyle(document.documentElement),token=style.getPropertyValue('--shadow-sm').trim();
+    // Resolve CSS token serialization through the browser, then compare computed values.
+    const sample=document.createElement('div');sample.style.boxShadow=token;document.body.append(sample);const low=getComputedStyle(sample).boxShadow;sample.remove();
+    for(const el of root.querySelectorAll('.card,.kcard,.notice-row,.wkrow,.emtree-manu,.eqitem,.staff-row,.stat')){
+      const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;
+      const nested=el.parentElement.closest('.card,.wkrow,.emtree-manu,.eqitem');
+      const flat=nested&&el.matches('.card,.kcard,.eqitem,.stat,.staff-row');
+      const expected=flat?'none':low,actual=getComputedStyle(el).boxShadow;
+      if(actual!==expected)failures.push({surface:el.id||el.className,expected,actual});
+    }
+    return failures;
+  });
+  expect(elevationFailures,'Content surfaces follow elevation rules').toEqual([]);
   expect(audit.remoteAPIs,'No production API traffic').toEqual([]);
   expect(audit.errors,'No runtime errors').toEqual([]);
   expect(measurements.blockedWrites,'No attempted fixture writes').toEqual([]);
@@ -235,7 +249,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       }
     }
     if(testInfo.project.use.viewport.width<=390&&scene.name.startsWith('dispatcher')){
-      expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Compact mobile dispatcher header').toBeLessThanOrEqual(190);
+      expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Visible list/journal/trash controls keep the mobile header bounded').toBeLessThanOrEqual(224);
       const filter=active.locator('.planner-filter-menu:visible');
       if(await filter.count()){
         await filter.locator('summary').click();await expect(filter.locator('select').first()).toBeVisible();

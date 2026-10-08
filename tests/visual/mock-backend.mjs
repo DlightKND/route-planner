@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1 } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, signedOut = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -316,12 +316,12 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   const unassignedID='60000000-0000-4000-8000-000000000001';
   const unknownVehicle=tables.vehicles[0]?.id||'vehicle-a';
   tables.unassigned_tracks=unassignedJourney?[{id:unassignedID,vehicle_id:unknownVehicle,started_at:'2026-10-04T07:00:00Z',last_ts:'2026-10-04T09:00:00Z',ended_at:'2026-10-04T09:00:00Z',state:role==='engineer'?'charged':'review',revision:0,review_note:'Историческая поездка: проверь границы и пробег',engineer_id:engineer,resolution:{cost:1500,km:120,rate:12.5,currency:'грн',reason:'Подтверждённая личная поездка'}}]:[];
-  if(unassignedJourney&&unassignedCount>1)tables.unassigned_tracks=Array.from({length:unassignedCount},(_,i)=>({...tables.unassigned_tracks[0],id:i?`40000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`:unassignedID}));
+  if(unassignedJourney&&unassignedCount>1)tables.unassigned_tracks=Array.from({length:unassignedCount},(_,i)=>({...tables.unassigned_tracks[0],started_at:new Date(Date.UTC(2026,9,4+i,7)).toISOString(),last_ts:new Date(Date.UTC(2026,9,4+i,9)).toISOString(),ended_at:new Date(Date.UTC(2026,9,4+i,9)).toISOString(),id:i?`40000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`:unassignedID}));
   tables.vehicle_telemetry_archive=unassignedJourney?[{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:00:00Z',lat:49.99,lng:36.23},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:01:00Z',lat:50.01,lng:36.25},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T09:00:00Z',lat:49.99,lng:36.23}]:[];
   tables.unassigned_track_events=[];
   const db = {
     auth: {
-      getSession: async () => ({ data: { session }, error: null }),
+      getSession: async () => ({ data: { session: signedOut?null:session }, error: null }),
       getUser: async () => ({ data: { user: session.user }, error: null }),
       onAuthStateChange: () => ({
         data: { subscription: { unsubscribe() {} } },
@@ -434,6 +434,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         let count=0;tables.notification_inbox.forEach(n=>{if(n.recipient_id===session.user.id&&!n.read_at&&n.created_at<=args.p_before){n.read_at=stamp;count++;}});return {data:count,error:null};
       }
       const reads = {
+        unassigned_track_points:(tables.vehicle_telemetry_archive||[]).map(p=>({...p,part:1})),
         unassigned_track_quote:{track_id:unassignedID,revision:0,km:120,points:3,gaps:1,rejected:0,rate:12.5,cost:1500},
         legacy_personal_schedule_read:legacyCrewMissing&&role==='engineer'&&(args.p_trips||[]).includes(trip)?[{id:trip,status:'done',date_from:ride.date_from,date_to:ride.date_to,day_plan:ride.day_plan,engineer_ids:[],lead_engineer:null,schedule_only:true,route_stops:ride.route_stops.map(s=>({type:s.type,lat:s.lat,lng:s.lng})),econ_snapshot:{driveH:ride.econ_snapshot.driveH,legs:[]}}]:[],
         account_org_read: {job_title:role==='engineer'?'Выездной инженер':'Руководитель сервиса',manager:role==='engineer'?{...people[0],job_title:'Руководитель сервиса'}:null,reports:role==='engineer'?[]:people.slice(1).map(p=>({...p,job_title:'Сервисный инженер'}))},
@@ -461,6 +462,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     functions: { invoke: async (name) => reject("function:" + name) },
   };
   window.supabase = { createClient: () => db };
+  const savedRanges=preserveRanges?Object.fromEntries(['gt','load','rev'].map(k=>[k,localStorage.getItem('dl_range_'+k)])):{};
   localStorage.clear();
   localStorage.setItem(
     "dl_range_gt",
@@ -474,6 +476,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     "dl_range_rev",
     JSON.stringify({ from: "2026-09-21", to: "2026-10-05" }),
   );
+  for(const [k,v] of Object.entries(savedRanges))if(v)localStorage.setItem('dl_range_'+k,v);
 }
 export const fixtureIDs = {
   job: "10000000-0000-4000-8000-000000000001",

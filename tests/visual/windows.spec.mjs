@@ -141,6 +141,8 @@ test('vehicle summary is compact, corners clip correctly and GPS details remain 
 });
 test('client popup keeps primary actions in a row and exposes secondary actions on demand',async({page},info)=>{
  await open(page,'mapClient');const pop=page.locator('.leaflet-popup:visible');await expect(pop).toBeVisible();
+ const surface=await pop.locator('.leaflet-popup-content-wrapper').evaluate(el=>{const sample=document.createElement('div');sample.style.background=CSS.supports('backdrop-filter','blur(1px)')?'var(--glass-panel)':'var(--panel)';sample.style.color='var(--ink)';document.body.append(sample);const actual=getComputedStyle(el),expected=getComputedStyle(sample),result={background:actual.backgroundColor,expectedBackground:expected.backgroundColor,color:actual.color,expectedColor:expected.color,shadow:actual.boxShadow,popover:el.closest('.leaflet-popup').hasAttribute('popover')};sample.remove();return result;});
+ expect(surface.background).toBe(surface.expectedBackground);expect(surface.color).toBe(surface.expectedColor);if(surface.popover)expect(surface.shadow).toBe('none');
  await expect(pop.getByRole('button',{name:'Редактировать клиента',exact:true})).toBeHidden();
  const geometry=await pop.locator('.client-popup-primary').evaluate(el=>Array.from(el.children,x=>{const r=x.getBoundingClientRect();return {top:r.top,height:r.height,width:r.width};}));
  expect(geometry).toHaveLength(2);expect(geometry[0].top).toBe(geometry[1].top);for(const r of geometry){expect(r.height).toBeGreaterThanOrEqual(44);expect(r.width).toBeGreaterThan(90);}
