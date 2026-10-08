@@ -249,7 +249,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       }
     }
     if(testInfo.project.use.viewport.width<=390&&scene.name.startsWith('dispatcher')){
-      expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Visible list/journal/trash controls keep the mobile header bounded').toBeLessThanOrEqual(224);
+      expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Visible actions and the separate trips journal navigation keep the mobile header bounded').toBeLessThanOrEqual(scene.name==='dispatcher-trips'?272:224);
       const filter=active.locator('.planner-filter-menu:visible');
       if(await filter.count()){
         await filter.locator('summary').click();await expect(filter.locator('select').first()).toBeVisible();
