@@ -1,3 +1,4 @@
+import {calendarPeriodBounds} from './core/calendar-period.js';
 import { openContextPanel } from './context-panels.js';
 import { wireSchedulePieceDrag } from './schedule-interactions.js';
 import { readPersonalScheduleTrips } from './personal-schedule.js';
@@ -47,7 +48,7 @@ const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profil
 serviceOrders.init();
 const notifications=createNotifications({db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
 const unassignedTracks=createUnassignedTracks({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
- leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
+ period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
 
@@ -874,6 +875,7 @@ function plannerSub(name){ const journal=name==='tracking';plannerCur=journal?'t
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
   document.querySelectorAll('.view-planner .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.sub===plannerCur);t.setAttribute('aria-pressed',String(t.dataset.sub===plannerCur));});
   if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=plannerCur==='trips'?'':'none';$('tripBoard').style.display=journal?'none':'';$('tripBoardToolbar').style.display=journal?'none':''; $('plOrders').style.display=name==='orders'?'':'none'; $('plUnassigned').style.display=name==='tracking'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else if(name==='orders') serviceOrders.board(); else if(name==='tracking')unassignedTracks.open(); else renderTripsView();
+  document.querySelectorAll('[data-trip-journal-only]').forEach(el=>el.style.display=journal?'':'none');if(journal)renderJournalPeriod();
   document.querySelectorAll('[data-trip-board-only]').forEach(el=>el.style.display=journal||(el.id==='tripAdd'&&!canWrite())?'none':'');
   document.querySelectorAll('[data-trip-section]').forEach(b=>{if(b.classList.contains('subtab'))return;const on=journal?b.dataset.tripSection==='tracking':b.dataset.tripSection==='board';b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});
   routeSet(journal?'planner/trips/tracking':'planner/'+name); }
@@ -3165,23 +3167,25 @@ function wireTripActs(box,offline){
 // Периоды выбираются, а не прибиты. Готовые ступени закрывают девять
 // случаев из десяти, произвольный диапазон — десятый.
 const RANGE_META={
+  journal:{dir:'back',lengths:[]},
   rev:{dir:'back',lengths:[[30,'месяц'],[90,'квартал'],[365,'год']]},
   load:{dir:'ahead',lengths:[[7,'неделя'],[14,'2 недели'],[30,'месяц']]},
   gt:{dir:'ahead',lengths:[[7,'неделя'],[14,'2 недели'],[30,'месяц']]}
 };
 function defaultRange(kind){
   const len=kind==='rev'?30:14,t=todayISO();
-  if(kind==='rev')return {from:t.slice(0,7)+'-01',to:monthEndIso(t.slice(0,7))};
+  if(kind==='rev'||kind==='journal')return {from:t.slice(0,7)+'-01',to:monthEndIso(t.slice(0,7))};
   return RANGE_META[kind].dir==='back'?{from:isoOf(utcOf(t)-(len-1)*DAY_MS),to:t}:{from:t,to:isoOf(utcOf(t)+(len-1)*DAY_MS)};
 }
-function loadRangeState(kind){try{const v=JSON.parse(localStorage.getItem('dl_range_'+kind)||'null');if(v&&v.from&&v.to)return v;}catch(e){}return defaultRange(kind);}
-const dashRanges={rev:loadRangeState('rev'),load:loadRangeState('load'),gt:loadRangeState('gt')};
+function loadRangeState(kind){try{const v=JSON.parse(localStorage.getItem('dl_range_'+kind)||'null');if(v&&v.from&&v.to){if(kind==='journal')calendarPeriodBounds(v);return v;}}catch(e){}return defaultRange(kind);}
+const dashRanges={journal:loadRangeState('journal'),rev:loadRangeState('rev'),load:loadRangeState('load'),gt:loadRangeState('gt')};
 function saveRange(kind){try{localStorage.setItem('dl_range_'+kind,JSON.stringify(dashRanges[kind]));}catch(e){}}
-function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<div class="rangebar" role="group" aria-label="'+(kind==='gt'?'Период графика':kind==='load'?'Период загрузки':'Период финансов и работ')+'" data-rk="'+kind+'">'
+function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<div class="rangebar" role="group" aria-label="'+(kind==='journal'?'Период GPS-журнала':kind==='gt'?'Период графика':kind==='load'?'Период загрузки':'Период финансов и работ')+'" data-rk="'+kind+'">'
   +'<input type="date" aria-label="Начало периода" data-rf value="'+esc(r.from)+'"><span class="rdash">—</span><input type="date" aria-label="Конец периода" data-rt value="'+esc(r.to)+'">'
-  +(kind==='rev'?'<span class="rquick"><button data-rmonth="-1" aria-label="Предыдущий месяц">←</button><button data-rmonth="0">Этот месяц</button><button data-rmonth="1" aria-label="Следующий месяц">→</button></span>':'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
+  +(kind==='rev'||kind==='journal'?'<span class="rquick"><button data-rmonth="-1" aria-label="Предыдущий месяц">←</button><button data-rmonth="0">Этот месяц</button><button data-rmonth="1" aria-label="Следующий месяц">→</button></span>':'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
   +meta.lengths.map(x=>'<button data-rlen="'+x[0]+'">'+x[1]+'</button>').join('')+'</span>')+'</div>';}
-function setRange(kind,from,to){if(!from||!to)return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderFeedAgain();}else renderDashboard();}
+function setRange(kind,from,to){if(!from||!to)return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='journal'){renderJournalPeriod();unassignedTracks.refresh();}else if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderFeedAgain();}else renderDashboard();}
+function renderJournalPeriod(){const box=$('tripJournalPeriod');box.innerHTML=rangeBar('journal');box.title='Поездки, пересекающие выбранный период · время Киева';wireRangeBar(box);}
 function wireRangeBar(box){box.querySelectorAll('.rangebar').forEach(bar=>{const kind=bar.dataset.rk,read=()=>[bar.querySelector('[data-rf]').value,bar.querySelector('[data-rt]').value];
   bar.querySelectorAll('input').forEach(i=>i.onchange=()=>setRange(kind,...read()));
   bar.querySelectorAll('[data-rshift]').forEach(b=>b.onclick=()=>{const r=dashRanges[kind],n=Math.round((utcOf(r.to)-utcOf(r.from))/DAY_MS)+1,d=(+b.dataset.rshift)*n;setRange(kind,isoOf(utcOf(r.from)+d*DAY_MS),isoOf(utcOf(r.to)+d*DAY_MS));});

@@ -9,7 +9,7 @@ async function open(page,info,role='admin',unassignedCount=1){
   if(url.hostname.endsWith('tile.openstreetmap.org')||url.hostname==='api.maptiler.com')return r.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e5e2d6"/><path d="M20 0 L60 90 35 256 M190 0 L155 110 230 256" fill="none" stroke="#aad2dd" stroke-width="18"/><path d="M0 80 L256 175 M85 0 L175 256" stroke="#fff" stroke-width="8"/><path d="M0 80 L256 175 M85 0 L175 256" stroke="#d2bd83" stroke-width="2"/><text x="10" y="30" font-family="sans-serif" font-size="12" fill="#555">Подложка QA</text></svg>'});
   return url.origin==='http://127.0.0.1:4173'?r.continue():r.abort();
  });
- await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,unassignedJourney:true,unassignedCount});
+ await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,unassignedJourney:true,unassignedCount,preserveRanges:true});
  await page.goto('/#/planner/tracking');await expect(page.locator('#unassignedHost .unassigned-card').first()).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
 }
@@ -99,4 +99,24 @@ test('trips journal and trash share the filters and create action row',async({pa
  await page.locator('#tripTrash').click();await expect(page.locator('#trashOverlay')).toBeVisible();await page.locator('#trashClose').click();
  await page.locator('[data-trip-section=tracking]').click();await expect(page.locator('#tripAdd')).toBeVisible();
  await page.screenshot({path:'test-results/gps-map-header/'+info.project.name+'-trips.png'});await clean(page);
+});
+
+
+test('journal period filters on the server, navigates months and persists after reload',async({page},info)=>{
+ await open(page,info,'admin',3);
+ const from=page.locator('#tripJournalPeriod [data-rf]'),to=page.locator('#tripJournalPeriod [data-rt]');
+ await expect(from).toBeVisible();await expect(to).toBeVisible();
+ await page.locator('[data-ut-select]').first().check();await expect(page.locator('.unassigned-merge')).toBeVisible();
+ await from.fill('2026-10-05');await from.dispatchEvent('change');await to.fill('2026-10-05');await to.dispatchEvent('change');
+ await expect(page.locator('.unassigned-card')).toHaveCount(1);await expect(page.locator('.unassigned-merge')).toHaveCount(0);
+ await expect(page.locator('.unassigned-period')).toContainText('05.10.2026');
+ await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
+ await expect(from).toHaveValue('2026-10-05');await expect(to).toHaveValue('2026-10-05');await expect(page.locator('.unassigned-card')).toHaveCount(1);
+ await page.locator('[data-ut-mode=archive]').click();await expect(page.locator('.unassigned-card')).toHaveCount(0);await expect(from).toHaveValue('2026-10-05');
+ await page.locator('[data-ut-mode=pending]').click();await expect(page.locator('.unassigned-card')).toHaveCount(1);
+ await page.locator('#tripJournalPeriod [data-rmonth="-1"]').click();await expect(from).toHaveValue('2026-09-01');await expect(to).toHaveValue('2026-09-30');await expect(page.locator('.unassigned-card')).toHaveCount(0);
+ await page.locator('#tripJournalPeriod [data-rmonth="1"]').click();await expect(from).toHaveValue('2026-10-01');await expect(to).toHaveValue('2026-10-31');await expect(page.locator('.unassigned-card')).toHaveCount(3);
+ for(const input of [from,to])expect(await input.evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThanOrEqual(130);
+ expect(await page.locator('.view-planner .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+ await page.screenshot({path:'test-results/journal-period/'+info.project.name+'.png'});await clean(page);
 });

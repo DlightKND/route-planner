@@ -1,3 +1,4 @@
+import {calendarPeriodBounds} from './core/calendar-period.js';
 import {gpsSegments,mountGpsTrackMap} from './gps-track-map.js';
 import {infoHint} from './info-hints.js';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -60,6 +61,7 @@ export function createUnassignedTracks(ctx){
  async function load(append=false){const uid=ctx.userId(),token=++version;if(!uid)return;
   const box=host();if(!box)return;box.querySelector('.unassigned-status').textContent='Загружаем поездки…';box.querySelector('[data-ut-more]').disabled=true;
   try{let query=ctx.db().from('unassigned_tracks').select('*').order('started_at',{ascending:false});
+   if(ctx.period){const bounds=calendarPeriodBounds(ctx.period());query=query.gte('last_ts',bounds.from).lt('started_at',bounds.until);}
    if(!manager()||mode==='charged')query=query.eq('state','charged');else query=query.in('state',mode==='pending'?['recording','review']:['linked','charged','merged']);
    const start=append?offset:0,{data,error}=await query.range(start,start+49);if(error)throw error;if(token!==version||uid!==ctx.userId())return;
    if(!append){selected=[];mergePreview=null;}rows=append?[...rows,...(data||[]).filter(r=>!rows.some(x=>x.id===r.id))]:data||[];offset=start+(data||[]).length;more=(data||[]).length===50;paint();
@@ -114,5 +116,5 @@ export function createUnassignedTracks(ctx){
  }
  async function cancel(id){const uid=ctx.userId(),r=rows.find(x=>x.id===id);if(!r)return;const v=await ctx.prompt('Отменить списание',[{key:'reason',label:'Причина отмены',type:'textarea',required:true}],{okText:'Отменить списание'});if(!v||uid!==ctx.userId())return;await rpc('unassigned_track_charge_cancel',{p_track:id,p_expected:r.revision,p_reason:v.reason});if(uid===ctx.userId())await load();}
  async function open(){const uid=ctx.userId();if(owner!==uid){reset();owner=uid;mode=manager()?'pending':'charged';}scaffold();try{await ctx.ensureRefs();if(uid===ctx.userId())return load();}catch(e){if(uid===ctx.userId()&&host())host().querySelector('.unassigned-status').textContent='Не удалось загрузить справочники: '+(e.message||'нет связи');}}
- return {open,reset};
+ return {open,reset,refresh:()=>{selected=[];mergePreview=null;paintSelection();host()?.querySelectorAll('[data-ut-select]').forEach(c=>c.checked=false);return load();}};
 }

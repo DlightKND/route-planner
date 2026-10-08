@@ -841,34 +841,36 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 
 @media(max-width:760px){#vehBody .veh-kv .btn{min-height:var(--touch-h)}}
 
-/* Trip actions share one row, below the entity navigation. */
-.view-planner .trip-list-toolbar{display:flex;flex-wrap:wrap;justify-content:flex-end}
-.view-planner .trip-list-toolbar>.searchbox{flex:1 1 180px}
-.trip-list-actions{display:flex;align-items:center;gap:var(--sp-2)}
-.view-planner .trip-list-actions [data-trip-section].on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+/* Dispatcher headers use one search slot and one action slot. */
+.view-planner .dispatcher-toolbar{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);align-items:start;gap:var(--sp-2);margin-bottom:var(--sp-3)}
+.view-planner .dispatcher-toolbar>.searchbox{width:100%;max-width:none;min-width:0;flex:none;order:0;grid-column:1;grid-row:1}
+.view-planner .dispatcher-toolbar input[type=search]{width:100%;height:var(--control-h)}
+.dispatcher-actions{display:flex;align-items:center;justify-content:flex-end;gap:var(--sp-2);grid-column:2;grid-row:1;min-width:0}
+.view-planner .dispatcher-actions>label{display:flex;align-items:center;gap:var(--sp-3);font-size:var(--fs-caption);color:var(--ink-dim);margin:0}
+.view-planner .dispatcher-actions>label select{width:auto;min-width:110px}
+.view-planner .dispatcher-actions [data-trip-section].on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.view-planner .dispatcher-toolbar:has([data-trip-journal-only]:not([style*="none"])){grid-template-columns:minmax(0,560px) minmax(0,1fr)}
+.dispatcher-period{grid-column:1;grid-row:1;min-width:0}
+.view-planner .dispatcher-period .rangebar{margin:0;gap:var(--sp-2);flex-wrap:nowrap}
+.view-planner .dispatcher-period .rangebar input{width:145px;min-width:130px;flex:1 1 145px}
+.view-planner .dispatcher-period .rquick{flex:none;flex-wrap:nowrap}
+.view-planner .dispatcher-period .rquick button{min-width:44px;padding:var(--sp-3) var(--sp-2);white-space:nowrap}
+.view .order-board-options{margin:0 0 var(--sp-3)}
+@media(max-width:1100px){
+ .view-planner .dispatcher-toolbar,.view-planner .dispatcher-toolbar:has([data-trip-journal-only]){grid-template-columns:minmax(0,1fr)}
+ .view-planner .dispatcher-toolbar>.searchbox{max-width:420px}
+ .view-planner .dispatcher-actions{grid-column:1;grid-row:2;width:100%}
+ .dispatcher-period{max-width:560px}
+}
 @media(max-width:760px){
- .view-planner .trip-list-toolbar>.searchbox{flex-basis:100%}
- .view-planner .trip-list-actions{width:100%;justify-content:flex-end}
- .view-planner .trip-list-actions .btn{padding:var(--sp-2);font-size:var(--fs-caption);min-height:44px}
+ .view-planner .dispatcher-toolbar>.searchbox{max-width:none}
+ .view-planner .dispatcher-actions>label{font-size:0;gap:0}
+ .view-planner .dispatcher-actions>label select{font-size:var(--fs-body)}
+ .view-planner .dispatcher-actions .btn{padding:var(--sp-2);font-size:var(--fs-caption);min-height:44px}
+ .view-planner .dispatcher-period .rangebar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+ .view-planner .dispatcher-period .rangebar input{width:100%;min-width:0}
+ .view-planner .dispatcher-period .rquick{grid-column:1/-1;justify-content:flex-start}
 }
 
-/* Repeated list rows share one rhythm; large content panels retain gap-card. */
+/* Repeated list rows share one rhythm. */
 .view-planner .klist{gap:var(--gap-list)}
-.view .order-board-toolbar>input{flex:1 1 220px;min-width:0}
-.view .order-board-toolbar>label{display:flex;align-items:center;gap:var(--sp-3);font-size:var(--fs-caption);color:var(--ink-dim)}
-.view .order-board-toolbar>label select{width:auto;min-width:110px}
-
-.view-planner .planner-toolbar:has(#jobTrash){grid-template-columns:minmax(0,1fr) auto auto auto}
-.view-planner .planner-toolbar>#jobAdd{grid-column:4}
-@media(max-width:760px){
- .view-planner .planner-toolbar:has(#jobTrash){grid-template-columns:minmax(0,1fr) auto auto}
- .view-planner .planner-toolbar>#jobTrash{grid-column:2;grid-row:2}
- .view-planner .planner-toolbar>#jobAdd{grid-column:3;grid-row:2}
-}
-@media(max-width:760px){
- .view .order-board-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--sp-2);margin-bottom:var(--sp-2)}
- .view .order-board-toolbar>input{grid-column:1/-1;width:100%}
- .view .order-board-toolbar>label{font-size:0;gap:0}
- .view .order-board-toolbar>label select{width:100%;min-width:0;font-size:var(--fs-body)}
- .view .order-board-options{margin:0 0 var(--sp-2)}
-}
