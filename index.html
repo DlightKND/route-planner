@@ -2846,17 +2846,20 @@
     </div><div id="orderList"></div></div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
-        <div class="trip-heading"><div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips" data-trip-section="board">Выезды</button></div><div class="trip-heading-actions"><button type="button" class="btn sm ghost" data-trip-section="tracking">GPS-журнал</button><button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button></div></div>
-        <div id="tripBoardToolbar">
-        <div class="pane-head planner-toolbar">
-          <div class="searchbox"><input type="search" id="tripSearch" aria-label="Поиск выезда" placeholder="поиск по авто/датам…"></div>
-          <details class="planner-filter-menu"><summary class="btn sm ghost" aria-label="Фильтры выездов">Фильтры</summary><div class="planner-filter-panel">
-            <label>Инженер<select id="tripEngFilter"><option value="">все инженеры</option></select></label>
-            <label>Представление<select id="tripLayout" aria-label="Представление выездов"><option value="kanban">Канбан</option><option value="list">Список</option></select></label>
-          </div></details><button class="btn sm amber" id="tripAdd">+ Выезд</button>
+        <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips" data-trip-section="board">Выезды</button></div>
+        <div class="pane-head planner-toolbar trip-list-toolbar">
+          <div class="searchbox" data-trip-board-only><input type="search" id="tripSearch" aria-label="Поиск выезда" placeholder="поиск по авто/датам…"></div>
+          <div class="trip-list-actions">
+            <details class="planner-filter-menu" data-trip-board-only><summary class="btn sm ghost" aria-label="Фильтры выездов">Фильтры</summary><div class="planner-filter-panel">
+              <label>Инженер<select id="tripEngFilter"><option value="">все инженеры</option></select></label>
+              <label>Представление<select id="tripLayout" aria-label="Представление выездов"><option value="kanban">Канбан</option><option value="list">Список</option></select></label>
+            </div></details>
+            <button type="button" class="btn sm ghost" data-trip-section="tracking">GPS-журнал</button>
+            <button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button>
+            <button class="btn sm amber" id="tripAdd" data-trip-board-only>+ Выезд</button>
+          </div>
         </div>
-        <div class="chips" id="tripStatusChips"></div>
-        </div>
+        <div id="tripBoardToolbar"><div class="chips" id="tripStatusChips"></div></div>
       </div>
       <div id="tripBoard"><div id="tripList"></div></div>
       <div id="plUnassigned" style="display:none"><div id="unassignedHost"></div></div>

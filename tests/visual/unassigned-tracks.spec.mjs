@@ -3,7 +3,12 @@ import {installMockBackend} from './mock-backend.mjs';
 const errors=[];
 async function open(page,info,role='admin',unassignedCount=1){
  errors.length=0;page.on('pageerror',e=>errors.push(e.message));
- await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());
+ await page.route('**/*',r=>{
+  const url=new URL(r.request().url());
+  // Deterministic tile fixture exercises image loading without remote services.
+  if(url.hostname.endsWith('tile.openstreetmap.org')||url.hostname==='api.maptiler.com')return r.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e5e2d6"/><path d="M20 0 L60 90 35 256 M190 0 L155 110 230 256" fill="none" stroke="#aad2dd" stroke-width="18"/><path d="M0 80 L256 175 M85 0 L175 256" stroke="#fff" stroke-width="8"/><path d="M0 80 L256 175 M85 0 L175 256" stroke="#d2bd83" stroke-width="2"/><text x="10" y="30" font-family="sans-serif" font-size="12" fill="#555">Подложка QA</text></svg>'});
+  return url.origin==='http://127.0.0.1:4173'?r.continue():r.abort();
+ });
  await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,unassignedJourney:true,unassignedCount});
  await page.goto('/#/planner/tracking');await expect(page.locator('#unassignedHost .unassigned-card').first()).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
@@ -11,7 +16,14 @@ async function open(page,info,role='admin',unassignedCount=1){
 async function clean(page){expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);}
 test('unassigned queue and GPS preview remain usable at each width',async({page},info)=>{
  await open(page,info);await page.getByRole('button',{name:'Посмотреть трек'}).click();
- await expect(page.locator('.unassigned-preview')).toBeVisible();await expect(page.locator('.unassigned-detail')).toContainText('120');
+ await expect(page.locator('.unassigned-map')).toBeVisible();
+ await expect(page.locator('.unassigned-map .leaflet-tile-loaded').first()).toBeVisible();
+ expect(await page.locator('.unassigned-map .leaflet-tile-loaded').first().evaluate(img=>img.naturalWidth)).toBe(256);
+ await expect(page.locator('.unassigned-map .leaflet-control-attribution')).toContainText('OpenStreetMap');
+ const before=await page.locator('.unassigned-map .gps-track-line').getAttribute('d');
+ await page.locator('.unassigned-map .leaflet-control-zoom-in').click();
+ await expect.poll(()=>page.locator('.unassigned-map .gps-track-line').getAttribute('d')).not.toBe(before);
+ await expect(page.locator('.unassigned-detail')).toContainText('120');
  const overflow=await page.locator('#unassignedHost').evaluate(el=>el.scrollWidth-el.clientWidth);expect(overflow).toBeLessThanOrEqual(1);
  await expect(page.locator('[data-ut-more]')).not.toBeVisible();
  for(const tab of await page.locator('#plUnassigned .subtab').all())expect(await tab.evaluate(el=>getComputedStyle(el).whiteSpace)).toBe('nowrap');
@@ -36,7 +48,9 @@ test('charge shows the cost basis and requires a separate amount confirmation',a
 test('engineer sees own charge without manager resolution controls',async({page},info)=>{
  await open(page,info,'engineer');await expect(page.locator('.unassigned-card')).toContainText('Списание инженеру');
  await expect(page.getByRole('button',{name:'Создать цепочку'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Посмотреть трек'})).toHaveCount(0);
- await expect(page.getByRole('button',{name:'Отменить списание'})).toHaveCount(0);await clean(page);
+ await expect(page.getByRole('button',{name:'Отменить списание'})).toHaveCount(0);
+ await page.locator('[data-trip-section=board]').click();await expect(page.locator('#tripAdd')).toBeHidden();await expect(page.locator('#tripTrash')).toBeHidden();
+ await clean(page);
 });
 
 test('GPS journal is nested under trips, has standard card gaps and scrolls to the last record',async({page},info)=>{
@@ -62,10 +76,27 @@ test('manager orders selected tracks and reviews separate GPS pieces before merg
  await expect(page.locator('[data-ut-preview]')).toBeDisabled();await expect(page.locator('.unassigned-merge')).toContainText('по времени');
  await page.locator('[data-ut-move="1"][data-step="-1"]').click();await expect(page.locator('[data-ut-preview]')).toBeEnabled();
  await page.locator('[data-ut-preview]').click();await expect(page.locator('[data-ut-merge]')).toBeVisible();
- await expect(page.locator('.unassigned-merge-preview polyline')).toHaveCount(4);
+ await expect(page.locator('.unassigned-merge-preview .gps-track-line')).toHaveCount(2);
+ await expect(page.locator('.unassigned-merge-preview .gps-track-point')).toHaveCount(2);
+ await expect(page.locator('.unassigned-merge-preview .leaflet-tile-loaded').first()).toBeVisible();
  await page.locator('[data-ut-merge]').click();await expect(page.locator('#promptOverlay')).toContainText('Основание объединения');await page.keyboard.press('Escape');
  await expect(page.locator('[data-ut-merge]')).toBeVisible();
  await page.screenshot({path:'test-results/merge-tracks/'+info.project.name+'.png'});
  await page.locator('[data-ut-clear]').click();await expect(page.locator('.unassigned-merge')).toHaveCount(0);for(const c of await choices.all())await expect(c).not.toBeChecked();
  await clean(page);
+});
+
+
+test('trips journal and trash share the filters and create action row',async({page},info)=>{
+ await open(page,info);await page.locator('[data-trip-section=board]').click();
+ const selectors=['.trip-list-actions .planner-filter-menu>summary','[data-trip-section=tracking]','#tripTrash','#tripAdd'];
+ const boxes=await Promise.all(selectors.map(s=>page.locator(s).boundingBox()));
+ for(const box of boxes){expect(box).not.toBeNull();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width);expect(box.height).toBeGreaterThanOrEqual(36);expect(Math.abs(box.y+box.height/2-boxes[0].y-boxes[0].height/2)).toBeLessThanOrEqual(1);}
+ for(let i=1;i<boxes.length;i++)expect(boxes[i].x).toBeGreaterThanOrEqual(boxes[i-1].x+boxes[i-1].width);
+ const tabs=await page.locator('#plTrips .subtabs').boundingBox();expect(boxes[0].y).toBeGreaterThanOrEqual(tabs.y+tabs.height);
+ await page.locator('.trip-list-actions .planner-filter-menu>summary').click();await expect(page.locator('#tripLayout')).toBeVisible();await page.keyboard.press('Escape');
+ await page.locator('[data-trip-section=tracking]').click();await expect(page.locator('.unassigned-card')).toBeVisible();await expect(page.locator('#tripAdd')).toBeHidden();
+ await page.locator('#tripTrash').click();await expect(page.locator('#trashOverlay')).toBeVisible();await page.locator('#trashClose').click();
+ await page.locator('[data-trip-section=tracking]').click();await expect(page.locator('#tripAdd')).toBeVisible();
+ await page.screenshot({path:'test-results/gps-map-header/'+info.project.name+'-trips.png'});await clean(page);
 });

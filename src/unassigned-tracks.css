@@ -38,3 +38,7 @@
 .unassigned-merge-preview{margin-top:var(--sp-4)}
 @media(max-width:760px){.unassigned-merge>.row{display:grid;grid-template-columns:1fr 1fr}.unassigned-merge>.row button{white-space:normal}}
 @media(max-width:760px){.unassigned-merge>.row [data-ut-preview]{grid-column:1/-1}}
+
+/* Interactive geographic preview; wheel scrolling still belongs to the journal. */
+.unassigned-map{height:240px;max-height:none;isolation:isolate;overflow:hidden}
+.unassigned-map .leaflet-control-attribution{font-size:10px}
