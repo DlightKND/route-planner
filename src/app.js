@@ -2571,6 +2571,7 @@ function gtPop(key,b,trigger){
     +'<div class="gp-days">'+(cuts.length?cuts.map((c,i)=>'<div class="gp-r"><span class="gp-k">после '+fmtH(c.after)+'</span><b class="gp-v">'+shortDate(c.at.d)+' · '+String(Math.floor(c.at.t)).padStart(2,'0')+':'+String(Math.round(c.at.t%1*60)).padStart(2,'0')+'</b>'+(editable?'<button class="gp-b danger" data-cut-del="'+i+'">×</button>':'')+'</div>').join(''):'<div class="hint">Ручных разрезов нет</div>')+'</div>'
     +'</details><div class="gp-f"><button class="btn sm ghost" data-gclose>Закрыть</button>'+(b.manual&&editable?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div></div>';
   document.body.insertAdjacentHTML('beforeend',h);const pop=document.body.lastElementChild;
+  pop.querySelector('.gp-layout').addEventListener('toggle',()=>{if(window.matchMedia('(max-width:760px)').matches)return;pop.style.top=Math.max(8,Math.min(parseFloat(pop.style.top)||8,window.innerHeight-pop.offsetHeight-8))+'px';});
   pop.querySelectorAll('[data-cut-del]').forEach(x=>x.onclick=async e=>{e.stopPropagation();cuts.splice(+x.dataset.cutDel,1);pop.remove();await gtSaveCuts(b,cuts);});
   const close=()=>{gtSel=null;pop.remove();gtPaint(key);};pop.querySelector('[data-gclose]').onclick=e=>{e.stopPropagation();close();};
   const reset=pop.querySelector('[data-greset]');if(reset)reset.onclick=e=>{e.stopPropagation();pop.remove();gtSave(b,null);};pop.onclick=e=>e.stopPropagation();

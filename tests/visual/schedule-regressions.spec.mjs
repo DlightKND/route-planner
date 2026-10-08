@@ -96,7 +96,7 @@ test('split saves the selected work part, moving its continuation keeps hours an
  await expect(page.locator('#toast')).toContainText('после предыдущей');expect(await page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(2);await expect(moved).toHaveAttribute('data-piece-from',String(split+.5));
  await page.screenshot({path:'test-results/schedule-regressions/'+info.project.name+'-split-saved.png'});
  await moved.locator('[data-gtools]').click();await expect(page.locator('.gpop [data-greset]')).toBeVisible();await page.locator('.gpop .gp-layout summary').click();await expect(page.locator('.gpop [data-cut-del]')).toHaveCount(1);
- await page.locator('.gpop [data-greset]').click();await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(3);expect(await page.evaluate(()=>window.__visualQA.scheduleWrites[2].record.day_plan)).toBeNull();await expect(pieces.filter({hasNot:page.locator('.road')})).toHaveCount(1);await clean(page,errors);
+ await expect(page.locator('.gpop [data-greset]')).toBeInViewport({ratio:1});await page.locator('.gpop [data-greset]').click();await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(3);expect(await page.evaluate(()=>window.__visualQA.scheduleWrites[2].record.day_plan)).toBeNull();await expect(pieces.filter({hasNot:page.locator('.road')})).toHaveCount(1);await clean(page,errors);
 });
 
 test('request cards open their page and the engineer filter survives day/week transitions',async({page},info)=>{
