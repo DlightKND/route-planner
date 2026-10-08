@@ -50,3 +50,20 @@ test('list spacing matches the journal and dispatcher trash controls are reachab
  expect(await page.locator('.view-planner .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
  await page.screenshot({path:'test-results/list-consistency/'+info.project.name+'.png'});
 });
+
+
+test('dispatcher search geometry matches across requests, tasks and trips',async({page},info)=>{
+ await open(page,info,'planner/jobs');
+ const dimensions=[];
+ for(const [route,id] of [['jobs','jobSearch'],['orders','orderSearch'],['trips','tripSearch']]){
+  await page.goto('/#/planner/'+route);await expect(page.locator('#'+id)).toBeVisible();
+  const toolbar=page.locator('#'+id).locator('xpath=ancestor::*[contains(@class,"dispatcher-toolbar")]');
+  const box=await page.locator('#'+id).boundingBox();dimensions.push(box);
+  const parent=await toolbar.boundingBox();expect(Math.abs(box.x-parent.x)).toBeLessThanOrEqual(1);
+  const controls=await toolbar.locator('.dispatcher-actions').boundingBox();expect(controls.x).toBeGreaterThanOrEqual(box.x);
+  expect(await toolbar.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({path:'test-results/search-alignment/'+info.project.name+'-'+route+'.png'});
+ }
+ for(const box of dimensions.slice(1)){expect(Math.abs(box.x-dimensions[0].x)).toBeLessThanOrEqual(1);expect(Math.abs(box.y-dimensions[0].y)).toBeLessThanOrEqual(1);expect(Math.abs(box.width-dimensions[0].width)).toBeLessThanOrEqual(1);expect(Math.abs(box.height-dimensions[0].height)).toBeLessThanOrEqual(1);}
+ if(page.viewportSize().width>760)expect(dimensions[0].width).toBe(420);
+});

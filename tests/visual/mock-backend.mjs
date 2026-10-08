@@ -372,6 +372,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
           rows = rows.filter((r) => r[k] >= v);
           return b;
         },
+        lt: (k,v) => {rows=rows.filter(r=>r[k]<v);return b;},
         lte: (k, v) => {
           rows = rows.filter((r) => r[k] <= v);
           return b;
@@ -462,7 +463,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     functions: { invoke: async (name) => reject("function:" + name) },
   };
   window.supabase = { createClient: () => db };
-  const savedRanges=preserveRanges?Object.fromEntries(['gt','load','rev'].map(k=>[k,localStorage.getItem('dl_range_'+k)])):{};
+  const savedRanges=preserveRanges?Object.fromEntries(['gt','load','rev','journal'].map(k=>[k,localStorage.getItem('dl_range_'+k)])):{};
   localStorage.clear();
   localStorage.setItem(
     "dl_range_gt",
@@ -476,6 +477,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     "dl_range_rev",
     JSON.stringify({ from: "2026-09-21", to: "2026-10-05" }),
   );
+  localStorage.setItem('dl_range_journal',JSON.stringify({from:'2026-10-01',to:'2026-10-31'}));
   for(const [k,v] of Object.entries(savedRanges))if(v)localStorage.setItem('dl_range_'+k,v);
 }
 export const fixtureIDs = {

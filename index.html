@@ -2827,12 +2827,12 @@
     <div id="plJobs">
       <div class="stickyhead">
         <div class="subtabs"><div class="subtab" data-sub="mine" style="display:none">График</div><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
-        <div class="pane-head planner-toolbar">
+        <div class="pane-head planner-toolbar dispatcher-toolbar">
           <div class="searchbox"><input type="search" id="jobSearch" aria-label="Поиск заявки" placeholder="поиск по клиенту…"></div>
-          <details class="planner-filter-menu"><summary class="btn sm ghost" aria-label="Фильтры заявок">Фильтры</summary><div class="planner-filter-panel">
+          <div class="dispatcher-actions"><details class="planner-filter-menu"><summary class="btn sm ghost" aria-label="Фильтры заявок">Фильтры</summary><div class="planner-filter-panel">
             <label>Инженер<select id="jobEngFilter"><option value="">все инженеры</option></select></label>
             <label>Представление<select id="jobLayout" aria-label="Представление заявок"><option value="kanban">Канбан</option><option value="list">Список</option></select></label>
-          </div></details><button class="btn sm ghost" id="jobTrash" title="Удалённые заявки">Корзина</button><button class="btn sm amber" id="jobAdd">+ Заявка</button>
+          </div></details><button class="btn sm ghost" id="jobTrash" title="Удалённые заявки">Корзина</button><button class="btn sm amber" id="jobAdd">+ Заявка</button></div>
         </div>
         <div class="chips" id="jobStatusChips"></div>
       </div>
@@ -2840,16 +2840,17 @@
     </div>
     <div id="plOrders" style="display:none"><div class="stickyhead">
       <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
-      <div class="pane-head order-board-toolbar"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"><label>Представление заданий<select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select></label><button class="btn sm ghost" id="orderTrash" title="Удалённые заявки и выезды">Корзина</button><button class="btn sm amber" id="orderAdd">+ Задание</button></div>
+      <div class="pane-head order-board-toolbar dispatcher-toolbar"><div class="searchbox"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"></div><div class="dispatcher-actions"><label>Представление заданий<select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select></label><button class="btn sm ghost" id="orderTrash" title="Удалённые заявки и выезды">Корзина</button><button class="btn sm amber" id="orderAdd">+ Задание</button></div></div>
       <div id="orderScope" hidden><span id="orderScopeText"></span><button class="btn sm ghost" id="orderScopeClear">Все задания</button></div>
       <details class="order-board-options"><summary id="orderBoardOptionsSummary">Фильтры и представление</summary><label>Инженер<select id="orderEngineer" aria-label="Фильтр по инженеру"></select></label><label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p></details>
     </div><div id="orderList"></div></div>
     <div id="plTrips" style="display:none">
       <div class="stickyhead">
         <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips" data-trip-section="board">Выезды</button></div>
-        <div class="pane-head planner-toolbar trip-list-toolbar">
+        <div class="pane-head planner-toolbar trip-list-toolbar dispatcher-toolbar">
           <div class="searchbox" data-trip-board-only><input type="search" id="tripSearch" aria-label="Поиск выезда" placeholder="поиск по авто/датам…"></div>
-          <div class="trip-list-actions">
+          <div id="tripJournalPeriod" class="dispatcher-period" data-trip-journal-only style="display:none"></div>
+          <div class="trip-list-actions dispatcher-actions">
             <details class="planner-filter-menu" data-trip-board-only><summary class="btn sm ghost" aria-label="Фильтры выездов">Фильтры</summary><div class="planner-filter-panel">
               <label>Инженер<select id="tripEngFilter"><option value="">все инженеры</option></select></label>
               <label>Представление<select id="tripLayout" aria-label="Представление выездов"><option value="kanban">Канбан</option><option value="list">Список</option></select></label>
