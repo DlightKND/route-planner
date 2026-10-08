@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planSchedule, driveOfLegs, dayIso, dayMs, isWorkday,
-  normPos, addHours, piecesOf, compactRoadSegments, dayScaleBounds, scheduleJobIncluded, tripRouteSegments, dayWindow, weekRowSpan, q4 } from '../src/core/schedule.js';
+  normPos, addHours, schedulePlacementIssue, piecesOf, compactRoadSegments, dayScaleBounds, scheduleJobIncluded, tripRouteSegments, dayWindow, weekRowSpan, q4 } from '../src/core/schedule.js';
 
 // Календарь для тестов: 2026-09-07 понедельник, 09-08 вт, 09-09 ср,
 // 09-10 чт, 09-11 пт, 09-12 сб, 09-13 вс.
@@ -370,4 +370,50 @@ describe('геометрия недели',()=>{
     const p=piecesOf({iso:'2026-09-07',t:7},[{k:'d',h:13}],W,'ivan',[]);
     expect(p.map(x=>[x.iso,x.h])).toEqual([['2026-09-07',11],['2026-09-08',2]]);
   });
+});
+
+
+describe('конфликты автоплана и ручного продолжения',()=>{
+ const day='2026-09-09',fixed=(id,h=2)=>({id,kind:'trip',engineer:'ivan',from:day,to:day,workH:h});
+ it('ставит два выезда с одинаковыми датами встык внутри смены',()=>{
+  const r=planSchedule([fixed('a'),fixed('b')],S,TODAY);
+  expect(r.blocks.map(b=>[b.start.t,b.pieces.at(-1).to])).toEqual([[7,9],[9,11]]);expect(r.warnings).toEqual([]);
+ });
+ it('резервирует ручной блок до автоматического независимо от порядка ввода',()=>{
+  const auto=fixed('auto'),manual={...fixed('manual'),plan:{start:{d:day,t:7}}};
+  for(const rows of [[auto,manual],[manual,auto]]){const r=planSchedule(rows,S,TODAY);expect(r.blocks.find(b=>b.id==='auto').start.t).toBe(9);expect(r.blocks.find(b=>b.id==='manual').start.t).toBe(7);}
+ });
+ it('учитывает участника общей команды с другим ведущим инженером',()=>{
+  const r=planSchedule([{...fixed('a'),engineerIds:['ivan','anna']},{...fixed('b'),engineer:'anna'}],S,TODAY);
+  expect(r.blocks.find(b=>b.id==='b').start.t).toBe(9);expect(r.warnings).toEqual([]);
+ });
+ it('оставляет назначенные даты и сообщает пересечение при нехватке времени',()=>{
+  const r=planSchedule([fixed('a',6),fixed('b',6)],S,TODAY);
+  expect(r.blocks.find(b=>b.id==='b')).toMatchObject({from:day,to:day,ok:false,why:'overlap'});expect(r.warnings.some(w=>w.kind==='overlap')).toBe(true);
+ });
+ it('не смещает вручную закреплённые пересечения и показывает конфликт',()=>{
+  const r=planSchedule(['a','b'].map(id=>({...fixed(id),plan:{start:{d:day,t:8}}})),S,TODAY);
+  expect(r.blocks.map(b=>b.start.t)).toEqual([8,8]);expect(r.warnings.some(w=>w.kind==='overlap')).toBe(true);
+ });
+ it('отбрасывает устаревшее продолжение поверх уже размещённой части',()=>{
+  const r=planSchedule([{...fixed('a',4),plan:{start:{d:day,t:7},cuts:[{after:2,at:{d:day,t:8}}]}}],S,TODAY);
+  expect(r.blocks[0].cuts).toEqual([]);expect(r.blocks[0].pieces).toHaveLength(1);expect(r.warnings.some(w=>w.kind==='stale')).toBe(true);
+ });
+ it('разделяет работу внутри дня, сохраняет её объём и позволяет паузу',()=>{
+  const plan={start:{d:day,t:7},cuts:[{after:2,at:{d:day,t:10}}]};
+  const b=planSchedule([{...fixed('a',4),plan}],S,TODAY).blocks[0];
+  expect(b.pieces.map(p=>[p.from,p.to,p.at])).toEqual([[7,9,0],[10,12,2]]);expect(b.workH).toBe(4);expect(b.jobIds).toEqual([]);
+  expect(schedulePlacementIssue({block:fixed('a',4),start:{iso:day,t:7},cuts:plan.cuts,settings:S})).toBe('');
+ });
+ it('проверяет сохранение разрезов против первой части и другого блока',()=>{
+  const args={block:fixed('a',4),start:{iso:day,t:7},settings:S};
+  expect(schedulePlacementIssue({...args,cuts:[{after:2,at:{d:day,t:8}}]})).toContain('после предыдущей');
+  const other={...fixed('b'),pieces:[{iso:day,from:10,to:12,h:2,k:'w'}]};
+  expect(schedulePlacementIssue({...args,cuts:[{after:2,at:{d:day,t:10}}],others:[other]})).toContain('занят другим блоком');
+  expect(schedulePlacementIssue({...args,cuts:[{after:2,at:{d:day,t:12}}],others:[other]})).toBe('');
+ });
+ it('свободная автоматическая работа уступает вручную закреплённому началу',()=>{
+  const r=planSchedule([{id:'auto',engineer:'ivan',sla:day,workH:2},{id:'manual',engineer:'ivan',sla:day,workH:2,plan:{start:{d:day,t:7}}}],S,TODAY);
+  expect(r.blocks.find(b=>b.id==='auto').start.t).toBe(9);expect(r.warnings).toEqual([]);
+ });
 });

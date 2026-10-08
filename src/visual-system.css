@@ -842,7 +842,7 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 @media(max-width:760px){#vehBody .veh-kv .btn{min-height:var(--touch-h)}}
 
 /* Dispatcher headers use one search slot and one action slot. */
-.view-planner .dispatcher-toolbar{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);align-items:start;gap:var(--sp-2);margin-bottom:var(--sp-3)}
+.view-planner .dispatcher-toolbar{position:relative;display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);align-items:start;gap:var(--sp-2);margin-bottom:var(--sp-3)}
 .view-planner .dispatcher-toolbar>.searchbox{width:100%;max-width:none;min-width:0;flex:none;order:0;grid-column:1;grid-row:1}
 .view-planner .dispatcher-toolbar input[type=search]{width:100%;height:var(--control-h)}
 .dispatcher-actions{display:flex;align-items:center;justify-content:flex-end;gap:var(--sp-2);grid-column:2;grid-row:1;min-width:0}
@@ -855,7 +855,8 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 .view-planner .dispatcher-period .rangebar input{width:145px;min-width:130px;flex:1 1 145px}
 .view-planner .dispatcher-period .rquick{flex:none;flex-wrap:nowrap}
 .view-planner .dispatcher-period .rquick button{min-width:44px;padding:var(--sp-3) var(--sp-2);white-space:nowrap}
-.view .order-board-options{margin:0 0 var(--sp-3)}
+.view .dispatcher-actions .order-board-options{margin:0}
+.view .dispatcher-actions .order-board-options>summary{color:var(--ink);font-size:var(--fs-caption);margin:0}
 @media(max-width:1100px){
  .view-planner .dispatcher-toolbar,.view-planner .dispatcher-toolbar:has([data-trip-journal-only]:not([style*="none"])){grid-template-columns:minmax(0,1fr)}
  .view-planner .dispatcher-toolbar>.searchbox{max-width:420px}
@@ -863,7 +864,18 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
  .dispatcher-period{max-width:560px}
 }
 @media(max-width:760px){
+ .view-planner :is(#jobList,#orderList,#tripList)>.kcol{flex:none}
  .view-planner .dispatcher-toolbar>.searchbox{max-width:none}
+ .view-planner .dispatcher-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;justify-content:stretch}
+ .view-planner .dispatcher-actions>.planner-filter-menu{grid-column:1;grid-row:1;min-width:0}
+ .view-planner .dispatcher-actions>:is(#jobTrash,#orderTrash,#tripTrash){grid-column:2;grid-row:1}
+ .view-planner .dispatcher-actions>:is(#jobAdd,#orderAdd,#tripAdd){grid-column:3;grid-row:1}
+ .view-planner .dispatcher-actions>[data-trip-section]{grid-column:1/-1;grid-row:2}
+ .view-planner .dispatcher-actions>#tripJournalRefresh{grid-column:3;grid-row:1}
+ .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) .dispatcher-actions>[data-trip-section]{grid-column:1;grid-row:1}
+ .view-planner .dispatcher-actions .btn{width:100%;min-width:0;white-space:normal;overflow-wrap:normal}
+ .view-planner .dispatcher-actions .planner-filter-panel{left:0;right:auto;width:100%;max-width:none;max-height:calc(100dvh - 250px);overflow:auto}
+ .view-planner .dispatcher-actions .planner-filter-panel label{font-size:var(--fs-body);align-items:start}
  .view-planner .dispatcher-actions>label{font-size:0;gap:0}
  .view-planner .dispatcher-actions>label select{font-size:var(--fs-body)}
  .view-planner .dispatcher-actions .btn{padding:var(--sp-2);font-size:var(--fs-caption);min-height:44px}
