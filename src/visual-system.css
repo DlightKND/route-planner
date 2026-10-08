@@ -866,19 +866,19 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 @media(max-width:760px){
  .view-planner :is(#jobList,#orderList,#tripList)>.kcol{flex:none}
  .view-planner .dispatcher-toolbar>.searchbox{max-width:none}
- .view-planner .dispatcher-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;justify-content:stretch}
- .view-planner .dispatcher-actions>.planner-filter-menu{grid-column:1;grid-row:1;min-width:0}
- .view-planner .dispatcher-actions>:is(#jobTrash,#orderTrash,#tripTrash){grid-column:2;grid-row:1}
- .view-planner .dispatcher-actions>:is(#jobAdd,#orderAdd,#tripAdd){grid-column:3;grid-row:1}
- .view-planner .dispatcher-actions>[data-trip-section]{grid-column:1/-1;grid-row:2}
- .view-planner .dispatcher-actions>#tripJournalRefresh{grid-column:3;grid-row:1}
- .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) .dispatcher-actions>[data-trip-section]{grid-column:1;grid-row:1}
- .view-planner .dispatcher-actions .btn{width:100%;min-width:0;white-space:normal;overflow-wrap:normal}
- .view-planner .dispatcher-actions .planner-filter-panel{left:0;right:auto;width:100%;max-width:none;max-height:calc(100dvh - 250px);overflow:auto}
+ .view-planner .dispatcher-toolbar,.view-planner .dispatcher-toolbar:has([data-trip-journal-only]:not([style*="none"])){grid-template-columns:minmax(0,1fr) 44px;align-items:start}
+ .view-planner .dispatcher-actions{display:contents}
+ .view-planner .dispatcher-more{display:block;grid-column:2;grid-row:1}
+ .view-planner .dispatcher-more>summary{display:flex;width:44px;height:44px;padding:0;font-size:24px;line-height:1}
+ .view-planner .dispatcher-more:not([open])>.dispatcher-menu{display:none}
+ .view-planner .dispatcher-menu{position:absolute;right:0;top:52px;width:min(100%,320px);max-height:calc(100dvh - 200px);overflow:auto;padding:var(--sp-3);display:flex;flex-direction:column;align-items:stretch;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);box-shadow:var(--shadow-md);z-index:30}
+ .view-planner .dispatcher-actions>:is(#jobAdd,#orderAdd,#tripAdd,#tripJournalRefresh){grid-column:1/-1;grid-row:2;justify-self:end;min-height:44px}
+ .view-planner .dispatcher-menu .btn{width:100%;min-height:44px}
+ .view-planner .dispatcher-menu .planner-filter-panel{position:static;width:100%;max-width:none;margin-top:var(--sp-2);box-shadow:none;border:0;padding:var(--sp-2) 0}
  .view-planner .dispatcher-actions .planner-filter-panel label{font-size:var(--fs-body);align-items:start}
- .view-planner .dispatcher-actions>label{font-size:0;gap:0}
- .view-planner .dispatcher-actions>label select{font-size:var(--fs-body)}
- .view-planner .dispatcher-actions .btn{padding:var(--sp-2);font-size:var(--fs-caption);min-height:44px}
+ .view-planner .dispatcher-period{max-width:none}
+ .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])){grid-template-columns:minmax(0,1fr) 44px}
+ .view-planner .dispatcher-period .rangebar{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
  .view-planner .dispatcher-period .rangebar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
  .view-planner .dispatcher-period .rangebar input{width:100%;min-width:0}
  .view-planner .dispatcher-period .rquick{grid-column:1/-1;justify-content:flex-start}
@@ -886,3 +886,19 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 
 /* Repeated list rows share one rhythm. */
 .view-planner .klist{gap:var(--gap-list)}
+
+/* The same compact action menu is used on every dispatcher surface. */
+.dispatcher-more{display:contents}
+.dispatcher-more>summary{display:none;list-style:none}
+.dispatcher-more>summary::-webkit-details-marker{display:none}
+.dispatcher-menu{display:flex;align-items:center;gap:var(--sp-2)}
+:is(.view-dash,#plMine) .gtwrap{padding-top:var(--sp-3)}
+:is(.view-dash,#plMine) .vg-tools{min-height:40px;align-items:center;margin-bottom:var(--sp-2)}
+:is(.view-dash,#plMine) .vg-tools .gtop{margin:0;min-width:0}
+@media(max-width:760px){
+ .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) .dispatcher-period{grid-column:1/-1}
+ .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) .dispatcher-more{grid-row:2}
+ .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) #tripJournalRefresh{grid-column:1;justify-self:start}
+ .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) .dispatcher-menu{top:100%;}
+ :is(.view-dash,#plMine) .vg-tools{flex-direction:row;flex-wrap:wrap;gap:var(--sp-2)}
+}

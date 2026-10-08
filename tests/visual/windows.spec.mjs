@@ -72,7 +72,7 @@ test('trip navigation waits for discard and keeps the draft after cancellation',
 });
 
 test('timeline primary action stays readable and help does not compete with trip actions',async({page})=>{
- const block=page.locator('.vg-block').first();await block.scrollIntoViewIfNeeded();await block.click({position:{x:12,y:10}});
+ const week=page.locator('.vg-block.trip').first().locator('xpath=ancestor::*[@data-gtbox]');await week.locator('[data-gday]').first().click();const block=week.locator('.vg-piece').filter({has:page.locator('.road')}).first();await block.scrollIntoViewIfNeeded();await block.click({position:{x:12,y:10}});
  const panel=page.locator('.gpop');await expect(panel).toBeVisible();const primary=panel.locator('[data-pop-action]');
  expect((await primary.boundingBox()).height).toBeLessThanOrEqual(70);
  expect(await panel.locator('.gp-layout').evaluate(el=>el.open)).toBe(false);

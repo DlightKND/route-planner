@@ -35,8 +35,10 @@ export function createUnassignedTracks(ctx){
  const vehicleName=id=>{const v=vehicle(id);return [v?.name||v?.model||'Машина',v?.plate].filter(Boolean).join(' · ');};
  const person=id=>{const p=ctx.people().find(v=>v.id===id);return p?.full_name||p?.name||p?.email||'Инженер';};
  function scaffold(){clearMaps();const box=host();if(!box)return;
-  box.innerHTML='<div class="unassigned-toolbar"><h2>Непривязанные поездки '+infoHint('GPS без активного выезда сохраняется на сервере. Привязка и списание выполняются после проверки. Списание: подтверждённый пробег × себестоимость километра машины или отдела. Это запись в журнале; выплатами приложение не управляет.','О непривязанных поездках')+'</h2>'+(!document.getElementById('tripJournalRefresh')?'<button class="btn sm ghost" data-ut-refresh>Обновить</button>':'')+'</div>'
+  box.innerHTML='<div class="unassigned-navigation">'
    +(manager()?'<div class="seg unassigned-filter" aria-label="Фильтр поездок"><button data-ut-mode="pending" class="on">На разборе</button><button data-ut-mode="archive">Архив</button><button data-ut-mode="charged">Списания</button></div>':'')
+   +infoHint('GPS без активного выезда сохраняется на сервере. Привязка и списание выполняются после проверки. Списание: подтверждённый пробег × себестоимость километра машины или отдела. Это запись в журнале; выплатами приложение не управляет.','О непривязанных поездках')
+   +(!document.getElementById('tripJournalRefresh')?'<button class="btn sm ghost" data-ut-refresh>Обновить</button>':'')+'</div>'
    +'<p class="unassigned-status" role="status"></p><div data-ut-selection></div><div class="unassigned-list"></div><button class="btn ghost" data-ut-more hidden>Загрузить ещё</button>';
   box.querySelectorAll('[data-ut-mode]').forEach(b=>{b.classList.toggle('on',b.dataset.utMode===mode);b.setAttribute('aria-pressed',String(b.dataset.utMode===mode));});
   (document.getElementById('tripJournalRefresh')||box.querySelector('[data-ut-refresh]')).onclick=()=>load();box.querySelector('[data-ut-more]').onclick=()=>load(true);
