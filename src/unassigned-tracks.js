@@ -1,3 +1,4 @@
+import {gpsSegments,mountGpsTrackMap} from './gps-track-map.js';
 import {infoHint} from './info-hints.js';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=value=>Number(value||0).toLocaleString('ru',{maximumFractionDigits:2});
@@ -17,22 +18,22 @@ export function trackPreview(points){
  const valid=points.filter(p=>Number.isFinite(+p.lat)&&Number.isFinite(+p.lng));if(!valid.length)return '';
  const {minX,maxX,minY,maxY}=valid.reduce((b,p)=>({minX:Math.min(b.minX,+p.lng),maxX:Math.max(b.maxX,+p.lng),minY:Math.min(b.minY,+p.lat),maxY:Math.max(b.maxY,+p.lat)}),{minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity});
  const cos=Math.max(.01,Math.cos((minY+maxY)/2*Math.PI/180)),span=Math.max((maxX-minX)*cos,(maxY-minY)*320/140,.0001);
- let paths=[],line=[],previous=null;
- for(const p of valid){if(previous&&(p.part!==previous.part||new Date(p.ts)-new Date(previous.ts)>300000)){if(line.length)paths.push(line);line=[];}
-  line.push((20+(+p.lng-minX)*cos/span*320).toFixed(2)+','+(160-(+p.lat-minY)/span*320).toFixed(2));previous=p;}
- if(line.length)paths.push(line);
+ const paths=gpsSegments(points).map(segment=>segment.map(p=>(20+(+p.lng-minX)*cos/span*320).toFixed(2)+','+(160-(+p.lat-minY)/span*320).toFixed(2)));
  return '<svg class="unassigned-preview" viewBox="0 0 360 180" role="img" aria-label="GPS-линия поездки; разрывы связи показаны разрывами линии">'+paths.map(p=>'<polyline points="'+p.join(' ')+'"/>').join('')+'</svg>';
 }
 export function createUnassignedTracks(ctx){
  let rows=[],mode='pending',offset=0,more=false,owner=null,version=0,selected=[],mergePreview=null;
+ const maps=new Set();
+ function clearMaps(scope){for(const entry of maps)if(!scope||scope.contains(entry.container)){entry.destroy();maps.delete(entry);}}
+ function drawMap(box,points){const entry=mountGpsTrackMap(box.querySelector('svg.unassigned-preview'),points,{leaflet:ctx.leaflet?.(),makeBase:ctx.makeTrackBase,color:getComputedStyle(box).getPropertyValue('--accent').trim()||'#25845a'});if(entry)maps.add(entry);}
  const manager=()=>['admin','logist'].includes(ctx.role());
  const host=()=>document.getElementById('unassignedHost');
  const mergeEligible=r=>r&&(r.state==='review'||r.state==='recording'&&new Date(r.last_ts)<=Date.now()-300000);
- function reset(){rows=[];selected=[];mergePreview=null;owner=null;version++;if(host())host().replaceChildren();}
+ function reset(){clearMaps();rows=[];selected=[];mergePreview=null;owner=null;version++;if(host())host().replaceChildren();}
  const vehicle=id=>ctx.vehicles().find(v=>v.id===id);
  const vehicleName=id=>{const v=vehicle(id);return [v?.name||v?.model||'Машина',v?.plate].filter(Boolean).join(' · ');};
  const person=id=>{const p=ctx.people().find(v=>v.id===id);return p?.full_name||p?.name||p?.email||'Инженер';};
- function scaffold(){const box=host();if(!box)return;
+ function scaffold(){clearMaps();const box=host();if(!box)return;
   box.innerHTML='<div class="unassigned-toolbar"><h2>Непривязанные поездки '+infoHint('GPS без активного выезда сохраняется на сервере. Привязка и списание выполняются после проверки. Списание: подтверждённый пробег × себестоимость километра машины или отдела. Это запись в журнале; выплатами приложение не управляет.','О непривязанных поездках')+'</h2><button class="btn sm ghost" data-ut-refresh>Обновить</button></div>'
    +(manager()?'<div class="seg unassigned-filter" aria-label="Фильтр поездок"><button data-ut-mode="pending" class="on">На разборе</button><button data-ut-mode="archive">Архив</button><button data-ut-mode="charged">Списания</button></div>':'')
    +'<p class="unassigned-status" role="status"></p><div data-ut-selection></div><div class="unassigned-list"></div><button class="btn ghost" data-ut-more hidden>Загрузить ещё</button>';
@@ -40,7 +41,7 @@ export function createUnassignedTracks(ctx){
   box.querySelector('[data-ut-refresh]').onclick=()=>load();box.querySelector('[data-ut-more]').onclick=()=>load(true);
   box.querySelectorAll('[data-ut-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.utMode;selected=[];mergePreview=null;box.querySelectorAll('[data-ut-mode]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b));});load();});
  }
- function paint(){const box=host();if(!box)return;box.querySelector('.unassigned-list').innerHTML=rows.map(r=>'<article class="card unassigned-card" data-ut-card="'+r.id+'"><div class="unassigned-cardhead"><h3>'+escape(vehicleName(r.vehicle_id))+'</h3><span class="tag">'+escape(status[r.state])+'</span>'+(manager()&&mode==='pending'&&mergeEligible(r)?'<label class="unassigned-select"><input type="checkbox" data-ut-select="'+r.id+'" '+(selected.includes(r.id)?'checked':'')+'> Объединить</label>':'')+'</div><div class="unassigned-period">'+date(r.started_at)+' → '+date(r.ended_at||r.last_ts)+'</div>'
+ function paint(){const box=host();if(!box)return;clearMaps(box.querySelector('.unassigned-list'));box.querySelector('.unassigned-list').innerHTML=rows.map(r=>'<article class="card unassigned-card" data-ut-card="'+r.id+'"><div class="unassigned-cardhead"><h3>'+escape(vehicleName(r.vehicle_id))+'</h3><span class="tag">'+escape(status[r.state])+'</span>'+(manager()&&mode==='pending'&&mergeEligible(r)?'<label class="unassigned-select"><input type="checkbox" data-ut-select="'+r.id+'" '+(selected.includes(r.id)?'checked':'')+'> Объединить</label>':'')+'</div><div class="unassigned-period">'+date(r.started_at)+' → '+date(r.ended_at||r.last_ts)+'</div>'
   +(r.review_note?'<div class="unassigned-review">'+escape(r.review_note)+'</div>':'')
   +(r.state==='charged'?'<div class="unassigned-charge"><strong>'+number(r.resolution?.cost)+' '+escape(r.resolution?.currency||'грн')+'</strong><span>'+escape(person(r.engineer_id))+' · '+number(r.resolution?.km)+' км × '+number(r.resolution?.rate)+'</span></div><p>'+escape(r.resolution?.reason)+'</p>':'')
   +'<div class="unassigned-actions">'+(manager()?'<button class="btn sm ghost" data-ut-details="'+r.id+'">Посмотреть трек</button>':'')
@@ -68,7 +69,7 @@ export function createUnassignedTracks(ctx){
  async function rpc(name,args){const {data,error}=await ctx.db().rpc(name,args);if(error)throw error;return data;}
  async function readPoints(id){const points=[];for(let offset=0;;offset+=1000){const chunk=await rpc('unassigned_track_points',{p_track:id,p_offset:offset,p_limit:1000});points.push(...chunk);if(chunk.length<1000)return points;}}
  function selectionError(){const chosen=selected.map(id=>rows.find(r=>r.id===id));if(chosen.length<2)return 'Выберите минимум два завершённых трека.';if(chosen.length>20)return 'За один раз можно объединить до 20 треков.';if(chosen.some(r=>!mergeEligible(r)))return 'Обновите выбор завершённых треков.';if(chosen.some(r=>r.vehicle_id!==chosen[0].vehicle_id))return 'Выберите треки одной машины.';if(chosen.some((r,i)=>i&&new Date(r.started_at)<=new Date(chosen[i-1].ended_at||chosen[i-1].last_ts)))return 'Расположите треки по времени без пересечений.';return '';}
- function paintSelection(){const panel=host()?.querySelector('[data-ut-selection]');if(!panel)return;if(!selected.length){panel.replaceChildren();return;}
+ function paintSelection(){const panel=host()?.querySelector('[data-ut-selection]');if(!panel)return;clearMaps(panel);if(!selected.length){panel.replaceChildren();return;}
   const error=selectionError();panel.innerHTML='<section class="card unassigned-merge"><h3>Объединение треков · '+selected.length+'</h3><p class="hint">Исходные треки сохранятся в архиве. Участки между ними не достраиваются.</p><ol class="unassigned-merge-order">'+selected.map((id,i)=>{const r=rows.find(r=>r.id===id);return '<li><span>'+escape(vehicleName(r?.vehicle_id))+'<small>'+date(r?.started_at)+' → '+date(r?.ended_at||r?.last_ts)+'</small></span><div><button type="button" class="btn sm ghost" data-ut-move="'+i+'" data-step="-1" aria-label="Трек '+(i+1)+': выше" '+(!i?'disabled':'')+'>↑</button><button type="button" class="btn sm ghost" data-ut-move="'+i+'" data-step="1" aria-label="Трек '+(i+1)+': ниже" '+(i===selected.length-1?'disabled':'')+'>↓</button></div></li>';}).join('')+'</ol>'
    +(error?'<p class="hint" role="status">'+escape(error)+'</p>':'')+'<div class="row"><button type="button" class="btn ghost" data-ut-clear>Снять выбор</button><button type="button" class="btn ghost" data-ut-sort>По времени</button><button type="button" class="btn" data-ut-preview '+(error?'disabled':'')+'>Посмотреть результат</button></div>'
    +(mergePreview?'<div class="unassigned-merge-preview">'+trackPreview(mergePreview.points)+'<p>'+number(mergePreview.km)+' км (сумма участков) · '+mergePreview.points.length+' точек · '+selected.length+' участков</p><button type="button" class="btn amber" data-ut-merge>Объединить треки</button></div>':'')+'</section>';
@@ -76,6 +77,7 @@ export function createUnassignedTracks(ctx){
   panel.querySelector('[data-ut-clear]').onclick=()=>{selected=[];mergePreview=null;paint();};
   panel.querySelectorAll('[data-ut-move]').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.utMove),next=i+Number(b.dataset.step);[selected[i],selected[next]]=[selected[next],selected[i]];mergePreview=null;paintSelection();host().querySelector('[data-ut-move="'+next+'"][data-step="'+b.dataset.step+'"]')?.focus();});
   panel.querySelector('[data-ut-preview]').onclick=e=>perform(e.currentTarget,prepareMerge);
+  if(mergePreview)drawMap(panel,mergePreview.points);
   const merge=panel.querySelector('[data-ut-merge]');if(merge)merge.onclick=()=>perform(merge,commitMerge);
  }
  async function prepareMerge(){const error=selectionError();if(error)throw Error(error);const keys=[...selected],signature=keys.join(),uid=ctx.userId(),preview={points:[],km:0,expected:{}};
@@ -92,8 +94,8 @@ export function createUnassignedTracks(ctx){
   if(uid!==ctx.userId()||!box.isConnected)return;
   const {data:events,error}=await ctx.db().from('unassigned_track_events').select('action,reason,created_at').eq('track_id',id).order('id',{ascending:false});if(error)throw error;
   if(uid!==ctx.userId()||!box.isConnected)return;
-  box.innerHTML=trackPreview(points)+'<div class="unassigned-metrics"><span><b>'+number(quote.km)+'</b> км GPS</span><span><b>'+quote.points+'</b> точек</span><span>Разрывы: '+quote.gaps+' · выбросы: '+quote.rejected+'</span></div><div class="hint">Себестоимость пробега: '+(quote.rate==null?'не настроена':number(quote.km)+' × '+number(quote.rate)+' = '+number(quote.cost)+' '+escape(ctx.currency()))+'</div>'
-   +(events||[]).map(e=>'<div class="unassigned-event">'+date(e.created_at)+' · '+escape(e.reason)+'</div>').join('');box.hidden=false;
+  clearMaps(box);box.innerHTML=trackPreview(points)+'<div class="unassigned-metrics"><span><b>'+number(quote.km)+'</b> км GPS</span><span><b>'+quote.points+'</b> точек</span><span>Разрывы: '+quote.gaps+' · выбросы: '+quote.rejected+'</span></div><div class="hint">Себестоимость пробега: '+(quote.rate==null?'не настроена':number(quote.km)+' × '+number(quote.rate)+' = '+number(quote.cost)+' '+escape(ctx.currency()))+'</div>'
+   +(events||[]).map(e=>'<div class="unassigned-event">'+date(e.created_at)+' · '+escape(e.reason)+'</div>').join('');box.hidden=false;drawMap(box,points);
  }
  async function resolve(id,action){const uid=ctx.userId(),row=rows.find(x=>x.id===id);if(!row)return;const quote=await rpc('unassigned_track_quote',{p_track:id});if(uid!==ctx.userId())return;
   if(row.state==='recording'&&new Date(row.last_ts)>Date.now()-300000)throw Error('Поездка ещё записывается. Разобрать её можно после завершения.');
