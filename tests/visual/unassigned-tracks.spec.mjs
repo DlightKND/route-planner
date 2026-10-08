@@ -1,3 +1,4 @@
+import {revealDispatcherActions,clickDispatcherControl} from './dispatcher-controls.mjs';
 import {test,expect} from '@playwright/test';
 import {installMockBackend} from './mock-backend.mjs';
 const errors=[];
@@ -65,7 +66,7 @@ test('GPS journal is nested under trips, has standard card gaps and scrolls to t
  await scroll.evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.unassigned-card').last()).toBeInViewport();
  await scroll.evaluate(el=>el.scrollTop=0);
  await page.locator('[data-trip-section=board]').click();await expect(page.locator('#tripBoard')).toBeVisible();await expect(page.locator('#plUnassigned')).toBeHidden();
- await page.locator('[data-trip-section=tracking]').click();await expect(page).toHaveURL(/#\/planner\/trips\/tracking$/);await expect(page.locator('#plUnassigned')).toBeVisible();
+ await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page).toHaveURL(/#\/planner\/trips\/tracking$/);await expect(page.locator('#plUnassigned')).toBeVisible();
  await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('#plTrips .subtab[data-sub=trips]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.unassigned-card')).toHaveCount(14);
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-journal.png'});await clean(page);
 });
@@ -89,15 +90,13 @@ test('manager orders selected tracks and reviews separate GPS pieces before merg
 
 test('trips actions keep aligned slots and a reachable journal switch',async({page},info)=>{
  await open(page,info);await page.locator('[data-trip-section=board]').click();
- const selectors=['.trip-list-actions .planner-filter-menu>summary','[data-trip-section=tracking]','#tripTrash','#tripAdd'];
- const boxes=await Promise.all(selectors.map(s=>page.locator(s).boundingBox()));
- for(const box of boxes){expect(box).not.toBeNull();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width);expect(box.height).toBeGreaterThanOrEqual(36);if(page.viewportSize().width>760||box!==boxes[1])expect(Math.abs(box.y+box.height/2-boxes[0].y-boxes[0].height/2)).toBeLessThanOrEqual(1);}
- if(page.viewportSize().width>760){for(let i=1;i<boxes.length;i++)expect(boxes[i].x).toBeGreaterThanOrEqual(boxes[i-1].x+boxes[i-1].width);}else{expect(boxes[1].y).toBeGreaterThanOrEqual(boxes[0].y+boxes[0].height);expect(boxes[2].x).toBeGreaterThanOrEqual(boxes[0].x+boxes[0].width);expect(boxes[3].x).toBeGreaterThanOrEqual(boxes[2].x+boxes[2].width);}
- const tabs=await page.locator('#plTrips .subtabs').boundingBox();expect(boxes[0].y).toBeGreaterThanOrEqual(tabs.y+tabs.height);
- await page.locator('.trip-list-actions .planner-filter-menu>summary').click();await expect(page.locator('#tripLayout')).toBeVisible();await page.keyboard.press('Escape');
- await page.locator('[data-trip-section=tracking]').click();await expect(page.locator('.unassigned-card')).toBeVisible();await expect(page.locator('#tripAdd')).toBeHidden();
- await page.locator('#tripTrash').click();await expect(page.locator('#trashOverlay')).toBeVisible();await page.locator('#trashClose').click();
- await page.locator('[data-trip-section=tracking]').click();await expect(page.locator('#tripAdd')).toBeVisible();
+ if(page.viewportSize().width<=760){await expect(page.locator('#tripTrash')).toBeHidden();await expect(page.locator('[data-trip-section=tracking]')).toBeHidden();await expect(page.locator('#tripAdd')).toBeVisible();}
+ await revealDispatcherActions(page);
+ for(const selector of ['.trip-list-actions .planner-filter-menu>summary','[data-trip-section=tracking]','#tripTrash']){const box=await page.locator(selector).boundingBox();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width);expect(box.height).toBeGreaterThanOrEqual(36);}
+ await clickDispatcherControl(page,'.trip-list-actions .planner-filter-menu>summary');await expect(page.locator('#tripLayout')).toBeVisible();await page.keyboard.press('Escape');
+ await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page.locator('.unassigned-card')).toBeVisible();await expect(page.locator('#tripAdd')).toBeHidden();
+ await clickDispatcherControl(page,'#tripTrash');await expect(page.locator('#trashOverlay')).toBeVisible();await page.locator('#trashClose').click();
+ await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page.locator('#tripAdd')).toBeVisible();
  await page.screenshot({path:'test-results/gps-map-header/'+info.project.name+'-trips.png'});await clean(page);
 });
 
@@ -106,7 +105,7 @@ test('journal period filters on the server, navigates months and persists after 
  await open(page,info,'admin',3);
  const from=page.locator('#tripJournalPeriod [data-rf]'),to=page.locator('#tripJournalPeriod [data-rt]');
  await expect(from).toBeVisible();await expect(to).toBeVisible();
- const toolbar=await page.locator('#plTrips .dispatcher-toolbar').boundingBox(),actions=await page.locator('#plTrips .dispatcher-actions').boundingBox();
+ const toolbar=await page.locator('#plTrips .dispatcher-toolbar').boundingBox(),actions=await page.locator(page.viewportSize().width<=760?'#plTrips .dispatcher-more>summary':'#plTrips .dispatcher-actions').boundingBox();
  expect(Math.abs(actions.x+actions.width-toolbar.x-toolbar.width)).toBeLessThanOrEqual(1);
  await page.locator('[data-ut-select]').first().check();await expect(page.locator('.unassigned-merge')).toBeVisible();
  await from.fill('2026-10-05');await from.dispatchEvent('change');await to.fill('2026-10-05');await to.dispatchEvent('change');

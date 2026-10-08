@@ -1,6 +1,6 @@
-.unassigned-toolbar,.unassigned-cardhead{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);flex-wrap:wrap}
-.unassigned-toolbar h2,.unassigned-cardhead h3{margin:0;min-width:0;overflow-wrap:anywhere}
-.unassigned-filter{margin:var(--sp-4) 0;max-width:540px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.unassigned-navigation,.unassigned-cardhead{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);flex-wrap:wrap}
+.unassigned-cardhead h3{margin:0;min-width:0;overflow-wrap:anywhere}
+.unassigned-filter{margin:0;flex:1;min-width:0;max-width:540px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
 .unassigned-filter button{min-width:0;white-space:normal}
 .unassigned-list{display:grid;gap:var(--sp-4)}
 [data-ut-more][hidden]{display:none!important}
@@ -42,3 +42,7 @@
 /* Interactive geographic preview; wheel scrolling still belongs to the journal. */
 .unassigned-map{height:240px;max-height:none;isolation:isolate;overflow:hidden}
 .unassigned-map .leaflet-control-attribution{font-size:10px}
+
+.unassigned-navigation{margin:var(--sp-3) 0;flex-wrap:nowrap}
+
+.unassigned-navigation>.q{flex:none;margin-inline:6px}

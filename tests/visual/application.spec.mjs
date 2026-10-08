@@ -250,14 +250,15 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     }
     if(testInfo.project.use.viewport.width<=390&&scene.name.startsWith('dispatcher')){
       expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Visible actions and the separate trips journal navigation keep the mobile header bounded').toBeLessThanOrEqual(scene.name==='dispatcher-trips'?272:224);
-      const filter=active.locator('.planner-filter-menu:visible');
+      await active.locator('.dispatcher-more>summary:visible').click();
+      const filter=active.locator('.dispatcher-more:visible .planner-filter-menu');
       if(await filter.count()){
         await filter.locator('summary').click();await expect(filter.locator('select').first()).toBeVisible();
         await visibleTarget(filter.locator('select').first());
         await shot(page,testInfo,role+'-'+scene.name+'-filters');
         await page.keyboard.press('Escape');
         await expect(filter).not.toHaveAttribute('open','');
-        await expect(filter.locator('summary')).toBeFocused();
+        await expect(active.locator('.dispatcher-more>summary:visible')).toBeFocused();
       }
     }
     if(scene.view==='dash'&&role==='logist'){
@@ -356,19 +357,10 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       }
     }
     if(scene.name==='dashboard-graph'){
-      const block=active.locator('.vg-block').first();
+      const block=active.locator('.vg-block[data-job-id]:not([data-job-id=""])').first();
       await block.click({position:{x:Math.min(12,(await block.boundingBox()).width/2),y:10}});
-      await expect(page.locator('.gpop')).toBeVisible();
-      await expect(page.locator('.gpop')).toBeInViewport({ratio:1});
-      const close=page.locator('.gpop [data-gclose]');
-      await expect(close).toBeInViewport({ratio:1});
-      if(testInfo.project.use.viewport.width<=760){
-        const boundary=await close.evaluate(el=>({bottom:el.getBoundingClientRect().bottom,rail:document.querySelector('.rail').getBoundingClientRect().top}));
-        expect(boundary.bottom,'Event close action stays above bottom navigation').toBeLessThanOrEqual(boundary.rail+1);
-      }
-      await expect(page.locator('.gpop .gp-h')).toContainText('Коммунальное');
-      await shot(page,testInfo,`${role}-schedule-event`);
-      await page.locator('.gpop [data-gclose]').click();
+      await expect(page.locator('.view-job.active')).toBeVisible();await expect(page.locator('.gpop')).toHaveCount(0);
+      await shot(page,testInfo,`${role}-schedule-request`);
     }
     if(scene.name==='trip'){
       await active.locator('#tpReviewPresence').click();
@@ -403,7 +395,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await expect(active.locator('#tpHistoryLog')).toContainText('Уточнён порядок');
       await shot(page,testInfo,`${role}-trip-history`);
     }
-    await integrity(page,active,audit,testInfo);
+    await integrity(page,page.locator('.view.active'),audit,testInfo);
   });
 }
 // A halved CSS viewport checks the reflow width equivalent to desktop 200% zoom.

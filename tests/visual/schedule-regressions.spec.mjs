@@ -56,7 +56,7 @@ test('day load rail fills from its top and dark surfaces match entry colours',as
  await clean(page,errors);
 });
 test('day taps share week context and cancelled drags or window taps never save',async({page},info)=>{
- const errors=await openGraph(page,info);const week=await openDay(page),piece=week.locator('.vg-piece[data-gb="t'+trip+'"]:not(.short)').first();
+ const errors=await openGraph(page,info);const week=await openDay(page),piece=week.locator('.vg-piece[data-gb="t'+trip+'"]').filter({has:page.locator('.road')}).first();
  await piece.scrollIntoViewIfNeeded();await piece.click({position:{x:12,y:12}});await expect(page.locator('.gpop')).toBeVisible();await expect(page.locator('.view-dash.active')).toBeVisible();await page.keyboard.press('Escape');
  const original=await piece.evaluate(el=>el.style.top),r=await piece.boundingBox();
  await page.mouse.move(r.x+15,r.y+12);await page.mouse.down();await page.mouse.move(r.x+15,r.y+32);await page.keyboard.press('Escape');await page.mouse.up();
@@ -67,10 +67,8 @@ test('day taps share week context and cancelled drags or window taps never save'
 test('split action targets the selected work piece and Escape cancels its preview',async({page},info)=>{
  const errors=await openGraph(page,info),week=await openDay(page);
  const work=week.locator('.vg-piece[data-gb="t'+trip+'"]:not(.short)').filter({hasNot:page.locator('.road')}).first();
- const from=Number(await work.getAttribute('data-piece-from'));await work.focus();await page.keyboard.press('Enter');
- await page.locator('.gpop .gp-layout summary').click();
- await page.locator('.gpop [data-pop-divide]').click();const cut=week.locator('.vg-cut');await expect(cut).toBeVisible();
- const input=cut.locator('input');expect(Number(await input.getAttribute('min'))).toBeCloseTo(from+.25);
+ const from=Number(await work.getAttribute('data-piece-from'));await work.locator('[data-gdivide]').click();const cut=week.locator('.vg-cut');await expect(cut).toBeVisible();
+ const input=cut.locator('[role=slider]');expect(Number(await input.getAttribute('aria-valuemin'))).toBeCloseTo(from+.25);
  await expect(input).toBeFocused();await page.keyboard.press('ArrowRight');await page.keyboard.press('Escape');
  await expect(cut).toHaveCount(0);await clean(page,errors);
 });
@@ -82,9 +80,9 @@ test('split saves the selected work part, moving its continuation keeps hours an
  const original=await pieces.evaluateAll(els=>els.map(el=>({from:Number(el.dataset.pieceFrom),to:Number(el.dataset.pieceTo)})));
  const hours=original.reduce((n,p)=>n+p.to-p.from,0);
  const work=pieces.filter({hasNot:page.locator('.road')}).first(),from=Number(await work.getAttribute('data-piece-from')),to=Number(await work.getAttribute('data-piece-to'));
- await work.focus();await page.keyboard.press('Enter');await page.locator('.gpop .gp-layout summary').click();await page.locator('.gpop [data-pop-divide]').click();
- const cut=week.locator('.vg-cut'),range=cut.locator('input'),split=Math.round((from+to)*2)/4;
- await range.evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));},String(split));await cut.locator('[data-cut-ok]').click();
+ await work.locator('[data-gdivide]').click();
+ const cut=week.locator('.vg-cut'),range=cut.locator('[role=slider]'),split=Math.round((from+to)*2)/4;
+ await expect(range).toHaveAttribute('aria-valuenow',String(split));await cut.locator('[data-cut-ok]').click();
  await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(1);
  const saved=await page.evaluate(()=>window.__visualQA.scheduleWrites[0].record.day_plan);expect(saved.cuts[0].at).toEqual({d:'2026-10-05',t:split});
  await expect(pieces.filter({hasNot:page.locator('.road')})).toHaveCount(2);
@@ -96,5 +94,33 @@ test('split saves the selected work part, moving its continuation keeps hours an
  const total=await pieces.evaluateAll(els=>els.reduce((n,el)=>n+Number(el.dataset.pieceTo)-Number(el.dataset.pieceFrom),0));expect(total).toBeCloseTo(hours);
  const before=await moved.boundingBox();await page.mouse.move(before.x+8,before.y+3);await page.mouse.down();await page.mouse.move(before.x+8,before.y-17);await page.mouse.up();
  await expect(page.locator('#toast')).toContainText('после предыдущей');expect(await page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(2);await expect(moved).toHaveAttribute('data-piece-from',String(split+.5));
- await page.screenshot({path:'test-results/schedule-regressions/'+info.project.name+'-split-saved.png'});await clean(page,errors);
+ await page.screenshot({path:'test-results/schedule-regressions/'+info.project.name+'-split-saved.png'});
+ await moved.locator('[data-gtools]').click();await expect(page.locator('.gpop [data-greset]')).toBeVisible();await page.locator('.gpop .gp-layout summary').click();await expect(page.locator('.gpop [data-cut-del]')).toHaveCount(1);
+ await expect(page.locator('.gpop [data-greset]')).toBeInViewport({ratio:1});await page.locator('.gpop [data-greset]').click();await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(3);expect(await page.evaluate(()=>window.__visualQA.scheduleWrites[2].record.day_plan)).toBeNull();await expect(pieces.filter({hasNot:page.locator('.road')})).toHaveCount(1);await clean(page,errors);
+});
+
+test('request cards open their page and the engineer filter survives day/week transitions',async({page},info)=>{
+ const errors=await openGraph(page,info);
+ const week=page.locator('.vg-block[data-gb="t'+trip+'"]').first().locator('xpath=ancestor::*[@data-gtbox]');
+ const picker=week.locator('[data-vgmode]');const selected=await picker.locator('option').nth(1).getAttribute('value');await picker.selectOption(selected);
+ const spacing=await week.locator('.vg-tools').evaluate(el=>({height:el.getBoundingClientRect().height,gap:parseFloat(getComputedStyle(el).marginBottom)}));
+ await week.locator('[data-gday="2026-10-05"]').click();await expect(picker).toHaveValue(selected);
+ await expect(week.locator('.vg-scale')).toHaveCount(0);await expect(week.locator('.gleg')).toHaveText('выездзаявкадорога');
+ const daySpacing=await week.locator('.vg-tools').evaluate(el=>({height:el.getBoundingClientRect().height,gap:parseFloat(getComputedStyle(el).marginBottom)}));expect(daySpacing.gap).toBe(spacing.gap);if(page.viewportSize().width>760)expect(daySpacing.height).toBeCloseTo(spacing.height,0);
+ await week.locator('[data-gback]').click();await expect(picker).toHaveValue(selected);await expect(week.locator('.vg-scale')).toHaveCount(0);
+ const request=week.locator('.vg-block[data-job-id]:not([data-job-id=""])').first();await request.focus();await page.keyboard.press('Enter');await expect(page.locator('.view-job.active')).toBeVisible();await expect(page.locator('.gpop')).toHaveCount(0);
+ await page.goto('/#/dash');await expect(page.locator('.vg-block[data-gb="t'+trip+'"]').first()).toBeVisible();const day=await openDay(page);
+ const work=day.locator('.vg-piece[data-job-id]:not([data-job-id=""])').first();await work.click({position:{x:10,y:8}});await expect(page.locator('.view-job.active')).toBeVisible();await expect(page.locator('.gpop')).toHaveCount(0);await clean(page,errors);
+});
+test('split line does not jump on press and tracks a real vertical pointer gesture',async({page},info)=>{
+ const errors=await openGraph(page,info),week=await openDay(page),work=week.locator('.vg-piece').filter({hasNot:page.locator('.road')}).first();
+ await work.locator('[data-gdivide]').click();const slider=work.locator('[role=slider]'),initial=Number(await slider.getAttribute('aria-valuenow'));await slider.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}));const r=await slider.boundingBox();
+ await page.mouse.move(r.x+10,r.y+12);await page.mouse.down();await expect(slider).toHaveAttribute('aria-valuenow',String(initial));
+ await page.mouse.move(r.x+10,r.y+22);await expect(slider).toHaveAttribute('aria-valuenow',String(initial+.5));await page.mouse.move(r.x+10,r.y+27);await expect(slider).toHaveAttribute('aria-valuenow',String(initial+.75));await page.mouse.up();
+ if(info.project.use.hasTouch){
+  const touch=await page.context().newCDPSession(page),r=await slider.boundingBox(),value=Number(await slider.getAttribute('aria-valuenow'));
+  await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x+10,y:r.y+12}]});await expect(slider).toHaveAttribute('aria-valuenow',String(value));
+  await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:r.x+10,y:r.y+2}]});await expect(slider).toHaveAttribute('aria-valuenow',String(value-.5));await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await touch.detach();
+ }
+ await page.keyboard.press('Escape');await expect(work.locator('.vg-cut')).toHaveCount(0);await clean(page,errors);
 });
