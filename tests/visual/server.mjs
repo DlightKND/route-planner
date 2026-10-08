@@ -69,13 +69,16 @@ const server = createServer(async (req, res) => {
         /<script[^>]+src="https:\/\/unpkg\.com\/leaflet[^>]+><\/script>/g,
         '<script src="/qa-vendor/leaflet/dist/leaflet.js"></script><script src="/qa-turf.js"></script>',
       );
+      // Keep Leaflet at its production position, before the application's
+      // overrides. Appending it to </head> changes popup colors and elevation.
       html = html.replace(
-        /<link[^>]+(?:href="https:\/\/unpkg\.com\/leaflet|href="https:\/\/fonts\.googleapis\.com)[^>]+>/g,
-        "",
+        /<link[^>]+href="https:\/\/unpkg\.com\/leaflet[^>]+>/g,
+        '<link rel="stylesheet" href="/qa-vendor/leaflet/dist/leaflet.css">',
       );
+      html = html.replace(/<link[^>]+href="https:\/\/fonts\.googleapis\.com[^>]+>/g, "");
       html = html.replace(
         "</head>",
-        '<link rel="stylesheet" href="/qa-vendor/leaflet/dist/leaflet.css"><link rel="stylesheet" href="/qa-fonts.css"></head>',
+        '<link rel="stylesheet" href="/qa-fonts.css"></head>',
       );
       bytes = html;
     }
