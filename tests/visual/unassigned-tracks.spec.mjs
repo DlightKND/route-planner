@@ -106,6 +106,8 @@ test('journal period filters on the server, navigates months and persists after 
  await open(page,info,'admin',3);
  const from=page.locator('#tripJournalPeriod [data-rf]'),to=page.locator('#tripJournalPeriod [data-rt]');
  await expect(from).toBeVisible();await expect(to).toBeVisible();
+ const toolbar=await page.locator('#plTrips .dispatcher-toolbar').boundingBox(),actions=await page.locator('#plTrips .dispatcher-actions').boundingBox();
+ expect(Math.abs(actions.x+actions.width-toolbar.x-toolbar.width)).toBeLessThanOrEqual(1);
  await page.locator('[data-ut-select]').first().check();await expect(page.locator('.unassigned-merge')).toBeVisible();
  await from.fill('2026-10-05');await from.dispatchEvent('change');await to.fill('2026-10-05');await to.dispatchEvent('change');
  await expect(page.locator('.unassigned-card')).toHaveCount(1);await expect(page.locator('.unassigned-merge')).toHaveCount(0);
