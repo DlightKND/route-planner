@@ -35,3 +35,10 @@ it('uses the versioned canonical RPC for new request edits',async()=>{
   await saveCanonicalRequest({rpc},{id:'job-1',record:{notes:'new'},works:[{id:'item-1'}],parts:[]});
   expect(rpc).toHaveBeenCalledWith('job_request_save_canonical',{p_id:'job-1',p_rec:{notes:'new'},p_works:[{id:'item-1'}],p_parts:[]});
 });
+
+it('adds new finance alongside imported rows without submitting historical rows for correction',async()=>{
+  const rpc=vi.fn(async()=>({data:{job_id:'job-1'},error:null}));
+  const work={id:'new-work',title:'Ремонт',hours:2},part={id:'new-part',name:'Фильтр',qty:1};
+  await saveCanonicalRequest({rpc},{id:'job-1',record:{notes:'Новая заметка'},works:[{id:'legacy-work',legacy_task_item_id:'imported-work'},work],parts:[{id:'legacy-part',legacy_task_item_id:'imported-part'},part]});
+  expect(rpc).toHaveBeenCalledWith('job_request_save_canonical',{p_id:'job-1',p_rec:{notes:'Новая заметка'},p_works:[work],p_parts:[part]});
+});

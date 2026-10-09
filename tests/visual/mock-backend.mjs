@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, lateScheduleCut = false, signedOut = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, lateScheduleCut = false, signedOut = false, financeJourney = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -294,6 +294,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     queryErrors: [],
     blockedWrites: [],
     scheduleWrites: [],
+    financeWrites: [],
     ready: true,
   });
   const reject = (name) => {
@@ -322,6 +323,15 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   if(unassignedJourney&&unassignedCount>1)tables.unassigned_tracks=Array.from({length:unassignedCount},(_,i)=>({...tables.unassigned_tracks[0],started_at:new Date(Date.UTC(2026,9,4+i,7)).toISOString(),last_ts:new Date(Date.UTC(2026,9,4+i,9)).toISOString(),ended_at:new Date(Date.UTC(2026,9,4+i,9)).toISOString(),id:i?`40000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`:unassignedID}));
   tables.vehicle_telemetry_archive=unassignedJourney?[{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:00:00Z',lat:49.99,lng:36.23},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:01:00Z',lat:50.01,lng:36.25},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T09:00:00Z',lat:49.99,lng:36.23}]:[];
   tables.unassigned_track_events=[];
+  if(financeJourney){
+    task.service_order_items=[
+      {...item,id:'50000000-0000-4000-8000-000000000001',legacy_job_work_id:'60000000-0000-4000-8000-000000000001',approved_at:stamp,financial_revenue_snapshot:7500,financial_cost_snapshot:4500,created_at:stamp,legacy_snapshot:{title:'Историческая работа'}},
+      {...item,id:'50000000-0000-4000-8000-000000000002',kind:'material',legacy_job_part_id:'60000000-0000-4000-8000-000000000002',work_catalog_id:null,title:'Историческая запчасть',unit:'шт',planned_qty:1,sku_snapshot:'OLD',unit_price_snapshot:300,unit_cost_snapshot:100,approved_at:stamp,created_at:stamp,legacy_snapshot:{}},
+      {...item,id:'50000000-0000-4000-8000-000000000003',kind:'material',work_catalog_id:null,title:'Редактируемая запчасть',unit:'шт',planned_qty:1,sku_snapshot:'NEW',unit_price_snapshot:50,unit_cost_snapshot:20,approved_at:null,created_at:'2026-10-06T07:00:00Z',legacy_snapshot:{request_finance_generation:1,created_by:manager}},
+    ];
+    request.service_orders=[task];
+    audit.financeRows=structuredClone(task.service_order_items);
+  }
   const db = {
     auth: {
       getSession: async () => ({ data: { session: signedOut?null:session }, error: null }),
@@ -434,6 +444,35 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(financeJourney&&name==='job_request_save_canonical'){
+        const target=args.p_id?tables.jobs.find(j=>j.id===args.p_id):{...request,id:crypto.randomUUID(),service_orders:[]};
+        if(!target)return {data:null,error:{message:'Заявка не найдена'}};
+        let seed=target.service_orders.find(o=>o.seed_request_id===target.id);
+        if(!seed){seed={...task,id:crypto.randomUUID(),job_id:target.id,seed_request_id:target.id,status:'draft',service_order_items:[]};target.service_orders=[seed];}
+        const saved={job_id:target.id,works:null,parts:null};
+        for(const [kind,key] of [['work','works'],['material','parts']]){
+          const incoming=args['p_'+key];if(incoming==null)continue;
+          if(!['draft','assigned','paused'].includes(seed.status))return {data:null,error:{message:'Финансовый состав нельзя менять после начала выполнения задания'}};
+          if(incoming.some(r=>seed.service_order_items.some(i=>i.id===r.id&&(i.legacy_job_work_id||i.legacy_job_part_id))))return {data:null,error:{message:'Историческую строку заявки нельзя менять обычным сохранением'}};
+          const rows=incoming.map(r=>({...item,id:r.id,job_id:target.id,order_id:seed.id,kind,title:r.title||r.name,work_catalog_id:r.work_id||null,unit:r.unit,planned_qty:r.hours??r.qty,sku_snapshot:r.sku||'',unit_price_snapshot:r.price||0,unit_cost_snapshot:r.cost||0,approved_at:stamp,approved_by:manager,billable:r.billable,billable_reason:r.billable_reason||'',legacy_snapshot:{request_finance_generation:1,created_by:manager}}));
+          seed.service_order_items=[...seed.service_order_items.filter(i=>i.kind!==kind||i.legacy_job_work_id||i.legacy_job_part_id),...rows];
+          saved[key]=incoming.map(r=>({index:r.index,id:r.id,revenue:0,price:r.price||0,cost:r.cost||0,approved_at:stamp,approved_by:manager}));
+        }
+        Object.assign(target,structuredClone(args.p_rec));
+        if(!args.p_id)tables.jobs.push(target);
+        audit.financeWrites.push(structuredClone({name,args}));audit.financeRows=structuredClone(seed.service_order_items);
+        return {data:saved,error:null};
+      }
+      if(financeJourney&&name==='service_order_trip'){
+        const created={...ride,id:crypto.randomUUID(),status:'planned',started_at:null,workbench_revision:1,route_stops:[ride.route_stops.at(-1)],route_geometry:null};
+        tables.trips.push(created);tables.trip_service_orders.push({trip_id:created.id,order_id:order,service_orders:task,trips:created});
+        tables.trip_jobs.push({trip_id:created.id,job_id:job,jobs:request});return {data:created.id,error:null};
+      }
+      if(financeJourney&&name==='trip_plan_save_tasks'){
+        const target=tables.trips.find(t=>t.id===args.p_trip);if(!target)return reject('missing trip');
+        Object.assign(target,structuredClone(args.p_plan));target.workbench_revision++;
+        audit.financeWrites.push(structuredClone({name,args}));return {data:target.id,error:null};
+      }
       if(name==='notification_set_read'){
         const row=tables.notification_inbox.find(n=>n.id===args.p_id&&n.recipient_id===session.user.id);
         if(!row)return {data:null,error:{message:'Уведомление недоступно'}};
@@ -452,7 +491,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         service_order_trip_cost_summary: [],
         trip_cost_allocation_read: null,
         trip_workbench_read: {
-          trip: ride,
+          trip:financeJourney?(tables.trips.find(t=>t.id===args.p_trip)||ride):ride,
           job_ids: [job],
           stays: stays.filter((s) => s.trip_id === trip),
           removed: [],
