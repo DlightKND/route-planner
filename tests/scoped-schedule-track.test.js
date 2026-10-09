@@ -10,37 +10,29 @@ const own={id:'own',owner_id:'owner',curator_id:'curator',vehicle_id:'car',statu
 const foreign={...own,id:'foreign',owner_id:'other',curator_id:'other'};
 function schedule({user='curator',role='engineer',rows=[own,foreign],blocks=[]}={}){
   const writes=[],refresh=vi.fn();
-  const sb={from:table=>({update:record=>({eq:async(key,id)=>{writes.push({table,id,record});return {error:null};}})})};
+  const sb={rpc:async(name,args)=>{writes.push({rpc:name,args});return {error:null};},from:table=>({update:record=>({eq:async(key,id)=>{writes.push({table,id,record});return {error:null};}})})};
   const code=rights+section('function gtCanEditBlock(','function gtTripAction(')+section('async function gtSave(b,start){','async function renderFeedAgain(');
-  const api=new Function('role','session','feedCtx','getTrip','tripCache','jobs','currentJobAuthority','sb','q4','showToast','notify','renderFeedAgain','schedulePlacementIssue','gtSettings','gtBlocks','gtPieces',code+';return {gtCanEditBlock,gtSave,gtSaveCuts};')
+  const api=new Function('role','session','feedCtx','getTrip','tripCache','jobs','currentJobAuthority','sb','q4','showToast','notify','renderFeedAgain','schedulePlacementIssue','gtSettings','gtBlocks','gtPieces',code+';return {gtCanEditBlock,gtCanSplitBlock,gtSave,gtSaveCuts};')
     (role,{user:{id:user}},{recordOf:id=>rows.find(r=>r.id===id.slice(1))},()=>null,{},[],true,sb,n=>Math.round(n*4)/4,vi.fn(),vi.fn(),refresh,schedulePlacementIssue,()=>({}),()=>blocks,b=>b.pieces||[]);
   return {...api,writes,refresh};
 }
-it('uses the scheduler row rather than authority from an unrelated open editor',()=>{
+it('engineer owners and curators may propose cuts only for their own assigned blocks',()=>{
   const api=schedule();
-  expect(api.gtCanEditBlock({id:'town',kind:'trip'})).toBe(true);
-  expect(api.gtCanEditBlock({id:'tforeign',kind:'trip'})).toBe(false);
-  expect(api.gtCanEditBlock({id:'jmissing',kind:'job'})).toBe(false);
-  expect(api.gtCanEditBlock(null)).toBe(false);
-  expect(api.gtCanEditBlock({id:'jown',kind:'job'})).toBe(true);
+  for(const block of [{id:'town',kind:'trip'},{id:'tforeign',kind:'trip'},{id:'jmissing',kind:'job'},null])expect(api.gtCanEditBlock(block)).toBe(false);
+  expect(api.gtCanSplitBlock({id:'town',kind:'trip',engineerIds:['curator']})).toBe(true);
+  expect(api.gtCanSplitBlock({id:'tforeign',kind:'trip',engineerIds:['other']})).toBe(false);
+  expect(api.gtCanSplitBlock({id:'town',kind:'trip',engineerIds:['curator'],scheduleOnly:true})).toBe(false);
 });
-it('saves curator placement and cuts, rejecting foreign blocks before a database write',async()=>{
-  const api=schedule(),start={iso:'2026-10-01',t:9.13},block={id:'town',kind:'trip',engineer:'crew',workH:4,start};
+it('engineer splitting calls the approval RPC without writing a plan or moving a block',async()=>{
+  const api=schedule(),start={iso:'2026-10-01',t:9},block={id:'town',kind:'trip',engineer:'curator',engineerIds:['curator'],workH:4,start};
   await api.gtSave(block,start);
-  expect(await api.gtSaveCuts(block,[{after:2,at:{d:'2026-10-02',t:10}}])).toBe(true);
-  await api.gtSave({id:'tforeign',kind:'trip'},start);
-  expect(await api.gtSaveCuts({id:'tforeign',kind:'trip',start},[])).toBe(false);
-  expect(api.writes).toEqual([
-    {table:'trips',id:'own',record:{day_plan:{start:{d:'2026-10-01',t:9.25}}}},
-    {table:'trips',id:'own',record:{day_plan:{start:{d:'2026-10-01',t:9.25},cuts:[{after:2,at:{d:'2026-10-02',t:10}}]}}}
-  ]);
-  expect(api.refresh).toHaveBeenCalledTimes(2);
+  expect(await api.gtSaveCuts(block,[{after:2,at:{d:'2026-10-01',t:11}}],'2026-10-01')).toBe(true);
+  expect(api.writes).toEqual([{rpc:'schedule_split_propose',args:{p_kind:'trip',p_id:'own',p_date:'2026-10-01',p_expected_plan:null,p_plan:{start:{d:'2026-10-01',t:9},cuts:[{after:2,at:{d:'2026-10-01',t:11}}]}}}]);
+  expect(await api.gtSaveCuts({...block,id:'tforeign',engineer:'other',engineerIds:['other']},[])).toBe(false);
 });
-it('preserves owner and global manager scheduling rights without granting crew rights',()=>{
-  const block={id:'town',kind:'trip'};
-  expect(schedule({user:'owner'}).gtCanEditBlock(block)).toBe(true);
-  expect(schedule({user:'crew'}).gtCanEditBlock(block)).toBe(false);
-  expect(schedule({user:'manager',role:'logist'}).gtCanEditBlock(block)).toBe(true);
+it('preserves global manager placement rights and saves approved cuts directly',async()=>{
+ const api=schedule({user:'manager',role:'logist'}),start={iso:'2026-10-01',t:9},block={id:'town',kind:'trip',engineer:'crew',workH:4,start};
+ expect(api.gtCanEditBlock(block)).toBe(true);await api.gtSave(block,start);await api.gtSaveCuts(block,[{after:2,at:{d:'2026-10-01',t:11}}]);expect(api.writes).toHaveLength(2);expect(api.writes.every(w=>w.table==='trips')).toBe(true);
 });
 function vehicle({user='curator',trip=own,answer='target',reason='Перенос по решению владельца'}={}){
   const win=new Window(),doc=win.document;
@@ -122,7 +114,7 @@ it('keeps crew start rights without granting crew track reassignment or cancella
 
 it('rejects overlapping continuation before writing and preserves the existing placement',async()=>{
  const start={iso:'2026-10-08',t:7},block={id:'town',kind:'trip',engineer:'crew',workH:4,start};
- const api=schedule({blocks:[{id:'tother',engineer:'crew',pieces:[{iso:start.iso,from:10,to:12}]}]});
+ const api=schedule({role:'logist',blocks:[{id:'tother',engineer:'crew',pieces:[{iso:start.iso,from:10,to:12}]}]});
  expect(await api.gtSaveCuts(block,[{after:2,at:{d:start.iso,t:8}}])).toBe(false);
  expect(await api.gtSaveCuts(block,[{after:2,at:{d:start.iso,t:10}}])).toBe(false);
  expect(api.writes).toEqual([]);expect(block.start).toEqual(start);

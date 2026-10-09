@@ -19,7 +19,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 // я назвал, — прод собран ровно из того, что мы наработали. Не совпал —
 // список ниже показывает, какой именно файл отстал.
 function buildStamp() {
-  const files = ['index.html', 'src/app.js', 'src/trip-workbench.js', 'src/engineer-picker.js', 'src/modal-shell.js', 'src/context-panels.js', 'src/schedule-interactions.js', 'src/personal-schedule.js', 'src/unassigned-tracks.js', 'src/unassigned-tracks.css', 'src/service-orders.js', 'src/service-orders.css', 'src/trip-workbench.css', 'src/visual-system.css', 'src/dashboard-chart.js', 'src/dashboard-summary.js', 'src/dashboard-visuals.js', 'src/info-hints.js', 'src/account-profile.js', 'src/entity-responsibility.js', 'src/notifications.js', 'src/entity-tabs.js', 'public/sw.js']
+  const files = ['index.html', 'src/app.js', 'src/approvals.js', 'src/trip-workbench.js', 'src/engineer-picker.js', 'src/modal-shell.js', 'src/context-panels.js', 'src/schedule-interactions.js', 'src/personal-schedule.js', 'src/unassigned-tracks.js', 'src/unassigned-tracks.css', 'src/service-orders.js', 'src/service-orders.css', 'src/trip-workbench.css', 'src/visual-system.css', 'src/dashboard-chart.js', 'src/dashboard-summary.js', 'src/dashboard-visuals.js', 'src/info-hints.js', 'src/account-profile.js', 'src/entity-responsibility.js', 'src/notifications.js', 'src/entity-tabs.js', 'public/sw.js']
     .concat(readdirSync('src/core').filter(f => f.endsWith('.js')).sort().map(f => 'src/core/' + f));
   const parts = files.map(name => {
     let text = '';

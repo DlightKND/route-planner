@@ -911,4 +911,10 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 }
 
 .dispatcher-add-label{margin-left:4px}
+.approval-card{margin-bottom:var(--sp-3);min-width:0;overflow-wrap:anywhere}
+.approval-heading,.approval-actions{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+.approval-heading .hint{margin-left:auto}
+.approval-card details{margin-top:var(--sp-3)}
+.vg-request{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+@media(max-width:760px){.approval-actions .btn{min-height:44px}.approval-card{padding:var(--sp-3)}}
 .view-planner .dispatcher-actions>[hidden]{display:none!important}

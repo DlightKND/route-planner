@@ -1,3 +1,4 @@
+import { mountApprovalDelegate } from './approvals.js';
 import {calendarPeriodBounds} from './core/calendar-period.js';
 import {gpsSegments,mountGpsTrackMap} from './gps-track-map.js';
 import {infoHint} from './info-hints.js';
@@ -56,8 +57,8 @@ export function createUnassignedTracks(ctx){
   box.querySelector('[data-ut-more]').hidden=!more;
   box.querySelectorAll('[data-ut-details]').forEach(b=>b.onclick=()=>perform(b,()=>details(b.dataset.utDetails)));
   box.querySelectorAll('[data-ut-trip]').forEach(b=>b.onclick=()=>ctx.openTrip(b.dataset.utTrip));
-  box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(b.dataset.utId,b.dataset.utAction)));
-  box.querySelectorAll('[data-ut-cancel]').forEach(b=>b.onclick=()=>perform(b,()=>cancel(b.dataset.utCancel)));
+  box.querySelectorAll('[data-ut-action]').forEach(b=>{b.onclick=()=>perform(b,()=>resolve(b.dataset.utId,b.dataset.utAction));if(ctx.delegateApproval&&b.dataset.utAction==='charge')mountApprovalDelegate(b,()=>perform(b,()=>resolve(b.dataset.utId,'charge',true)));});
+  box.querySelectorAll('[data-ut-cancel]').forEach(b=>{b.onclick=()=>perform(b,()=>cancel(b.dataset.utCancel));if(ctx.delegateApproval)mountApprovalDelegate(b,()=>perform(b,()=>cancel(b.dataset.utCancel,true)));});
  }
  async function perform(button,action){button.disabled=true;try{await action();}catch(e){ctx.notify(e.message||'Не удалось выполнить действие','err');}finally{if(button.isConnected){button.disabled=false;button.focus({preventScroll:true});}}}
  async function load(append=false){const uid=ctx.userId(),token=++version;if(!uid)return;
@@ -101,7 +102,7 @@ export function createUnassignedTracks(ctx){
   clearMaps(box);box.innerHTML=trackPreview(points)+'<div class="unassigned-metrics"><span><b>'+number(quote.km)+'</b> км GPS</span><span><b>'+quote.points+'</b> точек</span><span>Разрывы: '+quote.gaps+' · выбросы: '+quote.rejected+'</span></div><div class="hint">Себестоимость пробега: '+(quote.rate==null?'не настроена':number(quote.km)+' × '+number(quote.rate)+' = '+number(quote.cost)+' '+escape(ctx.currency()))+'</div>'
    +(events||[]).map(e=>'<div class="unassigned-event">'+date(e.created_at)+' · '+escape(e.reason)+'</div>').join('');box.hidden=false;drawMap(box,points);
  }
- async function resolve(id,action){const uid=ctx.userId(),row=rows.find(x=>x.id===id);if(!row)return;const quote=await rpc('unassigned_track_quote',{p_track:id});if(uid!==ctx.userId())return;
+ async function resolve(id,action,delegate=false){const uid=ctx.userId(),row=rows.find(x=>x.id===id);if(!row)return;const quote=await rpc('unassigned_track_quote',{p_track:id});if(uid!==ctx.userId())return;
   if(row.state==='recording'&&new Date(row.last_ts)>Date.now()-300000)throw Error('Поездка ещё записывается. Разобрать её можно после завершения.');
   const engineers=ctx.people().filter(x=>x.role==='engineer'&&x.active!==false).map(p=>({value:p.id,label:p.full_name||p.name||p.email||'Инженер'}));
   const fields=[];if(action==='chain')fields.push({key:'client',type:'select',label:'Клиент заявки',required:true,options:[{value:'',label:'Выберите клиента'},...ctx.clients().filter(c=>!c.deleted_at).map(c=>({value:c.id,label:c.name}))]},{key:'title',label:'Название задания',required:true});
@@ -111,12 +112,13 @@ export function createUnassignedTracks(ctx){
   if(action==='charge'&&!(quote.rate>0))throw Error('Сначала настройте себестоимость километра машины или отдела.');
   const values=await ctx.prompt(action==='chain'?'Создать заявку, черновик задания и выезд':action==='charge'?'Списание инженеру · '+number(quote.rate)+' '+ctx.currency()+'/км':'Привязать поездку к выезду',fields,{okText:action==='charge'?'Проверить сумму':'Создать привязку'});if(!values||uid!==ctx.userId())return;
   const cost=action==='charge'?distanceCost(values.km,quote.rate):null;
-  if(action==='charge'&&!await ctx.confirm('Списать '+number(cost)+' '+ctx.currency()+' инженеру?\n'+number(values.km)+' км × '+number(quote.rate)+' '+ctx.currency()+'/км.\nОснование: '+values.reason,{title:'Подтверждение списания',danger:true,okText:'Списать по себестоимости'}))return;
+  if(action==='charge'&&!delegate&&!await ctx.confirm('Списать '+number(cost)+' '+ctx.currency()+' инженеру?\n'+number(values.km)+' км × '+number(quote.rate)+' '+ctx.currency()+'/км.\nОснование: '+values.reason,{title:'Подтверждение списания',danger:true,okText:'Списать по себестоимости'}))return;
   if(uid!==ctx.userId())return;
+  if(delegate){if(await ctx.delegateApproval('track_charge',id,{expected:quote.revision,data:{...values,km:values.km??quote.km,points:quote.points,cost}}))await load();return;}
   const result=await rpc('unassigned_track_resolve',{p_track:id,p_expected:quote.revision,p_action:action,p_data:{...values,km:values.km??quote.km,points:quote.points,cost}});
   if(uid!==ctx.userId())return;await load();ctx.notify(action==='charge'?'Списание сохранено в журнале':'Трек привязан к выезду','ok');if(result.trip_id){await ctx.reload();ctx.openTrip(result.trip_id);}
  }
- async function cancel(id){const uid=ctx.userId(),r=rows.find(x=>x.id===id);if(!r)return;const v=await ctx.prompt('Отменить списание',[{key:'reason',label:'Причина отмены',type:'textarea',required:true}],{okText:'Отменить списание'});if(!v||uid!==ctx.userId())return;await rpc('unassigned_track_charge_cancel',{p_track:id,p_expected:r.revision,p_reason:v.reason});if(uid===ctx.userId())await load();}
+ async function cancel(id,delegate=false){const uid=ctx.userId(),r=rows.find(x=>x.id===id);if(!r)return;const v=await ctx.prompt('Отменить списание',[{key:'reason',label:'Причина отмены',type:'textarea',required:true}],{okText:'Отменить списание'});if(!v||uid!==ctx.userId())return;if(delegate){if(await ctx.delegateApproval('track_cancel',id,{expected:r.revision,reason:v.reason}))await load();return;}await rpc('unassigned_track_charge_cancel',{p_track:id,p_expected:r.revision,p_reason:v.reason});if(uid===ctx.userId())await load();}
  async function open(){const uid=ctx.userId();if(owner!==uid){reset();owner=uid;mode=manager()?'pending':'charged';}scaffold();try{await ctx.ensureRefs();if(uid===ctx.userId())return load();}catch(e){if(uid===ctx.userId()&&host())host().querySelector('.unassigned-status').textContent='Не удалось загрузить справочники: '+(e.message||'нет связи');}}
  return {open,reset,refresh:()=>{selected=[];mergePreview=null;paintSelection();host()?.querySelectorAll('[data-ut-select]').forEach(c=>c.checked=false);return load();}};
 }

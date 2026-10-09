@@ -189,3 +189,11 @@ it('filters individual task statuses in kanban and list without changing data',a
  doc.getElementById('orderClosed').checked=true;await doc.getElementById('orderClosed').onchange({target:{checked:true}});expect(doc.querySelector('[data-os="completed"]').getAttribute('aria-pressed')).toBe('true');
  await doc.querySelector('[data-os="completed"]').onclick();expect(doc.getElementById('orderClosed').checked).toBe(false);expect(order.status).toBe('in_progress');expect(rpcCalls).toEqual([]);
 });
+
+it('denies engineer creation through the board, request child, direct open and carryover even when curator',async()=>{
+ ctx.canWrite=()=>false;order.curator_id=person;order.owner_id=person;
+ await ui.board();expect(doc.getElementById('orderAdd').hidden).toBe(true);
+ await ui.requestPanel(job);expect(doc.querySelector('[data-order-new]')).toBeNull();
+ await ui.open(null,job);expect(ctx.notify).toHaveBeenCalledWith(expect.stringContaining('Создание заданий'),'warn');expect(ctx.showOrder).not.toHaveBeenCalled();
+ await ui.open('order1');expect(doc.getElementById('orderCarry')).toBeNull();expect(doc.getElementById('orderExtra')).toBeNull();expect(rpcCalls.filter(c=>/service_order_(save|carry)/.test(c.fn))).toHaveLength(0);
+});
