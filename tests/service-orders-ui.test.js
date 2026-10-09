@@ -13,7 +13,7 @@ let win,doc,ui,ctx,rpcCalls,order,stock,works,taskProfiles,selectCalls,settingsC
 const person='00000000-0000-4000-8000-000000000003',job='00000000-0000-4000-8000-000000000010';
 beforeEach(()=>{win=new Window();doc=win.document;stock=[];works=[];taskProfiles=[];tripChoices=[];selectCalls=[];settingsCalls=0;vi.stubGlobal('window',win);vi.stubGlobal('document',doc);doc.body.innerHTML='<input id="orderSearch"><select id="orderEngineer"></select><input id="orderClosed"><input id="orderHistorical" type="checkbox"><div id="orderHistoricalNote"></div><select id="orderViewMode"><option value="kanban">Канбан</option><option value="list">Список</option></select><button id="orderScopeClear"></button><button id="orderAdd"></button><div id="orderStatusChips"></div><div id="orderList"></div><div id="orderScope"></div><div id="orderScopeText"></div><div id="orderEditor"></div>';
  order={id:'order1',number:1,title:'Ремонт',status:'in_progress',work_mode:'onsite',job_id:job,seed_request_id:job,jobs:{clients:{name:'Клиент'}},engineer_ids:[person],lead_engineer:person,revision:2,service_order_items:[{id:'item1',job_id:job,title:'Насосы',unit:'шт',planned_qty:2,done_qty:0,transferred_qty:0}],trip_service_orders:[]};rpcCalls=[];
- const db={from:table=>{const data=table==='trips'?structuredClone(tripChoices):table==='jobs'?[{id:job,clients:{name:'Клиент'},at_depot:false}]:table==='service_orders'?[structuredClone(order)]:table==='stock_catalog'?structuredClone(stock):table==='work_catalog'?structuredClone(works):table==='settings'?[{tariff_profiles:structuredClone(taskProfiles)}]:[];const b={select:query=>{if(table==='service_orders')selectCalls.push(query);return b;},is:()=>b,order:()=>b,eq:()=>b,not:()=>b,limit:()=>b,single:()=>{if(table==='settings'){settingsCalls++;if(!ctx.canWrite())return Promise.resolve({data:null,error:{message:'Cannot coerce the result to a single JSON object'}});}return Promise.resolve({data:data[0],error:null});},then:(resolve,reject)=>Promise.resolve({data,error:null}).then(resolve,reject)};return b;},rpc:async(fn,args)=>{rpcCalls.push({fn,args});return {data:fn==='service_order_save_one'?'order1':3,error:null};}};
+ const db={from:table=>{const data=table==='trips'?structuredClone(tripChoices):table==='jobs'?[{id:job,clients:{name:'Клиент'},at_depot:false}]:table==='service_orders'?[structuredClone(order)]:table==='stock_catalog'?structuredClone(stock):table==='work_catalog'?structuredClone(works):table==='settings'?[{tariff_profiles:structuredClone(taskProfiles)}]:[];const b={select:query=>{if(table==='service_orders')selectCalls.push(query);return b;},is:()=>b,order:()=>b,eq:()=>b,not:()=>b,limit:()=>b,single:()=>{if(table==='settings'){settingsCalls++;if(!ctx.canWrite())return Promise.resolve({data:null,error:{message:'Cannot coerce the result to a single JSON object'}});}return Promise.resolve({data:data[0],error:null});},then:(resolve,reject)=>Promise.resolve({data,error:null}).then(resolve,reject)};return b;},rpc:async(fn,args)=>{if(fn==='entity_activity_results')return {data:[],error:null};rpcCalls.push({fn,args});return {data:fn==='service_order_save_one'?'order1':3,error:null};}};
  ctx={db:()=>db,canWrite:()=>true,role:()=>ctx.canWrite()?'admin':'engineer',userId:()=>person,profiles:()=>[{id:person,full_name:'Анна',role:'engineer',active:true}],ensureRefs:async()=>{},isPhone:()=>false,wireDrag:vi.fn(),notify:vi.fn(),showBoard:vi.fn(),showOrder:vi.fn(),openJob:vi.fn(),openTrip:vi.fn(),tripStatus:s=>s,confirmLeave:()=>false,reason:async()=>null};ui=createServiceOrders(ctx);ui.init();});
 afterEach(async()=>{await win.happyDOM.close();vi.unstubAllGlobals();});
 it('explains stage prerequisites before calling the server and prevents closing over an active shared trip',async()=>{
@@ -57,14 +57,13 @@ it('shows task children immediately inside a request while keeping kanban childr
 it('does not open a task or load its data when the trip leave guard is declined',async()=>{
  await ui.open('order1');ctx.beforeOpen=vi.fn(()=>false);ctx.ensureRefs=vi.fn();
  await ui.open(null,job);expect(ctx.beforeOpen).toHaveBeenCalledOnce();
- expect(ctx.ensureRefs).not.toHaveBeenCalled();expect(doc.querySelector('h2').textContent).toBe('Задание №1');
+ expect(ctx.ensureRefs).not.toHaveBeenCalled();expect(doc.querySelector('h2').textContent).toBe('Задание №1 · Ремонт');
 });
 it('guards expense links and disables stage actions while the task result is unsaved',async()=>{
  ctx.tripCostSummary=vi.fn(async()=>[{trip_id:'trip1',distance_cost:120}]);ctx.confirmLeave=vi.fn(()=>false);
  await ui.open('order1');await new Promise(r=>setTimeout(r,0));
  doc.querySelector('[data-result-qty]').value='1';doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));
- expect(doc.querySelector('[data-order-next="review"]').disabled).toBe(true);
- expect(doc.querySelector('[data-order-next="review"]').textContent).toBe('Передать на проверку');
+ doc.getElementById('orderMore').click();const review=[...doc.querySelectorAll('.entity-menu-item')].find(b=>b.textContent==='Передать на проверку');expect(review.disabled).toBe(true);doc.querySelector('.entity-actions-menu').close();
  doc.querySelector('#orderTripCostAllocation [data-order-trip]').click();
  expect(ctx.confirmLeave).toHaveBeenCalledOnce();expect(ctx.openTrip).not.toHaveBeenCalled();expect(ui.isDirty()).toBe(true);
 });
@@ -88,9 +87,9 @@ it('uses the direct request foreign key when embedding jobs on the task board an
 it('keeps mobile kanban by default and uses list only when selected',async()=>{ctx.isPhone=()=>true;await ui.board();expect(doc.querySelectorAll('.kcol')).toHaveLength(5);expect(doc.querySelector('[data-order-status]')).not.toBeNull();const view=doc.getElementById('orderViewMode');view.value='list';await view.onchange({target:view});expect(doc.querySelectorAll('.kcol')).toHaveLength(0);expect(doc.getElementById('orderList').className).toBe('klist');});
 it('creates a task against exactly one originating request',async()=>{await ui.open(null,job);doc.getElementById('orderTitle').value='Проверка';await doc.getElementById('orderSave').onclick();expect(rpcCalls[0]).toEqual({fn:'service_order_save_one',args:{p_id:null,p_expected:null,p_data:{title:'Проверка',work_mode:'onsite',date_from:'',date_to:'',engineer_ids:[],lead_engineer:null,instructions:''},p_job:job,p_items:[]}});});
 it('adds a selected stock item with a frozen catalog ID and quantity',async()=>{stock=[{id:'stock1',name:'Прокладка',sku:'S-1',unit:'шт',price:50,cost:30,active:true,current_since:'2026-09-23T00:00:00Z'}];await ui.open(null,job);doc.getElementById('orderTitle').value='Замена';await doc.getElementById('orderMaterialAdd').onclick();const select=doc.querySelector('[data-i-stock]');select.value='stock1';select.dispatchEvent(new win.Event('change',{bubbles:true}));const qty=doc.querySelector('[data-i-qty]');qty.value='2';qty.dispatchEvent(new win.Event('input',{bubbles:true}));expect(doc.getElementById('orderMaterialTotals').textContent).toContain('100');expect(doc.getElementById('orderMaterialTotals').textContent).toContain('60');await doc.getElementById('orderSave').onclick();expect(rpcCalls[0].args.p_items).toEqual([{id:null,job_id:job,kind:'material',stock_catalog_id:'stock1',work_catalog_id:null,billable:true,billable_reason:'',tariff_profile:null,title:'Прокладка',unit:'шт',planned_qty:2}]);});
-it('saves reported quantities with optimistic revision and never writes to trips/jobs',async()=>{await ui.open('order1');const el=doc.querySelector('[data-result-qty]');el.value='1';el.dispatchEvent(new win.Event('input',{bubbles:true}));expect(ui.isDirty()).toBe(true);await doc.getElementById('orderResultSave').onclick();expect(rpcCalls).toHaveLength(1);expect(rpcCalls[0]).toEqual({fn:'service_order_result',args:{p_id:'order1',p_expected:2,p_items:[{id:'item1',done_qty:1,result_note:''}],p_note:''}});});
+it('saves reported quantities with optimistic revision and never writes to trips/jobs',async()=>{await ui.open('order1');const el=doc.querySelector('[data-result-qty]');el.value='1';el.dispatchEvent(new win.Event('input',{bubbles:true}));expect(ui.isDirty()).toBe(true);await doc.getElementById('orderResultSave').onclick();expect(rpcCalls).toHaveLength(1);expect(rpcCalls[0]).toEqual({fn:'service_order_record_result',args:{p_id:'order1',p_expected:2,p_items:[{id:'item1',done_qty:1,result_note:''}],p_note:'',p_actual_date:expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),p_operation_id:expect.any(String),p_basis:null}});});
 it('blocks leaving a dirty task when discard is declined',async()=>{await ui.open('order1');doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));expect(await ui.leave()).toBe(false);expect(ui.isDirty()).toBe(true);});
-it('preserves entered result on a revision failure',async()=>{ctx.db().rpc=async()=>({error:{message:'Задание изменено другим пользователем'}});await ui.open('order1');const el=doc.querySelector('[data-result-qty]');el.value='1';el.dispatchEvent(new win.Event('input',{bubbles:true}));await doc.getElementById('orderResultSave').onclick();expect(el.value).toBe('1');expect(ui.isDirty()).toBe(true);expect(doc.getElementById('orderError').textContent).toContain('изменено');});
+it('preserves entered result on a revision failure',async()=>{ctx.db().rpc=async()=>({error:{message:'Задание изменено другим пользователем'}});await ui.open('order1');const el=doc.querySelector('[data-result-qty]');el.value='1';el.dispatchEvent(new win.Event('input',{bubbles:true}));await doc.getElementById('orderResultSave').onclick();expect(el.value).toBe('1');expect(ui.isDirty()).toBe(true);expect(doc.getElementById('orderResultError').textContent).toContain('изменено');});
 it('engineers cannot confirm and transferred scope is excluded from the remainder',()=>{expect(nextOrderStates('review',false)).toEqual([]);expect(remainingQty({planned_qty:5,done_qty:2,transferred_qty:1})).toBe(2);});
 it('calculates material plan and fact only from the saved price snapshots',()=>{expect(materialTotals([{kind:'material',planned_qty:4,done_qty:2,unit_price_snapshot:100,unit_cost_snapshot:60},{kind:'work',planned_qty:9,done_qty:9,unit_price_snapshot:999,unit_cost_snapshot:999}])).toEqual({planRevenue:400,planCost:240,factRevenue:200,factCost:120});});
 it('counts transferred material only on the carrying task, not on both tasks',()=>{expect(materialTotals([{kind:'material',planned_qty:5,done_qty:1,transferred_qty:4,unit_price_snapshot:100,unit_cost_snapshot:60},{kind:'material',planned_qty:4,done_qty:0,transferred_qty:0,unit_price_snapshot:100,unit_cost_snapshot:60}])).toEqual({planRevenue:500,planCost:300,factRevenue:100,factCost:60});});
@@ -108,7 +107,7 @@ it('shows only confirmed trip expense shares on the task',async()=>{ctx.tripCost
 it('rolls confirmed task trip costs up to the originating request',async()=>{doc.body.insertAdjacentHTML('beforeend','<section id="jobOrders"></section>');ctx.tripCostSummary=vi.fn(async()=>[{trip_id:'trip1',distance_km:12,distance_cost:120,labor_hours:2,labor_cost:80}]);await ui.requestPanel(job);expect(doc.getElementById('jobOrders').textContent).toContain('Выездные затраты заданий');expect(doc.getElementById('jobOrders').textContent).toContain('200');expect(ctx.tripCostSummary).toHaveBeenCalledWith('order1');});
 it('explains a closed historical request with an unconfirmed task on the board and in the task',async()=>{order.status='draft';order.created_by=null;order.jobs.status='done';ctx.isPhone=()=>true;await ui.board();expect(selectCalls[0]).toContain('created_by');expect(selectCalls[0]).toContain('status,clients(name)');expect(doc.querySelector('.order-history-note')).toBeNull();expect(doc.getElementById('orderHistoricalNote').textContent).toContain('1');doc.getElementById('orderHistorical').checked=true;await doc.getElementById('orderHistorical').onchange({target:doc.getElementById('orderHistorical')});expect(doc.querySelector('.order-history-note').textContent).toContain('подтверждённый результат работ не переносился');await ui.open('order1');expect(doc.querySelector('#orderEditor [role="note"]').textContent).toContain('Заявка закрыта в старой системе');});
 it('does not mark a newly created draft as historical even when its request is closed',async()=>{order.status='draft';order.created_by=person;order.jobs.status='done';await ui.board();expect(doc.querySelector('.order-history-note')).toBeNull();await ui.open('order1');expect(doc.querySelector('#orderEditor [role="note"]')).toBeNull();});
-it('allows a manager to record historical task fact with an explicit basis while keeping the draft',async()=>{order.status='draft';order.created_by=null;order.jobs.status='done';await ui.open('order1');expect(doc.querySelector('[data-result-qty]').disabled).toBe(false);expect(doc.getElementById('orderResultBasis')).not.toBeNull();doc.querySelector('[data-result-qty]').value='1';await doc.getElementById('orderResultSave').onclick();expect(rpcCalls).toHaveLength(0);expect(doc.getElementById('orderError').textContent).toContain('основание');doc.getElementById('orderResultBasis').value='Акт №42';await doc.getElementById('orderResultSave').onclick();expect(rpcCalls[0]).toEqual({fn:'service_order_historical_result',args:{p_id:'order1',p_expected:2,p_items:[{id:'item1',done_qty:1,result_note:''}],p_note:'',p_basis:'Акт №42'}});expect(order.status).toBe('draft');});
+it('allows a manager to record historical task fact with an explicit basis while keeping the draft',async()=>{order.status='draft';order.created_by=null;order.jobs.status='done';await ui.open('order1');expect(doc.querySelector('[data-result-qty]').disabled).toBe(false);expect(doc.getElementById('orderResultBasis')).not.toBeNull();doc.querySelector('[data-result-qty]').value='1';await doc.getElementById('orderResultSave').onclick();expect(rpcCalls).toHaveLength(0);expect(doc.getElementById('orderResultError').textContent).toContain('основание');doc.getElementById('orderResultBasis').value='Акт №42';await doc.getElementById('orderResultSave').onclick();expect(rpcCalls[0]).toEqual({fn:'service_order_record_result',args:{p_id:'order1',p_expected:2,p_items:[{id:'item1',done_qty:1,result_note:''}],p_note:'',p_basis:'Акт №42',p_actual_date:expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),p_operation_id:expect.any(String)}});expect(order.status).toBe('draft');});
 it('does not offer historical fact entry to an engineer or a new closed-request draft',async()=>{order.status='draft';order.created_by=null;order.jobs.status='done';ctx.canWrite=()=>false;await ui.open('order1');expect(doc.getElementById('orderResultBasis')).toBeNull();expect(doc.querySelector('[data-result-qty]').disabled).toBe(true);order.created_by=person;ctx.canWrite=()=>true;await ui.open('order1');expect(doc.getElementById('orderResultBasis')).toBeNull();});
 
 it('offers only editable planned trips that do not already include this task, without writing the plan',async()=>{
@@ -121,21 +120,21 @@ it('keeps result edits before adding a task to an existing trip',async()=>{
  await ui.open('order1');doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));expect(doc.getElementById('orderTripExisting').disabled).toBe(true);await doc.getElementById('orderTripExisting').onclick();expect(doc.getElementById('orderTripPicker').hidden).toBe(true);expect(ctx.openTrip).not.toHaveBeenCalled();expect(ui.isDirty()).toBe(true);
 });
 it('shows execution before administrative fields for engineers and keeps a readable brief',async()=>{
- ctx.canWrite=()=>false;order.instructions='Проверить насос';await ui.open('order1');expect(doc.getElementById('orderOrganization').hidden).toBe(true);expect(doc.querySelector('.order-brief').textContent).toContain('Проверить насос');expect(doc.getElementById('orderPane-result').hidden).toBe(false);expect(doc.getElementById('orderPane-scope').hidden).toBe(true);expect(doc.getElementById('orderTab-result').getAttribute('aria-selected')).toBe('true');
+ ctx.canWrite=()=>false;order.instructions='Проверить насос';await ui.open('order1');expect(doc.getElementById('orderOrganization').hidden).toBe(true);expect(doc.querySelector('.order-brief').textContent).toContain('Проверить насос');expect(doc.getElementById('orderPane-history').hidden).toBe(false);expect(doc.getElementById('orderPane-scope').hidden).toBe(true);expect(doc.getElementById('orderTab-history').getAttribute('aria-selected')).toBe('true');
 });
 it('waits for the request navigation guard and keeps the current task when it refuses',async()=>{
  ctx.beforeOpen=vi.fn(async()=>true);await ui.open('order1');const previous=doc.getElementById('orderTitle');const result=doc.querySelector('[data-result-qty]');ctx.beforeOpen=vi.fn(async()=>false);await ui.open(null,job);expect(doc.getElementById('orderTitle')).toBe(previous);expect(doc.querySelector('[data-result-qty]')).toBe(result);expect(ui.currentId()).toBe('order1');
 });
 
-it('routes changes to the base request scope through the estimate and leaves additions to separate tasks',async()=>{order.status='draft';await ui.open('order1');expect(doc.getElementById('orderItemAdd')).toBeNull();expect(doc.getElementById('orderMaterialAdd')).toBeNull();expect(doc.querySelector('.order-item-fields').hidden).toBe(true);expect(doc.getElementById('orderExtra')).not.toBeNull();order.seed_request_id=null;await ui.open('order1');expect(doc.getElementById('orderItemAdd')).not.toBeNull();expect(doc.querySelector('.order-item-fields').hidden).toBe(false);});
+it('routes changes to the base request scope through the estimate and leaves additions to separate tasks',async()=>{order.status='draft';await ui.open('order1');expect(doc.getElementById('orderItemAdd')).toBeNull();expect(doc.getElementById('orderMaterialAdd')).toBeNull();expect(doc.querySelector('.order-item-fields').hidden).toBe(true);doc.getElementById('orderMore').click();expect([...doc.querySelectorAll('.entity-menu-item')].some(b=>b.textContent==='Дополнительное задание')).toBe(true);doc.querySelector('.entity-actions-menu').close();order.seed_request_id=null;await ui.open('order1');expect(doc.getElementById('orderItemAdd')).not.toBeNull();expect(doc.querySelector('.order-item-fields').hidden).toBe(false);});
 
 it('shows assigned scope first and keeps active engineers on the result',async()=>{
  ctx.canWrite=()=>false;order.status='assigned';await ui.open('order1');expect(doc.getElementById('orderPane-scope').hidden).toBe(false);expect(doc.querySelector('[data-result-qty]').disabled).toBe(true);
- order.id='active-other';order.status='in_progress';await ui.open(order.id);expect(doc.getElementById('orderPane-result').hidden).toBe(false);expect(doc.querySelector('[data-result-qty]').disabled).toBe(false);
+ order.id='active-other';order.status='in_progress';await ui.open(order.id);expect(doc.getElementById('orderPane-history').hidden).toBe(false);expect(doc.querySelector('[data-result-qty]').disabled).toBe(false);
 });
 it('switches mounted panels without writes, leave checks or loss of unsaved result values',async()=>{
  ctx.canWrite=()=>false;ctx.confirmLeave=vi.fn(()=>false);await ui.open('order1');const qty=doc.querySelector('[data-result-qty]');qty.value='1.5';qty.dispatchEvent(new win.Event('input',{bubbles:true}));
- doc.getElementById('orderTab-scope').click();doc.getElementById('orderTab-travel').click();doc.getElementById('orderTab-history').click();doc.getElementById('orderTab-result').click();
+ doc.getElementById('orderTab-scope').click();doc.getElementById('orderTab-travel').click();doc.getElementById('orderTab-history').click();doc.getElementById('orderTab-history').click();
  expect(doc.querySelector('[data-result-qty]')).toBe(qty);expect(qty.value).toBe('1.5');expect(ui.isDirty()).toBe(true);expect(ctx.confirmLeave).not.toHaveBeenCalled();expect(rpcCalls).toHaveLength(0);
 });
 it('saves mounted result values while another panel is selected and retains that tab after save',async()=>{
@@ -144,10 +143,10 @@ it('saves mounted result values while another panel is selected and retains that
 });
 it('retains the initial result tab after saving without any tab navigation',async()=>{
  ctx.canWrite=()=>false;await ui.open('order1');
- expect(doc.getElementById('orderPane-result').hidden).toBe(false);
+ expect(doc.getElementById('orderPane-history').hidden).toBe(false);
  const qty=doc.querySelector('[data-result-qty]');qty.value='1';qty.dispatchEvent(new win.Event('input',{bubbles:true}));ctx.confirmLeave=()=>true;
  await doc.getElementById('orderResultSave').onclick();
- expect(doc.getElementById('orderPane-result').hidden).toBe(false);expect(doc.getElementById('orderTab-result').getAttribute('aria-selected')).toBe('true');expect(ui.isDirty()).toBe(false);
+ expect(doc.getElementById('orderPane-history').hidden).toBe(false);expect(doc.getElementById('orderTab-history').getAttribute('aria-selected')).toBe('true');expect(ui.isDirty()).toBe(false);
 });
 it('routes invalid hidden plan fields back to scope without discarding other values',async()=>{
  order.status='assigned';await ui.open('order1');doc.getElementById('orderTitle').value='';doc.getElementById('orderInstructions').value='Сохранить инструкцию';doc.getElementById('orderTab-history').click();
@@ -166,10 +165,10 @@ it('collects edited plan values from a mounted hidden scope',async()=>{
  await doc.getElementById('orderSave').onclick();expect(rpcCalls[0].args.p_data.title).toBe('Новая задача');expect(rpcCalls[0].args.p_items[0].planned_qty).toBe(3);expect(doc.getElementById('orderPane-history').hidden).toBe(false);
 });
 
-it('keeps unchanged result save neutral and promotes it only after edits without disabling the workflow',async()=>{
- await ui.open('order1');let save=doc.getElementById('orderResultSave');expect(save.classList.contains('amber')).toBe(false);expect(save.disabled).toBe(false);
+it('keeps modal result submit prominent and available before and after draft edits',async()=>{
+ await ui.open('order1');let save=doc.getElementById('orderResultSave');expect(save.classList.contains('amber')).toBe(true);expect(save.disabled).toBe(false);
  doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));expect(save.classList.contains('amber')).toBe(true);expect(save.disabled).toBe(false);
- ctx.confirmLeave=()=>true;await save.onclick();save=doc.getElementById('orderResultSave');expect(save.classList.contains('amber')).toBe(false);expect(save.disabled).toBe(false);
+ ctx.confirmLeave=()=>true;await save.onclick();save=doc.getElementById('orderResultSave');expect(save.classList.contains('amber')).toBe(true);expect(save.disabled).toBe(false);
 });
 
 it('shares a pending async discard and preserves the task until the decision resolves',async()=>{
@@ -178,6 +177,61 @@ it('shares a pending async discard and preserves the task until the decision res
  const first=ui.leave(),second=ui.leave();expect(ctx.confirmLeave).toHaveBeenCalledOnce();expect(ui.isDirty()).toBe(true);
  resolve(false);expect(await first).toBe(false);expect(await second).toBe(false);expect(ui.isDirty()).toBe(true);expect(qty.value).toBe('1.5');
  ctx.confirmLeave=vi.fn(async()=>true);expect(await ui.leave()).toBe(true);expect(ui.isDirty()).toBe(false);
+});
+
+it('opens a mounted result dialog and keeps its draft when it closes',async()=>{
+ ctx.canWrite=()=>false;await ui.open('order1');const qty=doc.querySelector('[data-result-qty]');const dialog=await ui.openResult('order1');
+ expect(dialog.open).toBe(true);expect(dialog.classList.contains('entity-result-dialog')).toBe(true);expect(dialog.querySelector('[data-result-qty]')).toBe(qty);
+ expect(dialog.textContent).toContain('Выполнено всего');expect(dialog.textContent).toContain('ранее 0');expect(dialog.textContent).not.toContain('Клиент · Насосы');
+ qty.value='1';qty.dispatchEvent(new win.Event('input',{bubbles:true}));dialog.close();expect(qty.isConnected).toBe(true);expect(doc.getElementById('orderAuxiliary').contains(qty)).toBe(true);
+ expect(JSON.parse(win.sessionStorage.getItem(`dlight:result-draft:${person}:order1`)).values.items[0].done_qty).toBe('1');const reopened=await ui.openResult('order1');expect(reopened.querySelector('[data-result-qty]').value).toBe('1');
+});
+
+it('guards native result dismissal and restores focus after accepting closure',async()=>{
+ ctx.canWrite=()=>false;ctx.confirm=vi.fn(async()=>false);await ui.open('order1');const trigger=doc.getElementById('orderRecordResult');trigger.focus();const dialog=await ui.openResult('order1');const qty=dialog.querySelector('[data-result-qty]');qty.value='1';qty.dispatchEvent(new win.Event('input',{bubbles:true}));
+ dialog.dispatchEvent(new win.Event('cancel',{cancelable:true}));await new Promise(r=>setTimeout(r,0));expect(dialog.open).toBe(true);expect(ctx.confirm).toHaveBeenCalledOnce();
+ ctx.confirm=vi.fn(async()=>true);dialog.dispatchEvent(new win.Event('cancel',{cancelable:true}));await new Promise(r=>setTimeout(r,0));expect(dialog.open).toBe(false);expect(doc.activeElement).toBe(trigger);expect(ui.isDirty()).toBe(true);
+});
+
+it('retries a failed result with the same operation ID and starts a new operation after a payload change',async()=>{
+ await ui.open('order1');const calls=[];ctx.db().rpc=async(fn,args)=>{if(fn==='entity_activity_results')return {data:[],error:null};calls.push({fn,args});return {error:{message:'Связь потеряна'}};};
+ const qty=doc.querySelector('[data-result-qty]');qty.value='1';qty.dispatchEvent(new win.Event('input',{bubbles:true}));await doc.getElementById('orderResultSave').onclick();await doc.getElementById('orderResultSave').onclick();
+ expect(calls).toHaveLength(2);expect(calls[0].args.p_operation_id).toBe(calls[1].args.p_operation_id);expect(qty.value).toBe('1');expect(doc.getElementById('orderResultError').textContent).toContain('Связь потеряна');
+ qty.value='1.5';qty.dispatchEvent(new win.Event('input',{bubbles:true}));await doc.getElementById('orderResultSave').onclick();expect(calls[2].args.p_operation_id).not.toBe(calls[1].args.p_operation_id);expect(calls.every(c=>c.fn==='service_order_record_result')).toBe(true);
+});
+
+it('restores a result draft with its original revision and isolates it from another user',async()=>{
+ await ui.open('order1');const qty=doc.querySelector('[data-result-qty]');qty.value='1.5';qty.dispatchEvent(new win.Event('input',{bubbles:true}));ctx.confirmLeave=()=>true;order.revision=3;await ui.open('order1');
+ expect(doc.querySelector('[data-result-qty]').value).toBe('1.5');expect(doc.getElementById('orderResultError').textContent).toContain('изменилось');await doc.getElementById('orderResultSave').onclick();expect(rpcCalls[0].args.p_expected).toBe(2);
+ ctx.userId=()=> 'another-user';await ui.open('order1');expect(doc.querySelector('[data-result-qty]').value).toBe('0');
+});
+
+it('validates empty quantities and missing dates instead of silently recording zeros',async()=>{
+ await ui.open('order1');const qty=doc.querySelector('[data-result-qty]');qty.value='';await doc.getElementById('orderResultSave').onclick();expect(rpcCalls).toHaveLength(0);expect(doc.getElementById('orderResultError').textContent).toContain('объём');
+ qty.value='0';doc.getElementById('orderResultDate').value='';await doc.getElementById('orderResultSave').onclick();expect(rpcCalls).toHaveLength(0);expect(doc.getElementById('orderResultError').textContent).toContain('дату');
+});
+
+it('exposes reporting only to permitted executors and returns eligible tasks across requests',async()=>{
+ ctx.canWrite=()=>false;await ui.open('order1');expect(await ui.eligibleOrdersForRequest(null)).toHaveLength(1);expect(await ui.eligibleOrdersForRequest('other-request')).toHaveLength(0);
+ ctx.userId=()=> 'unassigned';await ui.open('order1');expect(doc.getElementById('orderRecordResult')).toBeNull();expect(await ui.eligibleOrdersForRequest(null)).toHaveLength(0);await ui.openResult('order1');expect(doc.querySelector('dialog.entity-result-dialog')).toBeNull();
+});
+
+it('never moves an unsaved result between users when the account changes',async()=>{
+ await ui.open('order1');const qty=doc.querySelector('[data-result-qty]');qty.value='1.5';qty.dispatchEvent(new win.Event('input',{bubbles:true}));
+ ctx.userId=()=> 'another-user';await ui.open('order1');expect(doc.querySelector('[data-result-qty]').value).toBe('0');expect(win.sessionStorage.getItem('dlight:result-draft:another-user:order1')).toBeNull();
+ expect(JSON.parse(win.sessionStorage.getItem(`dlight:result-draft:${person}:order1`)).values.items[0].done_qty).toBe('1.5');
+});
+
+it('lets the user explicitly replace an outdated local draft with the current result',async()=>{
+ await ui.open('order1');const qty=doc.querySelector('[data-result-qty]');qty.value='1.5';qty.dispatchEvent(new win.Event('input',{bubbles:true}));ctx.confirmLeave=()=>true;order.revision=3;order.service_order_items[0].done_qty=1;await ui.open('order1');
+ const reset=doc.getElementById('orderResultError').querySelector('button');ctx.confirm=vi.fn(async()=>false);await reset.onclick();expect(doc.querySelector('[data-result-qty]').value).toBe('1.5');expect(ui.isDirty()).toBe(true);
+ ctx.confirm=vi.fn(async()=>true);await reset.onclick();expect(doc.querySelector('[data-result-qty]').value).toBe('1');expect(ui.isDirty()).toBe(false);expect(win.sessionStorage.getItem(`dlight:result-draft:${person}:order1`)).toBeNull();await doc.getElementById('orderResultSave').onclick();expect(rpcCalls[0].args.p_expected).toBe(3);
+});
+
+it('does not reopen the previous task when its result finishes after navigation',async()=>{
+ await ui.open('order1');let finish;ctx.db().rpc=async(fn)=>fn==='entity_activity_results'?{data:[],error:null}:new Promise(resolve=>finish=()=>resolve({data:{revision:3},error:null}));
+ const saving=doc.getElementById('orderResultSave').onclick();order.id='order2';order.title='Другое задание';await ui.open('order2');finish();await saving;
+ expect(ui.currentId()).toBe('order2');expect(doc.querySelector('h2').textContent).toContain('Другое задание');expect(win.sessionStorage.getItem(`dlight:result-draft:${person}:order2`)).toBeNull();
 });
 
 
