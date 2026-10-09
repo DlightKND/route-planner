@@ -1,3 +1,11 @@
+# Прямые жесты графика подготовлены · 09.10.2026
+
+Ветка `feat/direct-schedule-gestures-20261009` от main `7c4fee7e253d99c138231fb39fd573219e60e869` (включает опубликованную PR #154 правку отступа инженера и PR #152 мобильный ряд поиск → жёлтый плюс → ⋯). Перенос частей между соседними днями, скрепление ручных разрезов, отмена, фактическая высота коротких частей и компактная панель готовы к отдельному выпуску. Детали и проверки: `docs/direct-schedule-gestures-20261009.md`. Следующий шаг: PR/CI, squash с `[deploy]`, проверка main deployment и публичной сборки. Разрешение пользователя на PR/merge/deploy сохраняется; повторно не спрашивать.
+
+Незавершённые согласования: draft PR #153, remote HEAD `30f9b8075cdf9fbde6283d0c8c09f1eec2fb42a6`, ветка `feat/engineer-approval-chain-20261009`, локальный основной рабочий каталог `/workspace/scratch/dc413c3ec650/route-planner`. Миграция `20261009031015_engineer_schedule_approval_chain.sql` пока НЕ установлена: test Supabase apply_migration возвращал `Invalid or expired requestState`; production не менялся. Перед публикацией PR #153 обязательно установить/проверить миграцию на test, провести role/RPC/legacy/advisors QA, затем production. Supabase не нужен для текущего UX-выпуска, его не связывать с заблокированным PR.
+
+Перед продолжением PR #153 объединить свежий main и разрешить конфликты графика: сохранить новые drag/join/панель и одновременно gtCanSplitBlock + инженерский RPC согласования, запрет прямых переносов инженеру, делегирование согласований внутри ⋯. Не заменить менеджерскую новую gtSaveCuts старой версией и не удалить инженерскую ветку proposal. PR #153 build `37884609274` и полный visual `37884609277` success для прежнего feature head; это НЕ проверка будущей интеграции с текущими жестами.
+
 # Меню телефона и график опубликованы · 09.10.2026
 
 [PR #151](https://github.com/DlightKND/route-planner/pull/151) слит squash: `b02893ac00a1c2c97d811529f75a38486ac83dae`. Source `6b531e2cb155ec168891c8e9840a289fe483cff7`; source/tested/main tree `0f90134a7b70d05493fdd438f2ee2eba0554e03b` совпал. PR build `37859914471` и main build/deploy `37860191581` **success**. Public HTML/JS/CSS HTTP 200; JS `./assets/index-BphOBr21.js`, CSS `./assets/index-CdTcAvW6.css`, stamp **95c2084**. Подтверждены три ⋯ меню, вертикальный разрез, ручные инструменты времени и навигация GPS-журнала.

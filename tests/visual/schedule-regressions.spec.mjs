@@ -81,7 +81,7 @@ test('split action targets the selected work piece and Escape cancels its previe
 });
 
 
-test('split saves the selected work part, moving its continuation keeps hours and rejects overlap',async({page},info)=>{
+test('split saves the selected work part and dragging its continuation back joins it',async({page},info)=>{
  const errors=await openGraph(page,info,{scheduleJourney:true});let week=await openDay(page);
  let pieces=week.locator('.vg-piece[data-gb="t'+trip+'"]');
  const original=await pieces.evaluateAll(els=>els.map(el=>({from:Number(el.dataset.pieceFrom),to:Number(el.dataset.pieceTo)})));
@@ -100,10 +100,16 @@ test('split saves the selected work part, moving its continuation keeps hours an
  let moved=week.locator('.vg-piece[data-gb="t'+trip+'"][data-piece-at="'+at+'"]');await expect(moved).toHaveAttribute('data-piece-from',String(split+.5));
  const total=await pieces.evaluateAll(els=>els.reduce((n,el)=>n+Number(el.dataset.pieceTo)-Number(el.dataset.pieceFrom),0));expect(total).toBeCloseTo(hours);
  const before=await moved.boundingBox();await page.mouse.move(before.x+8,before.y+3);await page.mouse.down();await page.mouse.move(before.x+8,before.y-17);await page.mouse.up();
- await expect(page.locator('#toast')).toContainText('после предыдущей');expect(await page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(2);await expect(moved).toHaveAttribute('data-piece-from',String(split+.5));
- await page.screenshot({path:'test-results/schedule-regressions/'+info.project.name+'-split-saved.png'});
- await moved.locator('[data-gtools]').click();await expect(page.locator('.gpop [data-greset]')).toBeVisible();await page.locator('.gpop .gp-layout summary').click();await expect(page.locator('.gpop [data-cut-del]')).toHaveCount(1);
- await expect(page.locator('.gpop [data-greset]')).toBeInViewport({ratio:1});await page.locator('.gpop [data-greset]').click();await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(3);expect(await page.evaluate(()=>window.__visualQA.scheduleWrites[2].record.day_plan)).toBeNull();await expect(pieces.filter({hasNot:page.locator('.road')})).toHaveCount(1);await clean(page,errors);
+ await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(3);
+ expect(await page.evaluate(()=>window.__visualQA.scheduleWrites[2].record.day_plan.cuts)).toEqual([]);
+ await expect(pieces.filter({hasNot:page.locator('.road')})).toHaveCount(1);
+ const joined=pieces.filter({hasNot:page.locator('.road')}).first();await joined.locator('[data-gtools]').click();
+ await expect(page.locator('.gpop .gp-secondary')).toBeHidden();await page.locator('.gpop [data-pop-more]').click();
+ await expect(page.locator('.gpop [data-greset]')).toBeVisible();await page.locator('.gpop .gp-layout summary').click();
+ await expect(page.locator('.gpop [data-cut-del]')).toHaveCount(0);
+ await expect(page.locator('.gpop [data-greset]')).toBeInViewport({ratio:1});await page.locator('.gpop [data-greset]').click();
+ await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(4);
+ expect(await page.evaluate(()=>window.__visualQA.scheduleWrites[3].record.day_plan)).toBeNull();await clean(page,errors);
 });
 
 test('request cards open their page and the engineer filter survives day/week transitions',async({page},info)=>{
