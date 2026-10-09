@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, signedOut = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, approvalJourney = false, signedOut = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -292,6 +292,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     queryErrors: [],
     blockedWrites: [],
     scheduleWrites: [],
+    approvalWrites: [],
     ready: true,
   });
   const reject = (name) => {
@@ -314,6 +315,12 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     {id:'push:demo-3',recipient_id:session.user.id,entity_kind:'trip',entity_id:trip,title:'Выезд сегодня',body:'Отправлено напоминание на 05.10.2026.',created_at:'2026-10-04T12:00:00Z',source:'push',read_at:stamp},
     {id:'event:foreign',recipient_id:other,entity_kind:'job',entity_id:job,title:'Чужое уведомление',body:'Не показывать',created_at:stamp,source:'event',read_at:null},
   ].map(n=>({...n,search_text:n.title+' '+n.body}));
+  tables.staff_day=[];
+  const approvalRows=[];
+  const nextManager=other;
+  if(approvalJourney===true)approvalRows.push({id:'70000000-0000-4000-8000-000000000001',kind:'window',target:engineer,entity_kind:'staff',entity_id:engineer,date:'2026-10-05',status:'pending',revision:0,requester:engineer,assignee:manager,path:[engineer,manager],reason:'Изменение рабочего окна',preview:{date:'2026-10-05',field:'start',value:8,before:{start:7,end:16,tol:1}},history:[{actor:engineer,recipient:manager,action:'submitted',at:stamp,note:''}],created_at:stamp});
+  audit.approvals=approvalRows;
+  const approvalList=()=>structuredClone(approvalRows.filter(r=>r.path.includes(session.user.id)).map(r=>({...r,can_decide:r.status==='pending'&&r.assignee===session.user.id,can_cancel:r.status==='pending'&&r.requester===session.user.id,next_manager:r.assignee===manager?{id:nextManager,name:'Иван Коваленко'}:null})));
   const unassignedID='60000000-0000-4000-8000-000000000001';
   const unknownVehicle=tables.vehicles[0]?.id||'vehicle-a';
   tables.unassigned_tracks=unassignedJourney?[{id:unassignedID,vehicle_id:unknownVehicle,started_at:'2026-10-04T07:00:00Z',last_ts:'2026-10-04T09:00:00Z',ended_at:'2026-10-04T09:00:00Z',state:role==='engineer'?'charged':'review',revision:0,review_note:'Историческая поездка: проверь границы и пробег',engineer_id:engineer,resolution:{cost:1500,km:120,rate:12.5,currency:'грн',reason:'Подтверждённая личная поездка'}}]:[];
@@ -440,11 +447,34 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
       if(name==='notification_mark_all_read'){
         let count=0;tables.notification_inbox.forEach(n=>{if(n.recipient_id===session.user.id&&!n.read_at&&n.created_at<=args.p_before){n.read_at=stamp;count++;}});return {data:count,error:null};
       }
+      if(name==='approval_list')return {data:approvalList(),error:null};
+      if(approvalJourney&&name==='schedule_window_change'){
+        const own=role!=='engineer'||args.p_engineer===session.user.id;if(!own)return {error:{message:'Можно изменять только собственный день'}};
+        const prior=tables.staff_day.find(d=>d.engineer===args.p_engineer&&d.date===args.p_date),w={start:prior?.start_h??7,end:prior?.end_h??16,tol:prior?.tol_h??1};
+        if(JSON.stringify(w)!==JSON.stringify(args.p_expected))return {error:{message:'Рабочее окно изменилось'}};
+        const pending=role==='engineer'&&(args.p_field==='start'?args.p_value>w.start:args.p_value<w[args.p_field]);
+        audit.approvalWrites.push({name,args:structuredClone(args)});
+        if(pending){const row={id:'70000000-0000-4000-8000-'+String(approvalRows.length+1).padStart(12,'0'),kind:'window',target:args.p_engineer,entity_kind:'staff',entity_id:args.p_engineer,date:args.p_date,status:'pending',revision:0,requester:session.user.id,assignee:manager,path:[session.user.id,manager],preview:{date:args.p_date,field:args.p_field,value:args.p_value,before:w},reason:'Изменение рабочего окна',history:[{actor:session.user.id,recipient:manager,action:'submitted',at:stamp,note:''}],created_at:stamp};approvalRows.push(row);return {data:{status:'pending',id:row.id},error:null};}
+        const rec=prior||{engineer:args.p_engineer,date:args.p_date,start_h:w.start,end_h:w.end,tol_h:w.tol};rec[{start:'start_h',end:'end_h',tol:'tol_h'}[args.p_field]]=args.p_value;if(!prior)tables.staff_day.push(rec);return {data:{status:'applied'},error:null};
+      }
+      if(approvalJourney&&name==='schedule_split_propose'){
+        const row={id:'70000000-0000-4000-8000-'+String(approvalRows.length+1).padStart(12,'0'),kind:'split',target:args.p_id,entity_kind:args.p_kind,entity_id:args.p_id,date:args.p_date,status:'pending',revision:0,requester:session.user.id,assignee:manager,path:[session.user.id,manager],preview:{plan:structuredClone(args.p_plan),engineer:session.user.id},reason:'Разделение рабочего блока',history:[{actor:session.user.id,recipient:manager,action:'submitted',at:stamp,note:''}],created_at:stamp};approvalRows.push(row);audit.approvalWrites.push({name,args:structuredClone(args)});return {data:row.id,error:null};
+      }
+      if(approvalJourney&&['approval_decide','approval_escalate','approval_cancel'].includes(name)){
+        const row=approvalRows.find(r=>r.id===args.p_id);if(!row||row.status!=='pending'||row.revision!==args.p_expected)return {error:{message:'Согласование изменилось'}};
+        if(name!=='approval_cancel'&&row.assignee!==session.user.id)return {error:{message:'Это согласование тебе недоступно'}};
+        if(name==='approval_cancel'&&row.requester!==session.user.id)return {error:{message:'Нельзя отозвать это согласование'}};
+        const action=name==='approval_escalate'?'delegated':name==='approval_cancel'?'cancelled':args.p_accept?'approved':'rejected';
+        if(action==='delegated'){row.assignee=nextManager;row.path.push(nextManager);}else row.status=action;
+        row.history.push({actor:session.user.id,action,recipient:action==='delegated'?nextManager:null,note:args.p_note||'',at:stamp});row.revision++;
+        if(action==='approved'&&row.kind==='window'){const w=row.preview.before,rec={engineer:row.entity_id,date:row.date,start_h:w.start,end_h:w.end,tol_h:w.tol};rec[{start:'start_h',end:'end_h',tol:'tol_h'}[row.preview.field]]=row.preview.value;tables.staff_day.push(rec);}
+        audit.approvalWrites.push({name,args:structuredClone(args)});return {data:{status:action},error:null};
+      }
       const reads = {
         unassigned_track_points:(tables.vehicle_telemetry_archive||[]).map(p=>({...p,part:1})),
         unassigned_track_quote:{track_id:unassignedID,revision:0,km:120,points:3,gaps:1,rejected:0,rate:12.5,cost:1500},
         legacy_personal_schedule_read:legacyCrewMissing&&role==='engineer'&&(args.p_trips||[]).includes(trip)?[{id:trip,status:'done',date_from:ride.date_from,date_to:ride.date_to,day_plan:ride.day_plan,engineer_ids:[],lead_engineer:null,schedule_only:true,route_stops:ride.route_stops.map(s=>({type:s.type,lat:s.lat,lng:s.lng})),econ_snapshot:{driveH:ride.econ_snapshot.driveH,legs:[]}}]:[],
-        account_org_read: {job_title:role==='engineer'?'Выездной инженер':'Руководитель сервиса',manager:role==='engineer'?{...people[0],job_title:'Руководитель сервиса'}:null,reports:role==='engineer'?[]:people.slice(1).map(p=>({...p,job_title:'Сервисный инженер'}))},
+        account_org_read: {job_title:role==='engineer'?'Выездной инженер':'Руководитель сервиса',manager:role==='engineer'?{...people[0],job_title:'Руководитель сервиса'}:approvalJourney?{...people[2],job_title:'Руководитель отдела'}:null,reports:role==='engineer'?[]:people.slice(1).map(p=>({...p,job_title:'Сервисный инженер'}))},
         entity_people: people,
         entity_finance_config: settings,
         service_order_trip_cost_summary: [],
