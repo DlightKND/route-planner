@@ -2838,7 +2838,7 @@
           <div class="dispatcher-actions"><details class="dispatcher-more"><summary class="btn sm ghost" aria-label="Дополнительные действия">⋯</summary><div class="dispatcher-menu"><details class="planner-filter-menu"><summary class="btn sm ghost" aria-label="Фильтры заявок">Фильтры</summary><div class="planner-filter-panel">
             <label>Инженер<select id="jobEngFilter"><option value="">все инженеры</option></select></label>
             <label>Представление<select id="jobLayout" aria-label="Представление заявок"><option value="kanban">Канбан</option><option value="list">Список</option></select></label>
-          </div></details><button class="btn sm ghost" id="jobTrash" title="Удалённые заявки">Корзина</button></div></details><button class="btn sm amber" id="jobAdd">+ Заявка</button></div>
+          </div></details><button class="btn sm ghost" id="jobTrash" title="Удалённые заявки">Корзина</button></div></details><button class="btn sm amber" id="jobAdd" aria-label="Создать заявку"><span aria-hidden="true">+</span><span class="dispatcher-add-label">Заявка</span></button></div>
         </div>
         <div class="chips" id="jobStatusChips"></div>
       </div>
@@ -2846,7 +2846,7 @@
     </div>
     <div id="plOrders" style="display:none"><div class="stickyhead">
       <div class="subtabs"><button class="subtab" data-sub="jobs">Заявки</button><button class="subtab" data-sub="orders">Задания</button><button class="subtab" data-sub="trips">Выезды</button></div>
-      <div class="pane-head order-board-toolbar dispatcher-toolbar"><div class="searchbox"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"></div><div class="dispatcher-actions"><details class="dispatcher-more"><summary class="btn sm ghost" aria-label="Дополнительные действия">⋯</summary><div class="dispatcher-menu"><details class="planner-filter-menu order-board-options"><summary class="btn sm ghost" id="orderBoardOptionsSummary" aria-label="Фильтры заданий">Фильтры</summary><div class="planner-filter-panel"><label>Представление заданий<select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select></label><label>Инженер<select id="orderEngineer" aria-label="Фильтр по инженеру"></select></label><label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p></div></details><button class="btn sm ghost" id="orderTrash" title="Удалённые заявки и выезды">Корзина</button></div></details><button class="btn sm amber" id="orderAdd">+ Задание</button></div></div>
+      <div class="pane-head order-board-toolbar dispatcher-toolbar"><div class="searchbox"><input type="search" id="orderSearch" aria-label="Поиск заданий" placeholder="Название, номер или клиент…"></div><div class="dispatcher-actions"><details class="dispatcher-more"><summary class="btn sm ghost" aria-label="Дополнительные действия">⋯</summary><div class="dispatcher-menu"><details class="planner-filter-menu order-board-options"><summary class="btn sm ghost" id="orderBoardOptionsSummary" aria-label="Фильтры заданий">Фильтры</summary><div class="planner-filter-panel"><label>Представление заданий<select id="orderViewMode" aria-label="Представление заданий"><option value="kanban">Канбан</option><option value="list">Список</option></select></label><label>Инженер<select id="orderEngineer" aria-label="Фильтр по инженеру"></select></label><label><input type="checkbox" id="orderClosed" style="width:auto"> Показать завершённые и отменённые</label><label><input type="checkbox" id="orderHistorical" style="width:auto"> Исторические черновики закрытых заявок</label><p class="hint" id="orderHistoricalNote" role="status"></p></div></details><button class="btn sm ghost" id="orderTrash" title="Удалённые заявки и выезды">Корзина</button></div></details><button class="btn sm amber" id="orderAdd" aria-label="Создать задание"><span aria-hidden="true">+</span><span class="dispatcher-add-label">Задание</span></button></div></div>
       <div id="orderScope" hidden><span id="orderScopeText"></span><button class="btn sm ghost" id="orderScopeClear">Все задания</button></div>
       <div class="chips" id="orderStatusChips" role="group" aria-label="Видимые статусы заданий"></div>
     </div><div id="orderList"></div></div>
@@ -2863,7 +2863,7 @@
             </div></details>
             <button type="button" class="btn sm ghost" data-trip-section="tracking">GPS-журнал</button>
             <button class="btn sm ghost" id="tripTrash" title="Удалённые выезды">Корзина</button>
-            </div></details><button class="btn sm amber" id="tripAdd" data-trip-board-only>+ Выезд</button>
+            </div></details><button class="btn sm amber" id="tripAdd" data-trip-board-only aria-label="Создать выезд"><span aria-hidden="true">+</span><span class="dispatcher-add-label">Выезд</span></button>
             <button type="button" class="btn sm ghost" id="tripJournalRefresh" data-trip-journal-only style="display:none">Обновить</button>
           </div>
         </div>

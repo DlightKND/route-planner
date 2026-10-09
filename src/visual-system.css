@@ -866,13 +866,17 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 @media(max-width:760px){
  .view-planner :is(#jobList,#orderList,#tripList)>.kcol{flex:none}
  .view-planner .dispatcher-toolbar>.searchbox{max-width:none}
- .view-planner .dispatcher-toolbar,.view-planner .dispatcher-toolbar:has([data-trip-journal-only]:not([style*="none"])){grid-template-columns:minmax(0,1fr) 44px;align-items:start}
+ .view-planner .dispatcher-toolbar,.view-planner .dispatcher-toolbar:has([data-trip-journal-only]:not([style*="none"])){grid-template-columns:minmax(0,1fr) 44px 44px;align-items:start}
  .view-planner .dispatcher-actions{display:contents}
- .view-planner .dispatcher-more{display:block;grid-column:2;grid-row:1}
+ .view-planner .dispatcher-more{display:block;grid-column:3;grid-row:1}
  .view-planner .dispatcher-more>summary{display:flex;width:44px;height:44px;padding:0;font-size:24px;line-height:1}
  .view-planner .dispatcher-more:not([open])>.dispatcher-menu{display:none}
  .view-planner .dispatcher-menu{position:absolute;right:0;top:52px;width:min(100%,320px);max-height:calc(100dvh - 200px);overflow:auto;padding:var(--sp-3);display:flex;flex-direction:column;align-items:stretch;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);box-shadow:var(--shadow-md);z-index:30}
- .view-planner .dispatcher-actions>:is(#jobAdd,#orderAdd,#tripAdd,#tripJournalRefresh){grid-column:1/-1;grid-row:2;justify-self:end;min-height:44px}
+ .view-planner .dispatcher-actions>:is(#jobAdd,#orderAdd,#tripAdd){grid-column:2;grid-row:1;width:44px;height:44px;padding:0;font-size:24px;line-height:1;justify-content:center;gap:0}
+ .view-planner .dispatcher-add-label{display:none}
+ .view-planner .dispatcher-toolbar:not(:has(:is(#jobAdd,#orderAdd,#tripAdd):not([hidden]):not([style*="none"]))){grid-template-columns:minmax(0,1fr) 44px}
+ .view-planner .dispatcher-toolbar:not(:has(:is(#jobAdd,#orderAdd,#tripAdd):not([hidden]):not([style*="none"]))) .dispatcher-more{grid-column:2}
+ .view-planner #tripJournalRefresh{grid-column:1;grid-row:2;min-height:44px}
  .view-planner .dispatcher-menu .btn{width:100%;min-height:44px}
  .view-planner .dispatcher-menu .planner-filter-panel{position:static;width:100%;max-width:none;margin-top:var(--sp-2);box-shadow:none;border:0;padding:var(--sp-2) 0}
  .view-planner .dispatcher-actions .planner-filter-panel label{font-size:var(--fs-body);align-items:start}
@@ -897,8 +901,11 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 :is(.view-dash,#plMine) .vg-tools .gtop{margin:0;min-width:0}
 @media(max-width:760px){
  .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) .dispatcher-period{grid-column:1/-1}
- .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) .dispatcher-more{grid-row:2}
+ .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) .dispatcher-more{grid-column:2;grid-row:2}
  .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) #tripJournalRefresh{grid-column:1;justify-self:start}
  .view-planner .dispatcher-toolbar:has(.dispatcher-period:not([style*="none"])) .dispatcher-menu{top:100%;}
  :is(.view-dash,#plMine) .vg-tools{flex-direction:row;flex-wrap:wrap;gap:var(--sp-2)}
 }
+
+.dispatcher-add-label{margin-left:4px}
+.view-planner .dispatcher-actions>[hidden]{display:none!important}
