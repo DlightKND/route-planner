@@ -917,8 +917,8 @@ button.geo-result:focus-visible{outline:2px solid var(--focus);outline-offset:2p
 .vg-feed .vg-piece { min-height:0;height:var(--piece-h);border-radius:min(var(--r-sm),calc(var(--piece-h) / 2)); }
 .vg-piece .vg-seg.road { border-radius:inherit;overflow:hidden;pointer-events:none; }
 .vg-piece.micro :is(.vg-label,.vg-divide,.vg-plan-tools) { display:none; }
-/* Minute-scale tails retain their time and action without a full-width pill. */
-:is(.view-dash,#plMine) .vg-piece.sliver { border-top:0;border-right:0;border-bottom:0;border-radius:0;background:transparent;box-shadow:none;outline:none; }
+/* Minute-scale tails keep time and hit areas without stray pixels or pills. */
+:is(.view-dash,#plMine) .vg-piece.sliver { border:0;border-radius:0;background:transparent;box-shadow:none;outline:none; }
 .vg-piece.sliver .vg-seg { display:none; }
 :is(.view-dash,#plMine) .vg-piece.sliver:focus-visible { outline:2px solid var(--focus);outline-offset:2px; }
 
