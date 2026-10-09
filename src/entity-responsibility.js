@@ -8,7 +8,7 @@ const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({
 // The owner retains authority after delegation. The curator receives
 // operational decisions and alerts. Both assignments are entity-specific.
 export function mountEntityResponsibility({
-  root,db,kind,id,record,people,userId,role,onChange,onError=()=>{}
+  root,db,kind,id,record,people,userId,role,onChange,showHistory=true,onError=()=>{}
 }){
   if(!root||!id)return;
   const person=pid=>people().find(p=>p.id===pid);
@@ -57,7 +57,8 @@ export function mountEntityResponsibility({
     const list=[...transfers,...status].sort((a,b)=>b.at.localeCompare(a.at)||Number(b.id)-Number(a.id));
     events.innerHTML=list.length?list.slice(0,30).map(x=>x.html).join(''):'<p class="hint">Событий ответственности пока не было.</p>';
   };
-  refresh().catch(e=>{events.textContent='История недоступна: '+e.message;onError(e);});
+  if(!showHistory)events.remove();
+  if(showHistory)refresh().catch(e=>{events.textContent='История недоступна: '+e.message;onError(e);});
   const form=root.querySelector('form');
   if(form)form.onsubmit=async event=>{
     event.preventDefault();
@@ -77,7 +78,7 @@ export function mountEntityResponsibility({
       root.querySelector('[data-curator]').textContent=name(curator);
       form.elements.reason.value='';status.textContent='Передано';
       if(!admin&&owner!==actor&&curator!==actor)form.remove();
-      await refresh();await onChange?.(data);
+      if(showHistory)await refresh();await onChange?.(data);
     }catch(e){status.textContent=e.message||'Не удалось передать';onError(e);}
     finally{button.disabled=false;}
   };

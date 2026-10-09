@@ -2559,8 +2559,8 @@
       <nav class="entity-tabs" role="tablist" aria-label="Разделы заявки">
         <button type="button" role="tab" id="jobTabOverview" data-request-tab="overview" data-entity-tab="overview" aria-controls="jobOverviewPane" aria-selected="true">Обзор</button>
         <button type="button" role="tab" id="jobTabEstimate" data-request-tab="estimate" data-entity-tab="estimate" aria-controls="jobEstimatePane" aria-selected="false">Смета</button>
-        <button type="button" role="tab" id="jobTabExecution" data-request-tab="execution" data-entity-tab="execution" aria-controls="jobExecutionPane" aria-selected="false">Выполнение</button>
-        <button type="button" role="tab" id="jobTabHistory" data-request-tab="history" data-entity-tab="history" aria-controls="jobHistoryPane" aria-selected="false">История</button>
+        <button hidden type="button" role="tab" id="jobTabExecution" data-request-tab="execution" data-entity-tab="execution" aria-controls="jobExecutionPane" aria-selected="false">Выполнение</button>
+        <button type="button" role="tab" id="jobTabHistory" data-request-tab="history" data-entity-tab="history" aria-controls="jobHistoryPane" aria-selected="false">Лента</button>
       </nav>
       <div class="entity-savebar"><span class="savestate" id="jobSaveState" role="status" style="display:none"></span><button class="btn amber" id="jobSave">Создать заявку</button></div>
       <div class="err" id="jobErr" role="alert"></div>
@@ -2641,7 +2641,7 @@
         <div id="jbFixes" style="margin-top: var(--sp-3)"></div>
       </div>
 
-    <section class="card trip-wide entity-activity" id="jobActivitySection" hidden><h3>История заявки и комментарии</h3><div id="jobActivity"></div></section>
+    <section class="card trip-wide entity-activity" id="jobActivitySection" hidden><h3>Лента</h3><div id="jobActivity"></div></section>
     </section>
     <!-- Подпись заказчика. Отдельным окном при закрытии заявки: это
          последний шаг, и он должен быть один на экране, без соседей. -->
@@ -2649,13 +2649,8 @@
       <h3>Подпись заказчика</h3>
       <div class="hint" id="signWho">Распишитесь в поле ниже</div>
       <canvas id="signPad" class="signpad" width="640" height="320"></canvas>
-      <div class="row" style="margin-top: var(--sp-4)">
-        <button class="btn" id="signClear" type="button">Стереть</button>
-        <span class="grow"></span>
-        <button class="btn ghost" id="signCancel" type="button">Отмена завершения</button>
-        <button class="btn" id="signSkip" type="button">Без подписи</button>
-        <button class="btn amber" id="signOk" type="button">Готово</button>
-      </div>
+      <div class="entity-dialog-footer sign-footer"><button class="btn amber" id="signOk" type="button">Готово</button><button class="btn" id="signMore" type="button" aria-label="Другие действия с подписью">⋯</button></div>
+      <div hidden><button id="signClear" type="button">Стереть</button><button id="signCancel" type="button">Отмена завершения</button><button id="signSkip" type="button">Без подписи</button></div>
       <div class="err" id="signErr"></div>
     </div></div>
     <!-- Просмотр снимка во весь экран. Обычная картинка поверх затемнения:
@@ -2688,7 +2683,7 @@
       <button class="btn" role="tab" id="tpTabPlan" data-trip-tab="plan" data-entity-tab="plan" aria-selected="true" aria-controls="tpPlanPane">План</button>
       <button type="button" class="btn" role="tab" id="tpTabPresence" data-trip-tab="presence" data-entity-tab="presence" aria-selected="false" aria-controls="tpPresencePane">Присутствие</button>
       <button class="btn" role="tab" id="tpTabEconomy" data-trip-tab="economy" data-entity-tab="economy" aria-selected="false" aria-controls="tpEconomyPane">Экономика</button>
-      <button class="btn" role="tab" id="tpTabHistory" data-trip-tab="history" data-entity-tab="history" aria-selected="false" aria-controls="tpHistoryPane">История</button>
+      <button class="btn" role="tab" id="tpTabHistory" data-trip-tab="history" data-entity-tab="history" aria-selected="false" aria-controls="tpHistoryPane">Лента</button>
     </nav><div class="entity-savebar"><span class="grow"></span><button class="btn amber" id="tpSave">Сохранить план</button></div><div class="err" id="tripErr" role="alert"></div><div class="wb-note" id="tpReviewState" role="status" hidden></div></div>
     <div id="tpReviewSummary" class="trip-review-summary" role="status"></div>
     <div class="entity-tab-panel" id="tpPlanPane" data-entity-panel="plan" role="tabpanel" aria-labelledby="tpTabPlan" data-trip-pane="plan">
@@ -2767,7 +2762,7 @@
       <div class="card"><h3>Проверка выезда <span class="q"><button class="qm" type="button" aria-label="О проверке выезда" aria-expanded="false">?</button><span class="qbody">Поездка, присутствие и выполнение работ проверяются отдельно. Часы на объекте не заменяют результат задания.</span></span></h3><p class="hint" id="tpRevisionInfo"></p></div>
       <div id="tpHistoryLog"></div>
       <section class="card trip-wide" id="tripResponsibilitySection" hidden></section>
-      <section class="card trip-wide entity-activity" id="tripActivitySection" hidden><h3>Комментарии к выезду</h3><div id="tripActivity"></div></section>
+      <section class="card trip-wide entity-activity" id="tripActivitySection" hidden><h3>Лента</h3><div id="tripActivity"></div></section>
     </div>
   </div></div>
 

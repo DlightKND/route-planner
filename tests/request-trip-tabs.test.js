@@ -11,21 +11,27 @@ afterEach(async()=>{await Promise.all(windows.splice(0).map(win=>win.happyDOM.cl
 function setup({writable=true}={}){
   const win=new Window();windows.push(win);win.document.body.innerHTML=html;
   const context=vm.createContext({document:win.document,window:win,createEntityTabs,
-    $:id=>win.document.getElementById(id),canWriteJob:()=>writable});
+    $:id=>win.document.getElementById(id),canWriteJob:()=>writable,
+    mountEntityActions:vi.fn(),openEntityPanel:vi.fn(),confirmDialog:vi.fn(async()=>true)});
+  const prepareStart=app.indexOf('function prepareEntityPages()'),prepareEnd=app.indexOf('async function openActivityPhoto(',prepareStart);
+  vm.runInContext(app.slice(prepareStart,prepareEnd),context);
   vm.runInContext(app.slice(app.indexOf('const requestTabs=createEntityTabs'),app.indexOf('async function openJob(')),context);
   return {win,context,root:win.document.querySelector('.view-job'),get:id=>win.document.getElementById(id)};
 }
 it('organizes the actual request DOM without dropping or duplicating financial and operational controls',()=>{
   const {get}=setup();
-  const groups={jobOverviewPane:['jbClient','jbDue','jbNotes','jobResponsibilitySection'],
+  const groups={jobOverviewPane:['jbClient','jobOrders'],
     jobEstimatePane:['jobHeadEcon','jbWorks','jbParts','jbPartTotals'],
-    jobExecutionPane:['jobOrders','jbPhotoList'],jobHistoryPane:['jbFixes','jobActivity']};
+    jobHistoryPane:['jobActivity','jobPendingDecisions'],
+    jobAuxiliary:['jbDue','jbNotes','jobResponsibilitySection','jbFixes','jbPhotoList']};
   for(const [panel,ids] of Object.entries(groups))for(const id of ids){
     expect(get(panel).contains(get(id)),`${id} in ${panel}`).toBe(true);
     expect(get(panel).ownerDocument.querySelectorAll('#'+id)).toHaveLength(1);
   }
   expect(get('jobSave').closest('[data-request-pane]')).toBeNull();
   expect(get('jobErr').closest('.entity-toolbar')).not.toBeNull();
+  expect(get('jobExecutionPane')).toBeNull();expect(get('jobTabExecution')).toBeNull();
+  expect(get('jobAuxiliary').hidden).toBe(true);
 });
 it('switches request sections while preserving unsaved values, permission flags and autosave state',()=>{
   const {get,root,context}=setup();vm.runInContext('configureRequestTabs(true)',context);
@@ -38,18 +44,20 @@ it('switches request sections while preserving unsaved values, permission flags 
   expect(get('jbWorks').contains(field)).toBe(true);expect(field.value).toBe('1250');expect(field.disabled).toBe(true);
   expect(autosave).not.toHaveBeenCalled();
 });
-it('starts readonly engineers in execution and exposes plain request details in overview',()=>{
+it('starts readonly engineers in overview and exposes plain request details there',()=>{
   const {get,context}=setup({writable:false});vm.runInContext('configureRequestTabs(true)',context);
-  expect(get('jobExecutionPane').hidden).toBe(false);expect(get('jobRefRead').hidden).toBe(true);
+  expect(get('jobOverviewPane').hidden).toBe(false);expect(get('jobRefRead').hidden).toBe(false);
   get('jobTabOverview').click();expect(get('jobRefRead').hidden).toBe(false);
   get('jobTabEstimate').click();expect(get('jobRefRead').hidden).toBe(true);
   vm.runInContext("configureRequestTabs(true,'estimate')",context);
   expect(get('jobEstimatePane').hidden).toBe(false);
+  vm.runInContext("configureRequestTabs(true,'execution')",context);
+  expect(get('jobHistoryPane').hidden).toBe(false);
 });
 it('keeps new requests on useful sections and keyboard navigation skips unsaved-only sections',()=>{
   const {get,context,win}=setup();vm.runInContext('configureRequestTabs(false)',context);
   expect(get('jobUnsavedPanelsNotice').hidden).toBe(false);
-  expect(get('jobTabExecution').disabled).toBe(true);expect(get('jobTabHistory').disabled).toBe(true);
+  expect(get('jobTabExecution')).toBeNull();expect(get('jobTabHistory').disabled).toBe(true);
   get('jobTabOverview').dispatchEvent(new win.KeyboardEvent('keydown',{key:'End',bubbles:true}));
   expect(get('jobTabEstimate').getAttribute('aria-selected')).toBe('true');
   expect(win.document.activeElement).toBe(get('jobTabEstimate'));
@@ -81,7 +89,10 @@ it('keeps trip saving and errors in the common toolbar and preserves failed-load
   expect(get('tpSave').closest('.entity-toolbar')).not.toBeNull();
   expect(get('tripErr').closest('.entity-toolbar')).not.toBeNull();
   expect(get('tpReviewState').closest('.entity-toolbar')).not.toBeNull();
-  expect(get('tpRevisionInfo').closest('[data-trip-pane]').dataset.tripPane).toBe('history');
+  expect(get('tripAuxiliary').contains(get('tpRevisionInfo'))).toBe(true);
+  expect(get('tripAuxiliary').contains(get('tpHistoryLog'))).toBe(true);
+  expect(get('tripAuxiliary').hidden).toBe(true);
+  expect(get('tpRevisionInfo').closest('[data-trip-pane]')).toBeNull();
   const start=app.indexOf('async function loadWorkbench(id)'),end=app.indexOf("if($('tpRebuildRemaining'))",start);
   Object.assign(context,{tripWorkbench:null,tripPresenceDirty:false,tripCostReviewState:'',renderTripReviewSummary:vi.fn(),
     sb:{rpc:vi.fn(async()=>({error:new Error('server unavailable')}))}});
@@ -101,9 +112,12 @@ it('makes request save neutral after confirmed saving and primary for unsaved/ne
   vm.runInContext(app.slice(start,end),context);
   vm.runInContext("jobSaveState('сохранено')",context);expect(get('jobSave').classList.contains('amber')).toBe(false);
   expect(get('jobSave').disabled).toBe(false);
+  expect(get('jobSave').hidden).toBe(true);expect(get('jobSaveState').hidden).toBe(true);
   vm.runInContext("jobSaveState('изменено')",context);expect(get('jobSave').classList.contains('amber')).toBe(true);
+  expect(get('jobSave').hidden).toBe(false);expect(get('jobSaveState').hidden).toBe(false);
   vm.runInContext("jobSaveState('сохраняю…','busy')",context);expect(get('jobSave').classList.contains('amber')).toBe(false);
   context.jobEditId=null;vm.runInContext("jobSaveState('сохранено')",context);expect(get('jobSave').classList.contains('amber')).toBe(true);
+  expect(get('jobSave').hidden).toBe(false);
 });
 
 it('reveals the actual invalid field when saving from a different request section',async()=>{
