@@ -81,7 +81,7 @@ test('dispatcher actions keep stable mobile slots and task status chips control 
   if(page.viewportSize().width<=760){
    const menu=actions.locator('.dispatcher-more'),trigger=menu.locator(':scope>summary'),search=page.locator('#'+prefix+'Search');
    await expect(trigger).toBeVisible();await expect(page.locator('#'+prefix+'Trash')).toBeHidden();await expect(page.locator('#'+prefix+'Add')).toBeVisible();
-   const [input,dots]=await Promise.all([search.boundingBox(),trigger.boundingBox()]);expect(Math.abs(input.y-dots.y)).toBeLessThanOrEqual(1);expect(dots.x).toBeGreaterThanOrEqual(input.x+input.width);expect(dots.height).toBeGreaterThanOrEqual(44);layouts.push(dots);
+   const [input,plus,dots]=await Promise.all([search.boundingBox(),page.locator('#'+prefix+'Add').boundingBox(),trigger.boundingBox()]);expect(Math.abs(input.y-plus.y)).toBeLessThanOrEqual(1);expect(plus.width).toBe(44);expect(plus.height).toBe(44);expect(plus.x).toBeGreaterThanOrEqual(input.x+input.width);expect(dots.x).toBeGreaterThanOrEqual(plus.x+plus.width);await expect(page.locator('#'+prefix+'Add .dispatcher-add-label')).toBeHidden();await expect(page.locator('#'+prefix+'Add')).toHaveAttribute('aria-label',/^Создать/);expect(Math.abs(input.y-dots.y)).toBeLessThanOrEqual(1);expect(dots.x).toBeGreaterThanOrEqual(input.x+input.width);expect(dots.height).toBeGreaterThanOrEqual(44);layouts.push(dots);
    await revealDispatcherActions(page);await expect(page.locator('#'+prefix+'Trash')).toBeVisible();
   }
   await actions.locator('.planner-filter-menu>summary').click();await expect(actions.locator('.planner-filter-panel')).toBeVisible();
