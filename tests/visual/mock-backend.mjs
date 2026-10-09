@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, lateScheduleCut = false, signedOut = false, financeJourney = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -161,6 +161,15 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     fact_km: null,
   };
   if(tinySchedulePiece)ride.day_plan={start:{d:'2026-10-05',t:7},cuts:[{after:2.1,at:{d:'2026-10-05',t:9.5}}]};
+  if(roadSliverJourney){
+    // A quarter-hour cut can leave a 1.56-minute work tail before the return road.
+    ride.day_plan={start:{d:'2026-10-05',t:7.5},cuts:[{after:8.25,at:{d:'2026-10-05',t:15.75}}]};
+    ride.route_stops.push({type:'end',name:'Депо',lat:49.98,lng:36.2});
+    for(const snapshot of [ride.econ_snapshot,ride.plan_econ_snapshot]){
+      snapshot.driveH=5.5;
+      snapshot.legs=[{a:'49.98000,36.20000',b:'49.99000,36.23000',h:2.276,km:64},{a:'49.99000,36.23000',b:'49.98000,36.20000',h:3.224,km:64}];
+    }
+  }
   if(lateScheduleCut)ride.day_plan={start:{d:'2026-10-05',t:7},cuts:[{after:2,at:{d:'2026-10-05',t:18}}]};
   task.trip_service_orders = [{ trip_id: trip, trips: ride }];
   if(legacyCrewMissing){ride.lead_engineer=null;ride.engineer_ids=[];ride.status='done';}
@@ -206,6 +215,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     stay_radius_m: 300,
     stay_min_minutes: 10,
   };
+  if(roadSliverJourney)Object.assign(settings,{day_start:7.5,day_end:17,tolerance_h:2});
   const tables = {
     profiles: people,
     settings: [settings],

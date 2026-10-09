@@ -76,3 +76,21 @@ test('trip panel uses one primary row and keeps secondary actions and time behin
  mkdirSync('test-results/direct-gestures',{recursive:true});await panel.screenshot({path:'test-results/direct-gestures/'+info.project.name+'-panel.png'});
  await page.keyboard.press('Escape');await expect(panel).toHaveCount(0);expect(errors).toEqual([]);
 });
+
+for(const role of ['admin','engineer'])test(role+' renders a minute work tail as an edge marker before the full return road',async({page},info)=>{
+ const {week,errors}=await open(page,info,{role,roadSliverJourney:true});
+ const tail=week.locator('.vg-piece[data-gb="'+id+'"][data-piece-at="8.25"]');
+ await expect(tail).toHaveAttribute('data-piece-from','15.75');await expect(tail).toHaveAttribute('data-piece-to','15.776');
+ const road=week.locator('.vg-piece[data-gb="'+id+'"][data-piece-at="8.276"]');
+ await expect(road).toHaveAttribute('data-piece-to','19');
+ const marker=await tail.evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {w:r.width,h:r.height,shadow:s.boxShadow,outline:s.outlineStyle,background:s.backgroundColor,left:s.borderLeftColor,borders:[s.borderTopWidth,s.borderRightWidth,s.borderBottomWidth,s.borderLeftWidth]};});
+ expect(marker.h).toBe(2);expect(marker.borders).toEqual(['0px','0px','0px','3px']);
+ expect(marker.shadow).toBe('none');expect(marker.outline).toBe('none');expect(marker.background).toBe('rgba(0, 0, 0, 0)');expect(marker.left).toBe('rgb(255, 225, 0)');
+ const surface=await road.evaluate(el=>{const r=el.getBoundingClientRect(),s=el.querySelector('.road').getBoundingClientRect();return {h:r.height,roadH:s.height,w:r.width};});
+ expect(surface.h).toBeCloseTo(3.224*20,0);expect(surface.roadH).toBeCloseTo(surface.h-2,0);expect(surface.w).toBeGreaterThan(80);expect(marker.w).toBeCloseTo(surface.w);
+ mkdirSync('test-results/road-sliver',{recursive:true});await week.screenshot({path:'test-results/road-sliver/'+info.project.name+'-'+role+'.png'});
+ await page.keyboard.press('Tab');await tail.focus();await expect(tail).toBeFocused();expect(await tail.evaluate(el=>getComputedStyle(el).outlineStyle)).toBe('solid');
+ await page.keyboard.press('Enter');await expect(page.locator('.view-job.active')).toBeVisible();
+ expect(await page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(0);
+ expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
+});
