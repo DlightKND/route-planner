@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -299,12 +299,33 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   tables.service_order_items.push(...activeTask.service_order_items);
   const history=[{id:"history-a",trip_id:trip,revision:0,recorded_at:stamp,actor_id:manager,reason:"Уточнён порядок посещения объектов",snapshot:{date_from:ride.date_from,job_ids:[job],route_stops:ride.route_stops,econ_snapshot:ride.econ_snapshot}}];
   tables.trip_revision_history=history;
+  // Dense read fixtures and synthetic writes are deliberately separate options.
+  // Ordinary visual audits remain read-only, including when entityAudit is enabled.
+  const activityConfig={job:{table:'job_comments',key:'job_id',rows:tables.jobs},order:{table:'service_order_comments',key:'order_id',rows:tables.service_orders},trip:{table:'trip_comments',key:'trip_id',rows:tables.trips}};
+  const resultSnapshot=target=>({number:target.number,title:target.title,status:target.status,note:target.result_note||'',items:target.service_order_items.map(i=>({id:i.id,kind:i.kind,title:i.title,unit:i.unit,planned_qty:i.planned_qty,done_qty:i.done_qty,transferred_qty:i.transferred_qty,result_note:i.result_note||''}))});
+  const resultEvents=[],resultOperations=new Map();
+  if(entityAudit||entityJourney){
+    const comments=[
+      {body:'Доступ к оборудованию согласован. На проходной назвать номер задания и связаться с ответственным заказчика.',author_id:manager},
+      {body:'Диагностика выполнена. Для замены уплотнения потребуется остановка оборудования.\nПросьба подтвердить время остановки.',author_id:engineer},
+      {body:'Комплект уплотнений подготовлен на складе. Забрать перед следующим выездом.',author_id:other},
+    ];
+    for(const [kind,c] of Object.entries(activityConfig))tables[c.table]=c.rows.flatMap((target,index)=>comments.map((comment,n)=>({...comment,id:`70000000-0000-4000-8000-${String(Object.keys(activityConfig).indexOf(kind)*100+index*10+n+1).padStart(12,'0')}`,[c.key]:target.id,created_at:new Date(Date.UTC(2026,9,5,6,n*10)).toISOString(),pinned_at:null,pinned_by:null})));
+    tables.job_history=[{id:'job-history-a',job_id:job,actor_id:manager,recorded_at:'2026-10-04T16:00:00Z',event:'Заявка согласована',changed_fields:{status:['new','planned']}},{id:'job-history-b',job_id:job,actor_id:manager,recorded_at:'2026-10-05T06:05:00Z',event:'Уточнён состав работ',changed_fields:{notes:['','Согласовать остановку оборудования']}}];
+    tables.service_order_history=[task,activeTask].flatMap(target=>[{id:'order-history-'+target.id,order_id:target.id,actor_id:manager,recorded_at:'2026-10-04T16:10:00Z',reason:'Назначены исполнитель и срок выполнения'},{id:'order-history-start-'+target.id,order_id:target.id,actor_id:engineer,recorded_at:'2026-10-05T06:15:00Z',reason:target.status==='in_progress'?'Выполнение задания начато':'Исполнитель ознакомился с заданием'}]);
+    tables.entity_responsibility_events=Object.entries(activityConfig).map(([kind,c],index)=>({id:'responsibility-'+kind,entity_kind:kind,entity_id:kind==='order'?activeTask.id:c.rows[0].id,actor_id:manager,owner_id:manager,curator_id:manager,previous_owner_id:null,previous_curator_id:null,created_at:'2026-10-04T15:00:00Z',reason:'Назначены владелец и куратор'}));
+    resultEvents.push({id:'80000000-0000-4000-8000-000000000001',order_id:activeTask.id,actor_id:engineer,recorded_at:'2026-10-05T06:25:00Z',actual_date:'2026-10-04',snapshot:{...resultSnapshot(activeTask),note:'Диагностика завершена. Замена уплотнения запланирована на следующий этап.'}});
+    activeTask.trip_service_orders=[{trip_id:trip,trips:ride}];
+    tables.trip_service_orders.push({trip_id:trip,order_id:activeTask.id,service_orders:activeTask,trips:ride});
+  }
   const audit = (window.__visualQA = {
     reads: [],
     queryErrors: [],
     blockedWrites: [],
     scheduleWrites: [],
     financeWrites: [],
+    entityWrites: [],
+    entityResults: structuredClone(resultEvents),
     ready: true,
   });
   const reject = (name) => {
@@ -445,6 +466,14 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
             },
           };
         };
+      if(entityJourney&&Object.values(activityConfig).some(c=>c.table===table))b.insert=record=>{
+        const config=Object.values(activityConfig).find(c=>c.table===table),target=config.rows.find(r=>r.id===record[config.key]);
+        const allowed=target&&(role!=='engineer'||target.engineer_ids?.includes(session.user.id)||[target.owner_id,target.curator_id].includes(session.user.id));
+        const valid=allowed&&record.author_id===session.user.id&&typeof record.body==='string'&&record.body.trim().length>0&&record.body.length<=4000;
+        const out=valid?{data:[{...structuredClone(record),id:crypto.randomUUID(),created_at:stamp,pinned_at:null,pinned_by:null}],error:null}:{data:null,error:{message:'Комментарий недоступен или не заполнен',code:'42501'}};
+        if(valid){(tables[table]??=[]).push(out.data[0]);audit.entityWrites.push({table,action:'insert',record:structuredClone(record)});}
+        return {then:(a,z)=>Promise.resolve(out).then(a,z),select(){return this;},single(){return this;}};
+      };
       if(scheduleJourney&&['trips','jobs'].includes(table))b.update=record=>{
         if(Object.keys(record).some(k=>!['day_plan','date_from','date_to'].includes(k)))return {eq:()=>Promise.resolve(reject(table+'.update'))};
         return {eq:async(key,id)=>{const target=tables[table].find(row=>row[key]===id);if(!target)return {error:{message:'Missing synthetic row'}};
@@ -454,6 +483,40 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      // This read RPC is supported even by the default read-only fixture.
+      if(name==='entity_activity_results'){
+        const results=resultEvents.filter(event=>{
+          if(args.p_kind==='order')return event.order_id===args.p_id;
+          if(args.p_kind==='job')return tables.service_orders.some(o=>o.id===event.order_id&&o.job_id===args.p_id);
+          if(args.p_kind==='trip')return tables.trip_service_orders.some(link=>link.order_id===event.order_id&&link.trip_id===args.p_id);
+          return false;
+        });
+        return {data:structuredClone(results),error:null};
+      }
+      if(entityJourney&&name==='service_order_record_result'){
+        const target=tables.service_orders.find(o=>o.id===args.p_id),bad=message=>({data:null,error:{message,code:'QA_ENTITY_VALIDATION'}});
+        if(!target||role==='engineer'&&!target.engineer_ids.includes(session.user.id))return bad('Задание недоступно');
+        const signature=JSON.stringify({actor:session.user.id,order:args.p_id,items:args.p_items,note:args.p_note,date:args.p_actual_date,basis:args.p_basis??null});
+        const previous=resultOperations.get(args.p_operation_id);
+        if(previous)return previous.signature===signature?{data:structuredClone(previous.data),error:null}:bad('Операция уже использована для другого результата');
+        if(target.revision!==args.p_expected)return bad('Задание изменилось. Открой текущую версию');
+        if(!['in_progress','paused','review'].includes(target.status)||target.status==='review'&&role==='engineer')return bad('Ввод результата недоступен');
+        if(!/^[0-9a-f-]{36}$/i.test(args.p_operation_id||'')||!/^\d{4}-\d{2}-\d{2}$/.test(args.p_actual_date||'')||!Array.isArray(args.p_items))return bad('Не заполнены параметры результата');
+        if(new Set(args.p_items.map(i=>i.id)).size!==args.p_items.length||args.p_items.some(i=>!target.service_order_items.some(r=>r.id===i.id)||!Number.isFinite(i.done_qty)||i.done_qty<0||i.done_qty>Number(target.service_order_items.find(r=>r.id===i.id).planned_qty)-Number(target.service_order_items.find(r=>r.id===i.id).transferred_qty||0)))return bad('Некорректный объём выполнения');
+        for(const result of args.p_items){const row=target.service_order_items.find(i=>i.id===result.id);row.done_qty=result.done_qty;row.result_note=result.result_note||'';}
+        target.result_note=args.p_note||'';target.revision++;
+        const event={id:crypto.randomUUID(),order_id:target.id,actor_id:session.user.id,recorded_at:stamp,actual_date:args.p_actual_date,snapshot:resultSnapshot(target)};
+        resultEvents.push(event);const data={revision:target.revision,event_id:event.id};resultOperations.set(args.p_operation_id,{signature,data});
+        audit.entityWrites.push({name,args:structuredClone(args)});audit.entityResults=structuredClone(resultEvents);
+        return {data:structuredClone(data),error:null};
+      }
+      if(entityJourney&&name==='entity_activity_pin'){
+        const config=activityConfig[args.p_kind],target=config?.rows.find(r=>r.id===args.p_id),comment=config&&(tables[config.table]||[]).find(r=>r.id===args.p_comment&&r[config.key]===args.p_id);
+        if(!target||!comment||!(role==='admin'||role==='logist'||[target.owner_id,target.curator_id].includes(session.user.id)))return {data:null,error:{message:'Нет права закреплять этот комментарий',code:'42501'}};
+        comment.pinned_at=args.p_pinned?stamp:null;comment.pinned_by=args.p_pinned?session.user.id:null;
+        audit.entityWrites.push({name,args:structuredClone(args)});
+        return {data:{id:comment.id,pinned_at:comment.pinned_at,pinned_by:comment.pinned_by},error:null};
+      }
       if(financeJourney&&name==='job_request_save_canonical'){
         const target=args.p_id?tables.jobs.find(j=>j.id===args.p_id):{...request,id:crypto.randomUUID(),service_orders:[]};
         if(!target)return {data:null,error:{message:'Заявка не найдена'}};
