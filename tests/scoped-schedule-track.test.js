@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {Window} from 'happy-dom';
 import {it,expect,vi} from 'vitest';
-import {schedulePlacementIssue} from '../src/core/schedule.js';
+import {schedulePlacementIssue,piecesOf} from '../src/core/schedule.js';
 
 const source=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 const section=(from,to)=>source.slice(source.indexOf(from),source.indexOf(to,source.indexOf(from)));
@@ -9,12 +9,12 @@ const rights=section('function canWrite(){','\n')+section('function canWriteTrip
 const own={id:'own',owner_id:'owner',curator_id:'curator',vehicle_id:'car',status:'assigned'};
 const foreign={...own,id:'foreign',owner_id:'other',curator_id:'other'};
 function schedule({user='curator',role='engineer',rows=[own,foreign],blocks=[]}={}){
-  const writes=[],refresh=vi.fn();
+  const writes=[],refresh=vi.fn(),undo=vi.fn();
   const sb={from:table=>({update:record=>({eq:async(key,id)=>{writes.push({table,id,record});return {error:null};}})})};
   const code=rights+section('function gtCanEditBlock(','function gtTripAction(')+section('async function gtSave(b,start){','async function renderFeedAgain(');
-  const api=new Function('role','session','feedCtx','getTrip','tripCache','jobs','currentJobAuthority','sb','q4','showToast','notify','renderFeedAgain','schedulePlacementIssue','gtSettings','gtBlocks','gtPieces',code+';return {gtCanEditBlock,gtSave,gtSaveCuts};')
-    (role,{user:{id:user}},{recordOf:id=>rows.find(r=>r.id===id.slice(1))},()=>null,{},[],true,sb,n=>Math.round(n*4)/4,vi.fn(),vi.fn(),refresh,schedulePlacementIssue,()=>({}),()=>blocks,b=>b.pieces||[]);
-  return {...api,writes,refresh};
+  const api=new Function('role','session','feedCtx','getTrip','tripCache','jobs','currentJobAuthority','sb','q4','showToast','notify','renderFeedAgain','schedulePlacementIssue','gtSettings','gtBlocks','gtPieces','piecesOf','undoToast',code+';return {gtCanEditBlock,gtSave,gtSaveCuts};')
+    (role,{user:{id:user}},{recordOf:id=>rows.find(r=>r.id===id.slice(1))},()=>null,{},[],true,sb,n=>Math.round(n*4)/4,vi.fn(),vi.fn(),refresh,schedulePlacementIssue,()=>({}),()=>blocks,b=>b.pieces||[],piecesOf,undo);
+  return {...api,writes,refresh,undo};
 }
 it('uses the scheduler row rather than authority from an unrelated open editor',()=>{
   const api=schedule();
@@ -25,7 +25,7 @@ it('uses the scheduler row rather than authority from an unrelated open editor',
   expect(api.gtCanEditBlock({id:'jown',kind:'job'})).toBe(true);
 });
 it('saves curator placement and cuts, rejecting foreign blocks before a database write',async()=>{
-  const api=schedule(),start={iso:'2026-10-01',t:9.13},block={id:'town',kind:'trip',engineer:'crew',workH:4,start};
+  const api=schedule(),start={iso:'2026-10-01',t:9.13},block={id:'town',kind:'trip',engineer:'crew',workH:4,start,from:start.iso,to:'2026-10-09'};
   await api.gtSave(block,start);
   expect(await api.gtSaveCuts(block,[{after:2,at:{d:'2026-10-02',t:10}}])).toBe(true);
   await api.gtSave({id:'tforeign',kind:'trip'},start);
@@ -41,6 +41,14 @@ it('preserves owner and global manager scheduling rights without granting crew r
   expect(schedule({user:'owner'}).gtCanEditBlock(block)).toBe(true);
   expect(schedule({user:'crew'}).gtCanEditBlock(block)).toBe(false);
   expect(schedule({user:'manager',role:'logist'}).gtCanEditBlock(block)).toBe(true);
+});
+it('extends the stored calendar frame and restores its original bounds and plan on undo',async()=>{
+  const row={...own,date_from:'2026-10-01',date_to:'2026-10-09',day_plan:null};
+  const api=schedule({rows:[row]}),block={id:'town',kind:'trip',engineer:'crew',workH:4,start:{iso:'2026-10-12',t:9},from:'2026-10-12',to:'2026-10-12'};
+  expect(await api.gtSaveCuts(block,[])).toBe(true);
+  expect(api.writes[0].record).toMatchObject({date_from:'2026-10-01',date_to:'2026-10-12'});
+  await api.undo.mock.calls[0][1]();
+  expect(api.writes[1].record).toEqual({date_from:'2026-10-01',date_to:'2026-10-09',day_plan:null});
 });
 function vehicle({user='curator',trip=own,answer='target',reason='Перенос по решению владельца'}={}){
   const win=new Window(),doc=win.document;
@@ -121,7 +129,7 @@ it('keeps crew start rights without granting crew track reassignment or cancella
 
 
 it('rejects overlapping continuation before writing and preserves the existing placement',async()=>{
- const start={iso:'2026-10-08',t:7},block={id:'town',kind:'trip',engineer:'crew',workH:4,start};
+ const start={iso:'2026-10-08',t:7},block={id:'town',kind:'trip',engineer:'crew',workH:4,start,from:start.iso,to:'2026-10-09'};
  const api=schedule({blocks:[{id:'tother',engineer:'crew',pieces:[{iso:start.iso,from:10,to:12}]}]});
  expect(await api.gtSaveCuts(block,[{after:2,at:{d:start.iso,t:8}}])).toBe(false);
  expect(await api.gtSaveCuts(block,[{after:2,at:{d:start.iso,t:10}}])).toBe(false);

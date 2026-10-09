@@ -1,6 +1,6 @@
 import {Window} from 'happy-dom';
 import {it,expect,vi} from 'vitest';
-import {wireSchedulePieceDrag,wireScheduleCutDrag} from '../src/schedule-interactions.js';
+import {wireSchedulePieceDrag,wireScheduleCutDrag,scheduleJoinCandidate} from '../src/schedule-interactions.js';
 function fixture(canMove=true){
   const win=new Window(),el=win.document.createElement('div');win.document.body.append(el);el.style.top='160px';
   const onOpen=vi.fn(),onDrop=vi.fn();
@@ -44,4 +44,23 @@ it('split line preserves the grabbed offset, steps by quarter hours and clamps w
   pointer('pointerdown',200);pointer('pointermove',1000);expect(value).toBe(10.75);pointer('pointercancel',1000);expect(value).toBe(10);
   pointer('pointerdown',200);pointer('pointermove',0);expect(value).toBe(8.25);win.document.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));expect(value).toBe(10);
  }finally{await win.happyDOM.close();}
+});
+
+
+it('previews a cross-day destination without writing on cancel and commits the resolved destination on release',async()=>{
+ const win=new Window(),el=win.document.createElement('div');win.document.body.append(el);el.style.top='160px';
+ const onDrop=vi.fn(),onEnd=vi.fn(),onPreview=vi.fn();
+ wireSchedulePieceDrag({el,canMove:()=>true,onOpen:vi.fn(),onDrop,resolveDrop:({top})=>({iso:top>440?'2026-10-07':'2026-10-06',t:8}),onPreview,onEnd});
+ const pointer=(type,y)=>el.dispatchEvent(new win.PointerEvent(type,{bubbles:true,pointerId:1,clientY:y}));
+ try{pointer('pointerdown',190);pointer('pointermove',600);expect(onPreview).toHaveBeenLastCalledWith({iso:'2026-10-07',t:8});pointer('pointercancel',600);expect(onDrop).not.toHaveBeenCalled();
+ pointer('pointerdown',190);pointer('pointermove',600);pointer('pointerup',600);expect(onDrop).toHaveBeenCalledWith({iso:'2026-10-07',t:8});expect(onEnd).toHaveBeenCalledTimes(2);expect(el.style.top).toBe('160px');}finally{await win.happyDOM.close();}
+});
+it('snaps only neighbouring parts across an explicit cut, from either direction',()=>{
+ const pieces=[{iso:'2026-10-06',at:0,from:7,to:10,h:3},{iso:'2026-10-06',at:3,from:12,to:15,h:3}];
+ const cuts=[{after:3,at:{d:'2026-10-06',t:12}}];
+ expect(scheduleJoinCandidate({pieces,cuts,sourceAt:3,sourceIso:'2026-10-06',iso:'2026-10-06',t:10.25})).toMatchObject({after:3,side:'previous'});
+ expect(scheduleJoinCandidate({pieces,cuts,sourceAt:0,sourceIso:'2026-10-06',iso:'2026-10-06',t:9})).toMatchObject({after:3,side:'next'});
+ expect(scheduleJoinCandidate({pieces,cuts,sourceAt:3,sourceIso:'2026-10-06',iso:'2026-10-07',t:10})).toBeNull();
+ expect(scheduleJoinCandidate({pieces,cuts:[],sourceAt:3,sourceIso:'2026-10-06',iso:'2026-10-06',t:10})).toBeNull();
+ expect(scheduleJoinCandidate({pieces,cuts,sourceAt:3,sourceIso:'2026-10-06',iso:'2026-10-06',t:11})).toBeNull();
 });

@@ -1,6 +1,6 @@
 import {calendarPeriodBounds} from './core/calendar-period.js';
 import { openContextPanel } from './context-panels.js';
-import { wireSchedulePieceDrag, wireScheduleCutDrag } from './schedule-interactions.js';
+import { wireSchedulePieceDrag, wireScheduleCutDrag, scheduleJoinCandidate } from './schedule-interactions.js';
 import { readPersonalScheduleTrips } from './personal-schedule.js';
 import { createUnassignedTracks } from './unassigned-tracks.js';
 import './unassigned-tracks.css';
@@ -2234,8 +2234,8 @@ function gtDayHtml(key){
     gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
       const pcs=gtPieces(b).filter(p=>p.iso===iso);if(!pcs.length)return;
       const urgent=(b.lateJobs||[]).length||(!b.ok&&b.why==='late');
-      pcs.forEach(p=>{const y=geo.yOf(p.from),h=Math.max(12,geo.yOf(p.to)-geo.yOf(p.from)),name=p.k==='d'?'Дорога':((p.jobId&&feedCtx.jobName(p.jobId))||gtBlockName(b));
-        bars+='<div class="vg-block vg-piece '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(p.pinned?' man':'')+(h<40?' short':'')+'" role="button" tabindex="0" aria-label="'+esc((b.kind==='trip'?'Выезд: ':'Заявка: ')+name+' · '+clockLabel(p.from)+'–'+clockLabel(p.to))+'" data-readonly="'+(!gtCanEditBlock(b))+'" data-gb="'+esc(b.id)+'" data-job-id="'+esc(p.k!=='d'?(p.jobId||(b.kind==='job'?String(b.id).slice(1):'')):'')+'" data-piece-at="'+p.at+'" data-piece-from="'+p.from+'" data-piece-to="'+p.to+'" data-piece-iso="'+p.iso+'" style="top:'+y+'px;height:'+h+'px">'
+      pcs.forEach(p=>{const y=geo.yOf(p.from),h=Math.max(2,geo.yOf(p.to)-geo.yOf(p.from)),name=p.k==='d'?'Дорога':((p.jobId&&feedCtx.jobName(p.jobId))||gtBlockName(b));
+        bars+='<div class="vg-block vg-piece '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(p.pinned?' man':'')+(h<40?' short':'')+(h<18?' micro':'')+'" role="button" tabindex="0" aria-label="'+esc((b.kind==='trip'?'Выезд: ':'Заявка: ')+name+' · '+clockLabel(p.from)+'–'+clockLabel(p.to))+'" data-readonly="'+(!gtCanEditBlock(b))+'" data-gb="'+esc(b.id)+'" data-job-id="'+esc(p.k!=='d'?(p.jobId||(b.kind==='job'?String(b.id).slice(1):'')):'')+'" data-piece-at="'+p.at+'" data-piece-from="'+p.from+'" data-piece-to="'+p.to+'" data-piece-iso="'+p.iso+'" style="--piece-h:'+h+'px;top:'+y+'px;height:'+h+'px">'
           +(p.k==='d'?'<i class="vg-seg road" style="inset:0"></i>':'')+'<span class="vg-label"><b>'+esc(name)+(p.pinned?' ✎':'')+'</b><small>'+esc(fmtH(p.h)+' · '+clockLabel(p.from)+'–'+clockLabel(p.to))+'</small></span>'
           +(gtCanEditBlock(b)&&p.h>=.5?'<button class="vg-divide" type="button" data-gdivide aria-label="Разделить участок">÷</button>':'')+gtPlanTools(b)+'</div>';});
     });
@@ -2246,11 +2246,12 @@ function gtDayHtml(key){
   });
   const proposals=lanes.map(l=>({l,o:staffDayMap[l.id+'|'+iso]})).filter(x=>x.o&&x.o.proposed_end_h!=null);
   return '<div class="vg-tools"><div class="gtop"><button class="gback" type="button" data-gback="'+esc(key)+'">← неделя</button>'
-    +'<span class="gttl">'+WD_RU[new Date(utcOf(iso)).getUTCDay()]+' '+esc(shortDate(iso))+'</span>'
-    +'<span class="vg-auto">сутки · шаг 15 минут</span></div>'+gtLanePicker(key)+'</div>'
+    +'<button class="gback" type="button" data-day-step="-1" aria-label="Предыдущий день">‹</button><span class="gttl">'+WD_RU[new Date(utcOf(iso)).getUTCDay()]+' '+esc(shortDate(iso))+'</span>'
+    +'<button class="gback" type="button" data-day-step="1" aria-label="Следующий день">›</button><span class="vg-auto">15 мин</span></div>'+gtLanePicker(key)+'</div>'
     +proposals.map(x=>'<div class="vg-request">'+esc(x.l.name)+' просит сдвинуть конец дня на '+clockLabel(x.o.proposed_end_h)+'<button class="btn sm" data-day-decide="accept" data-engineer="'+x.l.id+'">Подтвердить</button><button class="btn sm ghost" data-day-decide="reject" data-engineer="'+x.l.id+'">Отклонить</button></div>').join('')
     +'<div class="vg-scroll"><div class="vg-grid vg-day-grid" style="--day-h:'+dayH+'px;--lanes:'+Math.max(1,lanes.length)+';--lane-min:'+laneMin+'px">'
     +axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
+    +[-1,1].map(dir=>'<div class="vg-day-transfer '+(dir<0?'previous':'next')+'" data-day-transfer="'+isoOf(utcOf(iso)+dir*DAY_MS)+'">'+(dir<0?'← предыдущий день · ':'следующий день → · ')+shortDate(isoOf(utcOf(iso)+dir*DAY_MS))+'</div>').join('')
     +'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="road"></i>дорога</span>'
     +'</div>';
 }
@@ -2395,6 +2396,7 @@ function gtVerticalHtml(key){
   });
   return '<div class="vg-tools"><span>'+(feedCtx.mine?'Работы по дням':'Рабочее окно '+fmtH((+appSettings.day_end||16)-(+appSettings.day_start||7))+' · допуск '+fmtH(appSettings.tolerance_h||1))+' '+infoHint((feedCtx.mine?'':'Перетащите работу на субботу или воскресенье, чтобы открыть выходной. ')+'Нажмите на день — сутки и ручная раскладка.', 'Работа с графиком')+'</span>'+gtLanePicker(key)+'</div>'
     +'<div class="vg-scroll" style="--lane-min:'+laneMin+'px"><div class="vg-grid" style="--week-h:'+totalH+'px;--lanes:'+Math.max(1,lanes.length)+'">'+axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
+
     +'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="road"></i>дорога</span></div>';
 }
 function gtHtml(key){ return gtZoom[key]?gtDayHtml(key):gtVerticalHtml(key); }
@@ -2403,6 +2405,7 @@ function gtPaint(key){
   box.innerHTML=gtHtml(key);
   gtWire(key,box);
 }
+function gtFocusDay(iso){const key=Object.keys(feedCtx.weeks).find(k=>gtWeekDays(feedCtx.weeks[k]).includes(iso));if(key){gtOpen[key]=true;gtZoom[key]=iso;gtApply();}}
 function gtApply(){
   Object.keys(gtOpen).forEach(k=>{
     const box=document.querySelector('[data-gtbox="'+k+'"]'); if(!box) return;
@@ -2424,6 +2427,7 @@ function gtWire(key,box){
   const gantt=box.querySelector('.vg-scroll');
   gtStickyObserve(box);
   box.querySelectorAll('.vg-block').forEach(el=>el.onkeydown=e=>{
+    if(e.target===el&&e.altKey&&el.matches('.vg-piece')&&['ArrowLeft','ArrowRight'].includes(e.key)){const b=gtFind(el.dataset.gb);if(b&&gtCanEditBlock(b)){e.preventDefault();e.stopPropagation();void gtPinPiece(b,{at:+el.dataset.pieceAt,iso:el.dataset.pieceIso},isoOf(utcOf(el.dataset.pieceIso)+(e.key==='ArrowLeft'?-1:1)*DAY_MS),+el.dataset.pieceFrom);}return;}
     if(e.target!==el||!['Enter',' '].includes(e.key))return;
     e.preventDefault();e.stopPropagation();const b=gtFind(el.dataset.gb);if(b){gtOpenBlock(key,b,el);}
   });
@@ -2440,6 +2444,7 @@ function gtWire(key,box){
     btn.onclick=async e=>{e.preventDefault();e.stopPropagation();const host=btn.closest('[data-gb]'),b=host&&gtFind(host.dataset.gb);if(b&&b.tripId){const own=(b.engineerIds||[]).includes(session.user.id);await tripAction(b.tripId,btn.dataset.gact,!own&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?feedCtx.nameOf(b.engineer):'');}};
   });
   box.querySelectorAll('.vg-gtitle').forEach(title=>title.onclick=e=>{e.stopPropagation();const b=gtFind(title.closest('[data-gb]').dataset.gb);if(b){gtOpenBlock(key,b,title.closest('[data-gb]'));}});
+  box.querySelectorAll('[data-day-step]').forEach(b=>b.onclick=e=>{e.stopPropagation();gtZoom[key]=isoOf(utcOf(zoom)+Number(b.dataset.dayStep)*DAY_MS);gtPaint(key);});
   box.querySelectorAll('[data-gback]').forEach(b=>b.onclick=e=>{ e.stopPropagation();
     gtZoom[key]=null; gtSel=null; gtPaint(key); });
   box.querySelectorAll('[data-gday]').forEach(d=>d.onclick=e=>{ e.stopPropagation();
@@ -2494,9 +2499,27 @@ function gtWire(key,box){
   if(zoom&&gtPendingDivide&&gtPendingDivide.iso===zoom){const selector='[data-gb="'+window.CSS.escape(String(gtPendingDivide.id))+'"]'+(gtPendingDivide.at!=null?'[data-piece-at="'+window.CSS.escape(gtPendingDivide.at)+'"]':'')+' [data-gdivide]',btn=box.querySelector(selector);gtPendingDivide=null;if(btn)requestAnimationFrame(()=>btn.click());}
   box.querySelectorAll('.vg-piece').forEach(el=>{
     const b=gtFind(el.dataset.gb),lane=el.closest('.vg-day-lane');if(!b||!lane)return;
-    wireSchedulePieceDrag({el,canMove:()=>gtCanEditBlock(b),onOpen:()=>{gtOpenBlock(key,b,el);},
+    const at=+el.dataset.pieceAt,sourceIso=el.dataset.pieceIso;
+    let scrollHost=lane.parentElement;while(scrollHost&&!(scrollHost.scrollHeight>scrollHost.clientHeight&&/auto|scroll/.test(getComputedStyle(scrollHost).overflowY)))scrollHost=scrollHost.parentElement;
+    const clear=()=>{box.classList.remove('vg-dragging');box.querySelectorAll('.joining').forEach(x=>x.classList.remove('joining'));document.querySelectorAll('[data-transfer-portal],.vg-drop-note').forEach(x=>x.remove());};
+    wireSchedulePieceDrag({el,canMove:()=>gtCanEditBlock(b),onOpen:()=>gtOpenBlock(key,b,el),scrollHost,
       maxY:()=>lane.clientHeight-el.offsetHeight,timeOfY:y=>q4(gtLaneTime(lane,y)),
-      onDrop:t=>gtPinPiece(b,{at:+el.dataset.pieceAt},el.dataset.pieceIso,t)});
+      resolveDrop:({top,event})=>{
+        box.classList.add('vg-dragging');
+        if(!document.querySelector('[data-transfer-portal]'))box.querySelectorAll('[data-day-transfer]').forEach(x=>{const portal=x.cloneNode(true);portal.dataset.transferPortal='';document.body.append(portal);});
+        const hit=document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-day-transfer]');
+        const dir=top<0?-1:top>=lane.clientHeight?1:0;
+        const iso=hit?.dataset.dayTransfer||(dir?isoOf(utcOf(sourceIso)+dir*DAY_MS):sourceIso);
+        let t=hit||dir?+el.dataset.pieceFrom:q4(gtLaneTime(lane,top));
+        {const w=dayWindow(b.engineer,iso,gtSettings())||{start:+appSettings.day_start||7,ceiling:(+appSettings.day_end||16)+(+appSettings.tolerance_h||1)};t=q4(Math.max(w.start,Math.min(w.ceiling-.25,t)));}
+        return {iso,t,join:iso===sourceIso?scheduleJoinCandidate({pieces:gtPieces(b),cuts:b.cuts,sourceAt:at,sourceIso,iso,t}):null};
+      },onPreview:target=>{
+        box.querySelectorAll('.joining').forEach(x=>x.classList.remove('joining'));document.querySelectorAll('[data-transfer-portal]').forEach(x=>x.classList.remove('active'));
+        if(target.join)lane.querySelector('[data-gb="'+window.CSS.escape(String(b.id))+'"][data-piece-at="'+target.join.neighbour.at+'"]')?.classList.add('joining');
+        document.querySelector('[data-transfer-portal][data-day-transfer="'+target.iso+'"]')?.classList.add('active');
+        let note=document.querySelector('.vg-drop-note');if(!note){note=document.createElement('div');note.className='vg-drop-note';note.setAttribute('role','status');document.body.append(note);}
+        note.textContent=target.join?'Скрепить участки':shortDate(target.iso)+' · '+clockLabel(target.t);
+      },onEnd:clear,onDrop:target=>gtPinPiece(b,{at,iso:sourceIso},target.iso,target.t,target.join)});
   });
   box.querySelectorAll('.vg-block:not(.vg-piece)').forEach(el=>{
     el.onclick=e=>{if(e.target.closest('button'))return;const b=gtFind(el.dataset.gb);if(b&&!gtCanEditBlock(b)){e.stopPropagation();gtOpenBlock(key,b,el);}};
@@ -2540,52 +2563,79 @@ async function gtSave(b,start){
   }catch(e){ notify('Не сохранилось: '+((e&&e.message)||e),'err'); }
 }
 
-async function gtSaveCuts(b,cuts){
+async function gtSaveCuts(b,cuts,date=null,focusDay=null){
   if(!gtCanEditBlock(b))return false;
   const isTrip=String(b.id)[0]==='t',id=String(b.id).slice(1);
-  const issue=schedulePlacementIssue({block:b,start:b.start,cuts,settings:gtSettings(),others:gtBlocks().map(x=>({...x,pieces:gtPieces(x)}))});
-  if(issue){notify(issue,'warn');return false;}
+  const original=feedCtx?.recordOf?.(b.id)||getTrip(id)||tripCache[id];
+  const originalFrom=original?.date_from||b.from,originalTo=original?.date_to||b.to;
   const plan={start:{d:b.start.iso,t:q4(b.start.t)},cuts:(cuts||[]).map(c=>({after:q4(c.after),at:{d:c.at.d,t:q4(c.at.t)}})).sort((a,z)=>a.after-z.after)};
-  const {error}=await sb.from(isTrip?'trips':'jobs').update({day_plan:plan}).eq('id',id);
-  if(error){notify('Не сохранилось: '+error.message,'err');return false;}
-  showToast('Ручная раскладка сохранена');await renderFeedAgain();return true;
+  let candidate={...b,plan};
+  if(!isTrip){candidate.from=null;candidate.to=null;}
+  if(isTrip){const dates=[originalFrom,originalTo,b.start.iso,...plan.cuts.map(c=>c.at.d)].filter(Boolean).sort();candidate.from=dates[0];candidate.to=dates.at(-1);}
+  const settings=gtSettings([candidate]);
+  const placed=piecesOf(b.start,b.segs,settings,b.engineer,plan.cuts);
+  if(isTrip&&placed.length){candidate.from=[candidate.from,...placed.map(p=>p.iso)].sort()[0];candidate.to=[candidate.to,...placed.map(p=>p.iso)].sort().at(-1);}
+  const issue=schedulePlacementIssue({block:candidate,start:b.start,cuts:plan.cuts,settings:gtSettings([candidate]),others:gtBlocks().map(x=>({...x,pieces:gtPieces(x)}))});
+  if(issue){notify(issue,'warn');return false;}
+  const rec={day_plan:plan},old={day_plan:original?.day_plan??b.plan??null};
+  if(isTrip&&(candidate.from!==originalFrom||candidate.to!==originalTo)){rec.date_from=candidate.from;rec.date_to=candidate.to;old.date_from=originalFrom;old.date_to=originalTo;}
+  try{
+    const {error}=await sb.from(isTrip?'trips':'jobs').update(rec).eq('id',id);if(error)throw error;
+    undoToast('Раскладка сохранена',async()=>{const {error}=await sb.from(isTrip?'trips':'jobs').update(old).eq('id',id);if(error)notify(error.message,'err');else{await renderFeedAgain();if(focusDay)gtFocusDay(b.pieces?.[0]?.iso||b.start.iso);}});
+    if(focusDay){dashRanges.gt.from=[dashRanges.gt.from,focusDay].sort()[0];dashRanges.gt.to=[dashRanges.gt.to,focusDay].sort().at(-1);}
+    await renderFeedAgain();
+    if(focusDay)gtFocusDay(focusDay);
+    return true;
+  }catch(e){notify('Не сохранилось: '+e.message,'err');return false;}
 }
 async function renderFeedAgain(){if(document.querySelector('.view-dash.active'))await renderAttention();else if(plannerCur==='mine')await renderMine();else await renderAttention();}
 function gtPop(key,b,trigger){
   const old=document.querySelector('.gpop');if(old)old.remove();
   const cuts=(b.cuts||[]).map(c=>({after:+c.after,at:{d:c.at.d,t:+c.at.t}}));
   const editable=gtCanEditBlock(b),trip=b.kind==='trip',action=trip?gtTripAction(b,true):null;
-  const tripTools=trip&&!b.scheduleOnly?'<div class="gp-f gp-trip-tools">'
-    +(action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'')
-    +((b.status==='planned'||b.status==='assigned')&&(editable||(b.engineerIds||[]).includes(session.user.id))&&!reschedByTrip[b.tripId]?'<button class="btn sm" data-pop-resched>Перенести</button>':'')
-    +'<button class="btn sm ghost" data-pop-map>Карта</button>'
-    +((b.status==='finished'||b.status==='done')?'<button class="btn sm" data-pop-stays>Стоянки</button>':'')
-    +((b.status==='finished'||b.status==='done')&&editable?'<button class="btn sm amber" data-pop-stay-map>Привязка факта</button>':'')
-    +((b.status==='finished'||b.status==='done')&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn sm" data-pop-km>Пересчитать факт</button>':'')
-    +(canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn sm" data-pop-open>Открыть выезд</button>':'')+'</div>':'';
   const selected=trigger||document.querySelector('.vg-block[data-gb="'+window.CSS.escape(String(b.id))+'"]'),selectedDay=selected&&(selected.dataset.blockDay||selected.dataset.pieceIso);
-  const h='<div class="gpop gpop-compact"><div class="gp-h">'+esc(gtBlockName(b))+'<span class="a-tag '+(cuts.length?'plan':'auto')+'">'+(cuts.length?'вручную':'авто')+'</span></div>'
+  const hasTools=trip&&!b.scheduleOnly;
+  const secondary=hasTools?
+    ((b.status==='planned'||b.status==='assigned')&&(editable||(b.engineerIds||[]).includes(session.user.id))&&!reschedByTrip[b.tripId]?'<button class="btn sm ghost" data-pop-resched>Перенести выезд</button>':'')
+    +'<button class="btn sm ghost" data-pop-map>Карта</button>'
+    +((b.status==='finished'||b.status==='done')?'<button class="btn sm ghost" data-pop-stays>Стоянки</button>':'')
+    +((b.status==='finished'||b.status==='done')&&editable?'<button class="btn sm ghost" data-pop-stay-map>Привязка факта</button>':'')
+    +((b.status==='finished'||b.status==='done')&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn sm ghost" data-pop-km>Пересчитать факт</button>':'')
+    +(canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn sm ghost" data-pop-open>Открыть выезд</button>':''):'';
+  const total=(b.segs||[]).reduce((n,p)=>n+p.h,0),points=[{after:0,at:{d:b.start.iso,t:b.start.t}},...cuts.map(c=>{const p=gtPieces(b).find(p=>Math.abs(p.at-c.after)<.01);return {...c,at:p?{d:p.iso,t:p.from}:c.at};})];
+  const layout='<details class="gp-layout"><summary>Участки времени'+(cuts.length?' · '+(cuts.length+1):'')+'</summary>'
+    +(editable?'<div class="gp-s">Перетащите участок. Подведите части друг к другу, чтобы скрепить.</div>':'')
+    +(selectedDay&&editable?'<button class="btn sm ghost" data-pop-divide>Разделить в этом дне</button>':'')
+    +'<div class="gp-days">'+points.map((c,i)=>'<div class="gp-r"><span class="gp-k">Участок '+(i+1)+'<small>'+fmtH(Math.max(0,(points[i+1]?.after??total)-c.after))+'</small></span><b class="gp-v">'+shortDate(c.at.d)+' · '+clockLabel(c.at.t)+'</b>'+(i&&editable?'<button class="gp-b" data-cut-del="'+(i-1)+'" aria-label="Скрепить с предыдущим участком" title="Скрепить с предыдущим">↥</button>':'')+'</div>').join('')+'</div></details>';
+  const primary=action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'<button class="btn sm" data-pop-map>Карта</button>';
+  const time=selectedDay?shortDate(selectedDay)+(selected?.dataset.pieceFrom?' · '+clockLabel(+selected.dataset.pieceFrom)+'–'+clockLabel(+selected.dataset.pieceTo):''):shortDate(b.start.iso)+' · '+clockLabel(b.start.t);
+  const h='<div class="gpop gpop-compact"><div class="gp-h"><span>'+esc(gtBlockName(b))+'</span><button class="gp-close" data-gclose aria-label="Закрыть">×</button></div>'
+    +'<div class="gp-caption">'+time+' · '+(cuts.length?(cuts.length+1)+' '+plural(cuts.length+1,'участок','участка','участков'):'авто')+'</div>'
     +(b.scheduleOnly?'<div class="gp-s">Исторический выезд · экипаж не указан · только просмотр графика</div>':'')
-    +tripTools+'<details class="gp-layout"><summary>Раскладка времени'+(cuts.length?' · '+cuts.length:'')+'</summary>'+(editable?'<div class="gp-s">Перетащите плашку в увеличенном дне или создайте точку разреза.</div>':'')
-    +(selectedDay&&editable?'<button class="btn sm" data-pop-divide>Разделить в этом дне</button>':'')
-    +'<div class="gp-days">'+(cuts.length?cuts.map((c,i)=>'<div class="gp-r"><span class="gp-k">после '+fmtH(c.after)+'</span><b class="gp-v">'+shortDate(c.at.d)+' · '+String(Math.floor(c.at.t)).padStart(2,'0')+':'+String(Math.round(c.at.t%1*60)).padStart(2,'0')+'</b>'+(editable?'<button class="gp-b danger" data-cut-del="'+i+'">×</button>':'')+'</div>').join(''):'<div class="hint">Ручных разрезов нет</div>')+'</div>'
-    +'</details><div class="gp-f"><button class="btn sm ghost" data-gclose>Закрыть</button>'+(b.manual&&editable?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div></div>';
+    +(hasTools?'<div class="gp-trip-tools">'+primary+'<button class="btn sm ghost gp-more" data-pop-more aria-label="Другие действия" aria-expanded="false">⋯</button></div><div class="gp-secondary" hidden>'+secondary+layout+(b.manual&&editable?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div>':layout)+'</div>';
   document.body.insertAdjacentHTML('beforeend',h);const pop=document.body.lastElementChild;
+  const fit=()=>{if(window.matchMedia('(max-width:760px)').matches)return;pop.style.top=Math.max(8,Math.min(parseFloat(pop.style.top)||8,window.innerHeight-pop.offsetHeight-8))+'px';};
+  const more=pop.querySelector('[data-pop-more]'),menu=pop.querySelector('.gp-secondary');
+  if(more){more.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;more.setAttribute('aria-expanded',String(!menu.hidden));fit();};pop.addEventListener('keydown',e=>{if(e.key==='Escape'&&!menu.hidden){e.preventDefault();e.stopImmediatePropagation();menu.hidden=true;more.setAttribute('aria-expanded','false');more.focus();}});}
   pop.querySelector('.gp-layout').addEventListener('toggle',()=>{if(window.matchMedia('(max-width:760px)').matches)return;pop.style.top=Math.max(8,Math.min(parseFloat(pop.style.top)||8,window.innerHeight-pop.offsetHeight-8))+'px';});
   pop.querySelectorAll('[data-cut-del]').forEach(x=>x.onclick=async e=>{e.stopPropagation();cuts.splice(+x.dataset.cutDel,1);pop.remove();await gtSaveCuts(b,cuts);});
   const close=()=>{gtSel=null;pop.remove();gtPaint(key);};pop.querySelector('[data-gclose]').onclick=e=>{e.stopPropagation();close();};
   const reset=pop.querySelector('[data-greset]');if(reset)reset.onclick=e=>{e.stopPropagation();pop.remove();gtSave(b,null);};pop.onclick=e=>e.stopPropagation();
   const tool=(sel,fn)=>{const x=pop.querySelector(sel);if(x)x.onclick=async e=>{e.stopPropagation();pop.remove();await fn();};};
+  pop.querySelectorAll('[data-pop-map]').forEach(x=>x.onclick=async e=>{e.stopPropagation();pop.remove();await showTripOnMap(b.tripId);});
   tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-stay-map]',()=>openStayBindingMap(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
   tool('[data-pop-divide]',async()=>{gtZoom[key]=selectedDay;gtPendingDivide={id:String(b.id),iso:selectedDay,at:selected?.dataset.pieceAt};gtPaint(key);});
   const el=selected;if(el&&!matchMedia('(max-width:760px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-348,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
   openContextPanel(pop,{trigger:el,label:gtBlockName(b),remove:true,onClose:()=>{gtSel=null;if(el?.isConnected)el.classList.remove('sel');}});
+  pop.querySelector('[data-pop-action]')?.focus({preventScroll:true});
 }
-async function gtPinPiece(b,piece,iso,t){
-  const cuts=(b.cuts||[]).filter(c=>Math.abs(+c.after-(+piece.at||0))>.01);
+async function gtPinPiece(b,piece,iso,t,join=null){
+  let cuts=(b.cuts||[]).filter(c=>Math.abs(+c.after-(join?join.after:(+piece.at||0)))>.01);
+  if(join?.side==='previous')return gtSaveCuts(b,cuts,null,iso);
+  if(join?.side==='next'){const pos=addHours({iso:join.neighbour.iso,t:join.neighbour.from},-join.duration,gtSettings(),b.engineer);iso=pos.iso;t=pos.t;cuts=cuts.filter(c=>Math.abs(+c.after-(+piece.at||0))>.01);}
   if((+piece.at||0)>0)cuts.push({after:q4(piece.at),at:{d:iso,t:q4(t)}});
   const start=(+piece.at||0)>0?b.start:{iso,t:q4(t)};
-  return gtSaveCuts({...b,start},cuts);
+  return gtSaveCuts({...b,start},cuts,null,iso!==piece.iso?iso:null);
 }
 // Клик мимо — закрыть модалку.
 document.addEventListener('click',e=>{
