@@ -34,7 +34,7 @@ import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
 import { hasStableJobWorkIds } from './core/job-work-diff.js';
-import { canEditRequestFinanceRow } from './core/request-finance-row.js';
+import { canEditRequestFinanceRow, mergePendingRequestFinance } from './core/request-finance-row.js';
 import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 import { saveCanonicalRequest, saveRequestAndWorks } from './core/request-save.js';
@@ -1817,9 +1817,9 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
   const box=$('jobList'); if(error){listLoadError(box,error,renderJobs);return;}
   const queued=await qAll();
   jobs=projectLegacyFinanceRows(data||[]).map(j=>{
-    const pending=pendingJobState(queued,j.id);
+    const pending=pendingJobState(queued,j.id,j.job_parts,j.job_works);
     return pending.payload?.works_complete
-      ? {...j,job_works:pending.payload.works,pending_local:true}
+      ? {...j,job_works:pending.works,pending_local:true}
       : j;
   });
   const q=$('jobSearch').value.trim().toLowerCase();
@@ -3729,11 +3729,11 @@ async function openJob(id,presetClient,presetEquip,{pane:requestedPane}={}){ if(
     // редактированием всегда сверяем его с сервером; без связи используем снимок.
     const full=await fetchJobFull(id);
     if(full) j=full; else j=await snapFindJob(id)||j;
-    const queued=await qAll(),pending=pendingJobState(queued,id);
+    const queued=await qAll(),pending=pendingJobState(queued,id,j?.job_parts,j?.job_works);
     pendingEdit=queued.some(it=>it.payload?.jobId===id&&(it.kind==='job'||it.kind==='part'));
     if(pending.payload){
       j={...j,...pending.payload.rec,
-        job_works:pending.payload.works_complete?pending.payload.works:j?.job_works,
+        job_works:pending.works,
         service_orders:j?.service_orders||[]};
     }
   }
@@ -3979,7 +3979,7 @@ function defaultProfileId(billable){ const list=appSettings.tariff_profiles||[];
   const dw=list.find(p=>p.def_warranty); return dw?dw.id:''; }
 $('jbWorkAdd').onclick=async ()=>{ const wid=$('jbWorkPick').value; if(!wid) return; const cw=catalog.find(c=>c.id===wid); if(!cw) return;
   let sug={billable:true,reasons:[]}; try{ const {data}=await sb.rpc('suggest_warranty',{p_equipment:$('jbEquip').value||null,p_work:wid,p_date:$('jbDate').value||null}); if(data) sug=data; }catch(e){}
-  const bill=sug.billable!==false; curWorks.push({work_id:wid,title:cw.name,name:cw.name,hours:+cw.norm_hours||0,override:((+cw.price>0)?String(cw.price):''),billable:bill,reasons:sug.reasons||[],billable_reason:'',profile:defaultProfileId(bill),custom:false}); $('jbWorkPick').value=''; renderJobWorks(); queueJobSave(); };
+  const bill=sug.billable!==false; curWorks.push({work_id:wid,title:cw.name,name:cw.name,hours:+cw.norm_hours||0,override:((+cw.price>0)?String(cw.price):''),billable:bill,reasons:sug.reasons||[],billable_reason:bill?'':(sug.reasons||[]).join(' · ')||'Гарантийный ремонт',profile:defaultProfileId(bill),custom:false}); $('jbWorkPick').value=''; renderJobWorks(); queueJobSave(); };
 $('jbCustomAdd').onclick=()=>{ curWorks.push({work_id:null,name:'',hours:0,override:'',billable:true,reasons:[],billable_reason:'',profile:defaultProfileId(true),custom:true}); renderJobWorks(); };
 function profileById(id){ return id?((appSettings.tariff_profiles||[]).find(p=>p.id===id)||null):null; }
 // Зеркало серверного guard_job_work_money. Разъедутся — инженер увидит одну
@@ -4021,7 +4021,7 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
       money+
       (w.voided?'<span class="hint">аннулирована</span>':w.legacy_task_item_id||w.approved?'<span class="hint" title="Требуется отдельная аудированная коррекция" style="margin-left:auto">'+(w.legacy_task_item_id?'историческая · защищена':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost" data-wrm="'+i+'" style="margin-left: auto">×</button>')+(canWriteJob()&&(w.legacy_task_item_id||w.canonical_task_item_id)&&!w.voided?'<button class="btn sm ghost" data-finance-void-work="'+i+'">Аннулировать</button>':'')+'</div>'+
       ((w.reasons&&w.reasons.length)?'<div class="m" style="margin-top: var(--sp-2)">'+esc(w.reasons.join(' · '))+'</div>':'')+
-      (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="причина гарантийности (необязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
+      (!w.billable?('<input type="text" data-wrsn="'+i+'" value="'+esc(w.billable_reason||'')+'" placeholder="Причина гарантийной работы (обязательно)" style="width:100%;margin-top: var(--sp-2);font-size: var(--fs-3)">'):'');
     if(!canEditRequestFinanceRow(w,mayW)) d.querySelectorAll('input,select,button:not([data-finance-void-work])').forEach(el=>el.disabled=true);
     box.appendChild(d); });
   // Добавлять работы можно ровно там же, где и править: иначе кнопка «+ из
@@ -4046,7 +4046,7 @@ function renderJobWorks(){ const box=$('jbWorks'); box.innerHTML='';
   box.querySelectorAll('[data-wh]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wh].hours=parseFloat(inp.value)||0; curWorks[inp.dataset.wh]._dirty=true; jobTotals(); });
   box.querySelectorAll('[data-wrsn]').forEach(inp=>inp.oninput=()=>{ curWorks[inp.dataset.wrsn].billable_reason=inp.value; curWorks[inp.dataset.wrsn]._dirty=true; });
   box.querySelectorAll('[data-wp]').forEach(sel=>sel.onchange=()=>{ curWorks[sel.dataset.wp].profile=sel.value; curWorks[sel.dataset.wp]._dirty=true; });
-  box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; w._dirty=true; w.profile=defaultProfileId(w.billable); renderJobWorks(); queueJobSave(); });
+  box.querySelectorAll('[data-wb]').forEach(b=>b.onclick=()=>{ const w=curWorks[b.dataset.wb]; w.billable=!w.billable; if(!w.billable&&!w.billable_reason?.trim())w.billable_reason='Гарантийный ремонт'; w._dirty=true; w.profile=defaultProfileId(w.billable); renderJobWorks(); queueJobSave(); });
   box.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>{ curWorks.splice(b.dataset.wrm,1); renderJobWorks(); queueJobSave(); });
   box.querySelectorAll('[data-finance-void-work]').forEach(b=>b.onclick=()=>voidRequestFinanceRow(curWorks[Number(b.dataset.financeVoidWork)]));
   jobTotals();
@@ -4734,7 +4734,7 @@ function partReady(p){ return !!String(p.name||'').trim(); }
 
 async function loadJobParts(){
   jobParts=[]; partT={}; jobPartsComplete=false;
-  if(!jobEditId){ renderJobParts(); return; }
+  if(!jobEditId){ jobPartsComplete=true;renderJobParts(); return; }
   try{
     const {data,error}=await sb.from('jobs').select(JOB_FINANCE_SELECT).eq('id',jobEditId).single();
     if(error) throw error;
@@ -4800,13 +4800,13 @@ function canEditWorks(){
   return !worksLocked();
 }
 function canEditParts(){
-  if(!jobEditId||jobRO||financeTaskLocked()) return false;
+  if(jobRO||financeTaskLocked()||!jobPartsComplete) return false;
   if(canWriteJob()) return true;
   return ($('jbStatus')?$('jbStatus').value:'')!=='done';
 }
 // Отдельная строка запчасти: своя, ещё не подтверждённая, заявка открыта.
 function canEditPart(p){
-  if(!canEditRequestFinanceRow(p,true)) return false;
+  if(!canEditRequestFinanceRow(p,canEditParts())) return false;
   if(canWriteJob()) return !jobRO;
   return canEditParts() && !p.approved_at
     && (!p.created_by || p.created_by===session.user.id);
@@ -4848,7 +4848,7 @@ function renderJobParts(){
         +(p.approved_at
             ? '<span class="pt-ok">проверено</span>'
             : '<span class="pt-wait">ждёт подтверждения</span>')
-        +(money&&!p.approved_at&&!p.legacy_task_item_id?('<span class="pt-acts">'
+        +(money&&!p.approved_at&&!p.legacy_task_item_id&&!partLocal(p)&&p.canonical_task_item_id?('<span class="pt-acts">'
             +'<button class="btn sm amber" data-pok="'+i+'">Подтвердить</button>'
             +'<button class="btn sm ghost" data-pno="'+i+'">Отклонить</button></span>'):'')
         +((!money&&p.approved_at&&jobEditId)?('<span class="pt-acts">'
@@ -4904,7 +4904,6 @@ function partTotals(){
 }
 function partAdd(seed){
   if(!canEditParts()){ notify('Состав материалов нельзя менять после начала выполнения задания','warn'); return; }
-  if(!jobEditId){ notify('Сначала создай заявку','warn'); return; }
   jobParts.push({id:'local-'+Date.now()+'-'+jobParts.length, job_id:jobEditId,
     name:(seed&&seed.name)||'', sku:'', qty:(seed&&seed.qty)||1, unit:(seed&&seed.unit)||'шт',
     price:0, cost:0, billable:true, created_by:session.user.id});
@@ -4935,38 +4934,8 @@ async function snapPartsPatch(jobId){
 }
 async function partSave(p){
   if(jobPartsComplete){ await saveJobNow(); return; }
-  clearTimeout(partT[p.id]); delete partT[p.id];
-  if(!partReady(p)) return;
-  const row={job_id:p.job_id||jobEditId, name:String(p.name).trim(), sku:String(p.sku||'').trim(),
-    qty:partQty(p)||1, unit:p.unit||'шт', billable:p.billable!==false};
-  if(canWriteJob()){ row.price=+p.price||0; row.cost=+p.cost||0; }
-  jobSaveState('сохраняю…','busy');
-  const add=partLocal(p);
-  try{
-    if(add){
-      const {data,error}=await sb.from('job_parts').insert(row).select('*').single();
-      if(error) throw error;
-      Object.assign(p,data);            // настоящий id и цены, как их принял сервер
-    } else {
-      const {data,error}=await sb.from('job_parts').update(row).eq('id',p.id).select('*').single();
-      if(error) throw error;
-      if(data) Object.assign(p,data);   // сервер мог обнулить цены — показываем правду
-    }
-    jobsDirty=true; jobSaveState('сохранено');
-    // Перерисовка сбрасывает курсор. Пока человек стоит в поле этой
-    // карточки — он ещё печатает, и вырывать у него фокус посреди слова
-    // нельзя; итоги при этом обновить всё равно надо.
-    if($('jbParts')&&$('jbParts').contains(document.activeElement)) partPaint();
-    else renderJobParts();
-  }catch(e){
-    if(!isNetErr(e)){ jobSaveState('запчасть не сохранена · '+((e&&e.message)||e),'bad'); return; }
-    // Правки одной и той же строки в очереди не копим: там лежит строка
-    // целиком, и каждая новая заменяет предыдущую.
-    if(await qReplacePart(String(p.id),{op:add?'add':'edit',jobId:jobEditId,localId:String(p.id),row})){
-      await snapPartsPatch(jobEditId);
-      jobSaveState('без связи · отправлю позже');
-    } else jobSaveState('не сохранено · нет связи и нет места на устройстве','bad');
-  }
+  jobSaveState('не сохранено · загрузите полный состав запчастей и повторите сохранение','bad');
+  return;
 }
 // Подтверждение и отклонение строки запчасти. Отклонить — значит убрать:
 // строка, которую менеджер не признал, не должна остаться в счёте «просто
@@ -4997,8 +4966,12 @@ async function partApprove(p,ok){
 async function worksApprove(){
   if(!canWriteJob()||!jobEditId) return;
   try{
+    const problem=jobProblem()||jobDraftIssue();
+    if(problem){notify('Сначала заполни работы: '+problem,'warn');revealRequestProblem();return;}
+    await saveJobNow();
+    if(jobEditorDirty||$('jobSaveState')?.classList.contains('bad')){notify('Сначала сохрани изменения заявки.','warn');return;}
     const ids=curWorks.filter(w=>!w.approved&&!w.legacy_task_item_id&&w.canonical_task_item_id).map(w=>w.canonical_task_item_id);
-    if(!ids.length){notify('Историческую строку можно исправить только отдельной аудированной операцией.','warn');return;}
+    if(!ids.length){renderJobWorks();notify(curWorks.some(w=>!w.approved&&!w.legacy_task_item_id)?'Дождись отправки работ на сервер.':'Работы уже подтверждены.');return;}
     const approvedAt=new Date().toISOString();
     const {error}=await sb.rpc('job_request_finance_approve',{p_job:jobEditId,p_ids:ids});
     if(error) throw error;
@@ -5151,6 +5124,7 @@ async function fixDecide(id,st){
 
 async function partDel(p){
   if(!p) return;
+  if(!canEditParts()){notify('Состав запчастей сейчас недоступен для редактирования.','warn');return;}
   if(p.legacy_task_item_id){notify('Перенесённую финансовую строку нельзя удалить до перехода на аннулирование.','warn');return;}
   if(p.approved_at){notify('Подтверждённую строку можно убрать только аудированной коррекцией.','warn');return;}
   const what=String(p.name||'').trim();
@@ -5303,10 +5277,13 @@ function jobRec(){
     at_depot:!!jobAtDepot,
     depot_id:(jobAtDepot?($('jbDepotSel').value||null):null)};
 }
+function jobDraftIssue(){
+  return queuedJobDraftIssue({works_complete:canEditWorks(),works:curWorks.filter(w=>!w.legacy_task_item_id).map(w=>({title:w.custom?w.name:w.title,work_id:w.work_id,hours:w.hours,billable:w.billable,billable_reason:w.billable_reason})),parts_complete:canEditParts(),parts:jobParts.filter(p=>!p.legacy_task_item_id)});
+}
 function jobProblem(){
   if(!$('jbClient').value) return 'не выбран клиент';
   if(curWorks.some(w=>w.custom&&!w.name.trim())) return 'у своей работы нет названия';
-  return '';
+  return !jobEditId?jobDraftIssue():'';
 }
 function revealRequestProblem(){
   let field=null;
@@ -5317,6 +5294,15 @@ function revealRequestProblem(){
       requestTabs.select('estimate');
       const card=$('jbWorks').closest('.foldable');if(card){folded.delete(foldKey(card));card.classList.remove('folded');}
       field=$('jbWorks').querySelector('[data-wn="'+index+'"]');
+    }
+    else if(jobDraftIssue()){
+      requestTabs.select('estimate');
+      const wi=curWorks.findIndex(w=>!w.legacy_task_item_id&&(!(Number(w.hours)>0)||w.billable===false&&!w.billable_reason?.trim()));
+      const pi=jobParts.findIndex(p=>!p.legacy_task_item_id&&(!partReady(p)||!(partQty(p)>0)||!p.unit?.trim()));
+      const box=wi>=0?$('jbWorks'):$('jbParts'),card=box.closest('.foldable');
+      if(card){folded.delete(foldKey(card));card.classList.remove('folded');}
+      if(wi>=0)field=box.querySelector('[data-'+(!(Number(curWorks[wi].hours)>0)?'wh':'wrsn')+'="'+wi+'"]');
+      else if(pi>=0)field=box.querySelector('[data-'+(!partReady(jobParts[pi])?'pn':!(partQty(jobParts[pi])>0)?'pq':'pu')+'="'+pi+'"]');
     }
   }
   if(field&&!field.disabled){field.focus({preventScroll:true});field.scrollIntoView({block:'center',behavior:'auto'});}
@@ -5339,7 +5325,7 @@ function jobPartRow(p,index){
   // response was lost reuses its original key instead of inserting a twin.
   if(String(p.id||'').startsWith('local-')){p.id=partStableId();p.local_only=true;}
   return {index,id:p.canonical_task_item_id||p.id,client_new:!!p.local_only,local_only:!!p.local_only,name:String(p.name||'').trim(),sku:String(p.sku||'').trim(),
-    qty:partQty(p)||1,unit:p.unit||'шт',billable:p.billable!==false,
+    qty:partQty(p),unit:p.unit||'шт',billable:p.billable!==false,
     ...(canWriteJob()?{price:+p.price||0,cost:+p.cost||0}:{})};
 }
 // Правка местного снимка после постановки в очередь: заявка внутри
@@ -5349,8 +5335,8 @@ async function snapJobPatch(jobId,rec,works,parts){
   let touched=false;
   Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{
     if(j.id!==jobId) return;
-    j.status=rec.status; if(Array.isArray(works)) j.job_works=works;
-    if(Array.isArray(parts))j.job_parts=parts.filter(partReady).map(x=>({id:x.id,local_only:!!x.local_only,name:x.name,sku:x.sku,qty:x.qty,unit:x.unit,price:x.price,cost:x.cost,billable:x.billable}));
+    Object.assign(j,rec); if(Array.isArray(works)) j.job_works=mergePendingRequestFinance(j.job_works,works);
+    if(Array.isArray(parts))j.job_parts=mergePendingRequestFinance(j.job_parts,parts);
     touched=true;
   }));
   if(touched) await snapSet('mine',s.val,s.at);
@@ -5361,8 +5347,7 @@ async function persistJob(rec){
   const editableWorks=curWorks.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
   const works=canEditWorks()?editableWorks.map(({row,index})=>({...jobWorkRow(row),index})):null;
   const editableParts=jobParts.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
-  const readyParts=editableParts.filter(x=>partReady(x.row));
-  const parts=canEditParts()&&jobPartsComplete?readyParts.map(({row,index})=>({...jobPartRow(row,index),index})):null;
+  const parts=canEditParts()&&jobPartsComplete?editableParts.map(({row,index})=>({...jobPartRow(row,index),index})):null;
   const data=await saveCanonicalRequest(sb,{id:jobEditId,record:rec,works,parts});
   jobId=data?.job_id||jobId;
   for(const saved of data?.works||[]){
@@ -5436,7 +5421,7 @@ async function queueCurrentJobSnapshot(){
   const rec=jobRec(), editableWorks=curWorks.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
   const works=canEditWorks()?editableWorks.map(({row,index})=>({...jobWorkRow(row),index})):null;
   const editableParts=jobParts.map((row,index)=>({row,index})).filter(x=>!x.row.legacy_task_item_id);
-  const parts=canEditParts()&&jobPartsComplete?editableParts.filter(x=>partReady(x.row)).map(({row,index})=>({...jobPartRow(row,index),index})):null;
+  const parts=canEditParts()&&jobPartsComplete?editableParts.map(({row,index})=>({...jobPartRow(row,index),index})):null;
   const payload={jobId:jobEditId,canonical_generation:1,rec,works,works_complete:Array.isArray(works),parts,parts_complete:Array.isArray(parts)};
   if(!await qReplaceJob(jobEditId,payload,Array.isArray(parts)))return null;
   await snapJobPatch(jobEditId,rec,works,parts);
@@ -5471,7 +5456,7 @@ async function saveJobOnce(){
     // that snapshot before replay. An online write must not bypass a blocked
     // older snapshot and then get overwritten by its eventual retry.
     const hasQueuedJob=(await qAll()).some(it=>it.kind==='job'&&it.payload?.jobId===jobEditId);
-    const incomplete=curWorks.some(w=>!(Number(w.hours)>0));
+    const incomplete=jobDraftIssue();
     if(!navigator.onLine||hasQueuedJob||incomplete){
       const payload=await queueCurrentJobSnapshot();
       if(!payload){jobSaveState('не сохранено · нет места на устройстве','bad');return;}
@@ -5510,6 +5495,7 @@ $('jobSave').onclick=async ()=>{
       // отсюда после каждого сохранения нельзя — правку обычно продолжают.
       await saveJobNow();
       if($('jobSaveState').classList.contains('bad')) $('jobErr').textContent='Не сохранилось: '+$('jobSaveState').textContent;
+      else if(jobDraftIssue()){notify(jobDraftIssue()+' · черновик сохранён на устройстве','warn');revealRequestProblem();}
       else showToast('Сохранено');
     } else {
       await persistJob(jobRec());jobEditorDirty=false;
@@ -5538,6 +5524,7 @@ const ST_TRIP={planned:'план',assigned:'назначен',in_progress:'в р
 const SERVICE_ORDER_STATUS={draft:'черновик',assigned:'назначено',in_progress:'в работе',paused:'приостановлено',review:'на проверке',completed:'завершено',cancelled:'отменено'};
 let tripRoute={km:0,driveH:0,geometry:null,legs:[]}, tripRouteStops=[], tripVariants=[], tripVarSel=0, tripStart=null, tripOverrides={revenue:'',cost:'',road:{}};
 let tripCostReviewState='не проверены';
+let tripNewPlanId=null;
 let tripWorkbench=null, tripPlanDirty=false, tripPresenceDirty=false, tripRemainingRoute=null;
 const tripTabs=createEntityTabs(document.querySelector('.view-trip'),{
   tabSelector:'[data-trip-tab]',panelSelector:'[data-trip-pane]',tabKey:'tripTab',panelKey:'tripPane',initial:'plan',
@@ -5920,14 +5907,14 @@ $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) o
 if($('tripEngFilter')) $('tripEngFilter').onchange=renderTrips;
 function canWriteTrip(t=getTrip(tripEditId)){return canWrite()||!!(t?.id&&[t.owner_id,t.curator_id].includes(session?.user?.id));}
 let tripBack={name:'planner',sub:'trips',id:null};
-async function openTrip(id,{includeOrderId=null}={}){ if(!await leaveSettingsEditor())return;if(!await leaveJobEditor())return;if(!await leaveTripEditor())return;if(serviceOrders.isDirty()&&!await serviceOrders.leave())return;
+async function openTrip(id,{includeOrderId=null,newPlan=false}={}){ if(!await leaveSettingsEditor())return;if(!await leaveJobEditor())return;if(!await leaveTripEditor())return;if(serviceOrders.isDirty()&&!await serviceOrders.leave())return;
   const origin=cardOrigin();if(origin.name!=='trip')tripBack=origin; await ensureRefs(); await loadTripJobs(); await loadTripOrders();
   // econCompute считает дорогу по плательщикам через turf, когда готовых
   // километров в выезде нет. Без turf он молча уйдёт в плоскую ветку и
   // покажет другую цифру — поэтому ждём здесь, до первого tripCalc().
   await ensureTurf().catch(()=>{}); tripEditId=id;
   if(id){ const {data,error}=await sb.from('trips').select('*').eq('id',id).single(); if(error){notify(error.message,'err');return;} const i=trips.findIndex(x=>x.id===id);if(i<0)trips.push(data);else trips[i]=data; }
-  const t=id?getTrip(id):null; tripMainJobId=(t&&t.main_job_id)||null;
+  const t=id?getTrip(id):null; tripNewPlanId=newPlan&&t?.status==='planned'&&!t.started_at?id:null; tripMainJobId=(t&&t.main_job_id)||null;
   if(t&&canWriteTrip(t)&&!canWrite()){
     const finance=await sb.rpc('entity_finance_config',{p_kind:'trip',p_id:id});
     if(finance.error)notify('Финансовые настройки выезда недоступны: '+finance.error.message,'err');
@@ -5945,7 +5932,7 @@ async function openTrip(id,{includeOrderId=null}={}){ if(!await leaveSettingsEdi
   const ro=!canWriteTrip(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
   $('tpSave').hidden=ro;
   $('tripHeadEcon').hidden=ro;
-  $('tpChangeReasonGroup').hidden=ro;
+  $('tpChangeReasonGroup').hidden=ro||!id||tripNewPlanId===id;
   configureTripPlanStatus($('tpStatus'),t,!ro);
   const es=(t&&(t.plan_econ_snapshot||t.econ_snapshot))||{}; tripRoute={km:es.km||0,driveH:es.driveH||0,geometry:(t&&t.route_geometry)||null,legs:es.legs||[]}; tripVariants=[];
   const ovs=(t&&t.overrides)||{}; tripOverrides={revenue:(ovs.revenue!=null?String(ovs.revenue):''),cost:(ovs.cost!=null?String(ovs.cost):''),road:(ovs.road||{})}; $('tpOvRev').value=tripOverrides.revenue; $('tpOvCost').value=tripOverrides.cost;
@@ -6106,7 +6093,7 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
     catch(e){$('tripErr').textContent=e.message;setTripPane('presence');const details=$('tpPresence').closest('details');if(details)details.open=true;return;}
     presenceChanges=presenceChanges.map(taskAllocationPayload);
   }
-  if(tripEditId&&!$('tpChangeReason').value.trim()){ $('tripErr').textContent='Укажи причину изменения плана.';setTripPane('plan');$('tpChangeReason').focus({preventScroll:true});$('tpChangeReason').scrollIntoView({block:'center',behavior:'auto'});return; }
+  if(tripEditId&&tripNewPlanId!==tripEditId&&!$('tpChangeReason').value.trim()){ $('tripErr').textContent='Укажи причину изменения плана.';setTripPane('plan');$('tpChangeReason').focus({preventScroll:true});$('tpChangeReason').scrollIntoView({block:'center',behavior:'auto'});return; }
   const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};
   // Километраж по плательщикам — по реальным дорогам. Считаем и здесь:
   // выезд можно сохранить из карточки, минуя планировщик.
@@ -6129,7 +6116,7 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
   const rec={main_job_id:tripMainJobId||null,road_km_by_payer:roadKmTrip,date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:selectedEngineerIds('tpEng')[0]||null,engineer_ids:selectedEngineerIds('tpEng'),status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:withLegs(e,tripRoute.legs),tariffs_snapshot:savedTripT(curTrip),remaining_route:tripRemainingRoute};
   $('tpSave').disabled=true;
   try{ let tid=tripEditId;
-    const {data,error}=await sb.rpc('trip_plan_save_tasks',{p_trip:tid,p_expected:curTrip?.workbench_revision??0,p_plan:rec,p_order_ids:[...curTripOrders],p_reason:$('tpChangeReason').value.trim()||'Создание выезда',p_stays:presenceChanges});
+    const {data,error}=await sb.rpc('trip_plan_save_tasks',{p_trip:tid,p_expected:curTrip?.workbench_revision??0,p_plan:rec,p_order_ids:[...curTripOrders],p_reason:$('tpChangeReason').value.trim()||(tripNewPlanId===tid?'Первоначальное заполнение нового выезда':'Создание выезда'),p_stays:presenceChanges});
     if(error)throw error;tid=data;
     // Одометр здесь БОЛЬШЕ НЕ ТРОГАЕМ. Его пишет триггер trips_odometer
     // на переходе в 'done' — из fact_km, с фолбэком на плановый ORS.
@@ -8573,7 +8560,8 @@ $('rSaveTrip').onclick=async ()=>{ const stops=routeStopsAll(); if(stops.length<
   const exist=plannerTripId?(trips.find(x=>x.id==plannerTripId)||{}):{};let selectedOrderIds=[];
   let planReason='Создание маршрута';
   if(plannerTripId){
-    const answer=await promptDialog('Изменение маршрута',[{key:'reason',label:'Причина изменения',type:'textarea',required:true}],{okText:'Продолжить'});if(!answer?.reason?.trim())return;planReason=answer.reason.trim();
+    if(tripNewPlanId===plannerTripId)planReason='Первоначальное заполнение нового выезда';
+    else{const answer=await promptDialog('Изменение маршрута',[{key:'reason',label:'Причина изменения',type:'textarea',required:true}],{okText:'Продолжить'});if(!answer?.reason?.trim())return;planReason=answer.reason.trim();}
     const {data:members,error}=await sb.from('trip_jobs').select('job_id').eq('trip_id',plannerTripId);if(error){notify(error.message,'err');return;}
     const {data:taskLinks,error:linkError}=await sb.from('trip_service_orders').select('order_id').eq('trip_id',plannerTripId);if(linkError){notify(linkError.message,'err');return;}selectedOrderIds=(taskLinks||[]).map(x=>x.order_id);
     await loadTripJobs();const ids=new Set((members||[]).map(x=>x.job_id));

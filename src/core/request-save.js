@@ -17,8 +17,8 @@ export async function saveCanonicalRequest(db,{id,record,works,parts}){
   const {data,error}=await db.rpc('job_request_save_canonical',{
     p_id:id??null,
     p_rec:record,
-    p_works:works??null,
-    p_parts:parts??null
+    p_works:works?.filter(row=>!row.legacy_task_item_id)??null,
+    p_parts:parts?.filter(row=>!row.legacy_task_item_id)??null
   });
   if(error)throw error;
   return data;

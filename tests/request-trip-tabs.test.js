@@ -131,7 +131,7 @@ it('reveals trip validation in its own section before any write and keeps the un
   const start=app.indexOf('const tripTabs=createEntityTabs'),end=app.indexOf("document.querySelector('.view-trip')?.addEventListener",start);
   vm.runInContext(app.slice(start,end),context);
   const rpc=vi.fn();Object.assign(context,{curTripJobs:new Set(),routeAll:()=>[],vehicles:[],canWriteTrip:()=>true,
-    tripPresenceDirty:false,tripPlanDirty:true,tripEditId:'trip-1',sb:{rpc},tripWorkbench:{stays:[]},readPresenceForm:()=>[]});
+    tripPresenceDirty:false,tripPlanDirty:true,tripEditId:'trip-1',tripNewPlanId:null,sb:{rpc},tripWorkbench:{stays:[]},readPresenceForm:()=>[]});
   const saveStart=app.indexOf("$('tpSave').onclick=async"),saveEnd=app.indexOf('async function delTrip(',saveStart);
   vm.runInContext(app.slice(saveStart,saveEnd),context);
   get('tpNotes').value='Новый маршрут';get('tpTabEconomy').click();await get('tpSave').onclick();

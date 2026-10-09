@@ -34,4 +34,28 @@ describe('request after an offline reload', () => {
     expect(queuedJobDraftIssue(original)).toContain('Укажи часы');
     expect(queuedJobDraftIssue({...original,works:[{...original.works[0],hours:0.25}]})).toBe('');
   });
+
+  it('restores a canonical draft alongside protected history and preserves its provenance',()=>{
+    const historicalPart={id:'old-part',canonical_task_item_id:'protected-part',legacy_task_item_id:'protected-part',name:'Старая деталь',price:50};
+    const historicalWork={id:'old-work',canonical_task_item_id:'protected-work',legacy_task_item_id:'protected-work',title:'Старая работа',hours:2};
+    const queued={jobId,canonical_generation:1,works_complete:true,works:[{id:'new-work',title:'Новая работа',hours:1}],parts_complete:true,parts:[{id:'new-part',name:'Новая деталь',qty:1,unit:'шт'}]};
+    const state=pendingJobState([{id:1,kind:'job',payload:queued}],jobId,[historicalPart],[historicalWork]);
+    expect(state.parts).toEqual([historicalPart,{...queued.parts[0],local_only:false}]);
+    expect(state.works).toEqual([historicalWork,queued.works[0]]);
+    expect(queued.parts).toHaveLength(1);
+    const alias={...queued,parts:[{id:'protected-part',name:'Старая деталь',qty:1,unit:'шт'}]};
+    expect(pendingJobState([{id:1,kind:'job',payload:alias}],jobId,[historicalPart]).parts).toEqual([historicalPart]);
+  });
+
+  it.each([
+    [{name:'',qty:1,unit:'шт'},'название'],
+    [{name:'Фильтр',qty:0,unit:'шт'},'количество'],
+    [{name:'Фильтр',qty:-1,unit:'шт'},'количество'],
+    [{name:'Фильтр',qty:1,unit:''},'единицу'],
+  ])('keeps an incomplete material draft rather than deleting its stored row (%j)',(part,message)=>{
+    const payload={parts_complete:true,parts:[{id:'existing-part',...part}]};
+    expect(queuedJobDraftIssue(payload)).toContain(message);
+    expect(payload.parts).toHaveLength(1);
+    expect(queuedJobDraftIssue({...payload,parts:[{...payload.parts[0],name:'Фильтр',qty:2,unit:'шт'}]})).toBe('');
+  });
 });
