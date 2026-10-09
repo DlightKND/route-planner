@@ -114,3 +114,7 @@ dialog.presence-editor :is(.presence-editor-actions,.presence-editor-foot) { dis
 @media(pointer:coarse) {
  .entity-panel-dialog :is(input,select,textarea),dialog.presence-editor :is(input,select,textarea) { font-size:16px;min-height:44px; }
 }
+@media(pointer:coarse) {
+ dialog.presence-editor .engineer-picker { min-height:44px;font-size:16px; }
+ :is(#reschedOverlay,#fixOverlay) .qm { width:44px;height:44px;min-width:44px;min-height:44px; }
+}

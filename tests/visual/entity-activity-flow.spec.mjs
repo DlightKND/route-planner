@@ -103,6 +103,11 @@ for(const role of ['admin','logist','engineer'])test(`${role}: cumulative result
   if(role==='engineer'){
     await expect(page.locator('#orderActivity [data-pin]')).toHaveCount(0);
   }else{
+    const pin=comment.locator('[data-pin]'),header=comment.locator('header');
+    const pinBox=await pin.boundingBox(),headerBox=await header.boundingBox();
+    expect(pinBox.width).toBeGreaterThanOrEqual(44);expect(pinBox.height).toBeGreaterThanOrEqual(44);
+    expect(pinBox.y).toBeLessThanOrEqual(headerBox.y+1);
+    expect(pinBox.x+pinBox.width).toBeGreaterThanOrEqual(headerBox.x+headerBox.width-1);
     await comment.locator('[data-pin]').click();
     await expect(page.locator('dialog.entity-actions-menu')).toBeVisible();
     await page.locator('dialog.entity-actions-menu').getByRole('button',{name:'Закрепить комментарий',exact:true}).click();

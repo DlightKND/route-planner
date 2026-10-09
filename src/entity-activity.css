@@ -24,8 +24,10 @@
 .entity-activity .activity-entry.is-comment { background:var(--panel-2); }
 .entity-activity .activity-entry.is-result { background:var(--panel-2);border-left:3px solid var(--green);padding-left:13px; }
 .entity-activity .activity-entry.is-event { padding-block:8px;color:var(--ink-dim); }
-.entity-activity .activity-entry header { display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;color:var(--ink-dim);font-size:12px;line-height:1.5; }
+.entity-activity .activity-entry header { display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:nowrap;gap:12px;color:var(--ink-dim);font-size:12px;line-height:1.5; }
 .entity-activity .activity-entry header>* { min-width:0; }
+.entity-activity .activity-meta { display:flex;align-items:baseline;flex:1;flex-wrap:wrap;gap:4px 12px;min-width:0; }
+.entity-activity .activity-pin { flex:none;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;min-width:44px;padding:0; }
 .entity-activity .activity-entry time { white-space:normal;font-variant-numeric:tabular-nums; }
 .entity-activity .activity-type { display:inline-block;font-size:12px;font-weight:600;color:var(--ink); }
 .entity-activity .is-result .activity-type { color:var(--green); }

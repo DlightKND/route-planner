@@ -41,7 +41,7 @@ function renderEntry(row,people,{canPin=false}={}){
   if(type==='photo')body+=`<button class="btn ghost" type="button" data-photo="${esc(row.id)}">Открыть фото</button>`;
   if(row.snapshot&&type==='event'){const s=row.snapshot;body+=`<details><summary>Данные до изменения</summary><p>Период: ${esc(date(s.date_from))}${s.date_to?' — '+esc(date(s.date_to)):''}</p><p>Объектов: ${esc(s.job_ids?.length??0)} · точек маршрута: ${esc(s.route_stops?.length??0)}</p></details>`;}
  }
- return `<article class="activity-entry is-${type}" data-activity-key="${esc(row.key)}"><header><span class="activity-type">${labels[type]||'История'}</span><span>${esc(actor(row.actor_id,people))}</span><time datetime="${esc(row.at)}">${esc(time(row.at))}</time>${pin}</header>${body}</article>`;
+ return `<article class="activity-entry is-${type}" data-activity-key="${esc(row.key)}"><header><div class="activity-meta"><span class="activity-type">${labels[type]||'История'}</span><span>${esc(actor(row.actor_id,people))}</span><time datetime="${esc(row.at)}">${esc(time(row.at))}</time></div>${pin}</header>${body}</article>`;
 }
 export async function loadEntityActivity(db,entity,id,people=[]){const rows=await loadEntityActivityRows(db,entity,id);return rows.map(r=>renderEntry(r,people)).join('')||'<p class="activity-empty">Пока нет записей.</p>';}
 export function mountEntityActivity({root,db,entity,id,userId,people=()=>[],canPin=()=>false,onRecordResult,onOpenPhoto,onError=()=>{}}){
