@@ -137,6 +137,9 @@ body { font-size:var(--fs-body); }
 :is(.view-dash,#plMine) :is(.vg-scroll,.vg-axis,.vg-date) { background:var(--panel);border-color:var(--line); }
 :is(.view-dash,#plMine) :is(.vg-lane,.vg-heads,.vg-cell) { border-color:var(--line); }
 :is(.view-dash,#plMine) .vg-block { background:var(--panel-2);border-color:var(--line);border-radius:var(--r-sm);box-shadow:var(--shadow-sm); }
+/* Personal schedules have no load rail: give blocks equal side insets. */
+.vg-feed.vg-personal .vg-block { --band-l:12px; }
+.vg-feed.vg-personal :is(.vg-piece,.vg-group,.vg-tail) { left:12px; }
 :is(.view-dash,#plMine) :is(.vg-date b,.vg-lane-head b,.vg-label b,.vg-gtitle) { color:var(--ink); }
 :is(.view-dash,#plMine) :is(.vg-date,.vg-label small) { color:var(--ink-dim); }
 :is(.view-dash,#plMine) .vg-date.today { background:color-mix(in srgb,var(--accent) 12%,var(--panel)); }

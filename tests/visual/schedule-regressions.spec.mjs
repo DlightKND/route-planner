@@ -23,9 +23,16 @@ for(const role of ['admin','engineer'])test(role+' keeps legacy trip edges, road
  expect(await page.locator('.vg-cell').first().evaluate(el=>getComputedStyle(el).borderTopWidth)).toBe('0px');
  expect(await page.locator('.vg-date').first().evaluate(el=>getComputedStyle(el).borderTopWidth)).toBe('0px');
  const first=page.locator('.vg-block[data-gb="t'+trip+'"]').first();await expect(first).toHaveClass(/\btrip\b/);
+ const weekInsets=await first.evaluate(el=>{const s=getComputedStyle(el);return {left:parseFloat(s.left),right:parseFloat(s.right)};});
+ expect(weekInsets).toEqual({left:role==='engineer'?12:28,right:12});
+ if(role==='engineer')await expect(page.locator('.vg-rail')).toHaveCount(0);
+ else await expect(page.locator('.vg-rail').first()).toBeVisible();
  expect(await first.evaluate(el=>getComputedStyle(el).borderLeftColor)).toBe('rgb(255, 225, 0)');
  await expect(first.locator('.vg-week-road')).not.toHaveCount(0);
  const week=await openDay(page),pieces=week.locator('.vg-piece[data-gb="t'+trip+'"]');
+ const dayInsets=await pieces.evaluateAll(els=>els.map(el=>{const s=getComputedStyle(el);return {left:parseFloat(s.left),right:parseFloat(s.right)};}));
+ expect(dayInsets.length).toBeGreaterThan(0);
+ for(const insets of dayInsets)expect(insets).toEqual({left:role==='engineer'?12:28,right:12});
  expect(await week.locator('.vg-hour-label').first().evaluate(el=>getComputedStyle(el).borderTopWidth)).toBe('0px');
  expect(await week.locator('.vg-hour-line').first().evaluate(el=>getComputedStyle(el).display)).toBe('none');
  await expect(week.locator('[data-winline=start]')).toBeVisible();await expect(week.locator('[data-winline=end]')).toBeVisible();

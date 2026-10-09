@@ -2843,7 +2843,7 @@ async function renderFeed(box,o){
       : '';
 
     const firstMotion=!motionPainted.has(box);
-    let h='<div class="vg-feed'+(firstMotion?' first-enter':'')+'">'+rangeBar('gt')+(offline?offlineBanner(snapAt):'')+orphanNote+pendNote;
+    let h='<div class="vg-feed'+(o.mine?' vg-personal':'')+(firstMotion?' first-enter':'')+'">'+rangeBar('gt')+(offline?offlineBanner(snapAt):'')+orphanNote+pendNote;
 
     // ── Просрочка: колода ────────────────────────────────────────────────
     //
