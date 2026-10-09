@@ -77,15 +77,15 @@ test('trip panel uses one primary row and keeps secondary actions and time behin
  await page.keyboard.press('Escape');await expect(panel).toHaveCount(0);expect(errors).toEqual([]);
 });
 
-for(const role of ['admin','engineer'])test(role+' renders a minute work tail as an edge marker before the full return road',async({page},info)=>{
+for(const role of ['admin','engineer'])test(role+' keeps a minute work tail transparent before the full return road',async({page},info)=>{
  const {week,errors}=await open(page,info,{role,roadSliverJourney:true});
  const tail=week.locator('.vg-piece[data-gb="'+id+'"][data-piece-at="8.25"]');
  await expect(tail).toHaveAttribute('data-piece-from','15.75');await expect(tail).toHaveAttribute('data-piece-to','15.776');
  const road=week.locator('.vg-piece[data-gb="'+id+'"][data-piece-at="8.276"]');
  await expect(road).toHaveAttribute('data-piece-to','19');
  const marker=await tail.evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {w:r.width,h:r.height,shadow:s.boxShadow,outline:s.outlineStyle,background:s.backgroundColor,left:s.borderLeftColor,borders:[s.borderTopWidth,s.borderRightWidth,s.borderBottomWidth,s.borderLeftWidth]};});
- expect(marker.h).toBe(2);expect(marker.borders).toEqual(['0px','0px','0px','3px']);
- expect(marker.shadow).toBe('none');expect(marker.outline).toBe('none');expect(marker.background).toBe('rgba(0, 0, 0, 0)');expect(marker.left).toBe('rgb(255, 225, 0)');
+ expect(marker.h).toBe(2);expect(marker.borders).toEqual(['0px','0px','0px','0px']);
+ expect(marker.shadow).toBe('none');expect(marker.outline).toBe('none');expect(marker.background).toBe('rgba(0, 0, 0, 0)');
  const surface=await road.evaluate(el=>{const r=el.getBoundingClientRect(),s=el.querySelector('.road').getBoundingClientRect();return {h:r.height,roadH:s.height,w:r.width};});
  expect(surface.h).toBeCloseTo(3.224*20,0);expect(surface.roadH).toBeCloseTo(surface.h-2,0);expect(surface.w).toBeGreaterThan(80);expect(marker.w).toBeCloseTo(surface.w);
  mkdirSync('test-results/road-sliver',{recursive:true});await week.screenshot({path:'test-results/road-sliver/'+info.project.name+'-'+role+'.png'});
@@ -93,4 +93,18 @@ for(const role of ['admin','engineer'])test(role+' renders a minute work tail as
  await page.keyboard.press('Enter');await expect(page.locator('.view-job.active')).toBeVisible();
  expect(await page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(0);
  expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
+});
+
+for(const role of ['admin','engineer'])test(role+' uses the same normal border for manual trip cards in week and day',async({page},info)=>{
+ const {week,errors}=await open(page,info,{role,roadSliverJourney:true});
+ await week.locator('[data-gback]').click();
+ const block=week.locator('.vg-block[data-gb="'+id+'"]');await expect(block).toHaveClass(/\bman\b/);
+ const borders=el=>{const s=getComputedStyle(el);return {left:s.borderLeftColor,top:s.borderTopColor,topWidth:s.borderTopWidth,outline:s.outlineStyle};};
+ const expected=await block.evaluate(borders);expect(expected.outline).toBe('none');expect(expected.left).toBe('rgb(255, 225, 0)');expect(expected.topWidth).toBe('1px');expect(expected.top).not.toBe(expected.left);
+ mkdirSync('test-results/schedule-outline',{recursive:true});await week.screenshot({path:'test-results/schedule-outline/'+info.project.name+'-'+role+'-week.png'});
+ await week.locator('[data-gday="2026-10-05"]').click();
+ const pieces=week.locator('.vg-piece[data-gb="'+id+'"]:not(.sliver)');await expect(pieces).toHaveCount(3);
+ for(const piece of await pieces.all())expect(await piece.evaluate(borders)).toEqual(expected);
+ await week.screenshot({path:'test-results/schedule-outline/'+info.project.name+'-'+role+'-day.png'});
+ expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(0);
 });
