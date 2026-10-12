@@ -7,6 +7,7 @@ import './unassigned-tracks.css';
 import { installModalShell, protectNativeForm } from './modal-shell.js';
 import { openAccountProfile, roleName, initials } from './account-profile.js';
 import { resolveFactTrack } from './core/fact-track.js';
+import {rebuildTripTrack,presenceBounds,tripTimeSummary} from './core/trip-presence-recovery.js';
 // Приложение DLIGHT. Пока это цельный перенос боевого index.html в сборку:
 // код тот же, но теперь это модуль: ядро подключается импортом.
 // Обработчики вешаются из JS (.onclick=), инлайновых onclick в разметке нет,
@@ -14,7 +15,7 @@ import { resolveFactTrack } from './core/fact-track.js';
 
 import * as core from './core/index.js';
 import { presenceSummary, validatePresence, remainingStops, presenceDaily, sameEditablePlan } from './core/trip-review.js';
-import { presenceHTML, removedHTML, readPresenceForm, tripCostReviewHTML } from './trip-workbench.js';
+import { presenceHTML, removedHTML, readPresenceForm, tripCostReviewHTML, wirePresenceRecovery } from './trip-workbench.js';
 import './trip-workbench.css';
 import './service-orders.css';
 import { createServiceOrders } from './service-orders.js';
@@ -5612,6 +5613,7 @@ document.querySelector('#tpPresence')?.addEventListener('click',e=>{
 });
 function taskAllocationPayload(stay){
   const row={id:stay.id,job_id:stay.job_id,crew_ids:stay.crew_ids,minutes_mgr:stay.minutes_mgr,status:stay.status};
+  if(stay.presence_evidence)row.recovery_acceptance=stay.recovery_acceptance||{};
   if(stay.task_allocations)row.task_allocations=stay.status==='approved'?stay.task_allocations:[];
   return row;
 }
@@ -5705,7 +5707,7 @@ async function openPresenceEditor(tid,stayId,jobId){
     dialog.innerHTML='<form method="dialog"><div class="presence-editor-head"><h3 id="presenceEditorTitle">Привязка и присутствие</h3><button class="btn sm" type="submit" aria-label="Закрыть">✕</button></div></form>'
       +presenceHTML({...data,jobIds:data.job_ids,stays:[stay]},tripJobsAll,profilesList,{editor:true,orders:ordersForTrip})
       +'<label>Комментарий<input class="presence-reason" value="Проверено по треку и составу команды"></label><p class="presence-error err" role="alert"></p><div class="presence-editor-foot"><button type="button" class="btn amber" data-presence-submit>Привязать и подтвердить</button></div>';
-    document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
+    document.body.append(dialog);wirePresenceRecovery(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
     const save=dialog.querySelector('[data-presence-submit]'),status=dialog.querySelector('[data-presence="status"]');
     const row=dialog.querySelector('[data-presence-id]'),job=dialog.querySelector('[data-presence="job_id"]');
     job.addEventListener('change',()=>renderTaskAllocationControls(row,job.value,ordersForTrip,job.value===original.job_id?(original.task_allocations||[]):[]));
@@ -5761,12 +5763,13 @@ async function loadWorkbench(id){
     tripWorkbench={...data,jobIds:data.job_ids,stays:(data.stays||[]).map(s=>({...s,task_allocations:allocationByStay.get(s.id)||[]}))};
     const index=trips.findIndex(t=>t.id===id);if(index>=0)trips[index]=data.trip;
     const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
-    $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{readonly:!canWriteTrip(data.trip),orders:linkedOrders});renderTripReviewSummary();
+    $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{readonly:!canWriteTrip(data.trip),orders:linkedOrders});wirePresenceRecovery($('tpPresence'));renderTripReviewSummary();
     const retained=document.createElement('section');retained.className='retained-trip-fact';retained.innerHTML='<h3>Сохранённый факт выезда</h3><p role="status">Проверяю сохранённый трек…</p>';$('tpPresence').prepend(retained);
     sb.from('trip_tracks').select('km,updated_at,data').eq('trip_id',id).maybeSingle().then(({data:track,error})=>{
       if(!retained.isConnected)return;
       const approved=tripWorkbench.stays.filter(s=>s.status==='approved'),minutes=approved.reduce((n,s)=>n+Number(s.minutes_mgr||0),0);
-      retained.innerHTML='<h3>Сохранённый факт выезда</h3><p>Подтверждённые стоянки: <b>'+approved.length+'</b> · '+minutes.toLocaleString('ru-RU')+' мин</p>'
+      const timing=tripTimeSummary(data.trip,track,tripWorkbench.stays),hours=v=>v==null?'—':(v/60).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ч';
+      retained.innerHTML='<div class="trip-time-metrics"><div><span>Продолжительность выезда</span><b>'+hours(timing.total)+'</b></div><div><span>Дорога'+(timing.estimatedRoad?' · расчётная часть':'')+'</span><b>'+hours(timing.road)+'</b></div><div><span>Стоянки · подтверждено</span><b>'+hours(timing.stopped)+'</b></div></div><p class="hint">Предложено восстановить: '+hours(timing.pending)+' · не разнесено: '+hours(timing.unallocated)+'</p>'+(timing.skipped.length?'<details class="trip-recovery-diagnostics"><summary>Неразрешённые участки: '+timing.skipped.length+'</summary>'+timing.skipped.map(x=>'<p>'+esc(new Date(x.from).toLocaleString('ru-RU'))+' — '+esc(new Date(x.to).toLocaleString('ru-RU'))+' · '+esc(x.reason)+'</p>').join('')+'</details>':'')+'<h3>Сохранённый факт выезда</h3><p>Подтверждённые стоянки: <b>'+approved.length+'</b> · '+minutes.toLocaleString('ru-RU')+' мин</p>'
         +(error?'<p class="err">Не удалось загрузить сохранённый трек: '+esc(error.message)+'</p>':track?'<p>Сохранённый разбор трека · '+new Date(track.updated_at).toLocaleDateString('ru-RU')+' · <b>'+Number(track.km).toLocaleString('ru-RU',{maximumFractionDigits:1})+' км</b></p>':'<p class="hint">Сохранённого разбора нет'+(data.trip.fact_km!=null?' · факт-пробег '+Number(data.trip.fact_km).toLocaleString('ru-RU')+' км'+esc(factSrcRu(data.trip.fact_km_source)):'')+'</p>')
         +(track?'<button type="button" class="btn sm" data-retained-track>Открыть сохранённый трек на карте</button>':'');
       retained.querySelector('[data-retained-track]')?.addEventListener('click',()=>showTripOnMap(id));
@@ -5783,7 +5786,7 @@ async function loadWorkbench(id){
       if(!detect.isConnected||!canReview()){notify('Доступ или выезд изменился. Открой карточку заново.','warn');return;}
       if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки.','warn');return;}
       detect.disabled=true;
-      try{const {error}=await sb.rpc('trip_presence_detect',{p_trip:id,p_expected:tripWorkbench.trip.workbench_revision});if(error)throw error;if(canReview())await loadWorkbench(id);}
+      try{const measured=await measureTripKm(id);if(!measured.measure)throw new Error(measured.why||'Нет GPS-точек для проверки');if(!canReview())throw new Error('Выезд или доступ изменились');await writeFactTrack(id,measured.measure);if(canReview()){await loadWorkbench(id);await loadFactHours();tripEcon();}showToast('Трек проверен; предложения присутствия готовы');}
       catch(e){notify(e.message,'err');if(detect.isConnected&&canReview())detect.disabled=false;}
     };
     const presenceSave=$('wbPresenceSave');
@@ -6625,7 +6628,7 @@ let staysModalTripId=null;
 
 async function loadFactHours(){
   try{
-    const { data, error }=await sb.from('trip_stays').select('trip_id,stay_from,stay_to,minutes_mgr,minutes_raw,status,job_id,crew_ids,crew_source');
+    const { data, error }=await sb.from('trip_stays').select('trip_id,stay_from,stay_to,minutes_mgr,minutes_raw,status,job_id,crew_ids,crew_source,presence_evidence,recovery_acceptance,accepted_intervals');
     if(error) throw error;
     factPresenceRows=data||[];
     const m={}; factPresenceRows.forEach(r=>{ (m[r.trip_id]||(m[r.trip_id]=[])).push(r); });
@@ -6639,7 +6642,7 @@ function minText(m){ if(m==null) return '—'; const h=Math.floor(m/60), r=Math.
 const STAY_ST={detected:'посчитано',engineer_ok:'подтвердил инженер',approved:'утверждено',rejected:'не работа'};
 
 async function openStaysModal(tid){
-  if(canWriteTrip()){$('staysOverlay').classList.remove('on');await openTrip(tid);return;}
+  if(canWriteTrip(getTrip(tid))){$('staysOverlay').classList.remove('on');await openTrip(tid);return;}
   staysModalTripId=tid;
   const t=getTrip(tid);
   $('staysTitle').textContent='Стоянки на выезде'+(t&&t.date_from?(' '+t.date_from):'');
@@ -6863,11 +6866,7 @@ async function settleFactKm(tid){
   if(m&&m.ok){
     try{
       busy('Записываю пробег…',1);
-      await writeFactKm(tid,m.km,'track',m.note);
-      // Разбор — отдельной записью и не фатально: если он не лёг, число
-      // всё равно записано, а карта просто пересчитает показ сама.
-      try{ if(m.measure) await writeFactTrack(tid,m.measure); }
-      catch(e2){ console.warn('Разбор трека не сохранился:',e2); }
+      await writeFactTrack(tid,m.measure,{km:m.km,source:'track',note:m.note});
     }
     catch(e){ notify('Пробег посчитан, но не записался: '+(e.message||e),'err'); return false; }
     finally{ busyDone(); }
@@ -6884,12 +6883,8 @@ async function settleFactKm(tid){
   if(!od) return false;
   try{
     busy('Записываю пробег…',1);
-    await writeFactKm(tid,od.km,'odometer','по одометру '+od.a+' → '+od.b+'; '+why);
-    // Разбор сохраняем и здесь, хотя число взято с одометра: именно на
-    // недостоверном треке и хочется посмотреть, что алгоритм вырезал и где.
-    // Расхождение между его итогом и записанным числом видно в отчёте.
-    try{ if(m&&m.measure) await writeFactTrack(tid,m.measure); }
-    catch(e2){ console.warn('Разбор трека не сохранился:',e2); }
+    const note='по одометру '+od.a+' → '+od.b+'; '+why;
+    if(m?.measure)await writeFactTrack(tid,m.measure,{km:od.km,source:'odometer',note});else await writeFactKm(tid,od.km,'odometer',note);
   }
   catch(e){ notify('Одометр не записался: '+(e.message||e),'err'); return false; }
   finally{ busyDone(); }
@@ -7532,12 +7527,12 @@ function factWindow(m){
 // рейса первая страница выглядела как «факт застыл на 821 км», хотя точки
 // продолжали приходить. Курсор времени грузит весь трек, а затем — только
 // хвост после уже увиденной точки.
-async function loadTripPositions(tid,afterTs){
+async function loadTripPositions(tid,afterTs,toTs){
   const out=[]; let cursor=afterTs||null;
   for(;;){
     let q=sb.from('vehicle_positions').select('lat,lng,ts,status')
       .eq('trip_id',tid).order('ts',{ascending:true}).limit(1000);
-    if(cursor) q=q.gt('ts',cursor);
+    if(cursor) q=q.gt('ts',cursor);if(toTs)q=q.lte('ts',toTs);
     const {data,error}=await q; if(error) throw error;
     const page=data||[]; out.push(...page);
     if(page.length<1000) return out;
@@ -7634,7 +7629,7 @@ function makeReach(){
       // ms не задан — это достройка до финиша: там проверять нечего,
       // выезд закончился там, где закончился. Отдаём одно расстояние.
       const ok=(ms==null)||!isFinite(sec)||sec<=(ms/1000)*slack;
-      return {ok,km,line:(f.geometry&&f.geometry.coordinates)||null};
+      return {ok,km,sec:Number.isFinite(sec)?sec:null,line:(f.geometry&&f.geometry.coordinates)||null};
     }catch(e){
       // ОТКАЗ МАРШРУТИЗАЦИИ — ДОВОД ПРОТИВ ТОЧКИ, но только если отказал
       // маршрут, а не связь. Кончилась квота, упала сеть, прокси вернул
@@ -7684,10 +7679,12 @@ function trackOpts(){
 // «достройкой разрывов», — и они расходились: карта показывала одно, а
 // в деньги уходило другое. Теперь источник один.
 async function measureTripKm(tid){
-  const raw=(await loadTripPositions(tid)).filter(p=>p.lat!=null&&p.lng!=null);
+  const requestedUser=session?.user?.id;
+  const {data:context,error:contextError}=await sb.rpc('trip_track_rebuild_context',{p_trip:tid});if(contextError)throw contextError;
+  const raw=(await loadTripPositions(tid,null,context.source_to)).filter(p=>p.lat!=null&&p.lng!=null);
   if(raw.length<2) return {ok:false,why:'трека нет'};
 
-  const t=trips.find(x=>x.id==tid)||null;
+  const t=context.trip;
   // Ход прохода наружу: точки идут быстро, а вот запрос к дорогам занимает
   // секунды, и именно на нём кажется, что всё зависло. Поэтому в подписи
   // отдельно видно, сколько маршрутов уже спросили.
@@ -7695,7 +7692,9 @@ async function measureTripKm(tid){
     busy('Считаю пробег: точка '+st.i+' из '+st.total
       +(st.checks?(' · маршрутов: '+st.checks):''), st.total?st.i/st.total:null);
   }});
-  const m=await measureTrip(raw,opts,tripEnds(t),makeReach());
+  const m=await rebuildTripTrack(raw,{...opts,stayRadiusM:appSettings.stay_radius_m,stayMinMinutes:appSettings.stay_min_minutes},{...tripEnds(t),stops:context.stops,started_at:t.started_at,finished_at:t.finished_at},makeReach());
+  m.rebuildContext=context;m.rebuildUser=requestedUser;
+  Object.assign(m.presence,{source_digest:context.source_digest,source_from:context.source_from,source_to:context.source_to});
   lastMeasure[tid]=m;
   if(m.verdict.indexOf('трек недостоверен')===0){
     const by=Object.keys(m.reasons||{}).map(k=>k+': '+m.reasons[k]).join('; ');
@@ -7755,8 +7754,9 @@ function slimMeasure(m){
     km:m.km, trackKm:m.trackKm, roadKm:m.roadKm, lineKm:m.lineKm, jitterKm:m.jitterKm,
     checks:m.checks, weakChecks:m.weakChecks, verdict:m.verdict, reasons:m.reasons,
     at:new Date().toISOString(),
+    ...(m.presence?{presence:{...m.presence,input_points:undefined}}:{}),
     segments:(m.segments||[]).map(g=>({
-      kind:g.kind, km:g.km, minutes:g.minutes, why:g.why||null,
+      kind:g.kind, km:g.km, minutes:g.minutes, ms:g.ms,driveSeconds:g.driveSeconds,driveSource:g.driveSource,gapFromTs:g.gapFromTs,gapToTs:g.gapToTs, why:g.why||null,
       fromTs:g.fromTs, toTs:g.toTs, fromPt:g.fromPt, toPt:g.toPt,
       line:(g.line&&g.line.length>2)?simplifyLine(g.line,0.0002):(g.line||null)
     })),
@@ -7769,11 +7769,11 @@ function slimMeasure(m){
   };
 }
 
-async function writeFactTrack(tid,m){
-  const {error}=await sb.from('trip_tracks')
-    .upsert({trip_id:tid,km:m.km,data:slimMeasure(m),updated_at:new Date().toISOString()},
-            {onConflict:'trip_id'});
-  if(error) throw error;
+async function writeFactTrack(tid,m,fact=null){
+  const context=m.rebuildContext;if(!context)throw new Error('Нет снимка GPS для сохранения. Повтори проверку трека.');
+  if(m.rebuildUser!==session?.user?.id)throw new Error('Аккаунт изменился. Повтори проверку трека.');
+  const {data,error}=await sb.rpc('trip_track_rebuild_save',{p_trip:tid,p_expected:context.trip.workbench_revision,p_source_to:context.source_to,p_source_digest:context.source_digest,p_track:slimMeasure(m),p_fact_km:fact?.km??null,p_fact_source:fact?.source??null,p_fact_note:fact?.note??null});
+  if(error)throw error;return data;
 }
 
 // Читаем сохранённый разбор. Пустой ответ — это не ошибка: у выездов,

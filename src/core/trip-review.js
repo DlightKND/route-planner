@@ -1,3 +1,4 @@
+import {presenceBounds,acceptedPresenceIntervals} from './trip-presence-recovery.js';
 // Presence is elapsed time per person, not billable norm hours.
 // Unknown crew and unreviewed stops must never silently become zero fact.
 export function presenceSummary(stays = []) {
@@ -30,6 +31,12 @@ export function validatePresence(stays) {
     if (!stay.job_id || !crew.length) throw new Error('Для присутствия нужны заявка и состав команды.');
     const from = Date.parse(stay.stay_from), to = Date.parse(stay.stay_to);
     const minutes = Number(stay.minutes_mgr);
+    const bounds=presenceBounds(stay);
+    if(bounds){
+      if(!Number.isFinite(minutes)||minutes<bounds.min||minutes>bounds.max)throw new Error('Достоверная GPS-часть неизменяема. Корректируй только достройку.');
+      for(const part of stay.presence_evidence.recovery_parts||[]){const selected=stay.recovery_acceptance?.[part.key];if(selected==null||!Number.isFinite(Number(selected))||Number(selected)<0||Number(selected)>part.minutes)throw new Error('Проверь длительность восстановленной части.');}
+    }
+
     if (!Number.isFinite(from) || !Number.isFinite(to) || to < from || stay.minutes_mgr == null || !Number.isFinite(minutes) || minutes < 0 || minutes > (to - from) / 60000 + 1) {
       throw new Error('Проверь интервал и длительность присутствия.');
     }
@@ -80,6 +87,10 @@ export function presenceDaily(stays, from, to, engineers = null, timeZone = 'Eur
   for(const s of stays){
     if(s.status!=='approved'||!s.job_id||!['snapshot','manager'].includes(s.crew_source)||s.minutes_mgr==null)continue;
     const crew=[...new Set(s.crew_ids||[])].filter(id=>!engineers||engineers.has(id));
+    if(s.presence_evidence){
+      const rows=acceptedPresenceIntervals(s).map(r=>({...s,presence_evidence:null,stay_from:r.from,stay_to:r.to,minutes_mgr:(Date.parse(r.to)-Date.parse(r.from))/60000}));
+      entries.push(...presenceDaily(rows,from,to,engineers,timeZone));continue;
+    }
     const a=Date.parse(s.stay_from),b=Date.parse(s.stay_to),minutes=+s.minutes_mgr;
     if(!crew.length||!Number.isFinite(a)||!Number.isFinite(b)||b<=a||!Number.isFinite(minutes)||minutes<0)continue;
     let cursor=Math.max(a,midnight(from));const end=Math.min(b,midnight(nextDay(to)));

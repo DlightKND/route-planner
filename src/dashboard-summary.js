@@ -16,6 +16,8 @@ export function dashboardSummaryHTML(metrics, load, {currency = 'грн', mode =
   const operations = row('Выполненные работы',m.normPlan,m.normFact,'нормо-ч')
     +row('Присутствие на объектах',m.presencePlan,m.presenceFact,'чел.-ч')
     +row('Пробег',m.kmPlan,m.kmFact,'км')
+    +row('Продолжительность выездов',null,m.tripDuration,'ч · без умножения на команду')
+    +row('Дорога · включая достройку',null,m.roadDuration,'ч · без умножения на команду')
     +row('Загрузка с дорогой',load.planPercent,load.factPercent,'% рабочего фонда');
   const revenue = row('Работы',p.work,f.work,currency)+row('Дорога и суточные',p.road,f.road,currency)+row('Запчасти',p.parts,f.parts,currency)
     +((Math.abs(p.revenueAdjustment || 0)>0.01||Math.abs(f.revenueAdjustment || 0)>0.01)?row('Корректировка выручки',p.revenueAdjustment,f.revenueAdjustment,currency):'')
@@ -28,7 +30,7 @@ export function dashboardSummaryHTML(metrics, load, {currency = 'грн', mode =
   const financeChart = chart([{label:'Работы',unit:currency,plan:p.work,fact:f.work},{label:'Дорога и суточные',unit:currency,plan:p.road,fact:f.road},{label:'Запчасти',unit:currency,plan:p.parts,fact:f.parts}],'План и факт выручки по составляющим',true);
   return `<section class="card summary-section" data-dcard="work"><header><span class="summary-step">01</span><h3>План–факт</h3>${infoHint('Работы — нормочасы принятых заданий, присутствие — проверенное время команды на объектах. Загрузка — работы и дорога / рабочий фонд выбранных инженеров. План берётся из сохранённых снимков выездов; нормочасы распределяются поровну между плановыми участниками, дорога считается для каждого. В факте используются проверенное присутствие и измеренные GPS-интервалы без достроек; экипаж берётся из согласованных стоянок. При пропусках трека, изменении состава экипажа или пересечении движения со стоянками процент факта не рассчитывается. «—» означает, что полного источника факта пока нет. Выезды сгруппированы по дате начала; задания на объектах — по связи с этими выездами, задания в депо и удалённые — по дате начала. Факт отражает текущее подтверждённое состояние, а не исторический снимок на конец периода.', 'Как читать план и факт')}</header>
     ${panel('charts',workChart)}${panel('tables',table(operations,'План и факт работ, пробега и загрузки'))}
-    <p class="summary-note">Принято ${m.accepted} из ${m.tasks} заданий · подтверждено ${m.completed} из ${m.trips} выездов. Присутствие — ${m.hoursKnown}/${m.completed}, пробег — ${m.kmKnown}/${m.completed}.</p>
+    <p class="summary-note">Принято ${m.accepted} из ${m.tasks} заданий · подтверждено ${m.completed} из ${m.trips} выездов. Присутствие — ${m.hoursKnown}/${m.completed}, пробег — ${m.kmKnown}/${m.completed}. Разложение времени — ${m.durationKnown??0}/${m.completed}.</p>
 
     </section>
     <section class="card summary-section" data-dcard="fin"><header><span class="summary-step">02</span><h3>Финансы</h3>${infoHint('План — все выезды периода; факт — выезды с подтверждённой экономикой. Договорная выручка берётся из согласованного снимка выезда, затраты — из подтверждённых данных. Неизвестные компоненты старых снимков не подменяются нулём.', 'Как читать финансы')}<span class="summary-unit">${esc(currency)}</span></header>

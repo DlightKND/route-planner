@@ -1,5 +1,6 @@
 // Read models only: unknown measurements stay null, and linked work is counted once.
 import {presenceSummary,presenceDaily} from './trip-review.js';
+import {tripTimeSummary} from './trip-presence-recovery.js';
 const number = v => v == null || v === '' || !Number.isFinite(+v) ? null : +v;
 const sum = (rows, get) => {
   if (!rows.length) return null;
@@ -54,6 +55,13 @@ export function roadPersonHours({trips=[],tracks=[],presence=[],period,engineerI
     if(km===0&&trip.status==='done'){known++;continue;}
     const crews=stays.filter(s=>s.status==='approved'&&s.job_id&&['snapshot','manager'].includes(s.crew_source)).map(s=>[...new Set(s.crew_ids||[])].sort());
     if(km==null||!Array.isArray(segments)||!segments.length||!crews.length||!summary.complete||crews.some(c=>JSON.stringify(c)!==JSON.stringify(crews[0]))){unknown++;continue;}
+    const rebuilt=tracks.find(t=>t.trip_id===trip.id)?.data?.presence||tracks.find(t=>t.trip_id===trip.id)?.presence;
+    if(rebuilt?.version===1&&rebuilt.usable&&Array.isArray(rebuilt.motion_intervals)){
+      const intervals=rebuilt.motion_intervals;
+      if(intervals.some(s=>!Number.isFinite(Date.parse(s.from))||!Number.isFinite(Date.parse(s.to))||Date.parse(s.to)<=Date.parse(s.from))){unknown++;continue;}
+      const roadStays=intervals.map(s=>({trip_id:trip.id,job_id:'road',status:'approved',crew_ids:crews[0],crew_source:'snapshot',stay_from:s.from,stay_to:s.to,minutes_mgr:(Date.parse(s.to)-Date.parse(s.from))/60000}));
+      daily.push(...presenceDaily(roadStays,period.from,period.to,selected));known++;continue;
+    }
     const motion=trackMotion(segments);
     if(!motion.hours||Math.abs(motion.km-km)>Math.max(.1,km*.005)||segments.some(s=>s.kind!=='track'||!(number(s.km)>0))){unknown++;continue;}
     const intervals=segments.map(s=>({from:Date.parse(s.fromTs),to:Date.parse(s.toTs)})).sort((a,b)=>a.from-b.from);
@@ -106,7 +114,9 @@ export function dashboardMetrics({trips = [], orders = [], links = [], tracks = 
     const taskIds=[...new Set(links.filter(l=>l.trip_id===t.id).map(l=>l.order_id))];
     return taskIds.length>0 && taskIds.every(id => accepted.some(o => o.id===id && !outside.has(id) && (o.service_order_items||[]).filter(validItem).length>0));
   });
+  const elapsed=completed.map(t=>tripTimeSummary(t,tracks.find(x=>x.trip_id===t.id),[]));
   return {
+    tripDuration:sum(elapsed,x=>x.total==null?null:x.total/60),roadDuration:sum(elapsed,x=>x.road==null?null:x.road/60),durationKnown:elapsed.filter(x=>x.total!=null&&x.road!=null).length,
     trips: scoped.length, completed: completed.length, hoursKnown: completed.filter(t => number(factHours[t.id]) != null).length,
     kmKnown: kmDone.length, tasks: tasks.length, accepted: accepted.length,
     normPlan: sum(items, planQty), normFact: doneNorm,
