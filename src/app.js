@@ -5788,6 +5788,7 @@ async function loadWorkbench(id){
       detect.disabled=true;
       try{const measured=await measureTripKm(id);if(!measured.measure)throw new Error(measured.why||'Нет GPS-точек для проверки');if(!canReview())throw new Error('Выезд или доступ изменились');await writeFactTrack(id,measured.measure);if(canReview()){await loadWorkbench(id);await loadFactHours();tripEcon();}showToast('Трек проверен; предложения присутствия готовы');}
       catch(e){notify(e.message,'err');if(detect.isConnected&&canReview())detect.disabled=false;}
+      finally{busyDone();}
     };
     const presenceSave=$('wbPresenceSave');
     if(presenceSave)presenceSave.onclick=async()=>{

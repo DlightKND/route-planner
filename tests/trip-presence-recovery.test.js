@@ -54,3 +54,10 @@ it('is deterministic on repeated rebuilding and does not add inferred points to 
  const points=[p(0,-1),p(1,0),...run(100,360,540)];const a=await rebuildTripTrack(points,{},context([stop(100)],points),reach(10800)),b=await rebuildTripTrack(points,{},context([stop(100)],points),reach(10800));
  expect(a.presence).toEqual(b.presence);expect(a.points).toHaveLength(points.length);
 });
+it('uses the shared road gate after a long hole so unreachable samples cannot create locked GPS presence',async()=>{
+ const points=[p(0,-1),p(1,0),...run(100,60,80),p(2,81),p(3,82)];
+ const road=async(a,b,ms)=>({sec:10800,ok:ms==null||10800<=ms/1000*1.5,km:120});
+ const m=await rebuildTripTrack(points,{},context([stop(100)],points),road);
+ expect(m.dropped.some(x=>x.why==='по дорогам не доехал бы')).toBe(true);
+ expect(m.presence.stays).toEqual([]);
+});

@@ -32,7 +32,7 @@ export async function rebuildTripTrack(points,opts={},ctx={},reach=null){
  const road=async(a,b,ms)=>{const key=routeKey(a,b);if(cache.has(key))return cache.get(key);if(!reach||calls>=limit)return null;calls++;const r=await reach(a,b,ms);if(r)cache.set(key,r);return r;};
  const actualStart=Date.parse(ctx.started_at),actualFinish=Date.parse(ctx.finished_at);
  const captured=(points||[]).filter(p=>(!Number.isFinite(actualStart)||time(p)>=actualStart)&&(!Number.isFinite(actualFinish)||time(p)<=actualFinish));
- const m=await measureTrip(captured,opts,ctx,road),real=m.points.filter(valid),sites=sitesOf(ctx.stops),gap=(opts.presenceGapMinutes??5)*MIN,rad=opts.stayRadiusM??300,minStay=opts.stayMinMinutes??10,hard=opts.hardSpeedKmh??300,slack=opts.slack??1.5;
+ const m=await measureTrip(captured,{...opts,validateGaps:true},ctx,road),real=m.points.filter(valid),sites=sitesOf(ctx.stops),gap=(opts.presenceGapMinutes??5)*MIN,rad=opts.stayRadiusM??300,minStay=opts.stayMinMinutes??10,hard=opts.hardSpeedKmh??300,slack=opts.slack??1.5;
  const skipped=[],components=[],motion=[],parts=[],replacement=new Map();
  const usable=!m.verdict.startsWith('трек недостоверен');
  const locate=p=>siteAt(p,sites,rad);
@@ -97,7 +97,7 @@ export async function rebuildTripTrack(points,opts={},ctx={},reach=null){
  for(const legs of replacement.values())segments.push(...legs);segments.sort((a,b)=>Date.parse(a.fromTs)-Date.parse(b.fromTs));
  const start=Date.parse(ctx.started_at),end=Date.parse(ctx.finished_at)||time(real.at(-1)||{});const total=Number.isFinite(start)&&end>=start?minutes(start,end):null;
  const driving=motion.reduce((n,x)=>n+x.minutes,0),observed=stays.reduce((n,x)=>n+x.gps_minutes,0);
- const presence={version:1,total_minutes:total,drive_minutes:Math.round(driving*1000)/1000,observed_minutes:observed,motion_intervals:motion,stays,skipped,usable,input_points:real.map(p=>({ts:p.ts,...coords(p)}))};
+ const presence={version:1,total_minutes:total,drive_minutes:Math.round(driving*1000)/1000,drive_complete:skipped.length===0,observed_minutes:observed,motion_intervals:motion,stays,skipped,usable,input_points:real.map(p=>({ts:p.ts,...coords(p)}))};
  const sums={trackKm:0,roadKm:0,lineKm:0};segments.forEach(g=>{const key={track:'trackKm',road:'roadKm',line:'lineKm'}[g.kind];if(key)sums[key]+=Number(g.km)||0;});
  return {...m,...sums,km:sums.trackKm+sums.roadKm+sums.lineKm,segments,checks:calls,presence};
 }
@@ -106,7 +106,7 @@ export function tripTimeSummary(trip,track,stays=[]){
  const data=track?.data||track,p=data?.presence;
  const start=Date.parse(trip?.started_at),end=Date.parse(trip?.finished_at)||Date.parse(p?.source_to);
  const total=Number.isFinite(start)&&end>=start?(end-start)/MIN:null;
- const road=p?.version===1&&p.usable&&Number.isFinite(p.drive_minutes)?p.drive_minutes:null;
+ const road=p?.version===1&&p.usable&&p.drive_complete!==false&&Number.isFinite(p.drive_minutes)?p.drive_minutes:null;
  const approved=stays.filter(s=>s.status==='approved'&&s.job_id&&s.minutes_mgr!=null);
  const stopped=approved.reduce((n,s)=>n+Number(s.minutes_mgr),0);
  const pending=stays.filter(s=>!['approved','rejected'].includes(s.status)).reduce((n,s)=>n+(presenceBounds(s)?.extra||0),0);

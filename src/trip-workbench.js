@@ -39,7 +39,7 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
   const recoveryControls = stay => {
     const bounds=presenceBounds(stay);if(!bounds)return '';
     return `<div class="presence-recovery-parts">${(stay.presence_evidence.recovery_parts||[]).map(part=>{
-      const accepted=stay.status==='approved'||stay.status==='rejected'?Number(stay.recovery_acceptance?.[part.key]||0):part.minutes;
+      const accepted=stay.minutes_mgr!=null&&['approved','rejected'].includes(stay.status)?Number(stay.recovery_acceptance?.[part.key]||0):part.minutes;
       return `<label class="presence-recovery-part">${esc({before:'До первых GPS-точек на объекте',after:'После последних GPS-точек на объекте',between:'Между GPS-частями стоянки',island:'Стоянка целиком внутри провала'}[part.side]||'Восстановленная часть')}<span class="hint">${time(part.from)} — ${time(part.to)} · максимум ${n(part.minutes)} мин</span><input type="number" data-recovery-part="${esc(part.key)}" min="0" max="${esc(part.minutes)}" step="any" value="${esc(accepted)}" aria-label="Подтвердить восстановленное время, минуты"></label>`;
     }).join('')||'<p class="hint">Вся длительность подтверждена GPS. Изменение времени недоступно.</p>'}</div>`;
   };

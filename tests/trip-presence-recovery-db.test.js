@@ -23,6 +23,7 @@ beforeAll(async()=>{
  await db.exec(file('../supabase/migrations/20260923133423_trip_cost_allocation.sql'));
  const responsibility=file('../supabase/migrations/20260929110000_entity_responsibility.sql'),start=responsibility.indexOf('function dlight_private.responsibility_manager('),prefix=responsibility.lastIndexOf('create ',start);await db.exec(responsibility.slice(prefix,responsibility.indexOf('$$;',start)+3));
  await db.exec(file('../supabase/migrations/20261012135646_trip_track_presence_recovery.sql'));
+ await db.exec(file('../supabase/migrations/20261012144614_trip_presence_recovery_refresh.sql'));
 },30000);
 afterAll(async()=>await db?.close());
 beforeEach(async()=>{
@@ -61,4 +62,28 @@ it('allows the scoped trip curator and denies a foreign trip or anonymous calls'
 });
 it('legacy sparse-message detector cannot relock a restored gap as observed GPS',async()=>{
  await as(1);const {c,m}=await calculate();await save(c,m);expect((await q('select trip_detect_stays($1) count',[id(10)]))[0].count).toBe(0);expect((await stay()).minutes_raw).toBe(180);
+});
+
+it('rejects disguising observed GPS as an editable gap even before the first saved proposal',async()=>{
+ await as(1);const {c,m}=await calculate(),forged=structuredClone(m),e=forged.presence.stays[0].presence_evidence;
+ e.gps_intervals=[];e.recovery_parts[0].to=point(100,540).ts;e.recovery_parts[0].gap_to=point(100,540).ts;e.recovery_parts[0].anchor_to.ts=point(100,540).ts;
+ await deny(()=>save(c,forged),/наблюдаемые GPS/);expect(await q('select * from trip_stays')).toHaveLength(0);
+});
+it('keeps a reviewed partial arrival when a refreshed ETA still contains the exact accepted interval',async()=>{
+ await as(1);const {c,m}=await calculate();await save(c,m);await approve(60);const original=await stay();
+ const fresh=structuredClone(m),s=fresh.presence.stays[0];s.presence_evidence.recovery_parts[0].from=point(100,190).ts;s.presence_evidence.recovery_parts[0].minutes=170;s.recovered_minutes=170;
+ await save(c,fresh,await rev());const next=await stay();expect(next.status).toBe('approved');expect(next.minutes_mgr).toBe('240');expect(next.accepted_intervals).toEqual(original.accepted_intervals);
+});
+it('rejects removing still-observed GPS time in a later reconstruction and rolls back the track',async()=>{
+ await as(1);const {c,m}=await calculate();await save(c,m);await approve(60);
+ const original=await stay(),forged=structuredClone(m),s=forged.presence.stays[0];
+ s.presence_evidence.gps_intervals[0].from=point(100,420).ts;s.gps_minutes=120;
+ s.presence_evidence.recovery_parts=[];
+ const revision=await rev();await deny(()=>save(c,forged,revision),/не может удалить/);
+ expect((await stay()).minutes_mgr).toBe(original.minutes_mgr);expect((await q('select data from trip_tracks'))[0].data.presence).toEqual(m.presence);
+});
+it('uses the captured GPS cutoff while new later messages arrive',async()=>{
+ await as(1);const {c,m}=await calculate();await db.exec('reset role');const p=point(100,541);
+ await q('insert into vehicle_positions values($1,$2,$3,$4,$5)',[999,id(10),p.ts,p.lat,p.lng]);await as(1);
+ await save(c,m);expect((await stay()).minutes_raw).toBe(180);
 });

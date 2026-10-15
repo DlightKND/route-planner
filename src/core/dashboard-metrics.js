@@ -56,7 +56,7 @@ export function roadPersonHours({trips=[],tracks=[],presence=[],period,engineerI
     const crews=stays.filter(s=>s.status==='approved'&&s.job_id&&['snapshot','manager'].includes(s.crew_source)).map(s=>[...new Set(s.crew_ids||[])].sort());
     if(km==null||!Array.isArray(segments)||!segments.length||!crews.length||!summary.complete||crews.some(c=>JSON.stringify(c)!==JSON.stringify(crews[0]))){unknown++;continue;}
     const rebuilt=tracks.find(t=>t.trip_id===trip.id)?.data?.presence||tracks.find(t=>t.trip_id===trip.id)?.presence;
-    if(rebuilt?.version===1&&rebuilt.usable&&Array.isArray(rebuilt.motion_intervals)){
+    if(rebuilt?.version===1&&rebuilt.usable&&rebuilt.drive_complete!==false&&Array.isArray(rebuilt.motion_intervals)){
       const intervals=rebuilt.motion_intervals;
       if(intervals.some(s=>!Number.isFinite(Date.parse(s.from))||!Number.isFinite(Date.parse(s.to))||Date.parse(s.to)<=Date.parse(s.from))){unknown++;continue;}
       const roadStays=intervals.map(s=>({trip_id:trip.id,job_id:'road',status:'approved',crew_ids:crews[0],crew_source:'snapshot',stay_from:s.from,stay_to:s.to,minutes_mgr:(Date.parse(s.to)-Date.parse(s.from))/60000}));

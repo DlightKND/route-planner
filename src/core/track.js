@@ -175,6 +175,16 @@ export async function measureTrip(points, opts, ctx, reach) {
       continue;
     }
 
+    let r = null, queried = false;
+    // Rebuilds that propose attendance also validate long telemetry gaps.
+    // A normal short GPS leg still uses ORS only as a mileage ruler.
+    if (o.validateGaps && dt > (o.presenceGapMinutes || 5) * 60000 && d * 1000 >= o.jitterM && reach && checks < o.maxOrsCalls) {
+      checks++; queried = true; r = await reach(trusted, p, dt);
+      if (r && r.ok === false) {
+        dropped.push(Object.assign({why:'по дорогам не доехал бы'},p)); suspect = true; continue;
+      }
+    }
+
     // Дрожание стоящей машины: точку принимаем, километры — нет.
     if (d * 1000 < o.jitterM) {
       jitterKm += d;
@@ -206,8 +216,7 @@ export async function measureTrip(points, opts, ctx, reach) {
     // четыре минуты — это девяносто километров в час, а ORS на том же
     // куске легко скажет семь минут. Строгое сравнение выбросило бы
     // нормальную дорогу. Для неё маршрут — линейка, а не судья.
-    let r = null;
-    if (reach && checks < o.maxOrsCalls) { checks++; r = await reach(trusted, p, dt); }
+    if (!queried && reach && checks < o.maxOrsCalls) { checks++; r = await reach(trusted, p, dt); }
     if (suspect && r && r.ok === false) {
       dropped.push(Object.assign({ why: 'по дорогам не доехал бы' }, p));
       continue;                                    // подозрение остаётся
