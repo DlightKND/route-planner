@@ -228,7 +228,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     if(scene.statistics){
       await expect(active.locator('[data-summary-mode=charts] .summary-chart')).toHaveCount(2);
       await shot(page,testInfo,'logist-dashboard-diagrams');
-      if(testInfo.project.use.viewport.width>=1181){const aligned=await active.locator('#dashBody .rangebar').evaluate(el=>{const date=el.querySelector('input').getBoundingClientRect(),quick=el.querySelector('.rquick').getBoundingClientRect();return Math.abs(date.top-quick.top)<2;});expect(aligned,'Dates and month arrows share a row').toBe(true);}
+      const period=await active.locator('#dashBody .rangebar').evaluate(el=>{const dates=[...el.querySelectorAll('input')].map(x=>{const r=x.getBoundingClientRect();return {top:r.top,bottom:r.bottom};}),quick=el.querySelector('.rquick').getBoundingClientRect(),buttons=[...el.querySelectorAll('.rquick button')].map(x=>x.getBoundingClientRect().top);return {dates,quick:{top:quick.top,bottom:quick.bottom},buttons};});expect(Math.abs(period.dates[0].top-period.dates[1].top),'Dates share one row').toBeLessThanOrEqual(2);expect(period.quick.top,'Month navigation follows dates without overlap').toBeGreaterThanOrEqual(period.dates[0].top-2);if(period.quick.top>period.dates[0].top+2)expect(period.quick.top).toBeGreaterThanOrEqual(period.dates[0].bottom);expect(Math.max(...period.buttons)-Math.min(...period.buttons),'Month arrows stay together').toBeLessThanOrEqual(2);
       await expect(active.locator('[data-summary-view=charts]')).toHaveAttribute('aria-pressed','true');
       await selectedContrast(active.locator('[data-summary-view=charts]'));
       await active.locator('[data-summary-view=tables]').click();

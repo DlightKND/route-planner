@@ -117,7 +117,7 @@ html:root { --workspace-width:1280px; }
 .workspace-dispatcher-head .subtab:is(.on,.active),.workspace-page .catalog-main-nav .subtab.active { border-bottom:3px solid var(--accent);background:transparent;box-shadow:none;color:var(--ink); }
 .view-planner .stickyhead { position:static;background:transparent;padding:0;border:0;box-shadow:none; }
 .workspace-dispatcher-head :is(#jobAdd,#orderAdd,#tripAdd) { min-width:126px;gap:8px;white-space:nowrap;flex:none; }
-.view-planner .dispatcher-toolbar.workspace-filterbar { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:16px;margin-bottom:12px; }
+.view-planner .dispatcher-toolbar.workspace-filterbar { display:grid;grid-template-columns:minmax(0,1fr) 400px;align-items:center;gap:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:16px;margin-bottom:12px; }
 .view-planner .workspace-filterbar>.searchbox { grid-column:1;grid-row:1;max-width:none; }
 .view-planner .workspace-filterbar>.dispatcher-actions { grid-column:2;grid-row:1;width:auto;justify-content:flex-end;flex-wrap:nowrap; }
 .view-planner .workspace-filterbar>.dispatcher-period { grid-column:1;grid-row:1; }
@@ -228,6 +228,11 @@ html:root { --workspace-width:1280px; }
  .view-dash.workspace-page .dash-grid { grid-template-columns:minmax(0,1fr); }
 }
 @media(min-width:761px) and (max-width:1100px){
+ .view-planner .dispatcher-toolbar.workspace-filterbar { grid-template-columns:minmax(0,1fr); }
+ .view-planner .workspace-filterbar>.dispatcher-actions { grid-column:1;grid-row:2;width:100%; }
+ .view-trip.workspace-page #tpPlanPane .trip-grid { grid-template-columns:minmax(0,1fr); }
+ .workspace-page .trip-review-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .workspace-masthead .trip-head { flex-wrap:wrap; }
  .workspace-shell .rail { padding-inline:16px;gap:16px; }
  .workspace-shell .nav-i { padding:10px 8px;font-size:12px;gap:6px; }
  .view-planner .kanban { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -298,3 +303,7 @@ html:root { --workspace-width:1280px; }
  .workspace-fleet-row .acts { grid-column:1/-1; }
  .workspace-person-editor .staff-form { grid-template-columns:minmax(0,1fr); }
 }
+
+/* A direct schedule gesture owns the surface until release. */
+body:has(.vg-dragging) #undoToast { visibility:hidden; }
+.workspace-shell .vg-piece { user-select:none;-webkit-user-select:none; }
