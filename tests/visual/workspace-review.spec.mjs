@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-import {mkdirSync} from 'node:fs';
+import {mkdirSync,writeFileSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 
 // Fast, complete screen captures for composition review. The full functional
@@ -17,8 +17,10 @@ for(const [name,route,role,section] of screens)test('workspace review '+name,asy
  await page.goto('/#/'+route);await expect(page.locator('#appRoot')).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  if(section)await page.locator('[data-sec="'+section+'"]').click();
+ const ready={dispatcher:'#orderList .kcard',requests:'#jobList .kcard',trips:'#tripList .kcard',request:'#requestContext dd',assignment:'#orderRecordResult',engineer:'#orderRecordResult',trip:'#tpReviewSummary button',catalog:'#catList .emrow',fleet:'#vehList .pt',people:'#usersList .staff-row',notifications:'.notice-row',schedule:'.vg-feed'};await expect(page.locator(ready[name]).first()).toBeVisible();
  await page.evaluate(()=>document.fonts.ready);await expect(page.locator('.view.active')).toBeVisible();
  expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
  mkdirSync('test-results/workspace-review/'+info.project.name,{recursive:true});
  await page.screenshot({path:'test-results/workspace-review/'+info.project.name+'/'+name+'.png',animations:'disabled',caret:'hide'});
+ const metrics=await page.evaluate(()=>Object.fromEntries(['#orderList','.workspace-board-heading','#orderRecordResult','.entity-header-actions','.view.active .workspace-masthead','.view.active .workspace-main'].map(s=>{const e=document.querySelector(s);if(!e)return [s,null];const r=e.getBoundingClientRect(),c=getComputedStyle(e);return [s,{x:r.x,y:r.y,w:r.width,h:r.height,display:c.display,visibility:c.visibility,text:e.textContent.slice(0,180)}];})));writeFileSync('test-results/workspace-review/'+info.project.name+'/'+name+'.json',JSON.stringify(metrics));
 });
