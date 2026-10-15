@@ -1,3 +1,4 @@
+import {frameNotifications} from './workspace-ui.js';
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const types = {job:['Заявка','▤'],order:['Задание','✓'],trip:['Выезд','↗']};
 const dateFormat = new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Kyiv',day:'numeric',month:'long',year:'numeric'});
@@ -36,7 +37,7 @@ export function createNotifications({db,userId,host,badge,onPush,onOpen,onError}
   function scaffold() {
     const box=host();if(!box)return;
     box.innerHTML='<header class="notice-header"><div><p class="design-eyebrow">Личные события</p><h1>Уведомления</h1><p>Изменения в ваших заявках, заданиях и выездах.</p></div></header><div class="notice-toolbar"><div class="notice-tabs" role="group" aria-label="Фильтр уведомлений"><button type="button" data-notice-filter="all">Все</button><button type="button" data-notice-filter="unread">Непрочитанные</button></div><label class="sr-only" for="noticeSearch">Поиск уведомлений</label><input id="noticeSearch" type="search" placeholder="Поиск по уведомлениям"><label class="sr-only" for="noticeKind">Тип события</label><select id="noticeKind"><option value="">Все события</option><option value="job">Заявки</option><option value="order">Задания</option><option value="trip">Выезды</option></select></div><div class="notice-actions"><button type="button" class="btn sm ghost" data-notice-all>Прочитать все</button><button type="button" class="btn sm ghost" data-notice-refresh>Обновить</button></div><div class="notice-status" role="status" aria-live="polite"></div><div class="notice-list"></div><button type="button" class="btn notice-more" data-notice-more hidden>Показать ещё</button><section class="notice-device"><div><h2>Push на этом устройстве</h2><p>Уведомления сохраняются в приложении независимо от настройки push.</p></div><button type="button" class="btn" data-notice-push>Настроить push</button></section>';
-    box.querySelector('[data-notice-push]').onclick=onPush;
+    box.querySelector('[data-notice-push]').onclick=onPush;frameNotifications(box);
     box.querySelector('#noticeSearch').value=search;box.querySelector('#noticeKind').value=kind;
     const paintFilter=()=>box.querySelectorAll('[data-notice-filter]').forEach(b=>{const on=(b.dataset.noticeFilter==='unread')===unread;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});paintFilter();
     box.querySelectorAll('[data-notice-filter]').forEach(b=>b.onclick=()=>{unread=b.dataset.noticeFilter==='unread';paintFilter();load();});

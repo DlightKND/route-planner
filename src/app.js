@@ -30,6 +30,8 @@ import './entity-activity.css';
 import './entity-pages.css';
 import './operations-design.css';
 import { installOperationsUI } from './operations-ui.js';
+import './workspace-ui.css';
+import {installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace} from './workspace-ui.js';
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
@@ -863,7 +865,7 @@ document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
 });
 
 let catCur='works';
-function catSub(name){ catCur=name; if($('catalogTitle'))$('catalogTitle').textContent=({works:'Работы',models:'Техника',materials:'Материалы и цены'})[name]||'Каталог'; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; $('catMaterials').style.display=name==='materials'?'':'none'; if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else renderStockCatalog(); }
+function catSub(name){ catCur=name; setCatalogWorkspace(name); if($('catalogTitle'))$('catalogTitle').textContent=({works:'Работы',models:'Техника',materials:'Материалы и цены'})[name]||'Каталог'; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; $('catMaterials').style.display=name==='materials'?'':'none'; if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else renderStockCatalog(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
 let plannerCur='jobs';
 let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
@@ -1801,8 +1803,8 @@ function jobCard(j){ const mayManage=canWriteJob(j); const w=j.job_works||[]; co
   const mv=mayManage?('<select class="kmove" data-jstat="'+j.id+'" title="Сменить статус">'+JOB_STATUS_ORDER.map(s=>'<option value="'+s+'"'+(s===j.status?' selected':'')+'>'+esc(ST[s])+'</option>').join('')+'</select>'):'';
   const eb=(assignedTo(j,session.user.id,'assigned_engineer')&&(j.status==='open'||j.status==='planned'))?'<button class="btn sm amber" data-jst="'+j.id+'|in_progress">В работу</button>':'';
   const eb2=(assignedTo(j,session.user.id,'assigned_engineer')&&j.status==='in_progress')?'<button class="btn sm amber" data-jst="'+j.id+'|done">Завершить</button>':'';
-  const acts='<div class="acts">'+mv+eb+eb2+'<button class="btn sm" data-jedit="'+j.id+'">открыть</button>'+(mayManage?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">×</button>':'')+'</div>';
-  return '<div class="kcard" data-kid="'+j.id+'">'+head+(subject?'<div class="meta">'+esc(subject)+'</div>':'')+(tags?'<div class="ktags">'+tags+'</div>':'')+meta+acts+'</div>'; }
+  const acts='<footer class="workspace-card-footer"><button class="btn sm" data-jedit="'+j.id+'">Открыть заявку →</button><details class="workspace-card-details"><summary aria-label="Действия с заявкой">⋯</summary><div class="acts">'+mv+eb+eb2+(mayManage?'<button class="btn sm ghost" data-jdel="'+j.id+'" title="Удалить заявку">Удалить</button>':'')+'</div></details></footer>';
+  return '<div class="kcard" data-kid="'+j.id+'"><div class="workspace-record-id">ЗАЯВКА · '+esc(ST[j.status]||j.status)+'</div>'+head+(subject?'<div class="meta">'+esc(subject)+'</div>':'')+(tags?'<div class="ktags">'+tags+'</div>':'')+meta+acts+'</div>'; }
 function wireJobCards(box){
   box.querySelectorAll('[data-jedit]').forEach(b=>b.onclick=()=>openJob(b.dataset.jedit));
   box.querySelectorAll('[data-jst]').forEach(b=>b.onclick=()=>{ const a=b.dataset.jst.split('|'); jobSetStatus(a[0],a[1]); });
@@ -3966,9 +3968,10 @@ function jobHead(){
   const cl=clients.find(c=>c.id==$('jbClient').value);
   const eqName=(()=>{ const sel=$('jbEquip'); return (sel&&sel.selectedIndex>0)?sel.options[sel.selectedIndex].text:''; })();
   const nm=cl?cl.name:'Новая заявка';
-  $('jobTitle').textContent=jobEditId?nm:('Новая заявка' + (cl?(' · '+nm):''));
+  const subject=$('jbNotes').value.trim().split('\n')[0]||curWorks[0]?.title||curWorks[0]?.name||nm;
+  $('jobTitle').textContent=jobEditId?(subject.length>140?subject.slice(0,137)+'…':subject):('Новая заявка' + (cl?(' · '+nm):''));
   $('jobCrumb').textContent=jobEditId?'Заявка':'Новая заявка';
-  const parts=[];
+  const parts=[];if(jobEditId&&$('jobTitle').textContent!==nm)parts.push(esc(nm));
   if(eqName) parts.push(esc(eqName)); else parts.push('без техники');
   const st=$('jbStatus'); if(st) parts.push(esc(st.options[st.selectedIndex].text));
   // Своё имя человек в подписи не читает — он и так знает, чья это заявка.
@@ -4010,6 +4013,7 @@ function jobHead(){
   if($('jbDateHint')) $('jbDateHint').textContent=$('jbDate').value?dateHuman($('jbDate').value):'';
   if($('jbDueHint')) $('jbDueHint').textContent=$('jbDue').value?dateHuman($('jbDue').value):'';
   if(document.querySelector('.view-job.job-task')) buildJobRead();
+  presentRequestWorkspace({saved:!!jobEditId,editable:canWriteJob(),client:cl?.name||'Не указан',equipment:eqName,status:selText('jbStatus'),engineers:engineerNames(selectedEngineerIds('jbEng')).join(', '),due:due?dateHuman(due):'',notes:$('jbNotes').value.trim(),phone:cl?.phone||'',address:cl?.address||cl?.addr||'',confirmDiscard:()=>leaveJobEditor()});
 }
 if($('jbDepot')) $('jbDepot').onchange=()=>{
   if($('jbDepot').checked && !depotList().length){
@@ -5933,7 +5937,7 @@ function tripCard(t){ const mayManage=canWriteTrip(t); const e=t.econ_snapshot||
       +((t.status==='finished'||t.status==='done')?('<button class="btn sm" data-tkm="'+t.id+'" title="Пересчитать факт-пробег по треку">↻ км</button>'):'')
       +'<button class="btn sm" data-tgm="'+t.id+'" title="Google Maps">⌖</button><button class="btn sm ghost" data-tdel="'+t.id+'" title="Удалить выезд">×</button></div>'
     : '<div class="acts"><button class="btn sm" data-tedit="'+t.id+'">Открыть выезд</button><button class="btn sm" data-tmap="'+t.id+'">карта</button><button class="btn sm" data-tgm="'+t.id+'">⌖ Google Maps</button></div>';
-  return '<div class="kcard" data-kid="'+t.id+'">'+head+meta+acts+'</div>'; }
+  return '<div class="kcard" data-kid="'+t.id+'"><div class="workspace-record-id">ВЫЕЗД · '+esc(ST_TRIP[t.status]||t.status)+'</div>'+head+meta+'<footer class="workspace-card-footer"><button class="btn sm" data-tedit="'+t.id+'">Открыть выезд →</button><details class="workspace-card-details"><summary aria-label="Действия с выездом">⋯</summary>'+acts+'</details></footer></div>'; }
 function wireTripCards(box){
   box.querySelectorAll('[data-tedit]').forEach(b=>b.onclick=()=>openTrip(b.dataset.tedit));
   box.querySelectorAll('[data-tmap]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.tmap));
@@ -6219,12 +6223,11 @@ async function loadVehicles(){ try{ const {data}=await sb.from('vehicles').selec
 // построенный на нём срок ТО: лучше пусто, чем правдоподобно неверно.
 // Колонки в базе не трогаем — миграция ради удаления мусора того не стоит,
 // а старые значения никому не мешают, пока их никто не показывает.
-function renderVehicles(){ const box=$('vehList'); if(!box) return; box.innerHTML=vehicles.length?'':'<div class="hint">Машин нет. Добавь ниже.</div>';
+function renderVehicles(){ const box=$('vehList'); if(!box) return; box.classList.add('workspace-fleet-table');box.innerHTML=vehicles.length?'<div class="workspace-fleet-heading"><span>Автомобиль</span><span>Номер</span><span>GPS</span><span>Одометр</span><span></span></div>':'<div class="hint">Машин нет. Добавь ниже.</div>';
   vehicles.forEach(v=>{
-    const d=document.createElement('div'); d.className='pt';
-    d.innerHTML='<div class="nm">'+esc(v.name)+(v.plate?' <span class="pill">'+esc(v.plate)+'</span>':'')+(v.wialon_id?' <span class="pill">GPS</span>':'')+'</div>'+
-      '<div class="meta">'+(v.wialon_id?('датчик '+esc(v.wialon_id)):'без датчика')+' · одометр '+Math.round(+v.odometer||0)+' км</div>'+
-      '<div class="acts"><button class="btn sm" data-vhedit="'+v.id+'">Редактировать</button><button class="btn sm ghost" data-vhdel="'+v.id+'">×</button></div>';
+    const d=document.createElement('div'); d.className='pt workspace-fleet-row';
+    d.innerHTML='<div class="nm">'+esc(v.name)+'</div><div>'+esc(v.plate||'Без номера')+'</div><div class="hint">'+(v.wialon_id?'GPS настроен':'Без датчика')+'</div><div class="workspace-fleet-km">'+Math.round(+v.odometer||0).toLocaleString('ru-RU')+' км</div>'+
+      '<div class="acts"><button class="btn sm" data-vhedit="'+v.id+'">Изменить</button><button class="btn sm ghost" data-vhdel="'+v.id+'" aria-label="Удалить автомобиль">×</button></div>';
     box.appendChild(d); });
   box.querySelectorAll('[data-vhedit]').forEach(b=>b.onclick=()=>editVehicle(b.dataset.vhedit));
   box.querySelectorAll('[data-vhdel]').forEach(b=>b.onclick=()=>delVehicle(b.dataset.vhdel)); }
@@ -6329,7 +6332,7 @@ async function profileSave(){ const name=$('tpfName').value.trim(); if(!name){ $
 async function profileDel(id){ if(!await confirmDialog('Удалить профиль тарифа?',{danger:true,okText:'Удалить'})) return; const list=tpProfiles().filter(x=>x.id!==id); const {error}=await sb.from('settings').update({tariff_profiles:list}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.tariff_profiles=list; renderProfiles(); if(profEditId===id) profileResetForm(); }
 if($('tpfSave')) $('tpfSave').onclick=profileSave; if($('tpfCancel')) $('tpfCancel').onclick=()=>{ profileResetForm(); $('profOverlay').classList.remove('on'); };
 if($('profCreate')) $('profCreate').onclick=()=>{ profileResetForm(); $('profOverlay').classList.add('on'); setTimeout(()=>{ try{ $('tpfName').focus(); }catch(e){} },40); };
-function settingsNav(sec){ if(role!=='admin')sec='theme'; document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
+function settingsNav(sec){ if(role!=='admin')sec='theme'; setSettingsWorkspace(sec); document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
 document.querySelectorAll('#settingsNav .son').forEach(b=>b.onclick=()=>settingsNav(b.dataset.sec));
 document.querySelectorAll('.settings-body > .card > h3:first-of-type').forEach(h=>{h.tabIndex=0;h.setAttribute('role','button');h.setAttribute('aria-expanded','true');const toggle=()=>{const collapsed=h.parentElement.classList.toggle('collapsed');h.setAttribute('aria-expanded',String(!collapsed));};h.onclick=e=>{if(!e.target.closest('.q'))toggle();};h.onkeydown=e=>{if(e.target===h&&['Enter',' '].includes(e.key)){e.preventDefault();toggle();}};});
 $('stSave').onclick=async ()=>{ if(role!=='admin')return; const invalid=document.querySelector('[data-sec-panel="tariffs"] input:invalid');if(invalid){const details=invalid.closest('details');if(details)details.open=true;invalid.reportValidity();return;}const negative=[...document.querySelectorAll('[data-sec-panel="tariffs"] input[type=number]')].find(el=>Number(el.value)<0);if(negative){notify('Значение не может быть отрицательным','warn');const details=negative.closest('details');if(details)details.open=true;negative.focus();return;}const start=parseFloat($('stDayStart').value),end=parseFloat($('stDayEnd').value); if(!(end>start)){notify('Конец рабочего дня должен быть позже начала','warn');return;} const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:start,day_end:end,tolerance_h:Math.max(0,parseFloat($('stTolerance').value)||0),currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,depot_radius_m:parseInt($('stDepotRad').value)||5000,depot_exit_margin_m:Math.max(0,parseInt($('stDepotMargin').value)||0),depot_outside_minutes:parseInt($('stDepotOut').value)||60,updated_at:new Date().toISOString()};
@@ -6355,6 +6358,7 @@ async function renderUsersAdmin(){
       '<label class="staff-field"><span>Прямой руководитель</span><select data-manager="'+p.id+'"><option value="">Без руководителя</option>'+inactiveManager+managerOptions+'</select></label>'+
       '<label class="staff-field"><span>Роль в приложении</span><select data-ur="'+p.id+'"><option value="admin">админ</option><option value="logist">логист</option><option value="engineer">инженер</option></select></label>'+
       '<div class="staff-save"><button class="btn sm" data-us="'+p.id+'">Сохранить</button></div>';
+    const fields=d.innerHTML;d.classList.add('workspace-person-row');d.innerHTML='<div class="workspace-person-summary"><div class="workspace-person-avatar" aria-hidden="true">'+esc(initials(p.full_name))+'</div><div><strong>'+esc(p.full_name||'Сотрудник')+'</strong><p class="hint">'+esc(org.job_title||'Должность не указана')+'</p></div><span class="design-status">'+esc(roleLabel[p.role]||p.role)+'</span></div><details class="workspace-person-editor"><summary data-user-edit="'+p.id+'">Изменить доступ и профиль</summary><div class="staff-form">'+fields+'</div></details>';
     box.appendChild(d); d.querySelector('[data-ur]').value=p.role; d.querySelector('[data-manager]').value=org.manager_id||'';
   });
   box.querySelectorAll('[data-us]').forEach(b=>b.onclick=async ()=>{
@@ -8997,3 +9001,4 @@ if($('verCopy')) $('verCopy').onclick=async()=>{
 
 // Expose everyday controls after the existing screen handlers have been installed.
 installOperationsUI();
+installWorkspaceStructure();

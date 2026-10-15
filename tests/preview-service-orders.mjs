@@ -3,7 +3,7 @@ import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {build} from 'esbuild';
 const source=readFileSync('index.html','utf8'),appSource=readFileSync('src/app.js','utf8');
 const themes=appSource.slice(appSource.indexOf('const THEMES='),appSource.indexOf('function applyTheme('));
-const styles=[...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m=>m[1]).join('\n')+readFileSync('src/trip-workbench.css','utf8')+readFileSync('src/service-orders.css','utf8')+readFileSync('src/visual-system.css','utf8')+readFileSync('src/entity-activity.css','utf8')+readFileSync('src/entity-pages.css','utf8')+readFileSync('src/operations-design.css','utf8');
+const styles=[...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m=>m[1]).join('\n')+readFileSync('src/trip-workbench.css','utf8')+readFileSync('src/service-orders.css','utf8')+readFileSync('src/visual-system.css','utf8')+readFileSync('src/entity-activity.css','utf8')+readFileSync('src/entity-pages.css','utf8')+readFileSync('src/operations-design.css','utf8')+readFileSync('src/workspace-ui.css','utf8');
 const script=`import {createServiceOrders} from './src/service-orders.js';import {installEngineerPickers} from './src/engineer-picker.js';
 ${themes}
 const mode=new URLSearchParams(location.search).get('theme')==='light'?'light':'dark';document.documentElement.dataset.theme=mode;Object.entries(THEMES[mode]).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));

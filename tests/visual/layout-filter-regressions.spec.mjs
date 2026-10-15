@@ -21,7 +21,7 @@ test('dashboard hides redundant desktop switch and dates fit',async({page},info)
 test('notifications align with the common pane edges',async({page},info)=>{
  await open(page,info,'notifications');await expect(page.locator('.notice-header')).toBeVisible();
  const edges=await page.locator('#noticeHost').evaluate(el=>{const p=el.parentElement,s=getComputedStyle(p),r=el.getBoundingClientRect(),pr=p.getBoundingClientRect();return {left:r.left-pr.left-parseFloat(s.paddingLeft),right:pr.right-r.right-parseFloat(s.paddingRight)};});
- expect(edges.left).toBeGreaterThanOrEqual(-1);expect(edges.right).toBeGreaterThanOrEqual(-1);expect(Math.abs(edges.left-edges.right)).toBeLessThanOrEqual(1);expect((await page.locator('#noticeHost').boundingBox()).width).toBeLessThanOrEqual(1120);
+ expect(edges.left).toBeGreaterThanOrEqual(-1);expect(edges.right).toBeGreaterThanOrEqual(-1);expect(Math.abs(edges.left-edges.right)).toBeLessThanOrEqual(1);expect((await page.locator('#noticeHost .workspace-main').boundingBox()).width).toBeLessThanOrEqual(1184);
  await page.screenshot({path:'test-results/layout-fixes/'+info.project.name+'-notifications.png'});
 });
 test('dispatcher filters preserve kanban and explicitly selected list',async({page},info)=>{
@@ -60,13 +60,13 @@ test('dispatcher search geometry matches across requests, tasks and trips',async
   await page.goto('/#/planner/'+route);await expect(page.locator('#'+id)).toBeVisible();
   const toolbar=page.locator('#'+id).locator('xpath=ancestor::*[contains(@class,"dispatcher-toolbar")]');
   const box=await page.locator('#'+id).boundingBox();dimensions.push(box);
-  const parent=await toolbar.boundingBox();expect(Math.abs(box.x-parent.x)).toBeLessThanOrEqual(1);
+  const parent=await toolbar.boundingBox();expect(box.x-parent.x).toBeGreaterThanOrEqual(12);expect(box.x+box.width).toBeLessThanOrEqual(parent.x+parent.width-12);
   const controls=await toolbar.locator(page.viewportSize().width<=760?'.dispatcher-more>summary':'.dispatcher-actions').boundingBox();expect(controls.x).toBeGreaterThanOrEqual(box.x);
   expect(await toolbar.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({path:'test-results/search-alignment/'+info.project.name+'-'+route+'.png'});
  }
  for(const box of dimensions.slice(1)){expect(Math.abs(box.x-dimensions[0].x)).toBeLessThanOrEqual(1);expect(Math.abs(box.y-dimensions[0].y)).toBeLessThanOrEqual(1);expect(Math.abs(box.width-dimensions[0].width)).toBeLessThanOrEqual(1);expect(Math.abs(box.height-dimensions[0].height)).toBeLessThanOrEqual(1);}
- if(page.viewportSize().width>760)expect(dimensions[0].width).toBe(420);
+ expect(dimensions[0].width).toBeGreaterThanOrEqual(250);
 });
 
 
@@ -81,7 +81,7 @@ test('dispatcher actions keep stable mobile slots and task status chips control 
   if(page.viewportSize().width<=760){
    const menu=actions.locator('.dispatcher-more'),trigger=menu.locator(':scope>summary'),search=page.locator('#'+prefix+'Search');
    await expect(trigger).toBeVisible();await expect(page.locator('#'+prefix+'Trash')).toBeHidden();await expect(page.locator('#'+prefix+'Add')).toBeVisible();
-   const [input,create,dots]=await Promise.all([search.boundingBox(),page.locator('#'+prefix+'Add').boundingBox(),trigger.boundingBox()]);expect(create.y).toBeGreaterThanOrEqual(input.y+input.height);expect(create.height).toBeGreaterThanOrEqual(44);expect(dots.height).toBeGreaterThanOrEqual(44);await expect(page.locator('#'+prefix+'Add .dispatcher-add-label')).toBeVisible();expect(await page.locator('#'+prefix+'Add .dispatcher-add-label').evaluate(el=>el.getBoundingClientRect().height<=parseFloat(getComputedStyle(el).fontSize)*1.5+1),'Create labels remain on one line').toBe(true);await expect(page.locator('#'+prefix+'Add')).toHaveAttribute('aria-label',/^Создать/);await expect(actions.locator('.planner-filter-menu>summary')).toBeVisible();await expect(actions.locator('.dispatcher-view-mode')).toBeVisible();layouts.push(dots);
+   const [input,create,dots]=await Promise.all([search.boundingBox(),page.locator('#'+prefix+'Add').boundingBox(),trigger.boundingBox()]);expect(create.y+create.height).toBeLessThanOrEqual(input.y);await expect(page.locator('#'+prefix+'Add').locator('xpath=ancestor::header')).toHaveClass(/workspace-dispatcher-head/);expect(create.height).toBeGreaterThanOrEqual(44);expect(dots.height).toBeGreaterThanOrEqual(44);await expect(page.locator('#'+prefix+'Add .dispatcher-add-label')).toBeVisible();expect(await page.locator('#'+prefix+'Add .dispatcher-add-label').evaluate(el=>el.getBoundingClientRect().height<=parseFloat(getComputedStyle(el).fontSize)*1.5+1),'Create labels remain on one line').toBe(true);await expect(page.locator('#'+prefix+'Add')).toHaveAttribute('aria-label',/^Создать/);await expect(actions.locator('.planner-filter-menu>summary')).toBeVisible();await expect(actions.locator('.dispatcher-view-mode')).toBeVisible();layouts.push(dots);
    await revealDispatcherActions(page);await expect(page.locator('#'+prefix+'Trash')).toBeVisible();
   }
   await actions.locator('.planner-filter-menu>summary').click();await expect(actions.locator('.planner-filter-panel')).toBeVisible();

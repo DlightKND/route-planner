@@ -57,7 +57,7 @@ it('shows task children immediately inside a request while keeping kanban childr
 it('does not open a task or load its data when the trip leave guard is declined',async()=>{
  await ui.open('order1');ctx.beforeOpen=vi.fn(()=>false);ctx.ensureRefs=vi.fn();
  await ui.open(null,job);expect(ctx.beforeOpen).toHaveBeenCalledOnce();
- expect(ctx.ensureRefs).not.toHaveBeenCalled();expect(doc.querySelector('h2').textContent).toBe('Задание №1 · Ремонт');
+ expect(ctx.ensureRefs).not.toHaveBeenCalled();expect(doc.querySelector('h2').textContent).toBe('Ремонт');
 });
 it('guards expense links and disables stage actions while the task result is unsaved',async()=>{
  ctx.tripCostSummary=vi.fn(async()=>[{trip_id:'trip1',distance_cost:120}]);ctx.confirmLeave=vi.fn(()=>false);

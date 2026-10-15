@@ -43,6 +43,9 @@ if (!parts.length) {
 
 const el = () => new Proxy(function () {}, {
   get(t, k) {
+    // Empty DOM nodes have no siblings or children. Returning another proxy
+    // here makes a legitimate "move remaining children" loop run forever.
+    if (k === 'firstChild' || k === 'nextSibling' || k === 'firstElementChild' || k === 'nextElementSibling') return null;
     if (k === 'style') return {};
     if (k === 'classList') return { add(){}, remove(){}, toggle(){}, contains(){ return false; } };
     if (k === 'dataset') return {};
