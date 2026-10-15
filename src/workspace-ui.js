@@ -67,6 +67,16 @@ export function installWorkspaceStructure(root=document){
  const dash=root.querySelector('.view-dash');
  if(dash){const title=dash.querySelector('.pane-head h2');if(title)title.textContent='График и работа';framePane(dash,[dash.querySelector('.stickyhead')]);}
  root.getElementById('appShell')?.classList.add('workspace-shell');
+ root.addEventListener('click',event=>{for(const menu of root.querySelectorAll('.workspace-card-details[open]'))if(!menu.contains(event.target))menu.open=false;});
+ root.addEventListener('keydown',event=>{
+  if(event.key!=='Escape'||root.querySelector('dialog[open],:popover-open'))return;
+  const menu=[...root.querySelectorAll('.workspace-card-details[open]')].at(-1);if(menu){event.preventDefault();menu.open=false;menu.querySelector('summary').focus();}
+ });
+ root.addEventListener('toggle',event=>{
+  const menu=event.target;if(!menu.matches?.('.workspace-card-details')||!menu.open)return;
+  const place=()=>{const panel=menu.querySelector('.acts,.order-status-label');if(!panel)return;panel.style.top='100%';panel.style.bottom='auto';const height=root.defaultView.innerHeight,rail=root.querySelector('.rail'),limit=root.defaultView.innerWidth<=760&&rail?rail.getBoundingClientRect().top-8:height-8;if(panel.getBoundingClientRect().bottom>limit){panel.style.top='auto';panel.style.bottom='100%';}};
+  root.defaultView.requestAnimationFrame(place);
+ },true);
 }
 
 export function setCatalogWorkspace(name,root=document){

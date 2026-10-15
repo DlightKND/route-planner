@@ -172,6 +172,7 @@ html:root { --workspace-width:1280px; }
 .view-dash.workspace-page .stickyhead { padding:0;position:static;border:0;box-shadow:none; }
 .view-dash.workspace-page .pane-head { margin:0; }
 .view-dash.workspace-page .dash-grid { display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr);gap:28px;max-height:none; }
+.view-dash.workspace-page .dash-grid.one-col { grid-template-columns:minmax(0,1fr); }
 .view-dash.workspace-page .dash-grid>* { overflow:visible;max-height:none; }
 .view-dash.workspace-page .dash-attn>.acaps { display:none; }
 .view.workspace-inbox>.pane { padding:0; }
@@ -222,6 +223,9 @@ html:root { --workspace-width:1280px; }
  .workspace-shell .profile-avatar { width:32px;height:32px;font-size:12px; }
  .workspace-shell .view-map .map-wrap { left:0; }
  .workspace-shell .view-map .leaflet-top.leaflet-left { margin-left:392px; }
+}
+@media(min-width:761px) and (max-width:1180px){
+ .view-dash.workspace-page .dash-grid { grid-template-columns:minmax(0,1fr); }
 }
 @media(min-width:761px) and (max-width:1100px){
  .workspace-shell .rail { padding-inline:16px;gap:16px; }

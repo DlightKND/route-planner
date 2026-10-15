@@ -102,3 +102,12 @@ test('dispatcher actions keep stable mobile slots and task status chips control 
  await expect(page.locator('#orderList .kcard')).toHaveCount(0);await expect(page.locator('#orderList')).toContainText('По выбранным условиям');
  expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
+
+test('dispatcher actions menus fit the viewport and restore keyboard focus',async({page},info)=>{
+ await open(page,info,'planner/orders');const menu=page.locator('#orderList .workspace-card-details').first(),trigger=menu.locator(':scope>summary');
+ await trigger.scrollIntoViewIfNeeded();await trigger.click();await expect(menu.locator('select')).toBeVisible();
+ await expect.poll(()=>menu.locator('.order-status-label').evaluate(el=>{const r=el.getBoundingClientRect(),rail=document.querySelector('.rail').getBoundingClientRect(),bottom=innerWidth<=760?rail.top:innerHeight;return r.left>=8&&r.right<=innerWidth-8&&r.top>=8&&r.bottom<=bottom-4;})).toBe(true);
+ await page.keyboard.press('Escape');await expect(menu).not.toHaveAttribute('open','');await expect(trigger).toBeFocused();
+ await trigger.click();await expect(menu).toHaveAttribute('open','');await page.locator('#plOrders h1').click();await expect(menu).not.toHaveAttribute('open','');
+ expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
+});
