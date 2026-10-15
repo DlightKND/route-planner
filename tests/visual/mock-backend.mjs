@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -363,6 +363,19 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     request.service_orders=[task];
     audit.financeRows=structuredClone(task.service_order_items);
   }
+  if(presenceRecoveryJourney){
+    const point=(km,min)=>({trip_id:trip,vehicle_id:ride.vehicle_id,lat:client.lat,lng:client.lng+(km-100)/(111.32*Math.cos(client.lat*Math.PI/180)),ts:new Date(Date.UTC(2026,9,5,7,min)).toISOString()});
+    tables.vehicle_positions=[point(0,-1),point(1,0),...Array.from({length:181},(_,i)=>point(100,360+i))];
+    Object.assign(ride.route_stops[0],{lat:tables.vehicle_positions[0].lat,lng:tables.vehicle_positions[0].lng});
+    Object.assign(ride,{status:'finished',started_at:tables.vehicle_positions[0].ts,finished_at:tables.vehicle_positions.at(-1).ts});
+    stays.splice(0,stays.length);tables.trip_stays=stays;
+    settings.ors_proxy='https://anqfbljgfimoaziztdxe.supabase.co/functions/v1/ors';
+    session.access_token='synthetic-token';audit.recoveryWrites=[];
+    if(role==='engineer'){
+      const p=tables.vehicle_positions,a=p[1],b=p[2],end=p.at(-1),from=new Date(Date.parse(b.ts)-180*60000).toISOString();
+      stays.push({id:'recovery-0',trip_id:trip,job_id:job,stay_from:from,stay_to:end.ts,status:'detected',crew_ids:[engineer],crew_source:'snapshot',minutes_raw:180,minutes_mgr:null,recovery_acceptance:{},presence_evidence:{version:1,gps_intervals:[{from:b.ts,to:end.ts}],recovery_parts:[{key:'arrival',from,to:b.ts,minutes:180,side:'before',gap_from:a.ts,gap_to:b.ts}]}});
+    }
+  }
   const db = {
     auth: {
       getSession: async () => ({ data: { session: signedOut?null:session }, error: null }),
@@ -483,6 +496,20 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(presenceRecoveryJourney&&name==='trip_track_rebuild_save'){
+        if(role==='engineer')return reject(name);
+        const previous=tables.trip_tracks.find(t=>t.trip_id===trip),same=JSON.stringify(previous?.data.presence)===JSON.stringify(args.p_track.presence);
+        if(!same){
+          stays.splice(0,stays.length,...args.p_track.presence.stays.map((s,i)=>({...s,id:'recovery-'+i,trip_id:trip,status:'detected',crew_ids:[engineer],crew_source:'snapshot',minutes_raw:s.gps_minutes,minutes_mgr:null,recovery_acceptance:{}})));
+          tables.trip_tracks=tables.trip_tracks.filter(t=>t.trip_id!==trip);tables.trip_tracks.push({trip_id:trip,km:args.p_track.km,data:structuredClone(args.p_track),updated_at:stamp});ride.workbench_revision++;
+        }
+        audit.recoveryWrites.push({name,args:structuredClone(args)});return {data:{revision:ride.workbench_revision,repeated:same},error:null};
+      }
+      if(presenceRecoveryJourney&&name==='trip_presence_save_tasks'){
+        if(role==='engineer')return reject(name);
+        for(const input of args.p_stays){const s=stays.find(s=>s.id===input.id);if(!s)return reject('missing stay');Object.assign(s,structuredClone(input));}
+        ride.workbench_revision++;audit.recoveryWrites.push({name,args:structuredClone(args)});return {data:ride.workbench_revision,error:null};
+      }
       // This read RPC is supported even by the default read-only fixture.
       if(name==='entity_activity_results'){
         const results=resultEvents.filter(event=>{
@@ -563,6 +590,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         entity_finance_config: settings,
         service_order_trip_cost_summary: [],
         trip_cost_allocation_read: null,
+        trip_track_rebuild_context: presenceRecoveryJourney?{trip:ride,source_from:ride.started_at,source_to:ride.finished_at,source_digest:'synthetic-source',stops:[{job_id:job,name:client.name,lat:client.lat,lng:client.lng}]}:null,
         trip_workbench_read: {
           trip:financeJourney?(tables.trips.find(t=>t.id===args.p_trip)||ride):ride,
           job_ids: [job],

@@ -1,5 +1,6 @@
 import { infoHint } from './info-hints.js';
 import { presenceSummary } from './core/trip-review.js';
+import {presenceBounds} from './core/trip-presence-recovery.js';
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const n = v => v == null ? '—' : (+v).toLocaleString('ru-RU',{maximumFractionDigits:2});
@@ -32,9 +33,20 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
   };
   const candidateJobs = [...jobs.filter(j => data.jobIds.includes(j.id)).map(j=>({id:j.id,name:jobName(j.id)})),
     ...data.removed.map(j=>({id:j.job_id,name:jobName(j.job_id)+' · исключена из плана'}))];
+  const evidenceLabel = stay => {
+    const bounds=presenceBounds(stay);return bounds?`<div class="presence-gps-note">По GPS: <b>${n(bounds.gps)} мин</b> · неизменяемая часть</div>${bounds.extra?`<div class="hint">Предложено после потери навигации: ${n(bounds.extra)} мин</div>`:''}`:`<div class="hint">GPS: ${n(stay.minutes_raw)} мин</div>`;
+  };
+  const recoveryControls = stay => {
+    const bounds=presenceBounds(stay);if(!bounds)return '';
+    return `<div class="presence-recovery-parts">${(stay.presence_evidence.recovery_parts||[]).map(part=>{
+      const accepted=stay.minutes_mgr!=null&&['approved','rejected'].includes(stay.status)?Number(stay.recovery_acceptance?.[part.key]||0):part.minutes;
+      return `<label class="presence-recovery-part">${esc({before:'До первых GPS-точек на объекте',after:'После последних GPS-точек на объекте',between:'Между GPS-частями стоянки',island:'Стоянка целиком внутри провала'}[part.side]||'Восстановленная часть')}<span class="hint">${time(part.from)} — ${time(part.to)} · максимум ${n(part.minutes)} мин</span><input type="number" data-recovery-part="${esc(part.key)}" min="0" max="${esc(part.minutes)}" step="any" value="${esc(accepted)}" aria-label="Подтвердить восстановленное время, минуты"></label>`;
+    }).join('')||'<p class="hint">Вся длительность подтверждена GPS. Изменение времени недоступно.</p>'}</div>`;
+  };
   const rows = data.stays.map(s => {
     const crew = s.crew_ids || [];
-    const mins = s.minutes_mgr ?? s.minutes_raw;
+    const bounds=presenceBounds(s), proposed=bounds?bounds.max:s.minutes_raw;
+    const mins = s.minutes_mgr ?? proposed;
     const hrs = mins != null && crew.length ? mins*crew.length/60 : null;
     const suggested=s.status==='detected'&&s.job_id&&s.stay_to&&crew.length&&s.crew_source==='snapshot';
     if(readonly){
@@ -43,18 +55,18 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
       const uniqueCrew=[...new Set(crew)];
       const crewLabel=uniqueCrew.map(id=>profiles.find(p=>p.id===id)?.full_name||'Инженер '+String(id).slice(0,8)).join(', ');
       const recordedHours=recordedMinutes!=null&&uniqueCrew.length&&knownCrew?recordedMinutes*uniqueCrew.length/60:null;
-      return `<tr data-presence-id="${esc(s.id)}"><td data-label="Интервал">${time(s.stay_from)}<br>${time(s.stay_to)}<div class="hint">GPS: ${n(s.minutes_raw)} мин</div></td>
+      return `<tr data-presence-id="${esc(s.id)}"><td data-label="Интервал">${time(s.stay_from)}<br>${time(s.stay_to)}${evidenceLabel(s)}</td>
         <td data-label="Объект / заявка">${esc(s.job_id?jobName(s.job_id):'Не привязана')}</td>
         <td data-label="Команда">${esc(crewLabel||'Состав не указан')}${!knownCrew?'<div class="hint">Состав не подтверждён</div>':''}</td>
         <td data-label="Задание · доля человеко-часов">${allocationCell(s,false)}</td>
         <td data-label="Минуты на человека">${n(recordedMinutes)}<div class="hint">${n(recordedHours)} чел.-ч${['approved','rejected'].includes(s.status)?'':' · по записи, до проверки'}</div></td>
         <td data-label="Проверка">${esc(presenceStatus[s.status]||'Не проверено')}</td></tr>`;
     }
-    return `<tr data-presence-id="${esc(s.id)}"><td data-label="Интервал">${time(s.stay_from)}<br>${time(s.stay_to)}<div class="hint">GPS: ${n(s.minutes_raw)} мин</div></td>
+    return `<tr data-presence-id="${esc(s.id)}"><td data-label="Интервал">${time(s.stay_from)}<br>${time(s.stay_to)}${evidenceLabel(s)}</td>
       <td data-label="Объект / заявка"><select data-presence="job_id" aria-label="Заявка стоянки"><option value="">Не привязана</option>${candidateJobs.map(j=>`<option value="${esc(j.id)}" ${j.id===s.job_id?'selected':''}>${esc(j.name)}</option>`).join('')}</select></td>
       <td data-label="Команда"><select data-presence="crew_ids" multiple aria-label="Присутствовавшие инженеры">${profiles.filter(p=>p.role==='engineer'||crew.includes(p.id)).map(p=>`<option value="${esc(p.id)}" ${crew.includes(p.id)?'selected':''}>${esc(p.full_name||'Инженер')}</option>`).join('')}</select>${s.crew_source==='legacy_unverified'?'<div class="hint">Исторический состав не подтверждён</div>':''}</td>
       <td data-label="Задание · доля человеко-часов">${allocationCell(s,editor)}</td>
-      <td data-label="Минуты на человека"><input data-presence="minutes_mgr" aria-label="Минуты присутствия" type="number" min="0" step="1" value="${esc(mins??'')}"><div class="hint">${n(hrs)} чел.-ч</div></td>
+      <td data-label="Минуты на человека"><input data-presence="minutes_mgr" aria-label="Минуты присутствия" type="number" min="${esc(bounds?.min??0)}" ${bounds?`max="${esc(bounds.max)}" readonly aria-readonly="true"`:""} step="any" value="${esc(mins??'')}"><div class="hint" data-presence-total>${n(hrs)} чел.-ч${bounds?" · итог по GPS и выбранным достройкам":""}</div>${recoveryControls(s)}</td>
       <td data-label="Проверка"><select data-presence="status" aria-label="Результат проверки"><option value="" ${!suggested&&!['approved','rejected'].includes(s.status)?'selected':''}>Проверить позже</option><option value="approved" ${suggested||s.status==='approved'?'selected':''}>${suggested?'Присутствие · предложено':'Присутствие'}</option><option value="rejected" ${s.status==='rejected'?'selected':''}>Не учитывать</option></select></td></tr>`;
   }).join('');
   const table = `<div class="wb-table-scroll" role="region" aria-label="Стоянки на объектах" tabindex="0"><table class="wb-table"><thead><tr><th>Интервал</th><th>Объект / заявка</th><th>Команда</th><th>Задание · доля часов</th><th>Минуты на человека</th><th>Проверка</th>${editor||readonly?'':'<th></th>'}</tr></thead><tbody>${editor||readonly?rows:rows.replaceAll('</tr>','<td><button type="button" class="btn sm" data-presence-edit>Изменить</button></td></tr>')}</tbody></table></div>`;
@@ -62,7 +74,7 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
   return `<div class="wb-metrics"><div><span>${summary.complete?'Присутствие · проверено':'Подтверждённая часть присутствия'} ${infoHint('Всё время на объекте × присутствовавшие инженеры. Ожидание включено. Нормочасы работ не изменяются. Подтверждённые минуты сохраняются; без известного состава человеко-часы не вычисляются. При незавершённой проверке показана только подтверждённая часть. Время указано по Киеву.', 'О проверенном присутствии')}</span><b>${n(presenceHours)} чел.-ч</b></div><div><span>Стоянки на проверке</span><b>${summary.pending}</b></div><div><span>Факт-пробег</span><b>${n(t.fact_km)} км</b></div></div>
 
     ${rows?table:'<p class="hint">Стоянок пока нет. Отсутствие данных не означает нулевое присутствие.</p>'}
-    ${readonly?'<p class="hint">Проверку присутствия выполняет куратор выезда.</p>':`<div class="row"><button type="button" class="btn" id="wbDetect">Обновить стоянки по треку</button>${rows?'<button type="button" class="btn amber" id="wbPresenceSave">Сохранить проверку присутствия</button>':''}</div>`}
+    ${readonly?'<p class="hint">Проверку присутствия выполняет куратор выезда.</p>':`<div class="row"><button type="button" class="btn" id="wbDetect">Проверить и достроить трек</button>${rows?'<button type="button" class="btn amber" id="wbPresenceSave">Сохранить проверку присутствия</button>':''}</div>`}
     <div class="hint" id="wbPresenceMessage" role="status"></div>`;
 }
 
@@ -94,7 +106,10 @@ export function readPresenceForm(root, originals) {
       const share=Number(item.querySelector('[data-task-allocation-share]').value||0)/100;
       return checkbox.checked&&share>0?[{order_id:checkbox.value,share}]:[];
     });
-    return {...s,job_id:get('job_id').value||null,minutes_mgr:get('minutes_mgr').value===''?null:Number(get('minutes_mgr').value),
+    const parts=[...row.querySelectorAll('[data-recovery-part]')],bounds=presenceBounds(s);
+    const recovery_acceptance=Object.fromEntries(parts.map(input=>[input.dataset.recoveryPart,input.value===''?null:Number(input.value)]));
+    const total=bounds?bounds.gps+parts.reduce((sum,input)=>sum+Number(input.value||0),0):get('minutes_mgr').value===''?null:Number(get('minutes_mgr').value);
+    return {...s,...(bounds?{recovery_acceptance}:{}),job_id:get('job_id').value||null,minutes_mgr:total,
       crew_ids:[...get('crew_ids').selectedOptions].map(o=>o.value),status:get('status').value,
       ...(row.querySelector('.wb-task-share-list')?{task_allocations}: {})};
   });
@@ -116,4 +131,15 @@ export function tripCostReviewHTML({trip,preview,run,stale=false,canApprove=fals
     ${gps?`<p class="hint">Одометр: ${n(gps.fact_km)} км · надёжные участки GPS: ${n(gps.reliable_track_km)} км · разница: ${n(gps.gps_variance_km)} км · неразмеченных частей: ${gps.unknown_segments}</p>`:''}
     ${run&&!stale?`<p class="hint">Основание: ${esc(run.approval_reason)}</p>`:''}
     ${canApprove?`<div class="trip-allocation-actions"><label>Основание сверки<input id="tripAllocationReason" maxlength="500" placeholder="Например: сверено по треку и одометру"></label><button type="button" class="btn amber" id="tripAllocationApprove" ${preview?'':'disabled'}>Подтвердить распределение</button></div>`:''}`;
+}
+
+
+export function wirePresenceRecovery(root){
+ root.addEventListener('input',event=>{
+  if(!event.target.matches('[data-recovery-part]'))return;
+  const row=event.target.closest('[data-presence-id]'),parts=[...row.querySelectorAll('[data-recovery-part]')],total=row.querySelector('[data-presence="minutes_mgr"]');
+  const invalid=parts.some(x=>x.value===''||!Number.isFinite(Number(x.value))||Number(x.value)<0||Number(x.value)>Number(x.max));
+  total.value=invalid?'':String(Number(total.min)+parts.reduce((sum,x)=>sum+Number(x.value),0));
+  row.querySelector('[data-presence-total]').textContent=invalid?'Проверь восстановленные интервалы':'Итого: '+n(total.value)+' мин · GPS-часть неизменяема';
+ });
 }

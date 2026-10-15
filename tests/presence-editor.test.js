@@ -2,7 +2,7 @@ import {protectNativeForm} from '../src/modal-shell.js';
 import {Window} from 'happy-dom';
 import {readFileSync} from 'node:fs';
 import {it,expect,vi,afterEach} from 'vitest';
-import {presenceHTML,readPresenceForm} from '../src/trip-workbench.js';
+import {presenceHTML,readPresenceForm,wirePresenceRecovery} from '../src/trip-workbench.js';
 import {validatePresence} from '../src/core/trip-review.js';
 const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 const body=app.slice(app.indexOf('async function openPresenceEditor('),app.indexOf('function renderTripReviewSummary('));
@@ -13,7 +13,7 @@ function setup(patch={},saveError=null,authority={manager:true,curator:'e1'}){
  const data={trip:{id:'t1',workbench_revision:7,owner_id:'owner',curator_id:authority.curator,status:authority.status},stays:[stay],job_ids:['j1'],removed:[]};
  const sb={rpc:vi.fn(async(name)=>name==='trip_workbench_read'?{data}:{error:saveError}),from:table=>{const q={select:()=>q,eq:()=>Promise.resolve({data:table==='trip_service_orders'?[{order_id:'o1'}]:[],error:null})};return q;}};
  const tripOrdersAll=[{id:'o1',number:1,title:'Ремонт',job_id:'j1'}];
- const ctx={protectNativeForm,confirmDialog:async()=>false,document:win.document,canWrite:()=>authority.manager,session:{user:{id:'e1'}},getTrip:id=>id===data.trip.id?data.trip:null,tripCache:{},tripPlanDirty:false,tripPresenceDirty:false,ensureRefs:async()=>{},loadTripJobs:async()=>{},loadTripOrders:async()=>{},sb,presenceHTML,readPresenceForm,validatePresence,taskAllocationPayload:s=>({id:s.id,job_id:s.job_id,crew_ids:s.crew_ids,minutes_mgr:s.minutes_mgr,status:s.status,task_allocations:s.status==='approved'?s.task_allocations:[]}),validateTaskAllocationShares:rows=>{if(rows.some(s=>(s.task_allocations||[]).reduce((n,x)=>n+x.share,0)>1.000001))throw new Error('Доля превышает 100%');},profilesList:[{id:'e1',role:'engineer',full_name:'Анна'}],tripJobsAll:[{id:'j1',clients:{name:'Объект'}}],tripOrdersAll,curTripOrders:new Set(['o1']),loadFactHours:vi.fn(async()=>{}),refreshTripEcon:vi.fn(async()=>true),stayBindMap:null,tripEditId:null,showToast:vi.fn(),notify:vi.fn()};
+ const ctx={protectNativeForm,confirmDialog:async()=>false,document:win.document,canWrite:()=>authority.manager,session:{user:{id:'e1'}},getTrip:id=>id===data.trip.id?data.trip:null,tripCache:{},tripPlanDirty:false,tripPresenceDirty:false,ensureRefs:async()=>{},loadTripJobs:async()=>{},loadTripOrders:async()=>{},sb,presenceHTML,readPresenceForm,wirePresenceRecovery,validatePresence,taskAllocationPayload:s=>({id:s.id,job_id:s.job_id,crew_ids:s.crew_ids,minutes_mgr:s.minutes_mgr,status:s.status,task_allocations:s.status==='approved'?s.task_allocations:[]}),validateTaskAllocationShares:rows=>{if(rows.some(s=>(s.task_allocations||[]).reduce((n,x)=>n+x.share,0)>1.000001))throw new Error('Доля превышает 100%');},profilesList:[{id:'e1',role:'engineer',full_name:'Анна'}],tripJobsAll:[{id:'j1',clients:{name:'Объект'}}],tripOrdersAll,curTripOrders:new Set(['o1']),loadFactHours:vi.fn(async()=>{}),refreshTripEcon:vi.fn(async()=>true),stayBindMap:null,tripEditId:null,showToast:vi.fn(),notify:vi.fn()};
  const open=new Function(...Object.keys(ctx),app.slice(app.indexOf('function canWriteTrip('),app.indexOf('\n',app.indexOf('function canWriteTrip(')))+';return ('+body+');')(...Object.values(ctx));
  return {win,open,sb,ctx};
 }
