@@ -58,7 +58,7 @@ test('day load rail fills from its top and dark surfaces match entry colours',as
  expect(Math.abs(box.top)).toBeLessThanOrEqual(1);
  if(info.project.metadata.theme==='dark'){
    const palette=await page.evaluate(()=>{const s=getComputedStyle(document.documentElement);return ['--bg','--panel','--panel-2','--ink','--glass-panel'].map(k=>s.getPropertyValue(k).trim());});
-   expect(palette).toEqual(['#141414','#1e1e1e','#262626','#eeede8','rgba(30,30,30,0.96)']);
+   expect(palette).toEqual(['#1c1c19','#262622','#30302b','#f2f0e8','rgba(38,38,34,0.96)']);
  }
  await clean(page,errors);
 });

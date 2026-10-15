@@ -37,7 +37,12 @@ jobs:
           if-no-files-found: warn
   chromium:
     runs-on: ubuntu-latest
-    # The 440-case matrix takes about 16 minutes on the two-worker CI runner.
+    # Run every viewport and theme without one long job exhausting its time limit.
+    strategy:
+      fail-fast: false
+      matrix:
+        viewport: [mobile-360, mobile-390, tablet-768, desktop-1024, desktop-1440]
+    name: chromium (${{ matrix.viewport }})
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -47,12 +52,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium --only-shell
-      - run: npm run qa:visual
+      - run: npm run qa:visual -- --project=${{ matrix.viewport }}-light --project=${{ matrix.viewport }}-dark
       - name: Keep screenshots, measurements, traces and HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: visual-qa-${{ github.run_id }}
+          name: visual-qa-${{ matrix.viewport }}-${{ github.run_id }}
           path: |
             test-results/
             playwright-report/

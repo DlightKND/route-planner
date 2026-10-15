@@ -45,8 +45,8 @@ test('dirty modal preserves input on cancelled discard and contains nested keybo
 
 test('signature cancel aborts closing, while unsigned completion is a separate result',async({page})=>{
  await open(page,'openJob',job);await open(page,'sign');await expect(page.locator('#signOverlay')).toBeVisible();
- await page.locator('#signCancel').click();await expect.poll(()=>page.evaluate(()=>window.__signResult)).toBe('cancelled');
- await open(page,'sign');await page.locator('#signSkip').click();await expect.poll(()=>page.evaluate(()=>window.__signResult)).toBe('unsigned');
+ await page.locator('#signMore').click();await page.getByRole('button',{name:'Отменить завершение',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.__signResult)).toBe('cancelled');
+ await open(page,'sign');await page.locator('#signMore').click();await page.getByRole('button',{name:'Продолжить без подписи',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.__signResult)).toBe('unsigned');
  await open(page,'sign');await page.keyboard.press('Escape');await expect.poll(()=>page.evaluate(()=>window.__signResult)).toBe('cancelled');
 });
 
