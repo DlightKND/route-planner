@@ -87,7 +87,7 @@ export function frameNotifications(host){
 
 export function presentRequestWorkspace({saved,editable,client,equipment,status,engineers,due,notes,phone,address,confirmDiscard},root=document){
  const context=root.getElementById('requestContext'),form=root.getElementById('requestContextFields');if(!context||!form)return;
- const view=context.closest('.view');view.classList.toggle('request-saved',saved);context.hidden=!saved;form.hidden=saved;
+ const view=context.closest('.view');view.classList.toggle('request-saved',saved);context.hidden=!saved;form.hidden=saved&&!form.closest('dialog[open]');
  const actions=root.getElementById('jobActs');
  if(!context.querySelector('.request-context-data')){
   context.innerHTML='<div class="workspace-section-head"><div><p class="design-eyebrow">Заявка</p><h3>Контекст клиента</h3></div><button class="btn sm ghost" id="requestEditContext" type="button">Изменить</button></div><dl class="request-context-data"></dl><div class="request-contact-actions"></div>';
@@ -103,7 +103,7 @@ export function positionOrderResult(root=document){
  scope.prepend(summary);const h=summary.querySelector('h3');if(h)h.textContent='Работы и материалы';
 }
 
-export function frameOrderWorkspace({record,editable,people,confirmDiscard},root=document){
+export function frameOrderWorkspace({record,editable,people},root=document){
  const editor=root.getElementById('orderEditor');if(!editor||editor.querySelector(':scope>.workspace-masthead'))return;
  const doc=editor.ownerDocument,head=element(doc,'header','workspace-masthead'),inner=element(doc,'div','workspace-header-inner'),main=element(doc,'main','workspace-main');
  const title=editor.querySelector('.trip-head h2');if(record.id&&title){const id=element(doc,'p','design-eyebrow');id.textContent='Задание №'+record.number;title.before(id);title.textContent=record.title||'Задание';}
@@ -119,7 +119,7 @@ export function frameOrderWorkspace({record,editable,people,confirmDiscard},root
   const linked=(record.trip_service_orders||[]).find(x=>x.trips&&!x.trips.deleted_at);if(linked){const travel=element(doc,'button','btn sm');travel.type='button';travel.textContent='Открыть связанный выезд →';travel.onclick=()=>root.querySelector('#orderTrips [data-order-trip="'+linked.trips.id+'"]')?.click();brief.append(travel);}
   briefing.append(brief,aside);toolbar.before(briefing);
   const organization=root.getElementById('orderOrganization');organization.hidden=true;root.getElementById('orderAuxiliary').append(organization);
-  aside.querySelector('[data-edit-organization]')?.addEventListener('click',e=>openEntityPanel({title:'Организация задания',panel:organization,trigger:e.currentTarget,confirmDiscard}));
+  if(editable){const details=element(doc,'details','workspace-organization-editor');details.innerHTML='<summary>Организация задания</summary>';organization.hidden=false;details.append(organization);aside.querySelector('[data-edit-organization]')?.replaceWith(details);}
   const composition=root.getElementById('orderComposition'),details=element(doc,'details','workspace-composition-editor');details.innerHTML=`<summary>${editable?'Плановые данные и изменение состава':'Плановые данные задания'}</summary>`;composition.before(details);details.append(composition);
   // The brief stays in view when switching between scope, travel and evidence.
   const emptyGrid=editor.querySelector('.order-grid');if(emptyGrid&&!emptyGrid.children.length)emptyGrid.remove();

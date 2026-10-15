@@ -7,7 +7,7 @@ import {installMockBackend} from './mock-backend.mjs';
 
 // QA-only entry points exercise the production functions; never shipped.
 const hooks=`
-window.__windowTests={openJob,openTrip,openEquip:window.openEquip,editClient:window.editClient,switchTab,ensureRefs,
+window.__windowTests={openJob,jobHead,openTrip,openEquip:window.openEquip,editClient:window.editClient,switchTab,ensureRefs,
  vehicle:()=>{vehState=[{vehicle_id:'vehicle-a',ts:new Date().toISOString(),lat:49.99,lng:36.23,speed:12,depot_state:'outside'}];vehTrackSessions=[];vehActiveTrips={};showVehModal('vehicle-a');},
  routePanel:async()=>{await switchTab('map');document.querySelector('[data-sb=route]').click();},
  nestedPush:()=>{openPush();confirmDialog('Подтвердить изменение?',{okText:'Подтвердить'});},
@@ -158,4 +158,13 @@ test('route panel shows one primary action and collapses advanced settings',asyn
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-route.png'});
  await page.locator('.route-settings summary').click();await expect(page.locator('#rPref')).toBeVisible();await page.locator('#chipAvoid').click();await expect(page.locator('#avoidBody')).toBeVisible();
  await page.locator('#chipOpt').click();await expect(page.locator('#chipOpt')).toHaveAttribute('aria-pressed','true');
+});
+
+
+test('request context editor keeps its mounted fields visible when the header refreshes',async({page})=>{
+ await open(page,'openJob',job);await expect(page.locator('#requestContext')).toBeVisible();
+ const field=page.locator('#jbClient'),initial=await field.inputValue();await page.evaluate(()=>window.__originalRequestField=document.getElementById('jbClient'));
+ await page.locator('#requestEditContext').click();const dialog=page.getByRole('dialog',{name:'Изменить заявку',exact:true});await expect(dialog).toBeVisible();await expect(field).toBeVisible();
+ await open(page,'jobHead');await expect(field).toBeVisible();await expect(field).toHaveValue(initial);expect(await page.evaluate(()=>window.__originalRequestField===document.getElementById('jbClient'))).toBe(true);
+ await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(page.locator('#requestContext')).toBeVisible();await expect(field).toBeHidden();
 });
