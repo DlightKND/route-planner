@@ -59,8 +59,8 @@ test('dispatcher search geometry matches across requests, tasks and trips',async
  for(const [route,id] of [['jobs','jobSearch'],['orders','orderSearch'],['trips','tripSearch']]){
   await page.goto('/#/planner/'+route);await expect(page.locator('#'+id)).toBeVisible();
   const toolbar=page.locator('#'+id).locator('xpath=ancestor::*[contains(@class,"dispatcher-toolbar")]');
-  const box=await page.locator('#'+id).boundingBox();dimensions.push(box);
-  const parent=await toolbar.boundingBox();expect(box.x-parent.x).toBeGreaterThanOrEqual(12);expect(box.x+box.width).toBeLessThanOrEqual(parent.x+parent.width-12);
+  const box=await page.locator('#'+id).boundingBox();
+  const parent=await toolbar.boundingBox();dimensions.push({...box,y:box.y-parent.y});expect(box.x-parent.x).toBeGreaterThanOrEqual(12);expect(box.x+box.width).toBeLessThanOrEqual(parent.x+parent.width-12);
   const controls=await toolbar.locator(page.viewportSize().width<=760?'.dispatcher-more>summary':'.dispatcher-actions').boundingBox();expect(controls.x).toBeGreaterThanOrEqual(box.x);
   expect(await toolbar.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({path:'test-results/search-alignment/'+info.project.name+'-'+route+'.png'});
