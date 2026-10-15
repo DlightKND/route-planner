@@ -8,6 +8,33 @@ on:
 permissions:
   contents: read
 jobs:
+  operations-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Check operational screens and windows before the full matrix
+        run: >-
+          npx playwright test tests/visual/application.spec.mjs
+          tests/visual/windows.spec.mjs tests/visual/layout-filter-regressions.spec.mjs
+          --project=mobile-390-dark --project=desktop-1440-light
+          --grep='logist (notifications|dispatcher$|task-active|trip$|map$|catalog$)|vehicle summary|client popup|timeline primary|route panel|dispatcher actions'
+      - name: Keep focused screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operations-smoke-${{ github.run_id }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: warn
   chromium:
     runs-on: ubuntu-latest
     # The 440-case matrix takes about 16 minutes on the two-worker CI runner.
