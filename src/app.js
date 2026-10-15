@@ -160,7 +160,7 @@ let theme={mode:'dark',accent:'#ffe100'};
 // ---------- theme ----------
 const THEMES={
   dark:{
-    '--bg':'#1c1c19', '--panel':'#262622', '--panel-2':'#30302b', '--line':'#49483f', '--input-line':'#6b695e',
+    '--bg':'#1c1c19', '--panel':'#262622', '--panel-2':'#30302b', '--line':'#49483f', '--input-line':'#7d7b6d',
     '--ink':'#f2f0e8', '--ink-dim':'#b6b1a5', '--ink-faint':'#aaa597', '--cyan':'#a7c7c0', '--green':'#a9d5af', '--red':'#f3aaa0', '--warning':'#f0c66e', '--danger-ink':'#1c1c19',
     '--success-bg':'#25392a', '--warning-bg':'#3d321e', '--danger-bg':'#422824',
     '--accent':'#ffe100', '--accent-ink':'#ffe100', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)',

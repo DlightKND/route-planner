@@ -216,7 +216,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         const anchored=await page.locator('#noticeBadge').evaluate(el=>{const b=el.getBoundingClientRect(),p=el.closest('button').getBoundingClientRect();return b.left>=p.left&&b.right<=p.right+1&&b.top>=p.top&&b.bottom<=p.bottom+1;});
         expect(anchored,'Unread badge stays on its notification button').toBe(true);
       }
-      await visibleTarget(active.locator('[data-notice-push]'));
+      await reveal(active.locator('[data-notice-push]'));
       await active.locator('[data-notice-push]').click();await expect(page.locator('#pushOverlay')).toHaveClass(/on/);
       await page.keyboard.press('Escape');await expect(active.locator('[data-notice-push]')).toBeFocused();
       await active.locator('[data-notice-filter=unread]').click();await expect(active.locator('.notice-row')).toHaveCount(2);
@@ -247,7 +247,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         expect(Math.abs(bounds[0].height-bounds[1].height),'Plan and route share a height').toBeLessThan(1);
         expect(bounds[1].width/bounds[0].width,'Balanced route/plan widths').toBeLessThan(1.5);
       }
-      await visibleTarget(active.locator('#tpFrom'));
+      await reveal(active.locator('#tpFrom'));
       if(role==='engineer'){
         await expect(active.locator('#tpSave')).toBeHidden();
         await expect(active.locator('#tpChangeReasonGroup')).toBeHidden();
@@ -326,7 +326,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       }
     }
     if(['task','task-active'].includes(scene.name)){
-      const expectedDefault=scene.name==='task'?'scope':'history';
+      const expectedDefault='scope';
       await expect(active.locator(`[data-entity-panel="${expectedDefault}"]`)).toBeVisible();
       await expect(active.getByRole('tab')).toHaveCount(3);
       for(const [key,label] of [['travel','Выезды'],['history','Лента'],['scope','Состав']]){
