@@ -23,8 +23,9 @@ jobs:
         run: >-
           npx playwright test tests/visual/application.spec.mjs
           tests/visual/windows.spec.mjs tests/visual/layout-filter-regressions.spec.mjs
-          --project=mobile-390-dark --project=desktop-1440-light
-          --grep='logist (notifications|dispatcher$|task-active|trip$|map$|catalog$)|vehicle summary|client popup|timeline primary|route panel|dispatcher actions'
+          tests/visual/unassigned-tracks.spec.mjs
+          --project=mobile-360-light --project=mobile-390-dark --project=desktop-1440-light
+          --grep='logist (notifications|dispatcher$|task-active|trip$|map$|catalog$)|vehicle summary|client popup|timeline primary|route panel|dispatcher actions|trips actions|journal period'
       - name: Keep focused screenshots and traces
         if: always()
         uses: actions/upload-artifact@v4
