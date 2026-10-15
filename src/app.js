@@ -7959,7 +7959,7 @@ function showVehModal(vid){
   }
 
   telemetry+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Координаты</div>';
-  telemetry+='<div class="veh-kv"><span style="font-family:var(--mono);font-size: var(--fs-2)">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
+  telemetry+='<div class="veh-kv veh-coordinates"><span style="font-family:var(--mono);font-size: var(--fs-2)">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
      '<span><button class="btn sm ghost" id="vehCopy">копировать</button></span></div>';
 
   h+='</section><details class="vehicle-details" open><summary>Данные машины и GPS</summary><div class="vehicle-telemetry">'+telemetry+'</div></details>';

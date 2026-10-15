@@ -259,7 +259,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     }
     if(testInfo.project.use.viewport.width<=390&&scene.name.startsWith('dispatcher')){
       expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Visible actions and the separate trips journal navigation keep the mobile header bounded').toBeLessThanOrEqual(scene.name==='dispatcher-trips'?272:224);
-      const filter=active.locator('.dispatcher-actions>.planner-filter-menu');
+      const filter=active.locator('.dispatcher-actions>.planner-filter-menu:visible');
       if(await filter.count()){
         await filter.locator('summary').click();await expect(filter.locator('select').first()).toBeVisible();
         await visibleTarget(filter.locator('select').first());
@@ -351,9 +351,13 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         await expect(result).toBeVisible();await expect(result.locator('[data-result-qty]').first()).toBeEnabled();
         await expect(result.locator('#orderResultSave')).toBeVisible();
         const bounds=await result.boundingBox(),viewport=testInfo.project.use.viewport;
-        expect(bounds.x).toBeGreaterThanOrEqual(11);expect(bounds.y).toBeGreaterThanOrEqual(11);
-        expect(bounds.x+bounds.width).toBeLessThanOrEqual(viewport.width-11);
-        expect(bounds.y+bounds.height).toBeLessThanOrEqual(viewport.height-11);
+        if(viewport.width<=480){
+          expect(bounds.x).toBe(0);expect(bounds.y).toBe(0);expect(bounds.width).toBe(viewport.width);expect(bounds.height).toBe(viewport.height);
+        }else{
+          expect(bounds.x).toBeGreaterThanOrEqual(11);expect(bounds.y).toBeGreaterThanOrEqual(11);
+          expect(bounds.x+bounds.width).toBeLessThanOrEqual(viewport.width-11);
+          expect(bounds.y+bounds.height).toBeLessThanOrEqual(viewport.height-11);
+        }
         await visibleTarget(result.locator('#orderResultSave'));
         await shot(page,testInfo,`${role}-${scene.name}-result`);
         await page.keyboard.press('Escape');await expect(result).toHaveCount(0);await expect(trigger).toBeFocused();

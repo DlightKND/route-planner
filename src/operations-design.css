@@ -70,7 +70,7 @@ button,input,select,textarea { font-family:var(--sans); }
 .order-brief-head { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px; }
 .order-brief-head h3 { margin:0;font-size:17px; }
 .order-team-meta { display:flex;flex-wrap:wrap;gap:6px 20px;padding-top:16px;margin-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-dim); }
-.view-order .order-result-summary { background:var(--panel);border:1px solid var(--line);padding:24px; }
+.view-order .order-result-summary { background:var(--panel);border:1px solid var(--line);padding:24px;margin-top:24px; }
 .order-result-line { padding:16px 0;border-bottom:1px solid var(--line); }
 .order-result-line:last-child { border-bottom:0;padding-bottom:0; }
 .order-result-line>strong { display:block;line-height:1.5; }
@@ -219,6 +219,7 @@ dialog.overlay .modal-actions { padding-top:16px;margin-top:24px!important;borde
 #vehBody .vehicle-details>summary { min-height:32px;font:600 14px/1.5 var(--sans); }
 #vehBody .vehicle-telemetry { margin-top:12px; }
 #vehBody .veh-kv { grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);font-size:13px;gap:12px; }
+#vehBody .veh-coordinates { grid-template-columns:minmax(0,1fr) auto; }
 /* Schedule context: lifecycle first, direct navigation second, time tools last. */
 .gpop.gpop { width:420px;padding:20px; }
 .gpop .gp-h { flex-wrap:nowrap;align-items:flex-start;gap:12px;margin-bottom:8px;font-size:18px; }
@@ -275,6 +276,7 @@ dialog.overlay .modal-actions { padding-top:16px;margin-top:24px!important;borde
   .design-page-head { margin-bottom:20px; }
   .design-page-head h2,:is(.view-job,.view-order,.view-trip) .trip-head h2 { font-size:22px; }
   .view-order #orderBrief,.view-order .order-result-summary { padding:16px; }
+  .view-order .order-result-summary { margin-top:16px; }
   .view-order .entity-header-actions { justify-content:stretch; }
   .view-order .entity-header-actions>.btn:not(#orderMore) { flex:1 1 140px; }
   .order-result-quantities { gap:8px; }
