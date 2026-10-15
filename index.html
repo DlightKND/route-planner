@@ -11,8 +11,8 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #141414; --panel: #1e1e1e; --panel-2: #262626; --line: #504c44;
-    --ink: #eeede8; --ink-dim: #c4c0b7; --ink-faint: #aaa397;
+    --bg: #1c1c19; --panel: #262622; --panel-2: #30302b; --line: #49483f;
+    --ink: #f2f0e8; --ink-dim: #b6b1a5; --ink-faint: #aaa597;
     --accent: #ffe100; --accent-ink: #ffe100; --on-accent: #141414; --edge: rgba(0,0,0,0);
     /* Отдельный токен для линий и указателей. Фирменный #ffe100 на белом
        даёт контраст 1.31:1 — для заливки кнопки с тёмным текстом это
@@ -2398,6 +2398,7 @@
       <div class="side-tabs2" id="sideTabs">
         <button type="button" class="on" data-sb="points"><span id="sideTitle">В работе</span> <span class="cnt" id="cliCount">0</span></button>
         <button type="button" data-sb="route">Маршрут <span class="cnt" id="rCount">0</span></button>
+        <button type="button" data-sb="directory">Справочник <span class="cnt" id="directoryCount">0</span></button>
       </div>
       <div class="scroll">
       <div class="block collapsible" id="pointsBlock">
@@ -2452,6 +2453,7 @@
              управления в столбик — это и была «духота»: всё выглядело
              одинаково важным. Редкое (объезды, оптимизация, коридор)
              ушло под раскрытие. -->
+        <h3 class="route-panel-title">План маршрута</h3>
         <div id="rStops" style="margin-top: var(--sp-3)"><p class="hint">Добавьте минимум две точки — по адресу, на карте или из карточки клиента.</p></div>
 
         <div class="row route-address" style="margin-top: var(--sp-3)">
@@ -2769,6 +2771,7 @@
   <div class="view view-order"><div class="pane scrollp" id="orderEditor"></div></div>
   <div class="view view-catalog">
     <div class="pane scrollp">
+      <header class="design-page-head"><p class="design-eyebrow">Справочники</p><h2 id="catalogTitle">Работы</h2><p class="design-description">Работы, техника и цены для подготовки новых заявок и заданий.</p></header>
       <!-- Переключатель подразделов стоит на месте заголовка — так же, как
            в «Диспетчере». Раньше он был отдельной строкой над заголовком:
            два яруса вместо одного и своя черта во всю ширину, которой
@@ -2870,7 +2873,7 @@
 
   <!-- SETTINGS -->
   <div class="view view-settings"><div class="pane scrollp">
-    <div class="pane-head"><h2>Настройки</h2></div>
+    <header class="design-page-head"><p class="design-eyebrow">Параметры приложения</p><h2>Настройки</h2><p class="design-description">Общие правила, справочники сотрудников и транспорта, личное оформление.</p></header>
     <div class="settings-layout">
       <!-- Обёртка нужна для телефона: там строка чипов прокручивается вбок,
            а липнуть и красить под собой фон должно то, что НЕ прокручивается.
@@ -2885,8 +2888,8 @@
       </div>
       </div>
       <div class="settings-body">
-<div class="card" data-sec-panel="theme" data-personal-settings style="display:none"><h3>Моё оформление</h3><label>Тема приложения</label><div class="seg" role="group" aria-label="Личная тема"><button type="button" id="modeDark">Тёмная</button><button type="button" id="modeLight">Светлая</button></div><p id="personalThemeStatus" class="hint" role="status"></p></div>
-    <div class="card" data-admin-settings data-sec-panel="tariffs"><h3 class="cardhead">Общие параметры</h3>
+<div class="card" data-sec-panel="theme" data-personal-settings style="display:none"><h3>Моё оформление</h3><p class="design-description">Тема применяется к вашему аккаунту. Оформление других сотрудников не изменится.</p><label>Тема приложения</label><div class="seg" role="group" aria-label="Личная тема"><button type="button" id="modeDark">Тёмная</button><button type="button" id="modeLight">Светлая</button></div><p id="personalThemeStatus" class="hint" role="status"></p></div>
+    <div class="card" data-admin-settings data-sec-panel="tariffs"><h3 class="cardhead">Тарифы и параметры</h3><p class="design-description">Правила для новых расчётов. Сохранённые снимки стоимости в документах сохраняют свою основу.</p>
       <h3>Рабочий день</h3>
       <div class="row"><div class="grow"><label>Начало</label><input type="number" id="stDayStart" step="0.25" min="0" max="23.75"></div><div class="grow"><label>Конец</label><input type="number" id="stDayEnd" step="0.25" min="0.25" max="24"></div><div class="grow"><label>Допуск, ч</label><input type="number" id="stTolerance" step="0.25" min="0" max="8"></div></div>
       <h3>Тарифные сутки <span class="q"><button class="qm" type="button" aria-label="О тарифных сутках" aria-expanded="false">?</button><span class="qbody">Только для расчёта суток по суточному тарифу; на график не влияют.</span></span></h3>
@@ -2915,7 +2918,7 @@
       <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Версия сборки <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Считается по содержимому файлов, а не пишется руками. Совпал отпечаток с тем, что назван в поставке, — прод собран ровно из переданных файлов. Не совпал — в списке видно, какой файл отстал. Там же проверяется, применены ли миграции базы.</span></span></div>
       <button class="verline" id="verBtn" type="button"><span id="verId">—</span><span class="qc">?</span></button>
 </details>
-      <button class="btn sm amber" id="stSave" style="margin-top: var(--sp-4)">Сохранить</button><span class="hint" id="stStatus" role="status" style="margin-left: var(--sp-3)"></span>
+      <div class="settings-savebar"><span class="hint" id="stStatus" role="status"></span><button class="btn amber" id="stSave">Сохранить параметры</button></div>
     </div>
     <div class="card" data-admin-settings data-sec-panel="tariffs"><h3 class="cardhead">Профили тарифов <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Профиль — это плательщик со своими ставками. Две ветки: платно и гарантия; на строку работ в заявке подставляется по её признаку. Флажки «по умолчанию» задают, какой профиль ставить автоматически. Дорожные ставки понадобятся в расчёте выезда.</span></span></h3>
       <div id="tpList" style="margin-top: var(--sp-3)"></div>
@@ -2984,7 +2987,7 @@
 <div class="overlay" id="vehOverlay"><div class="modal s">
   <h3 id="vehTitle">Машина</h3>
   <div id="vehBody"></div>
-  <div class="row modal-actions" style="margin-top: var(--sp-4)"><button class="btn sm grow" id="vehCenter">Центрировать</button></div>
+  <div class="row modal-actions" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="vehCenter">Центрировать на карте</button></div>
 </div></div>
 
 <!-- Окно экономики выезда убрано: разбивка живёт врезкой на странице

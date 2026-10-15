@@ -28,6 +28,8 @@ import { createEntityTabs } from './entity-tabs.js';
 import './visual-system.css';
 import './entity-activity.css';
 import './entity-pages.css';
+import './operations-design.css';
+import { installOperationsUI } from './operations-ui.js';
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
@@ -158,41 +160,34 @@ let theme={mode:'dark',accent:'#ffe100'};
 // ---------- theme ----------
 const THEMES={
   dark:{
-    '--bg':'#141414', '--panel':'#1e1e1e', '--panel-2':'#262626', '--line':'#504c44',
-    '--ink':'#eeede8', '--ink-dim':'#c4c0b7', '--ink-faint':'#aaa397', '--cyan':'#6ccbd5', '--green':'#66d99a', '--red':'#ff8585', '--warning':'#f6bc6a', '--danger-ink':'#141414',
+    '--bg':'#1c1c19', '--panel':'#262622', '--panel-2':'#30302b', '--line':'#49483f', '--input-line':'#6b695e',
+    '--ink':'#f2f0e8', '--ink-dim':'#b6b1a5', '--ink-faint':'#aaa597', '--cyan':'#a7c7c0', '--green':'#a9d5af', '--red':'#f3aaa0', '--warning':'#f0c66e', '--danger-ink':'#1c1c19',
+    '--success-bg':'#25392a', '--warning-bg':'#3d321e', '--danger-bg':'#422824',
     '--accent':'#ffe100', '--accent-ink':'#ffe100', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)',
     // Указатель «где я» и кольцо фокуса — разные задачи, и в тёмной теме
     // их закрывает один и тот же жёлтый, а в светлой нет: жёлтая линия
     // на белом даёт контраст 1.31, а затемнённый жёлтый уходит в горчицу.
     // Поэтому токена два.
     '--accent-line':'#ffe100', '--focus':'#ffe100',
-    '--nav-bg':'#262626', '--nav-ink':'#ffe100',
+    '--nav-bg':'#30302b', '--nav-ink':'#f2f0e8',
     '--shadow-sm':'0 1px 2px rgba(0,0,0,.28), 0 3px 10px rgba(0,0,0,.18)', '--shadow-md':'0 3px 6px rgba(0,0,0,.28), 0 10px 24px rgba(0,0,0,.30)', '--shadow-lg':'0 6px 12px rgba(0,0,0,.30), 0 20px 48px rgba(0,0,0,.45)',
     // Почти непрозрачные поверхности сохраняют контраст текста над картой.
-    '--glass-panel':'rgba(30,30,30,0.96)', '--glass-bg':'rgba(20,20,20,0.96)'
+    '--glass-panel':'rgba(38,38,34,0.96)', '--glass-bg':'rgba(28,28,25,0.96)'
   },
   light:{
-    // Светлая тема была вдвое площе тёмной: bg → panel-2 давали контраст
-    // 1.03 при 1.25 в тёмной, panel → panel-2 — 1.05 при 1.13. Три уровня
-    // поверхностей лежали в пределах 4% друг от друга, слои не читались,
-    // и всё сливалось в одну заливку. Шаги подобраны по контрастам тёмной
-    // темы, а нейтраль уведена из синевы в тёплую: холодный серый спорил
-    // с фирменным жёлтым.
-    '--bg':'#eef1f4', '--panel':'#ffffff', '--panel-2':'#f4f6f8', '--line':'#c8d0da',
-    '--ink':'#18212b', '--ink-dim':'#526071', '--ink-faint':'#647184', '--cyan':'#0c6775', '--green':'#147344', '--red':'#aa2d2d', '--warning':'#855000', '--danger-ink':'#ffffff',
-    // Указатель остаётся фирменным жёлтым — под тёмным текстом он читается.
-    // Фокус и выделение уходят в чернила: их работа — быть заметными,
-    // а не фирменными. Горчица #b39400 давала на белом 2.94 — ниже порога
-    // 3:1 для элементов интерфейса по WCAG 1.4.11, то есть была ещё
-    // и недостаточно контрастной.
-    '--accent-line':'#ffe100', '--focus':'#0f141b',
-    '--nav-bg':'#ffe100', '--nav-ink':'#141414', 
+    // Warm surfaces follow the operations reference; semantic colors are separate.
+    '--bg':'#faf7f1', '--panel':'#fffcf7', '--panel-2':'#f3eee5', '--line':'#ded5c7', '--input-line':'#9a8e7c',
+    '--ink':'#302b25', '--ink-dim':'#736b62', '--ink-faint':'#756d62', '--cyan':'#416c65', '--green':'#3f6b48', '--red':'#a53b32', '--warning':'#805600', '--danger-ink':'#fffcf7',
+    '--success-bg':'#e9f1e7', '--warning-bg':'#fff1cc', '--danger-bg':'#fbece9',
+    // Yellow fills retain dark labels; small indicators use a darker warm tone.
+    '--accent-line':'#806900', '--focus':'#302b25',
+    '--nav-bg':'#f3eee5', '--nav-ink':'#302b25',
     '--accent':'#ffe100', '--accent-ink':'#1a1d22', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)', // бренд-жёлтый для заливок/границ, тёмный текст-акцент для читаемости
     '--shadow-sm':'0 1px 2px rgba(15,20,27,.07), 0 2px 8px rgba(15,20,27,.07)',
     '--shadow-md':'0 4px 8px rgba(15,20,27,.07), 0 8px 20px rgba(15,20,27,.09)',
     '--shadow-lg':'0 8px 16px rgba(15,20,27,.07), 0 18px 40px rgba(15,20,27,.14)',
     // Та же нейтральная палитра и плотность 0.96, что в тёмной теме.
-    '--glass-panel':'rgba(255,255,255,0.96)', '--glass-bg':'rgba(238,241,244,0.96)'
+    '--glass-panel':'rgba(255,252,247,0.96)', '--glass-bg':'rgba(250,247,241,0.96)'
   }
 };
 function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
@@ -508,9 +503,10 @@ document.querySelectorAll('.block.collapsible > h2.ch').forEach(h=>h.onclick=e=>
 // добраться, надо было сперва свернуть точки. Это не два раздела подряд,
 // а два режима одной панели — значит вкладки.
 function sideTab(name){
-  document.querySelectorAll('#sideTabs button').forEach(b=>b.classList.toggle('on',b.dataset.sb===name));
+  if(name==='directory'||name==='points')setMapScope(name==='directory'?'all':'work');
+  document.querySelectorAll('#sideTabs button').forEach(b=>{const selected=b.dataset.sb===name;b.classList.toggle('on',selected);b.setAttribute('aria-pressed',String(selected));});
   const p=$('pointsBlock'), r=$('routeBlock');
-  if(p) p.classList.toggle('collapsed',name!=='points');
+  if(p) p.classList.toggle('collapsed',name==='route');
   if(r) r.classList.toggle('collapsed',name!=='route');
   // Шторка, свёрнутая в черту, по нажатию на вкладку обязана открыться:
   // иначе нажатие ничего не делает и выглядит сломанным.
@@ -867,7 +863,7 @@ document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
 });
 
 let catCur='works';
-function catSub(name){ catCur=name; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; $('catMaterials').style.display=name==='materials'?'':'none'; if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else renderStockCatalog(); }
+function catSub(name){ catCur=name; if($('catalogTitle'))$('catalogTitle').textContent=({works:'Работы',models:'Техника',materials:'Материалы и цены'})[name]||'Каталог'; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; $('catMaterials').style.display=name==='materials'?'':'none'; if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else renderStockCatalog(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
 let plannerCur='jobs';
 let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
@@ -1003,7 +999,7 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   // Тогда у панели остаётся одна вкладка — заголовок вместо переключателя.
   { const rt=document.querySelector('#sideTabs [data-sb="route"]'), tb=$('sideTabs');
     if(rt) rt.style.display=canWrite()?'':'none';
-    if(tb) tb.classList.toggle('solo',!canWrite());
+    if(tb) tb.classList.remove('solo');
     if(!canWrite()) sideTab('points'); }
   if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobTrash')) $('jobTrash').style.display=canWrite()?'':'none'; if($('orderTrash')) $('orderTrash').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; if($('tripTrash')) $('tripTrash').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
   // Show durable pending edits before any network-dependent screen loads.
@@ -1082,9 +1078,9 @@ function recomputeAlerts(){
 function alertOnly(){ return !!($('ptAlert')&&$('ptAlert').checked); }
 
 function render(){
-  $('cliCount').textContent=(mapScope==='work'
-    ? String(clients.filter(x=>x.is_base||((clientStats[x.id]||{}).open>0)).length)
-    : String(clients.length)); places=clients.filter(c=>c.is_base); recomputeAlerts(); renderColorLegend(); renderMarkers(); renderAvoidZones(); renderSide(); }
+  $('cliCount').textContent=String(clients.filter(x=>x.is_base||((clientStats[x.id]||{}).open>0)).length);
+  if($('directoryCount'))$('directoryCount').textContent=String(clients.length);
+  places=clients.filter(c=>c.is_base); recomputeAlerts(); renderColorLegend(); renderMarkers(); renderAvoidZones(); renderSide(); }
 // Раскраска точек — ОДИН выбор из трёх, а не набор независимых флажков.
 //
 // Раньше цвет по умолчанию брался из поля клиента color, то есть означал
@@ -1412,16 +1408,13 @@ function renderList(){ const q=$('search').value.trim().toLowerCase(), box=$('li
   box.querySelectorAll('[data-eq]').forEach(b=>b.onclick=()=>openEquip(b.dataset.eq));
   box.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editClient(b.dataset.edit));
   box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delClient(b.dataset.del)); }
-document.querySelectorAll('#mapScope button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('#mapScope button').forEach(x=>x.classList.toggle('on',x===b));
-  mapScope=b.dataset.ms;
-  const t=$('sideTitle'); if(t) t.textContent=(mapScope==='work'?'В работе':'Точки');
-  const c=$('cliCount');
-  if(c) c.textContent=(mapScope==='work'
-    ? String(clients.filter(x=>x.is_base||((clientStats[x.id]||{}).open>0)).length)
-    : String(clients.length));
+function setMapScope(scope){
+  mapScope=scope==='all'?'all':'work';
+  document.querySelectorAll('#mapScope button').forEach(x=>x.classList.toggle('on',x.dataset.ms===mapScope));
+  document.querySelectorAll('#sideTabs button').forEach(b=>{const selected=b.dataset.sb===(mapScope==='all'?'directory':'points');b.classList.toggle('on',selected);b.setAttribute('aria-pressed',String(selected));});
   renderMarkers(); renderSide();
-});
+}
+document.querySelectorAll('#mapScope button').forEach(b=>b.onclick=()=>setMapScope(b.dataset.ms));
 document.querySelectorAll('#typeFilter button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('#typeFilter button').forEach(x=>x.classList.toggle('on',x===b)); pointFilter=b.dataset.tf; renderList(); });
 if($('ptAlert')) $('ptAlert').onchange=()=>{ renderMarkers(); renderSide(); };
 $('search').oninput=renderList;
@@ -2600,22 +2593,22 @@ function gtPop(key,b,trigger){
   const hasTools=trip&&!b.scheduleOnly;
   const secondary=hasTools?
     ((b.status==='planned'||b.status==='assigned')&&(editable||(b.engineerIds||[]).includes(session.user.id))&&!reschedByTrip[b.tripId]?'<button class="btn sm ghost" data-pop-resched>Перенести выезд</button>':'')
-    +'<button class="btn sm ghost" data-pop-map>Карта</button>'
     +((b.status==='finished'||b.status==='done')?'<button class="btn sm ghost" data-pop-stays>Стоянки</button>':'')
     +((b.status==='finished'||b.status==='done')&&editable?'<button class="btn sm ghost" data-pop-stay-map>Привязка факта</button>':'')
     +((b.status==='finished'||b.status==='done')&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn sm ghost" data-pop-km>Пересчитать факт</button>':'')
-    +(canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn sm ghost" data-pop-open>Открыть выезд</button>':''):'';
+    :'';
+  const navigation=hasTools?'<div class="gp-navigation"><button class="btn" data-pop-map>Показать на карте</button>'+(canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn" data-pop-open>Открыть выезд</button>':'')+'</div>':b.kind==='job'?'<div class="gp-navigation"><button class="btn" data-pop-job>Открыть заявку</button></div>':'';
   const total=(b.segs||[]).reduce((n,p)=>n+p.h,0),points=[{after:0,at:{d:b.start.iso,t:b.start.t}},...cuts.map(c=>{const p=gtPieces(b).find(p=>Math.abs(p.at-c.after)<.01);return {...c,at:p?{d:p.iso,t:p.from}:c.at};})];
   const layout='<details class="gp-layout"><summary>Участки времени'+(cuts.length?' · '+(cuts.length+1):'')+'</summary>'
     +(editable?'<div class="gp-s">Перетащите участок. Подведите части друг к другу, чтобы скрепить.</div>':'')
     +(selectedDay&&editable?'<button class="btn sm ghost" data-pop-divide>Разделить в этом дне</button>':'')
     +'<div class="gp-days">'+points.map((c,i)=>'<div class="gp-r"><span class="gp-k">Участок '+(i+1)+'<small>'+fmtH(Math.max(0,(points[i+1]?.after??total)-c.after))+'</small></span><b class="gp-v">'+shortDate(c.at.d)+' · '+clockLabel(c.at.t)+'</b>'+(i&&editable?'<button class="gp-b" data-cut-del="'+(i-1)+'" aria-label="Скрепить с предыдущим участком" title="Скрепить с предыдущим">↥</button>':'')+'</div>').join('')+'</div></details>';
-  const primary=action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'<button class="btn sm" data-pop-map>Карта</button>';
+  const primary=action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'';
   const time=selectedDay?shortDate(selectedDay)+(selected?.dataset.pieceFrom?' · '+clockLabel(+selected.dataset.pieceFrom)+'–'+clockLabel(+selected.dataset.pieceTo):''):shortDate(b.start.iso)+' · '+clockLabel(b.start.t);
-  const h='<div class="gpop gpop-compact"><div class="gp-h"><span>'+esc(gtBlockName(b))+'</span><button class="gp-close" data-gclose aria-label="Закрыть">×</button></div>'
+  const h='<div class="gpop gpop-compact"><div class="design-eyebrow">'+(trip?'Выезд':'Заявка')+'</div><div class="gp-h"><span>'+esc(gtBlockName(b))+'</span><button class="gp-close" data-gclose aria-label="Закрыть">×</button></div>'
     +'<div class="gp-caption">'+time+' · '+(cuts.length?(cuts.length+1)+' '+plural(cuts.length+1,'участок','участка','участков'):'авто')+'</div>'
     +(b.scheduleOnly?'<div class="gp-s">Исторический выезд · экипаж не указан · только просмотр графика</div>':'')
-    +(hasTools?'<div class="gp-trip-tools">'+primary+'<button class="btn sm ghost gp-more" data-pop-more aria-label="Другие действия" aria-expanded="false">⋯</button></div><div class="gp-secondary" hidden>'+secondary+layout+(b.manual&&editable?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div>':layout)+'</div>';
+    +(hasTools?'<div class="gp-trip-tools">'+primary+'<button class="btn sm ghost gp-more" data-pop-more aria-label="Другие действия" aria-expanded="false">⋯</button></div><div class="gp-secondary" hidden>'+secondary+(b.manual&&editable?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div>':'')+navigation+layout+'</div>';
   document.body.insertAdjacentHTML('beforeend',h);const pop=document.body.lastElementChild;
   const fit=()=>{if(window.matchMedia('(max-width:760px)').matches)return;pop.style.top=Math.max(8,Math.min(parseFloat(pop.style.top)||8,window.innerHeight-pop.offsetHeight-8))+'px';};
   const more=pop.querySelector('[data-pop-more]'),menu=pop.querySelector('.gp-secondary');
@@ -2627,8 +2620,9 @@ function gtPop(key,b,trigger){
   const tool=(sel,fn)=>{const x=pop.querySelector(sel);if(x)x.onclick=async e=>{e.stopPropagation();pop.remove();await fn();};};
   pop.querySelectorAll('[data-pop-map]').forEach(x=>x.onclick=async e=>{e.stopPropagation();pop.remove();await showTripOnMap(b.tripId);});
   tool('[data-pop-action]',()=>{const own=(b.engineerIds||[]).includes(session.user.id);return tripAction(b.tripId,action.kind,!own&&canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?feedCtx.nameOf(b.engineer):'');});tool('[data-pop-resched]',()=>openReschedModal(b.tripId));tool('[data-pop-map]',()=>showTripOnMap(b.tripId));tool('[data-pop-stays]',()=>openStaysModal(b.tripId));tool('[data-pop-stay-map]',()=>openStayBindingMap(b.tripId));tool('[data-pop-km]',()=>remeasureTrip(b.tripId));tool('[data-pop-open]',()=>openTrip(b.tripId));
+  tool('[data-pop-job]',()=>openJob(String(b.id).slice(1)));
   tool('[data-pop-divide]',async()=>{gtZoom[key]=selectedDay;gtPendingDivide={id:String(b.id),iso:selectedDay,at:selected?.dataset.pieceAt};gtPaint(key);});
-  const el=selected;if(el&&!matchMedia('(max-width:760px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-348,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
+  const el=selected;if(el&&!matchMedia('(max-width:760px)').matches){const r=el.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(window.innerWidth-pop.offsetWidth-8,r.left))+'px';pop.style.top=Math.max(8,Math.min(window.innerHeight-pop.offsetHeight-8,r.bottom+8))+'px';}
   openContextPanel(pop,{trigger:el,label:gtBlockName(b),remove:true,onClose:()=>{gtSel=null;if(el?.isConnected)el.classList.remove('sel');}});
   pop.querySelector('[data-pop-action]')?.focus({preventScroll:true});
 }
@@ -5740,9 +5734,9 @@ function renderTripReviewSummary(){
  const stays=tripWorkbench?.stays;const pending=stays?.filter(s=>!['approved','rejected'].includes(s.status)).length;const tasks=tripOrdersAll.filter(o=>curTripOrders.has(o.id)),accepted=tasks.filter(o=>o.status==='completed').length;
  const approved=stays?.filter(s=>s.status==='approved').length||0;
  const presence=stays?(pending?'Подтверждено: '+approved+' · на проверке: '+pending:stays.length?'Проверено: '+stays.length+' '+plural(stays.length,'стоянка','стоянки','стоянок'):'Подтверждённых записей нет'):'Загружается';
- const states=[['Поездка',ST_TRIP[t.status]||t.status,'neutral'],['Присутствие',presence,pending?'pending':'neutral'],['Распределение затрат',tripCostReviewState,tripCostReviewState==='подтверждены'?'confirmed':'pending'],['Выполнение работ',tasks.length?'Принято '+accepted+' из '+tasks.length+' заданий':'Задания не добавлены','neutral']];
- box.innerHTML='<details class="entity-review-details"><summary>Проверка выезда · '+(pending?'стоянок на проверке: '+pending:approved?'присутствие проверено':'присутствие не подтверждено')+' · принято заданий: '+accepted+'/'+tasks.length+'</summary><dl class="trip-review-grid">'+states.map(([label,value,state])=>'<div class="trip-review-item" data-review-state="'+state+'"><dt>'+esc(label)+'</dt><dd>'+esc(value)+'</dd></div>').join('')+'</dl><div class="order-line-adds trip-review-actions"><button type="button" class="btn sm" id="tpReviewPresence">Открыть присутствие</button><button type="button" class="btn sm" id="tpReviewCosts">'+(canWriteTrip()?'Сверить затраты':'Открыть затраты')+'</button></div></details>';
- $('tpReviewPresence').onclick=()=>{setTripPane('presence');const details=$('tpPresence').closest('details');if(details)details.open=true;};$('tpReviewCosts').onclick=()=>{setTripPane('economy');$('tpTripAllocation').scrollIntoView({block:'start'});};
+ const states=[['Выезд',ST_TRIP[t.status]||t.status,t.status==='done'?'confirmed':'neutral','plan','tpReviewPlan','Открыть план'],['Присутствие',presence,pending?'pending':approved?'confirmed':'neutral','presence','tpReviewPresence','Открыть присутствие'],['Распределение затрат',tripCostReviewState,tripCostReviewState==='подтверждены'?'confirmed':'pending','economy','tpReviewCosts',canWriteTrip()?'Сверить затраты':'Открыть затраты'],['Выполнение заданий',tasks.length?'Принято '+accepted+' из '+tasks.length+' заданий':'Задания не добавлены',tasks.length&&accepted===tasks.length?'confirmed':'neutral','plan','tpReviewTasks','Открыть задания']];
+ box.innerHTML='<h3 class="trip-review-heading">Проверка выезда</h3><div class="trip-review-grid">'+states.map(([label,value,state,pane,id,action])=>'<button type="button" class="trip-review-item" id="'+id+'" data-review-state="'+state+'" data-review-pane="'+pane+'"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong><small>'+esc(action)+' →</small></button>').join('')+'</div>';
+ box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewPresence'){const details=$('tpPresence').closest('details');if(details)details.open=true;}if(button.id==='tpReviewCosts')$('tpTripAllocation').scrollIntoView({block:'start'});if(button.id==='tpReviewTasks')$('tpJobsCnt')?.closest('.card')?.scrollIntoView({block:'start'});});
 }
 function listLoadError(box,error,retry){box.className='';box.innerHTML='<p class="err" role="alert">Не удалось загрузить данные: '+esc(error.message)+'</p><button type="button" class="btn sm" data-list-retry>Повторить загрузку</button>';box.querySelector('[data-list-retry]').onclick=retry;}
 async function loadWorkbench(id){
@@ -6337,7 +6331,7 @@ if($('tpfSave')) $('tpfSave').onclick=profileSave; if($('tpfCancel')) $('tpfCanc
 if($('profCreate')) $('profCreate').onclick=()=>{ profileResetForm(); $('profOverlay').classList.add('on'); setTimeout(()=>{ try{ $('tpfName').focus(); }catch(e){} },40); };
 function settingsNav(sec){ if(role!=='admin')sec='theme'; document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
 document.querySelectorAll('#settingsNav .son').forEach(b=>b.onclick=()=>settingsNav(b.dataset.sec));
-document.querySelectorAll('.settings-body > .card > h3').forEach(h=>h.onclick=e=>{if(!e.target.closest('.q'))h.parentElement.classList.toggle('collapsed');});
+document.querySelectorAll('.settings-body > .card > h3:first-of-type').forEach(h=>{h.tabIndex=0;h.setAttribute('role','button');h.setAttribute('aria-expanded','true');const toggle=()=>{const collapsed=h.parentElement.classList.toggle('collapsed');h.setAttribute('aria-expanded',String(!collapsed));};h.onclick=e=>{if(!e.target.closest('.q'))toggle();};h.onkeydown=e=>{if(e.target===h&&['Enter',' '].includes(e.key)){e.preventDefault();toggle();}};});
 $('stSave').onclick=async ()=>{ if(role!=='admin')return; const invalid=document.querySelector('[data-sec-panel="tariffs"] input:invalid');if(invalid){const details=invalid.closest('details');if(details)details.open=true;invalid.reportValidity();return;}const negative=[...document.querySelectorAll('[data-sec-panel="tariffs"] input[type=number]')].find(el=>Number(el.value)<0);if(negative){notify('Значение не может быть отрицательным','warn');const details=negative.closest('details');if(details)details.open=true;negative.focus();return;}const start=parseFloat($('stDayStart').value),end=parseFloat($('stDayEnd').value); if(!(end>start)){notify('Конец рабочего дня должен быть позже начала','warn');return;} const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:start,day_end:end,tolerance_h:Math.max(0,parseFloat($('stTolerance').value)||0),currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,depot_radius_m:parseInt($('stDepotRad').value)||5000,depot_exit_margin_m:Math.max(0,parseInt($('stDepotMargin').value)||0),depot_outside_minutes:parseInt($('stDepotOut').value)||60,updated_at:new Date().toISOString()};
   if(!hasDayStart) delete rec.day_start;
   const generation=settingsGeneration;$('stSave').disabled=true;$('stStatus').textContent='Сохраняю…';let error;try{({error}=await sb.from('settings').update(rec).eq('id',true));}catch(e){error=e;}finally{$('stSave').disabled=false;}if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } settingsParamsDirty=generation!==settingsGeneration;appSettings=Object.assign(appSettings,rec);$('stStatus').textContent=settingsParamsDirty?'Сохранён предыдущий вариант · новые изменения не сохранены':'Сохранено'; };
@@ -7896,7 +7890,7 @@ function showVehModal(vid){
   if(!r||!v) return;
   vehModalId=vid;
   const cls=vehClass(r), age=vehAgeMin(r);
-  const col = cls==='moving'?'#22c55e' : cls==='idle'?'#f59e0b' : '#94a3b8';
+  const col = cls==='idle'?'var(--warning)':'var(--ink-dim)';
   const when=new Date(r.ts);
   const pad=n=>String(n).padStart(2,'0');
   // Время старше суток без даты не говорит ничего: «20:06» для события
@@ -7910,19 +7904,21 @@ function showVehModal(vid){
   const stale=!!r.lost_since || age>VEH_STALE_MIN;
 
   $('vehTitle').textContent=v.name+(v.plate?(' · '+v.plate):'');
-  let h='<div class="vehicle-state" style="color:'+col+'">'+esc(vehTitle(r))+'</div>';let telemetry='';
+  let h='<div class="vehicle-state-banner" data-stale="'+stale+'"><div class="vehicle-state" style="color:'+(stale?'var(--warning)':col)+'">'+esc(vehTitle(r))+'</div>';let telemetry='';
 
   h+=vehRow('Данные получены', hhmm+' <span class="hint" style="margin: 0">('+vehAgeText(age)+')</span>');
   if(stale) h+='<div class="vm-stale">Ниже — на момент последней связи, не текущее состояние.</div>';
+  h+='</div><section class="vehicle-context"><h4>'+(stale?'Последняя известная дислокация':'Дислокация')+'</h4>';
   const dimv=v=>stale?('<span style="color:var(--ink-faint)">'+v+'</span>'):v;
   if(cls!=='idle') telemetry+=vehRow('Скорость', dimv(Math.round(+r.speed||0)+' км/ч'));
   const depot=clients.find(c=>String(c.id)===String(r.current_depot_id));
   if(depot){
     const depotText=r.depot_state==='inside'?'в депо':r.depot_state==='outside_candidate'
       ? 'вне зоны '+Math.max(0,Math.floor((Date.now()-new Date(r.depot_outside_since||r.ts))/60000))+' мин':'вне депо';
-    h+=vehRow('Депо',dimv(esc(depot.name)+' · '+depotText));
+    h+=vehRow('Депо',dimv(esc(depot.name)))+vehRow('Статус зоны',dimv(depotText));
   } else h+=vehRow('Депо','<span style="color:var(--ink-faint)">не определено</span>');
-  telemetry+=vehRow('Одометр',Math.round(+v.odometer||0)+' км'+(canWrite()?' <button class="btn sm ghost" id="vehOdometer">изменить</button>':''));
+  h+='</section>';
+  telemetry+=vehRow('Одометр',Math.round(+v.odometer||0).toLocaleString('ru-RU')+' км'+(canWrite()?' <button class="btn sm ghost" id="vehOdometer">изменить</button>':''));
 
   // Связь и занятие — разные строки. Машина у клиента с заглушенным мотором
   // стоит И молчит одновременно; склеив это в одну строку, соврём про оба.
@@ -7941,7 +7937,7 @@ function showVehModal(vid){
   const trip=(tracking&&tracking.trip)||vehActiveTrips[linkedTripId]
     ||((trips||[]).find(t=>String(t.id)===String(linkedTripId))||tripCache[linkedTripId]||null);
   const canRunTrip=!!trip&&(canWriteTrip(trip)||assignedTo(trip,session?.user?.id,'lead_engineer'));
-  h+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Выезд</div>';
+  h+='<section class="vehicle-trip"><h4>Информация о выезде</h4>';
   if(trip){
     h+=vehRow('Дата', esc(trip.date_from||'—')+(trip.date_to&&trip.date_to!==trip.date_from?(' — '+esc(trip.date_to)):''));
     const trackingStatus=tracking&&tracking.state==='finish_candidate'?'ожидает завершения'
@@ -7966,7 +7962,7 @@ function showVehModal(vid){
   telemetry+='<div class="veh-kv"><span style="font-family:var(--mono);font-size: var(--fs-2)">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
      '<span><button class="btn sm ghost" id="vehCopy">копировать</button></span></div>';
 
-  h+='<details class="vehicle-details"><summary>Данные машины и GPS</summary>'+telemetry+'</details>';
+  h+='</section><details class="vehicle-details" open><summary>Данные машины и GPS</summary><div class="vehicle-telemetry">'+telemetry+'</div></details>';
   $('vehBody').innerHTML=h;
   if($('vehJournal'))$('vehJournal').onclick=()=>{$('vehOverlay').classList.remove('on');switchTab('planner','tracking');};
   const cp=$('vehCopy'); if(cp) cp.onclick=()=>{ const t=(+r.lat).toFixed(6)+', '+(+r.lng).toFixed(6);
@@ -8998,3 +8994,6 @@ if($('verCopy')) $('verCopy').onclick=async()=>{
   try{ sb=window.supabase.createClient(c.url,c.key); }catch(e){ $('cfgOverlay').classList.add('on'); return; }
   watchAuth();
   const { data:{ session:s } }=await sb.auth.getSession(); if(s){ await onSignedIn(); } else { $('authOverlay').classList.add('on'); } })();
+
+// Expose everyday controls after the existing screen handlers have been installed.
+installOperationsUI();

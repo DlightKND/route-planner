@@ -198,6 +198,10 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       };
       await checkCards('#workFeed .wf-row');
       await shot(page,testInfo,'logist-map-work-cards');
+      await active.locator('#sideTabs [data-sb=directory]').click();
+      await expect(active.locator('#sideTabs [data-sb=directory]')).toHaveAttribute('aria-pressed','true');
+      await expect(active.locator('#pointsBlock')).not.toHaveClass(/collapsed/);
+      await expect(active.locator('#list')).toBeVisible();
       await active.locator('#mapScope [data-ms=all]').click();
       await checkCards('#list .pt');
       await shot(page,testInfo,'logist-map-directory-cards');
