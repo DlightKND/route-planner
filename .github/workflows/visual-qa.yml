@@ -7,7 +7,31 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: visual-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
+  design-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Capture complete workspaces for design review
+        run: npx playwright test tests/visual/workspace-review.spec.mjs --project=mobile-390-light --project=desktop-1440-light --retries=0 --timeout=15000
+      - name: Keep workspace comparison screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-review-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: warn
   operations-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 10

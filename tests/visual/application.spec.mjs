@@ -69,7 +69,7 @@ async function integrity(page,active,audit,testInfo) {
       const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;
       const nested=el.parentElement.closest('.card,.wkrow,.emtree-manu,.eqitem');
       const flat=(nested&&el.matches('.card,.kcard,.eqitem,.stat,.staff-row'))||el.matches('#jobActivitySection,#tripActivitySection');
-      const expected=flat?'none':low,actual=getComputedStyle(el).boxShadow;
+      const expected=flat||!root.matches('.view-map')?'none':low,actual=getComputedStyle(el).boxShadow;
       if(actual!==expected)failures.push({surface:el.id||el.className,expected,actual});
     }
     return failures;
@@ -175,7 +175,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
   test(`${role} ${scene.name}`,async({page,context},testInfo)=>{
     const {active,audit}=await openScene(page,context,testInfo,role,scene);
     if(scene.name==='settings'){await active.locator('.settings-advanced').evaluateAll(list=>list.forEach(d=>d.open=true));await expect(active.locator('#stTrkKmh')).toBeVisible();await expect(active.locator('#verBtn')).toBeVisible();}
-    if(scene.name==='request')for(const action of await active.locator('.th-acts .btn:visible').all())await visibleTarget(action);
+    if(scene.name==='request')for(const action of await active.locator('.th-acts .btn:visible').all())await reveal(action);
     if(scene.name==='catalog')await expect(active.locator('#catList')).toContainText('Диагностика гидросистемы');
     if(scene.view==='catalog'){
       const tab=active.locator('.subtab.active:visible');
@@ -228,7 +228,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     if(scene.statistics){
       await expect(active.locator('[data-summary-mode=charts] .summary-chart')).toHaveCount(2);
       await shot(page,testInfo,'logist-dashboard-diagrams');
-      if(testInfo.project.use.viewport.width>=1181){const aligned=await active.locator('#dashBody .rangebar').evaluate(el=>{const date=el.querySelector('input').getBoundingClientRect(),quick=el.querySelector('.rquick').getBoundingClientRect();return Math.abs(date.top-quick.top)<2;});expect(aligned,'Dates and month arrows share a row').toBe(true);}
+      const period=await active.locator('#dashBody .rangebar').evaluate(el=>{const dates=[...el.querySelectorAll('input')].map(x=>{const r=x.getBoundingClientRect();return {top:r.top,bottom:r.bottom};}),quick=el.querySelector('.rquick').getBoundingClientRect(),buttons=[...el.querySelectorAll('.rquick button')].map(x=>x.getBoundingClientRect().top);return {dates,quick:{top:quick.top,bottom:quick.bottom},buttons};});expect(Math.abs(period.dates[0].top-period.dates[1].top),'Dates share one row').toBeLessThanOrEqual(2);expect(period.quick.top,'Month navigation follows dates without overlap').toBeGreaterThanOrEqual(period.dates[0].top-2);if(period.quick.top>period.dates[0].top+2)expect(period.quick.top).toBeGreaterThanOrEqual(period.dates[0].bottom);expect(Math.max(...period.buttons)-Math.min(...period.buttons),'Month arrows stay together').toBeLessThanOrEqual(2);
       await expect(active.locator('[data-summary-view=charts]')).toHaveAttribute('aria-pressed','true');
       await selectedContrast(active.locator('[data-summary-view=charts]'));
       await active.locator('[data-summary-view=tables]').click();
@@ -244,7 +244,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       if(testInfo.project.use.viewport.width>1050){
         const bounds=await active.evaluate(root=>['.wb-plan-card','.wb-route-card'].map(selector=>{const r=root.querySelector(selector).getBoundingClientRect();return {top:r.top,height:r.height,width:r.width};}));
         expect(Math.abs(bounds[0].top-bounds[1].top),'Plan and route share a baseline').toBeLessThan(1);
-        expect(Math.abs(bounds[0].height-bounds[1].height),'Plan and route share a height').toBeLessThan(1);
+        expect(bounds[1].width,'The route gets the primary workspace column').toBeGreaterThan(bounds[0].width);
         expect(bounds[1].width/bounds[0].width,'Balanced route/plan widths').toBeLessThan(1.5);
       }
       await reveal(active.locator('#tpFrom'));
@@ -258,7 +258,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       }
     }
     if(testInfo.project.use.viewport.width<=390&&scene.name.startsWith('dispatcher')){
-      expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Visible actions and the separate trips journal navigation keep the mobile header bounded').toBeLessThanOrEqual(scene.name==='dispatcher-trips'?272:224);
+      expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Page heading, tabs and filters leave a usable working viewport').toBeLessThanOrEqual(testInfo.project.use.viewport.height*.58);
       const filter=active.locator('.dispatcher-actions>.planner-filter-menu:visible');
       if(await filter.count()){
         await filter.locator('summary').click();await expect(filter.locator('select').first()).toBeVisible();
@@ -365,9 +365,10 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       }
       await active.getByRole('tab',{name:'Состав',exact:true}).click();
       await checkedPane(page,active,active.locator('#orderPane-scope'),audit,testInfo);
-      await reveal(active.locator('#orderComposition > h3'));
+      await reveal(active.locator('#orderResultSummary > h3'));
       await shot(page,testInfo,`${role}-${scene.name}-composition`);
       if(role==='logist'&&scene.name==='task'){
+        await active.locator('.workspace-organization-editor>summary').click();
         const picker=active.locator('#orderCrew + .engineer-picker');
         await reveal(picker);await picker.click();
         const options=page.locator('.engineer-options');

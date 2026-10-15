@@ -57,7 +57,7 @@ it('shows task children immediately inside a request while keeping kanban childr
 it('does not open a task or load its data when the trip leave guard is declined',async()=>{
  await ui.open('order1');ctx.beforeOpen=vi.fn(()=>false);ctx.ensureRefs=vi.fn();
  await ui.open(null,job);expect(ctx.beforeOpen).toHaveBeenCalledOnce();
- expect(ctx.ensureRefs).not.toHaveBeenCalled();expect(doc.querySelector('h2').textContent).toBe('Задание №1 · Ремонт');
+ expect(ctx.ensureRefs).not.toHaveBeenCalled();expect(doc.querySelector('h2').textContent).toBe('Ремонт');
 });
 it('guards expense links and disables stage actions while the task result is unsaved',async()=>{
  ctx.tripCostSummary=vi.fn(async()=>[{trip_id:'trip1',distance_cost:120}]);ctx.confirmLeave=vi.fn(()=>false);
@@ -249,7 +249,7 @@ it('shows saved quantities and a separate review handoff without recording anoth
  const summary=doc.getElementById('orderResultSummary');
  expect(summary.textContent).toContain('Результат сохранён · ещё не передан на проверку');
  expect(summary.querySelector('[data-remaining]').textContent).toContain('1 шт');
- expect(doc.getElementById('orderSaveState').closest('.order-savebar').hidden).toBe(false);
+ expect(doc.getElementById('orderSaveState').hidden).toBe(false);expect(doc.getElementById('orderSaveState').closest('.entity-head-meta')).not.toBeNull();
  await summary.querySelector('[data-order-next=review]').onclick();
  expect(rpcCalls.some(x=>x.fn==='service_order_transition'&&x.args.p_status==='review')).toBe(true);
  expect(rpcCalls.some(x=>x.fn==='service_order_record_result')).toBe(false);

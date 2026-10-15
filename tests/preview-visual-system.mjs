@@ -2,7 +2,7 @@
 import {readFileSync,writeFileSync} from 'node:fs';
 import {build} from 'esbuild';
 const source=readFileSync('index.html','utf8'),app=readFileSync('src/app.js','utf8');
-const styles=[...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m=>m[1]).join('\n')+['src/trip-workbench.css','src/service-orders.css','src/visual-system.css','src/entity-activity.css','src/entity-pages.css','src/operations-design.css'].map(p=>readFileSync(p,'utf8')).join('\n');
+const styles=[...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m=>m[1]).join('\n')+['src/trip-workbench.css','src/service-orders.css','src/visual-system.css','src/entity-activity.css','src/entity-pages.css','src/operations-design.css','src/workspace-ui.css'].map(p=>readFileSync(p,'utf8')).join('\n');
 const themes=app.slice(app.indexOf('const THEMES='),app.indexOf('function applyTheme('));
 const metrics=app.slice(app.indexOf('function metricDelta('),app.indexOf('let dashOrder='));
 const range=app.slice(app.indexOf('function rangeBar('),app.indexOf('function setRange('));
