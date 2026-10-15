@@ -264,13 +264,13 @@ dialog.overlay .modal-actions { padding-top:16px;margin-top:24px!important;borde
   .view:not(.view-map)>.pane { padding:16px max(16px,env(safe-area-inset-right)) calc(24px + var(--rail-h)) max(16px,env(safe-area-inset-left)); }
   .view-planner .dispatcher-toolbar,.view-planner .dispatcher-toolbar:has([data-trip-journal-only]:not([style*="none"])),.view-planner .dispatcher-toolbar:not(:has(:is(#jobAdd,#orderAdd,#tripAdd):not([hidden]):not([style*="none"]))) { grid-template-columns:minmax(0,1fr);gap:12px; }
   .view-planner .dispatcher-toolbar>.searchbox { grid-column:1;grid-row:1; }
-  .view-planner .dispatcher-toolbar>.dispatcher-actions { position:relative;display:flex;grid-column:1;grid-row:2;flex-wrap:wrap;width:100%;justify-content:flex-start;gap:6px; }
+  .view-planner .dispatcher-toolbar>.dispatcher-actions { position:relative;display:flex;grid-column:1;grid-row:2;flex-wrap:wrap;width:100%;justify-content:flex-start;gap:4px; }
   .view-planner .dispatcher-actions>:is(#jobAdd,#orderAdd,#tripAdd) { width:94px;padding:8px 10px;font-size:14px;gap:6px; }
-  .view-planner .dispatcher-add-label { display:inline; }
+  .view-planner .dispatcher-add-label { display:inline;white-space:nowrap;margin-left:0; }
   .view-planner .dispatcher-more { margin-left:auto;position:static; }
   .view-planner .dispatcher-more>.dispatcher-menu { top:calc(100% + 8px);width:min(280px,calc(100vw - 32px)); }
   .view-planner .dispatcher-actions>.planner-filter-menu .planner-filter-panel { left:0;right:auto;max-width:calc(100vw - 32px); }
-  .view-planner .dispatcher-actions>.dispatcher-view-mode select { min-width:90px;width:90px;max-width:90px;padding:8px; }
+  .view-planner .dispatcher-actions>.dispatcher-view-mode select { min-width:100px;width:100px;max-width:100px;padding:8px; }
   .view-planner .dispatcher-actions>.planner-filter-menu>summary { padding:8px 10px; }
   .view-planner .dispatcher-period { grid-column:1;grid-row:1; }
   .design-page-head { margin-bottom:20px; }
