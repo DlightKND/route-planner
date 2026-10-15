@@ -117,7 +117,7 @@ export function positionOrderResult(root=document){
 export function frameOrderWorkspace({record,editable,people},root=document){
  const editor=root.getElementById('orderEditor');if(!editor||editor.querySelector(':scope>.workspace-masthead'))return;
  const doc=editor.ownerDocument,head=element(doc,'header','workspace-masthead'),inner=element(doc,'div','workspace-header-inner'),main=element(doc,'main','workspace-main');
- const title=editor.querySelector('.trip-head h2');if(record.id&&title){const id=element(doc,'p','design-eyebrow');id.textContent='Задание №'+record.number;title.before(id);title.textContent=record.title||'Задание';}
+ const title=editor.querySelector('.trip-head h2');if(record.id&&title)title.textContent=record.title||'Задание';
  inner.append(editor.querySelector('.crumbs'),editor.querySelector('.trip-head'));head.append(inner);
  while(editor.firstChild)main.append(editor.firstChild);editor.append(head,main);editor.closest('.view')?.classList.add('workspace-page');
  const toolbar=editor.querySelector('.order-toolbar');
@@ -136,5 +136,5 @@ export function frameOrderWorkspace({record,editable,people},root=document){
   const emptyGrid=editor.querySelector('.order-grid');if(emptyGrid&&!emptyGrid.children.length)emptyGrid.remove();
   positionOrderResult(root);
  }
- const savebar=editor.querySelector('.order-savebar');if(savebar)inner.append(savebar);
+ const savebar=editor.querySelector('.order-savebar');if(savebar){const state=root.getElementById('orderSaveState'),save=root.getElementById('orderSave');if(state)inner.querySelector('.entity-head-meta').append(state);if(save)inner.querySelector('.entity-header-actions').append(save);savebar.remove();}
 }

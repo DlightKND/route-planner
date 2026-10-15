@@ -3746,6 +3746,7 @@ function configureEntityActions(kind,record){
  const responsible=pid=>profilesList.find(p=>p.id===pid)?.full_name||'Не назначен';$(prefix+'ResponsibilityMeta').textContent=id?'Владелец: '+responsible(record.owner_id)+' · куратор: '+responsible(record.curator_id):'';
  const report=$(prefix+'RecordResult');report.hidden=!id;report.onclick=()=>recordEntityResult(kind,id);
  if(kind==='job'){
+  if(id&&canWrite()){report.textContent='Создать задание';report.onclick=()=>$('jobOrders').querySelector('[data-order-new]')?.click();}else report.textContent='Зафиксировать результат';
   mountEntityActions({trigger,items:()=>[
    {label:'Зафиксировать результат',hidden:!id,onSelect:()=>recordEntityResult(kind,id)},
    {label:'Сроки и заметка',onSelect:()=>panel('Сроки и заметка',$('jobDeadlineFields'))},

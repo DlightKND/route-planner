@@ -249,7 +249,7 @@ it('shows saved quantities and a separate review handoff without recording anoth
  const summary=doc.getElementById('orderResultSummary');
  expect(summary.textContent).toContain('Результат сохранён · ещё не передан на проверку');
  expect(summary.querySelector('[data-remaining]').textContent).toContain('1 шт');
- expect(doc.getElementById('orderSaveState').closest('.order-savebar').hidden).toBe(false);
+ expect(doc.getElementById('orderSaveState').hidden).toBe(false);expect(doc.getElementById('orderSaveState').closest('.entity-head-meta')).not.toBeNull();
  await summary.querySelector('[data-order-next=review]').onclick();
  expect(rpcCalls.some(x=>x.fn==='service_order_transition'&&x.args.p_status==='review')).toBe(true);
  expect(rpcCalls.some(x=>x.fn==='service_order_record_result')).toBe(false);
