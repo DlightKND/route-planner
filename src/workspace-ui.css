@@ -1,7 +1,7 @@
 /* Workspace composition: page header / task context / working surface. */
 html:root { --workspace-width:1280px; }
 .view:not(.view-map) :is(.card,.kcard,.notice-row,.wkrow,.emtree-manu,.eqitem,.staff-row,.stat) { box-shadow:none; }
-.workspace-page>.pane { display:block;max-width:none;width:100%;padding:0; }
+.view.workspace-page>.pane { display:block;max-width:none;width:100%;padding:0; }
 .workspace-masthead { background:var(--panel);border-bottom:1px solid var(--line);padding:20px 32px 0; }
 .workspace-header-inner { max-width:var(--workspace-width);margin:auto; }
 .workspace-main { max-width:1344px;width:100%;margin:auto;padding:24px 32px 48px; }
@@ -89,7 +89,7 @@ html:root { --workspace-width:1280px; }
 .workspace-page .order-grid:has(#orderOrganization:not([hidden])) { display:grid!important;grid-template-columns:1fr 1.25fr;gap:24px; }
 
 /* Route workspace: the map and stops are primary, planning is a sidebar. */
-.workspace-page .trip-grid { grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:start;gap:24px; }
+.view-trip.workspace-page #tpPlanPane .trip-grid { grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:start;gap:24px; }
 .trip-planning-sidebar { min-width:0;display:grid;gap:20px; }
 .trip-planning-sidebar .trip-wide { grid-column:auto; }
 .workspace-page .wb-route-card { grid-column:1;grid-row:1; }
@@ -105,7 +105,7 @@ html:root { --workspace-width:1280px; }
 .workspace-page .trip-toolbar .entity-savebar { margin:0; }
 
 /* Dispatcher: page-level creation, a filter surface, then the board. */
-.view-planner>.pane { padding:0; }
+.view.view-planner>.pane { padding:0; }
 .view-planner :is(#plJobs,#plOrders,#plTrips) { --workspace-gutter:max(24px,calc((100vw - 1280px)/2));padding:24px var(--workspace-gutter) 48px; }
 .workspace-dispatcher-head { padding:24px var(--workspace-gutter) 0;margin:-24px calc(-1 * var(--workspace-gutter)) 24px;background:var(--panel);border-bottom:1px solid var(--line); }
 .workspace-dispatcher-head .subtabs { margin:20px 0 0;gap:28px;border:0; }
@@ -167,7 +167,7 @@ html:root { --workspace-width:1280px; }
 .view-dash.workspace-page .dash-grid { display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr);gap:28px;max-height:none; }
 .view-dash.workspace-page .dash-grid>* { overflow:visible;max-height:none; }
 .view-dash.workspace-page .dash-attn>.acaps { display:none; }
-.workspace-inbox>.pane { padding:0; }
+.view.workspace-inbox>.pane { padding:0; }
 .workspace-inbox .notice-host { max-width:none;margin:0; }
 .workspace-inbox .notice-header { margin:0;align-items:flex-start; }
 .workspace-inbox .workspace-masthead { padding-bottom:24px; }
@@ -233,7 +233,7 @@ html:root { --workspace-width:1280px; }
  .workspace-page .entity-tabs { gap:24px; }
  .workspace-page .entity-toolbar { margin-bottom:16px; }
  .workspace-masthead .entity-toolbar { margin:0; }
- .request-workspace-grid,.order-briefing-layout,.workspace-page .trip-grid,.workspace-page .order-grid:has(#orderOrganization:not([hidden])) { grid-template-columns:minmax(0,1fr);gap:16px; }
+ .request-workspace-grid,.order-briefing-layout,.view-trip.workspace-page #tpPlanPane .trip-grid,.workspace-page .order-grid:has(#orderOrganization:not([hidden])) { grid-template-columns:minmax(0,1fr);gap:16px; }
  .workspace-page .card,.view-job #jobOrders,.view-order .order-briefing-layout #orderBrief { padding:20px; }
  .workspace-page .order-result-summary { padding:0; }
  .workspace-page .order-result-summary>h3 { padding:20px; }

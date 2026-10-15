@@ -365,9 +365,10 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       }
       await active.getByRole('tab',{name:'Состав',exact:true}).click();
       await checkedPane(page,active,active.locator('#orderPane-scope'),audit,testInfo);
-      await reveal(active.locator('#orderComposition > h3'));
+      await reveal(active.locator('#orderResultSummary > h3'));
       await shot(page,testInfo,`${role}-${scene.name}-composition`);
       if(role==='logist'&&scene.name==='task'){
+        await active.locator('.workspace-organization-editor>summary').click();
         const picker=active.locator('#orderCrew + .engineer-picker');
         await reveal(picker);await picker.click();
         const options=page.locator('.engineer-options');
