@@ -26,6 +26,7 @@ export function installWorkspaceStructure(root=document){
   const stops=trip.querySelector('.wb-route-details');if(stops)stops.open=true;
   const routeTitle=trip.querySelector('.wb-route-card h3');if(routeTitle?.firstChild)routeTitle.firstChild.textContent='Маршрут и остановки ';
   const crewTitle=trip.querySelector('.wb-plan-card h3');if(crewTitle)crewTitle.textContent='Состав поездки';
+  const responsibility=root.getElementById('tripResponsibilityMeta');if(responsibility){responsibility.className='workspace-responsibility-caption';trip.querySelector('.wb-plan-card').append(responsibility);}
   const toolbar=trip.querySelector('.trip-toolbar');toolbar.before(root.getElementById('tpReviewSummary'));
   framePane(trip,[trip.querySelector('.crumbs'),trip.querySelector('.trip-head')]);
  }
@@ -69,6 +70,7 @@ export function installWorkspaceStructure(root=document){
 }
 
 export function setCatalogWorkspace(name,root=document){
+ const description=root.querySelector('.view-catalog .design-description');if(description)description.textContent=({works:'Нормы времени, применимость и стоимость работ.',models:'Модели оборудования, гарантия и сервисные интервалы.',materials:'Материалы, единицы измерения и актуальные цены.'})[name]||'';
  for(const [section,id,label] of [['works','catAdd','Добавить работу'],['models','emShowAdd','Добавить модель'],['materials','stockAdd','Добавить материал']]){
   const button=root.getElementById(id);if(button?.closest('.catalog-page-actions')){button.hidden=name!==section;button.textContent=label;}
  }
@@ -76,6 +78,13 @@ export function setCatalogWorkspace(name,root=document){
 
 export function setSettingsWorkspace(name,root=document){
  const heading=root.querySelector('.view-settings .design-page-head h2');if(heading)heading.textContent=({tariffs:'Тарифы и параметры',fleet:'Автопарк',users:'Пользователи и роли',theme:'Моё оформление'})[name]||'Настройки';
+ const description=root.querySelector('.view-settings .design-description');if(description)description.textContent=({tariffs:'Правила рабочего дня и тарифы для новых расчётов.',fleet:'Служебные автомобили, связь с GPS и проверенный одометр.',users:'Сотрудники, подчинённость и доступ к приложению.',theme:'Личное оформление вашего рабочего места.'})[name]||'';
+}
+
+export function presentDispatcherSection(journal,root=document){
+ const section=root.getElementById('plTrips'),title=section?.querySelector('.workspace-heading-row h1'),description=section?.querySelector('.workspace-subtitle');
+ if(title)title.textContent=journal?'GPS-журнал':'Выезды';if(description)description.textContent=journal?'Поездки, проверка трека и оформление факта':'Планы поездок, маршруты и GPS-журнал';
+ const board=section?.querySelector('.workspace-board-heading');if(board)board.hidden=journal;
 }
 
 export function frameNotifications(host){
@@ -88,10 +97,12 @@ export function frameNotifications(host){
 export function presentRequestWorkspace({saved,editable,client,equipment,status,engineers,due,notes,phone,address,confirmDiscard},root=document){
  const context=root.getElementById('requestContext'),form=root.getElementById('requestContextFields');if(!context||!form)return;
  const view=context.closest('.view');view.classList.toggle('request-saved',saved);context.hidden=!saved;form.hidden=saved&&!form.closest('dialog[open]');
+ const title=root.getElementById('jobTitle');let stage=view.querySelector('.request-workspace-stage');if(!stage&&title){stage=element(root,'span','design-status request-workspace-stage');title.parentElement.append(stage);}if(stage){stage.textContent=status||'';stage.hidden=!saved;}
  const actions=root.getElementById('jobActs');
  if(!context.querySelector('.request-context-data')){
   context.innerHTML='<div class="workspace-section-head"><div><p class="design-eyebrow">Заявка</p><h3>Контекст клиента</h3></div><button class="btn sm ghost" id="requestEditContext" type="button">Изменить</button></div><dl class="request-context-data"></dl><div class="request-contact-actions"></div>';
   context.querySelector('.request-contact-actions').append(actions);
+  const responsibility=root.getElementById('jobResponsibilityMeta');if(responsibility){responsibility.className='workspace-responsibility-caption';context.querySelector('.request-contact-actions').before(responsibility);}
  }
  const rows=[['Заказчик',client],['Оборудование',equipment||'Без привязки'],['Потребность',notes||'Не указана'],['Адрес',address],['Контакт',phone],['Срок',due],['Стадия',status],['Инженеры',engineers]];
  context.querySelector('dl').innerHTML=rows.filter(([,value])=>value).map(([label,value])=>`<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join('');

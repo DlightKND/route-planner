@@ -31,7 +31,7 @@ import './entity-pages.css';
 import './operations-design.css';
 import { installOperationsUI } from './operations-ui.js';
 import './workspace-ui.css';
-import {installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace} from './workspace-ui.js';
+import {installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
@@ -876,7 +876,7 @@ function plannerSub(name){ const journal=name==='tracking';plannerCur=journal?'t
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
   document.querySelectorAll('.view-planner .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.sub===plannerCur);t.setAttribute('aria-pressed',String(t.dataset.sub===plannerCur));});
   if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=plannerCur==='trips'?'':'none';$('tripBoard').style.display=journal?'none':'';$('tripBoardToolbar').style.display=journal?'none':''; $('plOrders').style.display=name==='orders'?'':'none'; $('plUnassigned').style.display=name==='tracking'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else if(name==='orders') serviceOrders.board(); else if(name==='tracking')unassignedTracks.open(); else renderTripsView();
-  document.querySelectorAll('[data-trip-journal-only]').forEach(el=>el.style.display=journal?'':'none');if(journal)renderJournalPeriod();
+  presentDispatcherSection(journal);document.querySelectorAll('[data-trip-journal-only]').forEach(el=>el.style.display=journal?'':'none');if(journal)renderJournalPeriod();
   document.querySelectorAll('[data-trip-board-only]').forEach(el=>el.style.display=journal||(el.id==='tripAdd'&&!canWrite())?'none':'');
   document.querySelectorAll('[data-trip-section]').forEach(b=>{if(b.classList.contains('subtab'))return;if(b.dataset.tripSection==='tracking'){b.textContent=journal?'← Выезды':'GPS-журнал';b.setAttribute('aria-label',journal?'Вернуться к выездам':'Открыть GPS-журнал');}const on=journal?b.dataset.tripSection==='tracking':b.dataset.tripSection==='board';b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});
   routeSet(journal?'planner/trips/tracking':'planner/'+name); }
@@ -3973,10 +3973,10 @@ function jobHead(){
   $('jobCrumb').textContent=jobEditId?'Заявка':'Новая заявка';
   const parts=[];if(jobEditId&&$('jobTitle').textContent!==nm)parts.push(esc(nm));
   if(eqName) parts.push(esc(eqName)); else parts.push('без техники');
-  const st=$('jbStatus'); if(st) parts.push(esc(st.options[st.selectedIndex].text));
+  // The stage and team belong to the client context, below the page identity.
   // Своё имя человек в подписи не читает — он и так знает, чья это заявка.
   const en=$('jbEng');
-  if(en&&selectedEngineerIds('jbEng').length){ const ns=engineerNames(selectedEngineerIds('jbEng')); parts.push(selectedEngineerIds('jbEng').includes(session.user.id)?'в том числе на мне':esc(ns.join(', '))); }
+  if(en) en.setAttribute('aria-label','Инженеры заявки');
   const due=$('jbDue').value;
   if(due){
     const u=jobUrgency({due_date:due,created_at:null},new Date());

@@ -1,7 +1,8 @@
 /* Workspace composition: page header / task context / working surface. */
 html:root { --workspace-width:1280px; }
+.workspace-shell [hidden] { display:none!important; }
 .view:not(.view-map) :is(.card,.kcard,.notice-row,.wkrow,.emtree-manu,.eqitem,.staff-row,.stat) { box-shadow:none; }
-.view.workspace-page>.pane { display:block;max-width:none;width:100%;padding:0; }
+.view.workspace-page>.pane { display:block;max-width:none;width:100%;padding:0;margin:0; }
 .workspace-masthead { background:var(--panel);border-bottom:1px solid var(--line);padding:20px 32px 0; }
 .workspace-header-inner { max-width:var(--workspace-width);margin:auto; }
 .workspace-main { max-width:1344px;width:100%;margin:auto;padding:24px 32px 48px; }
@@ -16,7 +17,7 @@ html:root { --workspace-width:1280px; }
 .workspace-page .entity-tabs { gap:24px;min-height:48px;align-items:stretch;border-bottom:1px solid var(--line); }
 .workspace-masthead .entity-tabs { border-bottom:0; }
 .workspace-page .entity-tabs :is(button,.btn) { border:0;border-radius:0;padding:12px 0;background:transparent;box-shadow:none;color:var(--ink-dim);font-size:14px;font-weight:500; }
-.workspace-page .entity-tabs [aria-selected=true] { color:var(--ink);border-bottom:3px solid var(--accent);background:transparent;box-shadow:none; }
+.view.workspace-page .entity-tabs [aria-selected=true] { color:var(--ink);border-bottom:3px solid var(--accent);background:transparent;box-shadow:none; }
 .workspace-page .card { margin:0;box-shadow:none; }
 .workspace-section-head { display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px; }
 .workspace-section-head h3 { margin:0;font-size:18px; }
@@ -35,6 +36,7 @@ html:root { --workspace-width:1280px; }
 .request-context-data dd { font-size:15px;margin:0;line-height:1.55;overflow-wrap:anywhere; }
 .request-context-data>div:first-child dd { font-weight:600; }
 .request-contact-actions { margin-top:24px; }
+.request-workspace-stage { margin-top:12px; }
 .request-contact-actions .th-acts { display:flex;gap:8px;flex-wrap:wrap; }
 .view-job.request-saved #jobOverviewPane>.trip-grid { display:none; }
 .view-job #jobRefRead { display:none; }
@@ -98,6 +100,7 @@ html:root { --workspace-width:1280px; }
 .workspace-page #tpRouteStops { max-height:none!important; }
 .workspace-page .wb-route-details { margin:0;border-top:1px solid var(--line);padding-top:12px; }
 .workspace-page .wb-route-details>summary { color:var(--ink);font-weight:500; }
+.workspace-responsibility-caption { margin-top:20px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-dim);line-height:1.6; }
 .workspace-page .trip-review-grid { margin:0 0 24px;gap:12px; }
 .workspace-page button.trip-review-item { border-radius:10px;box-shadow:none;min-height:118px; }
 .workspace-page .trip-review-item>strong { font-size:16px; }
@@ -110,7 +113,8 @@ html:root { --workspace-width:1280px; }
 .view-planner :is(#plJobs,#plOrders,#plTrips) { --workspace-gutter:max(24px,calc((100vw - 1280px)/2));padding:24px var(--workspace-gutter) 48px; }
 .workspace-dispatcher-head { padding:24px var(--workspace-gutter) 0;margin:-24px calc(-1 * var(--workspace-gutter)) 24px;background:var(--panel);border-bottom:1px solid var(--line); }
 .workspace-dispatcher-head .subtabs { margin:20px 0 0;gap:28px;border:0; }
-.workspace-dispatcher-head .subtab { padding:12px 0;border-radius:0; }
+.workspace-dispatcher-head .subtab { padding:12px 0;border-radius:0;border-bottom:3px solid transparent; }
+.workspace-dispatcher-head .subtab:is(.on,.active),.workspace-page .catalog-main-nav .subtab.active { border-bottom:3px solid var(--accent);background:transparent;box-shadow:none;color:var(--ink); }
 .view-planner .stickyhead { position:static;background:transparent;padding:0;border:0;box-shadow:none; }
 .workspace-dispatcher-head :is(#jobAdd,#orderAdd,#tripAdd) { min-width:126px;gap:8px;white-space:nowrap;flex:none; }
 .view-planner .dispatcher-toolbar.workspace-filterbar { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:16px;margin-bottom:12px; }
@@ -244,6 +248,9 @@ html:root { --workspace-width:1280px; }
  .workspace-page .order-result-quantities { margin-top:16px; }
  .workspace-page .order-result-review { padding:20px; }
  .workspace-page .order-result-review .btn { flex:1; }
+ .view-order.workspace-page:has(#orderRecordResult:not([hidden])) .workspace-main { padding-bottom:calc(var(--rail-h) + 104px); }
+ .view-order.workspace-page:has(#orderRecordResult:not([hidden])) .workspace-main::after { content:'';position:fixed;bottom:var(--rail-h);left:0;right:0;height:68px;background:var(--panel);border-top:1px solid var(--line);z-index:20; }
+ .view-order.workspace-page #orderRecordResult { position:fixed;left:16px;right:16px;bottom:calc(var(--rail-h) + 12px);width:calc(100% - 32px);max-width:none;min-height:44px;z-index:21; }
  .order-briefing-layout { margin-bottom:24px; }
  .workspace-lead-person { font-size:16px; }
  .workspace-page .trip-review-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
