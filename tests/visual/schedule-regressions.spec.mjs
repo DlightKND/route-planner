@@ -94,12 +94,12 @@ test('split saves the selected work part and dragging its continuation back join
  const saved=await page.evaluate(()=>window.__visualQA.scheduleWrites[0].record.day_plan);expect(saved.cuts[0].at).toEqual({d:'2026-10-05',t:split});
  await expect(pieces.filter({hasNot:page.locator('.road')})).toHaveCount(2);
  const tail=week.locator('.vg-piece[data-gb="t'+trip+'"][data-piece-from="'+split+'"]');
- const at=await tail.getAttribute('data-piece-at');const box=await tail.boundingBox();
+ const at=await tail.getAttribute('data-piece-at');await tail.scrollIntoViewIfNeeded();const box=await tail.boundingBox();
  await page.mouse.move(box.x+8,box.y+3);await page.mouse.down();await page.mouse.move(box.x+8,box.y+13);await page.mouse.up();
  await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(2);
  let moved=week.locator('.vg-piece[data-gb="t'+trip+'"][data-piece-at="'+at+'"]');await expect(moved).toHaveAttribute('data-piece-from',String(split+.5));
  const total=await pieces.evaluateAll(els=>els.reduce((n,el)=>n+Number(el.dataset.pieceTo)-Number(el.dataset.pieceFrom),0));expect(total).toBeCloseTo(hours);
- const before=await moved.boundingBox();await page.mouse.move(before.x+8,before.y+3);await page.mouse.down();await page.mouse.move(before.x+8,before.y-17);await page.mouse.up();
+ await moved.scrollIntoViewIfNeeded();const before=await moved.boundingBox();await page.mouse.move(before.x+8,before.y+3);await page.mouse.down();await page.mouse.move(before.x+8,before.y-17);await page.mouse.up();
  await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(3);
  expect(await page.evaluate(()=>window.__visualQA.scheduleWrites[2].record.day_plan.cuts)).toEqual([]);
  await expect(pieces.filter({hasNot:page.locator('.road')})).toHaveCount(1);

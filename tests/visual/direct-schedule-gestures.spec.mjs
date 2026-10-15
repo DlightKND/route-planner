@@ -55,10 +55,10 @@ test('a split part snaps back with touch or mouse and Escape preserves the cut',
  const {week,errors}=await open(page,info);const parts=()=>week.locator('.vg-piece[data-gb="'+id+'"]').filter({hasNot:page.locator('.road')});
  await parts().first().locator('[data-gdivide]').click();await week.locator('[data-cut-ok]').click();
  await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(1);await expect(parts()).toHaveCount(2);
- let tail=parts().last(),r=await tail.boundingBox();await page.mouse.move(r.x+10,r.y+3);await page.mouse.down();await page.mouse.move(r.x+10,r.y-7);
+ let tail=parts().last();await tail.scrollIntoViewIfNeeded();let r=await tail.boundingBox();await page.mouse.move(r.x+10,r.y+3);await page.mouse.down();await page.mouse.move(r.x+10,r.y-7);
  await expect(page.locator('.vg-drop-note')).toHaveText('Скрепить участки');await expect(week.locator('.vg-piece.joining')).toHaveCount(1);
  await page.keyboard.press('Escape');await page.mouse.up();expect(await page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(1);await expect(parts()).toHaveCount(2);
- tail=parts().last();r=await tail.boundingBox();
+ tail=parts().last();await tail.scrollIntoViewIfNeeded();r=await tail.boundingBox();
  if(info.project.use.hasTouch){const touch=await page.context().newCDPSession(page);await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x+10,y:r.y+3}]});await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:r.x+10,y:r.y-7}]});await expect(page.locator('.vg-drop-note')).toHaveText('Скрепить участки');await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await touch.detach();}
  else{await page.mouse.move(r.x+10,r.y+3);await page.mouse.down();await page.mouse.move(r.x+10,r.y-7);await page.mouse.up();}
  await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(2);await expect(parts()).toHaveCount(1);

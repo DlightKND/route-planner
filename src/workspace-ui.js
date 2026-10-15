@@ -54,7 +54,7 @@ export function installWorkspaceStructure(root=document){
   const row=element(root,'div','workspace-heading-row'),actions=element(root,'div','catalog-page-actions');
   row.append(catalogHead.firstElementChild,actions);catalogHead.append(row);
   for(const id of ['catAdd','emShowAdd','stockAdd'])actions.append(root.getElementById(id));
-  const tabs=[...catalog.querySelectorAll('.subtabs')];if(tabs.length){tabs[0].classList.add('catalog-main-nav');catalogHead.append(tabs[0]);tabs.slice(1).forEach(tab=>tab.hidden=true);}
+  const tabs=[...catalog.querySelectorAll('.subtabs')];if(tabs.length){tabs[0].classList.add('catalog-main-nav');catalogHead.append(tabs[0]);tabs.slice(1).forEach(tab=>tab.remove());}
   setCatalogWorkspace('works',root);
  }
  const fleet=root.querySelector('[data-sec-panel="fleet"]');

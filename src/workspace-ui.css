@@ -11,6 +11,7 @@ html:root { --workspace-width:1280px; }
 .workspace-masthead :is(.th-sub,.entity-meta) { font-size:13px;line-height:1.5; }
 .workspace-masthead .entity-meta { margin-top:8px; }
 .workspace-page .entity-toolbar { position:static;top:auto;padding:0;margin:0 0 20px;background:transparent;border:0;box-shadow:none; }
+.workspace-page .stickyhead::before,.workspace-page .stickyhead::after,.view-planner .stickyhead::before,.view-planner .stickyhead::after { content:none; }
 .workspace-masthead .entity-toolbar { margin:0; }
 .workspace-page .entity-tabs { gap:24px;min-height:48px;align-items:stretch;border-bottom:1px solid var(--line); }
 .workspace-masthead .entity-tabs { border-bottom:0; }
@@ -123,6 +124,8 @@ html:root { --workspace-width:1280px; }
 .view-planner .chips .chip { border:1px solid transparent;border-radius:999px;min-height:36px;padding:6px 12px;background:transparent;font:400 12px/1.5 var(--sans); }
 .view-planner .chips .chip.on { border-color:var(--line);background:var(--panel);box-shadow:none; }
 .view-planner .kanban { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;overflow:visible;align-items:start; }
+.view-planner #plOrders { display:block;flex:none;overflow:visible; }
+.view-planner #orderList.kanban { flex:none;overflow:visible; }
 .view-planner .kanban>.kcol { width:auto;min-width:0;max-width:none;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:16px; }
 .view-planner .kcol-h { margin:0;padding:0 0 16px;align-items:center;font-size:14px; }
 .view-planner .kcol-h>span:first-child { display:flex;align-items:center;gap:8px; }
