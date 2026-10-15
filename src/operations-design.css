@@ -142,7 +142,7 @@ button,input,select,textarea { font-family:var(--sans); }
 .notice-toolbar { gap:12px; }
 .notice-tabs { border:1px solid var(--line);border-radius:8px;padding:3px;background:var(--panel); }
 .notice-tabs button { min-height:38px;border:0;border-radius:6px;padding:8px 16px;font:500 14px var(--sans);color:var(--ink-dim); }
-.notice-tabs button.on { background:var(--panel-2);color:var(--ink);box-shadow:inset 0 -2px var(--accent-line); }
+.notice-tabs button.on { background:var(--ink);color:var(--panel);box-shadow:none;border-radius:8px; }
 .notice-day { font:600 16px/1.5 var(--sans);margin:24px 0 12px; }
 .notice-row { position:relative;gap:16px;margin-bottom:0;border:1px solid var(--line);border-bottom:0;border-radius:0;padding:20px;background:var(--panel); }
 .notice-row:last-child,.notice-row:has(+.notice-day) { border-bottom:1px solid var(--line);border-radius:0 0 12px 12px; }

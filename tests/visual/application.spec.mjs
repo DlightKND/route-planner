@@ -259,15 +259,14 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     }
     if(testInfo.project.use.viewport.width<=390&&scene.name.startsWith('dispatcher')){
       expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Visible actions and the separate trips journal navigation keep the mobile header bounded').toBeLessThanOrEqual(scene.name==='dispatcher-trips'?272:224);
-      await active.locator('.dispatcher-more>summary:visible').click();
-      const filter=active.locator('.dispatcher-more:visible .planner-filter-menu');
+      const filter=active.locator('.dispatcher-actions>.planner-filter-menu');
       if(await filter.count()){
         await filter.locator('summary').click();await expect(filter.locator('select').first()).toBeVisible();
         await visibleTarget(filter.locator('select').first());
         await shot(page,testInfo,role+'-'+scene.name+'-filters');
         await page.keyboard.press('Escape');
         await expect(filter).not.toHaveAttribute('open','');
-        await expect(active.locator('.dispatcher-more>summary:visible')).toBeFocused();
+        await expect(filter.locator(':scope>summary')).toBeFocused();
       }
     }
     if(scene.view==='dash'&&role==='logist'){
@@ -385,7 +384,6 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await shot(page,testInfo,`${role}-schedule-request`);
     }
     if(scene.name==='trip'){
-      await active.locator('#tpReviewSummary > details > summary').click();
       await active.locator('#tpReviewPresence').click();
       await checkedPane(page,active,active.locator('#tpPresencePane'),audit,testInfo);
       await visibleTarget(active.locator('#tpPresenceTitle'));

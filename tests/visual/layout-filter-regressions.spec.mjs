@@ -21,7 +21,7 @@ test('dashboard hides redundant desktop switch and dates fit',async({page},info)
 test('notifications align with the common pane edges',async({page},info)=>{
  await open(page,info,'notifications');await expect(page.locator('.notice-header')).toBeVisible();
  const edges=await page.locator('#noticeHost').evaluate(el=>{const p=el.parentElement,s=getComputedStyle(p),r=el.getBoundingClientRect(),pr=p.getBoundingClientRect();return {left:r.left-pr.left-parseFloat(s.paddingLeft),right:pr.right-r.right-parseFloat(s.paddingRight)};});
- expect(Math.abs(edges.left)).toBeLessThanOrEqual(1);expect(Math.abs(edges.right)).toBeLessThanOrEqual(1);
+ expect(edges.left).toBeGreaterThanOrEqual(-1);expect(edges.right).toBeGreaterThanOrEqual(-1);expect(Math.abs(edges.left-edges.right)).toBeLessThanOrEqual(1);expect((await page.locator('#noticeHost').boundingBox()).width).toBeLessThanOrEqual(1120);
  await page.screenshot({path:'test-results/layout-fixes/'+info.project.name+'-notifications.png'});
 });
 test('dispatcher filters preserve kanban and explicitly selected list',async({page},info)=>{
@@ -81,12 +81,12 @@ test('dispatcher actions keep stable mobile slots and task status chips control 
   if(page.viewportSize().width<=760){
    const menu=actions.locator('.dispatcher-more'),trigger=menu.locator(':scope>summary'),search=page.locator('#'+prefix+'Search');
    await expect(trigger).toBeVisible();await expect(page.locator('#'+prefix+'Trash')).toBeHidden();await expect(page.locator('#'+prefix+'Add')).toBeVisible();
-   const [input,plus,dots]=await Promise.all([search.boundingBox(),page.locator('#'+prefix+'Add').boundingBox(),trigger.boundingBox()]);expect(Math.abs(input.y-plus.y)).toBeLessThanOrEqual(1);expect(plus.width).toBe(44);expect(plus.height).toBe(44);expect(plus.x).toBeGreaterThanOrEqual(input.x+input.width);expect(dots.x).toBeGreaterThanOrEqual(plus.x+plus.width);await expect(page.locator('#'+prefix+'Add .dispatcher-add-label')).toBeHidden();await expect(page.locator('#'+prefix+'Add')).toHaveAttribute('aria-label',/^Создать/);expect(Math.abs(input.y-dots.y)).toBeLessThanOrEqual(1);expect(dots.x).toBeGreaterThanOrEqual(input.x+input.width);expect(dots.height).toBeGreaterThanOrEqual(44);layouts.push(dots);
+   const [input,create,dots]=await Promise.all([search.boundingBox(),page.locator('#'+prefix+'Add').boundingBox(),trigger.boundingBox()]);expect(create.y).toBeGreaterThanOrEqual(input.y+input.height);expect(create.height).toBeGreaterThanOrEqual(44);expect(dots.height).toBeGreaterThanOrEqual(44);await expect(page.locator('#'+prefix+'Add .dispatcher-add-label')).toBeVisible();await expect(page.locator('#'+prefix+'Add')).toHaveAttribute('aria-label',/^Создать/);await expect(actions.locator('.planner-filter-menu>summary')).toBeVisible();await expect(actions.locator('.dispatcher-view-mode')).toBeVisible();layouts.push(dots);
    await revealDispatcherActions(page);await expect(page.locator('#'+prefix+'Trash')).toBeVisible();
   }
   await actions.locator('.planner-filter-menu>summary').click();await expect(actions.locator('.planner-filter-panel')).toBeVisible();
   const panel=await actions.locator('.planner-filter-panel').boundingBox();expect(panel.x).toBeGreaterThanOrEqual(0);expect(panel.x+panel.width).toBeLessThanOrEqual(page.viewportSize().width);
-  await page.keyboard.press('Escape');if(page.viewportSize().width<=760){await page.keyboard.press('Escape');await expect(actions.locator('.dispatcher-more>summary')).toBeFocused();}
+  await page.keyboard.press('Escape');await expect(actions.locator('.planner-filter-menu>summary')).toBeFocused();
   await page.screenshot({path:'test-results/mobile-dispatcher/'+info.project.name+'-'+route+'.png'});
  }
  for(const dots of layouts.slice(1)){expect(dots.x).toBeCloseTo(layouts[0].x,0);expect(dots.y).toBeCloseTo(layouts[0].y,0);}
