@@ -63,7 +63,7 @@ it('guards expense links and disables stage actions while the task result is uns
  ctx.tripCostSummary=vi.fn(async()=>[{trip_id:'trip1',distance_cost:120}]);ctx.confirmLeave=vi.fn(()=>false);
  await ui.open('order1');await new Promise(r=>setTimeout(r,0));
  doc.querySelector('[data-result-qty]').value='1';doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));
- doc.getElementById('orderMore').click();const review=[...doc.querySelectorAll('.entity-menu-item')].find(b=>b.textContent==='Передать на проверку');expect(review.disabled).toBe(true);doc.querySelector('.entity-actions-menu').close();
+ const review=doc.querySelector('[data-order-next=review]');expect(review.textContent).toBe('Передать на проверку');expect(review.disabled).toBe(true);
  doc.querySelector('#orderTripCostAllocation [data-order-trip]').click();
  expect(ctx.confirmLeave).toHaveBeenCalledOnce();expect(ctx.openTrip).not.toHaveBeenCalled();expect(ui.isDirty()).toBe(true);
 });
@@ -119,8 +119,8 @@ it('offers only editable planned trips that do not already include this task, wi
 it('keeps result edits before adding a task to an existing trip',async()=>{
  await ui.open('order1');doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));expect(doc.getElementById('orderTripExisting').disabled).toBe(true);await doc.getElementById('orderTripExisting').onclick();expect(doc.getElementById('orderTripPicker').hidden).toBe(true);expect(ctx.openTrip).not.toHaveBeenCalled();expect(ui.isDirty()).toBe(true);
 });
-it('shows execution before administrative fields for engineers and keeps a readable brief',async()=>{
- ctx.canWrite=()=>false;order.instructions='Проверить насос';await ui.open('order1');expect(doc.getElementById('orderOrganization').hidden).toBe(true);expect(doc.querySelector('.order-brief').textContent).toContain('Проверить насос');expect(doc.getElementById('orderPane-history').hidden).toBe(false);expect(doc.getElementById('orderPane-scope').hidden).toBe(true);expect(doc.getElementById('orderTab-history').getAttribute('aria-selected')).toBe('true');
+it('opens the engineer briefing and saved quantities before administrative fields',async()=>{
+ ctx.canWrite=()=>false;order.instructions='Проверить насос';await ui.open('order1');expect(doc.getElementById('orderOrganization').hidden).toBe(true);expect(doc.querySelector('.order-brief').textContent).toContain('Проверить насос');expect(doc.getElementById('orderPane-history').hidden).toBe(true);expect(doc.getElementById('orderPane-scope').hidden).toBe(false);expect(doc.getElementById('orderTab-scope').getAttribute('aria-selected')).toBe('true');
 });
 it('waits for the request navigation guard and keeps the current task when it refuses',async()=>{
  ctx.beforeOpen=vi.fn(async()=>true);await ui.open('order1');const previous=doc.getElementById('orderTitle');const result=doc.querySelector('[data-result-qty]');ctx.beforeOpen=vi.fn(async()=>false);await ui.open(null,job);expect(doc.getElementById('orderTitle')).toBe(previous);expect(doc.querySelector('[data-result-qty]')).toBe(result);expect(ui.currentId()).toBe('order1');
@@ -128,9 +128,9 @@ it('waits for the request navigation guard and keeps the current task when it re
 
 it('routes changes to the base request scope through the estimate and leaves additions to separate tasks',async()=>{order.status='draft';await ui.open('order1');expect(doc.getElementById('orderItemAdd')).toBeNull();expect(doc.getElementById('orderMaterialAdd')).toBeNull();expect(doc.querySelector('.order-item-fields').hidden).toBe(true);doc.getElementById('orderMore').click();expect([...doc.querySelectorAll('.entity-menu-item')].some(b=>b.textContent==='Дополнительное задание')).toBe(true);doc.querySelector('.entity-actions-menu').close();order.seed_request_id=null;await ui.open('order1');expect(doc.getElementById('orderItemAdd')).not.toBeNull();expect(doc.querySelector('.order-item-fields').hidden).toBe(false);});
 
-it('shows assigned scope first and keeps active engineers on the result',async()=>{
+it('opens shared scope for assigned and active engineers and keeps result permissions',async()=>{
  ctx.canWrite=()=>false;order.status='assigned';await ui.open('order1');expect(doc.getElementById('orderPane-scope').hidden).toBe(false);expect(doc.querySelector('[data-result-qty]').disabled).toBe(true);
- order.id='active-other';order.status='in_progress';await ui.open(order.id);expect(doc.getElementById('orderPane-history').hidden).toBe(false);expect(doc.querySelector('[data-result-qty]').disabled).toBe(false);
+ order.id='active-other';order.status='in_progress';await ui.open(order.id);expect(doc.getElementById('orderPane-scope').hidden).toBe(false);expect(doc.querySelector('[data-result-qty]').disabled).toBe(false);
 });
 it('switches mounted panels without writes, leave checks or loss of unsaved result values',async()=>{
  ctx.canWrite=()=>false;ctx.confirmLeave=vi.fn(()=>false);await ui.open('order1');const qty=doc.querySelector('[data-result-qty]');qty.value='1.5';qty.dispatchEvent(new win.Event('input',{bubbles:true}));
@@ -141,12 +141,12 @@ it('saves mounted result values while another panel is selected and retains that
  await ui.open('order1');const qty=doc.querySelector('[data-result-qty]');qty.value='1';qty.dispatchEvent(new win.Event('input',{bubbles:true}));doc.getElementById('orderTab-travel').click();ctx.confirmLeave=()=>true;
  await doc.getElementById('orderResultSave').onclick();expect(rpcCalls[0].args.p_items[0].done_qty).toBe(1);expect(doc.getElementById('orderPane-travel').hidden).toBe(false);expect(ui.isDirty()).toBe(false);
 });
-it('retains the initial result tab after saving without any tab navigation',async()=>{
+it('returns to the initial briefing after saving without any tab navigation',async()=>{
  ctx.canWrite=()=>false;await ui.open('order1');
- expect(doc.getElementById('orderPane-history').hidden).toBe(false);
+ expect(doc.getElementById('orderPane-scope').hidden).toBe(false);
  const qty=doc.querySelector('[data-result-qty]');qty.value='1';qty.dispatchEvent(new win.Event('input',{bubbles:true}));ctx.confirmLeave=()=>true;
  await doc.getElementById('orderResultSave').onclick();
- expect(doc.getElementById('orderPane-history').hidden).toBe(false);expect(doc.getElementById('orderTab-history').getAttribute('aria-selected')).toBe('true');expect(ui.isDirty()).toBe(false);
+ expect(doc.getElementById('orderPane-scope').hidden).toBe(false);expect(doc.getElementById('orderTab-scope').getAttribute('aria-selected')).toBe('true');expect(ui.isDirty()).toBe(false);
 });
 it('routes invalid hidden plan fields back to scope without discarding other values',async()=>{
  order.status='assigned';await ui.open('order1');doc.getElementById('orderTitle').value='';doc.getElementById('orderInstructions').value='Сохранить инструкцию';doc.getElementById('orderTab-history').click();
@@ -242,4 +242,24 @@ it('filters individual task statuses in kanban and list without changing data',a
  await doc.querySelector('[data-os="in_progress"]').onclick();expect(doc.querySelectorAll('.kcard')).toHaveLength(1);
  doc.getElementById('orderClosed').checked=true;await doc.getElementById('orderClosed').onchange({target:{checked:true}});expect(doc.querySelector('[data-os="completed"]').getAttribute('aria-pressed')).toBe('true');
  await doc.querySelector('[data-os="completed"]').onclick();expect(doc.getElementById('orderClosed').checked).toBe(false);expect(order.status).toBe('in_progress');expect(rpcCalls).toEqual([]);
+});
+
+it('shows saved quantities and a separate review handoff without recording another result',async()=>{
+ order.service_order_items[0].done_qty=1;await ui.open('order1');
+ const summary=doc.getElementById('orderResultSummary');
+ expect(summary.textContent).toContain('Результат сохранён · ещё не передан на проверку');
+ expect(summary.querySelector('[data-remaining]').textContent).toContain('1 шт');
+ expect(doc.getElementById('orderSaveState').closest('.order-savebar').hidden).toBe(false);
+ await summary.querySelector('[data-order-next=review]').onclick();
+ expect(rpcCalls.some(x=>x.fn==='service_order_transition'&&x.args.p_status==='review')).toBe(true);
+ expect(rpcCalls.some(x=>x.fn==='service_order_record_result')).toBe(false);
+});
+
+it('puts unresolved remainder and its supported transfer next to the curator decision',async()=>{
+ order.status='review';order.service_order_items[0].done_qty=1;await ui.open('order1');
+ expect(doc.querySelector('[data-order-next=completed]').disabled).toBe(true);
+ expect(doc.getElementById('orderResultSummary').querySelector('[data-summary-carry]')).not.toBeNull();
+ doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));
+ expect(doc.querySelector('[data-summary-carry]').disabled).toBe(true);
+ expect(rpcCalls).toHaveLength(0);
 });

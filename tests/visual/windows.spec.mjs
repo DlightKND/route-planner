@@ -45,8 +45,8 @@ test('dirty modal preserves input on cancelled discard and contains nested keybo
 
 test('signature cancel aborts closing, while unsigned completion is a separate result',async({page})=>{
  await open(page,'openJob',job);await open(page,'sign');await expect(page.locator('#signOverlay')).toBeVisible();
- await page.locator('#signCancel').click();await expect.poll(()=>page.evaluate(()=>window.__signResult)).toBe('cancelled');
- await open(page,'sign');await page.locator('#signSkip').click();await expect.poll(()=>page.evaluate(()=>window.__signResult)).toBe('unsigned');
+ await page.locator('#signMore').click();await page.getByRole('button',{name:'Отменить завершение',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.__signResult)).toBe('cancelled');
+ await open(page,'sign');await page.locator('#signMore').click();await page.getByRole('button',{name:'Продолжить без подписи',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.__signResult)).toBe('unsigned');
  await open(page,'sign');await page.keyboard.press('Escape');await expect.poll(()=>page.evaluate(()=>window.__signResult)).toBe('cancelled');
 });
 
@@ -131,9 +131,10 @@ test('Escape closes only the top confirmation and keeps its parent dialog open',
 
 test('vehicle summary is compact, corners clip correctly and GPS details remain usable',async({page},info)=>{
  await open(page,'vehicle');const modal=page.locator('#vehOverlay .modal');await expect(modal).toBeVisible();
- await expect(page.locator('#vehOdometer')).toBeHidden();await expect(page.locator('#vehCopy')).toBeHidden();
+ await expect(page.locator('#vehOdometer')).toBeVisible();await expect(page.locator('#vehCopy')).toBeVisible();
  const shape=await modal.evaluate(el=>{const s=getComputedStyle(el);return {overflow:s.overflow,radii:[s.borderTopLeftRadius,s.borderTopRightRadius,s.borderBottomRightRadius,s.borderBottomLeftRadius],shadow:s.boxShadow};});
  expect(shape.overflow).toBe('hidden');expect(shape.radii).toEqual(['16px','16px','16px','16px']);expect(shape.shadow).not.toBe('none');
+ await page.locator('.vehicle-details summary').click();await expect(page.locator('#vehCopy')).toBeHidden();
  await page.locator('.vehicle-details summary').click();await expect(page.locator('#vehCopy')).toBeVisible();await expect(page.locator('#vehOdometer')).toBeVisible();
  await page.locator('#vehOdometer').click();await expect(page.locator('#promptOverlay')).toBeVisible();await page.keyboard.press('Escape');await expect(modal).toBeVisible();
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-vehicle.png'});

@@ -4,5 +4,7 @@ export async function revealDispatcherActions(page){
   if(await menu.count()&&!await menu.evaluate(el=>el.open))await menu.locator(':scope>summary').click();
 }
 export async function clickDispatcherControl(page,selector){
-  await revealDispatcherActions(page);await page.locator(selector).click();
+  const control=page.locator(selector);
+  if(await control.evaluate(el=>!!el.closest('.dispatcher-more')))await revealDispatcherActions(page);
+  await control.click();
 }

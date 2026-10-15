@@ -66,11 +66,11 @@ test('a split part snaps back with touch or mouse and Escape preserves the cut',
  expect(await parts().evaluateAll(els=>els.reduce((n,e)=>n+Number(e.dataset.pieceTo)-Number(e.dataset.pieceFrom),0))).toBe(6);
  expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
-test('trip panel uses one primary row and keeps secondary actions and time behind more',async({page},info)=>{
+test('trip panel keeps direct navigation, independent time details and secondary actions behind more',async({page},info)=>{
  const {week,errors}=await open(page,info);await week.locator('.vg-piece .road').first().locator('..').focus();await page.keyboard.press('Enter');
  const panel=page.locator('.gpop');await expect(panel.locator('[data-pop-action]')).toBeVisible();await expect(panel.locator('.gp-secondary')).toBeHidden();
  const r=await panel.locator('.gp-trip-tools').evaluate(el=>[...el.children].map(x=>{const b=x.getBoundingClientRect();return {top:b.top,bottom:b.bottom};}));expect(r[0].top).toBeCloseTo(r[1].top);expect(r[0].bottom).toBeCloseTo(r[1].bottom);
- await expect(panel).toHaveCSS('width',/\d/);expect((await panel.boundingBox()).height).toBeLessThan(170);
+ const bounds=await panel.boundingBox();expect(bounds.width).toBeLessThanOrEqual(420);expect(bounds.height).toBeLessThan(page.viewportSize().height-16);await expect(panel.locator('[data-pop-open]')).toBeVisible();await expect(panel.locator('[data-pop-map]')).toBeVisible();await expect(panel.locator('.gp-layout summary')).toBeVisible();
  await panel.locator('[data-pop-more]').click();await expect(panel.locator('[data-pop-resched]')).toBeVisible();await panel.locator('.gp-layout summary').click();await expect(panel.locator('.gp-days')).toContainText('Участок 1');
  await page.keyboard.press('Escape');await expect(panel).toBeVisible();await expect(panel.locator('.gp-secondary')).toBeHidden();await expect(panel.locator('[data-pop-more]')).toBeFocused();
  mkdirSync('test-results/direct-gestures',{recursive:true});await panel.screenshot({path:'test-results/direct-gestures/'+info.project.name+'-panel.png'});
