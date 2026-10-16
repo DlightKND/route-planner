@@ -92,7 +92,7 @@ async function integrity(page,active,audit,testInfo) {
     const visible=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';};
     const fields='input:not([type]),input[type=text],input[type=date],input[type=number],input[type=search],input[type=email],input[type=tel],select,textarea';
     return [...root.querySelectorAll(fields+',button.btn,.entity-tabs button')].filter(visible).filter(el=>!el.closest('.leaflet-control,.vg-grid,.gt-grid')).map(el=>{
-      const s=getComputedStyle(el);return {label:el.id||el.getAttribute('aria-label')||el.textContent.trim().slice(0,50)||el.tagName,field:el.matches(fields),btn:el.matches('button.btn'),tab:el.getAttribute('role')==='tab',radius:parseFloat(s.borderTopLeftRadius),font:s.fontFamily,transform:s.textTransform,padding:[s.paddingTop,s.paddingRight,s.paddingBottom,s.paddingLeft].map(parseFloat),before:getComputedStyle(el,'::before').content};
+      const s=getComputedStyle(el);return {label:el.id||el.getAttribute('aria-label')||el.textContent.trim().slice(0,50)||el.tagName,field:el.matches(fields),btn:el.matches('button.btn'),tab:el.getAttribute('role')==='tab'||el.matches('.activity-filters button'),radius:parseFloat(s.borderTopLeftRadius),font:s.fontFamily,transform:s.textTransform,padding:[s.paddingTop,s.paddingRight,s.paddingBottom,s.paddingLeft].map(parseFloat),before:getComputedStyle(el,'::before').content};
     });
   });
   for(const control of controls){

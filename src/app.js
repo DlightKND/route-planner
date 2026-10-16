@@ -31,12 +31,12 @@ import './entity-pages.css';
 import './operations-design.css';
 import { installOperationsUI } from './operations-ui.js';
 import './workspace-ui.css';
-import {installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
+import {frameGpsResolutionPrompt,restoreGpsResolutionPrompt,framePresenceWorkspace,installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
 import { dashboardSummaryHTML } from './dashboard-summary.js';
-import { createNotifications } from './notifications.js';
+import { createNotifications, loadNotificationDecisions } from './notifications.js';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
@@ -53,7 +53,7 @@ const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profil
  tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
  confirm:(message,options)=>confirmDialog(message,options),beforeOpen:async()=>await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});
 serviceOrders.init();
-const notifications=createNotifications({db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
+const notifications=createNotifications({loadDecisions:uid=>loadNotificationDecisions(sb,uid),db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
 const unassignedTracks=createUnassignedTracks({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
  period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
@@ -238,7 +238,7 @@ $('confirmYes').onclick=()=>_cdDone(true); $('confirmNo').onclick=()=>_cdDone(fa
 $('confirmOverlay').addEventListener('click',e=>{ if(e.target===$('confirmOverlay')) _cdDone(false); });
 let _pdRes=null;
 function promptDialog(title,fields=[],opts={}){ return new Promise(res=>{
-  _pdRes=res; $('promptTitle').textContent=title||'Ввод';$('promptYes').textContent=opts.okText||'Сохранить';
+  restoreGpsResolutionPrompt($('promptOverlay'));_pdRes=res; $('promptTitle').textContent=title||'Ввод';$('promptYes').textContent=opts.okText||'Сохранить';
   $('promptFields').innerHTML=fields.map((f,i)=>{
     const id='promptField'+i, attrs=' id="'+id+'" data-pf="'+esc(f.key)+'"'+(f.required?' required':'');
     const label='<label for="'+id+'">'+esc(f.label||'')+'</label>';
@@ -246,7 +246,7 @@ function promptDialog(title,fields=[],opts={}){ return new Promise(res=>{
     if(f.type==='select')return label+'<select'+attrs+'>'+(f.options||[]).map(o=>'<option value="'+esc(o.value)+'"'+(String(o.value)===String(f.value??'')?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select>';
     const type=['text','number','date','time','datetime-local','tel','email','url'].includes(f.type)?f.type:'text';
     return label+'<input type="'+type+'"'+attrs+' value="'+esc(f.value??'')+'"'+(f.inputmode?' inputmode="'+esc(f.inputmode)+'"':'')+(f.min!=null?' min="'+esc(f.min)+'"':'')+(type==='number'?' step="'+esc(f.step||'any')+'"':'')+'>';
-  }).join(''); $('promptOverlay').classList.add('on');
+  }).join('');if(opts.gpsResolution){$('promptTitle').textContent='Оформление GPS-записи';frameGpsResolutionPrompt($('promptOverlay'),opts.gpsResolution,action=>{const draft=Object.fromEntries([...$('promptOverlay').querySelectorAll('[data-pf]')].map(el=>[el.dataset.pf,el.value]));$('promptOverlay').classList.remove('on');const done=_pdRes;_pdRes=null;done?.({__nextAction:action,__draft:draft});});} $('promptOverlay').classList.add('on');
 }); }
 function _pdDone(ok){ const ov=$('promptOverlay'); let out=null; if(ok){ if([...ov.querySelectorAll('[data-pf]')].some(el=>!el.reportValidity()))return; out={}; ov.querySelectorAll('[data-pf]').forEach(el=>{ out[el.dataset.pf]=el.value; }); } ov.classList.remove('on'); const r=_pdRes; _pdRes=null; if(r) r(out); }
 $('promptYes').onclick=()=>_pdDone(true); $('promptNo').onclick=()=>_pdDone(false);
@@ -2383,13 +2383,13 @@ function gtVerticalHtml(key){
         const layout=dayLayout[String(b.id)+'|'+iso]||{col:0,cols:1},narrow=layout.cols>1;
         bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+(height<40?' short':'')+(height<40&&live?' short-live':'')+(height<44?' tap-short':'')+(contUp?' cont-up':'')+(contDown?' cont-down':'')+(action&&layout.col===0?' has-act':'')+(narrow?' col narrow':'')+'" role="button" tabindex="0" aria-label="'+esc((b.kind==='trip'?'Выезд: ':'Заявка: ')+gtBlockName(b)+' · '+shortDate(iso))+'" data-readonly="'+(!gtCanEditBlock(b))+'" data-gb="'+esc(b.id)+'" data-job-id="'+esc((b.jobIds||[]).length===1?b.jobIds[0]:'')+'" data-block="'+esc(b.id)+'" data-block-day="'+iso+'" style="--col:'+layout.col+';--cols:'+layout.cols+';--block-tint:'+(feedCtx.mine?'transparent':loadTint(startP))+';top:'+top+'px;height:'+height+'px">'+roads
           +(burn>0?'<i class="vg-burn" style="height:'+burn.toFixed(2)+'%"></i><i class="vg-burn-edge" style="top:'+burn.toFixed(2)+'%"></i>':'')
-          +'<span class="vg-label">'+(title?'<b>'+esc(title)+(b.manual?' ✎':'')+'</b>':'')+'<span class="vg-meta">'+meta+'</span></span>'+(layout.col===0?act:'')+gtPlanTools(b)+'</div>';
+          +'<span class="vg-label">'+(title?'<b>'+esc(title)+(b.manual?' ✎':'')+'</b>':'')+'<span class="vg-meta">'+meta+'</span></span>'+(layout.col===0?act:'')+'</div>';
         if(occupied.length>1){const g=groupBounds[b.id]||(groupBounds[b.id]={top,bottom:top+height,b,name:gtBlockName(b)});g.top=Math.min(g.top,top);g.bottom=Math.max(g.bottom,top+height);}
         if(iso===today&&b.status==='in_progress'&&now.t>to){const tailTop=offset+(to-row.top)*GT_WEEK_PX_H,tailH=Math.max(2,(Math.min(now.t,row.bot)-to)*GT_WEEK_PX_H);if(tailH>0)bars+='<i class="vg-tail" style="top:'+tailTop+'px;height:'+tailH+'px"></i>';}
       });
       if(iso===today&&now.t>=row.top&&now.t<=row.bot) bars+='<span class="vg-nowline" style="top:'+(offset+(now.t-row.top)*GT_WEEK_PX_H)+'px"><b></b><s></s></span>';
       offset+=row.px;});
-    const groups=Object.values(groupBounds).map(g=>'<div class="vg-group" data-vggroup data-gb="'+esc(g.b.id)+'" data-job-id="'+esc((g.b.jobIds||[]).length===1?g.b.jobIds[0]:'')+'" style="top:'+g.top+'px;height:'+(g.bottom-g.top)+'px"><b class="vg-gtitle">'+esc(g.name)+(g.b.manual?' ✎':'')+'</b></div>').join('');
+    const groups=Object.values(groupBounds).map(g=>'<div class="vg-group" data-vggroup data-gb="'+esc(g.b.id)+'" data-job-id="'+esc((g.b.jobIds||[]).length===1?g.b.jobIds[0]:'')+'" style="top:'+g.top+'px;height:'+(g.bottom-g.top)+'px"><b class="vg-gtitle">'+esc(g.name)+(g.b.manual?' ✎':'')+'</b>'+gtPlanTools(g.b)+'</div>').join('');
     tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'" style="height:'+totalH+'px">'+cells+bars+groups+'<span class="vg-tip" hidden></span></div>';
   });
   return '<div class="vg-tools"><span>'+(feedCtx.mine?'Работы по дням':'Рабочее окно '+fmtH((+appSettings.day_end||16)-(+appSettings.day_start||7))+' · допуск '+fmtH(appSettings.tolerance_h||1))+' '+infoHint((feedCtx.mine?'':'Перетащите работу на субботу или воскресенье, чтобы открыть выходной. ')+'Нажмите на день — сутки и ручная раскладка.', 'Работа с графиком')+'</span>'+gtLanePicker(key)+'</div>'
@@ -2601,16 +2601,16 @@ function gtPop(key,b,trigger){
     :'';
   const navigation=hasTools?'<div class="gp-navigation"><button class="btn" data-pop-map>Показать на карте</button>'+(canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn" data-pop-open>Открыть выезд</button>':'')+'</div>':b.kind==='job'?'<div class="gp-navigation"><button class="btn" data-pop-job>Открыть заявку</button></div>':'';
   const total=(b.segs||[]).reduce((n,p)=>n+p.h,0),points=[{after:0,at:{d:b.start.iso,t:b.start.t}},...cuts.map(c=>{const p=gtPieces(b).find(p=>Math.abs(p.at-c.after)<.01);return {...c,at:p?{d:p.iso,t:p.from}:c.at};})];
-  const layout='<details class="gp-layout"><summary>Участки времени'+(cuts.length?' · '+(cuts.length+1):'')+'</summary>'
+  const layout='<details class="gp-layout" open><summary>Участки времени <span class="gp-section-count">'+(cuts.length+1)+'</span></summary>'
     +(editable?'<div class="gp-s">Перетащите участок. Подведите части друг к другу, чтобы скрепить.</div>':'')
     +(selectedDay&&editable?'<button class="btn sm ghost" data-pop-divide>Разделить в этом дне</button>':'')
     +'<div class="gp-days">'+points.map((c,i)=>'<div class="gp-r"><span class="gp-k">Участок '+(i+1)+'<small>'+fmtH(Math.max(0,(points[i+1]?.after??total)-c.after))+'</small></span><b class="gp-v">'+shortDate(c.at.d)+' · '+clockLabel(c.at.t)+'</b>'+(i&&editable?'<button class="gp-b" data-cut-del="'+(i-1)+'" aria-label="Скрепить с предыдущим участком" title="Скрепить с предыдущим">↥</button>':'')+'</div>').join('')+'</div></details>';
   const primary=action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'';
   const time=selectedDay?shortDate(selectedDay)+(selected?.dataset.pieceFrom?' · '+clockLabel(+selected.dataset.pieceFrom)+'–'+clockLabel(+selected.dataset.pieceTo):''):shortDate(b.start.iso)+' · '+clockLabel(b.start.t);
-  const h='<div class="gpop gpop-compact"><div class="design-eyebrow">'+(trip?'Выезд':'Заявка')+'</div><div class="gp-h"><span>'+esc(gtBlockName(b))+'</span><button class="gp-close" data-gclose aria-label="Закрыть">×</button></div>'
+  const h='<div class="gpop gpop-workspace"><div class="gp-record-head"><div><div class="design-eyebrow">'+(trip?'Выезд':'Заявка')+'</div><h3>'+esc(gtBlockName(b))+'</h3></div><div class="gp-head-actions">'+(hasTools&&secondary?'<button class="btn sm ghost gp-more" data-pop-more aria-label="Другие действия" aria-expanded="false">⋯</button>':'')+'<button class="gp-close" data-gclose aria-label="Закрыть">×</button></div></div>'
     +'<div class="gp-caption">'+time+' · '+(cuts.length?(cuts.length+1)+' '+plural(cuts.length+1,'участок','участка','участков'):'авто')+'</div>'
     +(b.scheduleOnly?'<div class="gp-s">Исторический выезд · экипаж не указан · только просмотр графика</div>':'')
-    +(hasTools?'<div class="gp-trip-tools">'+primary+'<button class="btn sm ghost gp-more" data-pop-more aria-label="Другие действия" aria-expanded="false">⋯</button></div><div class="gp-secondary" hidden>'+secondary+(b.manual&&editable?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div>':'')+navigation+layout+'</div>';
+    +(hasTools?'<div class="gp-trip-tools">'+primary+'</div><div class="gp-secondary" hidden>'+secondary+'</div>':'')+navigation+layout+(b.manual&&editable?'<footer class="gp-time-footer"><button class="btn sm ghost" data-greset>Сбросить к авто</button><span class="hint">План времени</span></footer>':'')+'</div>';
   document.body.insertAdjacentHTML('beforeend',h);const pop=document.body.lastElementChild;
   const fit=()=>{if(window.matchMedia('(max-width:760px)').matches)return;pop.style.top=Math.max(8,Math.min(parseFloat(pop.style.top)||8,window.innerHeight-pop.offsetHeight-8))+'px';};
   const more=pop.querySelector('[data-pop-more]'),menu=pop.querySelector('.gp-secondary');
@@ -5706,7 +5706,7 @@ async function openPresenceEditor(tid,stayId,jobId){
     dialog.innerHTML='<form method="dialog"><div class="presence-editor-head"><h3 id="presenceEditorTitle">Привязка и присутствие</h3><button class="btn sm" type="submit" aria-label="Закрыть">✕</button></div></form>'
       +presenceHTML({...data,jobIds:data.job_ids,stays:[stay]},tripJobsAll,profilesList,{editor:true,orders:ordersForTrip})
       +'<label>Комментарий<input class="presence-reason" value="Проверено по треку и составу команды"></label><p class="presence-error err" role="alert"></p><div class="presence-editor-foot"><button type="button" class="btn amber" data-presence-submit>Привязать и подтвердить</button></div>';
-    document.body.append(dialog);wirePresenceRecovery(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
+    framePresenceWorkspace(dialog,stay);document.body.append(dialog);wirePresenceRecovery(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
     const save=dialog.querySelector('[data-presence-submit]'),status=dialog.querySelector('[data-presence="status"]');
     const row=dialog.querySelector('[data-presence-id]'),job=dialog.querySelector('[data-presence="job_id"]');
     job.addEventListener('change',()=>renderTaskAllocationControls(row,job.value,ordersForTrip,job.value===original.job_id?(original.task_allocations||[]):[]));

@@ -41,7 +41,7 @@ test('chain draft collects client and engineer and can cancel without writes',as
 });
 test('charge shows the cost basis and requires a separate amount confirmation',async({page},info)=>{
  await open(page,info);await page.getByText('Другие действия',{exact:true}).click();await page.getByRole('button',{name:'Списать инженеру',exact:true}).click();
- await expect(page.locator('#promptTitle')).toContainText('12,5');await page.locator('[data-pf=engineer]').selectOption('00000000-0000-4000-8000-000000000002');
+ await expect(page.locator('.gps-resolution-summary')).toContainText('12,5');await page.locator('[data-pf=engineer]').selectOption('00000000-0000-4000-8000-000000000002');
  await page.locator('[data-pf=reason]').fill('Подтверждённая личная поездка');await page.locator('#promptYes').click();
  await expect(page.locator('#confirmOverlay')).toBeVisible();await expect(page.locator('#confirmOverlay')).toContainText('1 500');
  await page.locator('#confirmNo').click();await expect(page.locator('.unassigned-card')).toBeVisible();await clean(page);

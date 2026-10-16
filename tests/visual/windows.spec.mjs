@@ -75,7 +75,7 @@ test('timeline primary action stays readable and help does not compete with trip
  const week=page.locator('.vg-block.trip').first().locator('xpath=ancestor::*[@data-gtbox]');await week.locator('[data-gday]').first().click();const block=week.locator('.vg-piece').filter({has:page.locator('.road')}).first();await block.scrollIntoViewIfNeeded();await block.click({position:{x:12,y:10}});
  const panel=page.locator('.gpop');await expect(panel).toBeVisible();const primary=panel.locator('[data-pop-action]');
  expect((await primary.boundingBox()).height).toBeLessThanOrEqual(70);
- expect(await panel.locator('.gp-layout').evaluate(el=>el.open)).toBe(false);
+ expect(await panel.locator('.gp-layout').evaluate(el=>el.open)).toBe(true);
  for(const button of await panel.locator('.gp-trip-tools button').all())expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(44);
  await page.keyboard.press('Escape');await expect(panel).toHaveCount(0);
 });

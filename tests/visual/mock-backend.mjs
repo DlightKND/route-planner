@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -318,6 +318,9 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     activeTask.trip_service_orders=[{trip_id:trip,trips:ride}];
     tables.trip_service_orders.push({trip_id:trip,order_id:activeTask.id,service_orders:activeTask,trips:ride});
   }
+  if(decisionQueue)tables.trip_stays.find(s=>s.id==='stay-past').status='detected';
+  if(reviewOrder||decisionQueue){activeTask.status='review';activeTask.result_note='Диагностика завершена. Осталась замена уплотнения.';}
+  if(designTripChoices){tables.trips.push({...ride,id:'30000000-0000-4000-8000-000000000010',vehicle_label:'Выезд с ответственным инженером',engineer_ids:[engineer],trip_service_orders:[]},{...ride,id:'30000000-0000-4000-8000-000000000011',vehicle_label:'Выезд с другой командой',engineer_ids:[other],trip_service_orders:[]});}
   const audit = (window.__visualQA = {
     reads: [],
     queryErrors: [],

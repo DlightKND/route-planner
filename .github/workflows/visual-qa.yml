@@ -23,7 +23,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium --only-shell
       - name: Capture complete workspaces for design review
-        run: npx playwright test tests/visual/workspace-review.spec.mjs --project=mobile-390-light --project=desktop-1440-light --retries=0 --timeout=15000
+        run: npx playwright test tests/visual/workspace-review.spec.mjs tests/visual/design-states.spec.mjs --project=mobile-390-light --project=desktop-1440-light --retries=0 --timeout=15000
       - name: Keep workspace comparison screens
         if: always()
         uses: actions/upload-artifact@v4

@@ -1,7 +1,44 @@
 import {openEntityPanel} from './entity-actions.js';
+import {presenceBounds} from './core/trip-presence-recovery.js';
 
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const element=(doc,tag,className)=>{const node=doc.createElement(tag);node.className=className;return node;};
+
+export function restoreGpsResolutionPrompt(overlay){
+ const workspace=overlay.querySelector('.gps-resolution-workspace'),fields=overlay.querySelector('#promptFields');if(workspace){workspace.before(fields);workspace.remove();}overlay.querySelector('.modal')?.classList.remove('gps-resolution-modal');
+}
+
+export function frameGpsResolutionPrompt(overlay,context,onSwitch){
+ const doc=overlay.ownerDocument,fields=overlay.querySelector('#promptFields'),workspace=element(doc,'div','gps-resolution-workspace'),main=element(doc,'div','gps-resolution-main'),aside=element(doc,'aside','gps-resolution-summary');
+ overlay.querySelector('.modal').classList.add('gps-resolution-modal');
+ const choices=[['link','Связать с существующей поездкой','Выбери доступный план той же машины.'],['chain','Создать заявку, задание и поездку','Будут созданы связанные черновики.'],['charge','Проверить начисление инженеру','Проверь пробег, ставку и основание перед списанием.']];
+ main.innerHTML=`<p class="design-eyebrow">${escape(context.vehicle)} · ${escape(context.period)}</p><h3>Выберите результат оформления</h3><p class="hint">Запись не будет создана или привязана до подтверждения.</p><div class="gps-resolution-choices">${choices.map(([key,title,description])=>`<button type="button" data-gps-choice="${key}" aria-pressed="${key===context.action}" ${key==='charge'&&!context.canCharge?'disabled':''}><strong>${title}</strong><span>${description}</span></button>`).join('')}</div><h3>Параметры решения</h3>`;
+ fields.before(workspace);main.append(fields);workspace.append(main,aside);
+ const paint=()=>{
+  const field=key=>fields.querySelector('[data-pf="'+key+'"]'),selected=key=>field(key)?.selectedOptions?.[0]?.textContent||'Не выбрано';let amount='';try{amount=context.action==='charge'?context.cost(field('km').value):'';}catch{amount='Проверь пробег';}
+  aside.innerHTML=`<h3>Что будет сохранено</h3><dl><div><dt>Операция</dt><dd>${escape(choices.find(x=>x[0]===context.action)[1])}</dd></div><div><dt>GPS-запись</dt><dd>${escape(context.km)} км · ${escape(context.points)} точек</dd></div><div><dt>Разрывы GPS</dt><dd>${escape(context.gaps)}</dd></div><div><dt>${context.action==='link'?'Выезд':'Инженер'}</dt><dd>${escape(selected(context.action==='link'?'trip':'engineer'))}</dd></div>${context.action==='chain'?'<div><dt>Клиент</dt><dd>'+escape(selected('client'))+'</dd></div>':''}${context.action==='charge'?'<div><dt>Ставка</dt><dd>'+escape(context.rate)+'</dd></div>':''}${amount?'<div><dt>Сумма после проверки</dt><dd>'+escape(amount)+'</dd></div>':''}</dl><p class="hint">При ошибке сохранения решение можно повторить после исправления данных.</p>`;
+ };
+ workspace.querySelectorAll('[data-gps-choice]').forEach(button=>button.onclick=()=>{if(button.dataset.gpsChoice!==context.action)onSwitch(button.dataset.gpsChoice);});fields.addEventListener('input',paint);fields.addEventListener('change',paint);paint();
+}
+
+export function framePresenceWorkspace(dialog,stay){
+ const row=dialog.querySelector('[data-presence-id]'),table=row?.closest('.wb-table-scroll');if(!row||!table)return;
+ const doc=dialog.ownerDocument,workspace=element(doc,'div','presence-workspace');workspace.dataset.presenceId=row.dataset.presenceId;
+ const evidence=element(doc,'section','presence-evidence-panel'),decision=element(doc,'section','presence-decision-panel');
+ evidence.innerHTML='<h3>Интервалы присутствия</h3>';decision.innerHTML='<h3>Команда и доли</h3>';
+ for(const [index,cell] of [...row.children].entries()){
+  const field=element(doc,'div','presence-workspace-field'),label=element(doc,'p','presence-field-label');label.textContent=cell.dataset.label;field.append(label);while(cell.firstChild)field.append(cell.firstChild);
+  (index===0||index===4?evidence:decision).append(field);
+ }
+ workspace.append(evidence,decision);table.replaceWith(workspace);
+ const metrics=element(doc,'div','presence-review-metrics'),bounds=presenceBounds(stay),calendar=stay.stay_from&&stay.stay_to?(Date.parse(stay.stay_to)-Date.parse(stay.stay_from))/60000:null;
+ const amount=value=>value==null?'—':Number(value).toLocaleString('ru-RU',{maximumFractionDigits:1})+' мин';
+ metrics.innerHTML=[['Календарная длительность',amount(calendar)],['Наблюдено GPS',amount(bounds?.gps??stay.minutes_raw)],['Предложено дополнительно',amount(bounds?bounds.extra:stay.minutes_raw!=null?0:null)],['Итог к подтверждению','']].map(([label,value],i)=>`<div><span>${label}</span><b ${i===3?'data-presence-review-total':''}>${value}</b></div>`).join('');workspace.before(metrics);
+ const paint=()=>{const input=workspace.querySelector('[data-presence="minutes_mgr"]');metrics.querySelector('[data-presence-review-total]').textContent=amount(input.value===''?null:Number(input.value));};paint();dialog.addEventListener('input',()=>doc.defaultView.queueMicrotask(paint));
+ const title=dialog.querySelector('#presenceEditorTitle');if(title)title.textContent='Проверка присутствия';
+ const footer=dialog.querySelector('.presence-editor-foot'),later=element(doc,'button','btn ghost');later.type='button';later.textContent='Проверить позже';later.onclick=()=>dialog.querySelector('.presence-editor-head button').click();footer.prepend(later);
+ const body=element(doc,'div','presence-editor-body');for(const child of [...dialog.children])if(child.tagName!=='FORM'&&child!==footer)body.append(child);dialog.insertBefore(body,footer);
+}
 
 // Screen structure is separate from record ownership and save handlers.
 // Existing inputs are moved, never copied, so drafts and listeners survive.
@@ -15,6 +52,10 @@ function framePane(view,headerNodes){
 export function installWorkspaceStructure(root=document){
  const job=root.querySelector('.view-job'),trip=root.querySelector('.view-trip');
  if(job){
+  const estimate=root.getElementById('jobEstimatePane'),base=element(root,'section','card request-estimate-base'),heading=element(root,'header','workspace-section-head');
+  heading.innerHTML='<div><p class="design-eyebrow">Заявка</p><h2>Смета заявки</h2><p class="hint">Согласованный объём и плановая стоимость. Фактические результаты ведутся в заданиях.</p></div>';
+  base.innerHTML='<h3>Базовая смета</h3>';const lines=element(root,'div','request-estimate-lines');for(const card of [...estimate.querySelectorAll(':scope>.card')])lines.append(card);base.append(lines,root.getElementById('jobHeadEcon'));
+  const related=element(root,'section','card request-estimate-assignments');related.innerHTML='<h3>Задания по заявке</h3><p class="hint">Состав, выполнение и дополнительные потребности — в рабочих заданиях.</p><button type="button" class="btn" data-estimate-tasks>К заданиям заявки →</button>';related.querySelector('button').onclick=()=>{root.getElementById('jobTabOverview').click();root.getElementById('jobOrders').scrollIntoView?.({block:'start'});};estimate.append(heading,base,related);
   const context=element(root,'section','card request-context');context.id='requestContext';context.hidden=true;
   const grid=element(root,'div','request-workspace-grid');grid.append(context,root.getElementById('jobOrders'));root.getElementById('jobOverviewPane').append(grid);
   framePane(job,[job.querySelector('.crumbs'),job.querySelector('.trip-head'),job.querySelector('.request-toolbar')]);
@@ -146,5 +187,7 @@ export function frameOrderWorkspace({record,editable,people},root=document){
   const emptyGrid=editor.querySelector('.order-grid');if(emptyGrid&&!emptyGrid.children.length)emptyGrid.remove();
   positionOrderResult(root);
  }
+ const travel=root.getElementById('orderPane-travel');if(travel){const intro=element(doc,'header','order-travel-head');intro.innerHTML='<div><p class="design-eyebrow">План и экономика</p><h2>Выезды и распределение</h2><p class="hint">Маршрут, команда и подтверждённые доли затрат этого задания.</p></div>';const actions=root.getElementById('orderTravel')?.querySelector('.order-line-adds');if(actions)intro.append(actions);travel.prepend(intro);}
+ const execution=root.getElementById('orderExecution'),results=root.getElementById('orderResults');if(execution&&results){const state=element(doc,'section','result-saved-state');state.id='orderResultSavedState';execution.firstElementChild?.replaceWith(state);const title=element(doc,'h3','result-section-title');title.textContent='Выполненные позиции';results.before(title);const fields=element(doc,'div','result-final-fields'),date=root.getElementById('orderResultDate')?.closest('label'),note=root.getElementById('orderResultNote')?.closest('label');if(date)fields.append(date);if(note)fields.append(note);results.after(fields);}
  const savebar=editor.querySelector('.order-savebar');if(savebar){const state=root.getElementById('orderSaveState'),save=root.getElementById('orderSave');if(state)inner.querySelector('.entity-head-meta').append(state);if(save)inner.querySelector('.entity-header-actions').append(save);savebar.remove();}
 }

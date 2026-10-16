@@ -60,3 +60,14 @@ it('keeps a failed comment draft and refuses submission after account change',as
   uid='other-account';root.querySelector('form').dispatchEvent(new win.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,0));
   expect(root.textContent).toContain('Аккаунт изменился');expect(input.value).toBe('Сохранить черновик');mounted.destroy();
 });
+
+it('opens composing explicitly and groups existing events without changing their ownership',async()=>{
+ rows.job_comments=[{id:'c1',body:'Запись инженера',author_id:user,created_at:'2026-10-09T11:00:00Z'}];
+ rows.job_history=[{id:'h1',event:'Изменён период',recorded_at:'2026-10-08T10:00:00Z'}];
+ const controller=mountEntityActivity({root,db,entity:'job',id:'timeline-job',userId:()=>user});await controller.refresh();
+ expect(root.querySelector('.activity-compose-disclosure').open).toBe(false);
+ expect(root.querySelectorAll('.activity-day')).toHaveLength(2);expect(root.querySelector('[data-activity-count=all]').textContent).toBe('2');
+ root.querySelector('[data-activity-compose]').click();expect(root.querySelector('.activity-compose-disclosure').open).toBe(true);
+ root.querySelector('[data-activity-filter=photo]').click();expect(root.querySelector('.activity-empty')).not.toBeNull();expect(writes).toEqual([]);
+ controller.destroy();
+});

@@ -263,3 +263,13 @@ it('puts unresolved remainder and its supported transfer next to the curator dec
  expect(doc.querySelector('[data-summary-carry]').disabled).toBe(true);
  expect(rpcCalls).toHaveLength(0);
 });
+
+it('opens a read-only curator decision with real blockers before any transition',async()=>{
+ order.status='review';order.service_order_items[0].done_qty=1;
+ order.trip_service_orders=[{trips:{id:'active-trip',status:'in_progress',vehicle_label:'Сервисный автомобиль'}}];
+ await ui.open('order1');doc.querySelector('[data-open-result-review]').click();
+ const dialog=doc.querySelector('.entity-review-dialog');expect(dialog.open).toBe(true);
+ expect(dialog.textContent).toContain('Выезд не завершён');expect(dialog.textContent).toContain('Остаток 1 шт');
+ expect(dialog.querySelector('[data-review-accept]').disabled).toBe(true);expect(rpcCalls).toEqual([]);
+ dialog.querySelector('[data-review-trip]').click();expect(ctx.openTrip).toHaveBeenCalledWith('active-trip');expect(rpcCalls).toEqual([]);
+});
