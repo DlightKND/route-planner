@@ -7651,7 +7651,7 @@ async function showTripFact(tid,opt){
     if(m.jitterKm>=0.5) bits.push('дрожание '+m.jitterKm.toFixed(1)+' км');
     if(m.stored) bits.push('разбор от '+new Date(m.at).toLocaleString('ru'));
     if(t&&t.fact_km!=null) bits.push('записано '+Math.round(t.fact_km)+' км'+factSrcRu(t.fact_km_source));
-    showToast(bits.join(' · '));return true;
+    if(!quiet)showToast(bits.join(' · '));return true;
   }catch(e){ notify('Трек не загрузился: '+(e.message||e),'err'); }
 }
 
