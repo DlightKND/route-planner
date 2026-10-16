@@ -32,7 +32,7 @@ button,input,select,textarea { font-family:var(--sans); }
 .view :is(input,select,textarea):not([type=checkbox]):not([type=radio]):not([type=range]) { background:var(--panel);border-color:var(--input-line); }
 .view :is(input,select,textarea):disabled { color:var(--ink-dim);opacity:1; }
 .view button:disabled,dialog button:disabled { cursor:not-allowed; }
-.nav-i.active { box-shadow:inset 3px 0 var(--accent-line); }
+.nav-i.active { box-shadow:none; }
 .view .subtabs { gap:8px;margin-bottom:20px;border-bottom:1px solid var(--line); }
 .view .subtab { font-size:14px;padding:12px 16px; }
 .view .subtab.on { color:var(--ink); }
@@ -108,7 +108,7 @@ button,input,select,textarea { font-family:var(--sans); }
 .view .settings-layout { grid-template-columns:220px minmax(0,1fr);gap:32px;max-width:1280px; }
 .view .settings-nav { gap:8px; }
 .view .settings-nav .son { min-height:44px;padding:12px 16px;border:1px solid transparent;border-radius:8px;text-align:left;font:500 14px/1.5 var(--sans); }
-.view .settings-nav .son.on { border-color:var(--line);background:var(--panel);box-shadow:inset 3px 0 var(--accent-line); }
+.view .settings-nav .son.on { border-color:var(--line);background:var(--panel);box-shadow:none; }
 .settings-body>.card { margin-bottom:24px; }
 .settings-body>.card>h3.cardhead { margin-bottom:20px;font-size:20px; }
 .settings-body>.card>h3:not(.cardhead) { font-size:16px;margin-top:24px; }
@@ -188,7 +188,7 @@ dialog.overlay .modal-actions { padding-top:16px;margin-top:24px!important;borde
 /* Map sheet: work queue, route editor and directory retain their own entry. */
 .side-tabs2 { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:8px; }
 .side-tabs2 button { min-width:0;min-height:44px;padding:8px 4px;font:500 12px/1.4 var(--sans);display:flex;justify-content:center;align-items:center;gap:6px;white-space:normal; }
-.side-tabs2 button.on { background:var(--panel-2);color:var(--ink);border-radius:8px;box-shadow:inset 0 -2px var(--accent-line); }
+.side-tabs2 button.on { background:transparent;color:var(--ink);border-radius:0;border-bottom:3px solid var(--accent);box-shadow:none; }
 .side-tabs2:has([data-sb=route][style*="none"]) { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .side-tabs2 .cnt { font-size:10px;padding:2px 5px; }
 .view-map .side .block-body { padding:16px; }
@@ -284,7 +284,7 @@ dialog.overlay .modal-actions { padding-top:16px;margin-top:24px!important;borde
   .view .settings-layout { grid-template-columns:minmax(0,1fr);gap:16px; }
   .view .settings-nav { gap:8px; }
   .view .settings-nav .son { white-space:nowrap;padding:10px 12px; }
-  .view .settings-nav .son.on { box-shadow:inset 0 -2px var(--accent-line); }
+  .view .settings-nav .son.on { box-shadow:none; }
   .view-trip button.trip-review-item { padding:12px; }
   .trip-review-item>strong { font-size:13px; }
   .view-trip .trip-grid { gap:16px; }
@@ -296,7 +296,7 @@ dialog.overlay .modal-actions { padding-top:16px;margin-top:24px!important;borde
   .entity-panel-dialog .entity-dialog-body { padding:16px; }
   .entity-panel-dialog .entity-dialog-foot { padding:12px 16px max(12px,env(safe-area-inset-bottom)); }
   dialog.overlay .modal { padding:20px; }
-  .nav-i.active { box-shadow:inset 0 -3px var(--accent-line); }
+  .nav-i.active { box-shadow:none; }
 }
 @media(max-width:480px) {
   dialog.entity-result-dialog { width:100%;max-width:100%;height:100dvh;max-height:100dvh;border-radius:0;margin:0; }

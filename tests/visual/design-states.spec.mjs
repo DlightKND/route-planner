@@ -114,3 +114,58 @@ test('design state: engineer map has no route editing or point creation',async({
  const errors=await start(page,info,'map',{role:'engineer'});await expect(page.locator('[data-sb=route]')).toBeHidden();await expect(page.locator('#pointTools')).toBeHidden();
  await page.locator('[data-sb=directory]').click();await expect(page.locator('[data-map-heading]')).toHaveText('Справочник точек');await expect(page.locator('#list [data-edit]')).toHaveCount(0);await capture(page,info,'map-engineer-directory',errors);
 });
+
+test('layout: desktop rail stays left and page bottoms remain reachable in short windows',async({page},info)=>{
+ await page.setViewportSize({width:page.viewportSize().width,height:600});
+ const errors=await start(page,info,'planner/orders');
+ const mobile=page.viewportSize().width<=760,rail=await page.locator('.rail').boundingBox();
+ if(mobile){expect(rail.y+rail.height).toBeCloseTo(600,0);}else{
+  expect(rail.x).toBe(0);expect(rail.y).toBe(0);expect(rail.width).toBe(76);expect(rail.height).toBe(600);
+  expect((await page.locator('#appRoot').boundingBox()).x).toBe(76);
+ }
+ for(const [route,list] of [['orders','orderList'],['jobs','jobList'],['trips','tripList']]){
+  await page.goto('/#/planner/'+route);await expect(page.locator('#'+list+' .kcard').first()).toBeVisible();
+  await expect(page.locator('.workspace-heading-row .design-eyebrow')).toHaveCount(0);
+  const pane=page.locator('.view-planner>.pane');await pane.evaluate(el=>el.scrollTop=el.scrollHeight);
+  const bounds=await pane.boundingBox(),limit=mobile?(await page.locator('.rail').boundingBox()).y:600;
+  expect(bounds.y+bounds.height).toBeLessThanOrEqual(601);
+  const bottom=await page.locator('#'+list+' .kcard:visible').evaluateAll(nodes=>Math.max(...nodes.map(el=>el.getBoundingClientRect().bottom)));
+  expect(bottom,route+' last card clears the viewport and navigation').toBeLessThanOrEqual(limit-8);
+  await capture(page,info,'bottom-'+route,errors);
+ }
+});
+
+test('layout: map tabs use one straight indicator without an inset shadow',async({page},info)=>{
+ const errors=await start(page,info,'map');await expandMapSheet(page);
+ for(const mode of ['directory','route','work']){
+  const target=mode==='work'?page.locator('#sideTabs button').first():page.locator('#sideTabs button[data-sb='+mode+']');
+  await target.click();await target.focus();
+  const style=await target.evaluate(el=>{const s=getComputedStyle(el);return {radius:s.borderRadius,shadow:s.boxShadow,line:parseFloat(s.borderBottomWidth)};});
+  expect(style.radius).toBe('0px');expect(style.shadow).toBe('none');expect(style.line).toBe(3);
+  await expect(page.locator('.map-workspace-head .design-eyebrow')).toHaveCount(0);
+ }
+ await capture(page,info,'map-straight-tabs',errors);
+});
+
+test('layout: summary schedule and statistics scroll independently below a fixed heading',async({page},info)=>{
+ test.skip(page.viewportSize().width<=1180,'Narrow screens show one summary column at a time');
+ await page.setViewportSize({width:page.viewportSize().width,height:600});
+ const errors=await start(page,info,'dash',{lateScheduleCut:true});
+ await expect(page.locator('#attnBody .vg-feed')).toBeVisible();await expect(page.locator('#dashBody .card').first()).toBeVisible();
+ const heading=await page.locator('.view-dash .workspace-masthead').boundingBox();
+ const columns=page.locator('.view-dash .dash-grid');
+ // Long schedules and statistical reports must remain independent of one another.
+ // Extend real rendered content to exercise overflow even with the small fixture.
+ await columns.evaluate(grid=>{for(const col of grid.children){const spacer=document.createElement('div');spacer.style.height='1200px';spacer.textContent='Конец длинного отчёта';col.append(spacer);}});
+ const schedule=page.locator('.dash-attn'),stats=page.locator('#dashBody');
+ await schedule.hover();await page.mouse.wheel(0,350);await expect.poll(()=>schedule.evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
+ expect(await stats.evaluate(el=>el.scrollTop)).toBe(0);
+ const scheduleTop=await schedule.evaluate(el=>el.scrollTop);await stats.hover();await page.mouse.wheel(0,350);await expect.poll(()=>stats.evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
+ expect(await schedule.evaluate(el=>el.scrollTop)).toBe(scheduleTop);
+ expect((await page.locator('.view-dash .workspace-masthead').boundingBox()).y).toBe(heading.y);
+ expect(await page.locator('.view-dash>.pane').evaluate(el=>el.scrollTop)).toBe(0);
+ for(const col of [schedule,stats]){
+  const r=await col.boundingBox();expect(r.y).toBeGreaterThanOrEqual(heading.y+heading.height);expect(r.y+r.height).toBeLessThanOrEqual(600);
+ }
+ await capture(page,info,'summary-independent-scroll',errors);
+});

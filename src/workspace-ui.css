@@ -205,24 +205,24 @@ html:root { --workspace-width:1280px; }
 .workspace-person-editor:not([open])>:not(summary) { display:none; }
 .workspace-person-editor .staff-form { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;border-top:1px solid var(--line);padding-top:16px; }
 
+/* The desktop rail remains a separate left column; the mobile rail stays below. */
+.workspace-shell .view>.pane { min-height:0;max-height:100%; }
+.workspace-shell .nav-i.active { position:relative;box-shadow:none; }
+.workspace-shell .nav-i.active::before { content:'';position:absolute;left:0;top:10px;bottom:10px;width:3px;background:var(--accent);border-radius:0; }
 @media(min-width:761px){
- html:root { --rail-w:0px; }
- .workspace-shell.app { flex-direction:column; }
- .workspace-shell .rail { position:relative;inset:auto;display:flex;flex-direction:row;width:100%;height:68px;min-height:68px;padding:0 24px;gap:28px;border:0;border-bottom:1px solid var(--line);background:var(--panel);backdrop-filter:none;box-shadow:none;z-index:1100; }
- .workspace-shell .rail-brand { display:flex;flex-direction:row;gap:8px;margin:0;flex:none;font:700 20px/1 var(--sans);letter-spacing:-.06em; }
- .workspace-shell .rail-items,.workspace-shell .rail-foot { display:flex;flex-direction:row;align-items:center;gap:4px;width:auto;padding:0;margin:0; }
- .workspace-shell .rail-items { flex:1; }
- .workspace-shell .nav-i { width:auto;min-width:44px;min-height:44px;display:flex;flex-direction:row;padding:10px 12px;gap:8px;font:500 13px/1.3 var(--sans);text-transform:none;letter-spacing:0;color:var(--ink-dim);border-radius:8px; }
- .workspace-shell .nav-i.active { color:var(--ink);background:var(--panel-2);box-shadow:none; }
- .workspace-shell .nav-i.hidden { display:none; }
- .workspace-shell .nav-i svg { width:18px;height:18px; }
- .workspace-shell .rail-foot .nav-i:not(.profile-trigger)>span { display:none; }
- .workspace-shell .rail-foot .nav-i { position:relative;padding:10px; }
- .workspace-shell .nav-more { display:none; }
- .workspace-shell .profile-trigger .who { display:none; }
- .workspace-shell .profile-avatar { width:32px;height:32px;font-size:12px; }
- .workspace-shell .view-map .map-wrap { left:0; }
- .workspace-shell .view-map .leaflet-top.leaflet-left { margin-left:392px; }
+ .workspace-shell .rail { overflow-y:auto;min-height:0; }
+ .workspace-shell .rail-brand,.workspace-shell .rail-items,.workspace-shell .rail-foot { flex-shrink:0; }
+}
+@media(max-width:760px){
+ .workspace-shell .nav-i.active::before { top:auto;bottom:0;left:10px;right:10px;width:auto;height:3px; }
+}
+/* Constrain the grid through its new wrapper so each column owns its scroll. */
+@media(min-width:1181px){
+ .view-dash.workspace-page .pane.scrollp { display:flex;flex-direction:column;overflow:hidden; }
+ .view-dash.workspace-page .workspace-masthead { flex:none; }
+ .view-dash.workspace-page .workspace-main { flex:1;min-height:0;display:flex;flex-direction:column;margin-block:0;padding-bottom:24px;overflow:hidden; }
+ .view-dash.workspace-page .dash-grid { flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch; }
+ .view-dash.workspace-page .dash-grid>* { min-height:0;overflow:auto;overscroll-behavior-y:contain;scrollbar-gutter:stable; }
 }
 @media(min-width:761px) and (max-width:1180px){
  .view-dash.workspace-page .dash-grid { grid-template-columns:minmax(0,1fr); }
@@ -233,8 +233,6 @@ html:root { --workspace-width:1280px; }
  .view-trip.workspace-page #tpPlanPane .trip-grid { grid-template-columns:minmax(0,1fr); }
  .workspace-page .trip-review-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .workspace-masthead .trip-head { flex-wrap:wrap; }
- .workspace-shell .rail { padding-inline:16px;gap:16px; }
- .workspace-shell .nav-i { padding:10px 8px;font-size:12px;gap:6px; }
  .view-planner .kanban { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .workspace-page .order-result-line { grid-template-columns:minmax(0,1fr) 280px; }
  .view-dash.workspace-page .dash-grid { grid-template-columns:minmax(0,1fr); }
