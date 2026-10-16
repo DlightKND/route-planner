@@ -169,3 +169,42 @@ test('layout: summary schedule and statistics scroll independently below a fixed
  }
  await capture(page,info,'summary-independent-scroll',errors);
 });
+
+test('polish: wide workspaces use the available width and the rail indicator sits at the edge',async({page},info)=>{
+ test.skip(page.viewportSize().width<1440,'Wide desktop composition');await page.setViewportSize({width:1920,height:1000});
+ const errors=await start(page,info,'planner/orders');
+ const heading=await page.locator('#plOrders .workspace-heading-row').boundingBox();expect(heading.x).toBe(108);expect(heading.x+heading.width).toBe(1888);
+ const marker=await page.locator('.rail .nav-i.active').evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el,'::before');return {edge:r.left+parseFloat(s.left),width:parseFloat(s.width)};});expect(marker.edge).toBe(0);expect(marker.width).toBe(4);
+ await capture(page,info,'wide-dispatcher',errors);
+ for(const route of ['catalog','job/'+fixtureIDs.job,'order/'+fixtureIDs.activeOrder,'trip/'+fixtureIDs.trip]){
+  await page.goto('/#/'+route);await expect(page.locator('.view.active .workspace-main')).toBeVisible();
+  const main=await page.locator('.view.active .workspace-main').boundingBox();expect(main.x).toBe(76);expect(main.width).toBe(1844);
+ }
+ const card=page.locator('#jobOrders .order-child').first();await page.goto('/#/job/'+fixtureIDs.job);await expect(card).toBeVisible();
+ expect(await card.evaluate(el=>[...['Top','Right','Bottom','Left']].map(side=>getComputedStyle(el)['border'+side+'Width']))).toEqual(['1px','1px','1px','1px']);
+ await capture(page,info,'wide-request',errors);
+});
+
+test('polish: settings advanced panels have padding and scrolled navigation stays flat',async({page},info)=>{
+ const errors=await start(page,info,'settings',{role:'admin'});const details=page.locator('.settings-advanced').first();
+ await details.locator('summary').click();await expect(page.locator('#stTrkKmh')).toBeVisible();
+ expect(await details.evaluate(el=>{const s=getComputedStyle(el);return [s.paddingTop,s.paddingRight,s.paddingBottom,s.paddingLeft];})).toEqual(['20px','20px','20px','20px']);
+ const bounds=await details.boundingBox(),title=await details.locator('summary').boundingBox();expect(title.x-bounds.x).toBeGreaterThanOrEqual(20);
+ await page.locator('.view-settings>.pane').evaluate(el=>el.scrollTop=500);
+ const shadows=await page.evaluate(()=>[...document.querySelectorAll('.view-settings *,.rail *')].flatMap(el=>['', '::before','::after'].map(p=>getComputedStyle(el,p).boxShadow)).filter(v=>v!=='none'));
+ expect(shadows).toEqual([]);await capture(page,info,'settings-flat-padding',errors);
+});
+
+test('polish: statistics cards stay separated and light schedule blocks use a light surface',async({page},info)=>{
+ const errors=await start(page,info,'dash');await expect(page.locator('.vg-block').first()).toBeVisible();
+ if(info.project.metadata.theme==='light')expect(await page.locator('.vg-block').first().evaluate(el=>{const sample=document.createElement('div');sample.style.background='var(--panel)';document.body.append(sample);const same=getComputedStyle(el).backgroundColor===getComputedStyle(sample).backgroundColor;sample.remove();return same;})).toBe(true);
+ if(page.viewportSize().width<=1180)await page.locator('#dashSeg [data-dv=cards]').click();
+ await expect(page.locator('#dashBody .summary-section')).toHaveCount(3);
+ const gaps=await page.locator('#dashBody .summary-section').evaluateAll(cards=>cards.slice(1).map((el,i)=>el.getBoundingClientRect().top-cards[i].getBoundingClientRect().bottom));
+ for(const gap of gaps)expect(gap).toBeGreaterThanOrEqual(24);await capture(page,info,'statistics-card-spacing',errors);
+});
+
+test('polish: native launch metadata uses the sampled yellow and valid padded icons',async({page},info)=>{
+ await start(page,info,'map');const manifest=await (await page.request.get('/manifest.json')).json();expect(manifest.background_color).toBe('#fff002');expect(manifest.theme_color).toBe('#fff002');
+ for(const icon of manifest.icons){const data=await (await page.request.get('/'+icon.src.replace(/^\.\//,''))).body();const size=Number(icon.sizes.split('x')[0]);expect(data.readUInt32BE(16)).toBe(size);expect(data.readUInt32BE(20)).toBe(size);expect(icon.purpose).toContain('maskable');}
+});

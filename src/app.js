@@ -172,7 +172,7 @@ const THEMES={
     // Поэтому токена два.
     '--accent-line':'#ffe100', '--focus':'#ffe100',
     '--nav-bg':'#30302b', '--nav-ink':'#f2f0e8',
-    '--shadow-sm':'0 1px 2px rgba(0,0,0,.28), 0 3px 10px rgba(0,0,0,.18)', '--shadow-md':'0 3px 6px rgba(0,0,0,.28), 0 10px 24px rgba(0,0,0,.30)', '--shadow-lg':'0 6px 12px rgba(0,0,0,.30), 0 20px 48px rgba(0,0,0,.45)',
+    '--shadow-sm':'none', '--shadow-md':'none', '--shadow-lg':'none',
     // Почти непрозрачные поверхности сохраняют контраст текста над картой.
     '--glass-panel':'rgba(38,38,34,0.96)', '--glass-bg':'rgba(28,28,25,0.96)'
   },
@@ -185,9 +185,9 @@ const THEMES={
     '--accent-line':'#806900', '--focus':'#302b25',
     '--nav-bg':'#f3eee5', '--nav-ink':'#302b25',
     '--accent':'#ffe100', '--accent-ink':'#1a1d22', '--on-accent':'#141414', '--edge':'rgba(0,0,0,0)', // бренд-жёлтый для заливок/границ, тёмный текст-акцент для читаемости
-    '--shadow-sm':'0 1px 2px rgba(15,20,27,.07), 0 2px 8px rgba(15,20,27,.07)',
-    '--shadow-md':'0 4px 8px rgba(15,20,27,.07), 0 8px 20px rgba(15,20,27,.09)',
-    '--shadow-lg':'0 8px 16px rgba(15,20,27,.07), 0 18px 40px rgba(15,20,27,.14)',
+    '--shadow-sm':'none',
+    '--shadow-md':'none',
+    '--shadow-lg':'none',
     // Та же нейтральная палитра и плотность 0.96, что в тёмной теме.
     '--glass-panel':'rgba(255,252,247,0.96)', '--glass-bg':'rgba(250,247,241,0.96)'
   }
@@ -195,6 +195,7 @@ const THEMES={
 function applyTheme(t){ theme=Object.assign({mode:'dark'},t||{});
   const pal=THEMES[theme.mode]||THEMES.dark, r=document.documentElement.style;
   document.documentElement.dataset.theme=theme.mode;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',pal['--bg']);
   for(const k in pal) r.setProperty(k,pal[k]);
   theme.accent=pal['--accent']||'#ffe100';
   $('modeDark').classList.toggle('on',theme.mode==='dark'); $('modeLight').classList.toggle('on',theme.mode==='light');
@@ -291,8 +292,7 @@ const map=L.map('map',{zoomControl:true});
 // ---------- подложка карты ----------
 //
 // Два стиля: «обычная» и «спутник». Обычная идёт за темой приложения —
-// backdrop-v4-light и backdrop-v4-dark у MapTiler: это намеренно тихая
-// подложка, на которой видно НАШИ точки, а не топонимы. Спутник —
+// OpenStreetMap для светлой темы и backdrop-v4-dark для тёмной. Спутник —
 // hybrid-v4, снимок с подписями и дорогами: без подписей на снимке
 // невозможно понять, куда смотришь.
 //
@@ -341,7 +341,7 @@ function makeBase(key){
     ? guardTiles(L.tileLayer(mtUrl('hybrid-v4','jpg'),{maxZoom:20,attribution:MT_ATTR}))
     : null; }
   const dark=(key==='map-dark');
-  if(mtOn()) return guardTiles(L.tileLayer(mtUrl(dark?'backdrop-v4-dark':'backdrop-v4-light'),{maxZoom:20,attribution:MT_ATTR}));
+  if(mtOn()) return guardTiles(L.tileLayer(mtUrl(dark?'backdrop-v4-dark':'openstreetmap'),{maxZoom:20,attribution:MT_ATTR}));
   return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     {maxZoom:19,attribution:OSM_ATTR,className:dark?'dark-tiles':''});
 }

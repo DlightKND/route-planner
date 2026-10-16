@@ -21,7 +21,7 @@ test('dashboard hides redundant desktop switch and dates fit',async({page},info)
 test('notifications align with the common pane edges',async({page},info)=>{
  await open(page,info,'notifications');await expect(page.locator('.notice-header')).toBeVisible();
  const edges=await page.locator('#noticeHost').evaluate(el=>{const p=el.parentElement,s=getComputedStyle(p),r=el.getBoundingClientRect(),pr=p.getBoundingClientRect();return {left:r.left-pr.left-parseFloat(s.paddingLeft),right:pr.right-r.right-parseFloat(s.paddingRight)};});
- expect(edges.left).toBeGreaterThanOrEqual(-1);expect(edges.right).toBeGreaterThanOrEqual(-1);expect(Math.abs(edges.left-edges.right)).toBeLessThanOrEqual(1);expect((await page.locator('#noticeHost .workspace-main').boundingBox()).width).toBeLessThanOrEqual(1184);
+ expect(edges.left).toBeGreaterThanOrEqual(-1);expect(edges.right).toBeGreaterThanOrEqual(-1);expect(Math.abs(edges.left-edges.right)).toBeLessThanOrEqual(1);expect((await page.locator('#noticeHost .workspace-main').boundingBox()).width).toBeLessThanOrEqual(page.viewportSize().width);
  await page.screenshot({path:'test-results/layout-fixes/'+info.project.name+'-notifications.png'});
 });
 test('dispatcher filters preserve kanban and explicitly selected list',async({page},info)=>{
