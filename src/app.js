@@ -7180,6 +7180,10 @@ function placeMapPanel(){
   const inline=trackPanelInline(),details=factLegendEl.querySelector('details');
   const wasInline=factLegendEl.parentElement===$('trackBlock');
   const selected=document.querySelector('#sideTabs button.on')?.dataset.sb;
+  // Native details content does not participate in the sheet's flex sizing.
+  // Move the same body out of it while docked so the footer cannot be clipped.
+  const body=factLegendEl.querySelector('.mleg-body');
+  if(inline)factLegendEl.append(body);else details.append(body);
   (inline?$('trackBlock'):$('mapTrackDock')).append(factLegendEl);
   details.open=inline||factDesktopOpen;
   if(inline&&!wasInline&&factDesktopOpen)sideTab('track');
@@ -7217,8 +7221,8 @@ function mapPanelRows(){
   if(stops||(rRoute&&rRoute.km>0)){
     R.push({key:'plan',style:'border-top:3px dashed var(--ink-faint)',name:'Плановый маршрут',val:stops+' '+plural(stops,'точка','точки','точек'),
       sub:(rRoute&&rRoute.km>0)
-        ? (rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч · '+stops+' точ.')
-        : (stops+' '+plural(stops,'точка','точки','точек')+', маршрут не построен')});
+        ? (rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч')
+        : 'Маршрут не построен'});
   }
   const d=factLast;
   if(d){

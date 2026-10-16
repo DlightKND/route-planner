@@ -245,7 +245,7 @@ test('map track: docked layer cards retain real visibility and the selected time
  const errors=await openTrackPanel(page,info),inline=page.viewportSize().width<=960,panel=page.locator('.mleg-body');
  await expect(panel.locator('h2')).toHaveText('Параметры трека');await expect(panel.locator('.mleg-layer')).toHaveCount(6);
  expect(await panel.getAttribute('popover')).toBeNull();expect(await panel.evaluate(el=>getComputedStyle(el).position)).toBe('static');
- if(inline){await expect(page.locator('#trackBlock .mleg')).toBeVisible();await expect(page.locator('[data-sb=track]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('#pointsBlock')).toBeHidden();}
+ if(inline){await expect(page.locator('#trackBlock .mleg')).toBeVisible();await expect(page.locator('[data-sb=track]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('#pointsBlock')).toBeHidden();const tops=await page.locator('#sideTabs button:visible').evaluateAll(nodes=>nodes.map(el=>el.getBoundingClientRect().top));expect(Math.max(...tops)-Math.min(...tops)).toBeLessThanOrEqual(1);}
  else{await expect(page.locator('#mapTrackDock .mleg')).toBeVisible();const card=await panel.boundingBox(),tools=await page.locator('.map-tools').boundingBox();expect(card.x+card.width).toBeCloseTo(tools.x+tools.width,0);expect(card.y).toBeGreaterThanOrEqual(tools.y+tools.height+8);}
  const gps=page.locator('.leaflet-overlay-pane path[stroke="#16a34a"],.leaflet-overlay-pane path[stroke="#a7f3d0"]');
  await expect(gps).toHaveCount(2);await panel.locator('[data-fl=track]').uncheck();await expect(gps).toHaveCount(0);await panel.locator('[data-fl=track]').check();await expect(gps).toHaveCount(2);
@@ -261,7 +261,7 @@ test('map track: resizing and closing preserve controls, and clearing leaves a v
  await panel.locator('[data-fl=line]').uncheck();await panel.locator('#tfA').fill('07:00');await panel.locator('#tfA').blur();
  const width=page.viewportSize().width>960?390:1440;await page.setViewportSize({width,height:600});
  await expect(page.locator('.mleg')).toHaveCount(1);await expect(panel).toBeVisible();await expect(panel.locator('[data-fl=line]')).not.toBeChecked();await expect(panel.locator('#tfA')).toHaveValue('07:00');
- await expect(panel.locator('.mleg-clear')).toBeInViewport();const box=await panel.boundingBox(),bottom=width<=760?(await page.locator('.rail').boundingBox()).y:600;expect(box.y+box.height).toBeLessThanOrEqual(bottom+1);
+ await expect(panel.locator('.mleg-clear')).toBeInViewport();const box=await panel.boundingBox(),bottom=width<=760?(await page.locator('.rail').boundingBox()).y:600;expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(bottom+1);
  await panel.locator('#tfA').focus();await page.keyboard.press('Escape');await expect(panel).toBeHidden();
  if(width<=960){await expect(page.locator('#sideTabs button.on')).not.toHaveAttribute('data-sb','track');await page.locator('[data-sb=track]').click();}
  else await page.locator('.mleg-details>summary').click();
