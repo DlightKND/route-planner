@@ -202,10 +202,10 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await expect(active.locator('#sideTabs [data-sb=directory]')).toHaveAttribute('aria-pressed','true');
       await expect(active.locator('#pointsBlock')).not.toHaveClass(/collapsed/);
       await expect(active.locator('#list')).toBeVisible();
-      await active.locator('#mapScope [data-ms=all]').click();
+      await active.locator('#sideTabs [data-sb=directory]').click();
       await checkCards('#list .pt');
       await shot(page,testInfo,'logist-map-directory-cards');
-      await active.locator('#mapScope [data-ms=work]').click();
+      await active.locator('#sideTabs [data-sb=points]').click();
     }
     if(scene.name==='notifications'){
       await expect(active.locator('.notice-row')).toHaveCount(3);await expect(active).not.toContainText('Чужое уведомление');

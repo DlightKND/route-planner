@@ -510,6 +510,7 @@ function sideTab(name){
   const p=$('pointsBlock'), r=$('routeBlock');
   if(p) p.classList.toggle('collapsed',name==='route');
   if(r) r.classList.toggle('collapsed',name!=='route');
+  if(name==='route')renderRoutePanel();
   // Шторка, свёрнутая в черту, по нажатию на вкладку обязана открыться:
   // иначе нажатие ничего не делает и выглядит сломанным.
   const sd=document.querySelector('.view-map .side');
@@ -1267,9 +1268,9 @@ function renderSide(){
 // что и на сводке, так что ленты не разъедутся между экранами.
 function renderWorkFeed(){
   const box=$('workFeed'); if(!box) return;
-  let h='';
-
-  const moving=(vehState||[]).filter(r=>r&&r.lat!=null);
+  let h='';const q=$('search').value.trim().toLowerCase();
+  const matchesJob=j=>{const c=clients.find(c=>c.id===j.client_id)||j.clients||{};return !(pointFilter==='client'&&c.is_base)&&!(pointFilter==='base'&&!c.is_base)&&(!q||String(c.name||'').toLowerCase().includes(q));};
+  const moving=(vehState||[]).filter(r=>r&&r.lat!=null&&pointFilter==='all'&&(!q||vehLabel((vehicles||[]).find(v=>v.id===r.vehicle_id)||{}).toLowerCase().includes(q)));
   if(moving.length){
     h+='<div class="wf-h">В пути сейчас</div>';
     moving.forEach(r=>{
@@ -1283,7 +1284,7 @@ function renderWorkFeed(){
     });
   }
 
-  const buckets=attentionBuckets(jobsLite,new Date());
+  const buckets=attentionBuckets(jobsLite.filter(matchesJob),new Date());
   const dated=buckets.dated;
   if(dated.length){
     h+='<div class="wf-h">Требует внимания <span class="cnt">'+dated.length+'</span></div>';
@@ -1312,7 +1313,7 @@ function renderWorkFeed(){
     });
   }
 
-  if(!h) h='<div class="kempty">Живых заявок и машин в пути нет.<br>Переключись на «весь справочник», чтобы увидеть все точки.</div>';
+  if(!h) h=q||pointFilter!=='all'?'<div class="kempty">В текущем списке ничего не найдено. Измени поиск или тип точки.</div>':'<div class="kempty">Живых заявок и машин в пути нет.<br>Открой «Справочник», чтобы увидеть все точки.</div>';
   box.innerHTML=h;
 
   const fly=id=>{ const c=clients.find(x=>x.id==id);if(c&&c.lat!=null&&c.lng!=null)map.flyTo([c.lat,c.lng],11);else notify('У точки нет координат. Открой заявку в диспетчере.','warn'); };
@@ -1417,9 +1418,9 @@ function setMapScope(scope){
   renderMarkers(); renderSide();
 }
 document.querySelectorAll('#mapScope button').forEach(b=>b.onclick=()=>setMapScope(b.dataset.ms));
-document.querySelectorAll('#typeFilter button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('#typeFilter button').forEach(x=>x.classList.toggle('on',x===b)); pointFilter=b.dataset.tf; renderList(); });
+document.querySelectorAll('#typeFilter button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('#typeFilter button').forEach(x=>x.classList.toggle('on',x===b)); pointFilter=b.dataset.tf; renderSide(); });
 if($('ptAlert')) $('ptAlert').onchange=()=>{ renderMarkers(); renderSide(); };
-$('search').oninput=renderList;
+$('search').oninput=renderSide;
 
 // ---------- client add/edit ----------
 $('addMode').onclick=()=>{ $('pointOverlay').classList.remove('on'); toggleAdd(true); };
@@ -8111,7 +8112,7 @@ function routePtCard(tag,s,idx,num,movable,role){
   return d;
 }
 function renderRoutePanel(){ $('rCount').textContent=routeStopsAll().length; const box=$('rStops'); box.innerHTML='';
-  if(!rStart && !rStops.length){ box.innerHTML='<div class="hint">Добавьте минимум две точки — по адресу, на карте или из карточки клиента.</div>'; drawStops(); return; }
+  if(!rStart && !rStops.length){ box.innerHTML='<div class="map-route-empty"><b>Маршрут пока пуст</b><p>Добавь минимум две точки: найди адрес, укажи место на карте или выбери клиента в справочнике.</p></div>'; drawStops(); return; }
   let n=0;
   // Старт стоит первым и не перетаскивается: он не «одна из точек», а
   // начало отсчёта. Финиш — последняя остановка-депо, её кнопка «сменить»

@@ -86,3 +86,31 @@ test('design state: current decisions remain separate from incoming notification
  await expect(page.locator('.notice-incoming .notice-toolbar')).toBeVisible();await capture(page,info,'notifications-decisions',errors);
  await queue.getByRole('link',{name:'Проверить результат',exact:true}).click();await expect(page.locator('[data-open-result-review]')).toBeVisible();expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
 });
+async function expandMapSheet(page){if(page.viewportSize().width<=760)await page.locator('#sideHandle').click();}
+test('design state: map work and directory have one scope navigation and working filters',async({page},info)=>{
+ const errors=await start(page,info,'map');await expandMapSheet(page);const side=page.locator('.map-workspace');
+ await expect(side.locator('[data-map-heading]')).toHaveText('В работе');await expect(side.locator('#mapScope')).toBeHidden();await expect(side.locator('#workFeed .wf-row').first()).toBeVisible();
+ await capture(page,info,'map-work',errors);await side.locator('#search').fill('Несуществующая точка 9999');await expect(side.locator('#workFeed .wf-row')).toHaveCount(0);await expect(side.locator('#workFeed')).toContainText('ничего не найдено');
+ await side.locator('#search').fill('');await expect(side.locator('#workFeed .wf-row').first()).toBeVisible();await side.locator('[data-sb=directory]').click();
+ await expect(side.locator('[data-map-heading]')).toHaveText('Справочник точек');await expect(side.locator('#list .pt').first()).toBeVisible();
+ await side.locator('[data-tf=base]').click();await expect(side.locator('#list')).not.toContainText('Коммунальное предприятие');await side.locator('[data-tf=all]').click();
+ await capture(page,info,'map-directory',errors);const expanded=(await side.boundingBox()).height;await side.locator('#listHead').click();await expect(side.locator('#pointsBox')).toBeHidden();await expect.poll(async()=>(await side.boundingBox()).height).toBeLessThan(expanded-20);await side.locator('[data-sb=route]').click();await expect(side.locator('#rBuild')).toBeInViewport();await side.locator('[data-sb=directory]').click();await expect(side.locator('#pointsBox')).toBeHidden();await side.locator('#listHead').click();await expect(side.locator('#pointsBox')).toBeVisible();
+});
+test('design state: map route keeps actions visible and independent from scrolling settings',async({page},info)=>{
+ const errors=await start(page,info,'map');await expandMapSheet(page);await page.locator('[data-sb=route]').click();const side=page.locator('.map-workspace');
+ await expect(side.locator('.map-route-scroll')).toBeVisible();await expect(side.locator('#rBuild')).toBeInViewport();await expect(side.locator('#rSaveTrip')).toBeInViewport();
+ await capture(page,info,'map-route-empty',errors);await side.locator('#rWp').fill('Несохранённый адрес');await side.locator('.route-settings summary').click();
+ await expect(side.locator('#chipOpt')).toBeDisabled();await side.locator('#rPref').selectOption('shortest');await side.locator('.map-route-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);
+ await expect(side.locator('#rBuild')).toBeInViewport();await side.locator('[data-sb=directory]').click();await side.locator('[data-sb=route]').click();await expect(side.locator('#rWp')).toHaveValue('Несохранённый адрес');
+});
+test('design state: map route preserves stop order controls and original client actions',async({page},info)=>{
+ const errors=await start(page,info,'map');await expandMapSheet(page);await page.locator('[data-sb=directory]').click();
+ const card=page.locator('#list .pt[data-cid=client-a]');await card.locator('.nm-t').click();await card.locator('[data-rt]').click();
+ await expect(page.locator('[data-sb=route]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('#rStops .route-pt')).toHaveCount(1);await expect(page.locator('#rStops [data-rrm]')).toBeVisible();
+ await capture(page,info,'map-route-stops',errors);await page.locator('#rStops [data-rrm]').click();await expect(page.locator('#rStops .route-pt')).toHaveCount(0);await expect(page.locator('#rStops')).toContainText('Маршрут пока пуст');
+ expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
+});
+test('design state: engineer map has no route editing or point creation',async({page},info)=>{
+ const errors=await start(page,info,'map',{role:'engineer'});await expect(page.locator('[data-sb=route]')).toBeHidden();await expect(page.locator('#pointTools')).toBeHidden();
+ await page.locator('[data-sb=directory]').click();await expect(page.locator('[data-map-heading]')).toHaveText('Справочник точек');await expect(page.locator('#list [data-edit]')).toHaveCount(0);await capture(page,info,'map-engineer-directory',errors);
+});

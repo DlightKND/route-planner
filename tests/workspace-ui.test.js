@@ -41,3 +41,15 @@ it('renders actual request context as escaped text and keeps editing unavailable
   presentRequestWorkspace({saved:false,editable:true,client:'Новый клиент'},doc);expect(form.hidden).toBe(false);expect(doc.getElementById('requestContext').hidden).toBe(true);
  }finally{await win.happyDOM.close();}
 });
+
+it('composes all map modes once while retaining live route fields and actions',async()=>{
+ const win=new Window(),doc=win.document;
+ try{
+  doc.body.innerHTML=readFileSync('index.html','utf8').match(/<body[^>]*>([\s\S]*)<\/body>/)[1];
+  const input=doc.getElementById('rWp'),build=doc.getElementById('rBuild'),create=doc.querySelector('#pointTools button'),click=vi.fn();input.value='Сохранённый адрес';build.onclick=click;
+  installWorkspaceStructure(doc);build.click();expect(click).toHaveBeenCalledOnce();expect(doc.getElementById('rWp')).toBe(input);expect(input.value).toBe('Сохранённый адрес');expect(doc.querySelectorAll('#rBuild')).toHaveLength(1);
+  expect(build.closest('.map-route-footer')).not.toBeNull();expect(input.closest('.map-route-add')).not.toBeNull();expect(create.closest('.map-workspace-head')).not.toBeNull();expect(doc.getElementById('mapScope').hidden).toBe(true);
+  doc.querySelector('#sideTabs button.on').classList.remove('on');doc.querySelector('[data-sb=directory]').classList.add('on');await win.happyDOM.waitUntilComplete();
+  expect(doc.querySelector('[data-map-heading]').textContent).toBe('Справочник точек');expect(doc.querySelector('.map-workspace').dataset.mapPanel).toBe('directory');
+ }finally{await win.happyDOM.close();}
+});

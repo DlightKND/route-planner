@@ -50,6 +50,7 @@ function framePane(view,headerNodes){
 }
 
 export function installWorkspaceStructure(root=document){
+ frameMapWorkspace(root);
  const job=root.querySelector('.view-job'),trip=root.querySelector('.view-trip');
  if(job){
   const estimate=root.getElementById('jobEstimatePane'),base=element(root,'section','card request-estimate-base'),heading=element(root,'header','workspace-section-head');
@@ -118,6 +119,38 @@ export function installWorkspaceStructure(root=document){
   const place=()=>{const panel=menu.querySelector('.acts,.order-status-label');if(!panel)return;panel.style.top='100%';panel.style.bottom='auto';const height=root.defaultView.innerHeight,rail=root.querySelector('.rail'),limit=root.defaultView.innerWidth<=760&&rail?rail.getBoundingClientRect().top-8:height-8;if(panel.getBoundingClientRect().bottom>limit){panel.style.top='auto';panel.style.bottom='100%';}};
   root.defaultView.requestAnimationFrame(place);
  },true);
+}
+
+// Keep the map's actual controls and their handlers. Each tab is a workspace,
+// rather than a second scope switch above an unrelated legacy list.
+export function frameMapWorkspace(root=document){
+ const side=root.querySelector('.view-map .side');if(!side||side.classList.contains('map-workspace'))return;
+ side.classList.add('map-workspace');side.setAttribute('aria-label','Рабочая панель карты');
+ const points=root.querySelector('#pointsBlock>.block-body'),tabs=root.getElementById('sideTabs');tabs.setAttribute('aria-label','Раздел карты');
+ const head=element(root,'header','map-workspace-head');head.innerHTML='<div><p class="design-eyebrow">Операционная карта</p><h2 data-map-heading>В работе</h2><p class="map-workspace-description" data-map-description></p></div>';
+ head.append(root.getElementById('pointTools'));points.prepend(head);
+ const scope=root.getElementById('mapScope');scope.hidden=true;scope.setAttribute('aria-hidden','true');points.querySelector('.chipsep')?.remove();
+ const tools=root.getElementById('sideTools');tools.classList.add('map-workspace-filters');
+ const filter=root.getElementById('typeFilter');filter.setAttribute('aria-label','Тип точки');
+ const listHead=root.getElementById('listHead'),label=element(root,'strong','map-list-caption');listHead.prepend(label);
+ root.getElementById('rWp').placeholder='Найти адрес или место';
+ const route=root.querySelector('#routeBlock>.block-body'),scroll=element(root,'div','map-route-scroll');
+ route.querySelector('.route-panel-title')?.remove();
+ const routeHead=element(root,'header','map-workspace-head');routeHead.innerHTML='<div><p class="design-eyebrow">План поездки</p><h2>Создание маршрута</h2><p class="map-workspace-description">Собери остановки и проверь порядок перед построением.</p></div>';
+ const stops=element(root,'section','map-route-section');stops.innerHTML='<h3>Остановки маршрута</h3>';stops.append(root.getElementById('rStops'));
+ const add=element(root,'section','map-route-section map-route-add');add.innerHTML='<h3>Добавить остановку</h3><label for="rWp">Адрес или название места</label>';
+ add.append(route.querySelector('.route-address'),root.getElementById('rWpMode'),root.getElementById('rWpHint'),root.getElementById('rWpRes'));
+ const footer=element(root,'footer','map-route-footer');footer.append(route.querySelector('.route-primary'),root.getElementById('rStatus'));
+ scroll.append(routeHead,stops,add,root.getElementById('rVariants'),route.querySelector('.route-settings'));route.append(scroll,footer);
+ const paint=()=>{
+  const mode=tabs.querySelector('button.on')?.dataset.sb||'points';side.dataset.mapPanel=mode;side.classList.toggle('list-folded',mode!=='route'&&root.getElementById('pointsBox').classList.contains('folded'));
+  routeHead.querySelector('h2').textContent=Number(root.getElementById('rCount').textContent)>0?'План маршрута':'Создание маршрута';
+  const directory=mode==='directory';head.querySelector('[data-map-heading]').textContent=directory?'Справочник точек':'В работе';
+  head.querySelector('[data-map-description]').textContent=directory?'Клиенты, оборудование и депо.':'Заявки и машины, которым нужно внимание.';
+  label.textContent=directory?'Точки справочника':'Рабочая очередь';
+  const input=root.getElementById('search');input.placeholder=directory?'Найти клиента или депо':'Найти клиента или машину';
+ };
+ paint();const Observer=root.defaultView?.MutationObserver;if(Observer)new Observer(paint).observe(tabs,{attributes:true,childList:true,characterData:true,subtree:true,attributeFilter:['class','style']});
 }
 
 export function setCatalogWorkspace(name,root=document){

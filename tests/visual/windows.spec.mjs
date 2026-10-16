@@ -157,7 +157,7 @@ test('route panel shows one primary action and collapses advanced settings',asyn
  const buttons=await page.locator('.route-primary>.btn').evaluateAll(xs=>xs.map(el=>{const r=el.getBoundingClientRect();return {top:r.top,height:r.height};}));expect(buttons[0].top).toBe(buttons[1].top);for(const b of buttons)expect(b.height).toBeGreaterThanOrEqual(44);
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-route.png'});
  await page.locator('.route-settings summary').click();await expect(page.locator('#rPref')).toBeVisible();await page.locator('#chipAvoid').click();await expect(page.locator('#avoidBody')).toBeVisible();
- await page.locator('#chipOpt').click();await expect(page.locator('#chipOpt')).toHaveAttribute('aria-pressed','true');
+ await expect(page.locator('#chipOpt')).toBeDisabled();await page.locator('#rPref').selectOption('shortest');await expect(page.locator('#rPref')).toHaveValue('shortest');
 });
 
 
