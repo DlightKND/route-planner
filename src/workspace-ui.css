@@ -127,8 +127,9 @@ html:root { --workspace-width:none; }
 .view-planner .chips { gap:8px; }
 .view-planner .chips .chip { border:1px solid transparent;border-radius:999px;min-height:36px;padding:6px 12px;background:transparent;font:400 12px/1.5 var(--sans); }
 .view-planner .chips .chip.on { border-color:var(--line);background:var(--panel);box-shadow:none; }
-.view-planner .kanban { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;overflow:visible;align-items:start; }
+.view-planner .kanban { display:grid;grid-auto-flow:column;grid-auto-columns:minmax(min(260px,100%),1fr);grid-template-columns:none;gap:20px;align-items:start; }
 .view-planner :is(#jobList,#orderList,#tripList) { flex:none;overflow:visible; }
+.view-planner :is(#jobList,#orderList,#tripList).kanban { overflow:auto;scrollbar-gutter:auto;overscroll-behavior-x:contain;padding-bottom:16px; }
 .view-planner .kanban>.kcol { width:auto;min-width:0;max-width:none;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:16px; }
 .view-planner .kcol-h { margin:0;padding:0 0 16px;align-items:center;font-size:14px; }
 .view-planner .kcol-h>span:first-child { display:flex;align-items:center;gap:8px; }
@@ -144,7 +145,7 @@ html:root { --workspace-width:none; }
 .workspace-card-footer>.btn { padding:8px 0!important;border:0;background:transparent; }
 .workspace-card-details { position:relative; }
 .workspace-card-details>summary { min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;list-style:none;cursor:pointer;font-size:22px; }
-.workspace-card-details .acts,.workspace-card-details .order-status-label { position:absolute;z-index:20;right:0;top:100%;width:240px;max-width:calc(100vw - 64px);margin:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--shadow-md); }
+.workspace-card-details .acts,.workspace-card-details .order-status-label { position:absolute;z-index:20;right:-20px;top:100%;width:240px;max-width:calc(100vw - 64px);margin:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--shadow-md); }
 .workspace-card-details:not([open])>:not(summary) { display:none; }
 .workspace-card-details .acts { display:flex;flex-wrap:wrap;gap:8px; }
 .workspace-card-details select { width:100%;flex-basis:100%; }
@@ -232,7 +233,6 @@ html:root { --workspace-width:none; }
  .view-trip.workspace-page #tpPlanPane .trip-grid { grid-template-columns:minmax(0,1fr); }
  .workspace-page .trip-review-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .workspace-masthead .trip-head { flex-wrap:wrap; }
- .view-planner .kanban { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .workspace-page .order-result-line { grid-template-columns:minmax(0,1fr) 280px; }
  .view-dash.workspace-page .dash-grid { grid-template-columns:minmax(0,1fr); }
 }
@@ -278,7 +278,7 @@ html:root { --workspace-width:none; }
  .view-planner .workspace-filterbar .dispatcher-more { margin-left:auto; }
  .view-planner .workspace-filterbar .planner-filter-panel { max-width:calc(100vw - 56px); }
  .workspace-board-heading { margin-top:24px; }
- .view-planner .kanban { grid-template-columns:minmax(0,1fr);gap:16px; }
+ .view-planner .kanban { gap:16px; }
  .view-planner .kanban>.kcol { padding:16px;min-height:0; }
  .view-planner .kcol:has(.kempty) .kcol-b { display:none; }
  .view-planner .kcol:has(.kempty) .kcol-h { padding-bottom:0; }
@@ -592,3 +592,5 @@ body *,body *::before,body *::after { box-shadow:none!important;text-shadow:none
 }
 
 .veh-ico,.veh-dir { filter:none!important; }
+
+@media(max-width:760px){ .workspace-card-details .acts,.workspace-card-details .order-status-label { right:-18px; } }
