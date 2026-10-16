@@ -480,6 +480,10 @@ dialog.presence-editor { width:960px;max-width:calc(100vw - 32px);padding:24px; 
 .summary-period-range>[data-summary-shift] { flex:none;width:36px;font-size:18px;color:var(--ink-dim); }
 .summary-period-range>[data-summary-dates] { display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;min-width:0;font:600 12px/1.3 var(--mono);white-space:nowrap; }
 .summary-period-range svg { width:16px;height:16px;flex:none;color:var(--accent-line); }
+.personal-schedule-head { padding:20px 32px;background:var(--panel);border-bottom:1px solid var(--line); }
+.personal-schedule-head .pane-head { display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin:0; }
+.personal-schedule-options { padding:20px 32px 0; }
+#mineList { padding:24px 32px 48px; }
 .summary-action-row { display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-bottom:24px; }
 .summary-action-row.has-warning { grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); }
 .summary-quick-actions { min-width:0;padding:20px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel); }
@@ -492,6 +496,9 @@ dialog.presence-editor { width:960px;max-width:calc(100vw - 32px);padding:24px; 
 .summary-action-row>.planwarn>b { display:block;line-height:1.4; }
 .summary-action-row>.planwarn ul { margin-bottom:0;padding-left:18px; }
 @media(max-width:760px){
+ .personal-schedule-head { padding:16px; }
+ .personal-schedule-options { padding:20px 16px 0; }
+ #mineList { padding:24px 16px 48px; }
  .view-dash.workspace-page .pane-head { gap:16px 12px; }
  .view-dash.workspace-page .pane-head h2 { margin-right:auto; }
  .view-dash.workspace-page .dashseg { margin-left:0; }

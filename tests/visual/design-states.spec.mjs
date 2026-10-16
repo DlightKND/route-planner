@@ -76,6 +76,20 @@ test('design state: summary shares its header period and opens real quick action
  await page.goto('/#/dash');await expect(period.locator('[data-summary-dates]')).toContainText('01.09 — 30.09.2026');await expect(page.locator('[data-summary-create=trip]')).toBeVisible();await page.locator('[data-summary-create=trip]').click();await expect(page.locator('#tpFrom')).toBeVisible();
  expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
+for(const role of ['engineer','admin'])test('design state: shared period respects '+role+' access',async({page},info)=>{
+ const errors=await start(page,info,'dash',{role});const engineer=role==='engineer',period=page.locator(engineer?'#minePeriod':'#summaryPeriod');
+ await expect(period).toBeVisible();await expect(period.locator('[data-summary-dates]')).toBeVisible();
+ await period.locator('[data-summary-preset=week]').click();await expect(period.locator('[data-summary-dates]')).toContainText('05.10 — 11.10.2026');
+ if(engineer){
+  await expect(page.locator('.view-planner')).toHaveClass(/active/);await expect(page.locator('#mineList .vg-feed')).toBeVisible();
+  await expect(page.locator('#mineList .rangebar')).toHaveCount(0);await expect(page.locator('#mineList .wk-pct,#mineList .wk-mini')).toHaveCount(0);
+  await expect(page.locator('#dashBody')).toBeHidden();await expect(page.locator('[data-summary-create]:visible')).toHaveCount(0);await expect(page.locator('#orderAdd')).toBeHidden();
+ }else{
+  await expect(page.locator('#attnBody [data-summary-create=order]')).toBeVisible();await expect(page.locator('#dashBody .summary-section')).toHaveCount(3);
+ }
+ const bounds=await period.evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth}));expect(bounds.scroll).toBeLessThanOrEqual(bounds.width+1);
+ await capture(page,info,'period-role-'+role,errors);
+});
 test('design state: summary warning shares one row with quick actions',async({page},info)=>{
  const errors=await start(page,info,'dash',{summaryOrphans:true});const row=page.locator('.summary-action-row');
  await expect(row.locator('.planwarn')).toContainText('Заявки без действующего выезда');
