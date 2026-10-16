@@ -580,7 +580,7 @@ body *,body *::before,body *::after { box-shadow:none!important;text-shadow:none
 .workspace-page .settings-body .settings-advanced>summary { margin:0; }
 .view-dash.workspace-page #dashBody>.card { margin-top:20px; }
 .view-dash.workspace-page #dashBody>.card+.card { margin-top:24px; }
-[data-theme=light] :is(.view-dash,#plMine) .vg-block { background:var(--panel); }
+[data-theme=light] :is(.view-dash,#plMine) .vg-block:not(.sliver) { background:var(--panel); }
 [data-theme=light] :is(.view-dash,#plMine) .vg-request { background:color-mix(in srgb,var(--warning) 4%,var(--panel)); }
 [data-theme=light] .vg-seg.road { background-image:linear-gradient(135deg,color-mix(in srgb,var(--block-tone,var(--ink-faint)) 8%,transparent) 25%,transparent 25% 50%,color-mix(in srgb,var(--block-tone,var(--ink-faint)) 8%,transparent) 50% 75%,transparent 75%); }
 @media(min-width:761px){
