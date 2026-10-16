@@ -2781,7 +2781,8 @@
          и домашний экран инженера. Он остаётся в разметке скрытым, чтобы
          plannerSub() было что подсвечивать. -->
     <div id="plMine" style="display:none">
-      <div class="pane-head"><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim)"><input type="checkbox" id="mineDone" style="width:auto">показать завершённые</label></div>
+      <header class="personal-schedule-head"><div class="pane-head"><h2>График и работа</h2><div id="minePeriod" class="summary-period" role="group" aria-label="Период личного графика"></div></div></header>
+      <div class="personal-schedule-options"><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim)"><input type="checkbox" id="mineDone" style="width:auto">показать завершённые</label></div>
       <div id="mineList"></div>
     </div>
     <div id="plJobs">

@@ -8,16 +8,19 @@ async function open(page,info,role,route){
 }
 for(const route of ['dash','planner/mine'])test('engineer personal periods work on '+route,async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await open(page,info,'engineer',route);
- const root=page.locator('#mineList');await expect(root.locator('.vg-feed')).toBeVisible();
- await expect(root.locator('.wk-pct,.wk-mini,.loadbars')).toHaveCount(0);await expect(page.locator('#dashBody')).toBeHidden();
- for(const [days,last] of [[7,'2026-10-11'],[14,'2026-10-18'],[30,'2026-11-03']]){
-  await root.locator('[data-rlen="'+days+'"]').click();await expect(root.locator('[data-rt]')).toHaveValue(last);await expect(root.locator('.shim')).toHaveCount(0);
+ const root=page.locator('#mineList'),period=page.locator('#minePeriod');await expect(root.locator('.vg-feed')).toBeVisible();await expect(period).toBeVisible();
+ await expect(root.locator('.rangebar')).toHaveCount(0);await expect(root.locator('.wk-pct,.wk-mini,.loadbars')).toHaveCount(0);await expect(page.locator('#dashBody')).toBeHidden();await expect(page.locator('[data-summary-create]:visible')).toHaveCount(0);
+ const otherPeriods=await page.evaluate(()=>{localStorage.setItem('dl_range_summary',JSON.stringify({from:'2026-09-01',to:'2026-09-30'}));return ['dl_range_summary','dl_range_journal'].map(k=>localStorage.getItem(k));});
+ for(const [preset,last] of [['week','11.10.2026'],['fortnight','18.10.2026'],['month','03.11.2026']]){
+  await period.locator('[data-summary-preset="'+preset+'"]').click();await expect(period.locator('[data-summary-dates]')).toContainText('05.10 — '+last);await expect(root.locator('.shim')).toHaveCount(0);
  }
- await root.locator('[data-rshift="1"]').click();await expect(root.locator('[data-rf]')).toHaveValue('2026-11-04');
- // A period with no work must still expose controls for navigating back.
- await root.locator('[data-rnow]').click();await expect(root.locator('[data-rf]')).toHaveValue('2026-10-05');
- await root.locator('[data-rt]').fill('2026-10-12');await root.locator('[data-rt]').dispatchEvent('change');await expect(root.locator('[data-rt]')).toHaveValue('2026-10-12');
- await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(root.locator('[data-rt]')).toHaveValue('2026-10-12');
+ await period.locator('[data-summary-shift="1"]').focus();await page.keyboard.press('Enter');await expect(period.locator('[data-summary-dates]')).toContainText('04.11 — 03.12.2026');await expect(period.locator('[data-summary-shift="1"]')).toBeFocused();
+ // Even a range without work keeps navigation and custom dates in the header.
+ await period.locator('[data-summary-today]').click();await expect(period.locator('[data-summary-dates]')).toContainText('05.10 — 03.11.2026');
+ await period.locator('[data-summary-dates]').click();await page.locator('[data-pf=to]').fill('2026-10-12');await page.locator('#promptYes').click();await expect(period.locator('[data-summary-dates]')).toContainText('05.10 — 12.10.2026');
+ await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(period.locator('[data-summary-dates]')).toContainText('05.10 — 12.10.2026');
+ expect(await page.evaluate(()=>['dl_range_summary','dl_range_journal'].map(k=>localStorage.getItem(k)))).toEqual(otherPeriods);
+ await page.locator('#mineDone').check();await expect(period.locator('[data-summary-dates]')).toContainText('05.10 — 12.10.2026');await page.locator('#mineDone').uncheck();
  await expect(root.locator('.wk-pct,.wk-mini,.loadbars')).toHaveCount(0);expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
  await page.screenshot({path:'test-results/engineer-dashboard/'+info.project.name+'-'+route.replace('/','-')+'.png'});
 });
