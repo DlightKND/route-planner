@@ -228,7 +228,10 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     if(scene.statistics){
       await expect(active.locator('[data-summary-mode=charts] .summary-chart')).toHaveCount(2);
       await shot(page,testInfo,'logist-dashboard-diagrams');
-      const period=await active.locator('#dashBody .rangebar').evaluate(el=>{const dates=[...el.querySelectorAll('input')].map(x=>{const r=x.getBoundingClientRect();return {top:r.top,bottom:r.bottom};}),quick=el.querySelector('.rquick').getBoundingClientRect(),buttons=[...el.querySelectorAll('.rquick button')].map(x=>x.getBoundingClientRect().top);return {dates,quick:{top:quick.top,bottom:quick.bottom},buttons};});expect(Math.abs(period.dates[0].top-period.dates[1].top),'Dates share one row').toBeLessThanOrEqual(2);expect(period.quick.top,'Month navigation follows dates without overlap').toBeGreaterThanOrEqual(period.dates[0].top-2);if(period.quick.top>period.dates[0].top+2)expect(period.quick.top).toBeGreaterThanOrEqual(period.dates[0].bottom);expect(Math.max(...period.buttons)-Math.min(...period.buttons),'Month arrows stay together').toBeLessThanOrEqual(2);
+      await expect(active.locator('.workspace-masthead #summaryPeriod')).toBeVisible();
+      const period=await active.locator('#summaryPeriod .summary-period-range').evaluate(el=>[...el.children].map(x=>{const r=x.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right};}));
+      expect(Math.max(...period.map(x=>x.top))-Math.min(...period.map(x=>x.top)),'Date range and arrows share one row').toBeLessThanOrEqual(2);
+      expect(period[0].right).toBeLessThanOrEqual(period[1].left+1);expect(period[1].right).toBeLessThanOrEqual(period[2].left+1);
       await expect(active.locator('[data-summary-view=charts]')).toHaveAttribute('aria-pressed','true');
       await selectedContrast(active.locator('[data-summary-view=charts]'));
       await active.locator('[data-summary-view=tables]').click();
@@ -237,7 +240,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
 
       await expect(active.locator('[data-dcard=fin] .finance-scope-summary')).toContainText('подтверждено 1 из 2');
       await expect(active.locator('[data-dcard=fin] .summary-total').last()).toContainText('350');
-      await expect(active.locator('#dashBody .rangebar')).toHaveCount(1);
+      await expect(active.locator('.rangebar')).toHaveCount(0);await expect(active.locator('#summaryPeriod')).toHaveCount(1);
       await expect(active.locator('#dashBody .summary-section')).toHaveCount(3);
     }
     if(scene.name==='trip'){

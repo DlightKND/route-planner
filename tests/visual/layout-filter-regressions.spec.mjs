@@ -11,10 +11,9 @@ async function open(page,info,route,unassignedJourney=false){
 test('dashboard hides redundant desktop switch and dates fit',async({page},info)=>{
  await open(page,info,'dash');await expect(page.locator('#attnBody .vg-feed')).toBeVisible();
  if(page.viewportSize().width>1180)await expect(page.locator('#dashSeg')).toBeHidden();else await expect(page.locator('#dashSeg')).toBeVisible();
- for(const input of await page.locator('.view-dash .rangebar input:visible').all()){
-  const sizing=await input.evaluate(el=>{const s=getComputedStyle(el),c=document.createElement('canvas').getContext('2d');c.font=s.font;return {available:el.clientWidth-parseFloat(s.paddingLeft)-parseFloat(s.paddingRight),required:c.measureText('30.12.2026').width+28,font:parseFloat(s.fontSize)};});
-  expect(sizing.font).toBeLessThanOrEqual(14);expect(sizing.available).toBeGreaterThanOrEqual(sizing.required);
- }
+ await expect(page.locator('.view-dash .rangebar')).toHaveCount(0);
+ await expect(page.locator('#summaryPeriod [data-summary-dates]')).toBeVisible();
+ const period=await page.locator('#summaryPeriod').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth}));expect(period.scroll).toBeLessThanOrEqual(period.width+1);
  expect(await page.locator('.view-dash .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
  await page.screenshot({path:'test-results/layout-fixes/'+info.project.name+'-dashboard.png'});
 });

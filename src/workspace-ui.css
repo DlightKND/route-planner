@@ -458,6 +458,53 @@ dialog.presence-editor { width:960px;max-width:calc(100vw - 32px);padding:24px; 
 .gps-resolution-summary>.hint { font-size:12px;line-height:1.6;margin-top:24px; }
 @media(max-width:760px) { .gps-resolution-workspace { grid-template-columns:minmax(0,1fr);gap:20px; }.gps-resolution-summary { padding:20px; } }
 .vg-group .vg-plan-tools { pointer-events:auto;right:4px;top:0;width:32px;height:32px; }
+.vg-group.has-act .vg-plan-tools { right:48px; }
+.vg-group.has-act .vg-gtitle { right:84px; }
+@container (max-width:131px){
+ .vg-group.has-act .vg-plan-tools { right:4px; }
+ .vg-group.has-act .vg-gtitle { right:42px; }
+}
+/* One period above both Summary columns; the compact phone card keeps arrows
+   and dates on one line instead of wrapping native date fields and shortcuts. */
+.view-dash.workspace-page .pane-head { display:flex;align-items:center;flex-wrap:wrap;gap:16px; }
+.summary-period { margin-left:auto;display:flex;align-items:center;gap:12px;min-width:0; }
+.summary-period-top { display:flex;align-items:center;gap:12px;order:2; }
+.summary-period button { min-height:40px;border:1px solid transparent;background:transparent;color:var(--ink);font:500 12px/1.2 var(--sans);cursor:pointer;border-radius:8px; }
+.summary-period button:hover { background:var(--panel-2); }
+.summary-period button:focus-visible { outline:2px solid var(--accent-line);outline-offset:2px; }
+.summary-period .summary-period-today { padding:8px;color:var(--ink-dim); }
+.summary-period-presets { display:flex;padding:3px;border:1px solid var(--line);border-radius:12px;background:var(--panel); }
+.summary-period-presets button { padding:8px 12px;white-space:nowrap;min-height:34px; }
+.summary-period-presets button[aria-pressed="true"] { background:var(--panel-2);border-color:var(--ink-dim);color:var(--ink);font-weight:600; }
+.summary-period-range { display:flex;align-items:center;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:3px;min-width:0; }
+.summary-period-range>[data-summary-shift] { flex:none;width:36px;font-size:18px;color:var(--ink-dim); }
+.summary-period-range>[data-summary-dates] { display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;min-width:0;font:600 12px/1.3 var(--mono);white-space:nowrap; }
+.summary-period-range svg { width:16px;height:16px;flex:none;color:var(--accent-line); }
+.summary-action-row { display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-bottom:24px; }
+.summary-action-row.has-warning { grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); }
+.summary-quick-actions { min-width:0;padding:20px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel); }
+.summary-quick-actions h3 { margin:0 0 16px;font:600 16px/1.3 var(--sans); }
+.summary-quick-buttons { display:flex;flex-wrap:wrap;gap:10px; }
+.summary-quick-buttons>.btn { display:flex;align-items:center;justify-content:center;gap:8px;flex:1 1 220px;min-height:44px;padding:12px;white-space:normal;text-align:center;line-height:1.4; }
+.summary-quick-buttons>.btn>span { font-size:18px;flex:none; }
+.summary-quick-actions .hint { margin:14px 0 0;line-height:1.5; }
+.summary-action-row>.planwarn { margin:0;padding:20px;min-width:0; }
+.summary-action-row>.planwarn>b { display:block;line-height:1.4; }
+.summary-action-row>.planwarn ul { margin-bottom:0;padding-left:18px; }
+@media(max-width:760px){
+ .view-dash.workspace-page .pane-head { gap:16px 12px; }
+ .view-dash.workspace-page .pane-head h2 { margin-right:auto; }
+ .view-dash.workspace-page .dashseg { margin-left:0; }
+ .summary-period { width:100%;margin:0;display:flex;flex-direction:column;gap:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--panel); }
+ .summary-period-top { order:0;width:100%;justify-content:space-between;gap:8px; }
+ .summary-period-presets button { padding:8px;min-height:36px;font-size:12px; }
+ .summary-period .summary-period-today { padding:6px;font-size:12px; }
+ .summary-period-range { width:100%;justify-content:space-between;background:var(--panel-2); }
+ .summary-period-range>[data-summary-dates] { flex:1;font-size:14px;gap:6px; }
+ .summary-period-range>[data-summary-shift] { width:30px; }
+ .summary-action-row.has-warning { grid-template-columns:minmax(0,1fr); }
+ .summary-quick-actions,.summary-action-row>.planwarn { padding:16px; }
+}
 dialog.entity-panel-dialog.entity-review-dialog { width:820px; }
 dialog.entity-panel-dialog.entity-trip-picker-dialog { width:860px; }
 dialog.presence-editor.presence-editor { width:960px; }

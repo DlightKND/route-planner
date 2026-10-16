@@ -56,6 +56,40 @@ test('design state: schedule trip workspace exposes time parts and direct naviga
  await expect(panel.locator('[data-pop-map]')).toBeVisible();await expect(panel.locator('[data-pop-open]')).toBeVisible();
  expect(await panel.locator('.gp-layout').evaluate(el=>el.open)).toBe(true);await capture(page,info,'schedule-trip-workspace',errors);
 });
+test('design state: summary shares its header period and opens real quick actions',async({page},info)=>{
+ const errors=await start(page,info,'dash',{preserveRanges:true});const period=page.locator('#summaryPeriod');
+ await expect(period).toBeVisible();await expect(page.locator('.view-dash .rangebar')).toHaveCount(0);
+ await expect(page.locator('#attnBody .summary-quick-actions')).toBeVisible();
+ const fill=await page.locator('.summary-action-row').evaluate(el=>({outer:el.clientWidth,card:el.firstElementChild.getBoundingClientRect().width}));expect(Math.abs(fill.outer-fill.card)).toBeLessThanOrEqual(2);
+ await capture(page,info,'summary-header-actions',errors);
+ await period.locator('[data-summary-preset=week]').click();await expect(period.locator('[data-summary-dates]')).toContainText('05.10 — 11.10.2026');
+ await capture(page,info,'summary-period-week',errors);
+ await period.locator('[data-summary-shift="1"]').focus();await page.keyboard.press('Enter');await expect(period.locator('[data-summary-dates]')).toContainText('12.10 — 18.10.2026');await expect(period.locator('[data-summary-shift="1"]')).toBeFocused();
+ await period.locator('[data-summary-dates]').click();await page.locator('[data-pf=from]').fill('2026-09-01');await page.locator('[data-pf=to]').fill('2026-09-30');await page.locator('#promptYes').click();
+ await expect(period.locator('[data-summary-preset=month]')).toHaveAttribute('aria-pressed','true');
+ await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dl_range_summary')))).toEqual({from:'2026-09-01',to:'2026-09-30'});
+ await expect(page.locator('#attnBody .wkrow[data-wk="2026-41"]')).toHaveCount(0);
+ if(page.viewportSize().width<=1180)await page.locator('#dashSeg [data-dv=cards]').click();
+ await expect(page.locator('#dashBody .summary-controls')).toBeVisible();await expect(page.locator('#dashBody .finance-scope-summary')).toContainText('подтверждено 1 из 1');await expect(period.locator('[data-summary-dates]')).toContainText('01.09 — 30.09.2026');
+ if(page.viewportSize().width<=1180)await page.locator('#dashSeg [data-dv=feed]').click();
+ await page.locator('[data-summary-create=order]').click();await expect(page.locator('#orderTitle')).toBeVisible();await expect(page.locator('#orderSave')).toBeVisible();
+ await page.goto('/#/dash');await expect(period.locator('[data-summary-dates]')).toContainText('01.09 — 30.09.2026');await expect(page.locator('[data-summary-create=trip]')).toBeVisible();await page.locator('[data-summary-create=trip]').click();await expect(page.locator('#tpFrom')).toBeVisible();
+ expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
+});
+test('design state: summary warning shares one row with quick actions',async({page},info)=>{
+ const errors=await start(page,info,'dash',{summaryOrphans:true});const row=page.locator('.summary-action-row');
+ await expect(row.locator('.planwarn')).toContainText('Заявки без действующего выезда');
+ const [action,warning]=await row.locator(':scope>*').evaluateAll(nodes=>nodes.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom};}));
+ if(page.viewportSize().width>760){expect(action.right).toBeLessThan(warning.x);expect(action.y).toBe(warning.y);}else expect(action.bottom).toBeLessThan(warning.y);
+ await capture(page,info,'summary-actions-warning',errors);
+});
+test('design state: schedule ellipsis leaves room for the stop action',async({page},info)=>{
+ const errors=await start(page,info,'dash',{lateScheduleCut:true,runningSchedule:true});
+ const group=page.locator('.vg-group.has-act[data-gb="t'+fixtureIDs.trip+'"]').first();await expect(group.locator('[data-gtools]')).toBeVisible();
+ const lane=group.locator('..'),stop=lane.locator('.vg-block[data-gb="t'+fixtureIDs.trip+'"] [data-gact=finish]').first();
+ if(await stop.isVisible()){const menu=await group.locator('[data-gtools]').boundingBox(),action=await stop.boundingBox();expect(menu.x+menu.width).toBeLessThanOrEqual(action.x);}else expect(await lane.evaluate(el=>el.clientWidth)).toBeLessThanOrEqual(131);
+ await capture(page,info,'summary-schedule-stop',errors);await group.locator('[data-gtools]').click();await expect(page.locator('.gpop-workspace')).toBeVisible();
+});
 test('design state: presence evidence and decision stay separate',async({page},info)=>{
  const errors=await start(page,info,'trip/'+fixtureIDs.trip);await page.locator('[data-trip-tab=presence]').click();
  await page.locator('#tpPresence [data-presence-edit]').first().click();const dialog=page.locator('dialog.presence-editor');await expect(dialog).toBeVisible();
@@ -178,8 +212,8 @@ test('polish: wide workspaces use the available width and the rail indicator sit
  const marker=await page.locator('.rail .nav-i.active').evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el,'::before');return {edge:r.left+parseFloat(s.left),width:parseFloat(s.width)};});expect(marker.edge).toBe(0);expect(marker.width).toBe(4);
  await capture(page,info,'wide-dispatcher',errors);
  for(const route of ['catalog','job/'+fixtureIDs.job,'order/'+fixtureIDs.activeOrder,'trip/'+fixtureIDs.trip]){
-  await page.goto('/#/'+route);await expect(page.locator('.view.active .workspace-main')).toBeVisible();
-  const main=await page.locator('.view.active .workspace-main').boundingBox();expect(main.x).toBe(76);expect(main.width).toBe(1844);
+  await page.goto('/#/'+route);const main=page.locator('.view-'+route.split('/')[0]+'.active .workspace-main');await expect(main).toBeVisible();
+  await expect.poll(async()=>{const r=await main.boundingBox();return r&&{x:r.x,width:r.width};}).toEqual({x:76,width:1844});
  }
  const card=page.locator('#jobOrders .order-child').first();await page.goto('/#/job/'+fixtureIDs.job);await expect(card).toBeVisible();
  expect(await card.evaluate(el=>[...['Top','Right','Bottom','Left']].map(side=>getComputedStyle(el)['border'+side+'Width']))).toEqual(['1px','1px','1px','1px']);
