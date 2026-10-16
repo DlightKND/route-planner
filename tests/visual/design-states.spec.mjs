@@ -70,3 +70,13 @@ test('design state: GPS resolution separates the operation, parameters and saved
  await overlay.locator('[data-gps-choice=chain]').click();await expect(overlay.locator('[data-pf=title]')).toHaveValue('Черновик названия');
  await overlay.locator('#promptNo').click();if(await page.locator('#confirmOverlay').isVisible())await page.locator('#confirmYes').click();await expect(overlay).toBeHidden();expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
+test('design state: request estimate keeps the agreed scope separate from execution',async({page},info)=>{
+ const errors=await start(page,info,'job/'+fixtureIDs.job);await page.locator('#jobTabEstimate').click();
+ await expect(page.locator('.request-estimate-base')).toBeVisible();await expect(page.locator('#jbWorks')).toBeVisible();await expect(page.locator('#jbParts')).toBeVisible();
+ await capture(page,info,'request-estimate',errors);await page.locator('[data-estimate-tasks]').click();await expect(page.locator('#jobOverviewPane')).toBeVisible();
+});
+test('design state: new assignment keeps editable organization and scope together',async({page},info)=>{
+ const errors=await start(page,info,'planner/orders');await page.locator('#orderAdd').click();
+ await expect(page.locator('#orderTitle')).toBeVisible();await expect(page.locator('#orderComposition')).toBeVisible();await expect(page.locator('#orderSave')).toBeVisible();
+ await capture(page,info,'assignment-create',errors);
+});

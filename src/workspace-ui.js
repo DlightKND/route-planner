@@ -33,10 +33,11 @@ export function framePresenceWorkspace(dialog,stay){
  workspace.append(evidence,decision);table.replaceWith(workspace);
  const metrics=element(doc,'div','presence-review-metrics'),bounds=presenceBounds(stay),calendar=stay.stay_from&&stay.stay_to?(Date.parse(stay.stay_to)-Date.parse(stay.stay_from))/60000:null;
  const amount=value=>value==null?'—':Number(value).toLocaleString('ru-RU',{maximumFractionDigits:1})+' мин';
- metrics.innerHTML=[['Календарная длительность',amount(calendar)],['Наблюдено GPS',amount(bounds?.gps)],['Предложено дополнительно',amount(bounds?bounds.max-bounds.gps:null)],['Итог к подтверждению','']].map(([label,value],i)=>`<div><span>${label}</span><b ${i===3?'data-presence-review-total':''}>${value}</b></div>`).join('');workspace.before(metrics);
+ metrics.innerHTML=[['Календарная длительность',amount(calendar)],['Наблюдено GPS',amount(bounds?.gps??stay.minutes_raw)],['Предложено дополнительно',amount(bounds?bounds.extra:stay.minutes_raw!=null?0:null)],['Итог к подтверждению','']].map(([label,value],i)=>`<div><span>${label}</span><b ${i===3?'data-presence-review-total':''}>${value}</b></div>`).join('');workspace.before(metrics);
  const paint=()=>{const input=workspace.querySelector('[data-presence="minutes_mgr"]');metrics.querySelector('[data-presence-review-total]').textContent=amount(input.value===''?null:Number(input.value));};paint();dialog.addEventListener('input',()=>doc.defaultView.queueMicrotask(paint));
  const title=dialog.querySelector('#presenceEditorTitle');if(title)title.textContent='Проверка присутствия';
  const footer=dialog.querySelector('.presence-editor-foot'),later=element(doc,'button','btn ghost');later.type='button';later.textContent='Проверить позже';later.onclick=()=>dialog.querySelector('.presence-editor-head button').click();footer.prepend(later);
+ const body=element(doc,'div','presence-editor-body');for(const child of [...dialog.children])if(child.tagName!=='FORM'&&child!==footer)body.append(child);dialog.insertBefore(body,footer);
 }
 
 // Screen structure is separate from record ownership and save handlers.
@@ -51,6 +52,10 @@ function framePane(view,headerNodes){
 export function installWorkspaceStructure(root=document){
  const job=root.querySelector('.view-job'),trip=root.querySelector('.view-trip');
  if(job){
+  const estimate=root.getElementById('jobEstimatePane'),base=element(root,'section','card request-estimate-base'),heading=element(root,'header','workspace-section-head');
+  heading.innerHTML='<div><p class="design-eyebrow">Заявка</p><h2>Смета заявки</h2><p class="hint">Согласованный объём и плановая стоимость. Фактические результаты ведутся в заданиях.</p></div>';
+  base.innerHTML='<h3>Базовая смета</h3>';const lines=element(root,'div','request-estimate-lines');for(const card of [...estimate.querySelectorAll(':scope>.card')])lines.append(card);base.append(lines,root.getElementById('jobHeadEcon'));
+  const related=element(root,'section','card request-estimate-assignments');related.innerHTML='<h3>Задания по заявке</h3><p class="hint">Состав, выполнение и дополнительные потребности — в рабочих заданиях.</p><button type="button" class="btn" data-estimate-tasks>К заданиям заявки →</button>';related.querySelector('button').onclick=()=>{root.getElementById('jobTabOverview').click();root.getElementById('jobOrders').scrollIntoView?.({block:'start'});};estimate.append(heading,base,related);
   const context=element(root,'section','card request-context');context.id='requestContext';context.hidden=true;
   const grid=element(root,'div','request-workspace-grid');grid.append(context,root.getElementById('jobOrders'));root.getElementById('jobOverviewPane').append(grid);
   framePane(job,[job.querySelector('.crumbs'),job.querySelector('.trip-head'),job.querySelector('.request-toolbar')]);

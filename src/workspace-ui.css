@@ -461,3 +461,24 @@ dialog.presence-editor { width:960px;max-width:calc(100vw - 32px);padding:24px; 
 .gps-resolution-summary>.hint { font-size:12px;line-height:1.6;margin-top:24px; }
 @media(max-width:760px) { .gps-resolution-workspace { grid-template-columns:minmax(0,1fr);gap:20px; }.gps-resolution-summary { padding:20px; } }
 .vg-group .vg-plan-tools { pointer-events:auto;right:4px;top:0;width:32px;height:32px; }
+dialog.entity-panel-dialog.entity-review-dialog { width:820px; }
+dialog.entity-panel-dialog.entity-trip-picker-dialog { width:860px; }
+dialog.presence-editor.presence-editor { width:960px; }
+dialog.presence-editor[open] { display:flex;flex-direction:column;overflow:hidden; }
+.presence-editor>form,.presence-editor-foot { flex:none; }
+.presence-editor-body { min-height:0;overflow:auto;overscroll-behavior:contain;padding-right:4px; }
+.presence-editor-body>label { display:block;margin-top:24px; }
+.presence-editor .presence-editor-foot { padding-top:16px;margin-top:16px;border-top:1px solid var(--line);background:var(--panel); }
+.presence-workspace .wb-task-share-row { grid-template-columns:18px minmax(0,1fr) 80px 12px; }
+.presence-workspace .wb-task-share-row input[type=number] { width:80px;max-width:80px;padding:8px; }
+.workspace-page :is(#jobActivitySection,#tripActivitySection) { padding:0;border:0;background:transparent; }
+.workspace-page :is(#jobActivitySection,#tripActivitySection)>h3 { display:none; }
+#jobEstimatePane>.workspace-section-head { margin-bottom:24px; }
+#jobEstimatePane>.workspace-section-head h2 { font:600 24px/1.3 var(--sans);margin:6px 0 8px; }
+#jobEstimatePane>.workspace-section-head .hint { margin:0; }
+.request-estimate-base>h3 { font-size:18px;margin:0 0 24px; }
+.workspace-page .request-estimate-lines>.card { border:0;border-radius:0;padding:0;background:transparent; }
+.workspace-page .request-estimate-lines>.card+.card { border-top:1px solid var(--line);margin-top:24px;padding-top:24px; }
+.request-estimate-base>#jobHeadEcon { display:flex;flex-wrap:wrap;gap:24px;margin-top:24px;padding:20px 0 0;border:0;border-top:1px solid var(--line);text-align:left; }
+#jobEstimatePane>.request-estimate-assignments { margin-top:24px; }
+.request-estimate-assignments .hint { margin:12px 0 20px; }
