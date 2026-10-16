@@ -206,8 +206,8 @@ test('polish: statistics cards stay separated and light schedule blocks use a li
 });
 
 test('polish: native launch metadata uses the sampled yellow and valid padded icons',async({page},info)=>{
- await start(page,info,'map');const manifest=await (await page.request.get('/manifest.json')).json();expect(manifest.background_color).toBe('#fff002');expect(manifest.theme_color).toBe('#fff002');
- for(const icon of manifest.icons){const data=await (await page.request.get('/'+icon.src.replace(/^\.\//,''))).body();const size=Number(icon.sizes.split('x')[0]);expect(data.readUInt32BE(16)).toBe(size);expect(data.readUInt32BE(20)).toBe(size);expect(icon.purpose).toContain('maskable');}
+ await start(page,info,'map');const manifest=await (await page.request.get('/manifest.json')).json();expect(manifest.background_color).toBe('#ffed00');expect(manifest.theme_color).toBe('#ffed00');await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href','favicon.png');
+ for(const icon of manifest.icons){expect(icon.src).toMatch(/^\.\/launch-icon-[a-f0-9]+-(192|512)\.png$/);const data=await (await page.request.get('/'+icon.src.replace(/^\.\//,''))).body();const size=Number(icon.sizes.split('x')[0]);expect(data.readUInt32BE(16)).toBe(size);expect(data.readUInt32BE(20)).toBe(size);expect(icon.purpose).toContain('maskable');}
 });
 
 

@@ -1,33 +1,42 @@
-"""Package the existing raster mark for Android's native launch screen.
-Run manually with Pillow; preserve the original raster letter shapes.
+"""Package the supplied full wordmark for the native PWA launch screen.
+Run manually with Pillow. Keep the favicon independent and never upscale
+this raster source; the checked-in assets do not require Pillow in CI.
 """
-from collections import Counter
+from hashlib import sha256
 from pathlib import Path
 import json
+import re
 from PIL import Image
 
 root = Path(__file__).resolve().parents[1]
-source = Image.open(root / 'public/favicon.png').convert('RGBA')
-background = Counter(source.getdata()).most_common(1)[0][0]
+source_path = root / 'public/launch-logo.png'
+source = Image.open(source_path).convert('RGBA')
+background = max(source.getcolors(source.width * source.height), key=lambda entry: entry[0])[1]
 color = '#%02x%02x%02x' % background[:3]
-# Lift the black raster lettering off its noisy yellow background so the
-# source image cannot leave a visible rectangle on the native splash.
-mark_source = Image.new('RGBA', source.size)
-alpha = []
-for red, green, blue, opacity in source.getdata():
-    coverage = round(255 * (1 - min(red / background[0], green / background[1], 1)))
-    alpha.append((0, 0, 0, coverage if coverage >= 8 else 0))
-mark_source.putdata(alpha)
-for size in (192, 512):
-    icon = Image.new('RGBA', (size, size), background)
-    width = round(size * .70)
-    mark = mark_source.resize((width, round(width * source.height / source.width)), Image.Resampling.LANCZOS)
-    icon.alpha_composite(mark, ((size - mark.width) // 2, (size - mark.height) // 2))
-    icon.convert('RGB').save(root / f'public/app-icon-{size}.png', optimize=True)
+# Icon URLs must change with the artwork so installed WebAPKs can detect it.
+version = sha256(source_path.read_bytes()).hexdigest()[:10]
 manifest_path = root / 'public/manifest.json'
 manifest = json.loads(manifest_path.read_text())
-manifest['background_color'] = color
-manifest['theme_color'] = color
-manifest['icons'] = [dict(src=f'./app-icon-{n}.png', sizes=f'{n}x{n}', type='image/png', purpose='any maskable') for n in (192, 512)]
+previous_icons = [icon['src'] for icon in manifest['icons']]
+icons = []
+for size in (192, 512):
+    icon = Image.new('RGBA', (size, size), background)
+    width = min(source.width, round(size * .70))
+    mark = source if width == source.width else source.resize(
+        (width, round(width * source.height / source.width)), Image.Resampling.LANCZOS)
+    icon.alpha_composite(mark, ((size - mark.width) // 2, (size - mark.height) // 2))
+    name = f'launch-icon-{version}-{size}.png'
+    icon.convert('RGB').save(root / 'public' / name, optimize=True)
+    icons.append(dict(src=f'./{name}', sizes=f'{size}x{size}', type='image/png', purpose='any maskable'))
+manifest.update(background_color=color, theme_color=color, icons=icons)
 manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+index_path = root / 'index.html'
+index = index_path.read_text()
+index = re.sub(r'(<link rel="apple-touch-icon" href=")[^"]+', r'\g<1>' + icons[0]['src'][2:], index)
+index = re.sub(r'(<meta name="theme-color" content=")[^"]+', r'\g<1>' + color, index)
+index_path.write_text(index)
+for previous in previous_icons:
+    if previous not in [icon['src'] for icon in icons] and re.fullmatch(r'\./(?:app-icon-\d+|launch-icon-[a-f0-9]+-\d+)\.png', previous):
+        (root / 'public' / previous[2:]).unlink(missing_ok=True)
 print('Native launch background:', color)
+print('Native launch icons:', ', '.join(icon['src'] for icon in icons))
