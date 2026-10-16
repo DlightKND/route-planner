@@ -78,7 +78,7 @@ const cases=[
  {id:'map-segment',selector:'.leaflet-popup',html:call('segPopup',{km:128,fromTs:'2026-09-30T03:00:00Z',toTs:'2026-09-30T05:00:00Z',ms:7200000,kind:'track'},'достроено по дорогам')},
  {id:'map-avoid',selector:'.leaflet-popup',template:true,htmlText:'<b>Объезд 1</b><br>радиус 150 м'},
  {id:'map-position',selector:'.leaflet-popup',template:true,htmlText:'<b>Текущая позиция</b><br>ещё не записана в историю выезда'},
- {id:'factLegend-open',selector:'.mleg-body',before:call('openStayBindingMap',past),click:'.mleg-details > summary'},
+ {id:'factLegend-open',selector:'.mleg-body',before:call('openStayBindingMap',past),click:'.mleg-details > summary',compactClick:'#sideTabs [data-sb=track]'},
  {id:'engineer-scope-large',selector:'.engineer-pop',template:true,before:call('largeTeam'),click:'.summary-team > summary',afterClick:'[data-epop]'},
  {id:'map-point-diagnostics',selector:'.leaflet-popup',template:true,htmlText:'<b>09:30</b><br>отброшено: неверная скорость'},
 ];
@@ -136,7 +136,8 @@ for(const d of dimensions)for(const theme of ['light','dark']){
    await invoke(page,call('closeAll'));await invoke(page,c.before);
    if(c.open)await invoke(page,c.open,!['confirmDialog','promptDialog','askSignature'].includes(c.open.name));
    if(c.fill)await page.evaluate(c.fill);
-   if(c.click){if(c.pointerClick){await page.locator(c.click).first().scrollIntoViewIfNeeded();await page.waitForTimeout(150);await page.locator(c.click).first().click({position:{x:12,y:10}});}else await page.locator(c.click).first().evaluate(el=>el.click());}
+   const click=d.width<=960&&c.compactClick?c.compactClick:c.click;
+   if(click){if(c.pointerClick){await page.locator(click).first().scrollIntoViewIfNeeded();await page.waitForTimeout(150);await page.locator(click).first().click({position:{x:12,y:10}});}else await page.locator(click).first().evaluate(el=>el.click());}
    if(c.afterClick)await page.locator(c.afterClick).click();
    if(c.html){const html=await page.evaluate(({name,args})=>window.__windowAudit[name](...args),c.html);await invoke(page,call('leaflet',html));}
    if(c.htmlText)await invoke(page,call('leaflet',c.htmlText));

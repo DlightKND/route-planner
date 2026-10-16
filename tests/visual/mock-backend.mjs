@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -286,6 +286,19 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   tables.service_orders.push(completedTask);tables.service_order_items.push(...completedTask.service_order_items);
   tables.trip_service_orders.push({trip_id:pastTrip.id,order_id:completedTask.id,service_orders:completedTask});
   tables.trip_tracks=[{trip_id:pastTrip.id,segments:[{kind:'track',km:128,fromTs:'2026-09-30T03:00:00Z',toTs:'2026-09-30T05:00:00Z',ms:7200000,fromPt:{lat:49.99,lng:36.23},toPt:{lat:50.4,lng:36.8},line:[[36.23,49.99],[36.8,50.4]]}],data:{km:128,trackKm:128,roadKm:0,lineKm:0,jitterKm:0,at:stamp,points:[],dropped:[],segments:[{kind:'track',km:128,fromTs:'2026-09-30T03:00:00Z',toTs:'2026-09-30T05:00:00Z',ms:7200000,fromPt:{lat:49.99,lng:36.23},toPt:{lat:50.4,lng:36.8},line:[[36.23,49.99],[36.8,50.4]]}]}}];
+  if(mapTrackDesign){
+    pastTrip.date_to='2026-10-02';
+    const track=tables.trip_tracks[0],data=track.data;
+    data.segments.push(
+      {kind:'track',km:12,fromTs:'2026-10-01T10:00:00Z',toTs:'2026-10-01T11:00:00Z',ms:3600000,fromPt:{lat:50.4,lng:36.8},toPt:{lat:50.5,lng:36.9}},
+      {kind:'road',km:25,fromTs:'2026-10-01T11:00:00Z',toTs:'2026-10-01T12:00:00Z',ms:3600000,fromPt:{lat:50.5,lng:36.9},toPt:{lat:50.6,lng:37}},
+      {kind:'line',km:8,fromTs:'2026-10-02T04:00:00Z',toTs:'2026-10-02T05:00:00Z',ms:3600000,fromPt:{lat:50.6,lng:37},toPt:{lat:50.7,lng:37.1}}
+    );
+    Object.assign(data,{km:173,trackKm:140,roadKm:25,lineKm:8,
+      points:[{lat:50.5,lng:36.9,ts:'2026-10-01T11:00:00Z',status:'idle'}],
+      dropped:[{lat:51,lng:37,ts:'2026-10-01T10:30:00Z',why:'скачок координат'}]});
+    track.segments=data.segments;
+  }
   tables.trips.push(pastTrip);
   tables.trip_stays.push({
     ...stays[0],

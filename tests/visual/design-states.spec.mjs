@@ -234,3 +234,39 @@ test('kanban: status columns stay in one adaptive row and the last column remain
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);
  }
 });
+
+async function openTrackPanel(page,info){
+ const errors=await start(page,info,'trip/30000000-0000-4000-8000-000000000002/map',{mapTrackDesign:true});
+ await expect(page.locator('.mleg')).toBeVisible();
+ if(page.viewportSize().width>960)await page.locator('.mleg-details>summary').click();
+ await expect(page.locator('.mleg-body')).toBeVisible();return errors;
+}
+test('map track: docked layer cards retain real visibility and the selected time window',async({page},info)=>{
+ const errors=await openTrackPanel(page,info),inline=page.viewportSize().width<=960,panel=page.locator('.mleg-body');
+ await expect(panel.locator('h2')).toHaveText('Параметры трека');await expect(panel.locator('.mleg-layer')).toHaveCount(6);
+ expect(await panel.getAttribute('popover')).toBeNull();expect(await panel.evaluate(el=>getComputedStyle(el).position)).toBe('static');
+ if(inline){await expect(page.locator('#trackBlock .mleg')).toBeVisible();await expect(page.locator('[data-sb=track]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('#pointsBlock')).toBeHidden();}
+ else{await expect(page.locator('#mapTrackDock .mleg')).toBeVisible();const card=await panel.boundingBox(),tools=await page.locator('.map-tools').boundingBox();expect(card.x+card.width).toBeCloseTo(tools.x+tools.width,0);expect(card.y).toBeGreaterThanOrEqual(tools.y+tools.height+8);}
+ const gps=page.locator('.leaflet-overlay-pane path[stroke="#16a34a"],.leaflet-overlay-pane path[stroke="#a7f3d0"]');
+ await expect(gps).toHaveCount(2);await panel.locator('[data-fl=track]').uncheck();await expect(gps).toHaveCount(0);await panel.locator('[data-fl=track]').check();await expect(gps).toHaveCount(2);
+ const endDate=await panel.locator('#tfBDate').inputValue();await panel.locator('#tfBDate').fill(await panel.locator('#tfADate').inputValue());await panel.locator('#tfB').fill('09:00');await panel.locator('#tfB').blur();await expect(gps).toHaveCount(1);
+ await panel.locator('#tfAll').click();await expect(panel.locator('#tfBDate')).toHaveValue(endDate);await expect(gps).toHaveCount(2);
+ await expect(panel.locator('#tfDuration')).toContainText('сут.');
+ expect(await panel.locator('.mleg-scroll').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+ await expect(panel.locator('.mleg-clear')).toBeInViewport();await capture(page,info,'map-track-parameters',errors);
+ await panel.locator('.mleg-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(panel.locator('[data-fl=stay]')).toBeInViewport();await capture(page,info,'map-track-layers',errors);
+});
+test('map track: resizing and closing preserve controls, and clearing leaves a valid map tab',async({page},info)=>{
+ const errors=await openTrackPanel(page,info),panel=page.locator('.mleg-body');
+ await panel.locator('[data-fl=line]').uncheck();await panel.locator('#tfA').fill('07:00');await panel.locator('#tfA').blur();
+ const width=page.viewportSize().width>960?390:1440;await page.setViewportSize({width,height:600});
+ await expect(page.locator('.mleg')).toHaveCount(1);await expect(panel).toBeVisible();await expect(panel.locator('[data-fl=line]')).not.toBeChecked();await expect(panel.locator('#tfA')).toHaveValue('07:00');
+ await expect(panel.locator('.mleg-clear')).toBeInViewport();const box=await panel.boundingBox(),bottom=width<=760?(await page.locator('.rail').boundingBox()).y:600;expect(box.y+box.height).toBeLessThanOrEqual(bottom+1);
+ await panel.locator('#tfA').focus();await page.keyboard.press('Escape');await expect(panel).toBeHidden();
+ if(width<=960){await expect(page.locator('#sideTabs button.on')).not.toHaveAttribute('data-sb','track');await page.locator('[data-sb=track]').click();}
+ else await page.locator('.mleg-details>summary').click();
+ await expect(panel.locator('[data-fl=line]')).not.toBeChecked();await expect(panel.locator('#tfA')).toHaveValue('07:00');
+ await panel.locator('.mleg-clear').click();await expect(page.locator('#confirmOverlay')).toBeVisible();await page.locator('#confirmNo').click();await expect(panel).toBeVisible();await expect(panel.locator('[data-fl=line]')).not.toBeChecked();
+ await panel.locator('.mleg-clear').click();await page.locator('#confirmYes').click();await expect(page.locator('.mleg')).toHaveCount(0);await expect(page.locator('[data-sb=track]')).toBeHidden();await expect(page.locator('#sideTabs button.on')).not.toHaveAttribute('data-sb','track');
+ await capture(page,info,'map-track-cleared',errors);
+});

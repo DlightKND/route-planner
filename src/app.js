@@ -505,16 +505,21 @@ document.querySelectorAll('.block.collapsible > h2.ch').forEach(h=>h.onclick=e=>
 // добраться, надо было сперва свернуть точки. Это не два раздела подряд,
 // а два режима одной панели — значит вкладки.
 function sideTab(name){
+  const side=document.querySelector('.view-map .side');
+  const previous=document.querySelector('#sideTabs button.on')?.dataset.sb;
+  if(name==='track'&&previous&&previous!=='track')side.dataset.trackReturn=previous;
+  if(side)side.dataset.mapPanel=name;
   if(name==='directory'||name==='points')setMapScope(name==='directory'?'all':'work');
   document.querySelectorAll('#sideTabs button').forEach(b=>{const selected=b.dataset.sb===name;b.classList.toggle('on',selected);b.setAttribute('aria-pressed',String(selected));});
   const p=$('pointsBlock'), r=$('routeBlock');
-  if(p) p.classList.toggle('collapsed',name==='route');
+  if(p) p.classList.toggle('collapsed',name==='route'||name==='track');
   if(r) r.classList.toggle('collapsed',name!=='route');
   if(name==='route')renderRoutePanel();
   // Шторка, свёрнутая в черту, по нажатию на вкладку обязана открыться:
   // иначе нажатие ничего не делает и выглядит сломанным.
   const sd=document.querySelector('.view-map .side');
-  if(sd&&sd.classList.contains('sheet-collapsed')) sheetSnapTo(1);
+  if(name==='track'&&sheetIsSheet())sheetSnapTo(2);
+  else if(sd&&sd.classList.contains('sheet-collapsed')) sheetSnapTo(1);
 }
 document.querySelectorAll('#sideTabs button').forEach(b=>b.onclick=()=>sideTab(b.dataset.sb));
 // Маршрут собирают кликами по карте — тогда панель обязана показать его
@@ -7155,27 +7160,74 @@ function dropIcon(){ return L.divIcon({className:'',iconSize:[14,14],iconAnchor:
 // Теперь строка = слой: образец слева повторяет то, чем слой нарисован,
 // флажок его включает, цифра справа говорит, сколько в нём километров.
 // Крестик убирает с карты всё сразу.
-let factLegend=null, factLegendEl=null;
+let factLegendEl=null, factPanelMedia=null, factDesktopOpen=false;
 let factLast=null;
+
+const trackPanelIcon='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>';
+function trackPanelInline(){ return window.innerWidth<=960; }
+function closeMapPanel(){
+  if(trackPanelInline()){
+    sideTab(document.querySelector('.view-map .side').dataset.trackReturn||'points');
+    document.querySelector('#sideTabs button.on')?.focus({preventScroll:true});
+  }
+  else{
+    factDesktopOpen=false;factLegendEl.querySelector('details').open=false;
+    factLegendEl.querySelector('summary').focus({preventScroll:true});
+  }
+}
+function placeMapPanel(){
+  if(!factLegendEl)return;
+  const inline=trackPanelInline(),details=factLegendEl.querySelector('details');
+  const wasInline=factLegendEl.parentElement===$('trackBlock');
+  const selected=document.querySelector('#sideTabs button.on')?.dataset.sb;
+  (inline?$('trackBlock'):$('mapTrackDock')).append(factLegendEl);
+  details.open=inline||factDesktopOpen;
+  if(inline&&!wasInline&&factDesktopOpen)sideTab('track');
+  if(!inline&&selected==='track'){
+    factDesktopOpen=true;details.open=true;
+    sideTab(document.querySelector('.view-map .side').dataset.trackReturn||'points');
+  }
+}
+function mountMapPanel(){
+  factLegendEl=document.createElement('aside');factLegendEl.className='mleg';factLegendEl.setAttribute('aria-label','Параметры трека');
+  factLegendEl.innerHTML='<details class="mleg-details"><summary>'+trackPanelIcon+'<span>Данные трека</span><b data-track-total></b><span aria-hidden="true">⌄</span></summary><div class="mleg-body">'
+    +'<header class="mleg-head"><span class="mleg-symbol">'+trackPanelIcon+'</span><div><h2>Параметры трека</h2><p>План и фактический путь</p></div><button type="button" class="mleg-close" aria-label="Закрыть параметры трека">×</button></header>'
+    +'<div class="mleg-scroll"></div><footer class="mleg-footer"><button type="button" class="btn mleg-clear"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7m4-7v7"/></svg>Очистить карту трека</button></footer></div></details>';
+  factLegendEl.querySelector('.mleg-close').onclick=closeMapPanel;
+  factLegendEl.querySelector('.mleg-clear').onclick=clearMapAll;
+  factLegendEl.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeMapPanel();}});
+  const details=factLegendEl.querySelector('details');
+  details.addEventListener('toggle',()=>{
+    if(!trackPanelInline()){
+      factDesktopOpen=details.open;
+      if(details.open&&!factLegendEl.querySelector('.mleg-body').contains(document.activeElement))factLegendEl.querySelector('.mleg-close').focus({preventScroll:true});
+    }
+    if(details.open)map.closePopup();
+  });
+  L.DomEvent.disableClickPropagation(factLegendEl);L.DomEvent.disableScrollPropagation(factLegendEl);
+  factPanelMedia=window.matchMedia('(max-width:960px)');factPanelMedia.addEventListener('change',placeMapPanel);
+  document.querySelector('#sideTabs [data-sb=track]').hidden=false;
+  placeMapPanel();
+}
 
 function mapPanelRows(){
   const R=[];
-  if(stayBindMap) R.push({key:'stay',icon:stopSvg(13),name:'привязка факта',sub:stayBindMap.selected?'Выбрана стоянка · нажмите точку заявки':'Нажмите стоянку, затем точку заявки'});
+  if(stayBindMap) R.push({key:'stay',icon:stopSvg(13),name:'Привязка стоянок',val:stayBindMap.stays.length,sub:stayBindMap.selected?'Выбрана стоянка · нажмите точку заявки':'Нажмите стоянку, затем точку заявки'});
   const stops=routeStopsAll().length;
   if(stops||(rRoute&&rRoute.km>0)){
-    R.push({key:'plan',style:'border-top:3px dashed var(--ink-faint)',name:'плановый маршрут',
+    R.push({key:'plan',style:'border-top:3px dashed var(--ink-faint)',name:'Плановый маршрут',val:stops+' '+plural(stops,'точка','точки','точек'),
       sub:(rRoute&&rRoute.km>0)
         ? (rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч · '+stops+' точ.')
         : (stops+' '+plural(stops,'точка','точки','точек')+', маршрут не построен')});
   }
   const d=factLast;
   if(d){
-    if(d.trackKm) R.push({key:'track',style:'border-top:4px dotted '+TRACK_C,name:'видели по трекеру',km:d.trackKm});
-    if(d.roadKm)  R.push({key:'road', style:'border-top:5px solid '+ROAD_C, name:'посчитано по дорогам',km:d.roadKm});
-    if(d.lineKm)  R.push({key:'line', style:'border-top:3px dotted '+GAP_C, name:'прямая, маршрут не строился',km:d.lineKm});
-    if(factLiveTail(d)) R.push({key:'live',style:'border-top:3px dashed '+LIVE_C,name:'текущая позиция · ждёт истории'});
-    if(d.dropped.length) R.push({key:'drop',icon:dropSvg(13),name:'выброшено точек',val:d.droppedTotal||d.dropped.length});
-    if(!stayBindMap) R.push({key:'stay',icon:stopSvg(13),name:'стоянки'});
+    if(d.trackKm) R.push({key:'track',style:'border-top:4px dotted '+TRACK_C,name:'Фактический трек',km:d.trackKm,sub:'Измерено GPS'});
+    if(d.roadKm)  R.push({key:'road',style:'border-top:5px solid '+ROAD_C,name:'Достроено по дорогам',km:d.roadKm,sub:'Восстановленные участки'});
+    if(d.lineKm)  R.push({key:'line',style:'border-top:3px dotted '+GAP_C,name:'Прямые линии',km:d.lineKm,sub:'Без привязки к дорогам'});
+    if(factLiveTail(d)) R.push({key:'live',style:'border-top:3px dashed '+LIVE_C,name:'Текущая позиция',sub:'Ожидает сохранения в истории'});
+    if(d.dropped.length) R.push({key:'drop',icon:dropSvg(13),name:'Отброшенные точки',val:d.droppedTotal||d.dropped.length,sub:'Ошибки приёмника'});
+    if(!stayBindMap) R.push({key:'stay',icon:stopSvg(13),name:'Стоянки и остановки'});
   }
   return R;
 }
@@ -7183,36 +7235,25 @@ function mapPanelRows(){
 function renderMapPanel(){
   const rows=mapPanelRows();
   if(!rows.length){ hideMapPanel(); return; }
-  if(!factLegend){
-    factLegend=L.control({position:'bottomright'});
-    factLegend.onAdd=function(){
-      factLegendEl=L.DomUtil.create('div','mleg');
-      L.DomEvent.disableClickPropagation(factLegendEl);
-      return factLegendEl;
-    };
-    factLegend.addTo(map);
-  }
-  if(!factLegendEl) return;
+  if(!factLegendEl)mountMapPanel();
   const bb=factLast?factBounds(factLast):null;
-  factLegendEl.innerHTML='<details class="mleg-details"><summary>Факт и слои'+(factLast?' · '+Math.round(factLast.km)+' км':'')+'</summary><div class="mleg-body">'
+  factLegendEl.querySelector('[data-track-total]').textContent=factLast?Math.round(factLast.km)+' км':'';
+  const scroll=factLegendEl.querySelector('.mleg-scroll'),top=scroll.scrollTop;
+  scroll.innerHTML=''
     +(bb?timeFilterHtml(bb):'')
-    +rows.map(r=>'<label><input type="checkbox" data-fl="'+r.key+'"'+(factVis[r.key]?' checked':'')+'>'
-      +(r.icon?('<span class="mleg-i">'+r.icon+'</span>'):('<i style="'+r.style+'"></i>'))
-      +r.name
-      +(r.km!=null?(' <b>'+Math.round(r.km)+' км</b>'):'')
-      +(r.val!=null?(' <b>'+r.val+'</b>'):'')
-      +'</label>'
-      +(r.sub?('<div class="mleg-s">'+esc(r.sub)+'</div>'):'')
-      +(r.key==='track'?speedScaleHtml():'')).join('')
-    +'<button type="button" class="btn sm ghost mleg-clear">Очистить карту…</button></div></details>';
+    +'<section class="mleg-layers" aria-label="Отображаемые слои"><h3>Отображаемые слои</h3>'
+    +rows.map(r=>'<label class="mleg-layer"><input type="checkbox" aria-label="'+esc(r.name)+'" data-fl="'+r.key+'"'+(factVis[r.key]?' checked':'')+'>'
+      +'<span class="mleg-layer-content"><span class="mleg-layer-title"><strong>'+r.name+'</strong>'
+      +(r.icon?('<span class="mleg-i">'+r.icon+'</span>'):('<i class="mleg-line" style="'+r.style+'"></i>'))+'</span>'
+      +(r.sub||r.km!=null||r.val!=null?'<span class="mleg-layer-meta">'
+        +(r.sub?'<span>'+esc(r.sub)+'</span>':'')
+        +(r.km!=null?'<b>'+Math.round(r.km)+' км</b>':r.val!=null?'<b>'+esc(r.val)+'</b>':'')+'</span>':'')
+      +(r.key==='track'?speedScaleHtml():'')+'</span></label>').join('')+'</section>';
+  scroll.scrollTop=top;
   factLegendEl.querySelectorAll('[data-fl]').forEach(cb=>{
     cb.onchange=()=>{ factVis[cb.dataset.fl]=cb.checked; factApplyVis(); };
   });
   wireTimeFilter(bb);
-  const x=factLegendEl.querySelector('.mleg-clear');
-  if(x) x.onclick=clearMapAll;
-  const details=factLegendEl.querySelector('details');
-  details.addEventListener('toggle',()=>{const body=details.querySelector('.mleg-body');if(details.open){map.closePopup();openContextPanel(body,{trigger:details.querySelector('summary'),label:'Факт и слои',onClose:()=>{details.open=false;}});}else if(body.matches(':popover-open'))body.hidePopover();});
 }
 
 // Окно времени: два поля ввода, как период на сводке. Ползунки тут были
@@ -7238,22 +7279,30 @@ function tfParse(v,one,baseT){
   const t=+new Date(v); return isFinite(t)?t:null;
 }
 function timeFilterHtml(bb){
-  const one=tfOneDay(bb), type=one?'time':'datetime-local';
-  return '<div class="mleg-tf">'
-    +'<input type="'+type+'" id="tfA" value="'+tfValue(factFrom==null?bb[0]:factFrom,one)+'">'
-    +'<span class="mleg-dash">—</span>'
-    +'<input type="'+type+'" id="tfB" value="'+tfValue(factTo==null?bb[1]:factTo,one)+'">'
-    +'<button type="button" id="tfAll" title="Показать весь выезд">весь</button>'
-    +'</div>';
+  const one=tfOneDay(bb),from=factFrom==null?bb[0]:factFrom,to=factTo==null?bb[1]:factTo;
+  return '<section class="mleg-period" aria-label="Временной интервал"><h3>Временной интервал'+(one?'<span>'+new Date(bb[0]).toLocaleDateString('ru')+'</span>':'')+'</h3><div class="mleg-tf">'
+    +[['A','Начало',from],['B','Конец',to]].map(([id,label,time])=>'<div class="mleg-time-field"><label for="tf'+id+'">'+label+'</label>'
+      +(!one?'<input type="date" id="tf'+id+'Date" aria-label="Дата: '+label.toLowerCase()+'" value="'+tfValue(time,false).slice(0,10)+'">':'')
+      +'<input type="time" id="tf'+id+'" aria-label="Время: '+label.toLowerCase()+'" value="'+tfValue(time,true)+'"></div>').join('')
+    +'</div><div class="mleg-period-footer"><span>Период: <b id="tfDuration">'+trackPeriodText(to-from)+'</b></span>'
+    +'<button type="button" id="tfAll" title="Показать весь выезд">↺ Весь период</button></div></section>';
 }
+function trackPeriodText(ms){const days=Math.floor(ms/86400000),rest=ms%86400000;return days?days+' сут.'+(rest?' '+dhm(rest):''):dhm(ms);}
 function wireTimeFilter(bb){
   if(!bb||!factLegendEl) return;
   const A=factLegendEl.querySelector('#tfA'), B=factLegendEl.querySelector('#tfB');
   const all=factLegendEl.querySelector('#tfAll');
   if(!A||!B) return;
   const one=tfOneDay(bb);
+  const AD=factLegendEl.querySelector('#tfADate'),BD=factLegendEl.querySelector('#tfBDate');
+  const sync=()=>{
+    const from=factFrom==null?bb[0]:factFrom,to=factTo==null?bb[1]:factTo;
+    A.value=tfValue(from,true);B.value=tfValue(to,true);
+    if(AD)AD.value=tfValue(from,false).slice(0,10);if(BD)BD.value=tfValue(to,false).slice(0,10);
+    factLegendEl.querySelector('#tfDuration').textContent=trackPeriodText(to-from);
+  };
   const apply=()=>{
-    let f=tfParse(A.value,one,bb[0]), t=tfParse(B.value,one,bb[1]);
+    let f=tfParse(one?A.value:AD.value+'T'+A.value,one,bb[0]), t=tfParse(one?B.value:BD.value+'T'+B.value,one,bb[1]);
     if(f==null&&t==null){ factFrom=null; factTo=null; }
     else{
       if(f==null) f=bb[0];
@@ -7264,11 +7313,13 @@ function wireTimeFilter(bb){
       factFrom=f; factTo=t;
     }
     if(factLast) drawFact(factLast);
+    sync();
   };
   A.onchange=apply; B.onchange=apply;
+  if(AD)AD.onchange=apply;if(BD)BD.onchange=apply;
   if(all) all.onclick=()=>{
     factFrom=null; factTo=null;
-    A.value=tfValue(bb[0],one); B.value=tfValue(bb[1],one);
+    sync();
     if(factLast) drawFact(factLast);
   };
 }
@@ -7276,14 +7327,15 @@ function wireTimeFilter(bb){
 // Шкала скорости под строкой измеренного трека: без неё градиент — просто
 // разноцветная линия.
 function speedScaleHtml(){
-  return '<div class="mleg-sp"><span>0</span>'
-    +'<i style="background:linear-gradient(90deg,'+SPEED_RAMP.join(',')+')"></i>'
-    +'<span>'+SPEED_MAX+'+ км/ч</span></div>';
+  return '<span class="mleg-sp"><span class="mleg-speed-caption"><span>Скорость движения</span><b>0 — '+SPEED_MAX+'+ км/ч</b></span>'
+    +'<i style="background:linear-gradient(90deg,'+SPEED_RAMP.join(',')+')"></i></span>';
 }
 
 function hideMapPanel(){
-  if(factLegend){ try{ map.removeControl(factLegend); }catch(e){} }
-  factLegend=null; factLegendEl=null;
+  if(document.querySelector('#sideTabs [data-sb=track].on'))sideTab(document.querySelector('.view-map .side').dataset.trackReturn||'points');
+  document.querySelector('#sideTabs [data-sb=track]').hidden=true;
+  factPanelMedia?.removeEventListener('change',placeMapPanel);factPanelMedia=null;
+  factLegendEl?.remove();factLegendEl=null;factDesktopOpen=false;
 }
 
 // Крестик убирает с карты всё. Факт — просто показ, его не жалко. А вот
@@ -7293,7 +7345,7 @@ async function clearMapAll(){
   const hasRoute=routeStopsAll().length>0;
   if(hasRoute && !await confirmDialog('Убрать с карты факт и плановый маршрут? Точки маршрута будут очищены.',
       {okText:'Убрать всё',cancelText:'Отмена'})) return;
-  factClear();
+  stayBindMap=null;factClear();
   if(hasRoute && $('rClear')) $('rClear').click();
   renderMapPanel();
   showToast('Карта очищена');
@@ -7403,7 +7455,7 @@ const popupFocus=new WeakMap(),popupRefit=new WeakMap();
 map.on('popupopen',e=>{
   const el=e.popup&&e.popup.getElement&&e.popup.getElement();
   if(!el) return;
-  factLegendEl?.querySelector('details')?.removeAttribute('open');
+  if(!trackPanelInline())factLegendEl?.querySelector('details')?.removeAttribute('open');
   // Leaflet reassigns string HTML on update; retain the DOM so disclosure state
   // and handlers survive layout/pan updates after opening an action menu.
   const popupContent=el.querySelector('.leaflet-popup-content');
@@ -7589,6 +7641,7 @@ async function showTripFact(tid,opt){
     (m.points||[]).forEach(p=>bpts.push([p.lat,p.lng]));
     if(bpts.length) setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(bpts).getBounds(),fitPadL(fitPad(40))); },60);
     showFactLegend(m);
+    if(trackPanelInline())sideTab('track');
     const bits=['Факт: '+Math.round(m.km)+' км'+(m.stored?' · сохранённый разбор':' по '+raw.length+' точкам')];
     if(m.dropped.length) bits.push('вырезано '+(m.droppedTotal||m.dropped.length));
     if(m.jitterKm>=0.5) bits.push('дрожание '+m.jitterKm.toFixed(1)+' км');
