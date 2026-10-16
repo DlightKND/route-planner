@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {clickDispatcherControl} from './dispatcher-controls.mjs';
 import {mkdirSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 async function start(page,info,route,options={}){
@@ -207,4 +208,29 @@ test('polish: statistics cards stay separated and light schedule blocks use a li
 test('polish: native launch metadata uses the sampled yellow and valid padded icons',async({page},info)=>{
  await start(page,info,'map');const manifest=await (await page.request.get('/manifest.json')).json();expect(manifest.background_color).toBe('#fff002');expect(manifest.theme_color).toBe('#fff002');
  for(const icon of manifest.icons){const data=await (await page.request.get('/'+icon.src.replace(/^\.\//,''))).body();const size=Number(icon.sizes.split('x')[0]);expect(data.readUInt32BE(16)).toBe(size);expect(data.readUInt32BE(20)).toBe(size);expect(icon.purpose).toContain('maskable');}
+});
+
+
+test('kanban: status columns stay in one adaptive row and the last column remains reachable',async({page},info)=>{
+ const errors=await start(page,info,'planner/orders');
+ for(const [route,prefix,mode] of [['jobs','job','jobLayout'],['orders','order','orderViewMode'],['trips','trip','tripLayout']]){
+  await page.goto('/#/planner/'+route);const board=page.locator('#'+prefix+'List');await expect(board).toHaveClass('kanban');
+  const chips=page.locator('#'+prefix+'StatusChips button');await expect(chips.first()).toBeVisible();
+  const count=await chips.count();for(let i=0;i<count;i++)if(await chips.nth(i).getAttribute('aria-pressed')==='false')await chips.nth(i).click();
+  const columns=board.locator(':scope>.kcol');await expect(columns).toHaveCount(count);
+  const rects=await columns.evaluateAll(nodes=>nodes.map(el=>{const r=el.getBoundingClientRect();return {top:r.top,width:r.width};}));
+  expect(Math.max(...rects.map(r=>r.top))-Math.min(...rects.map(r=>r.top)),route+' has a single row').toBeLessThanOrEqual(1);
+  expect(Math.max(...rects.map(r=>r.width))-Math.min(...rects.map(r=>r.width))).toBeLessThanOrEqual(1);
+  expect(await board.evaluate(el=>el.scrollWidth>el.clientWidth),route+' scrolls horizontally instead of wrapping').toBe(true);
+  await board.evaluate(el=>el.scrollLeft=el.scrollWidth);await expect(columns.last().locator('.kcol-h')).toBeInViewport();
+  const right=await columns.last().boundingBox(),frame=await board.boundingBox();expect(right.x+right.width).toBeLessThanOrEqual(frame.x+frame.width+1);
+  await capture(page,info,'kanban-'+route+'-last-column',errors);
+  for(let i=2;i<count;i++)await chips.nth(i).click();await expect(columns).toHaveCount(2);
+  if(await board.evaluate(el=>el.clientWidth>=540)){
+   expect((await columns.first().boundingBox()).width).toBeGreaterThan(rects[0].width);
+   expect(await board.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+  }
+  await clickDispatcherControl(page,'.view.active .planner-filter-menu:visible>summary');await page.locator('#'+mode).selectOption('list');await page.keyboard.press('Escape');await expect(board).toHaveClass('klist');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);
+ }
 });

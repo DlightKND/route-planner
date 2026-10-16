@@ -109,14 +109,26 @@ export function installWorkspaceStructure(root=document){
  const dash=root.querySelector('.view-dash');
  if(dash){const title=dash.querySelector('.pane-head h2');if(title)title.textContent='График и работа';framePane(dash,[dash.querySelector('.stickyhead')]);}
  root.getElementById('appShell')?.classList.add('workspace-shell');
- root.addEventListener('click',event=>{for(const menu of root.querySelectorAll('.workspace-card-details[open]'))if(!menu.contains(event.target))menu.open=false;});
+ const dismissCardMenus=event=>{for(const menu of root.querySelectorAll('.workspace-card-details[open]'))if(!menu.contains(event.target))menu.open=false;};
+ root.addEventListener('click',dismissCardMenus);
+ root.addEventListener('pointerdown',dismissCardMenus);
+ root.addEventListener('wheel',dismissCardMenus,{passive:true});
  root.addEventListener('keydown',event=>{
   if(event.key!=='Escape'||root.querySelector('dialog[open],:popover-open'))return;
   const menu=[...root.querySelectorAll('.workspace-card-details[open]')].at(-1);if(menu){event.preventDefault();menu.open=false;menu.querySelector('summary').focus();}
  });
  root.addEventListener('toggle',event=>{
   const menu=event.target;if(!menu.matches?.('.workspace-card-details')||!menu.open)return;
-  const place=()=>{const panel=menu.querySelector('.acts,.order-status-label');if(!panel)return;panel.style.top='100%';panel.style.bottom='auto';const height=root.defaultView.innerHeight,rail=root.querySelector('.rail'),limit=root.defaultView.innerWidth<=760&&rail?rail.getBoundingClientRect().top-8:height-8;if(panel.getBoundingClientRect().bottom>limit){panel.style.top='auto';panel.style.bottom='100%';}};
+  const place=()=>{
+   const panel=menu.querySelector('.acts,.order-status-label');if(!panel)return;
+   panel.style.top='100%';panel.style.bottom='auto';panel.style.right='';
+   const win=root.defaultView,rail=root.querySelector('.rail'),board=menu.closest('.kanban')?.getBoundingClientRect();
+   const viewportLimit=win.innerWidth<=760&&rail?rail.getBoundingClientRect().top-8:win.innerHeight-8;
+   if(panel.getBoundingClientRect().bottom>Math.min(viewportLimit,board?board.bottom-8:viewportLimit)){panel.style.top='auto';panel.style.bottom='100%';}
+   const bounds=panel.getBoundingClientRect(),left=Math.max(8,board?.left??8),right=Math.min(win.innerWidth-8,board?.right??win.innerWidth-8);
+   const offset=bounds.left<left?left-bounds.left:bounds.right>right?right-bounds.right:0;
+   if(offset)panel.style.right=((parseFloat(win.getComputedStyle(panel).right)||0)-offset)+'px';
+  };
   root.defaultView.requestAnimationFrame(place);
  },true);
 }
