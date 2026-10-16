@@ -50,7 +50,7 @@ test('design state: curator review explains both remaining work and active trave
 });
 test('design state: schedule trip workspace exposes time parts and direct navigation',async({page},info)=>{
  const errors=await start(page,info,'dash',{lateScheduleCut:true});
- const block=page.locator('.vg-block[data-gb="t'+fixtureIDs.trip+'"]').first();await block.locator('[data-gtools]').click();
+ const block=page.locator('.vg-group[data-gb="t'+fixtureIDs.trip+'"]').first();await block.locator('[data-gtools]').click();
  const panel=page.locator('.gpop-workspace');await expect(panel).toBeVisible();await expect(panel.locator('.gp-days')).toBeVisible();
  await expect(panel.locator('[data-pop-map]')).toBeVisible();await expect(panel.locator('[data-pop-open]')).toBeVisible();
  expect(await panel.locator('.gp-layout').evaluate(el=>el.open)).toBe(true);await capture(page,info,'schedule-trip-workspace',errors);
@@ -60,4 +60,13 @@ test('design state: presence evidence and decision stay separate',async({page},i
  await page.locator('#tpPresence [data-presence-edit]').first().click();const dialog=page.locator('dialog.presence-editor');await expect(dialog).toBeVisible();
  await expect(dialog.locator('.presence-evidence-panel')).toBeVisible();await expect(dialog.locator('.presence-decision-panel')).toBeVisible();
  await expect(dialog.locator('[data-presence-id]')).toHaveCount(1);await capture(page,info,'presence-review',errors);
+});
+test('design state: GPS resolution separates the operation, parameters and saved facts',async({page},info)=>{
+ const errors=await start(page,info,'planner/tracking',{role:'admin',unassignedJourney:true});
+ await page.getByRole('button',{name:'Создать цепочку',exact:true}).click();const overlay=page.locator('#promptOverlay');
+ await expect(overlay.locator('.gps-resolution-workspace')).toBeVisible();await expect(overlay.locator('[data-gps-choice]')).toHaveCount(3);
+ await overlay.locator('[data-pf=title]').fill('Черновик названия');await capture(page,info,'gps-resolution',errors);
+ await overlay.locator('[data-gps-choice=charge]').click();await expect(overlay.locator('[data-pf=km]')).toBeVisible();await expect(overlay.locator('.gps-resolution-summary')).toContainText('12,5');
+ await overlay.locator('[data-gps-choice=chain]').click();await expect(overlay.locator('[data-pf=title]')).toHaveValue('Черновик названия');
+ await overlay.locator('#promptNo').click();if(await page.locator('#confirmOverlay').isVisible())await page.locator('#confirmYes').click();await expect(overlay).toBeHidden();expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });

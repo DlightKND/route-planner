@@ -442,3 +442,22 @@ dialog.presence-editor { width:960px;max-width:calc(100vw - 32px);padding:24px; 
  .trip-choice-action>.btn { margin-top:16px;width:100%; }
  .trip-choice-card { padding:20px; }
 }
+/* GPS decisions use the same parameters and confirmation RPC as before. */
+#promptOverlay .modal.gps-resolution-modal { width:1000px;max-width:calc(100vw - 32px); }
+.gps-resolution-workspace { display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:28px; }
+.gps-resolution-main { min-width:0; }
+.gps-resolution-main h3,.gps-resolution-summary h3 { font:600 17px/1.4 var(--sans);margin:16px 0; }
+.gps-resolution-main>.hint { font-size:13px;line-height:1.6; }
+.gps-resolution-choices { display:grid;gap:12px;margin:20px 0 28px; }
+.gps-resolution-choices>button { display:grid;gap:8px;text-align:left;border:1px solid var(--line);border-radius:10px;padding:20px;background:var(--panel);color:var(--ink);cursor:pointer; }
+.gps-resolution-choices>button[aria-pressed=true] { border-color:var(--ink);box-shadow:inset 3px 0 var(--accent);background:var(--panel-2); }
+.gps-resolution-choices strong { font-size:14px;font-weight:500; }
+.gps-resolution-choices span { font:12px/1.6 var(--sans);color:var(--ink-dim); }
+.gps-resolution-summary { align-self:start;padding:24px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px; }
+.gps-resolution-summary h3 { margin-top:0; }
+.gps-resolution-summary dl { display:grid;gap:16px; }
+.gps-resolution-summary dt { font-size:11px;color:var(--ink-dim);margin-bottom:4px; }
+.gps-resolution-summary dd { font-size:14px;line-height:1.5;margin:0;overflow-wrap:anywhere; }
+.gps-resolution-summary>.hint { font-size:12px;line-height:1.6;margin-top:24px; }
+@media(max-width:760px) { .gps-resolution-workspace { grid-template-columns:minmax(0,1fr);gap:20px; }.gps-resolution-summary { padding:20px; } }
+.vg-group .vg-plan-tools { pointer-events:auto;right:4px;top:0;width:32px;height:32px; }

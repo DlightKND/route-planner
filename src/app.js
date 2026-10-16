@@ -31,7 +31,7 @@ import './entity-pages.css';
 import './operations-design.css';
 import { installOperationsUI } from './operations-ui.js';
 import './workspace-ui.css';
-import {framePresenceWorkspace,installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
+import {frameGpsResolutionPrompt,restoreGpsResolutionPrompt,framePresenceWorkspace,installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
@@ -238,7 +238,7 @@ $('confirmYes').onclick=()=>_cdDone(true); $('confirmNo').onclick=()=>_cdDone(fa
 $('confirmOverlay').addEventListener('click',e=>{ if(e.target===$('confirmOverlay')) _cdDone(false); });
 let _pdRes=null;
 function promptDialog(title,fields=[],opts={}){ return new Promise(res=>{
-  _pdRes=res; $('promptTitle').textContent=title||'Ввод';$('promptYes').textContent=opts.okText||'Сохранить';
+  restoreGpsResolutionPrompt($('promptOverlay'));_pdRes=res; $('promptTitle').textContent=title||'Ввод';$('promptYes').textContent=opts.okText||'Сохранить';
   $('promptFields').innerHTML=fields.map((f,i)=>{
     const id='promptField'+i, attrs=' id="'+id+'" data-pf="'+esc(f.key)+'"'+(f.required?' required':'');
     const label='<label for="'+id+'">'+esc(f.label||'')+'</label>';
@@ -246,7 +246,7 @@ function promptDialog(title,fields=[],opts={}){ return new Promise(res=>{
     if(f.type==='select')return label+'<select'+attrs+'>'+(f.options||[]).map(o=>'<option value="'+esc(o.value)+'"'+(String(o.value)===String(f.value??'')?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select>';
     const type=['text','number','date','time','datetime-local','tel','email','url'].includes(f.type)?f.type:'text';
     return label+'<input type="'+type+'"'+attrs+' value="'+esc(f.value??'')+'"'+(f.inputmode?' inputmode="'+esc(f.inputmode)+'"':'')+(f.min!=null?' min="'+esc(f.min)+'"':'')+(type==='number'?' step="'+esc(f.step||'any')+'"':'')+'>';
-  }).join(''); $('promptOverlay').classList.add('on');
+  }).join('');if(opts.gpsResolution){$('promptTitle').textContent='Оформление GPS-записи';frameGpsResolutionPrompt($('promptOverlay'),opts.gpsResolution,action=>{const draft=Object.fromEntries([...$('promptOverlay').querySelectorAll('[data-pf]')].map(el=>[el.dataset.pf,el.value]));$('promptOverlay').classList.remove('on');const done=_pdRes;_pdRes=null;done?.({__nextAction:action,__draft:draft});});} $('promptOverlay').classList.add('on');
 }); }
 function _pdDone(ok){ const ov=$('promptOverlay'); let out=null; if(ok){ if([...ov.querySelectorAll('[data-pf]')].some(el=>!el.reportValidity()))return; out={}; ov.querySelectorAll('[data-pf]').forEach(el=>{ out[el.dataset.pf]=el.value; }); } ov.classList.remove('on'); const r=_pdRes; _pdRes=null; if(r) r(out); }
 $('promptYes').onclick=()=>_pdDone(true); $('promptNo').onclick=()=>_pdDone(false);
@@ -2383,13 +2383,13 @@ function gtVerticalHtml(key){
         const layout=dayLayout[String(b.id)+'|'+iso]||{col:0,cols:1},narrow=layout.cols>1;
         bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+(height<40?' short':'')+(height<40&&live?' short-live':'')+(height<44?' tap-short':'')+(contUp?' cont-up':'')+(contDown?' cont-down':'')+(action&&layout.col===0?' has-act':'')+(narrow?' col narrow':'')+'" role="button" tabindex="0" aria-label="'+esc((b.kind==='trip'?'Выезд: ':'Заявка: ')+gtBlockName(b)+' · '+shortDate(iso))+'" data-readonly="'+(!gtCanEditBlock(b))+'" data-gb="'+esc(b.id)+'" data-job-id="'+esc((b.jobIds||[]).length===1?b.jobIds[0]:'')+'" data-block="'+esc(b.id)+'" data-block-day="'+iso+'" style="--col:'+layout.col+';--cols:'+layout.cols+';--block-tint:'+(feedCtx.mine?'transparent':loadTint(startP))+';top:'+top+'px;height:'+height+'px">'+roads
           +(burn>0?'<i class="vg-burn" style="height:'+burn.toFixed(2)+'%"></i><i class="vg-burn-edge" style="top:'+burn.toFixed(2)+'%"></i>':'')
-          +'<span class="vg-label">'+(title?'<b>'+esc(title)+(b.manual?' ✎':'')+'</b>':'')+'<span class="vg-meta">'+meta+'</span></span>'+(layout.col===0?act:'')+gtPlanTools(b)+'</div>';
+          +'<span class="vg-label">'+(title?'<b>'+esc(title)+(b.manual?' ✎':'')+'</b>':'')+'<span class="vg-meta">'+meta+'</span></span>'+(layout.col===0?act:'')+'</div>';
         if(occupied.length>1){const g=groupBounds[b.id]||(groupBounds[b.id]={top,bottom:top+height,b,name:gtBlockName(b)});g.top=Math.min(g.top,top);g.bottom=Math.max(g.bottom,top+height);}
         if(iso===today&&b.status==='in_progress'&&now.t>to){const tailTop=offset+(to-row.top)*GT_WEEK_PX_H,tailH=Math.max(2,(Math.min(now.t,row.bot)-to)*GT_WEEK_PX_H);if(tailH>0)bars+='<i class="vg-tail" style="top:'+tailTop+'px;height:'+tailH+'px"></i>';}
       });
       if(iso===today&&now.t>=row.top&&now.t<=row.bot) bars+='<span class="vg-nowline" style="top:'+(offset+(now.t-row.top)*GT_WEEK_PX_H)+'px"><b></b><s></s></span>';
       offset+=row.px;});
-    const groups=Object.values(groupBounds).map(g=>'<div class="vg-group" data-vggroup data-gb="'+esc(g.b.id)+'" data-job-id="'+esc((g.b.jobIds||[]).length===1?g.b.jobIds[0]:'')+'" style="top:'+g.top+'px;height:'+(g.bottom-g.top)+'px"><b class="vg-gtitle">'+esc(g.name)+(g.b.manual?' ✎':'')+'</b></div>').join('');
+    const groups=Object.values(groupBounds).map(g=>'<div class="vg-group" data-vggroup data-gb="'+esc(g.b.id)+'" data-job-id="'+esc((g.b.jobIds||[]).length===1?g.b.jobIds[0]:'')+'" style="top:'+g.top+'px;height:'+(g.bottom-g.top)+'px"><b class="vg-gtitle">'+esc(g.name)+(g.b.manual?' ✎':'')+'</b>'+gtPlanTools(g.b)+'</div>').join('');
     tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'" style="height:'+totalH+'px">'+cells+bars+groups+'<span class="vg-tip" hidden></span></div>';
   });
   return '<div class="vg-tools"><span>'+(feedCtx.mine?'Работы по дням':'Рабочее окно '+fmtH((+appSettings.day_end||16)-(+appSettings.day_start||7))+' · допуск '+fmtH(appSettings.tolerance_h||1))+' '+infoHint((feedCtx.mine?'':'Перетащите работу на субботу или воскресенье, чтобы открыть выходной. ')+'Нажмите на день — сутки и ручная раскладка.', 'Работа с графиком')+'</span>'+gtLanePicker(key)+'</div>'

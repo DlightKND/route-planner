@@ -4,6 +4,23 @@ import {presenceBounds} from './core/trip-presence-recovery.js';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const element=(doc,tag,className)=>{const node=doc.createElement(tag);node.className=className;return node;};
 
+export function restoreGpsResolutionPrompt(overlay){
+ const workspace=overlay.querySelector('.gps-resolution-workspace'),fields=overlay.querySelector('#promptFields');if(workspace){workspace.before(fields);workspace.remove();}overlay.querySelector('.modal')?.classList.remove('gps-resolution-modal');
+}
+
+export function frameGpsResolutionPrompt(overlay,context,onSwitch){
+ const doc=overlay.ownerDocument,fields=overlay.querySelector('#promptFields'),workspace=element(doc,'div','gps-resolution-workspace'),main=element(doc,'div','gps-resolution-main'),aside=element(doc,'aside','gps-resolution-summary');
+ overlay.querySelector('.modal').classList.add('gps-resolution-modal');
+ const choices=[['link','Связать с существующей поездкой','Выбери доступный план той же машины.'],['chain','Создать заявку, задание и поездку','Будут созданы связанные черновики.'],['charge','Проверить начисление инженеру','Проверь пробег, ставку и основание перед списанием.']];
+ main.innerHTML=`<p class="design-eyebrow">${escape(context.vehicle)} · ${escape(context.period)}</p><h3>Выберите результат оформления</h3><p class="hint">Запись не будет создана или привязана до подтверждения.</p><div class="gps-resolution-choices">${choices.map(([key,title,description])=>`<button type="button" data-gps-choice="${key}" aria-pressed="${key===context.action}" ${key==='charge'&&!context.canCharge?'disabled':''}><strong>${title}</strong><span>${description}</span></button>`).join('')}</div><h3>Параметры решения</h3>`;
+ fields.before(workspace);main.append(fields);workspace.append(main,aside);
+ const paint=()=>{
+  const field=key=>fields.querySelector('[data-pf="'+key+'"]'),selected=key=>field(key)?.selectedOptions?.[0]?.textContent||'Не выбрано';let amount='';try{amount=context.action==='charge'?context.cost(field('km').value):'';}catch{amount='Проверь пробег';}
+  aside.innerHTML=`<h3>Что будет сохранено</h3><dl><div><dt>Операция</dt><dd>${escape(choices.find(x=>x[0]===context.action)[1])}</dd></div><div><dt>GPS-запись</dt><dd>${escape(context.km)} км · ${escape(context.points)} точек</dd></div><div><dt>Разрывы GPS</dt><dd>${escape(context.gaps)}</dd></div><div><dt>${context.action==='link'?'Выезд':'Инженер'}</dt><dd>${escape(selected(context.action==='link'?'trip':'engineer'))}</dd></div>${context.action==='chain'?'<div><dt>Клиент</dt><dd>'+escape(selected('client'))+'</dd></div>':''}${context.action==='charge'?'<div><dt>Ставка</dt><dd>'+escape(context.rate)+'</dd></div>':''}${amount?'<div><dt>Сумма после проверки</dt><dd>'+escape(amount)+'</dd></div>':''}</dl><p class="hint">При ошибке сохранения решение можно повторить после исправления данных.</p>`;
+ };
+ workspace.querySelectorAll('[data-gps-choice]').forEach(button=>button.onclick=()=>{if(button.dataset.gpsChoice!==context.action)onSwitch(button.dataset.gpsChoice);});fields.addEventListener('input',paint);fields.addEventListener('change',paint);paint();
+}
+
 export function framePresenceWorkspace(dialog,stay){
  const row=dialog.querySelector('[data-presence-id]'),table=row?.closest('.wb-table-scroll');if(!row||!table)return;
  const doc=dialog.ownerDocument,workspace=element(doc,'div','presence-workspace');workspace.dataset.presenceId=row.dataset.presenceId;

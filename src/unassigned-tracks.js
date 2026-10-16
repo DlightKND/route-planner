@@ -24,13 +24,13 @@ export function trackPreview(points){
 }
 export function createUnassignedTracks(ctx){
  let rows=[],mode='pending',offset=0,more=false,owner=null,version=0,selected=[],mergePreview=null;
- const maps=new Set();
+ const maps=new Set(),resolutionDrafts=new Map();
  function clearMaps(scope){for(const entry of maps)if(!scope||scope.contains(entry.container)){entry.destroy();maps.delete(entry);}}
  function drawMap(box,points){const entry=mountGpsTrackMap(box.querySelector('svg.unassigned-preview'),points,{leaflet:ctx.leaflet?.(),makeBase:ctx.makeTrackBase,color:getComputedStyle(box).getPropertyValue('--accent').trim()||'#25845a'});if(entry)maps.add(entry);}
  const manager=()=>['admin','logist'].includes(ctx.role());
  const host=()=>document.getElementById('unassignedHost');
  const mergeEligible=r=>r&&(r.state==='review'||r.state==='recording'&&new Date(r.last_ts)<=Date.now()-300000);
- function reset(){clearMaps();rows=[];selected=[];mergePreview=null;owner=null;version++;if(host())host().replaceChildren();}
+ function reset(){clearMaps();resolutionDrafts.clear();rows=[];selected=[];mergePreview=null;owner=null;version++;if(host())host().replaceChildren();}
  const vehicle=id=>ctx.vehicles().find(v=>v.id===id);
  const vehicleName=id=>{const v=vehicle(id);return [v?.name||v?.model||'Машина',v?.plate].filter(Boolean).join(' · ');};
  const person=id=>{const p=ctx.people().find(v=>v.id===id);return p?.full_name||p?.name||p?.email||'Инженер';};
@@ -109,7 +109,9 @@ export function createUnassignedTracks(ctx){
   else fields.push({key:'engineer',type:'select',label:'Инженер',required:true,options:[{value:'',label:'Выберите инженера'},...engineers]});
   if(action==='charge')fields.push({key:'km',type:'number',min:0,step:.01,label:'Подтверждённый пробег, км',value:quote.km,required:true});fields.push({key:'reason',type:'textarea',label:'Основание решения',required:true});
   if(action==='charge'&&!(quote.rate>0))throw Error('Сначала настройте себестоимость километра машины или отдела.');
-  const values=await ctx.prompt(action==='chain'?'Создать заявку, черновик задания и выезд':action==='charge'?'Списание инженеру · '+number(quote.rate)+' '+ctx.currency()+'/км':'Привязать поездку к выезду',fields,{okText:action==='charge'?'Проверить сумму':'Создать привязку'});if(!values||uid!==ctx.userId())return;
+  const draftKey=uid+':'+id+':'+action,draft=resolutionDrafts.get(draftKey);if(draft)fields.forEach(field=>{if(Object.hasOwn(draft,field.key))field.value=draft[field.key];});
+  const values=await ctx.prompt(action==='chain'?'Создать заявку, черновик задания и выезд':action==='charge'?'Списание инженеру · '+number(quote.rate)+' '+ctx.currency()+'/км':'Привязать поездку к выезду',fields,{okText:action==='charge'?'Проверить сумму':action==='chain'?'Создать черновики':'Подтвердить связь',gpsResolution:{action,vehicle:vehicleName(row.vehicle_id),period:date(row.started_at)+' — '+date(row.ended_at||row.last_ts),km:number(quote.km),points:quote.points,gaps:quote.gaps,rate:number(quote.rate)+' '+ctx.currency()+'/км',canCharge:quote.rate>0,cost:km=>number(distanceCost(km,quote.rate))+' '+ctx.currency()}});if(!values||uid!==ctx.userId())return;
+  if(values.__nextAction){resolutionDrafts.set(draftKey,values.__draft||{});return resolve(id,values.__nextAction);}
   const cost=action==='charge'?distanceCost(values.km,quote.rate):null;
   if(action==='charge'&&!await ctx.confirm('Списать '+number(cost)+' '+ctx.currency()+' инженеру?\n'+number(values.km)+' км × '+number(quote.rate)+' '+ctx.currency()+'/км.\nОснование: '+values.reason,{title:'Подтверждение списания',danger:true,okText:'Списать по себестоимости'}))return;
   if(uid!==ctx.userId())return;
