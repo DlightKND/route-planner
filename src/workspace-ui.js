@@ -109,12 +109,14 @@ export function installWorkspaceStructure(root=document){
  const dash=root.querySelector('.view-dash');
  if(dash){const title=dash.querySelector('.pane-head h2');if(title)title.textContent='График и работа';framePane(dash,[dash.querySelector('.stickyhead')]);}
  root.getElementById('appShell')?.classList.add('workspace-shell');
- root.addEventListener('click',event=>{for(const menu of root.querySelectorAll('.workspace-card-details[open]'))if(!menu.contains(event.target))menu.open=false;});
+ const dismissCardMenus=event=>{for(const menu of root.querySelectorAll('.workspace-card-details[open]'))if(!menu.contains(event.target))menu.open=false;};
+ root.addEventListener('click',dismissCardMenus);
+ root.addEventListener('pointerdown',dismissCardMenus);
+ root.addEventListener('wheel',dismissCardMenus,{passive:true});
  root.addEventListener('keydown',event=>{
   if(event.key!=='Escape'||root.querySelector('dialog[open],:popover-open'))return;
   const menu=[...root.querySelectorAll('.workspace-card-details[open]')].at(-1);if(menu){event.preventDefault();menu.open=false;menu.querySelector('summary').focus();}
  });
- root.addEventListener('scroll',event=>{if(event.target.matches?.('.kanban'))for(const menu of event.target.querySelectorAll('.workspace-card-details[open]'))menu.open=false;},true);
  root.addEventListener('toggle',event=>{
   const menu=event.target;if(!menu.matches?.('.workspace-card-details')||!menu.open)return;
   const place=()=>{
