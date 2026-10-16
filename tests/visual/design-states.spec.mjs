@@ -65,18 +65,24 @@ test('design state: GPS resolution separates the operation, parameters and saved
  const errors=await start(page,info,'planner/tracking',{role:'admin',unassignedJourney:true});
  await page.getByRole('button',{name:'Создать цепочку',exact:true}).click();const overlay=page.locator('#promptOverlay');
  await expect(overlay.locator('.gps-resolution-workspace')).toBeVisible();await expect(overlay.locator('[data-gps-choice]')).toHaveCount(3);
- await overlay.locator('[data-pf=title]').fill('Черновик названия');await capture(page,info,'gps-resolution',errors);
+ await overlay.locator('[data-pf=title]').fill('Черновик названия');await expect(overlay.locator('#promptYes')).toBeInViewport();await expect(overlay.locator('#promptNo')).toBeInViewport();await capture(page,info,'gps-resolution',errors);
  await overlay.locator('[data-gps-choice=charge]').click();await expect(overlay.locator('[data-pf=km]')).toBeVisible();await expect(overlay.locator('.gps-resolution-summary')).toContainText('12,5');
  await overlay.locator('[data-gps-choice=chain]').click();await expect(overlay.locator('[data-pf=title]')).toHaveValue('Черновик названия');
  await overlay.locator('#promptNo').click();if(await page.locator('#confirmOverlay').isVisible())await page.locator('#confirmYes').click();await expect(overlay).toBeHidden();expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
 test('design state: request estimate keeps the agreed scope separate from execution',async({page},info)=>{
- const errors=await start(page,info,'job/'+fixtureIDs.job);await page.locator('#jobTabEstimate').click();
- await expect(page.locator('.request-estimate-base')).toBeVisible();await expect(page.locator('#jbWorks')).toBeVisible();await expect(page.locator('#jbParts')).toBeVisible();
+ const errors=await start(page,info,'job/'+fixtureIDs.job,{financeJourney:true});await page.locator('#jobTabEstimate').click();
+ await expect(page.locator('.request-estimate-base')).toBeVisible();await expect(page.locator('#jbWorks')).toBeVisible();await expect(page.locator('#jbParts').locator('..')).toBeVisible();
  await capture(page,info,'request-estimate',errors);await page.locator('[data-estimate-tasks]').click();await expect(page.locator('#jobOverviewPane')).toBeVisible();
 });
 test('design state: new assignment keeps editable organization and scope together',async({page},info)=>{
  const errors=await start(page,info,'planner/orders');await page.locator('#orderAdd').click();
  await expect(page.locator('#orderTitle')).toBeVisible();await expect(page.locator('#orderComposition')).toBeVisible();await expect(page.locator('#orderSave')).toBeVisible();
  await capture(page,info,'assignment-create',errors);
+});
+test('design state: current decisions remain separate from incoming notifications',async({page},info)=>{
+ const errors=await start(page,info,'notifications',{decisionQueue:true});const queue=page.locator('.notice-decisions');
+ await expect(queue.locator('.notice-decision-card')).toHaveCount(2);await expect(queue).toContainText('Проверка результата');await expect(queue).toContainText('Проверка присутствия');
+ await expect(page.locator('.notice-incoming .notice-toolbar')).toBeVisible();await capture(page,info,'notifications-decisions',errors);
+ await queue.getByRole('link',{name:'Проверить результат',exact:true}).click();await expect(page.locator('[data-open-result-review]')).toBeVisible();expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
 });

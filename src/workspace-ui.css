@@ -482,3 +482,20 @@ dialog.presence-editor[open] { display:flex;flex-direction:column;overflow:hidde
 .request-estimate-base>#jobHeadEcon { display:flex;flex-wrap:wrap;gap:24px;margin-top:24px;padding:20px 0 0;border:0;border-top:1px solid var(--line);text-align:left; }
 #jobEstimatePane>.request-estimate-assignments { margin-top:24px; }
 .request-estimate-assignments .hint { margin:12px 0 20px; }
+#promptOverlay .modal.gps-resolution-modal { display:flex;flex-direction:column;max-height:calc(100dvh - 32px);overflow:hidden; }
+.gps-resolution-modal>.modal-head,.gps-resolution-modal>.modal-actions { flex:none; }
+.gps-resolution-modal .gps-resolution-workspace { min-height:0;flex:1 1 auto;overflow:auto;overscroll-behavior:contain; }
+
+/* Pending decisions use current entity state; inbox cards remain a history. */
+.notice-workspace { display:grid;grid-template-columns:minmax(0,1fr) minmax(290px,360px);gap:32px;align-items:start; }
+.notice-incoming { min-width:0; }
+.notice-decisions { min-width:0;border-top:3px solid var(--accent);background:var(--panel);padding:24px; }
+.notice-decisions h2 { font-size:22px;font-weight:500;margin:8px 0 12px; }
+.notice-decisions [data-decision-count] { color:var(--muted);font-size:16px; }
+.notice-decisions header>p:last-child,.notice-decisions [data-decision-status] { color:var(--muted);font-size:13px;line-height:1.6; }
+.notice-decision-card { padding:24px 0;border-bottom:1px solid var(--line); }
+.notice-decision-card h3 { margin:10px 0;font-size:17px;font-weight:500;overflow-wrap:anywhere; }
+.notice-decision-card p { font-size:13px;line-height:1.7;color:var(--muted); }
+.notice-decision-card a { display:inline-block;margin-top:10px;color:var(--accent);font-size:13px; }
+@media(max-width:1100px){.notice-workspace { grid-template-columns:minmax(0,1fr);gap:24px; }.notice-decisions { grid-row:1; }.notice-decisions [data-decision-list] { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px; }}
+@media(max-width:620px){.notice-decisions { padding:20px 16px; }.notice-decisions [data-decision-list] { grid-template-columns:minmax(0,1fr);gap:0; }}

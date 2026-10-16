@@ -36,7 +36,7 @@ import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
 import { dashboardSummaryHTML } from './dashboard-summary.js';
-import { createNotifications } from './notifications.js';
+import { createNotifications, loadNotificationDecisions } from './notifications.js';
 import { installEngineerPickers } from './engineer-picker.js';
 installEngineerPickers();
 import { economicSnapshot } from './core/economic-snapshot.js';
@@ -53,7 +53,7 @@ const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profil
  tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
  confirm:(message,options)=>confirmDialog(message,options),beforeOpen:async()=>await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});
 serviceOrders.init();
-const notifications=createNotifications({db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
+const notifications=createNotifications({loadDecisions:uid=>loadNotificationDecisions(sb,uid),db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
 const unassignedTracks=createUnassignedTracks({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
  period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
