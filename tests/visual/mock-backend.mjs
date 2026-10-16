@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -172,6 +172,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   }
   if(lateScheduleCut)ride.day_plan={start:{d:'2026-10-05',t:7},cuts:[{after:2,at:{d:'2026-10-05',t:18}}]};
   task.trip_service_orders = [{ trip_id: trip, trips: ride }];
+  if(runningSchedule){ride.status='in_progress';ride.started_at='2026-10-05T04:00:00Z';}
   if(legacyCrewMissing){ride.lead_engineer=null;ride.engineer_ids=[];ride.status='done';}
   const stays = [
     {
@@ -331,6 +332,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     activeTask.trip_service_orders=[{trip_id:trip,trips:ride}];
     tables.trip_service_orders.push({trip_id:trip,order_id:activeTask.id,service_orders:activeTask,trips:ride});
   }
+  if(summaryOrphans)tables.trip_jobs.push({trip_id:'removed-trip',job_id:job,ord:0,jobs:request});
   if(decisionQueue)tables.trip_stays.find(s=>s.id==='stay-past').status='detected';
   if(reviewOrder||decisionQueue){activeTask.status='review';activeTask.result_note='Диагностика завершена. Осталась замена уплотнения.';}
   if(designTripChoices){tables.trips.push({...ride,id:'30000000-0000-4000-8000-000000000010',vehicle_label:'Выезд с ответственным инженером',engineer_ids:[engineer],trip_service_orders:[]},{...ride,id:'30000000-0000-4000-8000-000000000011',vehicle_label:'Выезд с другой командой',engineer_ids:[other],trip_service_orders:[]});}
@@ -627,7 +629,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     functions: { invoke: async (name) => reject("function:" + name) },
   };
   window.supabase = { createClient: () => db };
-  const savedRanges=preserveRanges?Object.fromEntries(['gt','load','rev','journal'].map(k=>[k,localStorage.getItem('dl_range_'+k)])):{};
+  const savedRanges=preserveRanges?Object.fromEntries(['gt','load','rev','journal','summary'].map(k=>[k,localStorage.getItem('dl_range_'+k)])):{};
   localStorage.clear();
   localStorage.setItem(
     "dl_range_gt",

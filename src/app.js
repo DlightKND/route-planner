@@ -1,4 +1,5 @@
 import {calendarPeriodBounds} from './core/calendar-period.js';
+import {summaryPreset,summaryUnit,shiftSummaryPeriod,summaryPeriodLabel} from './core/summary-period.js';
 import { openContextPanel } from './context-panels.js';
 import { wireSchedulePieceDrag, wireScheduleCutDrag, scheduleJoinCandidate } from './schedule-interactions.js';
 import { readPersonalScheduleTrips } from './personal-schedule.js';
@@ -2390,12 +2391,12 @@ function gtVerticalHtml(key){
         bars+='<div class="vg-block '+(b.kind==='trip'?'trip':'job')+(urgent?' urgent':'')+(b.manual?' man':'')+(height<40?' short':'')+(height<40&&live?' short-live':'')+(height<44?' tap-short':'')+(contUp?' cont-up':'')+(contDown?' cont-down':'')+(action&&layout.col===0?' has-act':'')+(narrow?' col narrow':'')+'" role="button" tabindex="0" aria-label="'+esc((b.kind==='trip'?'Выезд: ':'Заявка: ')+gtBlockName(b)+' · '+shortDate(iso))+'" data-readonly="'+(!gtCanEditBlock(b))+'" data-gb="'+esc(b.id)+'" data-job-id="'+esc((b.jobIds||[]).length===1?b.jobIds[0]:'')+'" data-block="'+esc(b.id)+'" data-block-day="'+iso+'" style="--col:'+layout.col+';--cols:'+layout.cols+';--block-tint:'+(feedCtx.mine?'transparent':loadTint(startP))+';top:'+top+'px;height:'+height+'px">'+roads
           +(burn>0?'<i class="vg-burn" style="height:'+burn.toFixed(2)+'%"></i><i class="vg-burn-edge" style="top:'+burn.toFixed(2)+'%"></i>':'')
           +'<span class="vg-label">'+(title?'<b>'+esc(title)+(b.manual?' ✎':'')+'</b>':'')+'<span class="vg-meta">'+meta+'</span></span>'+(layout.col===0?act:'')+'</div>';
-        if(occupied.length>1){const g=groupBounds[b.id]||(groupBounds[b.id]={top,bottom:top+height,b,name:gtBlockName(b)});g.top=Math.min(g.top,top);g.bottom=Math.max(g.bottom,top+height);}
+        if(occupied.length>1){const g=groupBounds[b.id]||(groupBounds[b.id]={top,bottom:top+height,b,name:gtBlockName(b),hasAction:!!action&&layout.col===0&&!narrow&&(!window.matchMedia('(pointer:coarse)').matches||height>=44)});g.top=Math.min(g.top,top);g.bottom=Math.max(g.bottom,top+height);}
         if(iso===today&&b.status==='in_progress'&&now.t>to){const tailTop=offset+(to-row.top)*GT_WEEK_PX_H,tailH=Math.max(2,(Math.min(now.t,row.bot)-to)*GT_WEEK_PX_H);if(tailH>0)bars+='<i class="vg-tail" style="top:'+tailTop+'px;height:'+tailH+'px"></i>';}
       });
       if(iso===today&&now.t>=row.top&&now.t<=row.bot) bars+='<span class="vg-nowline" style="top:'+(offset+(now.t-row.top)*GT_WEEK_PX_H)+'px"><b></b><s></s></span>';
       offset+=row.px;});
-    const groups=Object.values(groupBounds).map(g=>'<div class="vg-group" data-vggroup data-gb="'+esc(g.b.id)+'" data-job-id="'+esc((g.b.jobIds||[]).length===1?g.b.jobIds[0]:'')+'" style="top:'+g.top+'px;height:'+(g.bottom-g.top)+'px"><b class="vg-gtitle">'+esc(g.name)+(g.b.manual?' ✎':'')+'</b>'+gtPlanTools(g.b)+'</div>').join('');
+    const groups=Object.values(groupBounds).map(g=>'<div class="vg-group'+(g.hasAction?' has-act':'')+'" data-vggroup data-gb="'+esc(g.b.id)+'" data-job-id="'+esc((g.b.jobIds||[]).length===1?g.b.jobIds[0]:'')+'" style="top:'+g.top+'px;height:'+(g.bottom-g.top)+'px"><b class="vg-gtitle">'+esc(g.name)+(g.b.manual?' ✎':'')+'</b>'+gtPlanTools(g.b)+'</div>').join('');
     tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'" style="height:'+totalH+'px">'+cells+bars+groups+'<span class="vg-tip" hidden></span></div>';
   });
   return '<div class="vg-tools"><span>'+(feedCtx.mine?'Работы по дням':'Рабочее окно '+fmtH((+appSettings.day_end||16)-(+appSettings.day_start||7))+' · допуск '+fmtH(appSettings.tolerance_h||1))+' '+infoHint((feedCtx.mine?'':'Перетащите работу на субботу или воскресенье, чтобы открыть выходной. ')+'Нажмите на день — сутки и ручная раскладка.', 'Работа с графиком')+'</span>'+gtLanePicker(key)+'</div>'
@@ -2586,7 +2587,7 @@ async function gtSaveCuts(b,cuts,date=null,focusDay=null){
   try{
     const {error}=await sb.from(isTrip?'trips':'jobs').update(rec).eq('id',id);if(error)throw error;
     undoToast('Раскладка сохранена',async()=>{const {error}=await sb.from(isTrip?'trips':'jobs').update(old).eq('id',id);if(error)notify(error.message,'err');else{await renderFeedAgain();if(focusDay)gtFocusDay(b.pieces?.[0]?.iso||b.start.iso);}});
-    if(focusDay){dashRanges.gt.from=[dashRanges.gt.from,focusDay].sort()[0];dashRanges.gt.to=[dashRanges.gt.to,focusDay].sort().at(-1);}
+    if(focusDay){const range=feedCtx.summary?dashRanges.summary:dashRanges.gt;range.from=[range.from,focusDay].sort()[0];range.to=[range.to,focusDay].sort().at(-1);if(feedCtx.summary){saveRange('summary');renderSummaryPeriod();}}
     await renderFeedAgain();
     if(focusDay)gtFocusDay(focusDay);
     return true;
@@ -2696,9 +2697,12 @@ function tripTagHtml(j,tripOf,tripById){
   return '<span class="a-tag has">с выездом'+(per?(' · '+esc(per)):'')+'</span>';
 }
 
+const feedRenderVersions=new WeakMap();
 async function renderFeed(box,o){
   o=o||{};
   if(!box) return;
+  const version=(feedRenderVersions.get(box)||0)+1;feedRenderVersions.set(box,version);
+  const summary=box.id==='attnBody',scheduleRange=summary?{...dashRanges.summary}:{...dashRanges.gt};
   box.innerHTML='<div class="shim" role="status" aria-label="Загрузка данных"></div>';
   try{
     await ensureRefs(); await loadStaffDays();
@@ -2740,6 +2744,7 @@ async function renderFeed(box,o){
       else { box.innerHTML='<div class="err">'+esc((e&&e.message)||e)+'</div>'; return; }
     }
 
+    if(feedRenderVersions.get(box)!==version)return;
     // Инженер видит только свои заявки — как в канбане (см. renderJobs).
     if(o.mine||role==='engineer'){
       list=list.filter(j=>assignedTo(j,session.user.id,'assigned_engineer')||canWriteJob(j)||canWriteTrip(tripById[tripOf[j.id]]||null))
@@ -2775,7 +2780,7 @@ async function renderFeed(box,o){
     // «план» (руками) или «авто» (подобрано), а срок — рядом.
     const pd=planOfData(list,tripOf,tripById,tripOrd);
     const plan=pd.plan, blockOf=pd.blockOf;
-    const ganttPlan=dashRanges.gt.from<todayISO()?planOfData(list,tripOf,tripById,tripOrd,true).plan:plan;
+    const ganttPlan=scheduleRange.from<todayISO()?planOfData(list,tripOf,tripById,tripOrd,true).plan:plan;
 
     // ── Группы = БЛОКИ ───────────────────────────────────────────────────
     //
@@ -2810,9 +2815,9 @@ async function renderFeed(box,o){
     // Холодные, попавшие в выезд, из холодных уходят: они уже запланированы.
     cold=cold.filter(j=>!blockOf[j.id]);
     if(!groups.length && !(o.cold&&cold.length)){
-      box.innerHTML='<div class="vg-feed">'+rangeBar('gt')+(offline?offlineBanner(snapAt):'')
+      box.innerHTML='<div class="vg-feed">'+(summary?summaryActionsHTML():rangeBar('gt'))+(offline?offlineBanner(snapAt):'')
         +'<div class="aempty">'+(o.mine?'Работы на тебе нет.':'Заявок нет.')+'</div></div>';
-      wireRangeBar(box);return;
+      wireRangeBar(box);wireSummaryActions(box);return;
     }
 
     // ── Лента: градиент по остроте групп сверху вниз ─────────────────────
@@ -2884,7 +2889,7 @@ async function renderFeed(box,o){
       : '';
 
     const firstMotion=!motionPainted.has(box);
-    let h='<div class="vg-feed'+(o.mine?' vg-personal':'')+(firstMotion?' first-enter':'')+'">'+rangeBar('gt')+(offline?offlineBanner(snapAt):'')+orphanNote+pendNote;
+    let h='<div class="vg-feed'+(o.mine?' vg-personal':'')+(firstMotion?' first-enter':'')+'">'+(summary?summaryActionsHTML(orphanNote):rangeBar('gt'))+(offline?offlineBanner(snapAt):'')+(summary?'':orphanNote)+pendNote;
 
     // ── Просрочка: колода ────────────────────────────────────────────────
     //
@@ -2959,10 +2964,10 @@ async function renderFeed(box,o){
     }
     // Визуальная сетка получает уже рассчитанные pieces/load. Здесь нет
     // второй арифметики расписания — только группировка готовых данных по неделям.
-    feedCtx={plan:ganttPlan,weeks:weeks,dayH:dayH,engN:engN,shift:shift,mine:!!o.mine,
+    feedCtx={plan:ganttPlan,weeks:weeks,dayH:dayH,engN:engN,shift:shift,mine:!!o.mine,summary,
       nameOf:engName,recordOf:id=>String(id)[0]==='t'?tripById[String(id).slice(1)]:jobById[String(id).slice(1)],jobName:id=>{ const j=jobById[id]; return j&&j.clients?j.clients.name:''; }};
     let weekKeys=Object.keys(weeks).sort();
-    weekKeys=weekKeys.filter(k=>{const w=weeks[k],a=isoOf(w.w.mon),z=isoOf(w.w.mon+(7*(w.spanWeeks||1)-1)*DAY_MS);return z>=dashRanges.gt.from&&a<=dashRanges.gt.to;});
+    weekKeys=weekKeys.filter(k=>{const w=weeks[k],a=isoOf(w.w.mon),z=isoOf(w.w.mon+(7*(w.spanWeeks||1)-1)*DAY_MS);return z>=scheduleRange.from&&a<=scheduleRange.to;});
     if(weekKeys.length&&!weekKeys.some(k=>Object.prototype.hasOwnProperty.call(gtOpen,k))){
       const current=weekOf(todayISO());
       if(current&&weeks[current.key]) gtOpen[current.key]=true;
@@ -3161,6 +3166,7 @@ async function renderFeed(box,o){
     box.innerHTML=h;
     paintFirstMotion(box);
     wireRangeBar(box);
+    wireSummaryActions(box);
     // Строка ведёт в заявку; кнопки внутри строки — к себе, поэтому клик
     // по ним до строки не доходит.
     box.querySelectorAll('[data-ajob]').forEach(el=>el.onclick=e=>{
@@ -3244,7 +3250,30 @@ function defaultRange(kind){
 }
 function loadRangeState(kind){try{const v=JSON.parse(localStorage.getItem('dl_range_'+kind)||'null');if(v&&v.from&&v.to){if(kind==='journal')calendarPeriodBounds(v);return v;}}catch(e){}return defaultRange(kind);}
 const dashRanges={journal:loadRangeState('journal'),rev:loadRangeState('rev'),load:loadRangeState('load'),gt:loadRangeState('gt')};
+// Summary owns one period; the engineer's personal schedule and GPS journal keep theirs.
+try{const saved=JSON.parse(localStorage.getItem('dl_range_summary')||'null');calendarPeriodBounds(saved);dashRanges.summary=saved;}catch(e){dashRanges.summary={...dashRanges.rev};}
 function saveRange(kind){try{localStorage.setItem('dl_range_'+kind,JSON.stringify(dashRanges[kind]));}catch(e){}}
+function renderSummaryPeriod(){
+ const head=document.querySelector('.view-dash .pane-head');if(!head)return;
+ let bar=$('summaryPeriod');if(!bar){bar=document.createElement('div');bar.id='summaryPeriod';bar.className='summary-period';bar.setAttribute('role','group');bar.setAttribute('aria-label','Период сводки');head.append(bar);}
+ const range=dashRanges.summary,unit=summaryUnit(range);
+ bar.innerHTML='<div class="summary-period-top"><button type="button" class="summary-period-today" data-summary-today>Сегодня</button><div class="summary-period-presets" role="group" aria-label="Масштаб периода">'+[['week','Неделя'],['fortnight','2 недели'],['month','Месяц']].map(([key,label])=>'<button type="button" data-summary-preset="'+key+'" aria-pressed="'+(unit===key)+'">'+label+'</button>').join('')+'</div></div>'
+  +'<div class="summary-period-range"><button type="button" data-summary-shift="-1" aria-label="Предыдущий период">←</button><button type="button" data-summary-dates aria-label="Выбрать период: '+esc(summaryPeriodLabel(range))+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/></svg><span>'+esc(summaryPeriodLabel(range))+'</span></button><button type="button" data-summary-shift="1" aria-label="Следующий период">→</button></div>';
+ bar.querySelectorAll('[data-summary-preset]').forEach(b=>b.onclick=()=>setSummaryPeriod(summaryPreset(todayISO(),b.dataset.summaryPreset)));
+ bar.querySelectorAll('[data-summary-shift]').forEach(b=>b.onclick=()=>setSummaryPeriod(shiftSummaryPeriod(dashRanges.summary,+b.dataset.summaryShift)));
+ bar.querySelector('[data-summary-today]').onclick=()=>{const current=summaryUnit(dashRanges.summary);setSummaryPeriod(current==='custom'?{from:todayISO(),to:isoOf(utcOf(todayISO())+utcOf(dashRanges.summary.to)-utcOf(dashRanges.summary.from))}:summaryPreset(todayISO(),current));};
+ bar.querySelector('[data-summary-dates]').onclick=async()=>{
+  const picked=await promptDialog('Период сводки',[{key:'from',label:'Начало периода',type:'date',value:dashRanges.summary.from,required:true},{key:'to',label:'Конец периода',type:'date',value:dashRanges.summary.to,required:true}],{okText:'Применить период'});
+  if(!picked)return;if(picked.from>picked.to)[picked.from,picked.to]=[picked.to,picked.from];
+  try{calendarPeriodBounds(picked);setSummaryPeriod(picked);}catch(e){notify(e.message,'warn');}
+ };
+}
+function setSummaryPeriod(range){dashRanges.summary={...range};saveRange('summary');Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderDashboard();}
+function summaryActionsHTML(warning=''){
+ if(!canWrite())return warning;
+ return '<div class="summary-action-row'+(warning?' has-warning':'')+'"><section class="summary-quick-actions" aria-label="Быстрые действия"><h3>Быстрые действия</h3><div class="summary-quick-buttons"><button type="button" class="btn amber" data-summary-create="order"><span aria-hidden="true">＋</span>Создать и назначить задание</button><button type="button" class="btn" data-summary-create="trip"><span aria-hidden="true">↗</span>Сформировать новый выезд</button></div><p class="hint">Назначьте работу команде или соберите маршрут выезда.</p></section>'+warning+'</div>';
+}
+function wireSummaryActions(box){box.querySelectorAll('[data-summary-create]').forEach(b=>b.onclick=()=>{if(!canWrite())return;if(b.dataset.summaryCreate==='order')serviceOrders.open(null);else openTrip(null);});}
 function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<div class="rangebar" role="group" aria-label="'+(kind==='journal'?'Период GPS-журнала':kind==='gt'?'Период графика':kind==='load'?'Период загрузки':'Период финансов и работ')+'" data-rk="'+kind+'">'
   +'<input type="date" aria-label="Начало периода" data-rf value="'+esc(r.from)+'"><span class="rdash">—</span><input type="date" aria-label="Конец периода" data-rt value="'+esc(r.to)+'">'
   +(kind==='rev'||kind==='journal'?'<span class="rquick"><button data-rmonth="-1" aria-label="Предыдущий месяц">←</button><button data-rmonth="0">Этот месяц</button><button data-rmonth="1" aria-label="Следующий месяц">→</button></span>':'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
@@ -3404,7 +3433,7 @@ function monthEndIso(key){ const a=String(key).split('-').map(Number);
 // и график под ними. Одна карточка — один период, иначе цифра и столбик
 // рядом говорят о разном.
 function dashPeriod(){
-  return dashRanges.rev;
+  return dashRanges.summary;
 }
 
 // ── Финансы ─────────────────────────────────────────────────────────────
@@ -3432,9 +3461,9 @@ const jobDate=j=>j.due_date||String(j.created_at||'').slice(0,10);
 function dashboardLoad(trips,tasks,tracks=[]){
   if(!canWrite()) return '';
   const shift=gtWindowHours();
-  const fromIso=dashRanges.rev.from,toIso=dashRanges.rev.to;
+  const fromIso=dashRanges.summary.from,toIso=dashRanges.summary.to;
   const tripById=Object.fromEntries(trips.filter(t=>t.status!=='cancelled').map(t=>[t.id,t]));
-  const input=statisticsPlanBlocks(trips.filter(dashTripInScope),tasks.filter(dashTripInScope),dashRanges.rev);
+  const input=statisticsPlanBlocks(trips.filter(dashTripInScope),tasks.filter(dashTripInScope),dashRanges.summary);
   const plan=planSchedule(input.blocks,gtSettings(input.blocks),{today:todayISO()});
   const engs=dashEnsureEngineers().filter(p=>dashEngineers.has(String(p.id)));
   const engIds=new Set(engs.map(p=>p.id));
@@ -3461,7 +3490,7 @@ function dashboardLoad(trips,tasks,tracks=[]){
     r.f+=p.hours;r.fKnown=1;factDay[p.date]=(factDay[p.date]||0)+p.hours;
   });
 
-  const road=roadPersonHours({trips:Object.values(tripById).filter(t=>dashTripInScope(t)),tracks,presence:factPresenceRows,period:dashRanges.rev,engineerIds:[...engIds]});
+  const road=roadPersonHours({trips:Object.values(tripById).filter(t=>dashTripInScope(t)),tracks,presence:factPresenceRows,period:dashRanges.summary,engineerIds:[...engIds]});
   road.daily.forEach(p=>{const r=lane[p.engineer]||(lane[p.engineer]={w:0,d:0,n:0,f:0,fKnown:0});r.f+=p.hours;r.fKnown=1;factDay[p.date]=(factDay[p.date]||0)+p.hours;});
   const num=v=>v.toFixed(v%1?1:0);
   const name=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?(p.full_name||p.role||'без имени'):'—'; };
@@ -3537,7 +3566,7 @@ async function dashboardRead(table,columns,tripIds){
 let dashboardRenderVersion=0;
 let summaryMode=localStorage.getItem('dlight-summary-mode')==='tables'?'tables':'charts';
 async function renderDashboard(){ const version=++dashboardRenderVersion,box=$('dashBody'); if(!box) return;
-  renderAttention();
+  renderSummaryPeriod();renderAttention();
   // Ролевая раскладка. Инженер видит только «График» — ленту на всю ширину,
   // без денег и без правой колонки. Менеджер и админ — двухколоночно.
   const grid=document.querySelector('.dash-grid');
@@ -3566,13 +3595,13 @@ async function renderDashboard(){ const version=++dashboardRenderVersion,box=$('
       dashboardRead('service_orders','id,status,work_mode,date_from,lead_engineer,engineer_ids,service_order_items(id,kind,unit,planned_qty,done_qty,transferred_qty,billable,legacy_snapshot,request_finance_void_event_id)'),
       dashboardRead('trip_service_orders','trip_id,order_id')
     ]);
-    const scopedIds=trips.filter(t=>['done','finished','in_progress'].includes(t.status)&&t.date_from>=dashRanges.rev.from&&t.date_from<=dashRanges.rev.to&&dashTripInScope(t)).map(t=>t.id);
+    const scopedIds=trips.filter(t=>['done','finished','in_progress'].includes(t.status)&&t.date_from>=dashRanges.summary.from&&t.date_from<=dashRanges.summary.to&&dashTripInScope(t)).map(t=>t.id);
     let tracks=[],trackUnavailable=false;
     if(scopedIds.length)try{tracks=await dashboardRead('trip_tracks','trip_id,segments:data->segments',scopedIds);}catch(e){trackUnavailable=true;}
-    const metrics=dashboardMetrics({trips,orders:tasks,links:taskLinks,tracks,period:dashRanges.rev,engineerIds:[...dashEngineers],factHours:factHByTrip});
+    const metrics=dashboardMetrics({trips,orders:tasks,links:taskLinks,tracks,period:dashRanges.summary,engineerIds:[...dashEngineers],factHours:factHByTrip});
     if(version!==dashboardRenderVersion)return;
     const teamCount=dashEngineers.size;
-    box.innerHTML='<div class="summary-controls"><h2>Результаты отдела</h2>'+rangeBar('rev')+'<div class="summary-view-switch" role="group" aria-label="Представление статистики"><button type="button" data-summary-view="charts">Диаграммы</button><button type="button" data-summary-view="tables">Таблицы</button></div><details class="summary-team"><summary>Команда · '+teamCount+' '+plural(teamCount,'инженер','инженера','инженеров')+'</summary>'+engineerScopeHtml()+'</details></div>'
+    box.innerHTML='<div class="summary-controls"><h2>Результаты отдела</h2><div class="summary-view-switch" role="group" aria-label="Представление статистики"><button type="button" data-summary-view="charts">Диаграммы</button><button type="button" data-summary-view="tables">Таблицы</button></div><details class="summary-team"><summary>Команда · '+teamCount+' '+plural(teamCount,'инженер','инженера','инженеров')+'</summary>'+engineerScopeHtml()+'</details></div>'
       +dashboardSummaryHTML(metrics,dashboardLoad(trips,tasks,tracks),{currency:appSettings.currency||'грн',mode:summaryMode})
       +(trackUnavailable?'<p class="summary-note" role="status">Не удалось загрузить GPS-участки; средняя скорость недоступна.</p>':'');
     const paintSummaryMode=()=>{box.querySelectorAll('[data-summary-mode]').forEach(p=>p.hidden=p.dataset.summaryMode!==summaryMode);box.querySelectorAll('[data-summary-view]').forEach(b=>{b.classList.toggle('on',b.dataset.summaryView===summaryMode);b.setAttribute('aria-pressed',String(b.dataset.summaryView===summaryMode));});};
