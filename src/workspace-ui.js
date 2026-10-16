@@ -133,6 +133,7 @@ export function frameMapWorkspace(root=document){
  const tools=root.getElementById('sideTools');tools.classList.add('map-workspace-filters');
  const filter=root.getElementById('typeFilter');filter.setAttribute('aria-label','Тип точки');
  const listHead=root.getElementById('listHead'),label=element(root,'strong','map-list-caption');listHead.prepend(label);
+ root.getElementById('rWp').placeholder='Найти адрес или место';
  const route=root.querySelector('#routeBlock>.block-body'),scroll=element(root,'div','map-route-scroll');
  route.querySelector('.route-panel-title')?.remove();
  const routeHead=element(root,'header','map-workspace-head');routeHead.innerHTML='<div><p class="design-eyebrow">План поездки</p><h2>Создание маршрута</h2><p class="map-workspace-description">Собери остановки и проверь порядок перед построением.</p></div>';
@@ -143,12 +144,13 @@ export function frameMapWorkspace(root=document){
  scroll.append(routeHead,stops,add,root.getElementById('rVariants'),route.querySelector('.route-settings'));route.append(scroll,footer);
  const paint=()=>{
   const mode=tabs.querySelector('button.on')?.dataset.sb||'points';side.dataset.mapPanel=mode;
+  routeHead.querySelector('h2').textContent=Number(root.getElementById('rCount').textContent)>0?'План маршрута':'Создание маршрута';
   const directory=mode==='directory';head.querySelector('[data-map-heading]').textContent=directory?'Справочник точек':'В работе';
   head.querySelector('[data-map-description]').textContent=directory?'Клиенты, оборудование и депо.':'Заявки и машины, которым нужно внимание.';
   label.textContent=directory?'Точки справочника':'Рабочая очередь';
   const input=root.getElementById('search');input.placeholder=directory?'Найти клиента или депо':'Найти клиента или машину';
  };
- paint();const Observer=root.defaultView?.MutationObserver;if(Observer)new Observer(paint).observe(tabs,{attributes:true,subtree:true,attributeFilter:['class','style']});
+ paint();const Observer=root.defaultView?.MutationObserver;if(Observer)new Observer(paint).observe(tabs,{attributes:true,childList:true,characterData:true,subtree:true,attributeFilter:['class','style']});
 }
 
 export function setCatalogWorkspace(name,root=document){
