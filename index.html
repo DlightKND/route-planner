@@ -207,52 +207,6 @@
   .qc { width: 15px; height: 15px; border-radius: 50%; flex: none;
     border: 1px solid currentColor; display: inline-flex; align-items: center;
     justify-content: center; font-size: 10px; line-height: 1; }
-  /* Легенда факт-трека. Без неё серый пунктир достроенного куска и серый
-     пунктир недостающего выглядят одинаково, а значат противоположное. */
-  .mleg { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm);
-    padding: var(--pad-row); font-size: var(--fs-2); color: var(--ink-dim);
-    box-shadow: var(--shadow-sm); line-height: 1.9; }
-  .mleg i { width: 20px; height: 0; display: inline-block; vertical-align: middle;
-    margin-right: var(--sp-3); flex: none; }
-  .mleg .mleg-i { width: 20px; margin-right: var(--sp-3); flex: none;
-    display: inline-flex; align-items: center; justify-content: center; }
-  .mleg .mleg-i svg { display: block; }
-  /* Общий стиль форм делает подписи заглавными и разрядочными — в легенде
-     это нечитаемо, и она не форма. Сбрасываем явно. */
-  .mleg label { display: flex; align-items: center; gap: 0; cursor: pointer;
-    padding: 1px 0; white-space: nowrap; text-transform: none;
-    letter-spacing: normal; font-size: inherit; font-weight: 400;
-    color: inherit; margin: 0; }
-  .mleg label input { width: auto; margin: 0 var(--sp-3) 0 0; flex: none; cursor: pointer; }
-  .mleg label b { color: var(--ink); margin-left: 6px; }
-  .mleg-t { margin-top: var(--sp-2); padding-top: var(--sp-2);
-    border-top: 1px solid var(--line); color: var(--ink-faint); }
-  .mleg-t b { color: var(--ink); }
-  /* Цифры плана — отдельной строкой под своим слоем: в строку они делают
-     панель вдвое шире, а на телефоне она и так впритык. */
-  .mleg-s { margin: -2px 0 2px 26px; color: var(--ink-faint); }
-  /* Окно времени: два поля в строку через тире — как период на сводке. */
-  .mleg-tf { display: flex; align-items: center; gap: var(--gap-tight);
-    margin: 0 0 var(--sp-3); padding-bottom: var(--sp-3);
-    border-bottom: 1px solid var(--line); }
-  .mleg-tf input { width: auto; flex: 1 1 auto; min-width: 0; margin: 0;
-    padding: 2px var(--sp-2); font-family: var(--mono); font-size: var(--fs-2);
-    background: var(--panel-2); color: var(--ink);
-    border: 1px solid var(--line); border-radius: var(--r-sm); }
-  .mleg-dash { color: var(--ink-faint); flex: none; }
-  .mleg-tf button { flex: none; border: none; background: none; cursor: pointer;
-    padding: 0 0 0 var(--sp-2); font-family: var(--mono); font-size: var(--fs-1);
-    color: var(--ink-faint); text-decoration: underline; }
-  .mleg-tf button:hover { color: var(--ink); }
-  /* Шкала скорости: полоса градиента и два конца подписи. */
-  .mleg-sp { display: flex; align-items: center; gap: var(--gap-tight);
-    margin: 0 0 3px 26px; color: var(--ink-faint); font-size: var(--fs-1); }
-  .mleg-sp i { flex: 1; height: 5px; border-radius: 3px; display: block; }
-  .mleg-x { position: absolute; top: 2px; right: 4px; width: 20px; height: 20px;
-    border: none; background: none; cursor: pointer; color: var(--ink-faint);
-    font-size: var(--fs-5); line-height: 1; padding: 0; }
-  .mleg-x:hover { color: var(--ink); }
-  .mleg { position: relative; padding-right: var(--sp-5); max-width: min(320px, calc(100vw - 32px)); }
   /* Таблица составляющих: моноширинная, чтобы хеши и числа строк стояли
      столбиком и сверялись взглядом, а не чтением. */
   .vt { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: var(--fs-2); }
@@ -2399,6 +2353,7 @@
         <button type="button" class="on" data-sb="points"><span id="sideTitle">В работе</span> <span class="cnt" id="cliCount">0</span></button>
         <button type="button" data-sb="route">Маршрут <span class="cnt" id="rCount">0</span></button>
         <button type="button" data-sb="directory">Справочник <span class="cnt" id="directoryCount">0</span></button>
+        <button type="button" data-sb="track" hidden>Трек</button>
       </div>
       <div class="scroll">
       <div class="block collapsible" id="pointsBlock">
@@ -2503,8 +2458,10 @@
         </div>
       </div>
       </div>
+      <section id="trackBlock" aria-label="Данные трека"></section>
     </aside>
     <div class="map-wrap">
+      <div id="mapTrackDock"></div>
       <!-- Кнопки карты держит флекс-строка, а не два абсолютных right.
            Жёсткий right:120px рассчитан под ширину слова «Машины»: длиннее
            подпись — кнопки наезжают друг на друга. -->
