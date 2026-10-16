@@ -106,7 +106,7 @@ test('split saves the selected work part and dragging its continuation back join
  await expect(pieces.filter({hasNot:page.locator('.road')})).toHaveCount(1);
  const joined=pieces.filter({hasNot:page.locator('.road')}).first();await joined.locator('[data-gtools]').click();
  await expect(page.locator('.gpop .gp-secondary')).toBeHidden();await page.locator('.gpop [data-pop-more]').click();
- await expect(page.locator('.gpop [data-greset]')).toBeVisible();await page.locator('.gpop .gp-layout summary').click();
+ await expect(page.locator('.gpop [data-greset]')).toBeVisible();
  await expect(page.locator('.gpop [data-cut-del]')).toHaveCount(0);
  await expect(page.locator('.gpop [data-greset]')).toBeInViewport({ratio:1});await page.locator('.gpop [data-greset]').click();
  await expect.poll(()=>page.evaluate(()=>window.__visualQA.scheduleWrites.length)).toBe(4);

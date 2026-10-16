@@ -1,7 +1,26 @@
 import {openEntityPanel} from './entity-actions.js';
+import {presenceBounds} from './core/trip-presence-recovery.js';
 
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const element=(doc,tag,className)=>{const node=doc.createElement(tag);node.className=className;return node;};
+
+export function framePresenceWorkspace(dialog,stay){
+ const row=dialog.querySelector('[data-presence-id]'),table=row?.closest('.wb-table-scroll');if(!row||!table)return;
+ const doc=dialog.ownerDocument,workspace=element(doc,'div','presence-workspace');workspace.dataset.presenceId=row.dataset.presenceId;
+ const evidence=element(doc,'section','presence-evidence-panel'),decision=element(doc,'section','presence-decision-panel');
+ evidence.innerHTML='<h3>Интервалы присутствия</h3>';decision.innerHTML='<h3>Команда и доли</h3>';
+ for(const [index,cell] of [...row.children].entries()){
+  const field=element(doc,'div','presence-workspace-field'),label=element(doc,'p','presence-field-label');label.textContent=cell.dataset.label;field.append(label);while(cell.firstChild)field.append(cell.firstChild);
+  (index===0||index===4?evidence:decision).append(field);
+ }
+ workspace.append(evidence,decision);table.replaceWith(workspace);
+ const metrics=element(doc,'div','presence-review-metrics'),bounds=presenceBounds(stay),calendar=stay.stay_from&&stay.stay_to?(Date.parse(stay.stay_to)-Date.parse(stay.stay_from))/60000:null;
+ const amount=value=>value==null?'—':Number(value).toLocaleString('ru-RU',{maximumFractionDigits:1})+' мин';
+ metrics.innerHTML=[['Календарная длительность',amount(calendar)],['Наблюдено GPS',amount(bounds?.gps)],['Предложено дополнительно',amount(bounds?bounds.max-bounds.gps:null)],['Итог к подтверждению','']].map(([label,value],i)=>`<div><span>${label}</span><b ${i===3?'data-presence-review-total':''}>${value}</b></div>`).join('');workspace.before(metrics);
+ const paint=()=>{const input=workspace.querySelector('[data-presence="minutes_mgr"]');metrics.querySelector('[data-presence-review-total]').textContent=amount(input.value===''?null:Number(input.value));};paint();dialog.addEventListener('input',()=>doc.defaultView.queueMicrotask(paint));
+ const title=dialog.querySelector('#presenceEditorTitle');if(title)title.textContent='Проверка присутствия';
+ const footer=dialog.querySelector('.presence-editor-foot'),later=element(doc,'button','btn ghost');later.type='button';later.textContent='Проверить позже';later.onclick=()=>dialog.querySelector('.presence-editor-head button').click();footer.prepend(later);
+}
 
 // Screen structure is separate from record ownership and save handlers.
 // Existing inputs are moved, never copied, so drafts and listeners survive.
@@ -146,5 +165,7 @@ export function frameOrderWorkspace({record,editable,people},root=document){
   const emptyGrid=editor.querySelector('.order-grid');if(emptyGrid&&!emptyGrid.children.length)emptyGrid.remove();
   positionOrderResult(root);
  }
+ const travel=root.getElementById('orderPane-travel');if(travel){const intro=element(doc,'header','order-travel-head');intro.innerHTML='<div><p class="design-eyebrow">План и экономика</p><h2>Выезды и распределение</h2><p class="hint">Маршрут, команда и подтверждённые доли затрат этого задания.</p></div>';const actions=root.getElementById('orderTravel')?.querySelector('.order-line-adds');if(actions)intro.append(actions);travel.prepend(intro);}
+ const execution=root.getElementById('orderExecution'),results=root.getElementById('orderResults');if(execution&&results){const state=element(doc,'section','result-saved-state');state.id='orderResultSavedState';execution.firstElementChild?.replaceWith(state);const title=element(doc,'h3','result-section-title');title.textContent='Выполненные позиции';results.before(title);const fields=element(doc,'div','result-final-fields'),date=root.getElementById('orderResultDate')?.closest('label'),note=root.getElementById('orderResultNote')?.closest('label');if(date)fields.append(date);if(note)fields.append(note);results.after(fields);}
  const savebar=editor.querySelector('.order-savebar');if(savebar){const state=root.getElementById('orderSaveState'),save=root.getElementById('orderSave');if(state)inner.querySelector('.entity-head-meta').append(state);if(save)inner.querySelector('.entity-header-actions').append(save);savebar.remove();}
 }

@@ -31,7 +31,7 @@ import './entity-pages.css';
 import './operations-design.css';
 import { installOperationsUI } from './operations-ui.js';
 import './workspace-ui.css';
-import {installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
+import {framePresenceWorkspace,installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
@@ -2601,16 +2601,16 @@ function gtPop(key,b,trigger){
     :'';
   const navigation=hasTools?'<div class="gp-navigation"><button class="btn" data-pop-map>Показать на карте</button>'+(canWriteTrip(getTrip(b.tripId)||tripCache[b.tripId]||null)?'<button class="btn" data-pop-open>Открыть выезд</button>':'')+'</div>':b.kind==='job'?'<div class="gp-navigation"><button class="btn" data-pop-job>Открыть заявку</button></div>':'';
   const total=(b.segs||[]).reduce((n,p)=>n+p.h,0),points=[{after:0,at:{d:b.start.iso,t:b.start.t}},...cuts.map(c=>{const p=gtPieces(b).find(p=>Math.abs(p.at-c.after)<.01);return {...c,at:p?{d:p.iso,t:p.from}:c.at};})];
-  const layout='<details class="gp-layout"><summary>Участки времени'+(cuts.length?' · '+(cuts.length+1):'')+'</summary>'
+  const layout='<details class="gp-layout" open><summary>Участки времени <span class="gp-section-count">'+(cuts.length+1)+'</span></summary>'
     +(editable?'<div class="gp-s">Перетащите участок. Подведите части друг к другу, чтобы скрепить.</div>':'')
     +(selectedDay&&editable?'<button class="btn sm ghost" data-pop-divide>Разделить в этом дне</button>':'')
     +'<div class="gp-days">'+points.map((c,i)=>'<div class="gp-r"><span class="gp-k">Участок '+(i+1)+'<small>'+fmtH(Math.max(0,(points[i+1]?.after??total)-c.after))+'</small></span><b class="gp-v">'+shortDate(c.at.d)+' · '+clockLabel(c.at.t)+'</b>'+(i&&editable?'<button class="gp-b" data-cut-del="'+(i-1)+'" aria-label="Скрепить с предыдущим участком" title="Скрепить с предыдущим">↥</button>':'')+'</div>').join('')+'</div></details>';
   const primary=action&&!action.passive?'<button class="btn sm amber" data-pop-action="'+action.kind+'">'+gtActionIcon(action.kind)+' '+esc(action.label)+'</button>':'';
   const time=selectedDay?shortDate(selectedDay)+(selected?.dataset.pieceFrom?' · '+clockLabel(+selected.dataset.pieceFrom)+'–'+clockLabel(+selected.dataset.pieceTo):''):shortDate(b.start.iso)+' · '+clockLabel(b.start.t);
-  const h='<div class="gpop gpop-compact"><div class="design-eyebrow">'+(trip?'Выезд':'Заявка')+'</div><div class="gp-h"><span>'+esc(gtBlockName(b))+'</span><button class="gp-close" data-gclose aria-label="Закрыть">×</button></div>'
+  const h='<div class="gpop gpop-workspace"><div class="gp-record-head"><div><div class="design-eyebrow">'+(trip?'Выезд':'Заявка')+'</div><h3>'+esc(gtBlockName(b))+'</h3></div><div class="gp-head-actions">'+(hasTools&&secondary?'<button class="btn sm ghost gp-more" data-pop-more aria-label="Другие действия" aria-expanded="false">⋯</button>':'')+'<button class="gp-close" data-gclose aria-label="Закрыть">×</button></div></div>'
     +'<div class="gp-caption">'+time+' · '+(cuts.length?(cuts.length+1)+' '+plural(cuts.length+1,'участок','участка','участков'):'авто')+'</div>'
     +(b.scheduleOnly?'<div class="gp-s">Исторический выезд · экипаж не указан · только просмотр графика</div>':'')
-    +(hasTools?'<div class="gp-trip-tools">'+primary+'<button class="btn sm ghost gp-more" data-pop-more aria-label="Другие действия" aria-expanded="false">⋯</button></div><div class="gp-secondary" hidden>'+secondary+(b.manual&&editable?'<button class="btn sm ghost" data-greset>Сбросить к авто</button>':'')+'</div>':'')+navigation+layout+'</div>';
+    +(hasTools?'<div class="gp-trip-tools">'+primary+'</div><div class="gp-secondary" hidden>'+secondary+'</div>':'')+navigation+layout+(b.manual&&editable?'<footer class="gp-time-footer"><button class="btn sm ghost" data-greset>Сбросить к авто</button><span class="hint">План времени</span></footer>':'')+'</div>';
   document.body.insertAdjacentHTML('beforeend',h);const pop=document.body.lastElementChild;
   const fit=()=>{if(window.matchMedia('(max-width:760px)').matches)return;pop.style.top=Math.max(8,Math.min(parseFloat(pop.style.top)||8,window.innerHeight-pop.offsetHeight-8))+'px';};
   const more=pop.querySelector('[data-pop-more]'),menu=pop.querySelector('.gp-secondary');
@@ -5706,7 +5706,7 @@ async function openPresenceEditor(tid,stayId,jobId){
     dialog.innerHTML='<form method="dialog"><div class="presence-editor-head"><h3 id="presenceEditorTitle">Привязка и присутствие</h3><button class="btn sm" type="submit" aria-label="Закрыть">✕</button></div></form>'
       +presenceHTML({...data,jobIds:data.job_ids,stays:[stay]},tripJobsAll,profilesList,{editor:true,orders:ordersForTrip})
       +'<label>Комментарий<input class="presence-reason" value="Проверено по треку и составу команды"></label><p class="presence-error err" role="alert"></p><div class="presence-editor-foot"><button type="button" class="btn amber" data-presence-submit>Привязать и подтвердить</button></div>';
-    document.body.append(dialog);wirePresenceRecovery(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
+    framePresenceWorkspace(dialog,stay);document.body.append(dialog);wirePresenceRecovery(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
     const save=dialog.querySelector('[data-presence-submit]'),status=dialog.querySelector('[data-presence="status"]');
     const row=dialog.querySelector('[data-presence-id]'),job=dialog.querySelector('[data-presence="job_id"]');
     job.addEventListener('change',()=>renderTaskAllocationControls(row,job.value,ordersForTrip,job.value===original.job_id?(original.task_allocations||[]):[]));

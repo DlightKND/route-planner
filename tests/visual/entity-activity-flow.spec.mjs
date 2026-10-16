@@ -36,6 +36,7 @@ for(const role of ['admin','logist','engineer'])test(`${role}: cumulative result
   const composer=()=>page.locator('#orderActivity textarea[name="body"]');
 
   // A comment has its own draft and must not dirty the task's operational form.
+  await activity.locator('[data-activity-compose]').click();
   await composer().fill(draft);
   await expect(page.locator('#orderSaveState')).toHaveText('Сохранено');
   await page.locator('#orderTab-scope').click();
