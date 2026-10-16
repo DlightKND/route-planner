@@ -83,7 +83,7 @@ export function createNotifications({db,userId,host,badge,onPush,onOpen,onError,
     status.textContent='Проверяем текущие состояния…';list.innerHTML='';count.textContent='';retry.hidden=true;
     try{const result=await loadDecisions(uid);if(!valid())return;const items=(result.items||[]).filter(notificationRoute);
       count.textContent=String(items.length)+(result.truncated?'+':'');status.textContent=result.truncated?'Показана часть очереди. Остальные записи доступны в заданиях и выездах.':items.length?'':'Сейчас нет записей, ожидающих вашей проверки.';
-      list.innerHTML=items.map(row=>`<article class="notice-decision-card"><span class="notice-kind">${esc(row.kind)}</span><h3>${esc(row.title)}</h3><p>${esc(row.body)}</p><a href="${esc(notificationRoute(row))}" data-decision-open>${esc(row.action)}</a></article>`).join('');
+      list.innerHTML=items.map(row=>`<article class="notice-decision-card"><span class="notice-kind">${esc(row.kind)}</span><h3>${esc(row.title)}</h3><p>${esc(row.body)}</p><a class="btn ${row.entity_kind==='order'?'amber':''}" href="${esc(notificationRoute(row))}" data-decision-open>${esc(row.action)}</a></article>`).join('');
       list.querySelectorAll('[data-decision-open]').forEach(a=>a.onclick=e=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;e.preventDefault();if(valid())onOpen(a.getAttribute('href'));});
     }catch{if(valid()){status.textContent='Не удалось проверить очередь решений.';retry.hidden=false;}}
   }
