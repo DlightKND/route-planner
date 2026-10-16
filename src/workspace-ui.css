@@ -502,7 +502,7 @@ dialog.presence-editor[open] { display:flex;flex-direction:column;overflow:hidde
 
 /* The map uses the same workspace hierarchy as assignments and trips. */
 .view-map .side.map-workspace { width:440px;height:calc(100% - 32px);background:var(--panel);backdrop-filter:none;-webkit-backdrop-filter:none;border-radius:16px; }
-.view-map .side.map-workspace.sheet-collapsed { height:auto; }
+.view-map .side.map-workspace.sheet-collapsed,.view-map .side.map-workspace.list-folded { height:auto; }
 .map-workspace #pointsBlock,.map-workspace #routeBlock { padding:0;border:0; }
 .map-workspace #sideTabs { flex:none;padding:0 20px;gap:16px;border-bottom:1px solid var(--line);background:transparent; }
 .map-workspace #sideTabs button { padding:14px 0;border:0;border-bottom:3px solid transparent;border-radius:0;background:transparent;box-shadow:none;color:var(--ink-dim);font:500 13px/1.4 var(--sans);white-space:nowrap;gap:6px; }

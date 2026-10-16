@@ -94,7 +94,7 @@ test('design state: map work and directory have one scope navigation and working
  await side.locator('#search').fill('');await expect(side.locator('#workFeed .wf-row').first()).toBeVisible();await side.locator('[data-sb=directory]').click();
  await expect(side.locator('[data-map-heading]')).toHaveText('Справочник точек');await expect(side.locator('#list .pt').first()).toBeVisible();
  await side.locator('[data-tf=base]').click();await expect(side.locator('#list')).not.toContainText('Коммунальное предприятие');await side.locator('[data-tf=all]').click();
- await capture(page,info,'map-directory',errors);await side.locator('#listHead').click();await expect(side.locator('#pointsBox')).toBeHidden();await side.locator('#listHead').click();await expect(side.locator('#pointsBox')).toBeVisible();
+ await capture(page,info,'map-directory',errors);const expanded=(await side.boundingBox()).height;await side.locator('#listHead').click();await expect(side.locator('#pointsBox')).toBeHidden();await expect.poll(async()=>(await side.boundingBox()).height).toBeLessThan(expanded-20);await side.locator('[data-sb=route]').click();await expect(side.locator('#rBuild')).toBeInViewport();await side.locator('[data-sb=directory]').click();await expect(side.locator('#pointsBox')).toBeHidden();await side.locator('#listHead').click();await expect(side.locator('#pointsBox')).toBeVisible();
 });
 test('design state: map route keeps actions visible and independent from scrolling settings',async({page},info)=>{
  const errors=await start(page,info,'map');await expandMapSheet(page);await page.locator('[data-sb=route]').click();const side=page.locator('.map-workspace');

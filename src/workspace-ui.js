@@ -143,7 +143,7 @@ export function frameMapWorkspace(root=document){
  const footer=element(root,'footer','map-route-footer');footer.append(route.querySelector('.route-primary'),root.getElementById('rStatus'));
  scroll.append(routeHead,stops,add,root.getElementById('rVariants'),route.querySelector('.route-settings'));route.append(scroll,footer);
  const paint=()=>{
-  const mode=tabs.querySelector('button.on')?.dataset.sb||'points';side.dataset.mapPanel=mode;
+  const mode=tabs.querySelector('button.on')?.dataset.sb||'points';side.dataset.mapPanel=mode;side.classList.toggle('list-folded',mode!=='route'&&root.getElementById('pointsBox').classList.contains('folded'));
   routeHead.querySelector('h2').textContent=Number(root.getElementById('rCount').textContent)>0?'План маршрута':'Создание маршрута';
   const directory=mode==='directory';head.querySelector('[data-map-heading]').textContent=directory?'Справочник точек':'В работе';
   head.querySelector('[data-map-description]').textContent=directory?'Клиенты, оборудование и депо.':'Заявки и машины, которым нужно внимание.';
