@@ -621,10 +621,11 @@ body *,body *::before,body *::after { box-shadow:none!important;text-shadow:none
 .mleg h3>span { font-weight:400;letter-spacing:0; }
 .mleg-period { padding:2px 0 16px;margin-bottom:16px;border-bottom:1px solid var(--line); }
 .mleg-tf { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }
-.mleg-time-field { min-width:0;padding:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px; }
-.mleg-time-field>label { display:block;margin:0 0 4px;padding:0;min-height:0;color:var(--ink-dim);font:600 9px/1.4 var(--sans);text-transform:uppercase;letter-spacing:.05em; }
-.mleg .mleg-time-field>input { display:block;width:100%;min-width:0;min-height:36px;margin:0;padding:4px 0;border:0;border-radius:4px;background:transparent;color:var(--ink);font:500 12px/1.5 var(--mono); }
-.mleg .mleg-time-field>input+input { border-top:1px solid var(--line);border-radius:0;margin-top:4px; }
+.mleg-time-field { display:grid;align-content:start;gap:8px;min-width:0;padding:0;background:transparent;border:0;border-radius:0; }
+.mleg-time-field>label { display:block;margin:0;padding:0;min-height:0;color:var(--ink-dim);font:500 11px/1.4 var(--sans);text-transform:none;letter-spacing:0; }
+/* Match the Summary period inputs, including full rounded field contours. */
+.view .mleg .mleg-time-field>input { display:block;width:100%;min-width:0;min-height:var(--control-h);margin:0;padding:8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2);color:var(--ink);font:400 14px/1.3 var(--sans); }
+.view .mleg .mleg-time-field>input:focus { border-color:var(--focus);background:var(--panel); }
 .mleg-period-footer { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;color:var(--ink-dim);font:10px/1.5 var(--sans); }
 .mleg-period-footer b { color:var(--ink);font-weight:500; }
 .mleg-period-footer>button { flex:none;min-height:44px;padding:6px 0 6px 8px;border:0;background:transparent;color:var(--ink);font:500 11px/1.4 var(--sans);cursor:pointer; }
@@ -636,6 +637,8 @@ body *,body *::before,body *::after { box-shadow:none!important;text-shadow:none
 .mleg-layer>input { appearance:none;-webkit-appearance:none;flex:none;display:grid;place-content:center;width:20px;height:20px;min-height:20px;margin:0;padding:0;border:1px solid var(--ink-faint);border-radius:4px;background:transparent;cursor:pointer; }
 .mleg-layer>input:checked { background:var(--accent);border-color:var(--accent); }
 .mleg-layer>input:checked::after { content:'';width:8px;height:4px;border-left:2px solid var(--on-accent);border-bottom:2px solid var(--on-accent);transform:translateY(-1px) rotate(-45deg); }
+html[data-theme=light] .mleg-layer>input { border:2px solid var(--ink-dim); }
+html[data-theme=light] .mleg-symbol { width:24px;border-radius:0;background:transparent;color:var(--ink); }
 .mleg-layer-content { flex:1;min-width:0; }
 .mleg-layer-title { display:flex;align-items:center;justify-content:space-between;gap:10px; }
 .mleg-layer-title>strong { font:600 12px/1.5 var(--sans);text-transform:uppercase;overflow-wrap:anywhere; }

@@ -74,7 +74,7 @@ export function installWorkspaceStructure(root=document){
  }
  for(const [id,title,description,prefix] of [
   ['plJobs','Заявки','Потребности клиентов и задания на исполнение','job'],
-  ['plOrders','Рабочая доска','Назначение, выполнение и проверка заданий','order'],
+  ['plOrders','Задания','Назначение, выполнение и проверка заданий','order'],
   ['plTrips','Выезды','Планы поездок, маршруты и GPS-журнал','trip']
  ]){
   const section=root.getElementById(id);if(!section)continue;
