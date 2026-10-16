@@ -172,7 +172,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   }
   if(lateScheduleCut)ride.day_plan={start:{d:'2026-10-05',t:7},cuts:[{after:2,at:{d:'2026-10-05',t:18}}]};
   task.trip_service_orders = [{ trip_id: trip, trips: ride }];
-  if(runningSchedule){ride.status='in_progress';ride.started_at='2026-10-05T04:00:00Z';}
+  if(runningSchedule){ride.status='in_progress';ride.started_at='2026-10-05T04:00:00Z';request.job_works[0].hours=24;ride.econ_snapshot.workH=ride.plan_econ_snapshot.workH=24;ride.day_plan={start:{d:'2026-10-05',t:7},cuts:[{after:9,at:{d:'2026-10-06',t:7}}]};}
   if(legacyCrewMissing){ride.lead_engineer=null;ride.engineer_ids=[];ride.status='done';}
   const stays = [
     {

@@ -3256,16 +3256,20 @@ function saveRange(kind){try{localStorage.setItem('dl_range_'+kind,JSON.stringif
 function renderSummaryPeriod(){
  const head=document.querySelector('.view-dash .pane-head');if(!head)return;
  let bar=$('summaryPeriod');if(!bar){bar=document.createElement('div');bar.id='summaryPeriod';bar.className='summary-period';bar.setAttribute('role','group');bar.setAttribute('aria-label','Период сводки');head.append(bar);}
+ const focused=bar.contains(document.activeElement)?document.activeElement:null;
+ const focusKey=focused&&['data-summary-preset','data-summary-shift','data-summary-dates','data-summary-today'].find(key=>focused.hasAttribute(key));
+ const focusValue=focusKey?focused.getAttribute(focusKey):null;
  const range=dashRanges.summary,unit=summaryUnit(range);
  bar.innerHTML='<div class="summary-period-top"><button type="button" class="summary-period-today" data-summary-today>Сегодня</button><div class="summary-period-presets" role="group" aria-label="Масштаб периода">'+[['week','Неделя'],['fortnight','2 недели'],['month','Месяц']].map(([key,label])=>'<button type="button" data-summary-preset="'+key+'" aria-pressed="'+(unit===key)+'">'+label+'</button>').join('')+'</div></div>'
   +'<div class="summary-period-range"><button type="button" data-summary-shift="-1" aria-label="Предыдущий период">←</button><button type="button" data-summary-dates aria-label="Выбрать период: '+esc(summaryPeriodLabel(range))+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/></svg><span>'+esc(summaryPeriodLabel(range))+'</span></button><button type="button" data-summary-shift="1" aria-label="Следующий период">→</button></div>';
  bar.querySelectorAll('[data-summary-preset]').forEach(b=>b.onclick=()=>setSummaryPeriod(summaryPreset(todayISO(),b.dataset.summaryPreset)));
  bar.querySelectorAll('[data-summary-shift]').forEach(b=>b.onclick=()=>setSummaryPeriod(shiftSummaryPeriod(dashRanges.summary,+b.dataset.summaryShift)));
  bar.querySelector('[data-summary-today]').onclick=()=>{const current=summaryUnit(dashRanges.summary);setSummaryPeriod(current==='custom'?{from:todayISO(),to:isoOf(utcOf(todayISO())+utcOf(dashRanges.summary.to)-utcOf(dashRanges.summary.from))}:summaryPreset(todayISO(),current));};
+ if(focusKey)bar.querySelector('['+focusKey+'="'+focusValue+'"]')?.focus({preventScroll:true});
  bar.querySelector('[data-summary-dates]').onclick=async()=>{
   const picked=await promptDialog('Период сводки',[{key:'from',label:'Начало периода',type:'date',value:dashRanges.summary.from,required:true},{key:'to',label:'Конец периода',type:'date',value:dashRanges.summary.to,required:true}],{okText:'Применить период'});
   if(!picked)return;if(picked.from>picked.to)[picked.from,picked.to]=[picked.to,picked.from];
-  try{calendarPeriodBounds(picked);setSummaryPeriod(picked);}catch(e){notify(e.message,'warn');}
+  try{calendarPeriodBounds(picked);setSummaryPeriod(picked);$('summaryPeriod').querySelector('[data-summary-dates]').focus({preventScroll:true});}catch(e){notify(e.message,'warn');}
  };
 }
 function setSummaryPeriod(range){dashRanges.summary={...range};saveRange('summary');Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderDashboard();}
