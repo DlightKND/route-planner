@@ -54,7 +54,7 @@ export function installWorkspaceStructure(root=document){
  const job=root.querySelector('.view-job'),trip=root.querySelector('.view-trip');
  if(job){
   const estimate=root.getElementById('jobEstimatePane'),base=element(root,'section','card request-estimate-base'),heading=element(root,'header','workspace-section-head');
-  heading.innerHTML='<div><p class="design-eyebrow">Заявка</p><h2>Смета заявки</h2><p class="hint">Согласованный объём и плановая стоимость. Фактические результаты ведутся в заданиях.</p></div>';
+  heading.innerHTML='<div><h2>Смета заявки</h2><p class="hint">Согласованный объём и плановая стоимость. Фактические результаты ведутся в заданиях.</p></div>';
   base.innerHTML='<h3>Базовая смета</h3>';const lines=element(root,'div','request-estimate-lines');for(const card of [...estimate.querySelectorAll(':scope>.card')])lines.append(card);base.append(lines,root.getElementById('jobHeadEcon'));
   const related=element(root,'section','card request-estimate-assignments');related.innerHTML='<h3>Задания по заявке</h3><p class="hint">Состав, выполнение и дополнительные потребности — в рабочих заданиях.</p><button type="button" class="btn" data-estimate-tasks>К заданиям заявки →</button>';related.querySelector('button').onclick=()=>{root.getElementById('jobTabOverview').click();root.getElementById('jobOrders').scrollIntoView?.({block:'start'});};estimate.append(heading,base,related);
   const context=element(root,'section','card request-context');context.id='requestContext';context.hidden=true;
@@ -79,7 +79,7 @@ export function installWorkspaceStructure(root=document){
  ]){
   const section=root.getElementById(id);if(!section)continue;
   const sticky=section.querySelector('.stickyhead'),header=element(root,'header','workspace-dispatcher-head'),line=element(root,'div','workspace-heading-row');
-  line.innerHTML=`<div><p class="design-eyebrow">Диспетчерская · ${escape(title)}</p><h1>${escape(title)}</h1><p class="workspace-subtitle">${escape(description)}</p></div>`;
+  line.innerHTML=`<div><h1>${escape(title)}</h1><p class="workspace-subtitle">${escape(description)}</p></div>`;
   const add=root.getElementById(prefix+'Add');if(add){const label=add.querySelector('.dispatcher-add-label');if(label)label.textContent='Создать';line.append(add);}
   header.append(line,sticky.querySelector('.subtabs'));sticky.prepend(header);
   const toolbar=sticky.querySelector('.dispatcher-toolbar');toolbar.classList.add('workspace-filterbar');
@@ -127,7 +127,7 @@ export function frameMapWorkspace(root=document){
  const side=root.querySelector('.view-map .side');if(!side||side.classList.contains('map-workspace'))return;
  side.classList.add('map-workspace');side.setAttribute('aria-label','Рабочая панель карты');
  const points=root.querySelector('#pointsBlock>.block-body'),tabs=root.getElementById('sideTabs');tabs.setAttribute('aria-label','Раздел карты');
- const head=element(root,'header','map-workspace-head');head.innerHTML='<div><p class="design-eyebrow">Операционная карта</p><h2 data-map-heading>В работе</h2><p class="map-workspace-description" data-map-description></p></div>';
+ const head=element(root,'header','map-workspace-head');head.innerHTML='<div><h2 data-map-heading>В работе</h2><p class="map-workspace-description" data-map-description></p></div>';
  head.append(root.getElementById('pointTools'));points.prepend(head);
  const scope=root.getElementById('mapScope');scope.hidden=true;scope.setAttribute('aria-hidden','true');points.querySelector('.chipsep')?.remove();
  const tools=root.getElementById('sideTools');tools.classList.add('map-workspace-filters');
@@ -136,7 +136,7 @@ export function frameMapWorkspace(root=document){
  root.getElementById('rWp').placeholder='Найти адрес или место';
  const route=root.querySelector('#routeBlock>.block-body'),scroll=element(root,'div','map-route-scroll');
  route.querySelector('.route-panel-title')?.remove();
- const routeHead=element(root,'header','map-workspace-head');routeHead.innerHTML='<div><p class="design-eyebrow">План поездки</p><h2>Создание маршрута</h2><p class="map-workspace-description">Собери остановки и проверь порядок перед построением.</p></div>';
+ const routeHead=element(root,'header','map-workspace-head');routeHead.innerHTML='<div><h2>Создание маршрута</h2><p class="map-workspace-description">Собери остановки и проверь порядок перед построением.</p></div>';
  const stops=element(root,'section','map-route-section');stops.innerHTML='<h3>Остановки маршрута</h3>';stops.append(root.getElementById('rStops'));
  const add=element(root,'section','map-route-section map-route-add');add.innerHTML='<h3>Добавить остановку</h3><label for="rWp">Адрес или название места</label>';
  add.append(route.querySelector('.route-address'),root.getElementById('rWpMode'),root.getElementById('rWpHint'),root.getElementById('rWpRes'));
@@ -184,7 +184,7 @@ export function presentRequestWorkspace({saved,editable,client,equipment,status,
  const title=root.getElementById('jobTitle');let stage=view.querySelector('.request-workspace-stage');if(!stage&&title){stage=element(root,'span','design-status request-workspace-stage');title.parentElement.append(stage);}if(stage){stage.textContent=status||'';stage.hidden=!saved;}
  const actions=root.getElementById('jobActs');
  if(!context.querySelector('.request-context-data')){
-  context.innerHTML='<div class="workspace-section-head"><div><p class="design-eyebrow">Заявка</p><h3>Контекст клиента</h3></div><button class="btn sm ghost" id="requestEditContext" type="button">Изменить</button></div><dl class="request-context-data"></dl><div class="request-contact-actions"></div>';
+  context.innerHTML='<div class="workspace-section-head"><div><h3>Контекст клиента</h3></div><button class="btn sm ghost" id="requestEditContext" type="button">Изменить</button></div><dl class="request-context-data"></dl><div class="request-contact-actions"></div>';
   context.querySelector('.request-contact-actions').append(actions);
   const responsibility=root.getElementById('jobResponsibilityMeta');if(responsibility){responsibility.className='workspace-responsibility-caption';context.querySelector('.request-contact-actions').before(responsibility);}
  }
@@ -220,7 +220,7 @@ export function frameOrderWorkspace({record,editable,people},root=document){
   const emptyGrid=editor.querySelector('.order-grid');if(emptyGrid&&!emptyGrid.children.length)emptyGrid.remove();
   positionOrderResult(root);
  }
- const travel=root.getElementById('orderPane-travel');if(travel){const intro=element(doc,'header','order-travel-head');intro.innerHTML='<div><p class="design-eyebrow">План и экономика</p><h2>Выезды и распределение</h2><p class="hint">Маршрут, команда и подтверждённые доли затрат этого задания.</p></div>';const actions=root.getElementById('orderTravel')?.querySelector('.order-line-adds');if(actions)intro.append(actions);travel.prepend(intro);}
+ const travel=root.getElementById('orderPane-travel');if(travel){const intro=element(doc,'header','order-travel-head');intro.innerHTML='<div><h2>Выезды и распределение</h2><p class="hint">Маршрут, команда и подтверждённые доли затрат этого задания.</p></div>';const actions=root.getElementById('orderTravel')?.querySelector('.order-line-adds');if(actions)intro.append(actions);travel.prepend(intro);}
  const execution=root.getElementById('orderExecution'),results=root.getElementById('orderResults');if(execution&&results){const state=element(doc,'section','result-saved-state');state.id='orderResultSavedState';execution.firstElementChild?.replaceWith(state);const title=element(doc,'h3','result-section-title');title.textContent='Выполненные позиции';results.before(title);const fields=element(doc,'div','result-final-fields'),date=root.getElementById('orderResultDate')?.closest('label'),note=root.getElementById('orderResultNote')?.closest('label');if(date)fields.append(date);if(note)fields.append(note);results.after(fields);}
  const savebar=editor.querySelector('.order-savebar');if(savebar){const state=root.getElementById('orderSaveState'),save=root.getElementById('orderSave');if(state)inner.querySelector('.entity-head-meta').append(state);if(save)inner.querySelector('.entity-header-actions').append(save);savebar.remove();}
 }
