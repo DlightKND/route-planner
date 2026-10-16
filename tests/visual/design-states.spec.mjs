@@ -230,7 +230,7 @@ test('kanban: status columns stay in one adaptive row and the last column remain
    expect((await columns.first().boundingBox()).width).toBeGreaterThan(rects[0].width);
    expect(await board.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
   }
-  await clickDispatcherControl(page,'.view.active .planner-filter-menu>summary');await page.locator('#'+mode).selectOption('list');await page.keyboard.press('Escape');await expect(board).toHaveClass('klist');
+  await clickDispatcherControl(page,'.view.active .planner-filter-menu:visible>summary');await page.locator('#'+mode).selectOption('list');await page.keyboard.press('Escape');await expect(board).toHaveClass('klist');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);
  }
 });
