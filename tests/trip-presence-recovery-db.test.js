@@ -24,6 +24,8 @@ beforeAll(async()=>{
  const responsibility=file('../supabase/migrations/20260929110000_entity_responsibility.sql'),start=responsibility.indexOf('function dlight_private.responsibility_manager('),prefix=responsibility.lastIndexOf('create ',start);await db.exec(responsibility.slice(prefix,responsibility.indexOf('$$;',start)+3));
  await db.exec(file('../supabase/migrations/20261012135646_trip_track_presence_recovery.sql'));
  await db.exec(file('../supabase/migrations/20261012144614_trip_presence_recovery_refresh.sql'));
+ await db.exec("create function public.is_owner_or_mgr(uuid) returns boolean language sql stable as $$select public.user_role() in ('admin','logist') or auth.uid()=$1$$;create table trip_tracking_sessions(trip_id uuid,state text,finish_candidate_at timestamptz);");
+ await db.exec(file('../supabase/migrations/20261017094833_validated_trip_mileage.sql'));
 },30000);
 afterAll(async()=>await db?.close());
 beforeEach(async()=>{
@@ -86,4 +88,58 @@ it('uses the captured GPS cutoff while new later messages arrive',async()=>{
  await as(1);const {c,m}=await calculate();await db.exec('reset role');const p=point(100,541);
  await q('insert into vehicle_positions values($1,$2,$3,$4,$5)',[999,id(10),p.ts,p.lat,p.lng]);await as(1);
  await save(c,m);expect((await stay()).minutes_raw).toBe(180);
+});
+
+it('replaces the legacy 21747 km fact when a client only saves its reviewed reconstruction',async()=>{
+ await q('update trips set fact_km=21747,fact_km_source=null where id=$1',[id(10)]);
+ await as(1);const {c,m}=await calculate(),r=await save(c,m);
+ const [t]=await q('select fact_km,fact_km_source from trips where id=$1',[id(10)]);
+ expect(+t.fact_km).toBe(Math.round(m.km*10)/10);expect(t.fact_km_source).toBe('track');expect(r.fact_updated).toBe(true);
+ expect(+(await q('select km from trip_tracks where trip_id=$1',[id(10)]))[0].km).toBeCloseTo(m.km,6);
+ const retry=await save(c,m);expect(retry.repeated).toBe(true);expect(retry.fact_updated).toBe(false);
+});
+it('does not replace an explicit odometer during attendance reconstruction',async()=>{
+ await q("update trips set fact_km=1700,fact_km_source='odometer' where id=$1",[id(10)]);
+ await as(1);const {c,m}=await calculate(),r=await save(c,m);
+ expect((await q('select fact_km,fact_km_source from trips where id=$1',[id(10)]))[0]).toEqual({fact_km:'1700',fact_km_source:'odometer'});expect(r.fact_updated).toBe(false);
+});
+it('rejects a financial GPS total that differs from its retained geometry atomically',async()=>{
+ await as(1);const {c,m}=await calculate();
+ await deny(()=>q('select trip_track_rebuild_save($1,$2,$3,$4,$5,$6,$7,$8)',[id(10),c.trip.workbench_revision,c.source_to,c.source_digest,m,21747,'track','']),/совпадать/);
+ expect(await q('select * from trip_tracks')).toHaveLength(0);expect(await q('select * from trip_stays')).toHaveLength(0);
+});
+it('rejects inconsistent segment sums before writing a map or a financial fact',async()=>{
+ await as(1);const {c,m}=await calculate();m.km+=1;await deny(()=>save(c,m),/отрезками/);
+ expect(await q('select * from trip_tracks')).toHaveLength(0);
+});
+it('does not accept a numeric fact with an unspecified source',async()=>{
+ await as(1);const {c,m}=await calculate();
+ await deny(()=>q('select trip_track_rebuild_save($1,$2,$3,$4,$5,$6,$7,$8)',[id(10),c.trip.workbench_revision,c.source_to,c.source_digest,m,100,null,'']),/Некорректный факт/);
+});
+it.each([null,'track'])('closes the engineers trip without promoting raw or stale %s mileage',async source=>{
+ await q("select set_config('dlight.via_rpc','1',true)");
+ await q("update trips set status='in_progress',finished_at=null,fact_km=21747,fact_km_source=$2 where id=$1",[id(10),source]);
+ await as(3);expect((await q('select trip_finish($1) state',[id(10)]))[0].state).toBe('finished');
+ const [t]=await q('select status,fact_km,fact_km_source,fact_km_note from trips where id=$1',[id(10)]);
+ expect(t.status).toBe('finished');expect(t.fact_km).toBeNull();expect(t.fact_km_source).toBeNull();expect(t.fact_km_note).toContain('ожидает проверки');
+});
+it('preserves a managers explicit odometer when the engineer closes the trip',async()=>{
+ await q("select set_config('dlight.via_rpc','1',true)");
+ await q("update trips set status='in_progress',finished_at=null,fact_km=1700,fact_km_source='odometer' where id=$1",[id(10)]);
+ await as(3);await q('select trip_finish($1)',[id(10)]);
+ const [t]=await q('select fact_km,fact_km_source from trips where id=$1',[id(10)]);
+ expect(+t.fact_km).toBe(1700);expect(t.fact_km_source).toBe('odometer');
+});
+it('restricts the authoritative-mileage read to the existing trip access scope',async()=>{
+ await q("update trips set fact_km=120,fact_km_source='track' where id=$1",[id(10)]);
+ await as(3);expect(+(await q('select trip_fact_km($1) km',[id(10)]))[0].km).toBe(120);
+ await as(99);expect((await q('select trip_fact_km($1) km',[id(10)]))[0].km).toBeNull();
+ await as(null,'anon');await deny(()=>q('select trip_fact_km($1)',[id(10)]),/permission denied/);
+});
+it('blocks confirmation of the legacy raw total before it can reach odometer accounting',async()=>{
+ await q('update trips set fact_km=21747,fact_km_source=null where id=$1',[id(10)]);
+ await as(5);await deny(()=>q('select trip_confirm($1)',[id(10)]),/Сначала проверь/);
+ expect((await q('select status from trips where id=$1',[id(10)]))[0].status).toBe('finished');
+ const {c,m}=await calculate();await save(c,m);
+ expect((await q('select trip_confirm($1) state',[id(10)]))[0].state).toBe('done');
 });

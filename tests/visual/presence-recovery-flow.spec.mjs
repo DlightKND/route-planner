@@ -25,6 +25,11 @@ test('manager rebuilds the track, edits only the GPS gap and keeps approval on r
  await expect(row.locator('[data-presence="minutes_mgr"]')).toHaveValue('360');
  expect(await row.locator('[data-presence="minutes_mgr"]').evaluate(e=>e.readOnly)).toBe(true);
  expect(orsCalls).toBe(1);
+ const firstSave=await page.evaluate(()=>window.__visualQA.recoveryWrites.find(w=>w.name==='trip_track_rebuild_save').args);
+ expect(firstSave.p_fact_source).toBe('track');
+ expect(firstSave.p_fact_km).toBe(Math.round(firstSave.p_track.km*10)/10);
+ expect(firstSave.p_fact_km).toBeGreaterThan(100);
+ await expect(page.locator('#tpPresence .wb-metrics')).toContainText(firstSave.p_fact_km.toLocaleString('ru-RU'));
  await row.locator('[data-presence-edit]').click();
  const dialog=page.locator('dialog.presence-editor');await expect(dialog).toBeVisible();
  const extra=dialog.locator('[data-recovery-part]');await expect(extra).toHaveValue('180');
