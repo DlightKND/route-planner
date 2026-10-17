@@ -521,7 +521,9 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
           stays.splice(0,stays.length,...args.p_track.presence.stays.map((s,i)=>({...s,id:'recovery-'+i,trip_id:trip,status:'detected',crew_ids:[engineer],crew_source:'snapshot',minutes_raw:s.gps_minutes,minutes_mgr:null,recovery_acceptance:{}})));
           tables.trip_tracks=tables.trip_tracks.filter(t=>t.trip_id!==trip);tables.trip_tracks.push({trip_id:trip,km:args.p_track.km,data:structuredClone(args.p_track),updated_at:stamp});ride.workbench_revision++;
         }
-        audit.recoveryWrites.push({name,args:structuredClone(args)});return {data:{revision:ride.workbench_revision,repeated:same},error:null};
+        const factUpdated=args.p_fact_km!=null&&(ride.fact_km!==args.p_fact_km||ride.fact_km_source!==args.p_fact_source);
+        if(args.p_fact_km!=null)Object.assign(ride,{fact_km:args.p_fact_km,fact_km_source:args.p_fact_source,fact_km_note:args.p_fact_note});
+        audit.recoveryWrites.push({name,args:structuredClone(args)});return {data:{revision:ride.workbench_revision,repeated:same,fact_updated:factUpdated},error:null};
       }
       if(presenceRecoveryJourney&&name==='trip_presence_save_tasks'){
         if(role==='engineer')return reject(name);

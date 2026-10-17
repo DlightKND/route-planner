@@ -7,7 +7,7 @@ import { createUnassignedTracks } from './unassigned-tracks.js';
 import './unassigned-tracks.css';
 import { installModalShell, protectNativeForm } from './modal-shell.js';
 import { openAccountProfile, roleName, initials } from './account-profile.js';
-import { resolveFactTrack } from './core/fact-track.js';
+import { resolveFactTrack, validatedTrackFact } from './core/fact-track.js';
 import {rebuildTripTrack,presenceBounds,tripTimeSummary} from './core/trip-presence-recovery.js';
 // Приложение DLIGHT. Пока это цельный перенос боевого index.html в сборку:
 // код тот же, но теперь это модуль: ядро подключается импортом.
@@ -5832,7 +5832,19 @@ async function loadWorkbench(id){
       if(!detect.isConnected||!canReview()){notify('Доступ или выезд изменился. Открой карточку заново.','warn');return;}
       if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки.','warn');return;}
       detect.disabled=true;
-      try{const measured=await measureTripKm(id);if(!measured.measure)throw new Error(measured.why||'Нет GPS-точек для проверки');if(!canReview())throw new Error('Выезд или доступ изменились');await writeFactTrack(id,measured.measure);if(canReview()){await loadWorkbench(id);await loadFactHours();tripEcon();}showToast('Трек проверен; предложения присутствия готовы');}
+      try{
+        const measured=await measureTripKm(id);
+        if(!measured.ok)throw new Error(measured.why||'Нет достоверного GPS-трека для проверки');
+        if(!canReview())throw new Error('Выезд или доступ изменились');
+        await writeFactTrack(id,measured.measure);
+        if(canReview()){
+          await loadWorkbench(id);await loadFactHours();
+          if(measured.measure.rebuildContext.trip.status==='done'&&!await refreshTripEcon(id))
+            notify('Трек и пробег сохранены, но экономику обновить не удалось. Повтори пересчёт перед использованием финансового итога.','warn');
+          tripEcon();renderTpFactKm();
+        }
+        showToast('Трек проверен; предложения присутствия готовы');
+      }
       catch(e){notify(e.message,'err');if(detect.isConnected&&canReview())detect.disabled=false;}
       finally{busyDone();}
     };
@@ -7794,19 +7806,14 @@ async function measureTripKm(tid){
   const m=await rebuildTripTrack(raw,{...opts,stayRadiusM:appSettings.stay_radius_m,stayMinMinutes:appSettings.stay_min_minutes},{...tripEnds(t),stops:context.stops,started_at:t.started_at,finished_at:t.finished_at},makeReach());
   m.rebuildContext=context;m.rebuildUser=requestedUser;
   Object.assign(m.presence,{source_digest:context.source_digest,source_from:context.source_from,source_to:context.source_to});
-  lastMeasure[tid]=m;
   if(m.verdict.indexOf('трек недостоверен')===0){
     const by=Object.keys(m.reasons||{}).map(k=>k+': '+m.reasons[k]).join('; ');
     return {ok:false,why:m.verdict+(by?('. Причины — '+by):''),measure:m};
   }
 
-  const note=[];
-  if(m.dropped.length) note.push('вырезано аномалий: '+m.dropped.length
-    +' из '+(m.dropped.length+m.points.length)+' точек');
-  if(m.roadKm) note.push('по дорогам: '+Math.round(m.roadKm)+' км');
-  if(m.lineKm) note.push('прямыми, маршрут не строился: '+Math.round(m.lineKm)+' км');
-  if(m.jitterKm>=0.5) note.push('дрожание на стоянке: '+m.jitterKm.toFixed(1)+' км');
-  return {ok:true,km:Math.round(m.km*10)/10,note:note.join('; '),measure:m};
+  const fact=validatedTrackFact(m);
+  if(!fact)return {ok:false,why:'Некорректный итог проверки пробега',measure:m};
+  return {ok:true,...fact,measure:m};
 }
 
 // Ручной ввод одометра — фолбэк, когда треку верить нельзя. Человек читает
@@ -7871,8 +7878,15 @@ function slimMeasure(m){
 async function writeFactTrack(tid,m,fact=null){
   const context=m.rebuildContext;if(!context)throw new Error('Нет снимка GPS для сохранения. Повтори проверку трека.');
   if(m.rebuildUser!==session?.user?.id)throw new Error('Аккаунт изменился. Повтори проверку трека.');
-  const {data,error}=await sb.rpc('trip_track_rebuild_save',{p_trip:tid,p_expected:context.trip.workbench_revision,p_source_to:context.source_to,p_source_digest:context.source_digest,p_track:slimMeasure(m),p_fact_km:fact?.km??null,p_fact_source:fact?.source??null,p_fact_note:fact?.note??null});
-  if(error)throw error;return data;
+  // Attendance review refreshes GPS mileage too, while an explicit odometer
+  // remains authoritative until the user explicitly requests replacement.
+  const nextFact=fact??(context.trip.fact_km_source==='odometer'?null:validatedTrackFact(m));
+  const track=slimMeasure(m);
+  const {data,error}=await sb.rpc('trip_track_rebuild_save',{p_trip:tid,p_expected:context.trip.workbench_revision,p_source_to:context.source_to,p_source_digest:context.source_digest,p_track:track,p_fact_km:nextFact?.km??null,p_fact_source:nextFact?.source??null,p_fact_note:nextFact?.note??null});
+  if(error)throw error;
+  // A failed save must never make the map display an unpersisted calculation.
+  lastMeasure[tid]={...m,stored:true,at:track.at};
+  return {...data,fact_updated:data.fact_updated??!!nextFact};
 }
 
 // Читаем сохранённый разбор. Пустой ответ — это не ошибка: у выездов,
