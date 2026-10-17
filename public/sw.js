@@ -71,6 +71,27 @@ self.addEventListener('fetch', (event) => {
   const sameOrigin = url.origin === self.location.origin;
   if (!sameOrigin && !ASSET_HOSTS.includes(url.hostname)) return;
 
+  // Installed launch artwork comes from the manifest, not the favicon.
+  // Revalidate it before returning a cached copy so an update check does not
+  // receive yesterday's icon URLs. Keep the last good manifest for offline use.
+  if (sameOrigin && (req.destination === 'manifest'
+      || url.pathname === new URL('manifest.json', self.registration.scope).pathname)) {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req, { cache: 'no-cache' });
+        if (fresh.ok) {
+          const copy = fresh.clone();
+          await caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+          return fresh;
+        }
+        return (await caches.match(req)) || fresh;
+      } catch {
+        return (await caches.match(req)) || Response.error();
+      }
+    })());
+    return;
+  }
+
   // Навигация (сам index.html) — сеть первой: новая сборка приезжает сразу,
   // как только есть связь.
   if (req.mode === 'navigate') {
