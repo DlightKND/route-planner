@@ -26,6 +26,7 @@ beforeAll(async()=>{
  await db.exec(file('../supabase/migrations/20261012144614_trip_presence_recovery_refresh.sql'));
  await db.exec("create function public.is_owner_or_mgr(uuid) returns boolean language sql stable as $$select public.user_role() in ('admin','logist') or auth.uid()=$1$$;create table trip_tracking_sessions(trip_id uuid,state text,finish_candidate_at timestamptz);");
  await db.exec(file('../supabase/migrations/20261017094833_validated_trip_mileage.sql'));
+ await db.exec(file('../supabase/migrations/20261017104054_gps_anchor_serialization.sql'));
 },30000);
 afterAll(async()=>await db?.close());
 beforeEach(async()=>{
@@ -142,4 +143,19 @@ it('blocks confirmation of the legacy raw total before it can reach odometer acc
  expect((await q('select status from trips where id=$1',[id(10)]))[0].status).toBe('finished');
  const {c,m}=await calculate();await save(c,m);
  expect((await q('select trip_confirm($1) state',[id(10)]))[0].state).toBe('done');
+});
+
+it('accepts GPS anchors round-tripped through the production 15-digit JSON representation',async()=>{
+ await as(1);const {c,m}=await calculate();
+ const anchor=m.presence.stays[0].presence_evidence.recovery_parts[0].anchor_to;
+ const original=anchor.lng;anchor.lng=Number(original.toPrecision(15));
+ expect(anchor.lng).not.toBe(original);expect(Math.abs(anchor.lng-original)).toBeLessThan(1e-12);
+ await save(c,m);expect(await q('select * from trip_tracks')).toHaveLength(1);
+});
+it.each(['anchor_from','anchor_to'])('still rejects a changed %s coordinate and rolls back mileage',async key=>{
+ await as(1);const {c,m}=await calculate();
+ m.presence.stays[0].presence_evidence.recovery_parts[0][key].lng+=1e-10;
+ await deny(()=>save(c,m),/Опоры достройки/);
+ expect(await q('select * from trip_tracks')).toHaveLength(0);
+ expect((await q('select fact_km from trips where id=$1',[id(10)]))[0].fact_km).toBeNull();
 });
