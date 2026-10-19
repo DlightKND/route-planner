@@ -106,13 +106,13 @@ test('design state: schedule ellipsis leaves room for the stop action',async({pa
 });
 test('design state: presence evidence and decision stay separate',async({page},info)=>{
  const errors=await start(page,info,'trip/'+fixtureIDs.trip);await page.locator('[data-trip-tab=presence]').click();
- await page.locator('#tpPresence [data-presence-edit]').first().click();const dialog=page.locator('dialog.presence-editor');await expect(dialog).toBeVisible();
- await expect(dialog.locator('.presence-evidence-panel')).toBeVisible();await expect(dialog.locator('.presence-decision-panel')).toBeVisible();
- await expect(dialog.locator('[data-presence-id]')).toHaveCount(1);await capture(page,info,'presence-review',errors);
+ const workspace=page.locator('.presence-review-workspace');await expect(workspace).toBeVisible();
+ await expect(workspace.locator('.presence-review-sidebar')).toBeVisible();await expect(workspace.locator('.presence-review-detail')).toBeVisible();
+ await capture(page,info,'presence-review',errors);
 });
 test('design state: GPS resolution separates the operation, parameters and saved facts',async({page},info)=>{
  const errors=await start(page,info,'planner/tracking',{role:'admin',unassignedJourney:true});
- await page.getByRole('button',{name:'Создать цепочку',exact:true}).click();const overlay=page.locator('#promptOverlay');
+ if(page.viewportSize().width<=760)await page.locator('[data-ut-details]').first().click();await page.getByRole('button',{name:'Создать документы',exact:true}).click();const overlay=page.locator('#promptOverlay');
  await expect(overlay.locator('.gps-resolution-workspace')).toBeVisible();await expect(overlay.locator('[data-gps-choice]')).toHaveCount(3);
  await overlay.locator('[data-pf=title]').fill('Черновик названия');await expect(overlay.locator('#promptYes')).toBeInViewport();await expect(overlay.locator('#promptNo')).toBeInViewport();await capture(page,info,'gps-resolution',errors);
  await overlay.locator('[data-gps-choice=charge]').click();await expect(overlay.locator('[data-pf=km]')).toBeVisible();await expect(overlay.locator('.gps-resolution-summary')).toContainText('12,5');

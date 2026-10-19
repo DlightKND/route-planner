@@ -7,7 +7,7 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const n = v => v == null ? '—' : (+v).toLocaleString('ru-RU',{maximumFractionDigits:2});
 const time = v => v ? new Date(v).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Kyiv'}) : '—';
 
-export function presenceHTML(data, jobs, profiles, {editor = false, orders = [], readonly = false} = {}) {
+export function presenceHTML(data, jobs, profiles, {editor = false, orders = [], readonly = false, workspace = false} = {}) {
   const summary = presenceSummary(data.stays), t = data.trip;
   const knownApproved=(data.stays||[]).some(s=>s.status==='approved'&&s.job_id&&s.minutes_mgr!=null&&['snapshot','manager'].includes(s.crew_source)&&s.crew_ids?.length);
   const presenceHours=knownApproved?summary.approved:null;
@@ -67,7 +67,7 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
     return `<tr data-presence-id="${esc(s.id)}"><td class="presence-place-cell" data-label="Интервал">${place}${time(s.stay_from)}<br>${time(s.stay_to)}${evidenceLabel(s)}</td>
       <td data-label="Объект / заявка"><select data-presence="job_id" aria-label="Заявка стоянки"><option value="">Не привязана</option>${candidateJobs.map(j=>`<option value="${esc(j.id)}" ${j.id===s.job_id?'selected':''}>${esc(j.name)}</option>`).join('')}</select></td>
       <td data-label="Команда"><select data-presence="crew_ids" multiple aria-label="Присутствовавшие инженеры">${profiles.filter(p=>p.role==='engineer'||crew.includes(p.id)).map(p=>`<option value="${esc(p.id)}" ${crew.includes(p.id)?'selected':''}>${esc(p.full_name||'Инженер')}</option>`).join('')}</select>${s.crew_source==='legacy_unverified'?'<div class="hint">Исторический состав не подтверждён</div>':''}</td>
-      <td data-label="Задание · доля человеко-часов">${allocationCell(s,editor)}</td>
+      <td data-label="Задание · доля человеко-часов">${allocationCell(s,editor||workspace)}</td>
       <td data-label="Минуты на человека"><input data-presence="minutes_mgr" aria-label="Минуты присутствия" type="number" min="${esc(bounds?.min??0)}" ${bounds?`max="${esc(bounds.max)}" readonly aria-readonly="true"`:""} step="any" value="${esc(mins??'')}"><div class="hint" data-presence-total>${n(hrs)} чел.-ч${bounds?" · итог по GPS и выбранным достройкам":""}</div>${recoveryControls(s)}</td>
       <td data-label="Проверка"><select data-presence="status" aria-label="Результат проверки"><option value="" ${!suggested&&!['approved','rejected'].includes(s.status)?'selected':''}>Проверить позже</option><option value="approved" ${suggested||s.status==='approved'?'selected':''}>${suggested?'Присутствие · предложено':'Присутствие'}</option><option value="rejected" ${s.status==='rejected'?'selected':''}>Не учитывать</option></select></td></tr>`;
   }).join('');

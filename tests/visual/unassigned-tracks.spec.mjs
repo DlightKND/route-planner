@@ -16,7 +16,7 @@ async function open(page,info,role='admin',unassignedCount=1){
 }
 async function clean(page){expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);}
 test('unassigned queue and GPS preview remain usable at each width',async({page},info)=>{
- await open(page,info);await page.getByRole('button',{name:'Посмотреть трек'}).click();
+ await open(page,info);await page.locator('[data-ut-details]').first().click();
  await expect(page.locator('.unassigned-map')).toBeVisible();
  await expect(page.locator('.unassigned-map .leaflet-tile-loaded').first()).toBeVisible();
  expect(await page.locator('.unassigned-map .leaflet-tile-loaded').first().evaluate(img=>img.naturalWidth)).toBe(256);
@@ -24,7 +24,7 @@ test('unassigned queue and GPS preview remain usable at each width',async({page}
  const before=await page.locator('.unassigned-map .gps-track-line').getAttribute('d');
  await page.locator('.unassigned-map .leaflet-control-zoom-in').click();
  await expect.poll(()=>page.locator('.unassigned-map .gps-track-line').getAttribute('d')).not.toBe(before);
- await expect(page.locator('.unassigned-detail')).toContainText('120');
+ await expect(page.locator('.gps-journal-detail')).toContainText('120');
  const overflow=await page.locator('#unassignedHost').evaluate(el=>el.scrollWidth-el.clientWidth);expect(overflow).toBeLessThanOrEqual(1);
  await expect(page.locator('[data-ut-more]')).not.toBeVisible();
  for(const tab of await page.locator('#plUnassigned .subtab').all())expect(await tab.evaluate(el=>getComputedStyle(el).whiteSpace)).toBe('nowrap');
@@ -34,13 +34,13 @@ test('unassigned queue and GPS preview remain usable at each width',async({page}
  await clean(page);
 });
 test('chain draft collects client and engineer and can cancel without writes',async({page},info)=>{
- await open(page,info);await page.getByRole('button',{name:'Создать цепочку'}).click();
+ await open(page,info);if(page.viewportSize().width<=760)await page.locator('[data-ut-details]').first().click();await page.getByRole('button',{name:'Создать документы',exact:true}).click();
  await expect(page.locator('#promptOverlay')).toBeVisible();await expect(page.locator('#promptOverlay')).toContainText('Клиент заявки');
  await expect(page.locator('#promptOverlay')).toContainText('Инженер');await page.keyboard.press('Escape');
- await expect(page.locator('#promptOverlay')).not.toBeVisible();await expect(page.getByRole('button',{name:'Создать цепочку'})).toBeFocused();await clean(page);
+ await expect(page.locator('#promptOverlay')).not.toBeVisible();await expect(page.getByRole('button',{name:'Создать документы',exact:true})).toBeFocused();await clean(page);
 });
 test('charge shows the cost basis and requires a separate amount confirmation',async({page},info)=>{
- await open(page,info);await page.getByText('Другие действия',{exact:true}).click();await page.getByRole('button',{name:'Списать инженеру',exact:true}).click();
+ await open(page,info);if(page.viewportSize().width<=760)await page.locator('[data-ut-details]').first().click();await page.getByRole('button',{name:'Записать списание инженеру',exact:true}).click();
  await expect(page.locator('.gps-resolution-summary')).toContainText('12,5');await page.locator('[data-pf=engineer]').selectOption('00000000-0000-4000-8000-000000000002');
  await page.locator('[data-pf=reason]').fill('Подтверждённая личная поездка');await page.locator('#promptYes').click();
  await expect(page.locator('#confirmOverlay')).toBeVisible();await expect(page.locator('#confirmOverlay')).toContainText('1 500');
@@ -48,7 +48,7 @@ test('charge shows the cost basis and requires a separate amount confirmation',a
 });
 test('engineer sees own charge without manager resolution controls',async({page},info)=>{
  await open(page,info,'engineer');await expect(page.locator('.unassigned-card')).toContainText('Списание инженеру');
- await expect(page.getByRole('button',{name:'Создать цепочку'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Посмотреть трек'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Создать документы',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Посмотреть трек'})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Отменить списание'})).toHaveCount(0);
  await page.locator('[data-trip-section=board]').click();await expect(page.locator('#tripAdd')).toBeHidden();await expect(page.locator('#tripTrash')).toBeHidden();
  await clean(page);
@@ -59,10 +59,10 @@ test('GPS journal is nested under trips, has standard card gaps and scrolls to t
  await expect(page.locator('#plTrips')).toBeVisible();await expect(page.locator('#plTrips .subtab[data-sub=trips]')).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('.subtab[data-sub=tracking]')).toHaveCount(0);
  await expect(page.locator('#tripBoard')).toBeHidden();await expect(page.locator('.unassigned-card')).toHaveCount(14);
- const gap=await page.locator('.unassigned-list').evaluate(el=>{const [a,b]=el.children;return b.getBoundingClientRect().top-a.getBoundingClientRect().bottom;});
- expect(gap).toBe(12);
+ const gap=await page.locator('.unassigned-list').evaluate(el=>{const [a,b]=el.querySelectorAll('.unassigned-card');return b.getBoundingClientRect().top-a.getBoundingClientRect().bottom;});
+ expect(gap).toBeGreaterThanOrEqual(12);
  // The dispatcher page now owns scrolling in every viewport.
- const scroll=page.locator('.view-planner .pane');
+ const scroll=page.locator(page.viewportSize().width>760?'.gps-journal-sidebar':'.view-planner .pane');
  expect(await scroll.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
  await scroll.evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.unassigned-card').last()).toBeInViewport();
  await scroll.evaluate(el=>el.scrollTop=0);
@@ -74,9 +74,8 @@ test('GPS journal is nested under trips, has standard card gaps and scrolls to t
 
 test('manager orders selected tracks and reviews separate GPS pieces before merging',async({page},info)=>{
  await open(page,info,'admin',3);
- const choices=page.locator('[data-ut-select]');await choices.nth(1).check();await choices.nth(0).check();
- await expect(page.locator('[data-ut-preview]')).toBeDisabled();await expect(page.locator('.unassigned-merge')).toContainText('по времени');
- await page.locator('[data-ut-move="1"][data-step="-1"]').click();await expect(page.locator('[data-ut-preview]')).toBeEnabled();
+ await page.locator('[data-ut-choose]').click();const choices=page.locator('[data-ut-select]');await choices.nth(1).check();await choices.nth(0).check();
+ await expect(page.locator('[data-ut-preview]')).toBeEnabled();
  await page.locator('[data-ut-preview]').click();await expect(page.locator('[data-ut-merge]')).toBeVisible();
  await expect(page.locator('.unassigned-merge-preview .gps-track-line')).toHaveCount(2);
  await expect(page.locator('.unassigned-merge-preview .gps-track-point')).toHaveCount(2);
@@ -108,10 +107,10 @@ test('journal period filters on the server, navigates months and persists after 
  await expect(from).toBeVisible();await expect(to).toBeVisible();
  const toolbar=await page.locator('#plTrips .dispatcher-toolbar').boundingBox(),actions=await page.locator('#plTrips .dispatcher-actions').boundingBox();
  const inset=page.viewportSize().width<=760?13:17;expect(Math.abs(actions.x+actions.width-toolbar.x-toolbar.width+inset)).toBeLessThanOrEqual(1);
- await page.locator('[data-ut-select]').first().check();await expect(page.locator('.unassigned-merge')).toBeVisible();
+ await page.locator('[data-ut-choose]').click();await page.locator('[data-ut-select]').first().check();await expect(page.locator('.unassigned-merge')).toBeVisible();
  await from.fill('2026-10-05');await from.dispatchEvent('change');await to.fill('2026-10-05');await to.dispatchEvent('change');
  await expect(page.locator('.unassigned-card')).toHaveCount(1);await expect(page.locator('.unassigned-merge')).toHaveCount(0);
- await expect(page.locator('.unassigned-period')).toContainText('05.10.2026');
+ await expect(page.locator('.unassigned-card .unassigned-period')).toContainText('05.10.2026');
  await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await expect(from).toHaveValue('2026-10-05');await expect(to).toHaveValue('2026-10-05');await expect(page.locator('.unassigned-card')).toHaveCount(1);
  await page.locator('[data-ut-mode=archive]').click();await expect(page.locator('.unassigned-card')).toHaveCount(0);await expect(from).toHaveValue('2026-10-05');

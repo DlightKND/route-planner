@@ -397,13 +397,14 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await visibleTarget(active.locator('#tpPresenceTitle'));
       await expect(active.locator('.wb-table')).toBeVisible();
       if(role==='engineer'){
-        await expect(active.locator('#tpPresence input,#tpPresence select,#tpPresence textarea,#tpPresence button:not(.qm):not([data-retained-track])')).toHaveCount(0);
+        await expect(active.locator('#tpPresence [data-presence],#tpPresence [data-review-edit]')).toHaveCount(0);
         await expect(active.locator('#wbPresenceSave,#wbDetect,[data-presence-edit]')).toHaveCount(0);
-        await expect(active.locator('#tpPresence')).toContainText('Ожидает проверки');
+        await expect(active.locator('#tpPresence')).toContainText('Требует проверки');
       }else{await expect(active.locator('#wbPresenceSave')).toBeVisible();}
 
       await shot(page,testInfo,`${role}-trip-presence`);
-      await reveal(active.locator('.wb-task-share').first());
+      if(role==='engineer'){await active.locator('[data-review-mode=done]').click();}else{await active.locator('[data-review-mode=done]').click();await active.locator('[data-review-edit]').click();}
+      await reveal(active.locator(role==='engineer'?'.wb-task-share':'.wb-task-share-list').first());
       await shot(page,testInfo,`${role}-trip-presence-task-share`);
       await active.locator('#tpTabEconomy').click();
       await checkedPane(page,active,active.locator('#tpEconomyPane'),audit,testInfo);

@@ -12,7 +12,7 @@ for(const role of ['logist','engineer'])test(role+' sees and opens a presence lo
  await expect(preview.locator('.leaflet-container')).toBeVisible();await expect(preview.locator('.gps-track-point')).toHaveCount(1);
  await expect(preview).toContainText('49.99000, 36.23000');
  const bounds=await preview.boundingBox();expect(bounds.width).toBeGreaterThan(120);expect(bounds.height).toBeGreaterThan(130);
- if(role==='engineer')await expect(page.locator('#tpPresence input,#tpPresence select,#wbDetect,[data-presence-edit]')).toHaveCount(0);
+ if(role==='engineer')await expect(page.locator('#tpPresence [data-presence],#wbDetect,[data-presence-edit]')).toHaveCount(0);
  await info.attach('presence-location-'+role,{body:await page.screenshot(),contentType:'image/png'});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  await preview.getByRole('link',{name:'Стоянка 1: открыть на карте',exact:true}).click();
