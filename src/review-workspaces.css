@@ -29,6 +29,7 @@
 .presence-review-fields .presence-crew-checks { gap:4px; }
 .presence-crew-checks label { min-height:40px;margin:0;font-size:14px;line-height:1.4; }
 .presence-crew-checks input { flex:none;margin:0; }
+.presence-review-fields .wb-task-share-row input[type=checkbox] { accent-color:var(--accent); }
 .presence-review-fields .wb-task-share-row { display:grid;grid-template-columns:20px minmax(0,1fr) 84px 16px;gap:8px;align-items:center;font-size:13px; }
 .presence-review-fields input[data-task-allocation-share] { width:84px;min-width:0;padding:8px;font-size:16px;text-align:right; }
 .presence-review-fields .wb-table-scroll { padding:0; }
