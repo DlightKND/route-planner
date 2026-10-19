@@ -94,10 +94,12 @@ it('keeps trip saving and errors in the common toolbar and preserves failed-load
   expect(get('tripAuxiliary').hidden).toBe(true);
   expect(get('tpRevisionInfo').closest('[data-trip-pane]')).toBeNull();
   const start=app.indexOf('async function loadWorkbench(id)'),end=app.indexOf("if($('tpRebuildRemaining'))",start);
-  Object.assign(context,{tripWorkbench:null,tripPresenceDirty:false,tripCostReviewState:'',renderTripReviewSummary:vi.fn(),
+  const destroyMaps=vi.fn();
+  Object.assign(context,{presenceMaps:{destroy:destroyMaps},tripWorkbench:null,tripPresenceDirty:false,tripCostReviewState:'',renderTripReviewSummary:vi.fn(),
     sb:{rpc:vi.fn(async()=>({error:new Error('server unavailable')}))}});
   vm.runInContext(app.slice(start,end),context);
   await vm.runInContext('loadWorkbench("trip-1")',context);
+  expect(destroyMaps).toHaveBeenCalledOnce();expect(context.presenceMaps).toBeNull();
   expect(get('tpSave').disabled).toBe(true);expect(get('tpReviewState').hidden).toBe(false);
   expect(get('tpReviewState').textContent).toContain('Сохранение заблокировано');
   expect(get('tpPresence').textContent).toContain('server unavailable');

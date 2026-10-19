@@ -17,6 +17,7 @@ import {rebuildTripTrack,presenceBounds,tripTimeSummary} from './core/trip-prese
 import * as core from './core/index.js';
 import { presenceSummary, validatePresence, remainingStops, presenceDaily, sameEditablePlan } from './core/trip-review.js';
 import { presenceHTML, removedHTML, readPresenceForm, tripCostReviewHTML, wirePresenceRecovery } from './trip-workbench.js';
+import {mountPresenceMaps} from './presence-maps.js';
 import './trip-workbench.css';
 import './service-orders.css';
 import { createServiceOrders } from './service-orders.js';
@@ -5639,7 +5640,7 @@ const SERVICE_ORDER_STATUS={draft:'черновик',assigned:'назначен�
 let tripRoute={km:0,driveH:0,geometry:null,legs:[]}, tripRouteStops=[], tripVariants=[], tripVarSel=0, tripStart=null, tripOverrides={revenue:'',cost:'',road:{}};
 let tripCostReviewState='не проверены';
 let tripNewPlanId=null;
-let tripWorkbench=null, tripPlanDirty=false, tripPresenceDirty=false, tripRemainingRoute=null;
+let tripWorkbench=null, tripPlanDirty=false, tripPresenceDirty=false, tripRemainingRoute=null, presenceMaps=null;
 const tripTabs=createEntityTabs(document.querySelector('.view-trip'),{
   tabSelector:'[data-trip-tab]',panelSelector:'[data-trip-pane]',tabKey:'tripTab',panelKey:'tripPane',initial:'plan',
   onChange:name=>{if(name==='plan')window._miniMaps?.tpMap?.invalidateSize();}
@@ -5654,9 +5655,25 @@ document.querySelector('.view-trip')?.addEventListener('change',e=>{
 });
 window.addEventListener('beforeunload',e=>{if(tripPlanDirty||tripPresenceDirty||serviceOrders.isDirty()){e.preventDefault();e.returnValue='';}});
 document.querySelector('#tpPresence')?.addEventListener('click',e=>{
+  const location=e.target.closest('[data-presence-map-open]');
+  if(location){e.preventDefault();openPresenceLocation(location.dataset.presenceMapOpen);return;}
   const button=e.target.closest('[data-presence-edit]');
   if(button)openPresenceEditor(tripEditId,button.closest('[data-presence-id]').dataset.presenceId);
 });
+async function openPresenceLocation(stayId){
+  const snapshot=tripWorkbench,stay=snapshot?.stays.find(s=>String(s.id)===String(stayId));
+  if(!stay||stay.lat==null||stay.lng==null)return;
+  if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки выезда.','warn');return;}
+  try{
+    const point=[+stay.lat,+stay.lng];
+    await showTripOnMap(snapshot.trip.id,{focus:point});
+    if(tripWorkbench!==snapshot||!document.querySelector('.view-map.active'))return;
+    const index=snapshot.stays.indexOf(stay)+1;
+    const marker=L.marker(point,{icon:stayBindIcon(stay,index-1)}).bindPopup('<div class="trip-stop-popup"><b>Стоянка '+index+'</b><p>'+esc(new Date(stay.stay_from).toLocaleString('ru-RU',{timeZone:'Europe/Kyiv'}))+'</p></div>');
+    factG.stay.addLayer(marker);factVis.stay=true;factApplyVis();
+    map.fitBounds([point,point],{...fitPadL(fitPad(40)),maxZoom:16,animate:false});marker.openPopup();
+  }catch(e){notify('Не удалось открыть место стоянки: '+(e.message||e),'err');}
+}
 function taskAllocationPayload(stay){
   const row={id:stay.id,job_id:stay.job_id,crew_ids:stay.crew_ids,minutes_mgr:stay.minutes_mgr,status:stay.status};
   if(stay.presence_evidence)row.recovery_acceptance=stay.recovery_acceptance||{};
@@ -5792,6 +5809,7 @@ function renderTripReviewSummary(){
 }
 function listLoadError(box,error,retry){box.className='';box.innerHTML='<p class="err" role="alert">Не удалось загрузить данные: '+esc(error.message)+'</p><button type="button" class="btn sm" data-list-retry>Повторить загрузку</button>';box.querySelector('[data-list-retry]').onclick=retry;}
 async function loadWorkbench(id){
+  presenceMaps?.destroy();presenceMaps=null;
   tripWorkbench=null;tripPresenceDirty=false;tripCostReviewState='не проверены';renderTripReviewSummary();
   $('tpReviewState').hidden=true;$('tpReviewState').textContent='';$('tpRevisionInfo').textContent='';
   if(!id){$('tpPresence').textContent='Сохрани план, чтобы начать учёт выезда.';$('tpHistoryLog').textContent='Новый выезд';$('tpRemovedJobs').innerHTML='';$('tpReviewState').hidden=false;$('tpReviewState').textContent='Новый план';if($('tpTripAllocation'))$('tpTripAllocation').innerHTML='<p class="hint">Сохрани выезд и подтверди факт, чтобы распределить затраты.</p>';return;}
@@ -5810,6 +5828,7 @@ async function loadWorkbench(id){
     const index=trips.findIndex(t=>t.id===id);if(index>=0)trips[index]=data.trip;
     const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
     $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{readonly:!canWriteTrip(data.trip),orders:linkedOrders});wirePresenceRecovery($('tpPresence'));renderTripReviewSummary();
+    presenceMaps=mountPresenceMaps($('tpPresence'),tripWorkbench.stays,{leaflet:L,makeBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode)});
     const retained=document.createElement('section');retained.className='retained-trip-fact';retained.innerHTML='<h3>Сохранённый факт выезда</h3><p role="status">Проверяю сохранённый трек…</p>';$('tpPresence').prepend(retained);
     sb.from('trip_tracks').select('km,updated_at,data').eq('trip_id',id).maybeSingle().then(({data:track,error})=>{
       if(!retained.isConnected)return;
@@ -7443,7 +7462,7 @@ function drawTripPlan(t){
   if(pts.length) map.fitBounds(pts,fitPadL(fitPad(60)));
   return pts.length>0;
 }
-async function showTripOnMap(tid){
+async function showTripOnMap(tid,{focus=null}={}){
   stayBindMap=null;
   // Не записываем промежуточный #/map: одна кнопка должна давать одну запись
   // истории, чтобы Back возвращал туда, откуда открыли выезд.
@@ -7463,7 +7482,7 @@ async function showTripOnMap(tid){
   // Факт — сверху плана и только если он есть. Отсутствие факта больше не
   // повод показать пустую карту: у запланированного выезда факта нет по
   // определению, а посмотреть маршрут нужно именно до поездки.
-  const fact=await showTripFact(tid,{quiet:true,trip:t});
+  const fact=await showTripFact(tid,{quiet:true,trip:t,focus});
   if(!fact) showToast(shown?'Факта нет — показан плановый маршрут':'У выезда нет ни маршрута, ни трека');
   routeSet('trip/'+encodeURIComponent(tid)+'/map');
 }
@@ -7696,7 +7715,7 @@ async function showTripFact(tid,opt){
     const bpts=[];
     m.segments.forEach(g=>{ bpts.push([g.fromPt.lat,g.fromPt.lng],[g.toPt.lat,g.toPt.lng]); });
     (m.points||[]).forEach(p=>bpts.push([p.lat,p.lng]));
-    if(bpts.length) setTimeout(()=>{ map.invalidateSize(); map.fitBounds(L.polyline(bpts).getBounds(),fitPadL(fitPad(40))); },60);
+    if(bpts.length) setTimeout(()=>{ map.invalidateSize(); map.fitBounds(opt?.focus?[opt.focus,opt.focus]:L.polyline(bpts).getBounds(),{...fitPadL(fitPad(40)),...(opt?.focus?{maxZoom:16,animate:false}:{})}); },60);
     showFactLegend(m);
     if(trackPanelInline())sideTab('track');
     const bits=['Факт: '+Math.round(m.km)+' км'+(m.stored?' · сохранённый разбор':' по '+raw.length+' точкам')];
