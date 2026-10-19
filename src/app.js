@@ -1,3 +1,4 @@
+import {mountPresenceReview} from './presence-review-workspace.js';
 import {calendarPeriodBounds} from './core/calendar-period.js';
 import {summaryPreset,summaryUnit,shiftSummaryPeriod,summaryPeriodLabel} from './core/summary-period.js';
 import { openContextPanel } from './context-panels.js';
@@ -249,9 +250,9 @@ function promptDialog(title,fields=[],opts={}){ return new Promise(res=>{
     if(f.type==='select')return label+'<select'+attrs+'>'+(f.options||[]).map(o=>'<option value="'+esc(o.value)+'"'+(String(o.value)===String(f.value??'')?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select>';
     const type=['text','number','date','time','datetime-local','tel','email','url'].includes(f.type)?f.type:'text';
     return label+'<input type="'+type+'"'+attrs+' value="'+esc(f.value??'')+'"'+(f.inputmode?' inputmode="'+esc(f.inputmode)+'"':'')+(f.min!=null?' min="'+esc(f.min)+'"':'')+(type==='number'?' step="'+esc(f.step||'any')+'"':'')+'>';
-  }).join('');if(opts.gpsResolution){$('promptTitle').textContent='Оформление GPS-записи';frameGpsResolutionPrompt($('promptOverlay'),opts.gpsResolution,action=>{const draft=Object.fromEntries([...$('promptOverlay').querySelectorAll('[data-pf]')].map(el=>[el.dataset.pf,el.value]));$('promptOverlay').classList.remove('on');const done=_pdRes;_pdRes=null;done?.({__nextAction:action,__draft:draft});});} $('promptOverlay').classList.add('on');
+  }).join('');if(opts.gpsResolution){$('promptTitle').textContent='Оформление GPS-записи';frameGpsResolutionPrompt($('promptOverlay'),opts.gpsResolution,action=>{const draft=Object.fromEntries([...$('promptOverlay').querySelectorAll('[data-pf]')].map(el=>[el.dataset.pf,el.value]));$('promptOverlay').classList.remove('on');restoreGpsResolutionPrompt($('promptOverlay'));const done=_pdRes;_pdRes=null;done?.({__nextAction:action,__draft:draft});});} $('promptOverlay').classList.add('on');
 }); }
-function _pdDone(ok){ const ov=$('promptOverlay'); let out=null; if(ok){ if([...ov.querySelectorAll('[data-pf]')].some(el=>!el.reportValidity()))return; out={}; ov.querySelectorAll('[data-pf]').forEach(el=>{ out[el.dataset.pf]=el.value; }); } ov.classList.remove('on'); const r=_pdRes; _pdRes=null; if(r) r(out); }
+function _pdDone(ok){ const ov=$('promptOverlay'); let out=null; if(ok){ if([...ov.querySelectorAll('[data-pf]')].some(el=>!el.reportValidity()))return; out={}; ov.querySelectorAll('[data-pf]').forEach(el=>{ out[el.dataset.pf]=el.value; }); } ov.classList.remove('on'); restoreGpsResolutionPrompt(ov); const r=_pdRes; _pdRes=null; if(r) r(out); }
 $('promptYes').onclick=()=>_pdDone(true); $('promptNo').onclick=()=>_pdDone(false);
 $('promptOverlay').addEventListener('click',e=>{ if(e.target===$('promptOverlay')) _pdDone(false); });
 
@@ -5827,14 +5828,14 @@ async function loadWorkbench(id){
     tripWorkbench={...data,jobIds:data.job_ids,stays:(data.stays||[]).map(s=>({...s,task_allocations:allocationByStay.get(s.id)||[]}))};
     const index=trips.findIndex(t=>t.id===id);if(index>=0)trips[index]=data.trip;
     const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
-    $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{readonly:!canWriteTrip(data.trip),orders:linkedOrders});wirePresenceRecovery($('tpPresence'));renderTripReviewSummary();
+    $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{readonly:!canWriteTrip(data.trip),orders:linkedOrders,workspace:true});wirePresenceRecovery($('tpPresence'));mountPresenceReview($('tpPresence'),tripWorkbench,{jobs:tripJobsAll,profiles:profilesList,readonly:!canWriteTrip(data.trip),owner:session?.user?.id,leaflet:()=>L,makeBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),onJobChange:(row,job)=>renderTaskAllocationControls(row,job,linkedOrders)});renderTripReviewSummary();
     presenceMaps=mountPresenceMaps($('tpPresence'),tripWorkbench.stays,{leaflet:L,makeBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode)});
-    const retained=document.createElement('section');retained.className='retained-trip-fact';retained.innerHTML='<h3>Сохранённый факт выезда</h3><p role="status">Проверяю сохранённый трек…</p>';$('tpPresence').prepend(retained);
+    const retained=document.createElement('details');retained.className='retained-trip-fact';retained.innerHTML='<summary>Итоги выезда и сохранённый трек</summary><p role="status">Проверяю сохранённый трек…</p>';$('tpPresence').append(retained);
     sb.from('trip_tracks').select('km,updated_at,data').eq('trip_id',id).maybeSingle().then(({data:track,error})=>{
       if(!retained.isConnected)return;
       const approved=tripWorkbench.stays.filter(s=>s.status==='approved'),minutes=approved.reduce((n,s)=>n+Number(s.minutes_mgr||0),0);
       const timing=tripTimeSummary(data.trip,track,tripWorkbench.stays),hours=v=>v==null?'—':(v/60).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ч';
-      retained.innerHTML='<div class="trip-time-metrics"><div><span>Продолжительность выезда</span><b>'+hours(timing.total)+'</b></div><div><span>Дорога'+(timing.estimatedRoad?' · расчётная часть':'')+'</span><b>'+hours(timing.road)+'</b></div><div><span>Стоянки · подтверждено</span><b>'+hours(timing.stopped)+'</b></div></div><p class="hint">Предложено восстановить: '+hours(timing.pending)+' · не разнесено: '+hours(timing.unallocated)+'</p>'+(timing.skipped.length?'<details class="trip-recovery-diagnostics"><summary>Неразрешённые участки: '+timing.skipped.length+'</summary>'+timing.skipped.map(x=>'<p>'+esc(new Date(x.from).toLocaleString('ru-RU'))+' — '+esc(new Date(x.to).toLocaleString('ru-RU'))+' · '+esc(x.reason)+'</p>').join('')+'</details>':'')+'<h3>Сохранённый факт выезда</h3><p>Подтверждённые стоянки: <b>'+approved.length+'</b> · '+minutes.toLocaleString('ru-RU')+' мин</p>'
+      retained.innerHTML='<summary>Итоги выезда и сохранённый трек</summary><div class="trip-time-metrics"><div><span>Продолжительность выезда</span><b>'+hours(timing.total)+'</b></div><div><span>Дорога'+(timing.estimatedRoad?' · расчётная часть':'')+'</span><b>'+hours(timing.road)+'</b></div><div><span>Стоянки · подтверждено</span><b>'+hours(timing.stopped)+'</b></div></div><p class="hint">Предложено восстановить: '+hours(timing.pending)+' · не разнесено: '+hours(timing.unallocated)+'</p>'+(timing.skipped.length?'<details class="trip-recovery-diagnostics"><summary>Неразрешённые участки: '+timing.skipped.length+'</summary>'+timing.skipped.map(x=>'<p>'+esc(new Date(x.from).toLocaleString('ru-RU'))+' — '+esc(new Date(x.to).toLocaleString('ru-RU'))+' · '+esc(x.reason)+'</p>').join('')+'</details>':'')+'<h3>Сохранённый факт выезда</h3><p>Подтверждённые стоянки: <b>'+approved.length+'</b> · '+minutes.toLocaleString('ru-RU')+' мин</p>'
         +(error?'<p class="err">Не удалось загрузить сохранённый трек: '+esc(error.message)+'</p>':track?'<p>Сохранённый разбор трека · '+new Date(track.updated_at).toLocaleDateString('ru-RU')+' · <b>'+Number(track.km).toLocaleString('ru-RU',{maximumFractionDigits:1})+' км</b></p>':'<p class="hint">Сохранённого разбора нет'+(data.trip.fact_km!=null?' · факт-пробег '+Number(data.trip.fact_km).toLocaleString('ru-RU')+' км'+esc(factSrcRu(data.trip.fact_km_source)):'')+'</p>')
         +(track?'<button type="button" class="btn sm" data-retained-track>Открыть сохранённый трек на карте</button>':'');
       retained.querySelector('[data-retained-track]')?.addEventListener('click',()=>showTripOnMap(id));
@@ -5872,10 +5873,10 @@ async function loadWorkbench(id){
       if(!presenceSave.isConnected||!canReview()){notify('Доступ или выезд изменился. Открой карточку заново.','warn');return;}
       if(tripPlanDirty){notify('Сохрани план и проверку вместе верхней кнопкой «Сохранить план».','warn');return;}
       const reviewedTrip=tripWorkbench.trip;
-      const rows=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>['approved','rejected'].includes(s.status));
+      const rows=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>(!$('tpPresence').querySelector('.presence-review-workspace')||s.id===$('tpPresence').dataset.reviewActive)&&['approved','rejected'].includes(s.status));
       try{if(!rows.length)throw new Error('Выбери стоянки для проверки. Незакрытое присутствие можно проверить позже.');validatePresence(rows);}
       catch(e){notify(e.message,'warn');return;}
-      const reason=await promptDialog('Проверка присутствия',[{key:'reason',label:'Причина / комментарий',value:'Проверено по треку и составу команды',type:'textarea'}],{okText:'Подтвердить'});
+      const reason=await promptDialog('Проверка присутствия',[{key:'reason',label:'Причина / комментарий',value:rows[0]?.status==='rejected'?'Остановка в пути · не учитывать в присутствии на объекте':'Проверено по треку и составу команды',type:'textarea'}],{okText:'Подтвердить'});
       if(!reason)return;
       if(!presenceSave.isConnected||!canReview()){notify('Доступ или выезд изменился. Открой карточку заново.','warn');return;}
       presenceSave.disabled=true;
@@ -6239,7 +6240,7 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
   if(!canWriteTrip())return;
   let presenceChanges=null;
   if(tripPresenceDirty){
-    presenceChanges=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>['approved','rejected'].includes(s.status));
+    presenceChanges=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>(!$('tpPresence').querySelector('.presence-review-workspace')||s.id===$('tpPresence').dataset.reviewActive)&&['approved','rejected'].includes(s.status));
     try{if(!presenceChanges.length)throw new Error('Выбери результат проверки изменённых стоянок.');validatePresence(presenceChanges);validateTaskAllocationShares(presenceChanges);}
     catch(e){$('tripErr').textContent=e.message;setTripPane('presence');const details=$('tpPresence').closest('details');if(details)details.open=true;return;}
     presenceChanges=presenceChanges.map(taskAllocationPayload);

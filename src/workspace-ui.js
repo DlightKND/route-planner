@@ -5,13 +5,15 @@ const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 const element=(doc,tag,className)=>{const node=doc.createElement(tag);node.className=className;return node;};
 
 export function restoreGpsResolutionPrompt(overlay){
+ if(overlay._gpsInert){for(const [node,previous] of overlay._gpsInert)node.inert=previous;delete overlay._gpsInert;}
+ if(overlay._gpsReturnAnchor){overlay._gpsReturnAnchor.replaceWith(overlay);delete overlay._gpsReturnAnchor;}overlay.classList.remove('gps-inline-overlay');
  const workspace=overlay.querySelector('.gps-resolution-workspace'),fields=overlay.querySelector('#promptFields');if(workspace){workspace.before(fields);workspace.remove();}overlay.querySelector('.modal')?.classList.remove('gps-resolution-modal');
 }
 
 export function frameGpsResolutionPrompt(overlay,context,onSwitch){
  const doc=overlay.ownerDocument,fields=overlay.querySelector('#promptFields'),workspace=element(doc,'div','gps-resolution-workspace'),main=element(doc,'div','gps-resolution-main'),aside=element(doc,'aside','gps-resolution-summary');
  overlay.querySelector('.modal').classList.add('gps-resolution-modal');
- const choices=[['link','Связать с существующей поездкой','Выбери доступный план той же машины.'],['chain','Создать заявку, задание и поездку','Будут созданы связанные черновики.'],['charge','Проверить начисление инженеру','Проверь пробег, ставку и основание перед списанием.']];
+ const choices=[['link','Связать с выездом','Выбери доступный план той же машины.'],['chain','Создать документы','Заявка, задание и выезд; итог будет показан перед сохранением.'],['charge','Записать списание инженеру','Проверь пробег, ставку и основание перед списанием.']];
  main.innerHTML=`<p class="design-eyebrow">${escape(context.vehicle)} · ${escape(context.period)}</p><h3>Выберите результат оформления</h3><p class="hint">Запись не будет создана или привязана до подтверждения.</p><div class="gps-resolution-choices">${choices.map(([key,title,description])=>`<button type="button" data-gps-choice="${key}" aria-pressed="${key===context.action}" ${key==='charge'&&!context.canCharge?'disabled':''}><strong>${title}</strong><span>${description}</span></button>`).join('')}</div><h3>Параметры решения</h3>`;
  fields.before(workspace);main.append(fields);workspace.append(main,aside);
  const paint=()=>{
@@ -19,6 +21,7 @@ export function frameGpsResolutionPrompt(overlay,context,onSwitch){
   aside.innerHTML=`<h3>Что будет сохранено</h3><dl><div><dt>Операция</dt><dd>${escape(choices.find(x=>x[0]===context.action)[1])}</dd></div><div><dt>GPS-запись</dt><dd>${escape(context.km)} км · ${escape(context.points)} точек</dd></div><div><dt>Разрывы GPS</dt><dd>${escape(context.gaps)}</dd></div><div><dt>${context.action==='link'?'Выезд':'Инженер'}</dt><dd>${escape(selected(context.action==='link'?'trip':'engineer'))}</dd></div>${context.action==='chain'?'<div><dt>Клиент</dt><dd>'+escape(selected('client'))+'</dd></div>':''}${context.action==='charge'?'<div><dt>Ставка</dt><dd>'+escape(context.rate)+'</dd></div>':''}${amount?'<div><dt>Сумма после проверки</dt><dd>'+escape(amount)+'</dd></div>':''}</dl><p class="hint">При ошибке сохранения решение можно повторить после исправления данных.</p>`;
  };
  workspace.querySelectorAll('[data-gps-choice]').forEach(button=>button.onclick=()=>{if(button.dataset.gpsChoice!==context.action)onSwitch(button.dataset.gpsChoice);});fields.addEventListener('input',paint);fields.addEventListener('change',paint);paint();
+ const target=doc.querySelector('.gps-journal-detail .gps-resolution-entry');if(target&&doc.defaultView.matchMedia('(min-width: 761px)').matches){const anchor=doc.createComment('GPS form return');overlay.before(anchor);overlay._gpsReturnAnchor=anchor;overlay.classList.add('gps-inline-overlay');target.after(overlay);overlay._gpsInert=[];let child=overlay;while(child.parentElement&&child.parentElement!==doc.body){for(const sibling of child.parentElement.children)if(sibling!==child){overlay._gpsInert.push([sibling,sibling.inert]);sibling.inert=true;}child=child.parentElement;}overlay.scrollIntoView?.({block:'nearest'});}
 }
 
 export function framePresenceWorkspace(dialog,stay){

@@ -42,6 +42,7 @@ export function installModalShell({dismiss = {}, canDismiss = () => true, confir
       try {if(await confirmDiscard()){state.replaying=true;button.click();state.replaying=false;}} finally {state.pending=false;}
     },true);
     node.addEventListener('cancel',e=>{e.preventDefault();api.requestClose(node.id);});
+    node.addEventListener('keydown',e=>{if(e.key==='Escape'&&node.classList.contains('gps-inline-overlay')){e.preventDefault();api.requestClose(node.id);}});
     node.addEventListener('click',e=>{if(e.target===node){e.stopImmediatePropagation();api.requestClose(node.id);}},true);
     node.addEventListener('close',()=>{
       if(node.open)return;
@@ -62,7 +63,7 @@ export function installModalShell({dismiss = {}, canDismiss = () => true, confir
         state.trigger=document.activeElement;state.baseline=snapshot(node);
         const close=node.querySelector('.modal-close');if(close)close.hidden=!canDismiss(node.id);
         if(node.id==='cfgOverlay')node.querySelector('#cfgCancel').hidden=!canDismiss(node.id);
-        node.showModal();
+        if(node.classList.contains('gps-inline-overlay'))node.show();else node.showModal();
         const first=[...node.querySelectorAll('input:not([type=hidden]):not(:disabled),textarea:not(:disabled),select:not(:disabled),button.ghost:not(:disabled)')].find(el=>el.getClientRects().length) || close || node.querySelector('button:not(:disabled)');
         first?.focus({preventScroll:true});
       }else if(!on&&node.open)node.close();
