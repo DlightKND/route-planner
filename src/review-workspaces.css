@@ -40,7 +40,7 @@
 .gps-journal-detail .gps-detail-head h2 { font-size:22px;line-height:1.35; }
 .gps-journal-detail .gps-detail-head .design-eyebrow { display:none; }
 #promptOverlay.gps-inline-overlay .gps-resolution-choices { grid-template-columns:repeat(3,minmax(0,1fr)); }
-.gps-resolution-modal .gps-resolution-choices { margin:16px 0;gap:8px; }
+.gps-resolution-modal .gps-resolution-choices { grid-template-columns:repeat(3,minmax(0,1fr));margin:16px 0;gap:8px; }
 .gps-resolution-modal .gps-resolution-choices>button { padding:12px 16px;gap:4px; }
 .gps-resolution-modal .gps-resolution-choices>button[aria-pressed=true] { box-shadow:none;border-inline-start:3px solid var(--accent); }
 .gps-resolution-modal .gps-resolution-choices span { line-height:1.4; }

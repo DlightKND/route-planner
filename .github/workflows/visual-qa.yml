@@ -23,7 +23,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium --only-shell
       - name: Inspect the complete GPS and presence flows
-        run: npx playwright test tests/visual/review-ergonomics.spec.mjs tests/visual/presence-recovery-flow.spec.mjs --project=mobile-360-light --project=mobile-390-dark --project=desktop-1440-light --project=desktop-1440-dark --retries=0 --timeout=20000
+        run: npx playwright test tests/visual/review-ergonomics.spec.mjs tests/visual/presence-recovery-flow.spec.mjs --project=mobile-360-light --project=mobile-390-dark --project=tablet-768-light --project=desktop-1024-light --project=desktop-1440-light --project=desktop-1440-dark --retries=0 --timeout=20000
       - name: Keep every review step for visual inspection
         if: always()
         uses: actions/upload-artifact@v4
