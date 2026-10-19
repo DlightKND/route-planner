@@ -20,7 +20,7 @@ test('manager rebuilds the track, edits only the GPS gap and keeps approval on r
  await page.locator('[data-trip-tab="presence"]').click();
  await page.locator('.presence-track-tools summary').click();await expect(page.locator('#wbDetect')).toBeVisible();
  await page.locator('#wbDetect').click();
- const row=page.locator('#tpPresence [data-presence-id]');await expect(row).toHaveCount(1);
+ if(page.viewportSize().width<=760)await page.locator('[data-review-stop]').first().click();const row=page.locator('#tpPresence [data-presence-id]');await expect(row).toHaveCount(1);
  await expect(row).toContainText('180 мин');
  await expect(row.locator('[data-presence="minutes_mgr"]')).toHaveValue('360');
  expect(await row.locator('[data-presence="minutes_mgr"]').evaluate(e=>e.readOnly)).toBe(true);
@@ -43,7 +43,7 @@ test('manager rebuilds the track, edits only the GPS gap and keeps approval on r
  await expect(row.locator('[data-presence="minutes_mgr"]')).toHaveValue('240');
  await expect(page.locator('.trip-time-metrics')).toContainText('4 ч');
  await expect(page.locator('#busy')).not.toHaveClass(/on/);
- await page.locator('.presence-track-tools summary').click();await page.locator('#wbDetect').click();
+ if(page.viewportSize().width<=760)await page.locator('.presence-review-back').click();await page.locator('.presence-track-tools summary').click();await page.locator('#wbDetect').click();
  await expect(row.locator('[data-presence="minutes_mgr"]')).toHaveValue('240');
  await expect(row.locator('[data-presence="status"]')).toHaveValue('approved');
  await info.attach('presence-recovery-summary',{body:await page.screenshot(),contentType:'image/png'});
@@ -59,7 +59,7 @@ test('engineer sees GPS and proposed presence without review controls',async({pa
  await page.goto('/#/trip/'+fixtureIDs.trip);await expect(page.locator('.view-trip.active')).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await page.locator('[data-trip-tab="presence"]').click();
- await expect(page.locator('#tpPresence')).toContainText('По GPS: 180 мин');
+ if(page.viewportSize().width<=760)await page.locator('[data-review-stop]').first().click();await expect(page.locator('#tpPresence')).toContainText('По GPS: 180 мин');
  await expect(page.locator('#tpPresence')).toContainText('Предложено после потери навигации: 180 мин');
  await expect(page.locator('#tpPresence [data-presence],#wbDetect,[data-presence-edit]')).toHaveCount(0);
  const state=await page.evaluate(()=>window.__visualQA);expect(state.recoveryWrites).toEqual([]);expect(state.blockedWrites).toEqual([]);expect(state.queryErrors).toEqual([]);expect(errors).toEqual([]);

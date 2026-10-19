@@ -8,7 +8,7 @@ for(const role of ['logist','engineer'])test(role+' sees and opens a presence lo
  await page.goto('/#/trip/'+fixtureIDs.trip);await expect(page.locator('.view-trip.active')).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await page.getByRole('tab',{name:'Присутствие',exact:true}).click();
- const preview=page.locator('#tpPresence .presence-location').first();await preview.scrollIntoViewIfNeeded();
+ await page.locator('[data-review-mode=done]').click();if(page.viewportSize().width<=760)await page.locator('[data-review-stop]').first().click();const preview=page.locator('#tpPresence .presence-location').first();await preview.scrollIntoViewIfNeeded();
  await expect(preview.locator('.leaflet-container')).toBeVisible();await expect(preview.locator('.gps-track-point')).toHaveCount(1);
  await expect(preview).toContainText('49.99000, 36.23000');
  const bounds=await preview.boundingBox();expect(bounds.width).toBeGreaterThan(120);expect(bounds.height).toBeGreaterThan(130);

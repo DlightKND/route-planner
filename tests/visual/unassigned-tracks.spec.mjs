@@ -17,13 +17,13 @@ async function open(page,info,role='admin',unassignedCount=1){
 async function clean(page){expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);}
 test('unassigned queue and GPS preview remain usable at each width',async({page},info)=>{
  await open(page,info);await page.locator('[data-ut-details]').first().click();
- await expect(page.locator('.unassigned-map')).toBeVisible();
- await expect(page.locator('.unassigned-map .leaflet-tile-loaded').first()).toBeVisible();
- expect(await page.locator('.unassigned-map .leaflet-tile-loaded').first().evaluate(img=>img.naturalWidth)).toBe(256);
- await expect(page.locator('.unassigned-map .leaflet-control-attribution')).toContainText('OpenStreetMap');
- const before=await page.locator('.unassigned-map .gps-track-line').getAttribute('d');
- await page.locator('.unassigned-map .leaflet-control-zoom-in').click();
- await expect.poll(()=>page.locator('.unassigned-map .gps-track-line').getAttribute('d')).not.toBe(before);
+ await expect(page.locator('.gps-journal-detail .unassigned-map')).toBeVisible();
+ await expect(page.locator('.gps-journal-detail .unassigned-map .leaflet-tile-loaded').first()).toBeVisible();
+ expect(await page.locator('.gps-journal-detail .unassigned-map .leaflet-tile-loaded').first().evaluate(img=>img.naturalWidth)).toBe(256);
+ await expect(page.locator('.gps-journal-detail .unassigned-map .leaflet-control-attribution')).toContainText('OpenStreetMap');
+ const before=await page.locator('.gps-journal-detail .unassigned-map .gps-track-line').getAttribute('d');
+ await page.locator('.gps-journal-detail .unassigned-map .leaflet-control-zoom-in').click();
+ await expect.poll(()=>page.locator('.gps-journal-detail .unassigned-map .gps-track-line').getAttribute('d')).not.toBe(before);
  await expect(page.locator('.gps-journal-detail')).toContainText('120');
  const overflow=await page.locator('#unassignedHost').evaluate(el=>el.scrollWidth-el.clientWidth);expect(overflow).toBeLessThanOrEqual(1);
  await expect(page.locator('[data-ut-more]')).not.toBeVisible();
@@ -44,7 +44,7 @@ test('charge shows the cost basis and requires a separate amount confirmation',a
  await expect(page.locator('.gps-resolution-summary')).toContainText('12,5');await page.locator('[data-pf=engineer]').selectOption('00000000-0000-4000-8000-000000000002');
  await page.locator('[data-pf=reason]').fill('Подтверждённая личная поездка');await page.locator('#promptYes').click();
  await expect(page.locator('#confirmOverlay')).toBeVisible();await expect(page.locator('#confirmOverlay')).toContainText('1 500');
- await page.locator('#confirmNo').click();await expect(page.locator('.unassigned-card')).toBeVisible();await clean(page);
+ await page.locator('#confirmNo').click();if(page.viewportSize().width<=760)await page.locator('[data-ut-back]').click();await expect(page.locator('.unassigned-card')).toBeVisible();await clean(page);
 });
 test('engineer sees own charge without manager resolution controls',async({page},info)=>{
  await open(page,info,'engineer');await expect(page.locator('.unassigned-card')).toContainText('Списание инженеру');

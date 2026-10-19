@@ -13,7 +13,7 @@ export function mountGpsTrackMap(fallback,points,{leaflet:L,makeBase,color,label
  const segments=gpsSegments(points);if(!fallback||!L||!segments.length)return null;
  const container=fallback.ownerDocument.createElement('div');container.className='unassigned-preview unassigned-map'+(className?' '+className:'');
  container.setAttribute('role','region');container.setAttribute('aria-label',label);container.tabIndex=0;
- if(mapOptions.keyboard===false){container.removeAttribute('tabindex');container.setAttribute('role','img');}
+ if(mini||mapOptions.keyboard===false){container.removeAttribute('tabindex');container.setAttribute('role','img');}
  fallback.replaceWith(container);let map,observer;
  try{
   map=L.map(container,{scrollWheelZoom:false,...(mini?{zoomControl:false,attributionControl:false,dragging:false,touchZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false}:{}),...mapOptions});
