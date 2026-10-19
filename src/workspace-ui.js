@@ -13,7 +13,7 @@ export function restoreGpsResolutionPrompt(overlay){
 export function frameGpsResolutionPrompt(overlay,context,onSwitch){
  const doc=overlay.ownerDocument,fields=overlay.querySelector('#promptFields'),workspace=element(doc,'div','gps-resolution-workspace'),main=element(doc,'div','gps-resolution-main'),aside=element(doc,'aside','gps-resolution-summary');
  overlay.querySelector('.modal').classList.add('gps-resolution-modal');
- const choices=[['link','Связать с выездом','Выбери доступный план той же машины.'],['chain','Создать документы','Заявка, задание и выезд; итог будет показан перед сохранением.'],['charge','Записать списание инженеру','Проверь пробег, ставку и основание перед списанием.']];
+ const choices=[['link','Связать с выездом','Выбери доступный план той же машины.'],['chain','Создать документы','Заявка, задание и выезд; итог будет показан перед сохранением.'],['charge','Списание инженеру','Проверь пробег, ставку и основание перед списанием.']];
  main.innerHTML=`<p class="design-eyebrow">${escape(context.vehicle)} · ${escape(context.period)}</p><h3>Выберите результат оформления</h3><p class="hint">Запись не будет создана или привязана до подтверждения.</p><div class="gps-resolution-choices">${choices.map(([key,title,description])=>`<button type="button" data-gps-choice="${key}" aria-pressed="${key===context.action}" ${key==='charge'&&!context.canCharge?'disabled':''}><strong>${title}</strong><span>${description}</span></button>`).join('')}</div><h3>Параметры решения</h3>`;
  fields.before(workspace);main.append(fields);workspace.append(main,aside);
  const paint=()=>{

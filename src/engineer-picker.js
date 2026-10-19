@@ -12,9 +12,9 @@ export function installEngineerPickers(root = document) {
   const scan = () => {
     for (const [select,button] of mounted) {
       if (active?.select===select && select.disabled) close();
-      if (!select.isConnected) { if (active?.select === select) close(); button.remove(); mounted.delete(select); }
+      if (!select.isConnected || select.dataset.inlineCrew==='true') { if (active?.select === select) close(); button.remove(); mounted.delete(select); }
     }
-    root.querySelectorAll('select[multiple]').forEach(select => {
+    root.querySelectorAll('select[multiple]:not([data-inline-crew])').forEach(select => {
       let button = mounted.get(select);
       if (!button) {
         button = document.createElement('button'); button.type = 'button'; button.className = 'engineer-picker btn';

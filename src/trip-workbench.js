@@ -57,14 +57,14 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
       const uniqueCrew=[...new Set(crew)];
       const crewLabel=uniqueCrew.map(id=>profiles.find(p=>p.id===id)?.full_name||'Инженер '+String(id).slice(0,8)).join(', ');
       const recordedHours=recordedMinutes!=null&&uniqueCrew.length&&knownCrew?recordedMinutes*uniqueCrew.length/60:null;
-      return `<tr data-presence-id="${esc(s.id)}"><td class="presence-place-cell" data-label="Интервал">${place}${time(s.stay_from)}<br>${time(s.stay_to)}${evidenceLabel(s)}</td>
+      return `<tr data-presence-id="${esc(s.id)}"><td class="presence-place-cell" data-label="Интервал">${place}${workspace?'':time(s.stay_from)+'<br>'+time(s.stay_to)}${evidenceLabel(s)}</td>
         <td data-label="Объект / заявка">${esc(s.job_id?jobName(s.job_id):'Не привязана')}</td>
         <td data-label="Команда">${esc(crewLabel||'Состав не указан')}${!knownCrew?'<div class="hint">Состав не подтверждён</div>':''}</td>
         <td data-label="Задание · доля человеко-часов">${allocationCell(s,false)}</td>
         <td data-label="Минуты на человека">${n(recordedMinutes)}<div class="hint">${n(recordedHours)} чел.-ч${['approved','rejected'].includes(s.status)?'':' · по записи, до проверки'}</div></td>
         <td data-label="Проверка">${esc(presenceStatus[s.status]||'Не проверено')}</td></tr>`;
     }
-    return `<tr data-presence-id="${esc(s.id)}"><td class="presence-place-cell" data-label="Интервал">${place}${time(s.stay_from)}<br>${time(s.stay_to)}${evidenceLabel(s)}</td>
+    return `<tr data-presence-id="${esc(s.id)}"><td class="presence-place-cell" data-label="Интервал">${place}${workspace?'':time(s.stay_from)+'<br>'+time(s.stay_to)}${evidenceLabel(s)}</td>
       <td data-label="Объект / заявка"><select data-presence="job_id" aria-label="Заявка стоянки"><option value="">Не привязана</option>${candidateJobs.map(j=>`<option value="${esc(j.id)}" ${j.id===s.job_id?'selected':''}>${esc(j.name)}</option>`).join('')}</select></td>
       <td data-label="Команда"><select data-presence="crew_ids" multiple aria-label="Присутствовавшие инженеры">${profiles.filter(p=>p.role==='engineer'||crew.includes(p.id)).map(p=>`<option value="${esc(p.id)}" ${crew.includes(p.id)?'selected':''}>${esc(p.full_name||'Инженер')}</option>`).join('')}</select>${s.crew_source==='legacy_unverified'?'<div class="hint">Исторический состав не подтверждён</div>':''}</td>
       <td data-label="Задание · доля человеко-часов">${allocationCell(s,editor||workspace)}</td>
