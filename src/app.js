@@ -34,6 +34,7 @@ import './entity-pages.css';
 import './operations-design.css';
 import { installOperationsUI } from './operations-ui.js';
 import './workspace-ui.css';
+import './review-workspaces.css';
 import {frameGpsResolutionPrompt,restoreGpsResolutionPrompt,framePresenceWorkspace,installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';

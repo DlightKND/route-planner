@@ -23,7 +23,7 @@ export function trackPreview(points){
  return '<svg class="unassigned-preview" viewBox="0 0 360 180" role="img" aria-label="GPS-линия поездки; разрывы связи показаны разрывами линии">'+paths.map(p=>'<polyline points="'+p.join(' ')+'"/>').join('')+'</svg>';
 }
 export function createUnassignedTracks(ctx){
- let activeId=null,choosing=false,search='',vehicleFilter='',gapsOnly=false;const previews=new Map();let observer;
+ let listScroll=0;let activeId=null,choosing=false,search='',vehicleFilter='',gapsOnly=false;const previews=new Map();let observer;
  let rows=[],mode='pending',offset=0,more=false,owner=null,version=0,selected=[],mergePreview=null;
  const maps=new Set(),resolutionDrafts=new Map();
  function clearMaps(scope){for(const entry of maps)if(!scope||scope.contains(entry.container)){entry.destroy();maps.delete(entry);}}
@@ -95,7 +95,7 @@ export function createUnassignedTracks(ctx){
   const result=await rpc('unassigned_track_merge',{p_tracks:keys,p_expected:preview.expected,p_reason:values.reason});if(uid!==ctx.userId())return;await load();ctx.notify('Треки объединены. Проверьте результат перед привязкой.','ok');
   const card=host().querySelector('[data-ut-card="'+result.track_id+'"]');card?.scrollIntoView({block:'nearest'});
  }
- async function details(id,open=true){if(!manager())return;const uid=ctx.userId(),r=rows.find(x=>x.id===id),box=host()?.querySelector('.gps-journal-detail');if(!r||!box)return;activeId=id;host().classList.toggle('gps-show-detail',open);paintList();clearMaps(box);box.innerHTML='<p role="status">Загружаем трек…</p>';
+ async function details(id,open=true){if(!manager())return;const mobile=window.innerWidth<=760,pane=host()?.closest('.pane');if(open&&mobile&&!host()?.classList.contains('gps-show-detail'))listScroll=pane?.scrollTop||0;const uid=ctx.userId(),r=rows.find(x=>x.id===id),box=host()?.querySelector('.gps-journal-detail');if(!r||!box)return;activeId=id;host().classList.toggle('gps-show-detail',open);paintList();clearMaps(box);box.innerHTML='<p role="status">Загружаем трек…</p>';
   try{const {quote,points}=await previewFor(id);if(uid!==ctx.userId()||activeId!==id||!box.isConnected)return;
   const {data:events,error}=await ctx.db().from('unassigned_track_events').select('action,reason,created_at').eq('track_id',id).order('id',{ascending:false});if(error)throw error;if(uid!==ctx.userId()||activeId!==id||!box.isConnected)return;
   const canResolve=manager()&&['recording','review'].includes(r.state)&&!(r.state==='recording'&&new Date(r.last_ts)>Date.now()-300000);
@@ -104,7 +104,7 @@ export function createUnassignedTracks(ctx){
    +(canResolve?'<section class="gps-resolution-entry"><h3>Оформить поездку</h3><p class="hint">Привязка GPS-записи не подтверждает посещения объектов и выполнение работ.</p><div class="gps-resolution-choices"><button type="button" class="btn" data-ut-action="link">Связать с выездом</button><button type="button" class="btn" data-ut-action="chain">Создать документы</button><button type="button" class="btn ghost" data-ut-action="charge">Записать списание инженеру</button></div></section>':r.state==='recording'?'<p class="hint">Запись продолжается. Оформление доступно после завершения.</p>':'')
    +(r.state==='linked'?'<button type="button" class="btn" data-ut-trip>Открыть выезд</button>':'')+(manager()&&r.state==='charged'?'<button type="button" class="btn ghost" data-ut-cancel>Отменить списание</button>':'')
    +'<details class="gps-event-history"><summary>История решения · '+(events||[]).length+'</summary>'+(events||[]).map(e=>'<p class="unassigned-event">'+date(e.created_at)+' · '+escape(e.reason)+'</p>').join('')+'</details>';
-  drawMap(box,points);box.querySelector('[data-ut-back]').onclick=()=>host().classList.remove('gps-show-detail');box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(id,b.dataset.utAction)));box.querySelector('[data-ut-trip]')?.addEventListener('click',()=>ctx.openTrip(r.trip_id));box.querySelector('[data-ut-cancel]')?.addEventListener('click',e=>perform(e.currentTarget,()=>cancel(id)));paintList();
+  drawMap(box,points);box.querySelector('[data-ut-back]').onclick=()=>{host().classList.remove('gps-show-detail');if(mobile)window.requestAnimationFrame(()=>{if(pane)pane.scrollTop=listScroll;host().querySelector('[data-ut-details="'+id+'"]')?.focus({preventScroll:true});});};box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(id,b.dataset.utAction)));box.querySelector('[data-ut-trip]')?.addEventListener('click',()=>ctx.openTrip(r.trip_id));box.querySelector('[data-ut-cancel]')?.addEventListener('click',e=>perform(e.currentTarget,()=>cancel(id)));paintList();if(open&&mobile)window.requestAnimationFrame(()=>{if(pane)pane.scrollTop=0;box.querySelector('[data-ut-back]')?.focus({preventScroll:true});});
   }catch(e){if(activeId===id&&box.isConnected)box.innerHTML='<p class="err" role="alert">'+escape(e.message||'Не удалось загрузить трек')+'</p><button type="button" class="btn" data-ut-retry>Повторить</button>';box.querySelector('[data-ut-retry]')?.addEventListener('click',()=>details(id));}
  }
  async function resolve(id,action){const uid=ctx.userId(),row=rows.find(x=>x.id===id);if(!row)return;const quote=await rpc('unassigned_track_quote',{p_track:id});if(uid!==ctx.userId())return;

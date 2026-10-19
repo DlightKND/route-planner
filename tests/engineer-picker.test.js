@@ -22,3 +22,7 @@ it('closes on Escape and when the underlying control becomes disabled',async()=>
 it('removes an orphan overlay when the form is replaced',async()=>{
  installEngineerPickers();doc.querySelector('button').click();doc.querySelector('select').remove();await tick();expect(doc.querySelector('.engineer-options')).toBeNull();expect(doc.querySelector('.engineer-picker')).toBeNull();
 });
+
+it('does not duplicate a crew field rendered as inline checkboxes',async()=>{
+ const select=doc.querySelector('select');select.dataset.inlineCrew='true';select.hidden=true;installEngineerPickers();await tick();expect(doc.querySelector('.engineer-picker')).toBeNull();expect(select.selectedOptions[0].value).toBe('a');
+});
