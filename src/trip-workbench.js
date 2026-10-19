@@ -1,6 +1,7 @@
 import { infoHint } from './info-hints.js';
 import { presenceSummary } from './core/trip-review.js';
 import {presenceBounds} from './core/trip-presence-recovery.js';
+import {presenceLocationHTML} from './presence-maps.js';
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const n = v => v == null ? '—' : (+v).toLocaleString('ru-RU',{maximumFractionDigits:2});
@@ -43,7 +44,8 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
       return `<label class="presence-recovery-part">${esc({before:'До первых GPS-точек на объекте',after:'После последних GPS-точек на объекте',between:'Между GPS-частями стоянки',island:'Стоянка целиком внутри провала'}[part.side]||'Восстановленная часть')}<span class="hint">${time(part.from)} — ${time(part.to)} · максимум ${n(part.minutes)} мин</span><input type="number" data-recovery-part="${esc(part.key)}" min="0" max="${esc(part.minutes)}" step="any" value="${esc(accepted)}" aria-label="Подтвердить восстановленное время, минуты"></label>`;
     }).join('')||'<p class="hint">Вся длительность подтверждена GPS. Изменение времени недоступно.</p>'}</div>`;
   };
-  const rows = data.stays.map(s => {
+  const rows = data.stays.map((s,index) => {
+    const place=editor?'':presenceLocationHTML(s,index,t.id);
     const crew = s.crew_ids || [];
     const bounds=presenceBounds(s), proposed=bounds?bounds.max:s.minutes_raw;
     const mins = s.minutes_mgr ?? proposed;
@@ -55,21 +57,21 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
       const uniqueCrew=[...new Set(crew)];
       const crewLabel=uniqueCrew.map(id=>profiles.find(p=>p.id===id)?.full_name||'Инженер '+String(id).slice(0,8)).join(', ');
       const recordedHours=recordedMinutes!=null&&uniqueCrew.length&&knownCrew?recordedMinutes*uniqueCrew.length/60:null;
-      return `<tr data-presence-id="${esc(s.id)}"><td data-label="Интервал">${time(s.stay_from)}<br>${time(s.stay_to)}${evidenceLabel(s)}</td>
+      return `<tr data-presence-id="${esc(s.id)}"><td class="presence-place-cell" data-label="Интервал">${place}${time(s.stay_from)}<br>${time(s.stay_to)}${evidenceLabel(s)}</td>
         <td data-label="Объект / заявка">${esc(s.job_id?jobName(s.job_id):'Не привязана')}</td>
         <td data-label="Команда">${esc(crewLabel||'Состав не указан')}${!knownCrew?'<div class="hint">Состав не подтверждён</div>':''}</td>
         <td data-label="Задание · доля человеко-часов">${allocationCell(s,false)}</td>
         <td data-label="Минуты на человека">${n(recordedMinutes)}<div class="hint">${n(recordedHours)} чел.-ч${['approved','rejected'].includes(s.status)?'':' · по записи, до проверки'}</div></td>
         <td data-label="Проверка">${esc(presenceStatus[s.status]||'Не проверено')}</td></tr>`;
     }
-    return `<tr data-presence-id="${esc(s.id)}"><td data-label="Интервал">${time(s.stay_from)}<br>${time(s.stay_to)}${evidenceLabel(s)}</td>
+    return `<tr data-presence-id="${esc(s.id)}"><td class="presence-place-cell" data-label="Интервал">${place}${time(s.stay_from)}<br>${time(s.stay_to)}${evidenceLabel(s)}</td>
       <td data-label="Объект / заявка"><select data-presence="job_id" aria-label="Заявка стоянки"><option value="">Не привязана</option>${candidateJobs.map(j=>`<option value="${esc(j.id)}" ${j.id===s.job_id?'selected':''}>${esc(j.name)}</option>`).join('')}</select></td>
       <td data-label="Команда"><select data-presence="crew_ids" multiple aria-label="Присутствовавшие инженеры">${profiles.filter(p=>p.role==='engineer'||crew.includes(p.id)).map(p=>`<option value="${esc(p.id)}" ${crew.includes(p.id)?'selected':''}>${esc(p.full_name||'Инженер')}</option>`).join('')}</select>${s.crew_source==='legacy_unverified'?'<div class="hint">Исторический состав не подтверждён</div>':''}</td>
       <td data-label="Задание · доля человеко-часов">${allocationCell(s,editor)}</td>
       <td data-label="Минуты на человека"><input data-presence="minutes_mgr" aria-label="Минуты присутствия" type="number" min="${esc(bounds?.min??0)}" ${bounds?`max="${esc(bounds.max)}" readonly aria-readonly="true"`:""} step="any" value="${esc(mins??'')}"><div class="hint" data-presence-total>${n(hrs)} чел.-ч${bounds?" · итог по GPS и выбранным достройкам":""}</div>${recoveryControls(s)}</td>
       <td data-label="Проверка"><select data-presence="status" aria-label="Результат проверки"><option value="" ${!suggested&&!['approved','rejected'].includes(s.status)?'selected':''}>Проверить позже</option><option value="approved" ${suggested||s.status==='approved'?'selected':''}>${suggested?'Присутствие · предложено':'Присутствие'}</option><option value="rejected" ${s.status==='rejected'?'selected':''}>Не учитывать</option></select></td></tr>`;
   }).join('');
-  const table = `<div class="wb-table-scroll" role="region" aria-label="Стоянки на объектах" tabindex="0"><table class="wb-table"><thead><tr><th>Интервал</th><th>Объект / заявка</th><th>Команда</th><th>Задание · доля часов</th><th>Минуты на человека</th><th>Проверка</th>${editor||readonly?'':'<th></th>'}</tr></thead><tbody>${editor||readonly?rows:rows.replaceAll('</tr>','<td><button type="button" class="btn sm" data-presence-edit>Изменить</button></td></tr>')}</tbody></table></div>`;
+  const table = `<div class="wb-table-scroll" role="region" aria-label="Стоянки на объектах" tabindex="0"><table class="wb-table"><thead><tr><th>${editor?'Интервал':'Место и интервал'}</th><th>Объект / заявка</th><th>Команда</th><th>Задание · доля часов</th><th>Минуты на человека</th><th>Проверка</th>${editor||readonly?'':'<th></th>'}</tr></thead><tbody>${editor||readonly?rows:rows.replaceAll('</tr>','<td><button type="button" class="btn sm" data-presence-edit>Изменить</button></td></tr>')}</tbody></table></div>`;
   if (editor) return table;
   return `<div class="wb-metrics"><div><span>${summary.complete?'Присутствие · проверено':'Подтверждённая часть присутствия'} ${infoHint('Всё время на объекте × присутствовавшие инженеры. Ожидание включено. Нормочасы работ не изменяются. Подтверждённые минуты сохраняются; без известного состава человеко-часы не вычисляются. При незавершённой проверке показана только подтверждённая часть. Время указано по Киеву.', 'О проверенном присутствии')}</span><b>${n(presenceHours)} чел.-ч</b></div><div><span>Стоянки на проверке</span><b>${summary.pending}</b></div><div><span>Факт-пробег</span><b>${n(t.fact_km)} км</b></div></div>
 

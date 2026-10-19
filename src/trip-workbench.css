@@ -120,3 +120,16 @@ select[data-crew-native]{display:none!important}
 .order-trip-cost-list .order-child{width:100%;text-align:left}
 .order-trip-cost-list .order-child small{display:block;color:var(--ink-dim);margin-top:4px}
 @media(max-width:700px){.trip-allocation-metrics{grid-template-columns:1fr}.trip-allocation-actions .btn{width:100%}.wb-task-share-list{min-width:0}}
+
+/* The same geographic preview as the GPS journal, scoped to a single stop. */
+.presence-place-cell:has(.presence-location){min-width:190px;width:210px}
+.presence-location{display:grid;gap:var(--sp-2);margin:0 0 var(--sp-3);min-width:0;width:100%;text-transform:none;letter-spacing:normal}
+.presence-map-placeholder,.presence-location .presence-location-map{height:136px;min-height:136px;width:100%;max-height:none;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;isolation:isolate;background:var(--panel-2)}
+.presence-map-placeholder{display:grid;place-items:center;padding:var(--sp-3);text-align:center;color:var(--ink-dim);font-size:var(--fs-2)}
+.presence-location figcaption{display:grid;gap:4px;min-width:0;font-size:var(--fs-2);line-height:1.4;color:var(--ink-dim)}
+.presence-location figcaption b{color:var(--ink);font-weight:600}
+.presence-location figcaption>span{font-family:var(--mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.presence-location a{color:var(--accent-line);text-decoration:underline;text-underline-offset:3px;width:fit-content;padding:4px 0}
+.presence-location a:focus-visible{outline:2px solid var(--accent-line);outline-offset:3px}
+.presence-location-map .leaflet-control-attribution{font-size:9px;max-width:100%;white-space:normal}
+@media(max-width:700px){.presence-place-cell:has(.presence-location){width:auto;min-width:0}.presence-location .presence-location-map,.presence-map-placeholder{height:160px;min-height:160px}.presence-location a{min-height:32px;display:inline-flex;align-items:center}}

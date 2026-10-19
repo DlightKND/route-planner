@@ -177,6 +177,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   const stays = [
     {
       id: "stay-a",
+      lat:49.99,lng:36.23,
       trip_id: trip,
       job_id: job,
       stay_from: "2026-10-05T06:00:00Z",
@@ -189,6 +190,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     {
       id: "stay-b",
+      lat:50.01,lng:36.24,
       trip_id: trip,
       job_id: job,
       stay_from: "2026-10-06T06:00:00Z",
@@ -391,7 +393,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     session.access_token='synthetic-token';audit.recoveryWrites=[];
     if(role==='engineer'){
       const p=tables.vehicle_positions,a=p[1],b=p[2],end=p.at(-1),from=new Date(Date.parse(b.ts)-180*60000).toISOString();
-      stays.push({id:'recovery-0',trip_id:trip,job_id:job,stay_from:from,stay_to:end.ts,status:'detected',crew_ids:[engineer],crew_source:'snapshot',minutes_raw:180,minutes_mgr:null,recovery_acceptance:{},presence_evidence:{version:1,gps_intervals:[{from:b.ts,to:end.ts}],recovery_parts:[{key:'arrival',from,to:b.ts,minutes:180,side:'before',gap_from:a.ts,gap_to:b.ts}]}});
+      stays.push({id:'recovery-0',trip_id:trip,job_id:job,lat:b.lat,lng:b.lng,stay_from:from,stay_to:end.ts,status:'detected',crew_ids:[engineer],crew_source:'snapshot',minutes_raw:180,minutes_mgr:null,recovery_acceptance:{},presence_evidence:{version:1,gps_intervals:[{from:b.ts,to:end.ts}],recovery_parts:[{key:'arrival',from,to:b.ts,minutes:180,side:'before',gap_from:a.ts,gap_to:b.ts}]}});
     }
   }
   const db = {
