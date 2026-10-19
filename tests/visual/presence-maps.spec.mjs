@@ -18,5 +18,5 @@ for(const role of ['logist','engineer'])test(role+' sees and opens a presence lo
  await preview.getByRole('link',{name:'Стоянка 1: открыть на карте',exact:true}).click();
  await expect(page.locator('.view-map.active')).toBeVisible();await expect(page.locator('.leaflet-popup-content')).toContainText('Стоянка 1');
  await expect(page).toHaveURL(new RegExp('/trip/'+fixtureIDs.trip+'/map$'));
- const state=await page.evaluate(()=>window.__visualQA);expect(state.blockedWrites).toEqual([]);expect(state.queryErrors).toEqual([]);expect(state.recoveryWrites).toEqual([]);expect(errors).toEqual([]);
+ const state=await page.evaluate(()=>window.__visualQA);expect(state.blockedWrites).toEqual([]);expect(state.queryErrors).toEqual([]);expect(state.reads.filter(name=>['rpc:trip_presence_save_tasks','rpc:trip_track_rebuild_save','rpc:stay_attach'].includes(name))).toEqual([]);expect(errors).toEqual([]);
 });
