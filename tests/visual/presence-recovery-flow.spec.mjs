@@ -43,7 +43,7 @@ test('manager rebuilds the track, edits only the GPS gap and keeps approval on r
  await expect(row.locator('[data-presence="minutes_mgr"]')).toHaveValue('240');
  await expect(page.locator('.trip-time-metrics')).toContainText('4 ч');
  await expect(page.locator('#busy')).not.toHaveClass(/on/);
- if(page.viewportSize().width<=760)await page.locator('.presence-review-back').click();await page.locator('.presence-track-tools summary').click();await page.locator('#wbDetect').click();
+ if(await page.locator('.presence-review-back').isVisible())await page.locator('.presence-review-back').click();await page.locator('.presence-track-tools summary').click();await page.locator('#wbDetect').click();
  await expect(row.locator('[data-presence="minutes_mgr"]')).toHaveValue('240');
  await expect(row.locator('[data-presence="status"]')).toHaveValue('approved');
  await info.attach('presence-recovery-summary',{body:await page.screenshot(),contentType:'image/png'});
