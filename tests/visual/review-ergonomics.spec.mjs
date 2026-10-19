@@ -9,7 +9,8 @@ async function open(page,info,route,options={}){
     if(url.hostname.endsWith('tile.openstreetmap.org')||url.hostname==='api.maptiler.com')return r.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e6e2d6"/><path d="M0 90 L256 180 M70 0 L180 256" stroke="#fff" stroke-width="12"/><path d="M0 90 L256 180 M70 0 L180 256" stroke="#cdbb88" stroke-width="2"/></svg>'});
     return url.origin==='http://127.0.0.1:4173'?r.continue():r.abort();
   });
-  await page.clock.setFixedTime(new Date('2026-10-05T17:00:00Z'));
+  // Advance time normally so Leaflet's Date-based tile fade can finish.
+  await page.clock.install({time:new Date('2026-10-05T17:00:00Z')});
   await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,...options});
   await page.goto('/#/'+route);
   if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
@@ -18,6 +19,7 @@ async function open(page,info,route,options={}){
 }
 async function shot(page,info,name){
   mkdirSync('test-results/review-flows/'+info.project.name,{recursive:true});
+  const tile=page.locator('.leaflet-tile-loaded').filter({visible:true}).first();if(await tile.count())await expect.poll(()=>tile.evaluate(el=>Number(getComputedStyle(el).opacity))).toBeGreaterThanOrEqual(.99);
   await page.screenshot({path:'test-results/review-flows/'+info.project.name+'/'+name+'.png',animations:'disabled'});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);
 }
