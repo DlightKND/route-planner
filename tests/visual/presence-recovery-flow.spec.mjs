@@ -18,7 +18,7 @@ test('manager rebuilds the track, edits only the GPS gap and keeps approval on r
  await expect(page.locator('.view-trip.active')).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await page.locator('[data-trip-tab="presence"]').click();
- await page.locator('.presence-track-tools summary').click();await expect(page.locator('#wbDetect')).toBeVisible();
+ if(await page.locator('.presence-track-tools summary').count())await page.locator('.presence-track-tools summary').click();await expect(page.locator('#wbDetect')).toBeVisible();
  await page.locator('#wbDetect').click();
  if(page.viewportSize().width<=760)await page.locator('[data-review-stop]').first().click();const row=page.locator('#tpPresence [data-presence-id]');await expect(row).toHaveCount(1);
  await expect(row).toContainText('180 мин');
