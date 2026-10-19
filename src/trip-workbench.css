@@ -123,6 +123,7 @@ select[data-crew-native]{display:none!important}
 
 /* The same geographic preview as the GPS journal, scoped to a single stop. */
 .presence-place-cell:has(.presence-location){min-width:190px;width:210px}
+.wb-table [data-presence-edit]{white-space:nowrap}
 .presence-location{display:grid;gap:var(--sp-2);margin:0 0 var(--sp-3);min-width:0;width:100%;text-transform:none;letter-spacing:normal}
 .presence-map-placeholder,.presence-location .presence-location-map{height:136px;min-height:136px;width:100%;max-height:none;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;isolation:isolate;background:var(--panel-2)}
 .presence-map-placeholder{display:grid;place-items:center;padding:var(--sp-3);text-align:center;color:var(--ink-dim);font-size:var(--fs-2)}
