@@ -21,7 +21,7 @@
 .presence-review-map .presence-location { margin:0; }
 .presence-review-map .presence-location figcaption { display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center; }
 .presence-review-map .presence-location figcaption>b { display:none; }
-.presence-review-map .presence-location a { margin-left:auto; }
+.presence-review-map .presence-location figcaption a { margin-left:auto; }
 .presence-review-fields .presence-place-cell { width:auto;min-width:0; }
 .presence-review-fields .presence-review-row:not([hidden]) { gap:16px; }
 .presence-review-fields td { padding:16px 0;border:0;border-top:1px solid var(--line);border-radius:0; }
@@ -66,7 +66,7 @@
   .presence-selected-heading h2 { margin:8px 0;font-size:20px; }
   .presence-review-map .unassigned-map { height:168px;max-height:none; }
   .presence-review-map .presence-location figcaption { font-size:11px; }
-  .presence-review-map .presence-location a { min-height:36px;padding:4px 0; }
+  .presence-review-map .presence-location figcaption a { min-height:36px;padding:4px 0; }
   .presence-review-fields :is(input:not([type=checkbox]),select,textarea) { font-size:16px; }
   .presence-review-buttons { gap:8px; }
   .presence-review-buttons>.btn { padding:10px;font-size:13px; }
