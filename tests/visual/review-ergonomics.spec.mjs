@@ -48,6 +48,6 @@ test('GPS list detail and resolution form preserve context on mobile and desktop
   await page.locator('[data-gps-choice=charge]').click();await expect(page.locator('[data-pf=km]')).toBeVisible();await shot(page,info,'gps-charge');
   await page.locator('[data-gps-choice=chain]').click();await expect(page.locator('[data-pf=title]')).toHaveValue('Черновик визуальной проверки');
   await page.locator('#promptNo').click();if(await page.locator('#confirmOverlay').isVisible())await page.locator('#confirmYes').click();
-  if(mobile){await page.locator('[data-ut-back]').click();await expect(last).toBeInViewport();await expect(last).toBeFocused();}
+  if(mobile){await page.locator('[data-ut-back]').click();await expect(page.locator('.journal-orphan-overview')).toBeVisible();await page.locator('[data-ut-back]').click();await expect(last).toBeInViewport();await expect(last).toBeFocused();}
   await shot(page,info,'gps-return-to-list');await clean(page,errors);
 });
