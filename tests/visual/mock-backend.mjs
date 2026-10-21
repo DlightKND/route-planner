@@ -397,7 +397,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     }
   }
 
-  if(unifiedJournalJourney){
+  if(unifiedJournalJourney){tables.vehicles.push({id:'vehicle-empty',name:'Автомобиль без поездок',plate:'TEST',deleted_at:null});
     audit.recoveryWrites=[];
     Object.assign(ride,{status:'finished',started_at:'2026-10-05T05:12:00Z',finished_at:'2026-10-05T14:46:00Z'});
     const span=(from,to)=>({from:'2026-10-05T'+from+':00Z',to:'2026-10-05T'+to+':00Z'});

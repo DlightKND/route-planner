@@ -10,12 +10,12 @@ const when=v=>v?new Date(v).toLocaleString('ru-RU',{timeZone:'Europe/Kyiv',day:'
 const result=({data,error})=>{if(error)throw error;return data;};
 export function createJournalTrips(ctx){
  let view=null,token=0;
- async function list(offset=0){
+ async function list(offset=0,vehicleId=''){
   // Journal management retains its existing admin/logist scope. Table reads
   // and every decision RPC still run with the signed-in user's RLS policies.
   if(!['admin','logist'].includes(ctx.role()))return [];
   const bounds=calendarPeriodBounds(ctx.period());
-  const page=result(await ctx.db().from('trips').select('id,vehicle_id,started_at,finished_at,status,owner_id,curator_id,fact_km').is('deleted_at',null).not('started_at','is',null).lt('started_at',bounds.until).or('finished_at.is.null,finished_at.gte.'+bounds.from).order('started_at',{ascending:false}).range(offset,offset+49))||[];
+  let query=ctx.db().from('trips').select('id,vehicle_id,started_at,finished_at,status,owner_id,curator_id,fact_km').is('deleted_at',null).not('started_at','is',null).lt('started_at',bounds.until).or('finished_at.is.null,finished_at.gte.'+bounds.from).order('started_at',{ascending:false});if(vehicleId)query=query.eq('vehicle_id',vehicleId);const page=result(await query.range(offset,offset+49))||[];
   const trips=page.filter(t=>t.started_at<bounds.until&&(!t.finished_at||t.finished_at>=bounds.from));
   const summaries=trips.length?result(await ctx.db().from('trip_stays').select('trip_id,status,presence_evidence').in('trip_id',trips.map(t=>t.id))):[];
   return trips.map(t=>{const stops=(summaries||[]).filter(s=>s.trip_id===t.id);return {...t,review:{total:stops.length,done:stops.filter(reviewedStop).length,recovery:stops.some(s=>s.presence_evidence?.recovery_parts?.length)}};});
