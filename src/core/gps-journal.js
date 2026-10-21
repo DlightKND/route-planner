@@ -6,7 +6,7 @@ export function stopKind(stay){
  if(stay.status==='rejected')return /^Остановка в пути(?:\s|[·:.—]|$)/u.test(stay.note||'')?'road':'excluded';
  return stay.status==='approved'||stay.job_id?'visit':'later';
 }
-export function decisionComment(note=''){return String(note).replace(/^(?:Остановка в пути|Исключено из присутствия|Посещение подтверждено)\s*[·:—]?\s*/u,'');}
+export function decisionComment(note=''){return String(note??'').replace(/^(?:Остановка в пути|Исключено из присутствия|Посещение подтверждено)\s*[·:—]?\s*/u,'');}
 export function decisionReason(stay,comment=''){
  const text=decisionComment(comment).trim();
  return (stopKind(stay)==='road'?'Остановка в пути':stay.status==='rejected'?'Исключено из присутствия':'Посещение подтверждено')+' · '+(text||'Проверено по данным поездки');
@@ -17,6 +17,10 @@ export function minutesText(value){
 }
 export const numericText=value=>Number(value||0).toLocaleString('ru-RU',{maximumFractionDigits:2});
 export const kmText=value=>value==null?'Нет данных':numericText(value)+' км';
+export function evidenceExtent(stay){
+ const intervals=[...(stay.presence_evidence?.gps_intervals||[]),...(stay.presence_evidence?.recovery_parts||[])],from=[stay.stay_from,...intervals.map(p=>p.from)].map(Date.parse).filter(Number.isFinite),to=[stay.stay_to,...intervals.map(p=>p.to)].map(Date.parse).filter(Number.isFinite);
+ return {from:from.length?new Date(Math.min(...from)).toISOString():stay.stay_from,to:to.length?new Date(Math.max(...to)).toISOString():stay.stay_to};
+}
 export function stopTitle(stay,jobs=[],index=0){
  return stay.display_name||stay.address||((stopKind(stay)==='visit')&&jobs.find(j=>j.id===stay.job_id)?.clients?.name)||'Остановка '+(index+1);
 }

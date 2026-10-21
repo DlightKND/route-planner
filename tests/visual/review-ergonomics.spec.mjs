@@ -29,7 +29,7 @@ async function clean(page,errors){
 
 for(const role of ['logist','engineer'])test(role+' uses the canonical stop screen and keeps the footer above the real navigation rail',async({page},info)=>{
  const errors=await open(page,info,'journal/trip/'+fixtureIDs.trip,{role,unifiedJournalJourney:true});await page.locator('[data-review-stop="journal-stay-3"]').click();
- await expect(page.locator('.presence-review-map .leaflet-container')).toHaveCount(1);await shot(page,info,'presence-detail-'+role);
+ await expect(page.locator('.presence-review-map [data-presence-route]')).toBeVisible();await shot(page,info,'presence-detail-'+role);
  if(role==='engineer')await expect(page.locator('[data-presence-save],[data-review-edit]')).toHaveCount(0);
  else{const scroll=page.locator('.presence-review-scroll');await scroll.evaluate(e=>e.scrollTop=e.scrollHeight);if(page.viewportSize().width<=760){const floor=await page.locator('#nav.rail').evaluate(e=>e.getBoundingClientRect().top);for(const b of await page.locator('.presence-review-buttons>button:visible').all()){const bounds=await b.boundingBox();expect(bounds.y+bounds.height).toBeLessThanOrEqual(floor+1);}}await shot(page,info,'presence-footer');}
  expect(await page.locator('.presence-review-detail').evaluate(e=>e.clientHeight)).toBeGreaterThan(300);await clean(page,errors);
@@ -40,7 +40,7 @@ test('GPS list detail and resolution form preserve context on mobile and desktop
   await expect(page.locator('.unassigned-card')).toHaveCount(14);await shot(page,info,'gps-list');
   const last=page.locator('[data-ut-details]').last();await last.scrollIntoViewIfNeeded();await last.click();
   if(mobile){await expect(page.locator('[data-ut-back]')).toBeInViewport();if(page.viewportSize().width<=760)await expect(page.locator('#tripJournalPeriod')).toBeHidden();}
-  await expect(page.locator('.gps-journal-detail .leaflet-container')).toBeVisible();await expect(page.locator('.gps-journal-detail .leaflet-tile-loaded').first()).toBeVisible();await shot(page,info,'gps-detail');
+  await expect(page.locator('.journal-orphan-overview .leaflet-container')).toBeVisible();await expect(page.locator('.journal-orphan-overview .leaflet-tile-loaded').first()).toBeVisible();await shot(page,info,'gps-detail');
   if(await page.locator('[data-orphan-documents]').isVisible())await page.locator('[data-orphan-documents]').click();await page.getByRole('button',{name:'Создать документы',exact:true}).click();
   await expect(page.locator('#promptOverlay [data-pf=client]')).toBeInViewport();
   await expect(page.locator('#promptOverlay #promptYes')).toBeInViewport();await shot(page,info,'gps-resolution-start');

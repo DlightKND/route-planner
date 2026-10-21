@@ -5,7 +5,7 @@ const duration=v=>v==null?'Нет данных':[(v>=60?Math.floor(v/60)+' ч':'
 export function installPresenceControls(root,data,{readonly=false,profiles=[],onRoute}={}){
  const doc=root.ownerDocument,workspace=root.querySelector('.presence-review-workspace'),heading=workspace.querySelector('.presence-selected-heading');
  workspace.classList.add('presence-review-redesign');
- const evidence=doc.createElement('section');evidence.className='journal-presence-evidence';heading.after(evidence);const map=workspace.querySelector('.presence-review-map');heading.after(map);const kind=workspace.querySelector('.presence-kind');kind.after(evidence);
+ const evidence=doc.createElement('section');evidence.className='journal-presence-evidence';heading.after(evidence);const map=workspace.querySelector('.presence-review-map');heading.after(map);const kind=workspace.querySelector('.presence-kind');(workspace.querySelector('.journal-kind-select')||kind).after(evidence);
  const note=doc.createElement('label');note.className='journal-review-note-label';note.innerHTML='Комментарий <span class="hint">необязательно</span><textarea class="journal-review-note" rows="2" maxlength="500"></textarea>';note.hidden=readonly;workspace.querySelector('.presence-review-fields').after(note);
  const summaries=new Map();let modal=null;
  for(const row of root.querySelectorAll('[data-presence-id]')){

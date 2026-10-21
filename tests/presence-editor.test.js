@@ -8,7 +8,7 @@ it('routes the legacy map and schedule entrypoints to the canonical journal, wit
  const openJournalTrip=vi.fn(async()=>{});
  const body=app.slice(app.indexOf('async function openPresenceEditor('),app.indexOf('function renderTripReviewSummary('));
  await new Function('openJournalTrip','return ('+body+');')(openJournalTrip)('trip','stop');
- expect(openJournalTrip).toHaveBeenCalledWith('trip',{stopId:'stop'});
+ expect(openJournalTrip).toHaveBeenCalledWith('trip',{stopId:'stop',jobId:undefined});
  expect(body).not.toContain('trip_presence_save');expect(body).not.toContain('dialog');
 });
 it('edits explicit task-hour shares only among tasks for the selected request',async()=>{

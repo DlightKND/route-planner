@@ -90,7 +90,7 @@ test('dispatcher actions keep stable mobile slots and task status chips control 
  }
  for(const dots of layouts.slice(1)){expect(dots.x).toBeCloseTo(layouts[0].x,0);expect(dots.y).toBeCloseTo(layouts[0].y,0);}
  await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page.locator('.unassigned-list')).toBeVisible();
- await expect(page.locator('#tripJournalRefresh')).toBeVisible();await page.locator('#tripJournalRefresh').click();await expect(page.locator('.unassigned-card')).toBeVisible();
+ await expect(page.locator('[data-journal-refresh]')).toBeVisible();await page.locator('[data-journal-refresh]').click();await expect(page.locator('.unassigned-card')).toBeVisible();
  await page.screenshot({path:'test-results/mobile-dispatcher/'+info.project.name+'-journal.png'});
  await page.goto('/#/planner/orders');await expect(page.locator('#orderStatusChips [data-os]')).toHaveCount(7);
  await page.locator('[data-os=assigned]').click();await expect(page.locator('#orderList [data-kst=assigned]')).toHaveCount(0);await expect(page.locator('[data-os=assigned]')).toHaveAttribute('aria-pressed','false');

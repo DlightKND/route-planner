@@ -40,7 +40,7 @@ test('chain draft collects client and engineer and can cancel without writes',as
  await expect(page.locator('#promptOverlay')).not.toBeVisible();await expect(page.getByRole('button',{name:'Создать документы',exact:true})).toBeFocused();await clean(page);
 });
 test('charge shows the cost basis and requires a separate amount confirmation',async({page},info)=>{
- await open(page,info);if(page.viewportSize().width<=760)await page.locator('[data-ut-details]').first().click();await page.getByRole('button',{name:'Записать списание инженеру',exact:true}).click();
+ await open(page,info);if(page.viewportSize().width<=760)await page.locator('[data-ut-details]').first().click();if(await page.locator('[data-orphan-documents]').isVisible())await page.locator('[data-orphan-documents]').click();await page.getByRole('button',{name:'Записать списание инженеру',exact:true}).click();
  await expect(page.locator('.gps-resolution-summary')).toContainText('12,5');await page.locator('[data-pf=engineer]').selectOption('00000000-0000-4000-8000-000000000002');
  await page.locator('[data-pf=reason]').fill('Подтверждённая личная поездка');await page.locator('#promptYes').click();
  await expect(page.locator('#confirmOverlay')).toBeVisible();await expect(page.locator('#confirmOverlay')).toContainText('1 500');
@@ -95,8 +95,8 @@ test('trips actions keep aligned slots and a reachable journal switch',async({pa
  for(const selector of ['.trip-list-actions .planner-filter-menu>summary','[data-trip-section=tracking]','#tripTrash']){const box=await page.locator(selector).boundingBox();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width);expect(box.height).toBeGreaterThanOrEqual(36);}
  await clickDispatcherControl(page,'.trip-list-actions .planner-filter-menu>summary');await expect(page.locator('#tripLayout')).toBeVisible();await page.keyboard.press('Escape');
  await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page.locator('.unassigned-card')).toBeVisible();await expect(page.locator('#tripAdd')).toBeHidden();
- await clickDispatcherControl(page,'#tripTrash');await expect(page.locator('#trashOverlay')).toBeVisible();await page.locator('#trashClose').click();
- await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page.locator('#tripAdd')).toBeVisible();
+ await page.locator('[data-journal-exit]').click();await clickDispatcherControl(page,'#tripTrash');await expect(page.locator('#trashOverlay')).toBeVisible();await page.locator('#trashClose').click();
+ await expect(page.locator('#tripAdd')).toBeVisible();
  await page.screenshot({path:'test-results/gps-map-header/'+info.project.name+'-trips.png'});await clean(page);
 });
 
