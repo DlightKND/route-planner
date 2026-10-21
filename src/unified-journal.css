@@ -16,6 +16,9 @@
 .journal-trip-tabs {display:flex!important;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:0 16px;}
 .journal-trip-tabs button {flex:1;border:0;border-bottom:3px solid transparent;border-radius:0;white-space:normal;background:none;}
 .journal-trip-tabs button.on {border-bottom-color:var(--accent);box-shadow:none;}
+.view .journal-trip-tabs.seg {background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;gap:0;}
+.view .journal-trip-tabs.seg>button {background:none;color:var(--ink-dim);border:0;border-bottom:3px solid transparent;border-radius:0;box-shadow:none;}
+.view .journal-trip-tabs.seg>button.on {background:none;color:var(--ink);border-bottom-color:var(--accent);box-shadow:none;}
 .journal-timeline {padding:12px 16px;border-bottom:1px solid var(--line);}
 .journal-time-labels {display:flex;justify-content:space-between;color:var(--ink-dim);font-family:var(--mono);font-size:11px;margin-bottom:8px;}
 .journal-time-band {height:18px;position:relative;background:var(--line);overflow:hidden;border-radius:3px;}
@@ -63,10 +66,13 @@
 .journal-conflict {display:flex;gap:12px;align-items:center;justify-content:space-between;}
 .journal-review-note-label {display:grid;gap:8px;margin:16px 0;font-size:12px;}
 .journal-review-note-label textarea {width:100%;resize:vertical;}
+.journal-field-invalid::before,.journal-field-error {color:var(--danger-ink);}
+.journal-field-error {font-size:12px;margin:6px 0 0;}.journal-field-error:empty {display:none;}
+.journal-field-invalid select {border-color:var(--danger-ink);}
 .journal-allocation-summary p {display:flex;justify-content:space-between;gap:12px;font-size:12px;}
 .journal-allocation-summary b {font-family:var(--mono);white-space:nowrap;}
 .journal-trip-stops .presence-review-detail {max-height:none;}
-.journal-trip-stops .presence-review-save {bottom:-20px;}
+.journal-trip-stops .presence-review-save {position:static;bottom:auto;}
 .presence-review-redesign td:has([data-recovery-part])>input[readonly],.presence-review-redesign td:has([data-recovery-part])>[data-presence-total] {display:none;}
 .presence-review-redesign td:has([data-recovery-part])::before {content:'Учитывать из восстановленного времени';}
 .journal-trip-documents {padding:20px;}
@@ -132,6 +138,7 @@
  .journal-allocation-editor {width:100%;height:100%;max-height:100dvh;border:0;border-radius:0;margin:0;padding:16px 16px calc(24px + env(safe-area-inset-bottom));}
  .journal-allocation-editor .wb-task-share-row {grid-template-columns:24px minmax(0,1fr) 80px 16px;padding:12px;gap:8px;}.journal-allocation-editor .wb-task-share-row input[type=number] {width:80px;max-width:80px;}.journal-allocation-editor footer {bottom:-24px;padding-bottom:calc(16px + env(safe-area-inset-bottom));}
 
- #tripJournalPeriod .rangebar {padding:8px;gap:6px;border:0;}.view #tripJournalPeriod input {width:calc(50% - 10px);min-height:40px;font-size:12px;}.view #tripJournalPeriod .rquick {margin:0;}
+ .view-planner #tripJournalPeriod .rangebar {left:-44px;width:calc(100vw - 48px);max-width:calc(100vw - 48px);min-width:0;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);padding:8px;gap:6px;}
+ .view-planner #tripJournalPeriod .rangebar input {width:100%;min-width:0;min-height:44px;font-size:16px;}.view #tripJournalPeriod .rquick {margin:0;}
  .view-planner .dispatcher-toolbar:has(#tripJournalPeriod:not([style*="none"])) {padding:8px 0;margin-bottom:8px;}
 }

@@ -10,3 +10,13 @@ it('applies allocations to the same draft without confirming and restores cancel
   root.querySelector('[data-allocation-edit]').click();const next=root.querySelector('dialog [data-task-allocation-share]');next.value='80';next.dispatchEvent(new win.Event('input',{bubbles:true}));root.querySelector('[data-allocation-apply]').click();expect(readPresenceForm(root,[s])[0].task_allocations[0].share).toBe(.8);expect(s.status).toBe('detected');expect(s.task_allocations[0].share).toBe(.5);
  }finally{await win.happyDOM.close();}
 });
+it('keeps other stop drafts dirty when one decision is saved and clears explicitly discarded drafts',async()=>{
+ const win=new Window();try{
+  const data={trip:{id:'draft-trip'},jobIds:['j'],removed:[],stays:['a','b'].map(id=>({id,status:'detected',job_id:'j',crew_ids:['e'],crew_source:'snapshot',stay_from:'2026-10-21T08:00Z',stay_to:'2026-10-21T09:00Z',minutes_raw:60}))},jobs=[{id:'j',clients:{name:'Объект'}}],people=[{id:'e',role:'engineer',full_name:'Анна'}],root=win.document.body;
+  const mount=()=>{root.innerHTML=presenceHTML(data,jobs,people,{workspace:true});return mountPresenceReview(root,data,{owner:'draft-user',profiles:people,initialMode:'all'});};
+  let review=mount();review.select('a');const field=root.querySelector('[data-presence-id="a"] [data-presence=job_id]');field.value='';field.dispatchEvent(new win.Event('change',{bubbles:true}));
+  review.select('b');const comment=root.querySelector('.journal-review-note');comment.value='Проверить место';comment.dispatchEvent(new win.Event('input',{bubbles:true}));review.markSaved();expect(review.isDirty()).toBe(true);review.destroy();
+  review=mount();expect(review.isDirty()).toBe(true);expect(readPresenceForm(root,data.stays).find(s=>s.id==='a').job_id).toBe(null);review.discard();review.destroy();
+  review=mount();expect(review.isDirty()).toBe(false);expect(readPresenceForm(root,data.stays).find(s=>s.id==='a').job_id).toBe('j');review.destroy();
+ }finally{await win.happyDOM.close();}
+});

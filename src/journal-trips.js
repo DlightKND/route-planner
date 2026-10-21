@@ -66,7 +66,7 @@ export function createJournalTrips(ctx){
   };
   const diagnostics=data.stays.flatMap(s=>presenceRoadConflicts(s,track).map(()=>s));if(diagnostics.length){const warning=document.createElement('div');warning.className='journal-conflict';warning.innerHTML='<strong>Есть пересечение дороги и принятого присутствия.</strong><button type="button" class="btn" data-journal-conflict>Разобрать конфликт</button>';root.querySelector('.journal-timeline-host').append(warning);warning.querySelector('button').onclick=()=>{switchPane('stops');review?.select(diagnostics[0].id);};}
   if(amounts.total!=null)root.querySelector('.journal-trip-head p').append(' · '+amounts.total.toLocaleString('ru-RU',{maximumFractionDigits:1})+' км по GPS и дорогам');
-  view={destroy(){routeMap?.destroy();review?.destroy();root.classList.remove('journal-trip-detail');},isDirty:()=>review?.isDirty()};switchPane(pane);
+  view={discard:()=>review?.discard(),destroy(){routeMap?.destroy();review?.destroy();root.classList.remove('journal-trip-detail');},isDirty:()=>review?.isDirty()};switchPane(pane);
  }
- return {list,mount,destroy,isDirty:()=>view?.isDirty()};
+ return {list,mount,destroy,discard(){view?.discard();destroy();},isDirty:()=>view?.isDirty()};
 }
