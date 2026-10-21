@@ -813,7 +813,7 @@ async function applyRoute(){
     const p=raw.split('/').filter(Boolean).map(x=>{ try{ return decodeURIComponent(x); }catch(e){ return x; } });
     if(!p.length){ const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
       await switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
-    if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:p[3]==='stop'?p[4]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});return;}
+    if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:p[3]==='stop'?p[4]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});else await unassignedTracks.showList();return;}
     if(p[0]==='order'&&p[1]){await serviceOrders.open(p[1]);return;}
     if(p[0]==='job'&&p[1]){
       const j=await fetchJobFull(p[1]);

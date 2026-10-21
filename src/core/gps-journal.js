@@ -44,7 +44,7 @@ export function tripAttention(trip){const r=trip.review||{};return !!(r.done<r.t
 export function activityTimeline(trip,track,stays){
  const data=track?.data||track||{},from=Date.parse(trip.started_at),to=Date.parse(trip.finished_at||data.presence?.source_to);
  if(!Number.isFinite(from)||!Number.isFinite(to)||to<=from)return [];
- const motion=(data.presence?.motion_intervals||[]).map(m=>({...m,kind:'drive',recovery:m.source==='ors'}));
+ const motion=[...(data.segments||[]).filter(s=>s.kind==='track'&&s.fromTs&&s.toTs).map(s=>({from:s.fromTs,to:s.toTs,source:'gps'})),...(data.presence?.motion_intervals||[])].map(m=>({...m,kind:'drive',recovery:m.source==='ors'}));
  const stopParts=stays.flatMap(s=>{
   const base={kind:'stop',id:s.id,from:s.stay_from,to:s.stay_to};if(!s.stay_to)return [];
   if(!presenceBounds(s))return [{...base,recovery:false}];

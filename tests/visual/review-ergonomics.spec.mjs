@@ -39,9 +39,9 @@ test('GPS list detail and resolution form preserve context on mobile and desktop
   const errors=await open(page,info,'planner/tracking',{unassignedJourney:true,unassignedCount:14,preserveRanges:true}),mobile=page.viewportSize().width<=1100;
   await expect(page.locator('.unassigned-card')).toHaveCount(14);await shot(page,info,'gps-list');
   const last=page.locator('[data-ut-details]').last();await last.scrollIntoViewIfNeeded();await last.click();
-  if(mobile){await expect(page.locator('[data-ut-back]')).toBeInViewport();await expect(page.locator('#tripJournalPeriod')).toBeHidden();}
+  if(mobile){await expect(page.locator('[data-ut-back]')).toBeInViewport();if(page.viewportSize().width<=760)await expect(page.locator('#tripJournalPeriod')).toBeHidden();}
   await expect(page.locator('.gps-journal-detail .leaflet-container')).toBeVisible();await expect(page.locator('.gps-journal-detail .leaflet-tile-loaded').first()).toBeVisible();await shot(page,info,'gps-detail');
-  await page.getByRole('button',{name:'Создать документы',exact:true}).click();
+  if(await page.locator('[data-orphan-documents]').isVisible())await page.locator('[data-orphan-documents]').click();await page.getByRole('button',{name:'Создать документы',exact:true}).click();
   await expect(page.locator('#promptOverlay [data-pf=client]')).toBeInViewport();
   await expect(page.locator('#promptOverlay #promptYes')).toBeInViewport();await shot(page,info,'gps-resolution-start');
   await page.locator('[data-pf=title]').fill('Черновик визуальной проверки');

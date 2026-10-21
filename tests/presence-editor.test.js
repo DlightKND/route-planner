@@ -59,4 +59,3 @@ it('keeps the default manager editor and proposed approval available',()=>{
  win.document.body.innerHTML=presenceHTML(data,[{id:'j1',clients:{name:'Объект'}}],[{id:'e1',role:'engineer',full_name:'Анна'}]);
  expect(win.document.querySelector('[data-presence-edit]')).not.toBeNull();expect(win.document.querySelector('#wbDetect')).not.toBeNull();expect(win.document.querySelector('#wbPresenceSave')).not.toBeNull();
 });
-
