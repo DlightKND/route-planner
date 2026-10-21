@@ -91,6 +91,7 @@
 .journal-allocation-editor h2 {font-size:22px;}
 .journal-allocation-editor .wb-task-share-list {display:grid;gap:16px;margin:20px 0;}
 .journal-allocation-editor .wb-task-share-row {display:grid;grid-template-columns:24px minmax(0,1fr) 90px 20px;gap:10px;align-items:center;border:1px solid var(--line);border-radius:var(--r-sm);padding:16px;}
+.journal-allocation-editor .wb-task-share-row {font:400 14px/1.45 var(--sans);text-transform:none;letter-spacing:normal;}
 .journal-allocation-editor [hidden] {display:none!important;}
 .journal-allocation-editor .wb-task-share-row input[type=number] {width:90px;max-width:90px;min-height:44px;font-size:16px;}
 .journal-allocation-editor input[type=checkbox] {width:18px;height:18px;accent-color:var(--accent);}
@@ -135,7 +136,7 @@
  .presence-review-redesign .presence-review-fields input,.presence-review-redesign .presence-review-fields select,.journal-review-note {font-size:16px;}
  .presence-review-redesign .presence-review-save {position:relative;bottom:auto;padding-bottom:calc(20px + env(safe-area-inset-bottom));}
  .presence-review-redesign .presence-review-buttons [data-presence-save] {grid-column:1/-1;}
- .journal-allocation-editor {width:100%;height:100%;max-height:100dvh;border:0;border-radius:0;margin:0;padding:16px 16px calc(24px + env(safe-area-inset-bottom));}
+ .journal-allocation-editor {width:100%;max-width:none;height:100%;max-height:100dvh;border:0;border-radius:0;margin:0;padding:16px 16px calc(24px + env(safe-area-inset-bottom));}
  .journal-allocation-editor .wb-task-share-row {grid-template-columns:24px minmax(0,1fr) 80px 16px;padding:12px;gap:8px;}.journal-allocation-editor .wb-task-share-row input[type=number] {width:80px;max-width:80px;}.journal-allocation-editor footer {bottom:-24px;padding-bottom:calc(16px + env(safe-area-inset-bottom));}
 
  .view-planner #tripJournalPeriod .rangebar {left:-44px;width:calc(100vw - 48px);max-width:calc(100vw - 48px);min-width:0;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);padding:8px;gap:6px;}
