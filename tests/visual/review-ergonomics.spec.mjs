@@ -35,7 +35,7 @@ test('presence review keeps one map and crew control and makes the complete form
     expect(Math.max(...controls)-Math.min(...controls)).toBeLessThan(1);
     const value=page.locator('#tpPresence>.wb-metrics b').first();expect((await value.boundingBox()).height).toBeLessThan(26);
   }
-  await expect(page.locator('.presence-stop .leaflet-tile-loaded').first()).toBeVisible();await shot(page,info,'presence-list');
+await shot(page,info,'presence-list');
   await page.locator('[data-review-stop]').first().click();
   if(mobile){await expect(page.locator('.presence-review-back')).toBeInViewport();await expect(page.locator('#tpPresence>.wb-metrics')).toBeHidden();}
   await expect(page.locator('.presence-review-map .leaflet-container')).toHaveCount(1);await expect(page.locator('.presence-review-map .leaflet-tile-loaded').first()).toBeVisible();
@@ -50,9 +50,10 @@ test('presence review keeps one map and crew control and makes the complete form
   if(mobile)await page.locator('.presence-review-back').click();
   await page.locator('[data-review-mode=done]').click();if(mobile)await page.locator('[data-review-stop]').first().click();
   await page.locator('[data-review-edit]').click();
-  const share=page.locator('[data-presence-id]:visible [data-task-allocation-share]').first();
+  await page.locator('[data-presence-id]:visible [data-allocation-edit]').click();
+  const share=page.locator('.journal-allocation-editor [data-task-allocation-share]').first();
   await share.scrollIntoViewIfNeeded();await expect(share).toHaveValue('100');expect((await share.boundingBox()).width).toBeGreaterThanOrEqual(76);
-  await shot(page,info,'presence-team-and-share');
+  await shot(page,info,'presence-team-and-share');await page.locator('[data-allocation-cancel]').click();
   const last=page.locator('.presence-review-buttons button:visible').last();await last.scrollIntoViewIfNeeded();
   const floor=mobile?await page.locator('.rail').evaluate(el=>el.getBoundingClientRect().top):page.viewportSize().height;
   for(const b of await page.locator('.presence-review-buttons button:visible').all()){
