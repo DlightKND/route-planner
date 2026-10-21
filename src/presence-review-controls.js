@@ -2,13 +2,14 @@ import {presenceBounds} from './core/trip-presence-recovery.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const n=v=>Number(v||0).toLocaleString('ru-RU',{maximumFractionDigits:2});
 const duration=v=>v==null?'Нет данных':Math.floor(v/60)+' ч '+n(v%60)+' мин';
-export function installPresenceControls(root,data,{readonly=false,profiles=[]}={}){
+export function installPresenceControls(root,data,{readonly=false,profiles=[],onRoute}={}){
  const doc=root.ownerDocument,workspace=root.querySelector('.presence-review-workspace'),heading=workspace.querySelector('.presence-selected-heading');
  workspace.classList.add('presence-review-redesign');
- const evidence=doc.createElement('section');evidence.className='journal-presence-evidence';heading.after(evidence);const map=workspace.querySelector('.presence-review-map');heading.before(map);
+ const evidence=doc.createElement('section');evidence.className='journal-presence-evidence';heading.after(evidence);const map=workspace.querySelector('.presence-review-map');heading.after(map);const kind=workspace.querySelector('.presence-kind');kind.after(evidence);
  const note=doc.createElement('label');note.className='journal-review-note-label';note.innerHTML='Комментарий <span class="hint">необязательно</span><textarea class="journal-review-note" rows="2" maxlength="500"></textarea>';note.hidden=readonly;workspace.querySelector('.presence-review-fields').after(note);
  const summaries=new Map();let modal=null;
  for(const row of root.querySelectorAll('[data-presence-id]')){
+  const timeCell=row.querySelector('td[data-label="Минуты на человека"]');if(timeCell)row.prepend(timeCell);
   const list=row.querySelector('.wb-task-share-list');if(!list||readonly)continue;
   const cell=list.closest('td'),summary=doc.createElement('div'),button=doc.createElement('button');summary.className='journal-allocation-summary';button.type='button';button.className='btn ghost';button.textContent='Изменить распределение';button.dataset.allocationEdit='';list.hidden=true;cell.prepend(summary,button);summaries.set(row.dataset.presenceId,{summary,list,button});
   button.onclick=()=>{
@@ -23,6 +24,7 @@ export function installPresenceControls(root,data,{readonly=false,profiles=[]}={
   };
  }
  function render(original,current,editing){
+  if(onRoute&&!workspace.querySelector('[data-presence-route]')){const button=doc.createElement('button');button.type='button';button.className='btn ghost journal-stop-route';button.dataset.presenceRoute='';button.textContent='Развернуть карту';button.onclick=onRoute;workspace.querySelector('.presence-review-map').append(button);}
   if(!original){evidence.hidden=true;note.hidden=true;return;}evidence.hidden=false;note.hidden=readonly||!editing;
   const bounds=presenceBounds(original),road=current.status==='rejected',gps=bounds?.gps??original.minutes_raw,extra=bounds?.extra||0,accepted=bounds?Math.max(0,Number(current.minutes_mgr||0)-bounds.gps):0,total=Number(gps||0)+extra;
   evidence.hidden=road;

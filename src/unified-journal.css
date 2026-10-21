@@ -67,6 +67,8 @@
 .journal-allocation-summary b {font-family:var(--mono);white-space:nowrap;}
 .journal-trip-stops .presence-review-detail {max-height:none;}
 .journal-trip-stops .presence-review-save {bottom:-20px;}
+.presence-review-redesign td:has([data-recovery-part])>input[readonly],.presence-review-redesign td:has([data-recovery-part])>[data-presence-total] {display:none;}
+.presence-review-redesign td:has([data-recovery-part])::before {content:'Учитывать из восстановленного времени';}
 .journal-trip-documents {padding:20px;}
 .journal-trip-message {padding:0 20px;color:var(--danger-ink);}
 .journal-trip-route {display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,34%);min-height:420px;}
@@ -84,11 +86,27 @@
 .journal-allocation-editor .wb-task-share-list {display:grid;gap:16px;margin:20px 0;}
 .journal-allocation-editor .wb-task-share-row {display:grid;grid-template-columns:24px minmax(0,1fr) 90px 20px;gap:10px;align-items:center;border:1px solid var(--line);border-radius:var(--r-sm);padding:16px;}
 .journal-allocation-editor [hidden] {display:none!important;}
-.journal-allocation-editor input[type=number] {width:90px;min-height:44px;font-size:16px;}
+.journal-allocation-editor .wb-task-share-row input[type=number] {width:90px;max-width:90px;min-height:44px;font-size:16px;}
 .journal-allocation-editor input[type=checkbox] {width:18px;height:18px;accent-color:var(--accent);}
 .journal-task-hours {grid-column:2/-1;font-family:var(--mono);}
 .journal-allocation-editor footer {position:sticky;bottom:-24px;padding:16px 0;background:var(--panel);}.journal-allocation-editor footer button {width:100%;}
-@media(min-width:1101px){.journal-trip-detail>.gps-back {display:none;}}
+@media(min-width:1101px){
+ .journal-trip-detail>.gps-back {display:none;}
+ .presence-review-redesign .presence-review-detail {display:grid;grid-template-columns:minmax(0,1fr) 180px;align-content:start;column-gap:16px;}
+ .presence-review-redesign .presence-review-detail>* {grid-column:1/-1;}
+ .presence-review-redesign .presence-selected-heading {grid-column:1;grid-row:1;}
+ .presence-review-redesign .presence-review-map {grid-column:2;grid-row:1;float:none;margin:0;}
+}
+@media(min-width:761px){
+ .gps-journal-detail.journal-trip-detail {display:flex;flex-direction:column;overflow:hidden;}
+ .journal-trip-detail>.journal-trip-head,.journal-trip-detail>.journal-trip-tabs,.journal-trip-detail>.journal-timeline-host {flex:none;}
+ .journal-trip-detail>.journal-trip-stops {flex:1;min-height:0;overflow:hidden;}
+ .journal-trip-stops .presence-review-workspace {height:100%;min-height:0;}
+ .journal-trip-stops .presence-review-sidebar,.journal-trip-stops .presence-review-detail {height:100%;max-height:100%;overflow:auto;}
+ .journal-trip-detail>.journal-trip-route,.journal-trip-detail>.journal-trip-documents {flex:1;min-height:0;overflow:auto;}
+ .view-planner #plTrips:has(.unified-gps-journal)>.workspace-dispatcher-head {padding-block:12px;}
+ .view-planner #plTrips:has(.unified-gps-journal)>.workspace-dispatcher-head .workspace-subtitle {display:none;}
+}
 @media(max-width:1100px){
  .view #unassignedHost.unified-gps-journal {grid-template-columns:280px minmax(0,1fr);}
  .journal-trip-stops .presence-review-workspace {display:block;}.journal-trip-stops .presence-review-sidebar {border:0;}.journal-trip-stops .presence-review-detail {display:none;}.journal-trip-stops .presence-show-detail .presence-review-sidebar {display:none;}.journal-trip-stops .presence-show-detail .presence-review-detail {display:block;}.journal-trip-stops .presence-review-back {display:inline-flex;}
@@ -102,6 +120,7 @@
  .unified-gps-journal .gps-record-open .unassigned-cardhead {display:block;}
  .unified-gps-journal .gps-record-open .tag {display:inline-block;margin-top:6px;}
  .journal-trip-detail>.gps-back {margin:8px 16px;}
+ .journal-trip-detail:has(.journal-trip-stops:not([hidden]) .presence-show-detail)>:is(.gps-back,.journal-trip-head,.journal-trip-tabs,.journal-timeline-host) {display:none!important;}
  .journal-trip-head {padding:12px 16px;}.journal-trip-head h2 {font-size:20px;}
  .journal-trip-tabs {padding:0;}.journal-trip-tabs button {font-size:12px;min-height:48px;}
  .journal-trip-stops .presence-review-sidebar {padding:16px;}
@@ -111,8 +130,8 @@
  .presence-review-redesign .presence-review-save {position:relative;bottom:auto;padding-bottom:calc(20px + env(safe-area-inset-bottom));}
  .presence-review-redesign .presence-review-buttons [data-presence-save] {grid-column:1/-1;}
  .journal-allocation-editor {width:100%;height:100%;max-height:100dvh;border:0;border-radius:0;margin:0;padding:16px 16px calc(24px + env(safe-area-inset-bottom));}
- .journal-allocation-editor .wb-task-share-row {grid-template-columns:24px minmax(0,1fr) 80px 16px;padding:12px;gap:8px;}.journal-allocation-editor input[type=number] {width:80px;}.journal-allocation-editor footer {bottom:-24px;padding-bottom:calc(16px + env(safe-area-inset-bottom));}
- .view-planner .stickyhead:has(#tripJournalPeriod:not([style*="none"])) .subtabs {display:none;}
+ .journal-allocation-editor .wb-task-share-row {grid-template-columns:24px minmax(0,1fr) 80px 16px;padding:12px;gap:8px;}.journal-allocation-editor .wb-task-share-row input[type=number] {width:80px;max-width:80px;}.journal-allocation-editor footer {bottom:-24px;padding-bottom:calc(16px + env(safe-area-inset-bottom));}
+
  #tripJournalPeriod .rangebar {padding:8px;gap:6px;border:0;}.view #tripJournalPeriod input {width:calc(50% - 10px);min-height:40px;font-size:12px;}.view #tripJournalPeriod .rquick {margin:0;}
  .view-planner .dispatcher-toolbar:has(#tripJournalPeriod:not([style*="none"])) {padding:8px 0;margin-bottom:8px;}
 }
