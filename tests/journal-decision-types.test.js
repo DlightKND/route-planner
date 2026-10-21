@@ -1,0 +1,4 @@
+import {it,expect} from 'vitest';
+import {stopKind,decisionReason,decisionComment} from '../src/core/gps-journal.js';
+it('does not reinterpret a rejected historical proposal as an en-route stop',()=>{expect(stopKind({status:'rejected',note:'Неверное предположение'})).toBe('excluded');expect(stopKind({status:'rejected',note:'Остановка в пути · обед'})).toBe('road');expect(decisionReason({status:'rejected',stop_kind:'excluded'},'Потеря GPS')).toBe('Исключено из присутствия · Потеря GPS');});
+it('round-trips decision type and the common comment through existing revision-save reason',()=>{for(const kind of ['visit','road','excluded']){const status=kind==='visit'?'approved':'rejected',note=decisionReason({status,stop_kind:kind},'Проверено вручную');expect(stopKind({status,note})).toBe(kind);expect(decisionComment(note)).toBe('Проверено вручную');}});

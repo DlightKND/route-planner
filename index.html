@@ -2640,7 +2640,6 @@
     <div id="tripOrderParent"></div>
     <div class="entity-toolbar trip-toolbar"><nav class="wb-tabs entity-tabs" role="tablist" aria-label="Разделы выезда">
       <button class="btn" role="tab" id="tpTabPlan" data-trip-tab="plan" data-entity-tab="plan" aria-selected="true" aria-controls="tpPlanPane">План</button>
-      <button type="button" class="btn" role="tab" id="tpTabPresence" data-trip-tab="presence" data-entity-tab="presence" aria-selected="false" aria-controls="tpPresencePane">Присутствие</button>
       <button class="btn" role="tab" id="tpTabEconomy" data-trip-tab="economy" data-entity-tab="economy" aria-selected="false" aria-controls="tpEconomyPane">Экономика</button>
       <button class="btn" role="tab" id="tpTabHistory" data-trip-tab="history" data-entity-tab="history" aria-selected="false" aria-controls="tpHistoryPane">Лента</button>
     </nav><div class="entity-savebar"><span class="grow"></span><button class="btn amber" id="tpSave">Сохранить план</button></div><div class="err" id="tripErr" role="alert"></div><div class="wb-note" id="tpReviewState" role="status" hidden></div></div>
@@ -2691,14 +2690,8 @@
       </div>
     </div>
     </div>
-    <section class="entity-tab-panel" id="tpPresencePane" data-trip-pane="presence" data-entity-panel="presence" role="tabpanel" aria-labelledby="tpTabPresence" hidden>
-      <div class="card trip-wide">
-        <details class="wb-section wb-presence-details" open><summary id="tpPresenceTitle">Присутствие на объектах · стоянки и проверка</summary><div id="tpPresence"></div></details>
-        <div id="tpFactBox" style="margin-top: var(--sp-4)"></div>
-      </div>
-    </section>
     <div class="entity-tab-panel" id="tpEconomyPane" data-entity-panel="economy" role="tabpanel" aria-labelledby="tpTabEconomy" data-trip-pane="economy" hidden>
-      <div class="th-econ trip-economy-summary" id="tripHeadEcon"></div>
+      <div class="th-econ trip-economy-summary" id="tripHeadEcon"></div><section class="card trip-wide"><h3 id="tpPresenceTitle">GPS-журнал и присутствие</h3><div id="tpPresence"></div><div id="tpFactBox"></div></section>
 
       <!-- Ручные суммы стоят рядом с разбивкой, на которую влияют: раньше
            это были разные половины окна, и связь приходилось держать в уме. -->

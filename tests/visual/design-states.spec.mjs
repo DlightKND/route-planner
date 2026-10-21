@@ -105,14 +105,14 @@ test('design state: schedule ellipsis leaves room for the stop action',async({pa
  await capture(page,info,'summary-schedule-stop',errors);await group.locator('[data-gtools]').click();await expect(page.locator('.gpop-workspace')).toBeVisible();
 });
 test('design state: presence evidence and decision stay separate',async({page},info)=>{
- const errors=await start(page,info,'trip/'+fixtureIDs.trip);await page.locator('[data-trip-tab=presence]').click();
+ const errors=await start(page,info,'trip/'+fixtureIDs.trip);await page.locator('#tpReviewPresence').click();
  const workspace=page.locator('.presence-review-workspace');await expect(workspace).toBeVisible();
- await expect(workspace.locator('.presence-review-sidebar')).toBeVisible();if(page.viewportSize().width<=760){await expect(workspace.locator('.presence-review-detail')).toBeHidden();await capture(page,info,'presence-list',errors);await workspace.locator('[data-review-stop]').first().click();}await expect(workspace.locator('.presence-review-detail')).toBeVisible();
+ await expect(workspace.locator('.presence-review-sidebar')).toBeVisible();if(page.viewportSize().width<=1100){await expect(workspace.locator('.presence-review-detail')).toBeHidden();await capture(page,info,'presence-list',errors);await workspace.locator('[data-review-stop]').first().click();}await expect(workspace.locator('.presence-review-detail')).toBeVisible();
  await capture(page,info,'presence-review',errors);
 });
 test('design state: GPS resolution separates the operation, parameters and saved facts',async({page},info)=>{
  const errors=await start(page,info,'planner/tracking',{role:'admin',unassignedJourney:true});
- if(page.viewportSize().width<=760)await page.locator('[data-ut-details]').first().click();await page.getByRole('button',{name:'Создать документы',exact:true}).click();const overlay=page.locator('#promptOverlay');
+ if(page.viewportSize().width<=1100)await page.locator('[data-ut-details]').first().click();if(await page.locator('[data-orphan-documents]').isVisible())await page.locator('[data-orphan-documents]').click();await page.getByRole('button',{name:'Создать документы',exact:true}).click();const overlay=page.locator('#promptOverlay');
  await expect(overlay.locator('.gps-resolution-workspace')).toBeVisible();await expect(overlay.locator('[data-gps-choice]')).toHaveCount(3);
  await overlay.locator('[data-pf=title]').fill('Черновик названия');await expect(overlay.locator('#promptYes')).toBeInViewport();await expect(overlay.locator('#promptNo')).toBeInViewport();await capture(page,info,'gps-resolution',errors);
  await overlay.locator('[data-gps-choice=charge]').click();await expect(overlay.locator('[data-pf=km]')).toBeVisible();await expect(overlay.locator('.gps-resolution-summary')).toContainText('12,5');

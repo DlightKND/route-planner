@@ -29,7 +29,8 @@ export function validatePresence(stays) {
     if (stay.status !== 'approved') continue;
     const crew = [...new Set(stay.crew_ids || [])];
     if (!stay.job_id || !crew.length) throw new Error('Для присутствия нужны заявка и состав команды.');
-    const from = Date.parse(stay.stay_from), to = Date.parse(stay.stay_to);
+    const accepted=stay.presence_evidence?acceptedPresenceIntervals(stay):[];
+    const from=accepted.length?Math.min(...accepted.map(p=>Date.parse(p.from))):Date.parse(stay.stay_from),to=accepted.length?Math.max(...accepted.map(p=>Date.parse(p.to))):Date.parse(stay.stay_to);
     const minutes = Number(stay.minutes_mgr);
     const bounds=presenceBounds(stay);
     if(bounds){

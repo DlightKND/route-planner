@@ -65,7 +65,7 @@ it('keeps new requests on useful sections and keyboard navigation skips unsaved-
   vm.runInContext('configureRequestTabs(true)',context);expect(get('jobTabHistory').disabled).toBe(false);
   expect(get('jobUnsavedPanelsNotice').hidden).toBe(true);
 });
-it('opens the separate trip presence panel from the review CTA without changing trip form or dirty flags',()=>{
+it('opens the canonical journal from the trip review CTA without changing trip form or dirty flags',()=>{
   const {get,context}=setup();
   const start=app.indexOf('const tripTabs=createEntityTabs'),end=app.indexOf("document.querySelector('.view-trip')?.addEventListener",start);
   vm.runInContext(app.slice(start,end),context);
@@ -75,14 +75,12 @@ it('opens the separate trip presence panel from the review CTA without changing 
     plural:()=>'',esc:String,canWriteTrip:()=>false,tripPlanDirty:true,tripPresenceDirty:true});
   vm.runInContext(renderer,context);vm.runInContext('renderTripReviewSummary()',context);
   const notes=get('tpNotes');notes.value='Изменённый план';get('tpOvCost').value='725';get('tpOvCost').disabled=true;
-  const changes=vi.fn();get('tpPresencePane').closest('.view-trip').addEventListener('change',changes);
-  get('tpReviewPresence').click();expect(get('tpPresencePane').hidden).toBe(false);expect(get('tpPlanPane').hidden).toBe(true);
-  expect(get('tpPresence').closest('details').open).toBe(true);
-  expect(get('tpTabPresence').getAttribute('aria-selected')).toBe('true');
+  const changes=vi.fn();get('tpPresence').closest('.view-trip').addEventListener('change',changes);context.openJournalTrip=vi.fn();
+  get('tpReviewPresence').click();expect(context.openJournalTrip).toHaveBeenCalledWith('t1');expect(get('tpTabPresence')).toBeNull();expect(get('tpPresencePane')).toBeNull();
   get('tpTabEconomy').click();get('tpTabPlan').click();
   expect(notes.value).toBe('Изменённый план');expect(get('tpOvCost').value).toBe('725');expect(get('tpOvCost').disabled).toBe(true);
   expect(context.tripPlanDirty).toBe(true);expect(context.tripPresenceDirty).toBe(true);expect(changes).not.toHaveBeenCalled();
-  expect(get('tpFactBox').closest('[data-trip-pane]').dataset.tripPane).toBe('presence');
+  expect(get('tpFactBox').closest('[data-trip-pane]').dataset.tripPane).toBe('economy');
 });
 it('keeps trip saving and errors in the common toolbar and preserves failed-load blocking',async()=>{
   const {get,context}=setup();
@@ -154,8 +152,6 @@ it('reveals trip validation in its own section before any write and keeps the un
   expect(get('tpPlanPane').hidden).toBe(false);expect(win.document.activeElement).toBe(get('tpChangeReason'));
   expect(get('tpChangeReason').closest('.wb-plan-card')).not.toBeNull();
   expect(get('tripErr').textContent).toContain('причину');expect(rpc).not.toHaveBeenCalled();
-  context.tripPresenceDirty=true;get('tpTabPlan').click();await get('tpSave').onclick();
-  expect(get('tpPresencePane').hidden).toBe(false);expect(get('tpPresence').closest('details').open).toBe(true);
-  expect(get('tripErr').textContent).toContain('результат проверки');expect(rpc).not.toHaveBeenCalled();
-  expect(get('tpNotes').value).toBe('Новый маршрут');expect(context.tripPlanDirty).toBe(true);expect(context.tripPresenceDirty).toBe(true);
+  expect(app).not.toContain('p_stays:presenceChanges');expect(get('tpNotes').value).toBe('Новый маршрут');expect(context.tripPlanDirty).toBe(true);
+
 });
