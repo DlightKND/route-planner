@@ -15,3 +15,8 @@ Implementation checkpoint, PR #181 (first CI head 95861e8):
 - A06–A15/A17/A29: wide master/detail desktop, sequential tablet/mobile, semantic sections, native stop-type control, source evidence, inline desktop allocation and mobile draft editor, saved decision, field errors and fixed footer above actual #nav.rail.
 - A16/A19–A24/A27/A28: exclusion distinct from road; exact GPS/recovery intervals; numbered markers, selected timeline/route issues, symbolic hypothesis ring, conflict context, rebuild progress/result retains pane, shared history renderer.
 - A30: meaningful unit tests and full CI build passed on first head. First visual pass exposed direct-link mobile navigation and overly tall header/map composition; follow-up corrects these and adds reload/draft/hypothesis/exclusion scenarios. Still awaiting second browser pass and screenshot inspection. Publication is not complete.
+
+
+Visual checkpoint (160834b): review-workflows 60/60, design-review 104/104 and operations-smoke 48/48 passed. Screenshots inspected for mobile light stop/allocations, desktop expanded map and dark exclusion; no rail overlap. Full five-width, two-theme matrix still running.
+
+Final follow-up adds canonical orphan-record URLs, a source-loading race regression, explicitly saved session-draft regression, compact source fingerprints, URL-safe metadata batches, collocated-stop map choices, and truthful excluded-decision summaries. It preserves server RPCs, RLS and calculations. These additions require one final CI pass before merge/deployment.

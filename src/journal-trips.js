@@ -14,7 +14,9 @@ export function createJournalTrips(ctx){
   const bounds=calendarPeriodBounds(ctx.period());let query=ctx.db().from('trips').select('id,vehicle_id,started_at,finished_at,status,owner_id,curator_id,fact_km').is('deleted_at',null).not('started_at','is',null).lt('started_at',bounds.until).or('finished_at.is.null,finished_at.gte.'+bounds.from).order('started_at',{ascending:false});if(vehicleId)query=query.eq('vehicle_id',vehicleId);
   const trips=(result(await query.range(offset,offset+499))||[]).filter(t=>t.started_at<bounds.until&&(!t.finished_at||t.finished_at>=bounds.from));
   if(!trips.length)return [];
-  const [stops,tracks]=await Promise.all([ctx.db().from('trip_stays').select('trip_id,status,presence_evidence,stay_from,stay_to,recovery_acceptance').in('trip_id',trips.map(t=>t.id)).then(result),ctx.db().from('trip_tracks').select('trip_id,gps:data->trackKm,road:data->roadKm,line:data->lineKm,motion:data->presence->motion_intervals').in('trip_id',trips.map(t=>t.id)).then(result)]);
+  const batches=[];for(let i=0;i<trips.length;i+=100)batches.push(trips.slice(i,i+100).map(t=>t.id));
+  const summaries=await Promise.all(batches.map(async ids=>Promise.all([ctx.db().from('trip_stays').select('trip_id,status,presence_evidence,stay_from,stay_to,recovery_acceptance').in('trip_id',ids).then(result),ctx.db().from('trip_tracks').select('trip_id,gps:data->trackKm,road:data->roadKm,line:data->lineKm,motion:data->presence->motion_intervals').in('trip_id',ids).then(result)])));
+  const stops=summaries.flatMap(s=>s[0]||[]),tracks=summaries.flatMap(s=>s[1]||[]);
   return trips.map(t=>{const stays=(stops||[]).filter(s=>s.trip_id===t.id),saved=(tracks||[]).find(s=>s.trip_id===t.id),track=saved?.data?saved:{trackKm:saved?.gps,roadKm:saved?.road,presence:{motion_intervals:saved?.motion||[]}};return {...t,amounts:routeAmounts(track),review:{total:stays.length,done:stays.filter(reviewedStop).length,recovery:stays.some(s=>s.presence_evidence?.recovery_parts?.length),gaps:Number(saved?.line||0)>0,missingTrack:!saved,conflicts:stays.some(s=>presenceRoadConflicts(s,track).length)}};});
  }
  function destroy(){token++;view?.destroy();view=null;}

@@ -66,7 +66,7 @@ const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,ro
  save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:decisionReason(stay,note)});if(error)throw error;try{await loadFactHours();if(trip.status==='done'&&!await refreshTripEcon(trip.id))notify('Решение сохранено; экономику нужно пересчитать.','warn');}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}}
 });
 const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
- onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state={})=>routeSet('journal/trip/'+id+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
+ onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state={})=>routeSet('journal/trip/'+id+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
 
@@ -813,7 +813,7 @@ async function applyRoute(){
     const p=raw.split('/').filter(Boolean).map(x=>{ try{ return decodeURIComponent(x); }catch(e){ return x; } });
     if(!p.length){ const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
       await switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
-    if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:['stop','route'].includes(p[3])?p[4]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});else await unassignedTracks.showList();return;}
+    if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:['stop','route'].includes(p[3])?p[4]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});else if(p[1]==='record'&&p[2])await unassignedTracks.openSource(p[2],{pane:['route','documents'].includes(p[3])?p[3]:'stops'});else await unassignedTracks.showList();return;}
     if(p[0]==='order'&&p[1]){await serviceOrders.open(p[1]);return;}
     if(p[0]==='job'&&p[1]){
       const j=await fetchJobFull(p[1]);
