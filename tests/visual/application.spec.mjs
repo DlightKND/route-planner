@@ -404,8 +404,10 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
 
       await shot(page,testInfo,`${role}-trip-presence`);
       if(page.viewportSize().width<=760)await active.locator('.presence-review-back').click();await active.locator('[data-review-mode=done]').click();if(page.viewportSize().width<=760)await active.locator('[data-review-stop]').first().click();if(role!=='engineer')await active.locator('[data-review-edit]').click();
-      await reveal(active.locator(role==='engineer'?'.wb-task-share':'.wb-task-share-list').first());
+      if(role==='engineer')await reveal(active.locator('.wb-task-share').first());
+      else {await reveal(active.locator('[data-presence-id]:visible [data-allocation-edit]'));await active.locator('[data-presence-id]:visible [data-allocation-edit]').click();await expect(page.locator('.journal-allocation-editor')).toBeVisible();}
       await shot(page,testInfo,`${role}-trip-presence-task-share`);
+      if(role!=='engineer')await page.locator('[data-allocation-cancel]').click();
       await active.locator('#tpTabEconomy').click();
       await checkedPane(page,active,active.locator('#tpEconomyPane'),audit,testInfo);
       await visibleTarget(active.locator('#tpEconomyPane h3:visible').first());

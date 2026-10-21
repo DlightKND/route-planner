@@ -4,6 +4,7 @@ import {summaryPreset,summaryUnit,shiftSummaryPeriod,summaryPeriodLabel} from '.
 import { openContextPanel } from './context-panels.js';
 import { wireSchedulePieceDrag, wireScheduleCutDrag, scheduleJoinCandidate } from './schedule-interactions.js';
 import { readPersonalScheduleTrips } from './personal-schedule.js';
+import {createJournalTrips} from './journal-trips.js';
 import { createUnassignedTracks } from './unassigned-tracks.js';
 import './unassigned-tracks.css';
 import { installModalShell, protectNativeForm } from './modal-shell.js';
@@ -35,6 +36,7 @@ import './operations-design.css';
 import { installOperationsUI } from './operations-ui.js';
 import './workspace-ui.css';
 import './review-workspaces.css';
+import './unified-journal.css';
 import {frameGpsResolutionPrompt,restoreGpsResolutionPrompt,framePresenceWorkspace,installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
@@ -55,10 +57,16 @@ import { pendingJobState, queuedJobDraftIssue } from './core/offline-job.js';
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
  tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
- confirm:(message,options)=>confirmDialog(message,options),beforeOpen:async()=>await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});
+ confirm:(message,options)=>confirmDialog(message,options),beforeOpen:async()=>await unassignedTracks.leave()&&await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});
 serviceOrders.init();
 const notifications=createNotifications({loadDecisions:uid=>loadNotificationDecisions(sb,uid),db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
-const unassignedTracks=createUnassignedTracks({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
+const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,period:()=>dashRanges.journal,vehicles:()=>vehicles,people:()=>profilesList,
+ leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,
+ jobs:async ids=>{if(!ids.length)return [];const {data,error}=await sb.from('jobs').select('id,clients(name),equipment(model)').in('id',ids);if(error)throw error;return data||[];},renderAllocations:renderTaskAllocationControls,
+ rebuild:async id=>{const measured=await measureTripKm(id);try{if(!measured.ok)throw Error(measured.why||'Нет достоверного GPS');await writeFactTrack(id,measured.measure);await loadFactHours();if(measured.measure.rebuildContext.trip.status==='done')await refreshTripEcon(id);}finally{busyDone();}},
+ save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:stay.status==='rejected'?'Остановка в пути · '+(note?.trim()||'не учитывать в присутствии на объекте'):note?.trim()||'Проверено по треку и составу команды'});if(error)throw error;try{await loadFactHours();if(trip.status==='done'&&!await refreshTripEcon(trip.id))notify('Решение сохранено; экономику нужно пересчитать.','warn');}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}}
+});
+const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
  period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
@@ -842,6 +850,7 @@ async function checkLeaveTripEditor(){
 function cardOrigin(){const cur=document.querySelector('.view.active');const name=(cur?.className.match(/view-(\w+)/)||[])[1]||'planner';return {name,sub:name==='planner'?plannerCur:null,id:name==='order'?serviceOrders.currentId():name==='job'?jobEditId:name==='trip'?tripEditId:null};}
 async function returnToCard(origin){if(origin.name==='order'&&origin.id)return serviceOrders.open(origin.id);if(origin.name==='job'&&origin.id)return openJob(origin.id);if(origin.name==='trip'&&origin.id)return openTrip(origin.id);switchTab(origin.name,origin.sub);}
 async function switchTab(name, sub){ if(!tabAllowed(name)) return;
+  if(document.querySelector('.view-planner.active')&&dispCur==='tracking'&&(name!=='planner'||sub&&sub!=='tracking')&&!await unassignedTracks.leave())return;
   if(document.querySelector('.view-settings.active')&&(settingsParamsDirty||settingsThemeDirty||document.querySelector('.staff-row[data-dirty]'))&&!await leaveSettingsEditor())return;
   if(name!=='job'&&document.querySelector('.view-job.active')&&(jobEditorDirty||jobSaveT||jobSaveFlight||Object.keys(partT).length)){
     if(!jobLeavePending){jobLeavePending=true;leaveJobEditor().then(ok=>{jobLeavePending=false;if(ok)switchTab(name,sub);}).catch(e=>{jobLeavePending=false;notify(e.message||String(e),'err');});}return;
@@ -880,7 +889,7 @@ document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catS
 let plannerCur='jobs';
 let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
 function renderTripsView(){ renderTrips(); }
-function plannerSub(name){ const journal=name==='tracking';plannerCur=journal?'trips':name;
+async function plannerSub(name){ if(dispCur==='tracking'&&name!=='tracking'&&!await unassignedTracks.leave())return;const journal=name==='tracking';plannerCur=journal?'trips':name;
   if(name==='jobs'||name==='trips'||name==='orders'||name==='tracking') dispCur=name;
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
@@ -3292,8 +3301,8 @@ function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<
   +'<input type="date" aria-label="Начало периода" data-rf value="'+esc(r.from)+'"><span class="rdash">—</span><input type="date" aria-label="Конец периода" data-rt value="'+esc(r.to)+'">'
   +(kind==='rev'||kind==='journal'?'<span class="rquick"><button data-rmonth="-1" aria-label="Предыдущий месяц">←</button><button data-rmonth="0">Этот месяц</button><button data-rmonth="1" aria-label="Следующий месяц">→</button></span>':'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
   +meta.lengths.map(x=>'<button data-rlen="'+x[0]+'">'+x[1]+'</button>').join('')+'</span>')+'</div>';}
-function setRange(kind,from,to){if(!from||!to)return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='journal'){renderJournalPeriod();unassignedTracks.refresh();}else if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderFeedAgain();}else renderDashboard();}
-function renderJournalPeriod(){const box=$('tripJournalPeriod');box.innerHTML=rangeBar('journal');box.title='Поездки, пересекающие выбранный период · время Киева';wireRangeBar(box);}
+async function setRange(kind,from,to){if(!from||!to)return;if(kind==='journal'&&!await unassignedTracks.leave())return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='journal'){renderJournalPeriod();unassignedTracks.refresh();}else if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderFeedAgain();}else renderDashboard();}
+function renderJournalPeriod(){const box=$('tripJournalPeriod'),range=dashRanges.journal,start=new Date(range.from+'T12:00:00Z'),label=start.toLocaleDateString('ru-RU',{month:'long',year:'numeric',timeZone:'Europe/Kyiv'});box.innerHTML='<div class="journal-periodbar"><button type="button" class="btn ghost" data-journal-month="-1" aria-label="Предыдущий месяц журнала">‹</button><details><summary>'+esc(label)+'</summary>'+rangeBar('journal')+'</details><button type="button" class="btn ghost" data-journal-month="1" aria-label="Следующий месяц журнала">›</button></div>';box.title='Поездки, пересекающие выбранный период · время Киева';wireRangeBar(box);box.querySelectorAll('[data-journal-month]').forEach(b=>b.onclick=()=>box.querySelector('[data-rmonth="'+b.dataset.journalMonth+'"]').click());}
 function wireRangeBar(box){box.querySelectorAll('.rangebar').forEach(bar=>{const kind=bar.dataset.rk,read=()=>[bar.querySelector('[data-rf]').value,bar.querySelector('[data-rt]').value];
   bar.querySelectorAll('input').forEach(i=>i.onchange=()=>setRange(kind,...read()));
   bar.querySelectorAll('[data-rshift]').forEach(b=>b.onclick=()=>{const r=dashRanges[kind],n=Math.round((utcOf(r.to)-utcOf(r.from))/DAY_MS)+1,d=(+b.dataset.rshift)*n;setRange(kind,isoOf(utcOf(r.from)+d*DAY_MS),isoOf(utcOf(r.to)+d*DAY_MS));});
@@ -5655,7 +5664,7 @@ document.querySelector('.view-trip')?.addEventListener('change',e=>{
   if(e.target.closest('[data-presence-id]'))tripPresenceDirty=true;
   else if(e.target.closest('#tpPlanPane')||e.target.closest('#tpEconomyPane')){tripPlanDirty=true;}
 });
-window.addEventListener('beforeunload',e=>{if(tripPlanDirty||tripPresenceDirty||serviceOrders.isDirty()){e.preventDefault();e.returnValue='';}});
+window.addEventListener('beforeunload',e=>{if(tripPlanDirty||tripPresenceDirty||serviceOrders.isDirty()||journalTrips.isDirty()){e.preventDefault();e.returnValue='';}});
 document.querySelector('#tpPresence')?.addEventListener('click',e=>{
   const location=e.target.closest('[data-presence-map-open]');
   if(location){e.preventDefault();openPresenceLocation(location.dataset.presenceMapOpen);return;}

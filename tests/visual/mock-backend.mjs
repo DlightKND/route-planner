@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false } = {}) {
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -396,6 +396,24 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
       stays.push({id:'recovery-0',trip_id:trip,job_id:job,lat:b.lat,lng:b.lng,stay_from:from,stay_to:end.ts,status:'detected',crew_ids:[engineer],crew_source:'snapshot',minutes_raw:180,minutes_mgr:null,recovery_acceptance:{},presence_evidence:{version:1,gps_intervals:[{from:b.ts,to:end.ts}],recovery_parts:[{key:'arrival',from,to:b.ts,minutes:180,side:'before',gap_from:a.ts,gap_to:b.ts}]}});
     }
   }
+
+  if(unifiedJournalJourney){tables.vehicles.push({id:'vehicle-empty',name:'Автомобиль без поездок',plate:'TEST',deleted_at:null});
+    audit.recoveryWrites=[];
+    Object.assign(ride,{status:'finished',started_at:'2026-10-05T05:12:00Z',finished_at:'2026-10-05T14:46:00Z'});
+    const span=(from,to)=>({from:'2026-10-05T'+from+':00Z',to:'2026-10-05T'+to+':00Z'});
+    const base={trip_id:trip,job_id:job,crew_ids:[engineer,other],crew_source:'snapshot',lat:client.lat,lng:client.lng,minutes_raw:60,note:null};
+    stays.splice(0,stays.length,...[
+      {...base,id:'journal-stay-1',stay_from:span('05:28','05:46').from,stay_to:span('05:28','05:46').to,minutes_raw:18,minutes_mgr:18,status:'approved'},
+      {...base,id:'journal-stay-2',stay_from:span('06:30','07:20').from,stay_to:span('06:30','07:20').to,minutes_raw:50,minutes_mgr:50,status:'approved'},
+      {...base,id:'journal-stay-3',stay_from:span('08:20','12:20').from,stay_to:span('08:20','12:20').to,minutes_raw:180,minutes_mgr:null,status:'detected',presence_evidence:{gps_intervals:unifiedJournalJourney==='hypothesis'?[]:[span('08:20','11:20')],recovery_parts:[{key:'restored-1',...span(unifiedJournalJourney==='hypothesis'?'08:20':'11:20','12:20'),minutes:unifiedJournalJourney==='hypothesis'?240:60,side:'after'}]}},
+      {...base,id:'journal-stay-4',job_id:null,crew_ids:[],stay_from:span('13:05','13:28').from,stay_to:span('13:05','13:28').to,minutes_mgr:23,status:'rejected',note:'Остановка в пути'},
+      {...base,id:'journal-stay-5',job_id:null,crew_ids:[],stay_from:span('13:50','14:10').from,stay_to:span('13:50','14:10').to,minutes_mgr:20,status:'rejected',note:'Остановка в пути'}
+    ]);tables.trip_stays=stays;
+    const second={...task,id:'journal-second-task',number:472,title:'Настройка сети'};tables.service_orders.push(second);tables.trip_service_orders.push({trip_id:trip,order_id:second.id,service_orders:second});
+    tables.trip_stay_task_allocations=[{stay_id:'journal-stay-3',service_order_id:task.id,share:.5},{stay_id:'journal-stay-3',service_order_id:second.id,share:.3}];
+    const segments=[{kind:'track',km:74.2,fromTs:ride.started_at,toTs:'2026-10-05T07:50:00Z',line:[[36.2,49.98],[36.23,49.99],[36.25,50.01]],fromPt:{lat:49.98,lng:36.2},toPt:{lat:50.01,lng:36.25}},{kind:'road',km:13.2,fromTs:'2026-10-05T07:50:00Z',toTs:'2026-10-05T08:20:00Z',line:[[36.25,50.01],[36.24,50.015],[36.23,50.01]],fromPt:{lat:50.01,lng:36.25},toPt:{lat:50.01,lng:36.23}}];
+    tables.trip_tracks.push({trip_id:trip,km:87.4,updated_at:stamp,data:{trackKm:74.2,roadKm:13.2,segments,presence:{source_to:ride.finished_at,motion_intervals:[{...span('07:50','08:20'),source:'ors'}]}}});
+  }
   const db = {
     auth: {
       getSession: async () => ({ data: { session: signedOut?null:session }, error: null }),
@@ -527,7 +545,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         if(args.p_fact_km!=null)Object.assign(ride,{fact_km:args.p_fact_km,fact_km_source:args.p_fact_source,fact_km_note:args.p_fact_note});
         audit.recoveryWrites.push({name,args:structuredClone(args)});return {data:{revision:ride.workbench_revision,repeated:same,fact_updated:factUpdated},error:null};
       }
-      if(presenceRecoveryJourney&&name==='trip_presence_save_tasks'){
+      if((presenceRecoveryJourney||unifiedJournalJourney)&&name==='trip_presence_save_tasks'){
         if(role==='engineer')return reject(name);
         for(const input of args.p_stays){const s=stays.find(s=>s.id===input.id);if(!s)return reject('missing stay');Object.assign(s,structuredClone(input));}
         ride.workbench_revision++;audit.recoveryWrites.push({name,args:structuredClone(args)});return {data:ride.workbench_revision,error:null};

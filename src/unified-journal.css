@@ -1,0 +1,145 @@
+/* Unified review keeps native field nodes and the existing warm theme tokens. */
+.view #unassignedHost.unified-gps-journal {grid-template-columns:minmax(260px,27%) minmax(0,1fr);border-radius:0;}
+.view .unified-gps-journal .unassigned-filter.seg {grid-template-columns:repeat(4,minmax(0,1fr));}
+.unified-gps-journal .gps-journal-sidebar {padding:12px;}
+.journal-filters {border-bottom:1px solid var(--line);margin:8px 0 12px;padding-bottom:10px;}
+.journal-filters>summary {cursor:pointer;min-height:44px;align-content:center;font-weight:500;}
+.unified-gps-journal .gps-mini {height:68px;}
+.unified-gps-journal .gps-journal-card {border-radius:var(--r-sm);}
+.unified-gps-journal .gps-record-open {padding:12px;}
+.journal-review-progress {margin:10px 0;color:var(--ink-dim);font-size:12px;}
+.journal-trip-detail {padding:0!important;}
+.journal-trip-head {display:flex;justify-content:space-between;gap:16px;padding:20px;}
+.journal-trip-head h2 {font-size:22px;margin:0 0 8px;overflow-wrap:anywhere;}
+.journal-trip-head p {font-size:12px;margin:0;color:var(--ink-dim);}
+.journal-trip-states {display:flex;flex-wrap:wrap;align-content:start;gap:8px;}
+.journal-trip-tabs {display:flex!important;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:0 16px;}
+.journal-trip-tabs button {flex:1;border:0;border-bottom:3px solid transparent;border-radius:0;white-space:normal;background:none;}
+.journal-trip-tabs button.on {border-bottom-color:var(--accent);box-shadow:none;}
+.view .journal-trip-tabs.seg {background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;gap:0;}
+.view .journal-trip-tabs.seg>button {background:none;color:var(--ink-dim);border:0;border-bottom:3px solid transparent;border-radius:0;box-shadow:none;}
+.view .journal-trip-tabs.seg>button.on {background:none;color:var(--ink);border-bottom-color:var(--accent);box-shadow:none;}
+.journal-timeline {padding:12px 16px;border-bottom:1px solid var(--line);}
+.journal-time-labels {display:flex;justify-content:space-between;color:var(--ink-dim);font-family:var(--mono);font-size:11px;margin-bottom:8px;}
+.journal-time-band {height:18px;position:relative;background:var(--line);overflow:hidden;border-radius:3px;}
+.journal-time-part {position:absolute;top:0;bottom:0;min-width:0!important;min-height:0!important;padding:0!important;border:0;border-inline-end:1px solid var(--panel);border-radius:0!important;cursor:pointer;}
+.journal-time-part.drive {background:#54865b;}.journal-time-part.stop {background:var(--accent);}.journal-time-part.unknown {background:#999b9f;}
+.journal-time-part.recovery {background-image:repeating-linear-gradient(135deg,transparent 0 4px,#ffffff99 4px 6px);}
+.journal-time-part:focus-visible {outline:2px solid var(--ink);outline-offset:-2px;}
+.journal-time-part.conflict {border:2px solid var(--danger-ink);}
+.journal-legend {display:flex;flex-wrap:wrap;gap:8px 16px;font-size:11px;color:var(--ink-dim);margin-top:10px;}
+.journal-legend>span::before {content:'';display:inline-block;width:12px;height:8px;margin-right:5px;background:#999b9f;}
+.journal-legend>.drive::before {background:#54865b;}.journal-legend>.stop::before {background:var(--accent);}.journal-legend>.recovery::before {background:repeating-linear-gradient(135deg,#d87619 0 2px,transparent 2px 4px);}
+.journal-trip-stops>.wb-metrics {display:none!important;}
+.journal-trip-stops .presence-review-workspace {border:0;border-radius:0;min-height:0;grid-template-columns:minmax(200px,29%) minmax(0,1fr);}
+.journal-trip-stops .presence-review-sidebar {padding:16px;max-height:none;}
+.presence-review-redesign .presence-review-detail {padding:20px;}
+.presence-review-redesign .presence-review-list {gap:0;}
+.presence-review-redesign .presence-stop {border:0;border-radius:0;border-bottom:1px solid var(--line);padding:14px 10px;gap:6px;}
+.presence-review-redesign .presence-stop.is-selected {border-inline-start:4px solid var(--accent);}
+.presence-review-redesign .presence-stop-location {display:none;}
+.presence-review-redesign .presence-stop small {font-size:11px;}
+.presence-review-redesign .presence-stop .tag {background:none;padding:0;border:0;white-space:normal;}
+.presence-review-redesign .presence-review-map {width:180px;float:right;margin:0 0 16px 16px;}
+.presence-review-redesign .presence-review-map .unassigned-map {height:100px;}
+.presence-review-redesign .presence-review-map figcaption {font-size:10px;}
+.presence-review-redesign .presence-selected-heading {padding:0 0 12px;}
+.presence-review-redesign .presence-selected-heading h2 {font-size:22px;margin:6px 0;}
+.presence-review-redesign .presence-kind {clear:both;}
+.presence-review-redesign .presence-review-row:not([hidden]) {gap:16px;}
+.presence-review-redesign .presence-place-cell {display:none;}
+.presence-review-redesign .presence-review-fields td {padding:12px 0!important;border:0;border-top:1px solid var(--line);border-radius:0;background:none;}
+.presence-review-redesign .presence-review-fields td::before {margin-bottom:8px;font-size:12px;}
+.journal-presence-evidence {margin:0 0 16px;}
+.journal-presence-evidence {clear:both;}
+.journal-periodbar {display:flex;align-items:center;gap:6px;}
+.journal-periodbar>details {position:relative;min-width:160px;flex:1;}
+.journal-periodbar>details>summary {cursor:pointer;text-align:center;min-height:44px;align-content:center;text-transform:capitalize;border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px;}
+.journal-periodbar>details>.rangebar {position:absolute;z-index:30;top:calc(100% + 8px);left:0;min-width:310px;max-width:calc(100vw - 32px);padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);}
+.journal-presence-evidence h3 {font-size:14px;margin:8px 0 12px;}
+.journal-evidence-band {height:16px;display:flex;background:var(--line);overflow:hidden;border-radius:3px;}
+.journal-evidence-band>.gps {background:#54865b;}.journal-evidence-band>.accepted {background:repeating-linear-gradient(135deg,#e6b238 0 4px,var(--panel) 4px 6px);}.journal-evidence-band>.available {background:var(--line);}
+.journal-evidence-labels {display:flex;justify-content:space-between;gap:12px;font-size:11px;color:var(--ink-dim);margin:8px 0;}
+.journal-person-total {display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);}
+.journal-person-total strong {font-family:var(--mono);}
+.journal-hypothesis,.journal-conflict {padding:12px;border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--panel-2);font-size:13px;}
+.journal-conflict {display:flex;gap:12px;align-items:center;justify-content:space-between;}
+.journal-review-note-label {display:grid;gap:8px;margin:16px 0;font-size:12px;}
+.journal-review-note-label textarea {width:100%;resize:vertical;}
+.journal-field-invalid::before,.journal-field-error {color:var(--danger-ink);}
+.journal-field-error {font-size:12px;margin:6px 0 0;}.journal-field-error:empty {display:none;}
+.journal-field-invalid select {border-color:var(--danger-ink);}
+.journal-allocation-summary p {display:flex;justify-content:space-between;gap:12px;font-size:12px;}
+.journal-allocation-summary b {font-family:var(--mono);white-space:nowrap;}
+.journal-trip-stops .presence-review-detail {max-height:none;}
+.journal-trip-stops .presence-review-save {position:static;bottom:auto;}
+.presence-review-redesign td:has([data-recovery-part])>input[readonly],.presence-review-redesign td:has([data-recovery-part])>[data-presence-total] {display:none;}
+.presence-review-redesign td:has([data-recovery-part])::before {content:'Учитывать из восстановленного времени';}
+.journal-trip-documents {padding:20px;}
+.journal-trip-message {padding:0 20px;color:var(--danger-ink);}
+.journal-trip-route {display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,34%);min-height:420px;}
+.journal-trip-route[hidden],.journal-trip-stops[hidden],.journal-trip-documents[hidden] {display:none!important;}
+.journal-route-map {min-height:420px;z-index:0;background:var(--panel-2);}
+.journal-route-map>p {padding:24px;}
+.journal-route-quality {padding:20px;min-width:0;border-inline-start:1px solid var(--line);}
+.journal-route-quality h2 {font-size:18px;}.journal-route-quality h3 {font-size:14px;margin-top:24px;}
+.journal-route-quality dl>div {display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:10px 0;}.journal-route-quality dd {margin:0;font-family:var(--mono);white-space:nowrap;}
+.journal-route-quality .btn {width:100%;white-space:normal;}
+.journal-route-issues p {padding:12px 0;border-bottom:1px solid var(--line);font-size:12px;line-height:1.5;}
+.journal-allocation-editor {padding:24px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);color:var(--ink);width:min(600px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;box-shadow:none;}
+.journal-allocation-editor::backdrop {background:#0008;}
+.journal-allocation-editor h2 {font-size:22px;}
+.journal-allocation-editor .wb-task-share-list {display:grid;gap:16px;margin:20px 0;}
+.journal-allocation-editor .wb-task-share-row {display:grid;grid-template-columns:24px minmax(0,1fr) 90px 20px;gap:10px;align-items:center;border:1px solid var(--line);border-radius:var(--r-sm);padding:16px;}
+.journal-allocation-editor .wb-task-share-row {font:400 14px/1.45 var(--sans);text-transform:none;letter-spacing:normal;}
+.journal-allocation-editor [hidden] {display:none!important;}
+.journal-allocation-editor .wb-task-share-row input[type=number] {width:90px;max-width:90px;min-height:44px;font-size:16px;}
+.journal-allocation-editor input[type=checkbox] {width:18px;height:18px;accent-color:var(--accent);}
+.journal-task-hours {grid-column:2/-1;font-family:var(--mono);}
+.journal-allocation-editor footer {position:sticky;bottom:-24px;padding:16px 0;background:var(--panel);}.journal-allocation-editor footer button {width:100%;}
+@media(min-width:1101px){
+ .journal-trip-detail>.gps-back {display:none;}
+ .presence-review-redesign .presence-review-detail {display:grid;grid-template-columns:minmax(0,1fr) 180px;align-content:start;column-gap:16px;}
+ .presence-review-redesign .presence-review-detail>* {grid-column:1/-1;}
+ .presence-review-redesign .presence-selected-heading {grid-column:1;grid-row:1;}
+ .presence-review-redesign .presence-review-map {grid-column:2;grid-row:1;float:none;margin:0;}
+}
+@media(min-width:761px){
+ .gps-journal-detail.journal-trip-detail {display:flex;flex-direction:column;overflow:hidden;}
+ .journal-trip-detail>.journal-trip-head,.journal-trip-detail>.journal-trip-tabs,.journal-trip-detail>.journal-timeline-host {flex:none;}
+ .journal-trip-detail>.journal-trip-stops {flex:1;min-height:0;overflow:hidden;}
+ .journal-trip-stops .presence-review-workspace {height:100%;min-height:0;}
+ .journal-trip-stops .presence-review-sidebar,.journal-trip-stops .presence-review-detail {height:100%;max-height:100%;overflow:auto;}
+ .journal-trip-detail>.journal-trip-route,.journal-trip-detail>.journal-trip-documents {flex:1;min-height:0;overflow:auto;}
+ .view-planner #plTrips:has(.unified-gps-journal)>.workspace-dispatcher-head {padding-block:12px;}
+ .view-planner #plTrips:has(.unified-gps-journal)>.workspace-dispatcher-head .workspace-subtitle {display:none;}
+}
+@media(max-width:1100px){
+ .view #unassignedHost.unified-gps-journal {grid-template-columns:280px minmax(0,1fr);}
+ .journal-trip-stops .presence-review-workspace {display:block;}.journal-trip-stops .presence-review-sidebar {border:0;}.journal-trip-stops .presence-review-detail {display:none;}.journal-trip-stops .presence-show-detail .presence-review-sidebar {display:none;}.journal-trip-stops .presence-show-detail .presence-review-detail {display:block;}.journal-trip-stops .presence-review-back {display:inline-flex;}
+ .journal-trip-route {grid-template-columns:1fr;}.journal-route-map {min-height:300px;}.journal-trip-head {display:block;}.journal-trip-states {margin-top:12px;}
+}
+@media(max-width:760px){
+ .view #unassignedHost.unified-gps-journal {display:block;overflow:visible;}
+ .unified-gps-journal .gps-journal-sidebar {padding:0;}
+ .unified-gps-journal .gps-journal-selection {margin:0 0 8px;}
+ .unified-gps-journal .gps-mini {display:none;}
+ .unified-gps-journal .gps-record-open .unassigned-cardhead {display:block;}
+ .unified-gps-journal .gps-record-open .tag {display:inline-block;margin-top:6px;}
+ .journal-trip-detail>.gps-back {margin:8px 16px;}
+ .journal-trip-detail:has(.journal-trip-stops:not([hidden]) .presence-show-detail)>:is(.gps-back,.journal-trip-head,.journal-trip-tabs,.journal-timeline-host) {display:none!important;}
+ .journal-trip-head {padding:12px 16px;}.journal-trip-head h2 {font-size:20px;}
+ .journal-trip-tabs {padding:0;}.journal-trip-tabs button {font-size:12px;min-height:48px;}
+ .journal-trip-stops .presence-review-sidebar {padding:16px;}
+ .presence-review-redesign .presence-review-detail {padding:16px;}
+ .presence-review-redesign .presence-review-map {float:none;width:100%;margin:0 0 16px;}.presence-review-redesign .presence-review-map .unassigned-map {height:130px;}
+ .presence-review-redesign .presence-review-fields input,.presence-review-redesign .presence-review-fields select,.journal-review-note {font-size:16px;}
+ .presence-review-redesign .presence-review-save {position:relative;bottom:auto;padding-bottom:calc(20px + env(safe-area-inset-bottom));}
+ .presence-review-redesign .presence-review-buttons [data-presence-save] {grid-column:1/-1;}
+ .journal-allocation-editor {width:100%;max-width:none;height:100%;max-height:100dvh;border:0;border-radius:0;margin:0;padding:16px 16px calc(24px + env(safe-area-inset-bottom));}
+ .journal-allocation-editor .wb-task-share-row {grid-template-columns:24px minmax(0,1fr) 80px 16px;padding:12px;gap:8px;}.journal-allocation-editor .wb-task-share-row input[type=number] {width:80px;max-width:80px;}.journal-allocation-editor footer {bottom:-24px;padding-bottom:calc(16px + env(safe-area-inset-bottom));}
+
+ .view-planner #tripJournalPeriod .rangebar {left:-44px;width:calc(100vw - 48px);max-width:calc(100vw - 48px);min-width:0;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);padding:8px;gap:6px;}
+ .view-planner #tripJournalPeriod .rangebar input {width:100%;min-width:0;min-height:44px;font-size:16px;}.view #tripJournalPeriod .rquick {margin:0;}
+ .view-planner .dispatcher-toolbar:has(#tripJournalPeriod:not([style*="none"])) {padding:8px 0;margin-bottom:8px;}
+}

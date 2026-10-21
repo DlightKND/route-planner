@@ -76,8 +76,8 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
   return `<div class="wb-metrics"><div><span>${workspace?'Подтверждено':summary.complete?'Присутствие · проверено':'Подтверждённая часть присутствия'} ${infoHint('Всё время на объекте × присутствовавшие инженеры. Ожидание включено. Нормочасы работ не изменяются. Подтверждённые минуты сохраняются; без известного состава человеко-часы не вычисляются. При незавершённой проверке показана только подтверждённая часть. Время указано по Киеву.', 'О проверенном присутствии')}</span><b>${n(presenceHours)} чел.-ч</b></div><div><span>${workspace?'На проверке':'Стоянки на проверке'}</span><b>${summary.pending}</b></div><div><span>Факт-пробег</span><b>${n(t.fact_km)} км</b></div></div>
 
     ${rows?table:'<p class="hint">Стоянок пока нет. Отсутствие данных не означает нулевое присутствие.</p>'}
-    ${readonly?'<p class="hint">Проверку присутствия выполняет куратор выезда.</p>':`<div class="row"><button type="button" class="btn" id="wbDetect">Проверить и достроить трек</button>${rows?'<button type="button" class="btn amber" id="wbPresenceSave">Сохранить проверку присутствия</button>':''}</div>`}
-    <div class="hint" id="wbPresenceMessage" role="status"></div>`;
+    ${readonly?'<p class="hint">Проверку присутствия выполняет куратор выезда.</p>':`<div class="row"><button type="button" class="btn" id="wbDetect" data-presence-detect>Проверить и достроить трек</button>${rows?'<button type="button" class="btn amber" id="wbPresenceSave" data-presence-save>Сохранить проверку присутствия</button>':''}</div>`}
+    <div class="hint" id="wbPresenceMessage" data-presence-message role="status"></div>`;
 }
 
 export function historyHTML(data, profiles = []) {
