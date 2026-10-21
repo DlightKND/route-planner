@@ -15,3 +15,10 @@ it('keeps unknown time and source confidence distinct from stop or driving activ
  const rows=activityTimeline({started_at:'2026-10-21T08:00Z',finished_at:'2026-10-21T12:00Z'},{presence:{motion_intervals:[{from:'2026-10-21T08:00Z',to:'2026-10-21T09:00Z',source:'ors'}]}},[{id:'s',stay_from:'2026-10-21T10:00Z',stay_to:'2026-10-21T12:00Z'}]);
  expect(rows.map(r=>[r.kind,r.width,r.recovery])).toEqual([['drive',25,true],['unknown',25,false],['stop',50,false]]);
 });
+it('hatches only the exact reconstructed interval and retains adjacent GPS evidence',()=>{
+ const stays=[{id:'s',stay_from:'2026-10-21T08:00Z',stay_to:'2026-10-21T12:00Z',presence_evidence:{gps_intervals:[{from:'2026-10-21T08:00Z',to:'2026-10-21T11:00Z'}],recovery_parts:[{from:'2026-10-21T11:00Z',to:'2026-10-21T12:00Z'}]}}];
+ const rows=activityTimeline({started_at:stays[0].stay_from,finished_at:stays[0].stay_to},null,stays);expect(rows.map(p=>[p.width,p.recovery])).toEqual([[75,false],[25,true]]);
+});
+it('deduplicates linked sources before a trip page is loaded and retains their history',()=>{
+ const sources=Array.from({length:60},(_,i)=>({id:'source-'+i,state:'linked',trip_id:'t',started_at:'2026-10-21'}));expect(journalEntries(sources,[])).toHaveLength(1);expect(journalEntries(sources,[{id:'t',started_at:'2026-10-21'}])[0]._sources).toHaveLength(60);
+});

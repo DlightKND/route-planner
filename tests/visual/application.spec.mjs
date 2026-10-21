@@ -392,22 +392,15 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await shot(page,testInfo,`${role}-schedule-request`);
     }
     if(scene.name==='trip'){
+      await expect(active.locator('#tpTabPresence')).toHaveCount(0);
       await active.locator('#tpReviewPresence').click();
-      await checkedPane(page,active,active.locator('#tpPresencePane'),audit,testInfo);
-      await visibleTarget(active.locator('#tpPresenceTitle'));
-      if(page.viewportSize().width<=760)await active.locator('[data-review-stop]').first().click();await expect(active.locator('.wb-table')).toBeVisible();
-      if(role==='engineer'){
-        await expect(active.locator('#tpPresence [data-presence],#tpPresence [data-review-edit]')).toHaveCount(0);
-        await expect(active.locator('#wbPresenceSave,#wbDetect,[data-presence-edit]')).toHaveCount(0);
-        await expect(active.locator('#tpPresence')).toContainText('Требует проверки');
-      }else{await expect(active.locator('#wbPresenceSave')).toBeVisible();}
-
+      await expect(page.locator('.view-planner.active .presence-review-workspace')).toBeVisible();
+      await page.locator('[data-review-stop]').first().click();
+      await expect(page.locator('.presence-review-detail')).toBeVisible();
+      if(role==='engineer')await expect(page.locator('[data-presence-save],[data-review-edit]')).toHaveCount(0);
       await shot(page,testInfo,`${role}-trip-presence`);
-      if(page.viewportSize().width<=760)await active.locator('.presence-review-back').click();await active.locator('[data-review-mode=done]').click();if(page.viewportSize().width<=760)await active.locator('[data-review-stop]').first().click();if(role!=='engineer')await active.locator('[data-review-edit]').click();
-      if(role==='engineer')await reveal(active.locator('.wb-task-share').first());
-      else {await reveal(active.locator('[data-presence-id]:visible [data-allocation-edit]'));await active.locator('[data-presence-id]:visible [data-allocation-edit]').click();await expect(page.locator('.journal-allocation-editor')).toBeVisible();}
-      await shot(page,testInfo,`${role}-trip-presence-task-share`);
-      if(role!=='engineer')await page.locator('[data-allocation-cancel]').click();
+      await page.goto('/#/trip/'+fixtureIDs.trip);
+      await expect(active).toBeVisible();
       await active.locator('#tpTabEconomy').click();
       await checkedPane(page,active,active.locator('#tpEconomyPane'),audit,testInfo);
       await visibleTarget(active.locator('#tpEconomyPane h3:visible').first());

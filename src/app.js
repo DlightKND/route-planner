@@ -1,4 +1,4 @@
-import {mountPresenceReview} from './presence-review-workspace.js';
+import {decisionReason} from './core/gps-journal.js';
 import {calendarPeriodBounds} from './core/calendar-period.js';
 import {summaryPreset,summaryUnit,shiftSummaryPeriod,summaryPeriodLabel} from './core/summary-period.js';
 import { openContextPanel } from './context-panels.js';
@@ -10,7 +10,7 @@ import './unassigned-tracks.css';
 import { installModalShell, protectNativeForm } from './modal-shell.js';
 import { openAccountProfile, roleName, initials } from './account-profile.js';
 import { resolveFactTrack, validatedTrackFact } from './core/fact-track.js';
-import {rebuildTripTrack,presenceBounds,tripTimeSummary} from './core/trip-presence-recovery.js';
+import {rebuildTripTrack,presenceBounds} from './core/trip-presence-recovery.js';
 // Приложение DLIGHT. Пока это цельный перенос боевого index.html в сборку:
 // код тот же, но теперь это модуль: ядро подключается импортом.
 // Обработчики вешаются из JS (.onclick=), инлайновых onclick в разметке нет,
@@ -18,8 +18,7 @@ import {rebuildTripTrack,presenceBounds,tripTimeSummary} from './core/trip-prese
 
 import * as core from './core/index.js';
 import { presenceSummary, validatePresence, remainingStops, presenceDaily, sameEditablePlan } from './core/trip-review.js';
-import { presenceHTML, removedHTML, readPresenceForm, tripCostReviewHTML, wirePresenceRecovery } from './trip-workbench.js';
-import {mountPresenceMaps} from './presence-maps.js';
+import { removedHTML, readPresenceForm, tripCostReviewHTML } from './trip-workbench.js';
 import './trip-workbench.css';
 import './service-orders.css';
 import { createServiceOrders } from './service-orders.js';
@@ -61,13 +60,13 @@ const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profil
 serviceOrders.init();
 const notifications=createNotifications({loadDecisions:uid=>loadNotificationDecisions(sb,uid),db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
 const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,period:()=>dashRanges.journal,vehicles:()=>vehicles,people:()=>profilesList,
- leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,
+ confirm:confirmDialog,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,onNavigate:state=>routeSet('journal/trip/'+state.tripId+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane:'')),
  jobs:async ids=>{if(!ids.length)return [];const {data,error}=await sb.from('jobs').select('id,clients(name),equipment(model)').in('id',ids);if(error)throw error;return data||[];},renderAllocations:renderTaskAllocationControls,
  rebuild:async id=>{const measured=await measureTripKm(id);try{if(!measured.ok)throw Error(measured.why||'Нет достоверного GPS');await writeFactTrack(id,measured.measure);await loadFactHours();if(measured.measure.rebuildContext.trip.status==='done')await refreshTripEcon(id);}finally{busyDone();}},
- save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:stay.status==='rejected'?'Остановка в пути · '+(note?.trim()||'не учитывать в присутствии на объекте'):note?.trim()||'Проверено по треку и составу команды'});if(error)throw error;try{await loadFactHours();if(trip.status==='done'&&!await refreshTripEcon(trip.id))notify('Решение сохранено; экономику нужно пересчитать.','warn');}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}}
+ save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:decisionReason(stay,note)});if(error)throw error;try{await loadFactHours();if(trip.status==='done'&&!await refreshTripEcon(trip.id))notify('Решение сохранено; экономику нужно пересчитать.','warn');}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}}
 });
 const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
- period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
+ onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state={})=>routeSet('journal/trip/'+id+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane:'')),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
 
@@ -794,7 +793,7 @@ function routeForView(name,sub){
   if(name==='order'&&serviceOrders.currentId()) return 'order/'+encodeURIComponent(serviceOrders.currentId());
   if(name==='job'&&jobEditId) return 'job/'+encodeURIComponent(jobEditId);
   if(name==='trip'&&tripEditId) return 'trip/'+encodeURIComponent(tripEditId);
-  if(name==='planner'){const section=sub==='disp'?dispCur:(sub||(plannerCur==='trips'&&dispCur==='tracking'?'tracking':plannerCur));return section==='tracking'?'planner/trips/tracking':'planner/'+section;}
+  if(name==='planner'){const section=sub==='disp'?dispCur:(sub||(plannerCur==='trips'&&dispCur==='tracking'?'tracking':plannerCur));return section==='tracking'?'journal':'planner/'+section;}
   return name;
 }
 async function routeTrip(id){
@@ -814,6 +813,7 @@ async function applyRoute(){
     const p=raw.split('/').filter(Boolean).map(x=>{ try{ return decodeURIComponent(x); }catch(e){ return x; } });
     if(!p.length){ const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
       await switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
+    if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:p[3]==='stop'?p[4]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});return;}
     if(p[0]==='order'&&p[1]){await serviceOrders.open(p[1]);return;}
     if(p[0]==='job'&&p[1]){
       const j=await fetchJobFull(p[1]);
@@ -874,7 +874,7 @@ async function switchTab(name, sub){ if(!tabAllowed(name)) return;
   // Клик по «Диспетчеру» возвращает в тот подраздел, где человек был
   // в прошлый раз: уводить его каждый раз на «Заявки» значило бы терять
   // место в работе на ровном месте.
-  if(name==='planner') plannerSub(sub==='disp'?dispCur:(sub||plannerCur));
+  if(name==='planner') await plannerSub(sub==='disp'?dispCur:(sub||plannerCur));
   $('pushBtn')?.classList.toggle('active',name==='notifications');
   if(name==='notifications')notifications.open();
   if(name==='dash') renderDashboard(); if(name==='settings') renderSettings();
@@ -894,11 +894,12 @@ async function plannerSub(name){ if(dispCur==='tracking'&&name!=='tracking'&&!aw
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
   document.querySelectorAll('.view-planner .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.sub===plannerCur);t.setAttribute('aria-pressed',String(t.dataset.sub===plannerCur));});
-  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=plannerCur==='trips'?'':'none';$('tripBoard').style.display=journal?'none':'';$('tripBoardToolbar').style.display=journal?'none':''; $('plOrders').style.display=name==='orders'?'':'none'; $('plUnassigned').style.display=name==='tracking'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else if(name==='orders') serviceOrders.board(); else if(name==='tracking')unassignedTracks.open(); else renderTripsView();
+  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=plannerCur==='trips'?'':'none';$('tripBoard').style.display=journal?'none':'';$('tripBoardToolbar').style.display=journal?'none':''; $('plOrders').style.display=name==='orders'?'':'none'; $('plUnassigned').style.display=name==='tracking'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else if(name==='orders') serviceOrders.board(); else if(name==='tracking')await unassignedTracks.open(); else renderTripsView();
   presentDispatcherSection(journal);document.querySelectorAll('[data-trip-journal-only]').forEach(el=>el.style.display=journal?'':'none');if(journal)renderJournalPeriod();
   document.querySelectorAll('[data-trip-board-only]').forEach(el=>el.style.display=journal||(el.id==='tripAdd'&&!canWrite())?'none':'');
   document.querySelectorAll('[data-trip-section]').forEach(b=>{if(b.classList.contains('subtab'))return;if(b.dataset.tripSection==='tracking'){b.textContent=journal?'← Выезды':'GPS-журнал';b.setAttribute('aria-label',journal?'Вернуться к выездам':'Открыть GPS-журнал');}const on=journal?b.dataset.tripSection==='tracking':b.dataset.tripSection==='board';b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});
-  routeSet(journal?'planner/trips/tracking':'planner/'+name); }
+  document.querySelector('.view-planner').classList.toggle('journal-open',journal);
+  routeSet(journal?'journal':'planner/'+name); }
 document.querySelectorAll('[data-trip-section]').forEach(b=>b.onclick=()=>plannerSub(b.dataset.tripSection==='tracking'&&dispCur!=='tracking'?'tracking':'trips'));
 // Поворот телефона и открытие на планшете меняют раскладку списков —
 // перерисовываем, когда пересекли границу, а не на каждый пиксель.
@@ -907,7 +908,7 @@ try{
   const onPhoneChange=()=>{
     if(!document.querySelector('.view-planner.active')) return;
     if(plannerCur==='jobs') renderJobs();
-    else if(plannerCur==='trips') renderTripsView();
+    else if(plannerCur==='trips'&&dispCur!=='tracking') renderTripsView();
     else if(plannerCur==='orders') serviceOrders.board();
   };
   if(mqPhone.addEventListener) mqPhone.addEventListener('change',onPhoneChange);
@@ -5754,61 +5755,11 @@ async function renderTripCostReview(id){
     };
   }catch(e){tripCostReviewState='не удалось проверить';renderTripReviewSummary();box.innerHTML=`<p class="err">Не удалось загрузить распределение затрат: ${esc(e.message||String(e))}</p><button type="button" class="btn sm" id="tripAllocationRetry">Повторить</button>`;$('tripAllocationRetry').onclick=()=>renderTripCostReview(id);}
 }
-async function openPresenceEditor(tid,stayId,jobId){
-  const trigger=document.activeElement;
-  if(!canWriteTrip(getTrip(tid)||tripCache[tid]||null))return;
-  if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки выезда.','warn');return;}
-  const openedTripId=tripEditId;
-  try{
-    await ensureRefs();await loadTripJobs();await loadTripOrders();
-    const {data:taskLinks,error:taskLinkError}=await sb.from('trip_service_orders').select('order_id').eq('trip_id',tid);if(taskLinkError)throw taskLinkError;
-    const linkedIds=new Set((taskLinks||[]).map(x=>x.order_id));
-    if(!linkedIds.size){const {data:legacyLinks,error:legacyError}=await sb.from('trip_jobs').select('job_id').eq('trip_id',tid);if(legacyError)throw legacyError;const jobs=new Set((legacyLinks||[]).map(x=>x.job_id));tripOrdersAll.filter(o=>jobs.has(o.job_id)&&o.seed_request_id===o.job_id).forEach(o=>linkedIds.add(o.id));}
-    const ordersForTrip=tripOrdersAll.filter(o=>linkedIds.has(o.id));
-    const {data,error}=await sb.rpc('trip_workbench_read',{p_trip:tid});if(error)throw error;
-    if(tripEditId!==openedTripId||!canWriteTrip(data.trip)){notify('Доступ или выезд изменился. Открой присутствие заново.','warn');return;}
-    const source=data.stays.find(s=>String(s.id)===String(stayId));if(!source)throw new Error('Стоянка не найдена');
-    const {data:shareRows,error:shareError}=await sb.from('trip_stay_task_allocations').select('service_order_id,share').eq('stay_id',source.id);
-    if(shareError)throw shareError;
-    const original={...source,task_allocations:(shareRows||[]).map(x=>({order_id:x.service_order_id,share:Number(x.share)}))};
-    const stay={...original};
-    if(jobId!==undefined)stay.job_id=jobId;
-    // Approval is the default action; the validation still requires a closed
-    // interval and explicitly known crew. No historic team is guessed.
-    if(stay.stay_to&&stay.status!=='rejected')stay.status='approved';
-    const dialog=document.createElement('dialog');dialog.className='presence-editor';dialog.setAttribute('aria-labelledby','presenceEditorTitle');
-    const canSave=()=>dialog.isConnected&&dialog.open&&tripEditId===openedTripId&&canWriteTrip(getTrip(tid)||tripCache[tid]||data.trip);
-    dialog.innerHTML='<form method="dialog"><div class="presence-editor-head"><h3 id="presenceEditorTitle">Привязка и присутствие</h3><button class="btn sm" type="submit" aria-label="Закрыть">✕</button></div></form>'
-      +presenceHTML({...data,jobIds:data.job_ids,stays:[stay]},tripJobsAll,profilesList,{editor:true,orders:ordersForTrip})
-      +'<label>Комментарий<input class="presence-reason" value="Проверено по треку и составу команды"></label><p class="presence-error err" role="alert"></p><div class="presence-editor-foot"><button type="button" class="btn amber" data-presence-submit>Привязать и подтвердить</button></div>';
-    framePresenceWorkspace(dialog,stay);document.body.append(dialog);wirePresenceRecovery(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
-    const save=dialog.querySelector('[data-presence-submit]'),status=dialog.querySelector('[data-presence="status"]');
-    const row=dialog.querySelector('[data-presence-id]'),job=dialog.querySelector('[data-presence="job_id"]');
-    job.addEventListener('change',()=>renderTaskAllocationControls(row,job.value,ordersForTrip,job.value===original.job_id?(original.task_allocations||[]):[]));
-    const label=()=>{save.textContent=status.value==='rejected'?'Не учитывать стоянку':status.value==='approved'?'Привязать и подтвердить':'Закрыть без сохранения';};
-    status.addEventListener('change',label);label();
-    protectNativeForm(dialog,{trigger,confirmDiscard:()=>confirmDialog('Отменить несохранённые изменения присутствия?',{title:'Присутствие',okText:'Отменить изменения',cancelText:'Продолжить ввод',danger:true})});
-    save.onclick=async()=>{
-      const output=dialog.querySelector('.presence-error');output.textContent='';
-      if(!canSave()){output.textContent='Доступ или выезд изменился. Открой присутствие заново.';return;}
-      const rows=readPresenceForm(dialog,[original]);
-      if(!rows[0].status){dialog.close();return;}
-      try{
-        validatePresence(rows);validateTaskAllocationShares(rows);const reason=dialog.querySelector('.presence-reason').value.trim();if(!reason)throw new Error('Укажи комментарий проверки');
-        if(!canSave())throw new Error('Доступ или выезд изменился. Открой присутствие заново.');
-        save.disabled=true;
-        const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:tid,p_expected:data.trip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason});
-        if(error)throw error;
-        dialog.close();showToast(rows[0].status==='approved'?'Стоянка привязана и присутствие подтверждено':'Стоянка исключена из учёта');
-        try{await loadFactHours();
-          if(data.trip.status==='done'&&!await refreshTripEcon(tid))throw new Error('Не удалось пересчитать экономику по проверенному присутствию');
-          if(stayBindMap?.tid===tid)await reloadStayBindingData(tid);
-          if(tripEditId===tid){await loadWorkbench(tid);tripEcon();}
-        }catch(refreshError){notify('Проверка сохранена, но обновить отображение не удалось: '+refreshError.message,'warn');}
-      }catch(e){output.textContent=e.message||String(e);save.disabled=false;}
-    };
-  }catch(e){notify('Не удалось открыть присутствие: '+(e.message||e),'err');}
+async function openJournalTrip(tid,options={}){
+ if(!await leaveTripEditor()||!await leaveJobEditor())return;
+ await switchTab('planner','tracking');await unassignedTracks.openRecord(tid,options);
 }
+async function openPresenceEditor(tid,stayId){return openJournalTrip(tid,{stopId:stayId});}
 function renderTripReviewSummary(){
  const box=$('tpReviewSummary');if(!box)return;const t=tripWorkbench?.trip||getTrip(tripEditId);if(!t){box.textContent='Новый план: сначала сохрани выезд.';return;}
  const stays=tripWorkbench?.stays;const pending=stays?.filter(s=>!['approved','rejected'].includes(s.status)).length;const tasks=tripOrdersAll.filter(o=>curTripOrders.has(o.id)),accepted=tasks.filter(o=>o.status==='completed').length;
@@ -5816,7 +5767,7 @@ function renderTripReviewSummary(){
  const presence=stays?(pending?'Подтверждено: '+approved+' · на проверке: '+pending:stays.length?'Проверено: '+stays.length+' '+plural(stays.length,'стоянка','стоянки','стоянок'):'Подтверждённых записей нет'):'Загружается';
  const states=[['Выезд',ST_TRIP[t.status]||t.status,t.status==='done'?'confirmed':'neutral','plan','tpReviewPlan','Открыть план'],['Присутствие',presence,pending?'pending':approved?'confirmed':'neutral','presence','tpReviewPresence','Открыть присутствие'],['Распределение затрат',tripCostReviewState,tripCostReviewState==='подтверждены'?'confirmed':'pending','economy','tpReviewCosts',canWriteTrip()?'Сверить затраты':'Открыть затраты'],['Выполнение заданий',tasks.length?'Принято '+accepted+' из '+tasks.length+' заданий':'Задания не добавлены',tasks.length&&accepted===tasks.length?'confirmed':'neutral','plan','tpReviewTasks','Открыть задания']];
  box.innerHTML='<h3 class="trip-review-heading">Проверка выезда</h3><div class="trip-review-grid">'+states.map(([label,value,state,pane,id,action])=>'<button type="button" class="trip-review-item" id="'+id+'" data-review-state="'+state+'" data-review-pane="'+pane+'"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong><small>'+esc(action)+' →</small></button>').join('')+'</div>';
- box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewPresence'){const details=$('tpPresence').closest('details');if(details)details.open=true;}if(button.id==='tpReviewCosts')$('tpTripAllocation').scrollIntoView({block:'start'});if(button.id==='tpReviewTasks')$('tpJobsCnt')?.closest('.card')?.scrollIntoView({block:'start'});});
+ box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{if(button.id==='tpReviewPresence'){openJournalTrip(t.id);return;}setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewCosts')$('tpTripAllocation').scrollIntoView({block:'start'});if(button.id==='tpReviewTasks')$('tpJobsCnt')?.closest('.card')?.scrollIntoView({block:'start'});});
 }
 function listLoadError(box,error,retry){box.className='';box.innerHTML='<p class="err" role="alert">Не удалось загрузить данные: '+esc(error.message)+'</p><button type="button" class="btn sm" data-list-retry>Повторить загрузку</button>';box.querySelector('[data-list-retry]').onclick=retry;}
 async function loadWorkbench(id){
@@ -5837,63 +5788,13 @@ async function loadWorkbench(id){
     const allocationByStay=new Map();for(const x of taskShares||[]){const rows=allocationByStay.get(x.stay_id)||[];rows.push({order_id:x.service_order_id,share:Number(x.share)});allocationByStay.set(x.stay_id,rows);}
     tripWorkbench={...data,jobIds:data.job_ids,stays:(data.stays||[]).map(s=>({...s,task_allocations:allocationByStay.get(s.id)||[]}))};
     const index=trips.findIndex(t=>t.id===id);if(index>=0)trips[index]=data.trip;
-    const linkedOrders=tripOrdersAll.filter(o=>curTripOrders.has(o.id));
-    $('tpPresence').innerHTML=presenceHTML(tripWorkbench,tripJobsAll,profilesList,{readonly:!canWriteTrip(data.trip),orders:linkedOrders,workspace:true});wirePresenceRecovery($('tpPresence'));mountPresenceReview($('tpPresence'),tripWorkbench,{jobs:tripJobsAll,profiles:profilesList,readonly:!canWriteTrip(data.trip),owner:session?.user?.id,leaflet:()=>L,makeBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),onJobChange:(row,job)=>renderTaskAllocationControls(row,job,linkedOrders)});renderTripReviewSummary();
-    presenceMaps=mountPresenceMaps($('tpPresence'),tripWorkbench.stays,{leaflet:L,makeBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode)});
-    const retained=document.createElement('details');retained.className='retained-trip-fact';retained.innerHTML='<summary>Итоги выезда и сохранённый трек</summary><p role="status">Проверяю сохранённый трек…</p>';$('tpPresence').append(retained);
-    sb.from('trip_tracks').select('km,updated_at,data').eq('trip_id',id).maybeSingle().then(({data:track,error})=>{
-      if(!retained.isConnected)return;
-      const approved=tripWorkbench.stays.filter(s=>s.status==='approved'),minutes=approved.reduce((n,s)=>n+Number(s.minutes_mgr||0),0);
-      const timing=tripTimeSummary(data.trip,track,tripWorkbench.stays),hours=v=>v==null?'—':(v/60).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ч';
-      retained.innerHTML='<summary>Итоги выезда и сохранённый трек</summary><div class="trip-time-metrics"><div><span>Продолжительность выезда</span><b>'+hours(timing.total)+'</b></div><div><span>Дорога'+(timing.estimatedRoad?' · расчётная часть':'')+'</span><b>'+hours(timing.road)+'</b></div><div><span>Стоянки · подтверждено</span><b>'+hours(timing.stopped)+'</b></div></div><p class="hint">Предложено восстановить: '+hours(timing.pending)+' · не разнесено: '+hours(timing.unallocated)+'</p>'+(timing.skipped.length?'<details class="trip-recovery-diagnostics"><summary>Неразрешённые участки: '+timing.skipped.length+'</summary>'+timing.skipped.map(x=>'<p>'+esc(new Date(x.from).toLocaleString('ru-RU'))+' — '+esc(new Date(x.to).toLocaleString('ru-RU'))+' · '+esc(x.reason)+'</p>').join('')+'</details>':'')+'<h3>Сохранённый факт выезда</h3><p>Подтверждённые стоянки: <b>'+approved.length+'</b> · '+minutes.toLocaleString('ru-RU')+' мин</p>'
-        +(error?'<p class="err">Не удалось загрузить сохранённый трек: '+esc(error.message)+'</p>':track?'<p>Сохранённый разбор трека · '+new Date(track.updated_at).toLocaleDateString('ru-RU')+' · <b>'+Number(track.km).toLocaleString('ru-RU',{maximumFractionDigits:1})+' км</b></p>':'<p class="hint">Сохранённого разбора нет'+(data.trip.fact_km!=null?' · факт-пробег '+Number(data.trip.fact_km).toLocaleString('ru-RU')+' км'+esc(factSrcRu(data.trip.fact_km_source)):'')+'</p>')
-        +(track?'<button type="button" class="btn sm" data-retained-track>Открыть сохранённый трек на карте</button>':'');
-      retained.querySelector('[data-retained-track]')?.addEventListener('click',()=>showTripOnMap(id));
-    });
-
+    $('tpPresence').innerHTML='<p>Проверено '+tripWorkbench.stays.filter(s=>['approved','rejected'].includes(s.status)).length+' из '+tripWorkbench.stays.length+' остановок. Присутствие проверяется в GPS-журнале.</p><button type="button" class="btn" data-trip-journal>Открыть поездку в GPS-журнале</button>';
+    $('tpPresence').querySelector('[data-trip-journal]').onclick=()=>openJournalTrip(id);renderTripReviewSummary();
     $('tpRemovedJobs').innerHTML=removedHTML(tripWorkbench,tripJobsAll);
     $('tpHistoryLog').textContent=''; // History has one renderer in the activity feed.
     $('tpRevisionInfo').textContent=(ST_TRIP[data.trip.status]||data.trip.status)+' · версия '+data.trip.workbench_revision+' · изменение плана не удаляет трек и посещения';
     configureTripPlanStatus($('tpStatus'),data.trip,canWriteTrip(data.trip));
     $('tpRemainingInfo').textContent=data.trip.remaining_route?'Осталось '+data.trip.remaining_route.km.toFixed(1)+' км · расчёт '+new Date(data.trip.remaining_route.at).toLocaleString('ru-RU'):'';
-    const canReview=()=>tripEditId===id&&tripWorkbench?.trip?.id===id&&canWriteTrip(getTrip(id)||tripWorkbench.trip);
-    const detect=$('wbDetect');
-    if(detect)detect.onclick=async()=>{
-      if(!detect.isConnected||!canReview()){notify('Доступ или выезд изменился. Открой карточку заново.','warn');return;}
-      if(tripPlanDirty||tripPresenceDirty){notify('Сначала сохрани изменения карточки.','warn');return;}
-      detect.disabled=true;
-      try{
-        const measured=await measureTripKm(id);
-        if(!measured.ok)throw new Error(measured.why||'Нет достоверного GPS-трека для проверки');
-        if(!canReview())throw new Error('Выезд или доступ изменились');
-        await writeFactTrack(id,measured.measure);
-        if(canReview()){
-          await loadWorkbench(id);await loadFactHours();
-          if(measured.measure.rebuildContext.trip.status==='done'&&!await refreshTripEcon(id))
-            notify('Трек и пробег сохранены, но экономику обновить не удалось. Повтори пересчёт перед использованием финансового итога.','warn');
-          tripEcon();renderTpFactKm();
-        }
-        showToast('Трек проверен; предложения присутствия готовы');
-      }
-      catch(e){notify(e.message,'err');if(detect.isConnected&&canReview())detect.disabled=false;}
-      finally{busyDone();}
-    };
-    const presenceSave=$('wbPresenceSave');
-    if(presenceSave)presenceSave.onclick=async()=>{
-      if(!presenceSave.isConnected||!canReview()){notify('Доступ или выезд изменился. Открой карточку заново.','warn');return;}
-      if(tripPlanDirty){notify('Сохрани план и проверку вместе верхней кнопкой «Сохранить план».','warn');return;}
-      const reviewedTrip=tripWorkbench.trip;
-      const rows=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>(!$('tpPresence').querySelector('.presence-review-workspace')||s.id===$('tpPresence').dataset.reviewActive)&&['approved','rejected'].includes(s.status));
-      try{if(!rows.length)throw new Error('Выбери стоянки для проверки. Незакрытое присутствие можно проверить позже.');validatePresence(rows);}
-      catch(e){notify(e.message,'warn');return;}
-      const reason=await promptDialog('Проверка присутствия',[{key:'reason',label:'Причина / комментарий',value:rows[0]?.status==='rejected'?'Остановка в пути · не учитывать в присутствии на объекте':'Проверено по треку и составу команды',type:'textarea'}],{okText:'Подтвердить'});
-      if(!reason)return;
-      if(!presenceSave.isConnected||!canReview()){notify('Доступ или выезд изменился. Открой карточку заново.','warn');return;}
-      presenceSave.disabled=true;
-      try{validateTaskAllocationShares(rows);const {error}=await sb.rpc('trip_presence_save_tasks',{p_trip:id,p_expected:reviewedTrip.workbench_revision,p_stays:rows.map(taskAllocationPayload),p_reason:reason.reason});if(error)throw error;
-        if(canReview())tripPresenceDirty=false;await loadFactHours();if(reviewedTrip.status==='done'&&!await refreshTripEcon(id))throw new Error('Присутствие сохранено, но пересчитать экономику не удалось. Открой выезд заново и повтори проверку.');if(canReview()){await loadWorkbench(id);tripEcon();}showToast('Человеко-часы присутствия сохранены');}
-      catch(e){notify(e.message,'err');if(presenceSave.isConnected&&canReview())presenceSave.disabled=false;}
-    };
     await renderTripCostReview(id);
   }catch(e){$('tpPresence').textContent='Не удалось загрузить проверку выезда: '+e.message;$('tpSave').disabled=true;$('tpReviewState').hidden=false;$('tpReviewState').textContent='Данные недоступны. Сохранение заблокировано до успешной загрузки.';}
 }
@@ -6248,13 +6149,6 @@ $('tripCancel').onclick=async()=>{if((tripPlanDirty||tripPresenceDirty)&&!await 
 $('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
 $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
   if(!canWriteTrip())return;
-  let presenceChanges=null;
-  if(tripPresenceDirty){
-    presenceChanges=readPresenceForm($('tpPresence'),tripWorkbench.stays).filter(s=>(!$('tpPresence').querySelector('.presence-review-workspace')||s.id===$('tpPresence').dataset.reviewActive)&&['approved','rejected'].includes(s.status));
-    try{if(!presenceChanges.length)throw new Error('Выбери результат проверки изменённых стоянок.');validatePresence(presenceChanges);validateTaskAllocationShares(presenceChanges);}
-    catch(e){$('tripErr').textContent=e.message;setTripPane('presence');const details=$('tpPresence').closest('details');if(details)details.open=true;return;}
-    presenceChanges=presenceChanges.map(taskAllocationPayload);
-  }
   if(tripEditId&&tripNewPlanId!==tripEditId&&!$('tpChangeReason').value.trim()){ $('tripErr').textContent='Укажи причину изменения плана.';setTripPane('plan');$('tpChangeReason').focus({preventScroll:true});$('tpChangeReason').scrollIntoView({block:'center',behavior:'auto'});return; }
   const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};
   // Километраж по плательщикам — по реальным дорогам. Считаем и здесь:
@@ -6278,14 +6172,14 @@ $('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=route
   const rec={main_job_id:tripMainJobId||null,road_km_by_payer:roadKmTrip,date_from:$('tpFrom').value||null,date_to:$('tpTo').value||null,vehicle_label:veh?(veh.name+(veh.plate?(' '+veh.plate):'')):'',vehicle_id:veh?veh.id:null,lead_engineer:selectedEngineerIds('tpEng')[0]||null,engineer_ids:selectedEngineerIds('tpEng'),status:$('tpStatus').value,notes:$('tpNotes').value.trim(),route_stops:stops,route_geometry:slimGeometry(tripRoute.geometry)||null,overrides:ov,econ_snapshot:withLegs(e,tripRoute.legs),tariffs_snapshot:savedTripT(curTrip),remaining_route:tripRemainingRoute};
   $('tpSave').disabled=true;
   try{ let tid=tripEditId;
-    const {data,error}=await sb.rpc('trip_plan_save_tasks',{p_trip:tid,p_expected:curTrip?.workbench_revision??0,p_plan:rec,p_order_ids:[...curTripOrders],p_reason:$('tpChangeReason').value.trim()||(tripNewPlanId===tid?'Первоначальное заполнение нового выезда':'Создание выезда'),p_stays:presenceChanges});
+    const {data,error}=await sb.rpc('trip_plan_save_tasks',{p_trip:tid,p_expected:curTrip?.workbench_revision??0,p_plan:rec,p_order_ids:[...curTripOrders],p_reason:$('tpChangeReason').value.trim()||(tripNewPlanId===tid?'Первоначальное заполнение нового выезда':'Создание выезда'),p_stays:null});
     if(error)throw error;tid=data;
     // Одометр здесь БОЛЬШЕ НЕ ТРОГАЕМ. Его пишет триггер trips_odometer
     // на переходе в 'done' — из fact_km, с фолбэком на плановый ORS.
     // Если оставить и эту ветку, пробег задвоится:два источника на одно поле.
     // Заодно чинится дыра: инженер закрывает выезд через RPC, saveTrip не
     // вызывается вовсе, и пробег молча переставал бы обновляться.
-    tripPlanDirty=false;tripPresenceDirty=false;await loadFactHours(); await renderTrips(); await openTrip(tid); showToast('План и выбранная проверка сохранены. Накопленный трек сохранён отдельно.');
+    tripPlanDirty=false;tripPresenceDirty=false;await loadFactHours(); await renderTrips(); await openTrip(tid); showToast('План выезда сохранён.');
   }catch(err){ console.error('Сохранение выезда не прошло:', err, '| детали:', err&&(err.details||err.hint||err.code)); $('tripErr').textContent='Ошибка: '+(err.message||err); } finally{ $('tpSave').disabled=false; } };
 async function delTrip(id){ if(!await confirmDialog('Переместить выезд в корзину? Он удалится автоматически через 7 дней.',{danger:true,okText:'В корзину'})) return; const {error}=await sb.from('trips').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderTrips();
   undoToast('Выезд перемещён в корзину', async ()=>{ const {error:e2}=await sb.rpc('trash_restore',{p_kind:'trips',p_id:id}); if(e2){ notify(e2.message,'err'); return; } await renderTrips(); showToast('Восстановлено'); }); }
@@ -6730,122 +6624,8 @@ function minText(m){ if(m==null) return '—'; const h=Math.floor(m/60), r=Math.
 
 const STAY_ST={detected:'посчитано',engineer_ok:'подтвердил инженер',approved:'утверждено',rejected:'не работа'};
 
-async function openStaysModal(tid){
-  if(canWriteTrip(getTrip(tid))){$('staysOverlay').classList.remove('on');await openTrip(tid);return;}
-  staysModalTripId=tid;
-  const t=getTrip(tid);
-  $('staysTitle').textContent='Стоянки на выезде'+(t&&t.date_from?(' '+t.date_from):'');
-  $('staysBody').innerHTML='<div class="hint">Загрузка…</div>';
-  $('staysOverlay').classList.add('on');
+async function openStaysModal(tid){$('staysOverlay').classList.remove('on');return openJournalTrip(tid);}
 
-  const { data, error }=await sb.from('trip_stays')
-    .select('*, jobs(id, clients(name))').eq('trip_id',tid).order('stay_from');
-  if(error){ $('staysBody').innerHTML='<div class="err">'+esc(error.message)+'</div>'; return; }
-  const list=data||[];
-  // Заявки выезда — для ручной привязки стоянки. Автопривязка в
-  // trip_detect_stays работает по радиусу stay_radius_m, и если координата
-  // объекта смещена (дефект В9: геокодер по адресу промахивается на 1-3 км),
-  // стоянка остаётся без заявки навсегда.
-  const {data:tjs}=await sb.from('trip_jobs')
-    .select('job_id, jobs(id, clients(name))').eq('trip_id',tid).order('ord');
-  const stayJobs=(tjs||[]).map(r=>({id:r.job_id,
-    name:(r.jobs&&r.jobs.clients&&r.jobs.clients.name)||'заявка без клиента'}));
-  if(!list.length){ $('staysBody').innerHTML='<div class="hint">Стоянок не найдено. Либо машина нигде не стояла дольше порога, либо трек не писался.</div>'; return; }
-
-  const mgr=canWriteTrip();
-  let h='<div class="hint" style="margin-bottom: var(--sp-3)">Идёт только в себестоимость. Нормочасы в заявках это не меняет.</div>';
-
-  list.forEach(s=>{
-    const cli=s.jobs&&s.jobs.clients?s.jobs.clients.name:null;
-    const cur=(s.minutes_mgr!=null?s.minutes_mgr:(s.minutes_eng!=null?s.minutes_eng:s.minutes_raw));
-    h+='<div class="card" style="margin-bottom: var(--sp-3)">';
-    h+='<h3 style="font-size: var(--fs-5)">'+(cli?esc(cli):'<span style="color:var(--ink-dim)">не у заявки</span>')+
-       ' <span class="pill">'+esc(STAY_ST[s.status]||s.status)+'</span></h3>';
-    h+='<div class="meta">'+hhmm(s.stay_from)+' — '+hhmm(s.stay_to)+' · детектор: '+minText(s.minutes_raw)+
-       (s.dist_m!=null?(' · '+s.dist_m+' м до точки'):'')+'</div>';
-
-    // Инженер физически стоял на объекте — его координата точнее
-    // геокодированного адреса. Со второго визита автопривязка сработает сама.
-    if(cli && s.dist_m!=null && s.dist_m>0 && s.status!=='rejected' && (mgr||s.status!=='approved')){
-      h+='<div class="row" style="margin-top: var(--sp-3)"><button class="btn sm ghost" data-spin="'+s.id+'">'+
-         'Уточнить точку объекта ('+s.dist_m+' м)</button></div>';
-    }
-
-    if(!cli){
-      // Не прячем: инженеру полезно видеть, что система про эту стоянку знает
-      // и почему не засчитала. Иначе «где мои два часа» — вечный вопрос.
-      h+='<div class="hint">Ни одной заявки выезда рядом — в часы не идёт.</div>';
-      if(stayJobs.length && (mgr||s.status!=='approved')){
-        h+='<div class="row" style="margin-top: var(--sp-3)"><select data-sjob="'+s.id+'" style="flex:1">'+
-           '<option value="">— привязать к заявке вручную —</option>'+
-           stayJobs.map(j=>'<option value="'+j.id+'">'+esc(j.name)+'</option>').join('')+
-           '</select></div>';
-      }
-    } else if(s.status==='approved'){
-      h+='<div class="ds">Зачтено: <b>'+minText(s.minutes_mgr)+'</b>'+
-         (s.minutes_eng!=null&&s.minutes_eng!=s.minutes_mgr?(' <span class="hint" style="margin: 0">(инженер ставил '+minText(s.minutes_eng)+')</span>'):'')+'</div>';
-    } else if(s.status==='rejected'){
-      h+='<div class="ds" style="color:var(--ink-dim)">Отклонено'+(s.note?(': '+esc(s.note)):'')+'</div>';
-    } else {
-      const canAct=mgr&&(s.status==='engineer_ok'||s.status==='detected');
-      if(canAct){
-        h+='<div class="row" style="margin-top: var(--sp-3);align-items:center">'+
-           '<div style="width:120px"><label>минут</label><input type="number" min="0" step="5" id="sm_'+s.id+'" value="'+(cur!=null?cur:0)+'"></div>'+
-           '<button class="btn sm amber" data-sok="'+s.id+'">'+(mgr?'Утвердить':'Подтвердить')+'</button>'+
-           '<button class="btn sm ghost" data-sno="'+s.id+'">Не работа</button></div>';
-      } else if(!mgr && s.status==='engineer_ok'){
-        h+='<div class="ds">Ты подтвердил <b>'+minText(s.minutes_eng)+'</b>. Ждёт менеджера.</div>';
-      }
-    }
-    h+='</div>';
-  });
-
-  const approved=list.filter(s=>s.status==='approved'&&s.job_id).reduce((a,s)=>a+(+s.minutes_mgr||0),0);
-  h+='<div class="ds" style="margin-top: var(--sp-2)"><b>Утверждено в себестоимость: '+(approved/60).toFixed(2)+' ч</b></div>';
-  $('staysBody').innerHTML=h;
-
-  $('staysBody').querySelectorAll('[data-sok]').forEach(b=>b.onclick=()=>stayAct(b.dataset.sok,mgr?'approve':'confirm',tid));
-  $('staysBody').querySelectorAll('[data-sno]').forEach(b=>b.onclick=()=>stayAct(b.dataset.sno,'reject',tid));
-
-  $('staysBody').querySelectorAll('[data-sjob]').forEach(sel=>sel.onchange=async()=>{
-    try{
-      const { data, error }=await sb.rpc('stay_attach',{p_stay:sel.dataset.sjob,p_job:sel.value||null});
-      if(error) throw error;
-      if(data==='foreign_job') notify('Эта заявка не из текущего выезда.','err');
-      else if(data==='already_approved') notify('Стоянку уже утвердил менеджер.','err');
-      else showToast(data==='detached'?'Привязка снята':'Привязано к заявке');
-      await loadFactHours(); await openStaysModal(tid);
-    }catch(e){ notify('Ошибка: '+(e.message||e),'err'); } });
-
-  $('staysBody').querySelectorAll('[data-spin]').forEach(b=>b.onclick=async()=>{
-    const st=list.find(x=>x.id===b.dataset.spin); if(!st) return;
-    if(!await confirmDialog('Записать координату этой стоянки в карточку объекта? Точка сместится на '+st.dist_m+' м.',{okText:'Записать'})) return;
-    try{
-      const { data, error }=await sb.rpc('stay_pin_point',{p_stay:b.dataset.spin});
-      if(error) throw error;
-      if(data==='too_far') notify('Слишком далеко: инженер может сдвинуть объект не дальше 1 км, менеджер — 5 км.','err');
-      else if(data==='no_job') notify('Сначала привяжи стоянку к заявке.','err');
-      else if(data==='pinned'){ showToast('Координата объекта уточнена'); await loadAll(); }
-      await openStaysModal(tid);
-    }catch(e){ notify('Ошибка: '+(e.message||e),'err'); } });
-}
-
-async function stayAct(sid,kind,tid){
-  try{
-    let rpc,args;
-    if(kind==='reject'){ rpc='stay_reject'; args={p_stay:sid,p_note:''}; }
-    else{
-      const el=$('sm_'+sid); const m=el?(+el.value||0):null;
-      rpc=(kind==='approve')?'stay_approve':'stay_confirm'; args={p_stay:sid,p_minutes:m};
-    }
-    const { data, error }=await sb.rpc(rpc,args);
-    if(error) throw error;
-    if(data==='already_approved') notify('Стоянку уже утвердил менеджер.','err');
-    await loadFactHours();
-    await openStaysModal(tid);
-    if(plannerCur==='mine') renderMine();
-  }catch(e){ notify('Ошибка: '+(e.message||e),'err'); }
-}
 if($('staysClose')) $('staysClose').onclick=()=>$('staysOverlay').classList.remove('on');
 if($('staysMap')) $('staysMap').onclick=async()=>{
   if(!staysModalTripId) return;
@@ -7137,22 +6917,8 @@ async function reloadStayBindingData(tid){
   stayBindMap={tid,stays:data.stays,jobs:tripJobsAll.filter(j=>data.job_ids.includes(j.id)||data.removed.some(r=>r.job_id===j.id)),selected:null};
   drawStayBindingMap();
 }
-async function openStayBindingMap(tid){
-  const t=getTrip(tid)||tripCache[tid];
-  if(t&&t.status!=='finished'&&t.status!=='done'){notify('Привязка факта доступна после завершения выезда.','warn');return;}
-  await showTripOnMap(tid);
-  if(canWriteTrip(t||null)){try{await loadTripJobs();await reloadStayBindingData(tid);}catch(e){notify(e.message,'err');}return;}
-  try{
-    const [{data:stays,error:se},{data:links,error:je}]=await Promise.all([
-      sb.from('trip_stays').select('*').eq('trip_id',tid).order('stay_from'),
-      sb.from('trip_jobs').select('job_id,jobs(id,clients(name),equipment(model))').eq('trip_id',tid).order('ord')
-    ]);
-    if(se)throw se;if(je)throw je;
-    stayBindMap={tid,stays:stays||[],jobs:(links||[]).map(x=>x.jobs).filter(Boolean),selected:null};
-    drawStayBindingMap();
-    showToast(stayBindMap.stays.length?'Выберите красную точку стоянки и заявку':'Стоянок для привязки не найдено');
-  }catch(e){notify('Стоянки не загрузились: '+(e.message||e),'err');}
-}
+async function openStayBindingMap(tid){return openJournalTrip(tid);}
+
 // Слой либо на карте, либо нет. Очистка слоя тут не годится: при следующем
 // включении рисовать было бы нечего, пришлось бы пересчитывать трек.
 function factApplyVis(){

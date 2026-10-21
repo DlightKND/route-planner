@@ -111,7 +111,7 @@ export function readPresenceForm(root, originals) {
     const parts=[...row.querySelectorAll('[data-recovery-part]')],bounds=presenceBounds(s);
     const recovery_acceptance=Object.fromEntries(parts.map(input=>[input.dataset.recoveryPart,input.value===''?null:Number(input.value)]));
     const total=bounds?bounds.gps+parts.reduce((sum,input)=>sum+Number(input.value||0),0):get('minutes_mgr').value===''?null:Number(get('minutes_mgr').value);
-    return {...s,...(bounds?{recovery_acceptance}:{}),job_id:get('job_id').value||null,minutes_mgr:total,
+    return {...s,stop_kind:row.dataset.stopKind,...(bounds?{recovery_acceptance}:{}),job_id:get('job_id').value||null,minutes_mgr:total,
       crew_ids:[...get('crew_ids').selectedOptions].map(o=>o.value),status:get('status').value,
       ...(row.querySelector('.wb-task-share-list')?{task_allocations}: {})};
   });
