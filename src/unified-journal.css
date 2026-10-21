@@ -24,7 +24,7 @@
 .journal-time-part::after{content:'';position:absolute;inset:9px 0;background:#92969a}
 .journal-time-part.drive::after{background:#7b9b62}.journal-time-part.stop::after{background:var(--accent)}
 .journal-time-part.recovery::after{background:repeating-linear-gradient(135deg,#e99747 0 3px,var(--panel) 3px 5px)}
-.journal-time-part.conflict::after{outline:2px solid var(--danger-ink);outline-offset:-2px}
+.journal-time-part.conflict::after{outline:2px solid var(--red);outline-offset:-2px}
 .journal-time-part.is-selected{outline:2px solid var(--ink);outline-offset:-2px;z-index:1}
 .journal-time-part:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
 .journal-legend{display:flex;flex-wrap:wrap;gap:8px 16px;color:var(--ink-dim);font-size:11px;margin:4px 0}
@@ -71,11 +71,11 @@
 .journal-hypothesis,.journal-conflict{display:grid;gap:8px;border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--panel-2);padding:12px;font:400 13px/1.5 var(--sans);color:var(--ink);text-align:left}
 .journal-conflict{width:100%;cursor:pointer}.journal-conflict small{color:var(--ink-dim)}
 .journal-saved-decision h3{font-size:15px;margin:24px 0 12px}.journal-saved-decision dl>div{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line);font-size:13px}.journal-saved-decision dd{margin:0;font-weight:600}
-.journal-field-invalid select{border-color:var(--danger-ink)}.journal-field-error{color:var(--danger-ink);font-size:12px;margin:8px 0 0}.journal-field-error:empty{display:none}
+.view .presence-field.journal-field-invalid select[aria-invalid=true]{border-color:var(--red)}.journal-field-invalid>h3{color:var(--red)}.journal-field-invalid .presence-crew-checks input{outline:1px solid var(--red);outline-offset:1px}.journal-field-error{color:var(--red);font-size:12px;margin:8px 0 0}.journal-field-error:empty{display:none}
 .presence-review-redesign .presence-review-save{position:static;flex:none;padding:16px 28px;border-top:1px solid var(--line);background:var(--panel);margin:0;bottom:auto}
 .presence-review-result{margin:0 0 12px;font-size:13px;line-height:1.5}.presence-review-validation:empty{display:none}.presence-review-validation{font-size:12px;margin:0 0 12px}
 .presence-review-buttons{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px}.presence-review-buttons .btn{min-height:44px;font-size:12px;white-space:normal}.presence-review-buttons [data-presence-save]{order:3}
-.journal-trip-message{font-size:12px;line-height:1.5;margin:0;padding:8px 20px;color:var(--ink-dim);flex:none}.journal-trip-message:empty{display:none}.journal-trip-message.is-error{color:var(--danger-ink)}
+.journal-trip-message{font-size:12px;line-height:1.5;margin:0;padding:8px 20px;color:var(--ink-dim);flex:none}.journal-trip-message:empty{display:none}.journal-trip-message.is-error{color:var(--red)}
 .journal-allocation-mobile{display:none}.presence-field .wb-task-share-list{display:grid;gap:0}.presence-field .wb-task-share-row{display:grid;grid-template-columns:20px minmax(0,1fr) 70px 16px;gap:12px;align-items:center;min-height:56px;border-bottom:1px solid var(--line);font:400 13px/1.4 var(--sans);letter-spacing:normal;text-transform:none}.wb-task-share-row input[type=number]{width:70px;min-height:44px}.wb-task-share-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
 .journal-trip-documents{padding:24px;overflow:auto;flex:1}.journal-trip-documents h2{font-size:20px}
 .journal-map-expanded>.gps-journal-sidebar{display:none}.view #unassignedHost.journal-map-expanded>.gps-journal-detail{grid-column:1/-1}
