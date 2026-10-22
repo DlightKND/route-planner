@@ -99,8 +99,8 @@ export function removedHTML(data,jobs) {
   return `<details class="wb-history"><summary>Исключены из плана · ${data.removed.length}</summary><p class="hint">Посещения и трек сохранены. Исключение из выезда не отменяет саму заявку.</p>${data.removed.map(h=>`<p>${esc(jobs.find(j=>j.id===h.job_id)?.clients?.name||h.snapshot.client_name||('Заявка '+h.job_id.slice(0,8)))} · ${time(h.removed_at)}</p>`).join('')}</details>`;
 }
 
-export function readPresenceForm(root, originals) {
-  return [...root.querySelectorAll('[data-presence-id]')].map(row => {
+export function readPresenceForm(root, originals, stayId = null) {
+  return [...root.querySelectorAll('[data-presence-id]')].filter(row=>!stayId||row.dataset.presenceId===stayId).map(row => {
     const s = originals.find(x=>x.id===row.dataset.presenceId);
     const get = key => row.querySelector(`[data-presence="${key}"]`);
     const task_allocations=[...row.querySelectorAll('[data-task-allocation-row]')].flatMap(item=>{
