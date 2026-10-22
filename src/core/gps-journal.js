@@ -47,7 +47,8 @@ export function routeAmounts(track){
 }
 export function presenceRoadConflicts(stay,track){
  if(stay.status!=='approved')return [];
- return ((track?.data||track)?.presence?.motion_intervals||[]).filter(m=>acceptedPresenceIntervals(stay).some(p=>Date.parse(p.from)<Date.parse(m.to)&&Date.parse(p.to)>Date.parse(m.from)));
+ const accepted=acceptedPresenceIntervals(stay).map(p=>[Date.parse(p.from),Date.parse(p.to)]);
+ return ((track?.data||track)?.presence?.motion_intervals||[]).filter(m=>{const from=Date.parse(m.from),to=Date.parse(m.to);return accepted.some(([a,b])=>a<to&&b>from);});
 }
 export function tripReviewIssues(trip){
  const r=trip.review||{},issues=[],pending=Math.max(0,Number(r.total||0)-Number(r.done||0));
@@ -67,6 +68,13 @@ export function activityTimeline(trip,track,stays){
   if(!presenceBounds(s))return [{...base,recovery:false}];
   return [...(s.presence_evidence.gps_intervals||[]).map(p=>({...base,...p,recovery:false})),...(s.presence_evidence.recovery_parts||[]).map(p=>({...base,...p,recovery:true}))];
  });
- const source=[...motion,...stopParts],cuts=[...new Set([from,to,...source.flatMap(s=>[Date.parse(s.from),Date.parse(s.to)]).filter(t=>t>from&&t<to)])].sort((a,b)=>a-b);
- return cuts.slice(1).map((b,i)=>{const a=cuts[i],items=source.filter(s=>Date.parse(s.from)<=a&&Date.parse(s.to)>=b),stop=items.find(s=>s.kind==='stop'),part=stop||items[0];return {from:a,to:b,left:(a-from)/(to-from)*100,width:(b-a)/(to-from)*100,kind:part?.kind||'unknown',recovery:!!part?.recovery,stopId:stop?.id,conflict:!!stop&&items.some(s=>s.kind==='drive')};});
+ // Sweep interval boundaries once; keep original source order for overlapping evidence.
+ const source=[...motion,...stopParts].map(s=>({...s,start:Date.parse(s.from),end:Date.parse(s.to)}));
+ const cuts=[...new Set([from,to,...source.flatMap(s=>[s.start,s.end]).filter(t=>t>from&&t<to)])].sort((a,b)=>a-b);
+ const events=source.flatMap((s,index)=>s.end>s.start&&s.start<to&&s.end>from?[{time:Math.max(from,s.start),index,open:true},{time:Math.min(to,s.end),index,open:false}]:[]).sort((a,b)=>a.time-b.time);
+ const active=new Set(),stops=[],drives=[];
+ function push(heap,index){let i=heap.length;heap.push(index);while(i){const parent=(i-1)>>1;if(heap[parent]<=index)break;heap[i]=heap[parent];i=parent;}heap[i]=index;}
+ function first(heap){while(heap.length&&!active.has(heap[0])){const last=heap.pop();if(!heap.length)break;let i=0;while(i*2+1<heap.length){let child=i*2+1;if(child+1<heap.length&&heap[child+1]<heap[child])child++;if(heap[child]>=last)break;heap[i]=heap[child];i=child;}heap[i]=last;}return heap.length?source[heap[0]]:null;}
+ let cursor=0;
+ return cuts.slice(1).map((b,i)=>{const a=cuts[i];while(cursor<events.length&&events[cursor].time<=a){const event=events[cursor++];if(event.open){active.add(event.index);push(source[event.index].kind==='stop'?stops:drives,event.index);}else active.delete(event.index);}const stop=first(stops),drive=first(drives),part=stop||drive;return {from:a,to:b,left:(a-from)/(to-from)*100,width:(b-a)/(to-from)*100,kind:part?.kind||'unknown',recovery:!!part?.recovery,stopId:stop?.id,conflict:!!stop&&!!drive};});
 }

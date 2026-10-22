@@ -414,6 +414,13 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     const segments=[{kind:'track',km:74.2,fromTs:ride.started_at,toTs:'2026-10-05T07:50:00Z',line:[[36.2,49.98],[36.23,49.99],[36.25,50.01]],fromPt:{lat:49.98,lng:36.2},toPt:{lat:50.01,lng:36.25}},{kind:'road',km:13.2,fromTs:'2026-10-05T07:50:00Z',toTs:'2026-10-05T08:20:00Z',line:[[36.25,50.01],[36.24,50.015],[36.23,50.01]],fromPt:{lat:50.01,lng:36.25},toPt:{lat:50.01,lng:36.23}}];
     tables.trip_tracks.push({trip_id:trip,km:87.4,updated_at:stamp,data:{trackKm:74.2,roadKm:13.2,segments,presence:{source_to:ride.finished_at,motion_intervals:[{...span('07:50','08:20'),source:'ors'}]}}});
   }
+  if(unifiedJournalJourney==='long'){
+    const baseTime=Date.parse('2026-10-05T04:00Z'),iso=m=>new Date(baseTime+m*60000).toISOString();ride.started_at=iso(0);ride.finished_at=iso(6000);
+    const base=stays[2];stays.splice(0,stays.length,...Array.from({length:29},(_,i)=>({...base,id:'long-stay-'+i,stay_from:iso(i*200+20),stay_to:iso(i*200+50),minutes_raw:30,minutes_mgr:null,status:'detected',presence_evidence:null})));
+    const segments=Array.from({length:2200},(_,i)=>({kind:'track',km:.1,fromTs:iso(i*2),toTs:iso(i*2+2),line:[[36.2+i*.00001,49.98],[36.2+(i+1)*.00001,49.98001]]}));
+    const saved=tables.trip_tracks.find(t=>t.trip_id===trip);saved.data={trackKm:220,roadKm:0,segments,presence:{source_to:ride.finished_at,motion_intervals:segments.map(s=>({from:s.fromTs,to:s.toTs,source:'gps'}))}};
+    history.splice(0,history.length,...Array.from({length:100},(_,i)=>({id:'long-history-'+i,revision:i,recorded_at:iso(i),actor_id:manager,reason:'Синтетическое изменение '+i,snapshot:{stays:stays.map(s=>({...s,note:'x'.repeat(1500)}))}})));
+  }
   const db = {
     auth: {
       getSession: async () => ({ data: { session: signedOut?null:session }, error: null }),
@@ -639,6 +646,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
           history,
         },
       };
+      reads.trip_journal_read={...reads.trip_workbench_read,history:[],history_deferred:true};
       return Object.hasOwn(reads, name)
         ? { data: structuredClone(reads[name]), error: null }
         : reject("rpc:" + name);
