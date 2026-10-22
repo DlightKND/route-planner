@@ -8,6 +8,8 @@ The timeline filtered every source interval at every boundary and repeatedly par
 
 The reviewed API logs also contained slow responses: the largest observed origin times were 10.1 seconds for track reads, 3.0 seconds for the workbench RPC and 3.9 seconds for allocation reads. These maxima are across requests in the log window and must not be added as if they belong to one opening. They do not establish the entire cause of a reported 60-second wait.
 
+After applying the new reader, a database comparison confirmed unchanged trip/stops/jobs data. The initial workbench JSON shrank from 5,966,062 to 167,065 bytes for 29 stops and from 3,865,616 to 135,614 bytes for 23 stops. The track is a separate response. Security advisor findings were unchanged.
+
 ## Changes
 
 - A lightweight journal snapshot omits revision history entirely, including its database query. Its privileged reader stays in the private schema and retains exactly the existing workbench responsibility gate. The public RPC is an invoker wrapper. Existing full workbench RPC and RLS reader fallback remain available.
