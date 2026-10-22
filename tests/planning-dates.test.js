@@ -1,0 +1,3 @@
+import {it,expect} from 'vitest';
+import {planningPeriod,planningWarnings} from '../src/core/planning-dates.js';
+it('keeps request SLA, task period and trip dates distinct and warns without changing them',()=>{const input={requestDue:'2026-10-23',from:'2026-10-22',to:'2026-10-25',trips:[{date_from:'2026-10-21',date_to:'2026-10-22'},{date_from:'2026-10-20',date_to:'2026-10-22',deleted_at:'2026-10-21'}]},before=structuredClone(input);expect(planningWarnings(input)).toHaveLength(2);expect(planningWarnings(input).join(' ')).toContain('SLA');expect(input).toEqual(before);expect(planningWarnings({...input,to:'2026-10-23',trips:[]})).toEqual([]);expect(planningPeriod('2026-10-22','2026-10-25')).toBe('22.10.2026 — 25.10.2026');});

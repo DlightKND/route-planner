@@ -11,6 +11,26 @@ concurrency:
   group: visual-qa-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  manager-workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Verify manager planning, save, cancel and handoff
+        run: npx playwright test tests/visual/manager-workflow.spec.mjs --project=mobile-360-light --project=mobile-390-dark --project=desktop-1024-light --project=desktop-1440-light --retries=0 --timeout=30000
+      - name: Keep manager audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manager-workflows-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7
   review-workflows:
     runs-on: ubuntu-latest
     timeout-minutes: 7

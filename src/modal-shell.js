@@ -72,15 +72,16 @@ export function installModalShell({dismiss = {}, canDismiss = () => true, confir
   return api;
 }
 
-export function protectNativeForm(dialog, {trigger, confirmDiscard}) {
+export function protectNativeForm(dialog, {trigger, confirmDiscard, isBusy=()=>false}) {
   const snapshot=()=>JSON.stringify([...dialog.querySelectorAll('input,select,textarea')].map(el=>[el.value,el.checked,el.multiple?[...el.selectedOptions].map(o=>o.value):null]));
   const baseline=snapshot();let pending=false;
   const cancel=async()=>{
-    if(pending)return;pending=true;
+    if(pending||isBusy())return;pending=true;
     try {if(snapshot()===baseline || await confirmDiscard())dialog.close();}finally {pending=false;}
   };
   dialog.addEventListener('cancel',e=>{e.preventDefault();cancel();});
   dialog.querySelector('form[method=dialog]')?.addEventListener('submit',e=>{e.preventDefault();cancel();});
   dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)cancel();}});
   dialog.addEventListener('close',()=>{if(trigger?.isConnected)trigger.focus({preventScroll:true});});
+  return {requestClose:cancel};
 }

@@ -1,5 +1,6 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false } = {}) {
+  if(managerJourney){financeJourney=true;entityAudit=true;}
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
     other = "00000000-0000-4000-8000-000000000003";
@@ -421,6 +422,8 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     const saved=tables.trip_tracks.find(t=>t.trip_id===trip);saved.data={trackKm:220,roadKm:0,segments,presence:{source_to:ride.finished_at,motion_intervals:segments.map(s=>({from:s.fromTs,to:s.toTs,source:'gps'}))}};
     history.splice(0,history.length,...Array.from({length:100},(_,i)=>({id:'long-history-'+i,revision:i,recorded_at:iso(i),actor_id:manager,reason:'Синтетическое изменение '+i,snapshot:{stays:stays.map(s=>({...s,note:'x'.repeat(1500)}))}})));
   }
+  const managerState=()=>({request:{due_date:request.due_date,status:request.status,engineer_ids:[...(request.engineer_ids||[])]},order:{status:task.status,date_from:task.date_from,date_to:task.date_to,engineer_ids:[...task.engineer_ids],lead_engineer:task.lead_engineer,revision:task.revision,items:task.service_order_items.map(i=>({id:i.id,done_qty:i.done_qty,planned_qty:i.planned_qty}))},trip:{date_from:ride.date_from,date_to:ride.date_to,engineer_ids:[...ride.engineer_ids]}});
+  if(managerJourney){task.status=typeof managerJourney==='string'?managerJourney:managerJourney.stage||'assigned';audit.managerWrites=[];audit.managerState=managerState();}
   const db = {
     auth: {
       getSession: async () => ({ data: { session: signedOut?null:session }, error: null }),
@@ -591,6 +594,18 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         audit.entityWrites.push({name,args:structuredClone(args)});
         return {data:{id:comment.id,pinned_at:comment.pinned_at,pinned_by:comment.pinned_by},error:null};
       }
+      if(managerJourney&&['service_order_organization_save','service_order_save_one','entity_responsibility_assign','service_order_deadline_propose','trip_reschedule_request'].includes(name)){
+        const bad=message=>({data:null,error:{message,code:'QA_MANAGER_VALIDATION'}}),target=name==='entity_responsibility_assign'?(args.p_kind==='order'?tables.service_orders.find(o=>o.id===args.p_id):args.p_kind==='job'?request:ride):tables.service_orders.find(o=>o.id===(args.p_id||args.p_order));
+        if(name==='trip_reschedule_request'){audit.managerWrites.push({name,args:structuredClone(args)});return {data:'requested',error:null};}
+        if(!target)return bad('Запись не найдена');
+        if(name==='service_order_deadline_propose'){if(role!=='engineer')return bad('В этом сценарии предложение отправляет инженер');const row={id:'deadline-new',order_id:target.id,order_revision:target.revision,proposed_date_to:args.p_date_to,reason:args.p_reason,status:'open',created_by:session.user.id,created_at:stamp};tables.service_order_deadline_requests=[...(tables.service_order_deadline_requests||[]),row];audit.managerWrites.push({name,args:structuredClone(args)});return {data:row.id,error:null};}
+        if(role==='engineer'&&![target.owner_id,target.curator_id].includes(session.user.id))return bad('Нет прав менеджера');
+        if(args.p_expected!=null&&target.revision!==args.p_expected)return bad('Задание изменено другим пользователем');
+        if(name==='entity_responsibility_assign'){
+          if(managerJourney.failAssignment)return bad('Передача отклонена сервером');target[args.p_field+'_id']=args.p_person;if(args.p_kind==='order')target.revision++;audit.managerWrites.push({name,args:structuredClone(args)});audit.managerState=managerState();return {data:{owner_id:target.owner_id,curator_id:target.curator_id},error:null};
+        }
+        if(name==='service_order_organization_save')Object.assign(target,{date_from:args.p_date_from,date_to:args.p_date_to,engineer_ids:[...args.p_engineer_ids],lead_engineer:args.p_lead_engineer});else Object.assign(target,structuredClone(args.p_data));target.revision++;audit.managerWrites.push({name,args:structuredClone(args)});audit.managerState=managerState();return {data:name==='service_order_save_one'?target.id:target.revision,error:null};
+      }
       if(financeJourney&&name==='job_request_save_canonical'){
         const target=args.p_id?tables.jobs.find(j=>j.id===args.p_id):{...request,id:crypto.randomUUID(),service_orders:[]};
         if(!target)return {data:null,error:{message:'Заявка не найдена'}};
@@ -607,7 +622,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         }
         Object.assign(target,structuredClone(args.p_rec));
         if(!args.p_id)tables.jobs.push(target);
-        audit.financeWrites.push(structuredClone({name,args}));audit.financeRows=structuredClone(seed.service_order_items);
+        audit.financeWrites.push(structuredClone({name,args}));audit.financeRows=structuredClone(seed.service_order_items);if(managerJourney)audit.managerState=managerState();
         return {data:saved,error:null};
       }
       if(financeJourney&&name==='service_order_trip'){
@@ -618,7 +633,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
       if(financeJourney&&name==='trip_plan_save_tasks'){
         const target=tables.trips.find(t=>t.id===args.p_trip);if(!target)return reject('missing trip');
         Object.assign(target,structuredClone(args.p_plan));target.workbench_revision++;
-        audit.financeWrites.push(structuredClone({name,args}));return {data:target.id,error:null};
+        audit.financeWrites.push(structuredClone({name,args}));if(managerJourney)audit.managerState=managerState();return {data:target.id,error:null};
       }
       if(name==='notification_set_read'){
         const row=tables.notification_inbox.find(n=>n.id===args.p_id&&n.recipient_id===session.user.id);

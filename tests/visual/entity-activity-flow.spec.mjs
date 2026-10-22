@@ -120,8 +120,8 @@ for(const role of ['admin','logist','engineer'])test(`${role}: cumulative result
 
   // Minor deadline controls live behind the contextual menu in a real modal.
   await page.locator('#orderMore').click();
-  await page.locator('dialog.entity-actions-menu').getByRole('button',{name:'Изменение срока',exact:true}).click();
-  const deadline=page.getByRole('dialog',{name:'Изменение срока',exact:true});
+  await page.locator('dialog.entity-actions-menu').getByRole('button',{name:'Предложения по сроку',exact:true}).click();
+  const deadline=page.getByRole('dialog',{name:'Предложения по сроку',exact:true});
   await expect(deadline).toBeVisible();await nativeDialogFits(page,deadline);
   await expect(deadline.locator('#orderDeadlinePanel')).toBeVisible();
   if(role==='engineer')await expect(deadline.locator('#orderDeadlineDate')).toBeVisible();
