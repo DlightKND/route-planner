@@ -170,7 +170,7 @@
  .journal-page-head{padding:4px 12px;gap:4px;grid-template-columns:44px minmax(0,1fr) auto;min-height:0}
  .journal-page-head>[data-journal-exit]{width:44px}.journal-page-head [data-journal-refresh]{padding-inline:10px;min-height:44px}
  .journal-periodbar>details>summary{min-height:44px;padding:8px}.journal-page-head h1{font-size:20px}
- .unified-gps-journal .gps-journal-sidebar{padding:4px 12px 12px}.view .unified-gps-journal .unassigned-filter.seg{margin:0;gap:0}
+ .unified-gps-journal .gps-journal-sidebar{padding:0 12px 12px}.view .unified-gps-journal .unassigned-filter.seg{margin:0;gap:0}
  .view .unified-gps-journal .unassigned-filter.seg>button{padding:4px 2px;min-height:44px;white-space:nowrap;font-size:10px}
  .journal-list-tools{gap:4px;margin:0}.journal-search input{font-size:16px;margin:0;padding:8px}
  .journal-list-tools>.journal-filters>summary{font-size:11px;padding-inline:6px}
