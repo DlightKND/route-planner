@@ -19,14 +19,14 @@ test('manager rebuilds the track, edits only the GPS gap and keeps approval on r
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await page.locator('#tpReviewPresence').click();
  await page.locator('[data-journal-pane=route]').click();await page.locator('[data-route-rebuild]').click();await expect(page.locator('.journal-trip-message')).toContainText('Трек проверен');await page.locator('[data-journal-pane=stops]').click();if(await page.locator('[data-review-stop]').first().isVisible())await page.locator('[data-review-stop]').first().click();const row=page.locator('.journal-trip-stops [data-presence-id]');await expect(row).toHaveCount(1);
- await expect(row.locator('[data-presence="minutes_mgr"]')).toHaveValue('360');expect(await row.locator('[data-presence="minutes_mgr"]').evaluate(e=>e.readOnly)).toBe(true);
+ await expect(row.locator('[data-presence="minutes_mgr"]')).toHaveValue('180');expect(await row.locator('[data-presence="minutes_mgr"]').evaluate(e=>e.readOnly)).toBe(true);
  expect(orsCalls).toBe(1);
  const firstSave=await page.evaluate(()=>window.__visualQA.recoveryWrites.find(w=>w.name==='trip_track_rebuild_save').args);
  expect(firstSave.p_fact_source).toBe('track');
  expect(firstSave.p_fact_km).toBe(Math.round(firstSave.p_track.km*10)/10);
  expect(firstSave.p_fact_km).toBeGreaterThan(100);
- await expect(page.locator('.journal-person-total')).toContainText('6 ч');
- const extra=row.locator('[data-recovery-part]');await expect(extra).toHaveValue('180');
+ await expect(page.locator('.journal-person-total')).toContainText('3 ч');
+ const extra=row.locator('[data-recovery-part]');await expect(extra).toHaveValue('0');
  await extra.fill('181');await expect(page.locator('#wbPresenceSave')).toBeDisabled();
  await expect(page.locator('.presence-review-validation')).not.toBeEmpty();
  expect(await page.evaluate(()=>window.__visualQA.recoveryWrites.filter(w=>w.name==='trip_presence_save_tasks').length)).toBe(0);

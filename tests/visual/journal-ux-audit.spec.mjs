@@ -1,0 +1,39 @@
+import {test,expect} from '@playwright/test';
+import {mkdirSync} from 'node:fs';
+import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
+const tripKey='trip:'+fixtureIDs.trip;
+async function start(page,info,{queue=false}={}){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',r=>{const u=new URL(r.request().url());if(u.hostname.endsWith('tile.openstreetmap.org'))return r.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e6e2d6"/><path d="M0 90L256 160 M70 0L180 256" stroke="white" stroke-width="10"/></svg>'});return u.origin==='http://127.0.0.1:4173'?r.continue():r.abort();});
+ await page.clock.install({time:new Date('2026-10-05T17:00Z')});
+ await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,preserveRanges:true,...(queue?{unassignedJourney:true,unassignedCount:14}:{unifiedJournalJourney:true})});
+ await page.goto('/#/journal');if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.unassigned-card').first()).toBeVisible();return errors;
+}
+async function capture(page,info,name){mkdirSync('test-results/journal-ux-audit/'+info.project.name,{recursive:true});await page.screenshot({path:'test-results/journal-ux-audit/'+info.project.name+'/'+name+'.png',animations:'disabled'});expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);}
+async function clean(page,errors){expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);}
+
+test('audit 03: compact mobile queue keeps two records visible and retains filters and merge selection',async({page},info)=>{
+ const errors=await start(page,info,{queue:true});await expect(page.locator('.unassigned-card')).toHaveCount(14);
+ if(page.viewportSize().width<=760){await expect(page.locator('[data-journal-shared-timeline]')).toBeHidden();const first=await page.locator('.unassigned-card').first().boundingBox();expect(first.y).toBeLessThanOrEqual(220);await expect(page.locator('.unassigned-card').nth(1)).toBeInViewport({ratio:1});}
+ await capture(page,info,'01-compact-queue');await page.locator('.journal-filters>summary').click();await expect(page.locator('[data-ut-vehicle]')).toBeVisible();await page.locator('.journal-filters>summary').click();await page.locator('.journal-actions>summary').click();await page.locator('[data-ut-choose]').click();await expect(page.locator('[data-ut-select]').first()).toBeVisible();await clean(page,errors);
+});
+for(const accepted of [0,30,60])test('audit 01/02/04: explicit '+accepted+' minutes produce the correct hours and complete the attention queue',async({page},info)=>{
+ const errors=await start(page,info);await page.locator('[data-ut-details="'+tripKey+'"]').click();await page.locator('[data-review-stop=journal-stay-3]').click();const row=page.locator('[data-presence-id=journal-stay-3]'),extra=row.locator('[data-recovery-part]');
+ await expect(extra).toHaveValue('0');await expect(row.locator('[data-presence=minutes_mgr]')).toHaveValue('180');await expect(page.locator('.journal-time-equation')).toContainText('GPS 3 ч + принято 0 мин = 3 ч');
+ for(const button of await page.locator('.journal-decision-summary>button').all())await expect(button).toBeInViewport({ratio:1});await expect(page.locator('.journal-decision-summary')).toContainText('Команда: 2');
+ if(accepted===0){await page.locator('[data-review-focus=job_id]').click();await expect(row.locator('[data-presence=job_id]')).toBeFocused();await expect(row.locator('[data-presence=job_id]')).toBeInViewport({ratio:1});if(page.viewportSize().width>1100){await page.locator('[data-journal-list-toggle]').click();await expect(page.locator('.gps-journal-sidebar')).toBeHidden();await page.locator('[data-journal-list-toggle]').click();}}
+ if(accepted===60)await row.locator('[data-recovery-accept]').click();else await extra.fill(String(accepted));
+ await expect(page.locator('.journal-person-total')).toContainText(accepted===0?'3 ч':accepted===30?'3 ч 30 мин':'4 ч');await expect(page.locator('.presence-review-result')).toContainText((180+accepted)*2/60+' чел.-ч');
+ await capture(page,info,'02-before-confirm-'+accepted);await page.locator('[data-presence-save]').click();await expect(page.locator('.journal-trip-message')).toContainText('Решение сохранено');
+ await expect(page.locator('[data-ut-mode=pending]')).toHaveText('Внимание 0');await expect(page.locator('[data-ut-mode=archive]')).toHaveText('Проверенные 1');await capture(page,info,'03-queue-finished-'+accepted);
+ const saved=(await page.evaluate(()=>window.__visualQA.recoveryWrites)).find(w=>w.name==='trip_presence_save_tasks').args.p_stays[0];expect(saved.minutes_mgr).toBe(180+accepted);expect(saved.recovery_acceptance).toEqual({'restored-1':accepted});
+ await page.locator('[data-review-edit]').click();await expect(page.locator('[data-recovery-part]')).toHaveValue(String(accepted));await clean(page,errors);
+});
+test('audit 05/06/07/09: route quality is visible, stops are distinguishable and timeline labels do not collide',async({page},info)=>{
+ const errors=await start(page,info);await page.locator('[data-ut-details="'+tripKey+'"]').click();const names=await page.locator('.presence-stop strong').allTextContents();expect(new Set(names.slice(0,3)).size).toBe(3);await expect(page.locator('.journal-stop-location').first()).not.toBeEmpty();
+ const contrast=await page.locator('.journal-stop-state.confirmed').first().evaluate(el=>{const css=getComputedStyle(el),probe=document.createElement('span');el.append(probe);const rgb=color=>(color.match(/[\d.]+/g)||[]).slice(0,3).map(Number),lum=color=>rgb(color).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0),fg=lum(css.color);const values=['--panel','--panel-2'].map(token=>{probe.style.backgroundColor=getComputedStyle(el).getPropertyValue(token);const bg=lum(getComputedStyle(probe).backgroundColor);return (Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05);});probe.remove();return values;});for(const value of contrast)expect(value).toBeGreaterThanOrEqual(4.5);
+ await page.locator('[data-journal-pane=route]').click();await expect(page.locator('.journal-route-metrics')).toContainText('74,2');await expect(page.locator('.journal-route-metrics')).toContainText('13,2');await expect(page.locator('[data-route-problems]')).toContainText('Проблемы маршрута: 0');
+ if(page.viewportSize().width<=760){await expect(page.locator('[data-route-rebuild]')).toBeInViewport({ratio:1});await expect(page.locator('[data-route-problems]')).toBeInViewport({ratio:1});}
+ await expect.poll(()=>page.locator('.journal-time-labels>span').evaluateAll(spans=>{const boxes=spans.filter(s=>!s.hidden&&getComputedStyle(s).display!=='none').map(s=>s.getBoundingClientRect()).sort((a,b)=>a.x-b.x);return boxes.slice(1).every((b,i)=>b.left>=boxes[i].right+8);})).toBe(true);
+ await capture(page,info,'04-route-quality');if(page.viewportSize().width<=1100){await page.locator('.journal-timeline-stops>summary').click();for(const button of await page.locator('.journal-timeline-stops button').all()){const box=await button.boundingBox();expect(box.width).toBeGreaterThanOrEqual(44);expect(box.height).toBeGreaterThanOrEqual(44);}await page.locator('.journal-timeline-stops [data-journal-stop=journal-stay-1]').click();await expect(page.locator('.journal-saved-decision')).toContainText('Решение');}await clean(page,errors);
+});

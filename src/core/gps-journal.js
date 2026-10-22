@@ -24,6 +24,11 @@ export function evidenceExtent(stay){
 export function stopTitle(stay,jobs=[],index=0){
  return stay.display_name||stay.address||((stopKind(stay)==='visit')&&jobs.find(j=>j.id===stay.job_id)?.clients?.name)||'Остановка '+(index+1);
 }
+export function stopPlace(stay,jobs=[],index=0){
+ const job=jobs.find(j=>j.id===stay.job_id),place=stay.display_name||stay.site_name||stay.object_name;
+ const coordinates=stay.lat!=null&&stay.lng!=null&&Number.isFinite(Number(stay.lat))&&Number.isFinite(Number(stay.lng));
+ return {title:place||'Остановка '+(index+1),location:stay.address||job?.clients?.address||job?.clients?.addr||(coordinates?Number(stay.lat).toFixed(4)+', '+Number(stay.lng).toFixed(4):'Адрес не указан'),fullTitle:stopTitle(stay,jobs,index)};
+}
 export function stopState(stay){return stopKind(stay)==='road'?'Остановка в пути':stay.status==='approved'?'Посещение подтверждено':stay.status==='rejected'?'Исключено из присутствия':!stay.stay_to?'Запись продолжается':'Не проверено';}
 export function journalEntries(unassigned,trips){
  const records=new Map();
@@ -44,7 +49,15 @@ export function presenceRoadConflicts(stay,track){
  if(stay.status!=='approved')return [];
  return ((track?.data||track)?.presence?.motion_intervals||[]).filter(m=>acceptedPresenceIntervals(stay).some(p=>Date.parse(p.from)<Date.parse(m.to)&&Date.parse(p.to)>Date.parse(m.from)));
 }
-export function tripAttention(trip){const r=trip.review||{};return !!(r.done<r.total||r.recovery||r.gaps||r.conflicts||r.missingTrack);}
+export function tripReviewIssues(trip){
+ const r=trip.review||{},issues=[],pending=Math.max(0,Number(r.total||0)-Number(r.done||0));
+ if(pending)issues.push({kind:'stops',count:pending,label:'Остановки на проверке: '+pending});
+ if(r.conflicts)issues.push({kind:'route',count:Number(r.conflicts),label:'Конфликты времени: '+Number(r.conflicts)});
+ if(r.gaps)issues.push({kind:'route',count:typeof r.gaps==='number'?r.gaps:null,label:typeof r.gaps==='number'?'Участки без дорожного подтверждения: '+r.gaps:'Есть неизмеренные разрывы GPS'});
+ if(r.missingTrack)issues.push({kind:'route',count:1,label:'Трек отсутствует · нужна проверка'});
+ return issues;
+}
+export const tripAttention=trip=>tripReviewIssues(trip).length>0;
 export function activityTimeline(trip,track,stays){
  const data=track?.data||track||{},from=Date.parse(trip.started_at),to=Date.parse(trip.finished_at||data.presence?.source_to);
  if(!Number.isFinite(from)||!Number.isFinite(to)||to<=from)return [];

@@ -74,7 +74,7 @@ test('GPS journal is nested under trips, has standard card gaps and scrolls to t
 
 test('manager orders selected tracks and reviews separate GPS pieces before merging',async({page},info)=>{
  await open(page,info,'admin',3);
- await page.locator('[data-ut-choose]').click();const choices=page.locator('[data-ut-select]');await choices.nth(1).check();await choices.nth(0).check();
+ await page.locator('.journal-actions>summary').click();await page.locator('[data-ut-choose]').click();const choices=page.locator('[data-ut-select]');await choices.nth(1).check();await choices.nth(0).check();
  await expect(page.locator('[data-ut-preview]')).toBeEnabled();
  await page.locator('[data-ut-preview]').click();await expect(page.locator('[data-ut-merge]')).toBeVisible();
  await expect(page.locator('.unassigned-merge-preview .gps-track-line')).toHaveCount(2);
@@ -106,7 +106,7 @@ test('journal period filters on the server, navigates months and persists after 
  const from=page.locator('#tripJournalPeriod [data-rf]'),to=page.locator('#tripJournalPeriod [data-rt]');
  await page.locator('#tripJournalPeriod .journal-periodbar>details>summary').click();await expect(from).toBeVisible();await expect(to).toBeVisible();
  const toolbar=await page.locator('.journal-page-head').boundingBox(),actions=await page.locator('[data-journal-refresh]').boundingBox();expect(actions.x).toBeGreaterThanOrEqual(toolbar.x);expect(actions.x+actions.width).toBeLessThanOrEqual(toolbar.x+toolbar.width+1);
- await page.locator('[data-ut-choose]').click();await page.locator('[data-ut-select]').first().check();await expect(page.locator('.unassigned-merge')).toBeVisible();
+ await page.locator('.journal-actions>summary').click();await page.locator('[data-ut-choose]').click();await page.locator('[data-ut-select]').first().check();await expect(page.locator('.unassigned-merge')).toBeVisible();
  await from.fill('2026-10-05');await from.dispatchEvent('change');await page.locator('#tripJournalPeriod .journal-periodbar>details>summary').click();await to.fill('2026-10-05');await to.dispatchEvent('change');
  await expect(page.locator('.unassigned-card')).toHaveCount(1);await expect(page.locator('.unassigned-merge')).toHaveCount(0);
  await expect(page.locator('.unassigned-card .unassigned-period')).toContainText('05.10.2026');
