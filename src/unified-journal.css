@@ -153,7 +153,7 @@
 .journal-decision-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}
 .journal-decision-summary>button{display:grid;align-content:center;gap:2px;min-width:0;min-height:44px;border:0;border-left:2px solid var(--line);padding:4px 8px;background:transparent;color:var(--ink);text-align:left;font:500 11px/1.35 var(--sans);cursor:pointer}
 .journal-decision-summary small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-dim);font-weight:400;font-size:10px}
-.presence-field{scroll-margin-block:12px}.journal-decision-summary>button:focus-visible,.journal-title-expand:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.presence-field{scroll-margin-block:12px}.presence-review-scroll :is(input,select,textarea,button){scroll-margin-block:12px}.journal-decision-summary>button:focus-visible,.journal-title-expand:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .view .btn.amber:disabled,dialog .btn.amber:disabled{background:var(--panel-2);color:var(--ink-dim);border-color:var(--line);opacity:1;filter:none;box-shadow:none;cursor:not-allowed}
 .journal-route-metrics>.btn{width:100%;min-height:44px;white-space:normal;margin-top:8px}.journal-route-metrics dl{margin:8px 0}.journal-route-quality details>summary{min-height:44px;align-content:center;cursor:pointer;font-size:13px;font-weight:600}
 .journal-route-explainer{margin-top:20px}.journal-route-explainer .journal-map-legend{margin:12px 0}
