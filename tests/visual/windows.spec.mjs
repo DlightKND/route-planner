@@ -164,7 +164,7 @@ test('route panel shows one primary action and collapses advanced settings',asyn
 test('request context editor keeps its mounted fields visible when the header refreshes',async({page})=>{
  await open(page,'openJob',job);await expect(page.locator('#requestContext')).toBeVisible();
  const field=page.locator('#jbClient'),initial=await field.inputValue();await page.evaluate(()=>window.__originalRequestField=document.getElementById('jbClient'));
- await page.locator('#requestEditContext').click();const dialog=page.getByRole('dialog',{name:'Изменить заявку',exact:true});await expect(dialog).toBeVisible();await expect(field).toBeVisible();
+ await page.locator('[data-request-edit-context]').click();const dialog=page.getByRole('dialog',{name:'Изменить заявку',exact:true});await expect(dialog).toBeVisible();await expect(field).toBeVisible();
  await open(page,'jobHead');await expect(field).toBeVisible();await expect(field).toHaveValue(initial);expect(await page.evaluate(()=>window.__originalRequestField===document.getElementById('jbClient'))).toBe(true);
  await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(page.locator('#requestContext')).toBeVisible();await expect(field).toBeHidden();
 });

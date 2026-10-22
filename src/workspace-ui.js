@@ -193,19 +193,22 @@ export function frameNotifications(host){
  inner.append(head);masthead.append(inner);while(host.firstChild)main.append(host.firstChild);host.append(masthead,main);host.closest('.view')?.classList.add('workspace-inbox');
 }
 
-export function presentRequestWorkspace({saved,editable,client,equipment,status,engineers,due,notes,phone,address,confirmDiscard},root=document){
+export function presentRequestWorkspace({saved,editable,client,equipment,status,engineers,due,notes,phone,address,confirmDiscard,editContext,editDeadline},root=document){
  const context=root.getElementById('requestContext'),form=root.getElementById('requestContextFields');if(!context||!form)return;
  const view=context.closest('.view');view.classList.toggle('request-saved',saved);context.hidden=!saved;form.hidden=saved&&!form.closest('dialog[open]');
  const title=root.getElementById('jobTitle');let stage=view.querySelector('.request-workspace-stage');if(!stage&&title){stage=element(root,'span','design-status request-workspace-stage');title.parentElement.append(stage);}if(stage){stage.textContent=status||'';stage.hidden=!saved;}
  const actions=root.getElementById('jobActs');
  if(!context.querySelector('.request-context-data')){
-  context.innerHTML='<div class="workspace-section-head"><div><h3>Контекст клиента</h3></div><button class="btn sm ghost" id="requestEditContext" type="button">Изменить</button></div><dl class="request-context-data"></dl><div class="request-contact-actions"></div>';
+  context.innerHTML='<details class="request-reference"><summary>Контекст клиента</summary><div class="workspace-section-head"><button class="btn sm ghost" id="requestEditContext" type="button">Изменить заявку</button></div><dl class="request-context-data"></dl></details><div class="request-contact-actions"></div>';context.querySelector('details').open=(root.defaultView||context.ownerDocument.defaultView).innerWidth>760;
   context.querySelector('.request-contact-actions').append(actions);
   const responsibility=root.getElementById('jobResponsibilityMeta');if(responsibility){responsibility.className='workspace-responsibility-caption';context.querySelector('.request-contact-actions').before(responsibility);}
  }
+ let planning=view.querySelector('.request-planning-summary');if(!planning){planning=element(root,'section','card request-planning-summary');context.before(planning);}planning.hidden=!saved;
+ planning.innerHTML='<h3>Планирование заявки</h3><dl class="planning-summary-data"><div><dt>Срок заявки (SLA)</dt><dd>'+escape(due||'Не задан')+'</dd>'+(editable?'<button type="button" class="btn sm ghost" data-request-edit-deadline>Изменить срок</button>':'')+'</div><div><dt>Инженеры заявки</dt><dd>'+escape(engineers||'Не назначены')+'</dd>'+(editable?'<button type="button" class="btn sm ghost" data-request-assign>Назначить инженеров</button>':'')+'</div><div><dt>Стадия заявки</dt><dd>'+escape(status||'Не задана')+'</dd>'+(editable?'<button type="button" class="btn sm ghost" data-request-edit-context>Изменить заявку</button>':'')+'</div></dl>';
+ planning.querySelector('[data-request-edit-deadline]')?.addEventListener('click',e=>editDeadline?.(e.currentTarget));planning.querySelector('[data-request-assign]')?.addEventListener('click',e=>editContext?.(e.currentTarget,'jbEng'));planning.querySelector('[data-request-edit-context]')?.addEventListener('click',e=>editContext?.(e.currentTarget));
  const rows=[['Заказчик',client],['Оборудование',equipment||'Без привязки'],['Потребность',notes||'Не указана'],['Адрес',address],['Контакт',phone],['Срок',due],['Стадия',status],['Инженеры',engineers]];
  context.querySelector('dl').innerHTML=rows.filter(([,value])=>value).map(([label,value])=>`<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join('');
- const edit=context.querySelector('#requestEditContext');edit.hidden=!editable;edit.onclick=()=>openEntityPanel({title:'Изменить заявку',panel:form,trigger:edit,confirmDiscard});
+ const edit=context.querySelector('#requestEditContext');edit.hidden=!editable;edit.onclick=()=>editContext?editContext(edit):openEntityPanel({title:'Изменить заявку',panel:form,trigger:edit,confirmDiscard});
 }
 
 export function positionOrderResult(root=document){

@@ -8,7 +8,7 @@ const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({
 // The owner retains authority after delegation. The curator receives
 // operational decisions and alerts. Both assignments are entity-specific.
 export function mountEntityResponsibility({
-  root,db,kind,id,record,people,userId,role,onChange,showHistory=true,onError=()=>{}
+  root,db,kind,id,record,people,userId,role,onChange,beforeAssign,showHistory=true,onError=()=>{}
 }){
   if(!root||!id)return;
   const person=pid=>people().find(p=>p.id===pid);
@@ -66,20 +66,22 @@ export function mountEntityResponsibility({
     const field=form.elements.field.value,p_person=form.elements.person.value,
       p_reason=form.elements.reason.value.trim();
     if(p_reason.length<5){status.textContent='Укажи причину не короче пяти символов';return;}
-    button.disabled=true;status.textContent='Передаю…';
+    button.disabled=true;status.textContent='Проверяем изменения…';let ready=true,assigned=false;
     try{
+      ready=beforeAssign?await beforeAssign():true;if(ready===false){status.textContent='Передача не выполнена. Продолжите работу с текущей карточкой.';return;}
+      const activeRecord=ready?.record||record;status.textContent='Передаю…';
       const {data,error}=await db.rpc('entity_responsibility_assign',{
         p_kind:kind,p_id:id,p_field:field,p_person,p_reason,
-        p_expected:kind==='order'?record.revision:null
+        p_expected:kind==='order'?activeRecord.revision:null
       });
-      if(error)throw error;
+      if(error)throw error;assigned=true;
       owner=data.owner_id;curator=data.curator_id;
       root.querySelector('[data-owner]').textContent=name(owner);
       root.querySelector('[data-curator]').textContent=name(curator);
       form.elements.reason.value='';status.textContent='Передано';
       if(!admin&&owner!==actor&&curator!==actor)form.remove();
       if(showHistory)await refresh();await onChange?.(data);
-    }catch(e){status.textContent=e.message||'Не удалось передать';onError(e);}
+    }catch(e){status.textContent=(assigned?'Ответственность передана. Не удалось обновить карточку: ':ready?.saved?((kind==='trip'?'План выезда сохранён':kind==='job'?'Изменения заявки сохранены':'Изменения задания сохранены')+'. Не удалось подтвердить передачу: '):ready?.draftSaved?'Черновик результата сохранён на устройстве. Не удалось подтвердить передачу: ':'Не удалось подтвердить передачу: ')+(e.message||'Ошибка операции');onError(new Error(status.textContent));}
     finally{button.disabled=false;}
   };
 }

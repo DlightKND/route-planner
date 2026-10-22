@@ -732,3 +732,40 @@ html[data-theme=light] .mleg-symbol { width:24px;border-radius:0;background:tran
 
 .view-trip #tpPresence>.retained-trip-fact{margin:20px 0 0}.retained-trip-fact>summary{cursor:pointer;font-weight:500}.view-trip #tpPresence>.wb-metrics{margin-top:0}
 @media(max-width:760px){.view-trip #tpPresence>.wb-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:20px}.view-trip #tpPresence>.wb-metrics>div{padding:10px;min-width:0}.view-trip #tpPresence>.wb-metrics span{font-size:10px;line-height:1.35;overflow-wrap:normal}.view-trip #tpPresence>.wb-metrics b{font-size:16px;margin-top:8px}.view-trip .retained-trip-fact .trip-time-metrics{grid-template-columns:1fr}.view-trip .retained-trip-fact .trip-time-metrics>div{display:flex;justify-content:space-between;gap:16px;align-items:center}}
+
+/* Planning context is visible before reference information on both screen sizes. */
+.request-planning-summary{grid-column:1/-1;order:0;margin:0}
+.request-workspace-grid #jobOrders{order:1;margin:0}
+.request-workspace-grid #requestContext{order:2;margin:0}
+.planning-summary-data{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:16px 0 0}
+.planning-summary-data>div{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.planning-summary-data dt{font-size:12px;color:var(--ink-dim)}
+.planning-summary-data dd{margin:0;font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.planning-summary-data .btn{min-height:44px;white-space:normal;text-align:left}
+.request-reference>summary{font-size:17px;font-weight:600;min-height:44px;cursor:pointer;align-content:center}
+.request-reference .workspace-section-head{margin:12px 0 16px}
+.order-planning-summary{margin-bottom:20px}
+.order-child-period{font-weight:600;color:var(--ink)}
+.planning-warnings:empty{display:none}
+.planning-warnings p{margin:16px 0 0;padding:12px;border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--panel-2);color:var(--ink);font-size:13px;line-height:1.5}
+.order-context-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
+.order-context-actions .btn{min-height:44px}
+.entity-editor-footer{flex-direction:column;align-items:stretch;gap:8px}
+.entity-editor-footer .row{justify-content:flex-end;gap:12px}
+.entity-editor-state,.entity-editor-error{margin:0}
+.entity-editor-error:empty{display:none}
+.entity-draft-dialog .entity-dialog-foot{flex-wrap:wrap;gap:12px}
+.order-organization-editor .row>label{flex:1;min-width:0}
+.order-organization-editor>label{display:block;margin-top:16px}
+@media(max-width:760px){
+ .planning-summary-data{grid-template-columns:minmax(0,1fr);gap:12px}
+ .planning-summary-data>div{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:4px}
+ .planning-summary-data dt{grid-column:1}
+ .planning-summary-data dd{grid-column:1;font-size:14px}
+ .planning-summary-data button{grid-column:2;grid-row:1/3;max-width:145px}
+ .request-planning-summary,.order-planning-summary{padding:16px!important}
+ .request-planning-summary h3,.order-planning-summary h3{margin:0;font-size:16px}
+ .entity-editor-footer .row{display:grid;grid-template-columns:1fr 1fr}
+ .entity-editor-footer .btn{white-space:normal;min-height:44px}
+ .entity-draft-dialog .entity-dialog-foot{display:grid;grid-template-columns:1fr}
+}
