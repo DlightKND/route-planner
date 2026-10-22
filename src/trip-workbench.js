@@ -40,15 +40,15 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
   const recoveryControls = stay => {
     const bounds=presenceBounds(stay);if(!bounds)return '';
     return `<div class="presence-recovery-parts">${(stay.presence_evidence.recovery_parts||[]).map(part=>{
-      const accepted=stay.minutes_mgr!=null&&['approved','rejected'].includes(stay.status)?Number(stay.recovery_acceptance?.[part.key]||0):part.minutes;
-      return `<label class="presence-recovery-part">${esc({before:'До первых GPS-точек на объекте',after:'После последних GPS-точек на объекте',between:'Между GPS-частями стоянки',island:'Стоянка целиком внутри провала'}[part.side]||'Восстановленная часть')}<span class="hint">${time(part.from)} — ${time(part.to)} · максимум ${n(part.minutes)} мин</span><input type="number" data-recovery-part="${esc(part.key)}" min="0" max="${esc(part.minutes)}" step="any" value="${esc(accepted)}" aria-label="Подтвердить восстановленное время, минуты"></label>`;
+      const accepted=stay.minutes_mgr!=null&&['approved','rejected'].includes(stay.status)?Number(stay.recovery_acceptance?.[part.key]||0):0;
+      return `<div class="presence-recovery-part"><label>${esc({before:'До первых GPS-точек на объекте',after:'После последних GPS-точек на объекте',between:'Между GPS-частями стоянки',island:'Стоянка целиком внутри провала'}[part.side]||'Восстановленная часть')}<input type="number" data-recovery-part="${esc(part.key)}" min="0" max="${esc(part.minutes)}" step="any" value="${esc(accepted)}" aria-label="Принято восстановленного времени, минуты"></label><span class="hint">${time(part.from)} — ${time(part.to)} · максимум ${n(part.minutes)} мин</span><button type="button" class="btn ghost" data-recovery-accept="${esc(part.key)}">Учесть ${n(part.minutes)} мин восстановления</button></div>`;
     }).join('')||'<p class="hint">Вся длительность подтверждена GPS. Изменение времени недоступно.</p>'}</div>`;
   };
   const rows = data.stays.map((s,index) => {
     const place=editor?'':presenceLocationHTML(s,index,t.id);
     const crew = s.crew_ids || [];
     const bounds=presenceBounds(s), proposed=bounds?bounds.max:s.minutes_raw;
-    const mins = s.minutes_mgr ?? proposed;
+    const mins = s.minutes_mgr!=null&&['approved','rejected'].includes(s.status)?s.minutes_mgr:bounds?.gps??proposed;
     const hrs = mins != null && crew.length ? mins*crew.length/60 : null;
     const suggested=s.status==='detected'&&s.job_id&&s.stay_to&&crew.length&&s.crew_source==='snapshot';
     if(readonly){
@@ -137,6 +137,10 @@ export function tripCostReviewHTML({trip,preview,run,stale=false,canApprove=fals
 
 
 export function wirePresenceRecovery(root){
+ root.addEventListener('click',event=>{
+  const button=event.target.closest('[data-recovery-accept]');if(!button)return;
+  const input=button.closest('.presence-recovery-part').querySelector('[data-recovery-part]');input.value=input.max;input.dispatchEvent(new root.ownerDocument.defaultView.Event('input',{bubbles:true}));input.focus({preventScroll:true});
+ });
  root.addEventListener('input',event=>{
   if(!event.target.matches('[data-recovery-part]'))return;
   const row=event.target.closest('[data-presence-id]'),parts=[...row.querySelectorAll('[data-recovery-part]')],total=row.querySelector('[data-presence="minutes_mgr"]');
