@@ -81,7 +81,7 @@ export function mountEntityResponsibility({
       form.elements.reason.value='';status.textContent='Передано';
       if(!admin&&owner!==actor&&curator!==actor)form.remove();
       if(showHistory)await refresh();await onChange?.(data);
-    }catch(e){status.textContent=(assigned?'Ответственность передана. Не удалось обновить карточку: ':ready?.saved?'Изменения задания сохранены. Не удалось подтвердить передачу: ':ready?.draftSaved?'Черновик результата сохранён на устройстве. Не удалось подтвердить передачу: ':'Не удалось подтвердить передачу: ')+(e.message||'Ошибка операции');onError(new Error(status.textContent));}
+    }catch(e){status.textContent=(assigned?'Ответственность передана. Не удалось обновить карточку: ':ready?.saved?((kind==='trip'?'План выезда сохранён':kind==='job'?'Изменения заявки сохранены':'Изменения задания сохранены')+'. Не удалось подтвердить передачу: '):ready?.draftSaved?'Черновик результата сохранён на устройстве. Не удалось подтвердить передачу: ':'Не удалось подтвердить передачу: ')+(e.message||'Ошибка операции');onError(new Error(status.textContent));}
     finally{button.disabled=false;}
   };
 }

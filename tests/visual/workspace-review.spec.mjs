@@ -17,7 +17,7 @@ for(const [name,route,role,section] of screens)test('workspace review '+name,asy
  await page.goto('/#/'+route);await expect(page.locator('#appRoot')).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  if(section)await page.locator('[data-sec="'+section+'"]').click();
- const ready={dispatcher:'#orderList .kcard',requests:'#jobList .kcard',trips:'#tripList .kcard',request:'#requestContext dd',assignment:'#orderRecordResult',engineer:'#orderRecordResult',trip:'#tpReviewSummary button',catalog:'#catList .emrow',fleet:'#vehList .pt',people:'#usersList .staff-row',notifications:'.notice-row',schedule:'.vg-feed'};await expect(page.locator(ready[name]).first()).toBeVisible();
+ const ready={dispatcher:'#orderList .kcard',requests:'#jobList .kcard',trips:'#tripList .kcard',request:'.request-planning-summary dd',assignment:'#orderRecordResult',engineer:'#orderRecordResult',trip:'#tpReviewSummary button',catalog:'#catList .emrow',fleet:'#vehList .pt',people:'#usersList .staff-row',notifications:'.notice-row',schedule:'.vg-feed'};await expect(page.locator(ready[name]).first()).toBeVisible();
  await page.evaluate(()=>document.fonts.ready);await expect(page.locator('.view.active')).toBeVisible();
  expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
  mkdirSync('test-results/workspace-review/'+info.project.name,{recursive:true});

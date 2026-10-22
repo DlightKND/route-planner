@@ -423,7 +423,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     history.splice(0,history.length,...Array.from({length:100},(_,i)=>({id:'long-history-'+i,revision:i,recorded_at:iso(i),actor_id:manager,reason:'Синтетическое изменение '+i,snapshot:{stays:stays.map(s=>({...s,note:'x'.repeat(1500)}))}})));
   }
   const managerState=()=>({request:{due_date:request.due_date,status:request.status,engineer_ids:[...(request.engineer_ids||[])]},order:{status:task.status,date_from:task.date_from,date_to:task.date_to,engineer_ids:[...task.engineer_ids],lead_engineer:task.lead_engineer,revision:task.revision,items:task.service_order_items.map(i=>({id:i.id,done_qty:i.done_qty,planned_qty:i.planned_qty}))},trip:{date_from:ride.date_from,date_to:ride.date_to,engineer_ids:[...ride.engineer_ids]}});
-  if(managerJourney){task.status=typeof managerJourney==='string'?managerJourney:managerJourney.stage||'assigned';audit.managerWrites=[];audit.managerState=managerState();}
+  if(managerJourney){for(const row of task.service_order_items)if(row.kind==='material'&&!row.stock_catalog_id)row.stock_catalog_id='stock-a';task.status=typeof managerJourney==='string'?managerJourney:managerJourney.stage||'assigned';audit.managerWrites=[];audit.managerState=managerState();}
   const db = {
     auth: {
       getSession: async () => ({ data: { session: signedOut?null:session }, error: null }),

@@ -848,7 +848,7 @@ async function settleTripDraft(id){
  const choice=await resolveEntityDraft({title:'Перед передачей ответственности',message:'Сохранить изменения выезда перед передачей?',saveLabel:'Сохранить и передать'});if(choice==='cancel')return false;
  if(choice==='save'){await $('tpSave').onclick();if(tripPlanDirty||tripPresenceDirty||$('tripErr').textContent)return false;}
  else{tripPlanDirty=false;tripPresenceDirty=false;await openTrip(id);}
- return tripEditId===id;
+ return tripEditId===id?{saved:choice==='save'}:false;
 }
 async function checkLeaveTripEditor(){
   if(!document.querySelector('.view-trip.active')||(!tripPlanDirty&&!tripPresenceDirty))return true;
@@ -3946,7 +3946,7 @@ async function openJob(id,presetClient,presetEquip,{pane:requestedPane}={}){ if(
   $('jobResponsibilitySection').hidden=true;
   configureRequestTabs(!!id,requestedPane);
   if(id) mountEntityActivity({root:$('jobActivity'),db:sb,entity:'job',id,userId:()=>session?.user?.id,people:()=>profilesList,canPin:()=>canWriteJob(),onOpenPhoto:openActivityPhoto});
-  if(id&&j)mountEntityResponsibility({root:$('jobResponsibilitySection'),db:sb,kind:'job',id,record:j,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,showHistory:false,beforeAssign:async()=>{if(!await leaveJobEditor())return false;if((await qAll()).some(x=>x.payload?.jobId===id)){notify('Сначала дождитесь отправки изменений заявки на сервер.','warn');return false;}return true;},onChange:data=>canWrite()||[data.owner_id,data.curator_id].includes(session?.user?.id)?openJob(id):switchTab('planner','jobs'),onError:e=>notify(e.message,'err')});
+  if(id&&j)mountEntityResponsibility({root:$('jobResponsibilitySection'),db:sb,kind:'job',id,record:j,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,showHistory:false,beforeAssign:async()=>{const saved=!!(jobEditorDirty||jobSaveT||jobSaveFlight||Object.keys(partT).length);if(!await leaveJobEditor())return false;if((await qAll()).some(x=>x.payload?.jobId===id)){notify('Сначала дождитесь отправки изменений заявки на сервер.','warn');return false;}return {saved};},onChange:data=>canWrite()||[data.owner_id,data.curator_id].includes(session?.user?.id)?openJob(id):switchTab('planner','jobs'),onError:e=>notify(e.message,'err')});
   configureEntityActions('job',j);
   const pane=document.querySelector('.view-job .pane'); if(pane) pane.scrollTop=0; }
 let jobBack='planner', jobBackSub='jobs',jobBackId=null;
