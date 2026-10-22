@@ -25,4 +25,4 @@ Source: `manager-workflow-ux-audit.pdf`, findings M1–M7, against main `ab8f1e1
 
 Run `npm run lint`, `npm test`, `npm run test:tz`, `npm run smoke` and the Playwright manager workflow matrix. Inspect both themes and small phone widths. The CI job stores each significant manager workflow screenshot; the broad existing matrix checks other roles and screens.
 
-Deployment requires applying `20261022103950_manager_task_organization.sql` before publishing the UI. Verify private-definer/public-invoker security, execute privileges and advisors after migration.
+Deployment requires applying `20261022110733_manager_task_organization.sql` before publishing the UI. Verify private-definer/public-invoker security, execute privileges and advisors after migration.
