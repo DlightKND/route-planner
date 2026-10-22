@@ -68,7 +68,7 @@ export function mountEntityResponsibility({
     if(p_reason.length<5){status.textContent='Укажи причину не короче пяти символов';return;}
     button.disabled=true;status.textContent='Проверяем изменения…';let ready=true,assigned=false;
     try{
-      ready=beforeAssign?await beforeAssign():true;if(ready===false){status.textContent='Передача отменена. Текущие изменения сохранены в форме.';return;}
+      ready=beforeAssign?await beforeAssign():true;if(ready===false){status.textContent='Передача не выполнена. Продолжите работу с текущей карточкой.';return;}
       const activeRecord=ready?.record||record;status.textContent='Передаю…';
       const {data,error}=await db.rpc('entity_responsibility_assign',{
         p_kind:kind,p_id:id,p_field:field,p_person,p_reason,
