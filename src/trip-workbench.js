@@ -50,7 +50,7 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
     const bounds=presenceBounds(s), proposed=bounds?bounds.max:s.minutes_raw;
     const mins = s.minutes_mgr!=null&&['approved','rejected'].includes(s.status)?s.minutes_mgr:bounds?.gps??proposed;
     const hrs = mins != null && crew.length ? mins*crew.length/60 : null;
-    const suggested=s.status==='detected'&&s.job_id&&s.stay_to&&crew.length&&s.crew_source==='snapshot';
+    const suggested=!workspace&&s.status==='detected'&&s.job_id&&s.stay_to&&crew.length&&s.crew_source==='snapshot';
     if(readonly){
       const recordedMinutes=['approved','rejected'].includes(s.status)?s.minutes_mgr:s.minutes_raw;
       const knownCrew=['snapshot','manager'].includes(s.crew_source);

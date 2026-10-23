@@ -63,3 +63,5 @@ it('does not render preserved historical minutes as zero person hours when the c
  const html=presenceHTML(data,[{id:'job',clients:{name:'Объект'}}],[],{readonly:true});
  expect(html).toContain('<b>— чел.-ч</b>');expect(html).toContain('215');expect(html).toContain('Проверено · присутствие');expect(html).toContain('Подтверждённая часть присутствия');
 });
+
+it('counts only confirmed attendance without requiring unrelated stops to be processed',()=>{const approved={status:'approved',job_id:'j',crew_ids:['e'],crew_source:'manager',minutes_mgr:60},pending={status:'detected',job_id:null,crew_ids:[],minutes_raw:90};expect(presenceSummary([approved,pending])).toMatchObject({approved:1,confirmedKnown:true,complete:false});expect(presenceSummary([pending])).toMatchObject({approved:0,confirmedKnown:false});expect(presenceSummary([{...approved,minutes_mgr:0},pending])).toMatchObject({approved:0,confirmedKnown:true});expect(presenceSummary([approved,{...approved,crew_source:'legacy_unverified'}])).toMatchObject({confirmedKnown:false});});

@@ -29,7 +29,7 @@ export function stopPlace(stay,jobs=[],index=0){
  const coordinates=stay.lat!=null&&stay.lng!=null&&Number.isFinite(Number(stay.lat))&&Number.isFinite(Number(stay.lng));
  return {title:place||'Остановка '+(index+1),location:stay.address||job?.clients?.address||job?.clients?.addr||(coordinates?Number(stay.lat).toFixed(4)+', '+Number(stay.lng).toFixed(4):'Адрес не указан'),fullTitle:stopTitle(stay,jobs,index)};
 }
-export function stopState(stay){return stopKind(stay)==='road'?'Остановка в пути':stay.status==='approved'?'Посещение подтверждено':stay.status==='rejected'?'Исключено из присутствия':!stay.stay_to?'Запись продолжается':'Не проверено';}
+export function stopState(stay){return stay.status==='approved'?'Присутствие подтверждено':'Присутствие не подтверждено';}
 export function journalEntries(unassigned,trips){
  const records=new Map();
  // Canonical keys are stable even before a linked trip page arrives.
@@ -51,8 +51,7 @@ export function presenceRoadConflicts(stay,track){
  return ((track?.data||track)?.presence?.motion_intervals||[]).filter(m=>{const from=Date.parse(m.from),to=Date.parse(m.to);return accepted.some(([a,b])=>a<to&&b>from);});
 }
 export function tripReviewIssues(trip){
- const r=trip.review||{},issues=[],pending=Math.max(0,Number(r.total||0)-Number(r.done||0));
- if(pending)issues.push({kind:'stops',count:pending,label:'Остановки на проверке: '+pending});
+ const r=trip.review||{},issues=[];
  if(r.conflicts)issues.push({kind:'route',count:Number(r.conflicts),label:'Конфликты времени: '+Number(r.conflicts)});
  if(r.gaps)issues.push({kind:'route',count:typeof r.gaps==='number'?r.gaps:null,label:typeof r.gaps==='number'?'Участки без дорожного подтверждения: '+r.gaps:'Есть неизмеренные разрывы GPS'});
  if(r.missingTrack)issues.push({kind:'route',count:1,label:'Трек отсутствует · нужна проверка'});
