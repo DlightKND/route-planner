@@ -64,7 +64,7 @@ const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,ro
  confirm:confirmDialog,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,onNavigate:state=>routeSet('journal/trip/'+state.tripId+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),
  jobs:async ids=>{if(!ids.length)return [];const {data,error}=await sb.from('jobs').select('id,clients(name),equipment(model)').in('id',ids);if(error)throw error;return data||[];},renderAllocations:renderTaskAllocationControls,
  rebuild:async id=>{const measured=await measureTripKm(id);try{if(!measured.ok)throw Error(measured.why||'Нет достоверного GPS');await writeFactTrack(id,measured.measure);await loadFactHours();if(measured.measure.rebuildContext.trip.status==='done')await refreshTripEcon(id);}finally{busyDone();}},
- save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {data:revision,error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:decisionReason(stay,note)});if(error)throw error;try{await loadFactHours(trip.id);if(trip.status==='done'&&!await refreshTripEcon(trip.id))notify('Решение сохранено; экономику нужно пересчитать.','warn');}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}return revision;}
+ save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {data:revision,error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:decisionReason(stay,note)});if(error)throw error;let nextRevision=revision;try{await loadFactHours(trip.id);if(trip.status==='done'){const updated=await refreshTripEcon(trip.id,revision);if(Number.isInteger(updated))nextRevision=updated;else notify('Решение сохранено; экономику нужно пересчитать.','warn');}}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}return nextRevision;}
 });
 const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
  onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state={})=>routeSet('journal/trip/'+id+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
@@ -6677,7 +6677,7 @@ const TRIP_SAY={started:'Выезд начат',finished:'Выезд закры�
 //
 // Входные данные берём из самой строки выезда, а не со страницы: маршрут,
 // ставки-оверрайды и километры по плательщикам там уже лежат.
-async function refreshTripEcon(tripId){
+async function refreshTripEcon(tripId,expectedRevision=null){
   try{
     const {data:t,error}=await sb.from('trips')
       .select('id,econ_snapshot,overrides,road_km_by_payer,route_stops,date_from,date_to,fact_km,tariffs_snapshot,started_at')
@@ -6700,8 +6700,12 @@ async function refreshTripEcon(tripId){
       dateFrom:t.date_from, dateTo:t.date_to,
       factKm:t.fact_km, factWorkH:factHByTrip[tripId]??null
     }, jobs.length);
-    const {error:e2}=await sb.from('trips').update({econ_snapshot:withLegs(snap,es.legs)}).eq('id',tripId);
-    return !e2;
+    let update=sb.from('trips').update({econ_snapshot:withLegs(snap,es.legs)}).eq('id',tripId);
+    if(Number.isInteger(expectedRevision)){
+      const {data,error}=await update.eq('workbench_revision',expectedRevision).select('workbench_revision').maybeSingle();
+      return !error&&Number.isInteger(data?.workbench_revision)?data.workbench_revision:false;
+    }
+    const {error:e2}=await update;return !e2;
   }catch(e){ console.warn('Пересчёт экономики выезда не прошёл:',e); return false; }
 }
 
