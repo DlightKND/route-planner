@@ -1,3 +1,4 @@
+import {openLocation} from './journal-actions.mjs';
 import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
@@ -29,7 +30,7 @@ async function clean(page,errors){
 
 for(const role of ['logist','engineer'])test(role+' uses the canonical stop screen and keeps the footer above the real navigation rail',async({page},info)=>{
  const errors=await open(page,info,'journal/trip/'+fixtureIDs.trip,{role,unifiedJournalJourney:true});await page.locator('[data-review-stop="journal-stay-3"]').click();
- await expect(page.locator('.presence-review-map [data-presence-route]')).toBeVisible();await shot(page,info,'presence-detail-'+role);
+ await openLocation(page);await expect(page.locator('.presence-review-map [data-presence-route]')).toBeVisible();await shot(page,info,'presence-detail-'+role);
  if(role==='engineer')await expect(page.locator('[data-presence-save],[data-review-edit]')).toHaveCount(0);
  else{const scroll=page.locator('.presence-review-scroll');await scroll.evaluate(e=>e.scrollTop=e.scrollHeight);if(page.viewportSize().width<=760){const floor=await page.locator('#nav.rail').evaluate(e=>e.getBoundingClientRect().top);for(const b of await page.locator('.presence-review-buttons>button:visible').all()){const bounds=await b.boundingBox();expect(bounds.y+bounds.height).toBeLessThanOrEqual(floor+1);}}await shot(page,info,'presence-footer');}
  expect(await page.locator('.presence-review-detail').evaluate(e=>e.clientHeight)).toBeGreaterThan(300);await clean(page,errors);

@@ -46,7 +46,7 @@ test('list spacing matches the journal and dispatcher trash controls are reachab
  await clickDispatcherControl(page,'#orderTrash');await expect(page.locator('#trashOverlay')).toBeVisible();await expect(page.locator('#trashTabs')).toContainText('Выезды');await page.locator('#trashClose').click();
  await page.goto('/#/planner/trips/tracking');await expect(page.locator('.unassigned-list')).toBeVisible();
  expect(await page.locator('.unassigned-list').evaluate(el=>parseFloat(getComputedStyle(el).gap))).toBe(listGap);
- await page.locator('[data-journal-exit]').click();await clickDispatcherControl(page,'#tripTrash');await expect(page.locator('#trashTitle')).toHaveText('Корзина выездов');await page.locator('#trashClose').click();
+ await page.locator('.journal-actions>summary').click();await page.locator('[data-journal-exit]').click();await clickDispatcherControl(page,'#tripTrash');await expect(page.locator('#trashTitle')).toHaveText('Корзина выездов');await page.locator('#trashClose').click();
  expect(await page.locator('.view-planner .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
  await page.screenshot({path:'test-results/list-consistency/'+info.project.name+'.png'});
 });
@@ -90,7 +90,7 @@ test('dispatcher actions keep stable mobile slots and task status chips control 
  }
  for(const dots of layouts.slice(1)){expect(dots.x).toBeCloseTo(layouts[0].x,0);expect(dots.y).toBeCloseTo(layouts[0].y,0);}
  await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page.locator('.unassigned-list')).toBeVisible();
- await expect(page.locator('[data-journal-refresh]')).toBeVisible();await page.locator('[data-journal-refresh]').click();await expect(page.locator('.unassigned-card')).toBeVisible();
+ await page.locator('.journal-actions>summary').click();await expect(page.locator('[data-journal-refresh]')).toBeVisible();await page.locator('[data-journal-refresh]').click();await expect(page.locator('.unassigned-card')).toBeVisible();
  await page.screenshot({path:'test-results/mobile-dispatcher/'+info.project.name+'-journal.png'});
  await page.goto('/#/planner/orders');await expect(page.locator('#orderStatusChips [data-os]')).toHaveCount(7);
  await page.locator('[data-os=assigned]').click();await expect(page.locator('#orderList [data-kst=assigned]')).toHaveCount(0);await expect(page.locator('[data-os=assigned]')).toHaveAttribute('aria-pressed','false');
