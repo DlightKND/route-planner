@@ -190,6 +190,6 @@
  .journal-trip-tabs>button{min-height:40px!important}.journal-trip-head>.gps-back{min-height:40px;padding:4px 0}
 }
 .view .presence-review-workspace .presence-kind:not([hidden]){display:inline-flex;flex-wrap:nowrap;width:fit-content;max-width:100%;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2);margin:12px 0;clear:both}
-.view .presence-review-workspace .presence-kind>button{flex:1;min-width:0;min-height:44px;padding:8px 12px;border:0;border-radius:calc(var(--r-sm) - 3px);background:transparent;color:var(--ink-dim);font:500 13px/1.4 var(--sans);text-transform:none;letter-spacing:normal;box-shadow:none;cursor:pointer}
+.view .presence-review-workspace .presence-kind>button{flex:1;min-width:0;min-height:44px;padding:8px 12px;border:0;border-radius:calc(var(--r-sm) - 3px);background:transparent;color:var(--ink-dim);font:500 13px/1.4 var(--sans);white-space:nowrap;text-transform:none;letter-spacing:normal;box-shadow:none;cursor:pointer}
 .view .presence-review-workspace .presence-kind>button.on{background:var(--ink);color:var(--panel);box-shadow:none}
 .view .presence-review-workspace .presence-kind>button:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
