@@ -20,10 +20,10 @@ export function savedPresenceHTML(stay,{jobs=[],profiles=[],taskTitle=()=> 'За
  <h3>Фактическое и учтённое время</h3><dl class="journal-result-evidence">
  <div><dt>По GPS · автомобиль</dt><dd>${durationText(gps)}</dd></div>
  <div><dt>Принято дополнительно</dt><dd>${extra==null?'Нет разложения':durationText(extra)}</dd></div></dl>
- <p class="journal-time-equation">${bounds?`(GPS ${durationText(gps)} + принято ${durationText(extra)})`:durationText(stay.minutes_mgr)} × ${crew.length} чел. = ${hours==null?'не определено':numericText(hours)+' чел.-ч'}</p>`:'<p>Время не учтено в присутствии на объекте.</p>'}
+ <p class="journal-time-equation">${bounds?`(GPS ${durationText(gps)} + принято ${durationText(extra)})`:durationText(stay.minutes_mgr)} × ${crew.length} чел. = ${hours==null?'не определено':numericText(hours)+' чел.-ч'}</p>`:`<h3>Данные о времени</h3><dl class="journal-result-evidence"><div><dt>По GPS · автомобиль</dt><dd>${durationText(gps)}</dd></div><div><dt>Восстановлено до</dt><dd>${durationText(bounds?.extra??0)}</dd></div></dl><p>Время не учтено в присутствии на объекте.</p>`}
  <h3>Заявка и команда</h3><dl class="journal-result-links"><div><dt>Заявка и объект</dt><dd>${esc(job?.clients?.name||'Заявка не указана')}</dd></div>
  <div><dt>Команда</dt><dd>${esc(crew.map(id=>profiles.find(p=>p.id===id)?.full_name||'Инженер').join(', ')||'Состав не указан')}</dd></div></dl>
  ${approved?`<h3>Распределение трудозатрат</h3><ul class="journal-result-tasks">${allocations.map(a=>`<li><span>${esc(taskTitle(a.order_id))}</span><b>${numericText(a.share*100)}% времени${hours==null?'':' · '+numericText(hours*a.share)+' чел.-ч'}</b></li>`).join('')||'<li>Задания не выбраны</li>'}</ul><p class="hint">Не распределено: ${numericText(Math.max(0,1-share)*100)}%${hours==null?'':' · '+numericText(hours*Math.max(0,1-share))+' чел.-ч'}</p>`:''}
- <h3>Решение</h3><p class="journal-decision-author">${esc(actor)}${time?' · '+esc(time):''}</p><p>${esc(decisionComment(stay.note))}</p>
+ <h3>Решение</h3>${approved||stay.mgr_at?`<p class="journal-decision-author">${esc(actor)}${time?' · '+esc(time):''}</p><p>${esc(decisionComment(stay.note))}</p>`:'<p>Подтверждённого решения нет.</p>'}
  <p class="hint">Присутствие не подтверждает выполнение задания. Интервал: ${esc(intervalText(stay.stay_from,stay.stay_to))}.</p>`;
 }
