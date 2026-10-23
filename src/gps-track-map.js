@@ -9,7 +9,7 @@ export function gpsSegments(points){
  if(line.length)segments.push(line);return segments;
 }
 
-export function mountGpsTrackMap(fallback,points,{leaflet:L,makeBase,color,label='Карта GPS-трека',className='',endpoints=true,mapOptions={},mini=false}){
+export function mountGpsTrackMap(fallback,points,{leaflet:L,makeBase,color,label='Карта GPS-трека',className='',endpoints=true,mapOptions={},mini=false,pointStyle={}}){
  const segments=gpsSegments(points);if(!fallback||!L||!segments.length)return null;
  const container=fallback.ownerDocument.createElement('div');container.className='unassigned-preview unassigned-map'+(className?' '+className:'');
  container.setAttribute('role','region');container.setAttribute('aria-label',label);container.tabIndex=0;
@@ -20,7 +20,7 @@ export function mountGpsTrackMap(fallback,points,{leaflet:L,makeBase,color,label
   const base=makeBase();if(!base)throw Error('Нет картографической подложки');base.addTo(map);
   const layers=segments.map(segment=>{
    const coords=segment.map(p=>[+p.lat,+p.lng]);
-   return (coords.length>1?L.polyline(coords,{color,weight:3,opacity:1,className:'gps-track-line'}):L.circleMarker(coords[0],{color,radius:4,className:'gps-track-point'})).addTo(map);
+   return (coords.length>1?L.polyline(coords,{color,weight:3,opacity:1,className:'gps-track-line'}):L.circleMarker(coords[0],{color,radius:4,className:'gps-track-point',...pointStyle})).addTo(map);
   });
   const first=segments[0][0],last=segments.at(-1).at(-1);
   for(const [p,label,fill] of endpoints?[[first,'Начало трека','#25845a'],[last,'Конец трека','#c34e3c']]:[]){
