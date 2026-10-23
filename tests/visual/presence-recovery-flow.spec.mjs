@@ -50,7 +50,7 @@ test('engineer sees GPS and proposed presence without review controls',async({pa
  await page.goto('/#/trip/'+fixtureIDs.trip);await expect(page.locator('.view-trip.active')).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await page.locator('#tpReviewPresence').click();
- if(await page.locator('[data-review-stop]').first().isVisible())await page.locator('[data-review-stop]').first().click();await expect(page.locator('.journal-presence-evidence')).toContainText('3 ч');await expect(page.locator('[data-presence-save],[data-review-edit],[data-presence-edit]')).toHaveCount(0);
+ if(await page.locator('[data-review-stop]').first().isVisible())await page.locator('[data-review-stop]').first().click();await expect(page.locator('.journal-saved-decision .journal-result-evidence')).toContainText('3 ч');await expect(page.locator('[data-presence-save],[data-review-edit],[data-presence-edit]')).toHaveCount(0);
  const state=await page.evaluate(()=>window.__visualQA);expect(state.recoveryWrites).toEqual([]);expect(state.blockedWrites).toEqual([]);expect(state.queryErrors).toEqual([]);expect(errors).toEqual([]);
 });
 

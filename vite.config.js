@@ -21,7 +21,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 function buildStamp() {
   const files = ['index.html', 'src/app.js', 'src/trip-workbench.js', 'src/engineer-picker.js', 'src/modal-shell.js', 'src/context-panels.js', 'src/schedule-interactions.js', 'src/personal-schedule.js', 'src/unassigned-tracks.js', 'src/unassigned-tracks.css', 'src/service-orders.js', 'src/service-orders.css', 'src/trip-workbench.css', 'src/visual-system.css', 'src/dashboard-chart.js', 'src/dashboard-summary.js', 'src/dashboard-visuals.js', 'src/info-hints.js', 'src/account-profile.js', 'src/entity-responsibility.js', 'src/notifications.js', 'src/entity-tabs.js','src/entity-activity.js','src/entity-activity.css','src/entity-actions.js','src/entity-pages.css', 'public/sw.js']
     .concat(readdirSync('src/core').filter(f => f.endsWith('.js')).sort().map(f => 'src/core/' + f));
-  files.push('src/journal-trips.js','src/journal-route.js','src/presence-review-controls.js','src/unified-journal.css','src/review-workspaces.css','src/presence-review-workspace.js','src/gps-track-map.js','public/manifest.json','src/operations-design.css','src/operations-ui.js','src/workspace-ui.js','src/workspace-ui.css');
+  files.push('src/journal-trips.js','src/journal-route.js','src/presence-decision.js','src/presence-review-controls.js','src/unified-journal.css','src/review-workspaces.css','src/presence-review-workspace.js','src/gps-track-map.js','public/manifest.json','src/operations-design.css','src/operations-ui.js','src/workspace-ui.js','src/workspace-ui.css');
   const parts = files.map(name => {
     let text = '';
     try { text = readFileSync(name, 'utf8'); } catch (e) { return { name, hash: 'нет файла', lines: 0 }; }

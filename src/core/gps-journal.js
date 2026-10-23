@@ -1,3 +1,4 @@
+import {durationText,distanceText} from './journal-display.js';
 import {acceptedPresenceIntervals,presenceBounds} from './trip-presence-recovery.js';
 
 export const reviewedStop=s=>['approved','rejected'].includes(s.status);
@@ -11,24 +12,33 @@ export function decisionReason(stay,comment=''){
  const text=decisionComment(comment).trim();
  return (stopKind(stay)==='road'?'Остановка в пути':stay.status==='rejected'?'Исключено из присутствия':'Посещение подтверждено')+' · '+(text||'Проверено по данным поездки');
 }
-export function minutesText(value){
- if(value==null||!Number.isFinite(Number(value)))return 'Нет данных';
- const m=Math.round(Number(value));return [m>=60?Math.floor(m/60)+' ч':'',m%60||m<60?(m%60)+' мин':''].filter(Boolean).join(' ');
-}
+export const minutesText=durationText;
 export const numericText=value=>Number(value||0).toLocaleString('ru-RU',{maximumFractionDigits:2});
-export const kmText=value=>value==null?'Нет данных':numericText(value)+' км';
+export const kmText=distanceText;
 export function evidenceExtent(stay){
  const intervals=[...(stay.presence_evidence?.gps_intervals||[]),...(stay.presence_evidence?.recovery_parts||[])],from=[stay.stay_from,...intervals.map(p=>p.from)].map(Date.parse).filter(Number.isFinite),to=[stay.stay_to,...intervals.map(p=>p.to)].map(Date.parse).filter(Number.isFinite);
  return {from:from.length?new Date(Math.min(...from)).toISOString():stay.stay_from,to:to.length?new Date(Math.max(...to)).toISOString():stay.stay_to};
 }
-export function stopTitle(stay,jobs=[],index=0){
- return stay.display_name||stay.address||((stopKind(stay)==='visit')&&jobs.find(j=>j.id===stay.job_id)?.clients?.name)||'Остановка '+(index+1);
+export function stopPlace(stay, jobs = [], index = 0) {
+  const job = jobs.find(j => j.id === stay.job_id);
+  const clean = value => typeof value === 'string' ? value.trim() : '';
+  const title = [stay.display_name, stay.site_name, stay.object_name,
+    job?.clients?.name, stay.address].map(clean).find(Boolean)
+    || `Остановка ${index + 1}`;
+  const hasCoordinates = stay.lat != null && stay.lng != null &&
+    Number.isFinite(Number(stay.lat)) && Number.isFinite(Number(stay.lng));
+  const address = [stay.address, job?.clients?.address, job?.clients?.addr]
+    .map(clean).find(Boolean);
+  const location = address || (hasCoordinates
+    ? `${Number(stay.lat).toFixed(4)}, ${Number(stay.lng).toFixed(4)}`
+    : 'Адрес не указан');
+  return {title, fullTitle: title, location};
 }
-export function stopPlace(stay,jobs=[],index=0){
- const job=jobs.find(j=>j.id===stay.job_id),place=stay.display_name||stay.site_name||stay.object_name;
- const coordinates=stay.lat!=null&&stay.lng!=null&&Number.isFinite(Number(stay.lat))&&Number.isFinite(Number(stay.lng));
- return {title:place||'Остановка '+(index+1),location:stay.address||job?.clients?.address||job?.clients?.addr||(coordinates?Number(stay.lat).toFixed(4)+', '+Number(stay.lng).toFixed(4):'Адрес не указан'),fullTitle:stopTitle(stay,jobs,index)};
+
+export function stopTitle(stay, jobs = [], index = 0) {
+  return stopPlace(stay, jobs, index).fullTitle;
 }
+
 export function stopState(stay){return stay.status==='approved'?'Присутствие подтверждено':'Присутствие не подтверждено';}
 export function journalEntries(unassigned,trips){
  const records=new Map();
