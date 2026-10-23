@@ -387,6 +387,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   if(presenceRecoveryJourney){
     const point=(km,min)=>({trip_id:trip,vehicle_id:ride.vehicle_id,lat:client.lat,lng:client.lng+(km-100)/(111.32*Math.cos(client.lat*Math.PI/180)),ts:new Date(Date.UTC(2026,9,5,7,min)).toISOString()});
     tables.vehicle_positions=[point(0,-1),point(1,0),...Array.from({length:181},(_,i)=>point(100,360+i))];
+    if(presenceRecoveryJourney==='unbound'){tables.vehicle_positions=[point(0,-1),{...point(1,0),status:'idle'}, {...point(26,137),status:'moving'},point(27,138)];const finish=tables.vehicle_positions.at(-1);ride.route_stops.push({type:'end',name:'Финиш',lat:finish.lat,lng:finish.lng});}
     Object.assign(ride.route_stops[0],{lat:tables.vehicle_positions[0].lat,lng:tables.vehicle_positions[0].lng});
     Object.assign(ride,{status:'finished',started_at:tables.vehicle_positions[0].ts,finished_at:tables.vehicle_positions.at(-1).ts});
     stays.splice(0,stays.length);tables.trip_stays=stays;

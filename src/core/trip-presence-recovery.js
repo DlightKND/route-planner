@@ -33,7 +33,7 @@ export async function rebuildTripTrack(points,opts={},ctx={},reach=null){
  const actualStart=Date.parse(ctx.started_at),actualFinish=Date.parse(ctx.finished_at);
  const captured=(points||[]).filter(p=>(!Number.isFinite(actualStart)||time(p)>=actualStart)&&(!Number.isFinite(actualFinish)||time(p)<=actualFinish));
  const m=await measureTrip(captured,{...opts,validateGaps:true},ctx,road),real=m.points.filter(valid),sites=sitesOf(ctx.stops),gap=(opts.presenceGapMinutes??5)*MIN,rad=opts.stayRadiusM??300,minStay=opts.stayMinMinutes??10,hard=opts.hardSpeedKmh??300,slack=opts.slack??1.5;
- const skipped=[],components=[],motion=[],parts=[],replacement=new Map();
+ const skipped=[],components=[],motion=[],parts=[],replacement=new Map(),proposalSites=[...sites];
  const usable=!m.verdict.startsWith('трек недостоверен');
  const locate=p=>siteAt(p,sites,rad);
  const component=(site,from,to,kind,payload)=>components.push({site,from,to,kind,...payload});
@@ -52,7 +52,12 @@ export async function rebuildTripTrack(points,opts={},ctx={},reach=null){
   const skip=reason=>skipped.push({from:a.ts,to:b.ts,reason});
   if(!witness(real,i-1,-1,gap,hard)||!witness(real,i,1,gap,hard)){skip('Недостаточно соседних GPS-точек для проверки опор');continue;}
   const sa=locate(a),sb=locate(b);let site,mode;
-  if(sameSite(sa,sb)){site=sa;mode='between';}
+  // An observed idle fix is already a location anchor. It must not require
+  // a request or an invented detour through a different linked object.
+  if(!sa&&!sb&&a.status==='idle'&&b.status!=='idle'){
+   site={key:'gps-idle:'+a.ts+'|'+(+a.lat).toFixed(5)+','+(+a.lng).toFixed(5),...coords(a),job_ids:[],origin:{kind:'gps_idle',ts:a.ts,...coords(a)}};mode='after';
+  }
+  if(!site&&sameSite(sa,sb)){site=sa;mode='between';}
   else if(sa&&!sb){site=sa;mode='after';}
   else if(sb&&!sa){site=sb;mode='before';}
   else if(sa&&sb){skip('Провал между разными объектами: время не распределяется автоматически');continue;}
@@ -69,25 +74,26 @@ export async function rebuildTripTrack(points,opts={},ctx={},reach=null){
    if(feasible.length!==1){skip(feasible.length?'Несколько возможных объектов внутри провала':'Нет однозначного объекта и маршрута для восстановления');continue;}
    ({site,inbound,outbound}={site:feasible[0].site,inbound:feasible[0].x,outbound:feasible[0].y});mode='island';
   }else{
-   const r=await road(a,b,dt);if(!r||!Number.isFinite(r.sec)||r.sec<0){skip('Длительность дороги ORS недоступна');continue;}
+   const r=site.origin&&haversineKm(a,b)*1000<30?{ok:true,sec:0,km:0,line:null}:await road(a,b,dt);if(!r||!Number.isFinite(r.sec)||r.sec<0){skip('Длительность дороги ORS недоступна');continue;}
    if(r.sec*1000>dt*slack){skip('Опоры не проходят дорожную проверку достижимости');continue;}
    if(r.sec*1000>dt){skip('Расчётная дорога занимает весь промежуток');continue;}
    if(mode==='before')inbound=r;else outbound=r;
   }
   const arrival=mode==='after'?from:from+(inbound?.sec||0)*1000,departure=mode==='before'?to:to-(outbound?.sec||0)*1000;
   if(departure-arrival<minStay*MIN){skip('Остаток времени меньше минимальной стоянки');continue;}
+  if(site.origin){proposalSites.push(site);site.origin.road_seconds=outbound.sec;}
   addPart(site,a,b,arrival,departure,mode);
   const c={...site,gapFromTs:a.ts,gapToTs:b.ts},legs=[];
   if(inbound)legs.push(drive(a,mode==='island'?c:b,from,arrival,inbound));
-  if(outbound)legs.push(drive(mode==='island'?c:a,b,departure,to,outbound));
+  if(outbound&&(outbound.sec>0||outbound.km>0))legs.push(drive(mode==='island'?c:a,b,departure,to,outbound));
   replacement.set(routeKey(a,b),legs);
  }
  const stays=[];
- for(const site of sites){
+ for(const site of proposalSites){
   const entries=components.filter(x=>x.site.key===site.key).sort((a,b)=>a.from-b.from);let visit=[];
   const finish=()=>{if(!visit.length)return;const gps=mergeIntervals(visit.filter(x=>x.kind==='gps').map(x=>x.gps)),recovery=visit.filter(x=>x.kind==='recovery').map(x=>x.part);const start=Math.min(...visit.map(x=>x.from)),end=Math.max(...visit.map(x=>x.to));
    if(intervalMinutes(gps)+intervalMinutes(recovery)<minStay){visit=[];return;}
-   const evidence={version:1,site_key:site.key,job_ids:site.job_ids,gps_intervals:gps,recovery_parts:recovery};
+   const evidence={version:1,site_key:site.key,job_ids:site.job_ids,gps_intervals:gps,recovery_parts:recovery,...(site.origin?{origin:site.origin}:{})};
    stays.push({key:site.key+'|'+iso(start),job_id:site.job_ids.length===1?site.job_ids[0]:null,lat:site.lat,lng:site.lng,stay_from:iso(start),stay_to:iso(end),gps_minutes:intervalMinutes(gps),recovered_minutes:intervalMinutes(recovery),presence_evidence:evidence});visit=[];};
   for(const entry of entries){if(visit.length&&entry.from>Math.max(...visit.map(x=>x.to)))finish();visit.push(entry);}finish();
  }
@@ -97,7 +103,7 @@ export async function rebuildTripTrack(points,opts={},ctx={},reach=null){
  for(const legs of replacement.values())segments.push(...legs);segments.sort((a,b)=>Date.parse(a.fromTs)-Date.parse(b.fromTs));
  const start=Date.parse(ctx.started_at),end=Date.parse(ctx.finished_at)||time(real.at(-1)||{});const total=Number.isFinite(start)&&end>=start?minutes(start,end):null;
  const driving=motion.reduce((n,x)=>n+x.minutes,0),observed=stays.reduce((n,x)=>n+x.gps_minutes,0);
- const presence={version:1,total_minutes:total,drive_minutes:Math.round(driving*1000)/1000,drive_complete:skipped.length===0,observed_minutes:observed,motion_intervals:motion,stays,skipped,usable,input_points:real.map(p=>({ts:p.ts,...coords(p)}))};
+ const presence={version:1,idle_stop_version:1,total_minutes:total,drive_minutes:Math.round(driving*1000)/1000,drive_complete:skipped.length===0,observed_minutes:observed,motion_intervals:motion,stays,skipped,usable,input_points:real.map(p=>({ts:p.ts,...coords(p)}))};
  const sums={trackKm:0,roadKm:0,lineKm:0};segments.forEach(g=>{const key={track:'trackKm',road:'roadKm',line:'lineKm'}[g.kind];if(key)sums[key]+=Number(g.km)||0;});
  return {...m,...sums,km:sums.trackKm+sums.roadKm+sums.lineKm,segments,checks:calls,presence};
 }
