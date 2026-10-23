@@ -183,3 +183,5 @@ html[data-theme=dark] .unified-gps-journal,html[data-theme=dark] .journal-alloca
 @media(min-width:1101px){.view #unassignedHost.unified-gps-journal{grid-template-columns:minmax(330px,27%) minmax(0,1fr)}.view #unassignedHost.journal-list-collapsed,.view #unassignedHost.journal-map-expanded{grid-template-columns:minmax(0,1fr)}}
 .view .presence-review-buttons>.btn.amber:disabled{background:var(--panel-2);color:var(--ink-dim);border-color:var(--line);opacity:1;filter:none;box-shadow:none;cursor:not-allowed}
 .view .journal-choice-field>select:not([hidden]){width:calc(100% - 24px);max-width:calc(100% - 24px);box-sizing:border-box}
+.journal-review-progress:not(.is-confirmed),.journal-recovery-badge.has-recovery{color:#80560f}.journal-stop-state:not(.confirmed):not(.is-neutral){color:#875b13}
+html[data-theme=dark] .journal-review-progress:not(.is-confirmed),html[data-theme=dark] .journal-recovery-badge.has-recovery,html[data-theme=dark] .journal-stop-state:not(.confirmed):not(.is-neutral){color:#f1c766}
