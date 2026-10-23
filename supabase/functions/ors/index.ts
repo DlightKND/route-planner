@@ -14,6 +14,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.118.0'
 
 const ORS_KEY = Deno.env.get('ORS_KEY') ?? ''
+// Presence only: never log, return or download the secret itself. Merely adding
+// a Free key does not enable commercial failover or change routing behavior.
+console.info('GraphHopper configuration', JSON.stringify({
+  key_configured: Boolean(Deno.env.get('GRAPHHOPPER_KEY')?.trim()),
+  automatic_fallback: false,
+}))
 
 // белый список: наружу можно только эти три эндпоинта ORS, ничего больше
 const UPSTREAM = new Map([

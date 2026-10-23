@@ -7,16 +7,18 @@ import {transformSync} from 'esbuild';
 const source=readFileSync(new URL('../supabase/functions/ors/index.ts',import.meta.url),'utf8');
 const code=transformSync(source.replace(/^import .*createClient.*\n/m,''),{loader:'ts',format:'iife',target:'es2022'}).code;
 const key='fake-server-only-ors-key',token='Bearer fake-user-session';
-function setup({staff=true,error=null,authThrows=false,secret=key}={}){
+function setup({staff=true,error=null,authThrows=false,secret=key,graphhopperKey=''}={}){
  let handler;const rpc=vi.fn(async()=>{if(authThrows)throw Error('auth unavailable');return {data:staff,error};});
  const client=vi.fn(()=>({rpc})),fetcher=vi.fn(),log=vi.fn();
- const env={ORS_KEY:secret,SUPABASE_URL:'https://example.supabase.co',SUPABASE_ANON_KEY:'fake-anon-key'};
- runInNewContext(code,{Deno:{env:{get:k=>env[k]},serve:fn=>handler=fn},createClient:client,fetch:fetcher,Response,Request,AbortSignal,console:{error:log},setTimeout,Date});
+ const env={ORS_KEY:secret,GRAPHHOPPER_KEY:graphhopperKey,SUPABASE_URL:'https://example.supabase.co',SUPABASE_ANON_KEY:'fake-anon-key'};
+ runInNewContext(code,{Deno:{env:{get:k=>env[k]},serve:fn=>handler=fn},createClient:client,fetch:fetcher,Response,Request,AbortSignal,console:{error:log,info:log},setTimeout,Date});
  return {handler,rpc,client,fetcher,log};
 }
 const path='v2/directions/driving-car/geojson',body={coordinates:[[8.68,49.41],[8.69,49.42]]};
 const request=(payload={path,body},method='POST')=>new Request('https://example.supabase.co/functions/v1/ors',{method,headers:{Authorization:token,'Content-Type':'application/json'},...(method==='POST'?{body:typeof payload==='string'?payload:JSON.stringify(payload)}:{})});
 function cors(response){expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');expect(response.headers.get('Access-Control-Allow-Headers')).toContain('authorization');}
+
+it.each(['','fake-graphhopper-key'])('reports secret presence without exposing it or enabling failover: %s',graphhopperKey=>{const x=setup({graphhopperKey});expect(x.log).toHaveBeenCalledWith('GraphHopper configuration',JSON.stringify({key_configured:!!graphhopperKey,automatic_fallback:false}));expect(JSON.stringify(x.log.mock.calls)).not.toContain('fake-graphhopper-key');expect(x.fetcher).not.toHaveBeenCalled();});
 
 it('answers preflight without consuming ORS quota or checking a user',async()=>{const x=setup(),r=await x.handler(request(null,'OPTIONS'));expect(r.status).toBe(200);cors(r);expect(x.client).not.toHaveBeenCalled();expect(x.fetcher).not.toHaveBeenCalled();});
 it.each([['GET',405],['DELETE',405]])('rejects %s with a readable CORS response',async(method,status)=>{const x=setup(),r=await x.handler(request(null,method));expect(r.status).toBe(status);cors(r);expect(x.fetcher).not.toHaveBeenCalled();});
