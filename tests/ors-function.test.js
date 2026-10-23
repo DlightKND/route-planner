@@ -1,0 +1,32 @@
+import {it,expect,vi} from 'vitest';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+import {transformSync} from 'esbuild';
+
+// Execute the deployed entrypoint, replacing only the remote SDK and runtime.
+const source=readFileSync(new URL('../supabase/functions/ors/index.ts',import.meta.url),'utf8');
+const code=transformSync(source.replace(/^import .*createClient.*\n/m,''),{loader:'ts',format:'iife',target:'es2022'}).code;
+const key='fake-server-only-ors-key',token='Bearer fake-user-session';
+function setup({staff=true,error=null,authThrows=false,secret=key}={}){
+ let handler;const rpc=vi.fn(async()=>{if(authThrows)throw Error('auth unavailable');return {data:staff,error};});
+ const client=vi.fn(()=>({rpc})),fetcher=vi.fn(),log=vi.fn();
+ const env={ORS_KEY:secret,SUPABASE_URL:'https://example.supabase.co',SUPABASE_ANON_KEY:'fake-anon-key'};
+ runInNewContext(code,{Deno:{env:{get:k=>env[k]},serve:fn=>handler=fn},createClient:client,fetch:fetcher,Response,Request,AbortSignal,console:{error:log},setTimeout});
+ return {handler,rpc,client,fetcher,log};
+}
+const path='v2/directions/driving-car/geojson',body={coordinates:[[8.68,49.41],[8.69,49.42]]};
+const request=(payload={path,body},method='POST')=>new Request('https://example.supabase.co/functions/v1/ors',{method,headers:{Authorization:token,'Content-Type':'application/json'},...(method==='POST'?{body:typeof payload==='string'?payload:JSON.stringify(payload)}:{})});
+function cors(response){expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');expect(response.headers.get('Access-Control-Allow-Headers')).toContain('authorization');}
+
+it('answers preflight without consuming ORS quota or checking a user',async()=>{const x=setup(),r=await x.handler(request(null,'OPTIONS'));expect(r.status).toBe(200);cors(r);expect(x.client).not.toHaveBeenCalled();expect(x.fetcher).not.toHaveBeenCalled();});
+it.each([['GET',405],['DELETE',405]])('rejects %s with a readable CORS response',async(method,status)=>{const x=setup(),r=await x.handler(request(null,method));expect(r.status).toBe(status);cors(r);expect(x.fetcher).not.toHaveBeenCalled();});
+it('keeps the server secret mandatory',async()=>{const x=setup({secret:''}),r=await x.handler(request());expect(r.status).toBe(500);cors(r);expect(x.client).not.toHaveBeenCalled();expect(x.fetcher).not.toHaveBeenCalled();});
+it.each([{staff:false,status:403},{error:{message:'expired'},status:401},{authThrows:true,status:401}])('denies unauthorized or inactive callers before ORS: %j',async config=>{const x=setup(config),r=await x.handler(request());expect(r.status).toBe(config.status);cors(r);expect(x.rpc).toHaveBeenCalledWith('is_staff');expect(x.fetcher).not.toHaveBeenCalled();});
+it.each(['https://attacker.invalid','v2/directions/driving-hgv','../admin'])('does not forward arbitrary endpoint %s',async forbidden=>{const x=setup(),r=await x.handler(request({path:forbidden,body}));expect(r.status).toBe(400);cors(r);expect(x.fetcher).not.toHaveBeenCalled();});
+it('rejects malformed JSON',async()=>{const x=setup(),r=await x.handler(request('{'));expect(r.status).toBe(400);cors(r);expect(x.fetcher).not.toHaveBeenCalled();});
+it('preserves routing payload and uses the user token only for the staff check',async()=>{const x=setup(),answer=JSON.stringify({features:[{geometry:{type:'LineString',coordinates:body.coordinates}}]});x.fetcher.mockResolvedValue(new Response(answer));const r=await x.handler(request());expect(r.status).toBe(200);expect(await r.text()).toBe(answer);cors(r);expect(x.client).toHaveBeenCalledWith('https://example.supabase.co','fake-anon-key',expect.objectContaining({global:{headers:{Authorization:token}}}));expect(x.fetcher).toHaveBeenCalledWith('https://api.openrouteservice.org/'+path,expect.objectContaining({method:'POST',headers:{Authorization:key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:expect.any(AbortSignal)}));});
+it('recovers one transient transport failure with one bounded retry',async()=>{const x=setup();x.fetcher.mockRejectedValueOnce(Object.assign(new TypeError('connection refused'),{code:'ECONNREFUSED'})).mockResolvedValueOnce(new Response('{"features":[]}'));const r=await x.handler(request());expect(r.status).toBe(200);expect(x.fetcher).toHaveBeenCalledTimes(2);expect(x.fetcher.mock.calls[0][1].body).toBe(x.fetcher.mock.calls[1][1].body);});
+it('turns a persistent connection refusal into a CORS-readable 502 without leaking secrets',async()=>{const x=setup();x.fetcher.mockRejectedValue(Object.assign(new TypeError('failed '+key+' '+token),{code:'ECONNREFUSED'}));const r=await x.handler(request());expect(r.status).toBe(502);cors(r);const answer=await r.text();expect(JSON.parse(answer).error.code).toBe('ORS_UPSTREAM_UNAVAILABLE');expect(answer).toContain('Нет соединения');expect(x.fetcher).toHaveBeenCalledTimes(2);expect(answer+JSON.stringify(x.log.mock.calls)).not.toContain(key);expect(answer+JSON.stringify(x.log.mock.calls)).not.toContain(token);});
+it('returns 504 on a timeout without retrying an expensive routing request',async()=>{const x=setup();x.fetcher.mockRejectedValue(Object.assign(new Error('timeout'),{name:'TimeoutError'}));const r=await x.handler(request());expect(r.status).toBe(504);cors(r);expect((await r.json()).error.code).toBe('ORS_UPSTREAM_TIMEOUT');expect(x.fetcher).toHaveBeenCalledTimes(1);});
+it('also catches a connection lost while reading the upstream body',async()=>{const x=setup();x.fetcher.mockResolvedValue({status:200,text:async()=>{throw new TypeError('connection reset');}});const r=await x.handler(request());expect(r.status).toBe(502);cors(r);expect(x.fetcher).toHaveBeenCalledTimes(2);});
+it.each([400,401,403,429,500])('passes ORS HTTP %s through without retrying',async status=>{const x=setup(),answer='{"error":{"message":"upstream response"}}';x.fetcher.mockResolvedValue(new Response(answer,{status}));const r=await x.handler(request());expect(r.status).toBe(status);expect(await r.text()).toBe(answer);cors(r);expect(x.fetcher).toHaveBeenCalledTimes(1);});
