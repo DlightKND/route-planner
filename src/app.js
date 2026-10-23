@@ -64,7 +64,7 @@ const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,ro
  confirm:confirmDialog,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,onNavigate:state=>routeSet('journal/trip/'+state.tripId+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),
  jobs:async ids=>{if(!ids.length)return [];const {data,error}=await sb.from('jobs').select('id,clients(name),equipment(model)').in('id',ids);if(error)throw error;return data||[];},renderAllocations:renderTaskAllocationControls,
  rebuild:async id=>{const measured=await measureTripKm(id);try{if(!measured.ok)throw Error(measured.why||'Нет достоверного GPS');await writeFactTrack(id,measured.measure);await loadFactHours();if(measured.measure.rebuildContext.trip.status==='done')await refreshTripEcon(id);}finally{busyDone();}},
- save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {data:revision,error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:decisionReason(stay,note)});if(error)throw error;try{await loadFactHours();if(trip.status==='done'&&!await refreshTripEcon(trip.id))notify('Решение сохранено; экономику нужно пересчитать.','warn');}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}return revision;}
+ save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {data:revision,error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:decisionReason(stay,note)});if(error)throw error;try{await loadFactHours(trip.id);if(trip.status==='done'&&!await refreshTripEcon(trip.id))notify('Решение сохранено; экономику нужно пересчитать.','warn');}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}return revision;}
 });
 const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
  onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state={})=>routeSet('journal/trip/'+id+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
@@ -6624,11 +6624,13 @@ function reschedBanner(t){
 let factHByTrip={}, factPresenceRows=[];
 let staysModalTripId=null;
 
-async function loadFactHours(){
+async function loadFactHours(tripId=null){
   try{
-    const { data, error }=await sb.from('trip_stays').select('trip_id,stay_from,stay_to,minutes_mgr,minutes_raw,status,job_id,crew_ids,crew_source,presence_evidence,recovery_acceptance,accepted_intervals');
+    let query=sb.from('trip_stays').select('trip_id,stay_from,stay_to,minutes_mgr,minutes_raw,status,job_id,crew_ids,crew_source,presence_evidence,recovery_acceptance,accepted_intervals');
+    if(tripId)query=query.eq('trip_id',tripId);
+    const {data,error}=await query;
     if(error) throw error;
-    factPresenceRows=data||[];
+    factPresenceRows=tripId?[...factPresenceRows.filter(s=>s.trip_id!==tripId),...(data||[])]:data||[];
     const m={}; factPresenceRows.forEach(r=>{ (m[r.trip_id]||(m[r.trip_id]=[])).push(r); });
     factHByTrip={}; Object.keys(m).forEach(k=>{const s=presenceSummary(m[k]);if(s.complete||s.confirmedKnown)factHByTrip[k]=s.approved;});
   }catch(e){ factHByTrip={};factPresenceRows=[]; loadFail('фактические часы по выездам',e); }
