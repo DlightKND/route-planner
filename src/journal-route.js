@@ -39,5 +39,12 @@ export function mountJournalRoute(root,{trip,track,stays,leaflet:L,makeBase,onSt
  function focus(index){const line=lines.get(index);lines.forEach(l=>l.setStyle({weight:l===line?7:4}));if(map&&line)map.fitBounds(line.getBounds(),{padding:[40,40],maxZoom:15});root.querySelectorAll('[data-route-issue]').forEach(b=>b.classList.toggle('is-selected',Number(b.dataset.routeIssue)===index));}
  root.querySelectorAll('[data-route-issue]').forEach(b=>b.onclick=()=>focus(Number(b.dataset.routeIssue)));root.querySelectorAll('[data-route-conflict]').forEach(b=>b.onclick=()=>onStop?.(conflicts[Number(b.dataset.routeConflict)].stay.id));root.querySelector('[data-expand-map]')?.addEventListener('click',()=>root.closest('.journal-trip-detail')?.querySelector('[data-journal-pane="route"]')?.click());
  const observer=map&&typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>map.invalidateSize({pan:false})):null;observer?.observe(box);
- return {select(id){for(const marker of new Set(markers.values()))marker.getElement()?.classList.toggle('selected',markers.get(id)===marker);},focus,destroy(){observer?.disconnect();map?.remove();}};
+ function refreshPresence(){
+  for(const marker of new Set(markers.values())){const group=stays.filter(s=>markers.get(s.id)===marker);marker.getElement()?.classList.toggle('confirmed',group.every(s=>s.status==='approved'));}
+  const current=stays.flatMap(s=>presenceRoadConflicts(s,track).map(m=>({stay:s,...m}))),quality=root.querySelector('.journal-route-quality');if(!quality)return;
+  root.querySelectorAll('[data-route-conflict]').forEach(b=>b.remove());
+  const problems=root.querySelector('[data-route-problems]');if(problems)problems.textContent='Проблемы маршрута: '+(amounts.unknown.length+current.length+(amounts.gps==null?1:0))+' · участки: '+issues.length;
+  const legend=root.querySelector('.journal-route-explainer');for(const conflict of current){const button=root.ownerDocument.createElement('button');button.className='journal-conflict';button.dataset.routeConflict='';button.textContent='Конфликт времени · Остановка '+(stays.indexOf(conflict.stay)+1)+' · '+clock(conflict.from)+'–'+clock(conflict.to);button.onclick=()=>onStop?.(conflict.stay.id);legend.before(button);}
+ }
+ return {select(id){for(const marker of new Set(markers.values()))marker.getElement()?.classList.toggle('selected',markers.get(id)===marker);},refreshPresence,focus,destroy(){observer?.disconnect();map?.remove();}};
 }

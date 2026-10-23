@@ -557,7 +557,8 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
       }
       if((presenceRecoveryJourney||unifiedJournalJourney)&&name==='trip_presence_save_tasks'){
         if(role==='engineer')return reject(name);
-        for(const input of args.p_stays){const s=stays.find(s=>s.id===input.id);if(!s)return reject('missing stay');Object.assign(s,structuredClone(input));}
+        if(args.p_expected!==ride.workbench_revision)return {data:null,error:{message:'Выезд изменён. Обновите поездку.'}};
+        for(const input of args.p_stays){const s=stays.find(s=>s.id===input.id);if(!s)return reject('missing stay');Object.assign(s,structuredClone(input),{crew_source:'manager',mgr_by:session.user.id,mgr_at:new Date().toISOString(),note:args.p_reason});if(input.task_allocations){tables.trip_stay_task_allocations=tables.trip_stay_task_allocations.filter(a=>a.stay_id!==s.id).concat(input.task_allocations.map(a=>({stay_id:s.id,service_order_id:a.order_id,share:a.share})));}}
         ride.workbench_revision++;audit.recoveryWrites.push({name,args:structuredClone(args)});return {data:ride.workbench_revision,error:null};
       }
       // This read RPC is supported even by the default read-only fixture.

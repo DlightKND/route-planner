@@ -2,7 +2,7 @@ import {presenceBounds,acceptedPresenceIntervals} from './trip-presence-recovery
 // Presence is elapsed time per person, not billable norm hours.
 // Unknown crew and unreviewed stops must never silently become zero fact.
 export function presenceSummary(stays = []) {
-  let proposed = 0, approved = 0, pending = 0, unknownCrew = 0;
+  let proposed = 0, approved = 0, pending = 0, unknownCrew = 0, approvedCount = 0, invalidApproved = 0;
   const byEngineer = {}, byJob = {};
   for (const stay of stays) {
     if (stay.status === 'rejected') continue;
@@ -10,6 +10,10 @@ export function presenceSummary(stays = []) {
     const minutes = stay.status === 'approved' ? stay.minutes_mgr : stay.minutes_raw;
     const valid = minutes != null && Number.isFinite(+minutes) && +minutes >= 0;
     const knownCrew=['snapshot','manager'].includes(stay.crew_source);
+    if(stay.status==='approved'){
+      if(!stay.job_id||!valid||!crew.length||!knownCrew)invalidApproved++;
+      else approvedCount++;
+    }
     if (!crew.length || !knownCrew) unknownCrew++;
     if (!stay.job_id || !valid || !crew.length || stay.status !== 'approved' || !knownCrew) pending++;
     if (!stay.job_id || !valid || !crew.length) continue;
@@ -20,7 +24,7 @@ export function presenceSummary(stays = []) {
     byJob[stay.job_id] = (byJob[stay.job_id] || 0) + hours * crew.length;
     crew.forEach(id => { byEngineer[id] = (byEngineer[id] || 0) + hours; });
   }
-  return { proposed, approved, pending, unknownCrew, complete: pending === 0, byEngineer, byJob };
+  return { proposed, approved, pending, unknownCrew, complete: pending === 0, confirmedKnown: approvedCount > 0 && invalidApproved === 0, byEngineer, byJob };
 }
 
 export function validatePresence(stays) {

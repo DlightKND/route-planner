@@ -189,3 +189,7 @@
  .journal-trip-head{gap:8px;padding:8px 16px}.journal-trip-head h2{font-size:20px}.journal-trip-head p{font-size:11px}
  .journal-trip-tabs>button{min-height:40px!important}.journal-trip-head>.gps-back{min-height:40px;padding:4px 0}
 }
+.view .presence-review-workspace .presence-kind:not([hidden]){display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;clear:both}
+.view .presence-review-workspace .presence-kind>button{flex:1;min-width:130px;min-height:44px;padding:10px 16px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2);color:var(--ink);font:500 14px/1.4 var(--sans);text-transform:none;letter-spacing:normal;box-shadow:none;cursor:pointer}
+.view .presence-review-workspace .presence-kind>button.on{border-color:var(--accent);background:var(--accent);color:#17170f;box-shadow:none}
+.view .presence-review-workspace .presence-kind>button:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
