@@ -107,7 +107,7 @@ test('design state: schedule ellipsis leaves room for the stop action',async({pa
 test('design state: presence evidence and decision stay separate',async({page},info)=>{
  const errors=await start(page,info,'trip/'+fixtureIDs.trip);await page.locator('#tpReviewPresence').click();
  const workspace=page.locator('.presence-review-workspace');await expect(workspace).toBeVisible();
- await expect(workspace.locator('.presence-review-sidebar')).toBeVisible();if(page.viewportSize().width<=1100){await expect(workspace.locator('.presence-review-detail')).toBeHidden();await capture(page,info,'presence-list',errors);await workspace.locator('[data-review-stop]').first().click();}await expect(workspace.locator('.presence-review-detail')).toBeVisible();
+ await expect(workspace.locator('.presence-review-sidebar')).toBeVisible();await expect(workspace.locator('.presence-review-detail')).toBeHidden();await capture(page,info,'presence-list',errors);await workspace.locator('[data-review-stop]').first().click();await expect(workspace.locator('.presence-review-detail')).toBeVisible();
  await capture(page,info,'presence-review',errors);
 });
 test('design state: GPS resolution separates the operation, parameters and saved facts',async({page},info)=>{
