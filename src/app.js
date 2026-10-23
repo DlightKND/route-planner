@@ -6770,6 +6770,8 @@ async function settleFactKm(tid){
     busy('Записываю пробег…',1);
     const note='по одометру '+od.a+' → '+od.b+'; '+why;
     if(m?.measure)await writeFactTrack(tid,m.measure,{km:od.km,source:'odometer',note});else await writeFactKm(tid,od.km,'odometer',note);
+    const t=m?.measure?.rebuildContext?.trip||trips.find(x=>x.id==tid)||tripCache[tid];
+    if(t?.status==='done')try{await loadFactHours(tid);if(!await refreshTripEcon(tid))notify('Пробег сохранён; экономику нужно пересчитать.','warn');}catch(e){notify('Пробег сохранён; обновить сводку не удалось: '+e.message,'warn');}
   }
   catch(e){ notify('Одометр не записался: '+(e.message||e),'err'); return false; }
   finally{ busyDone(); }
@@ -7084,7 +7086,7 @@ function mapPanelRows(){
   }
   const d=factLast;
   if(d){
-    if(d.trackKm) R.push({key:'track',style:'border-top:4px dotted '+TRACK_C,name:'Фактический трек',km:d.trackKm,sub:'Измерено GPS'});
+    if(d.trackKm) R.push({key:'track',style:'border-top:4px solid '+TRACK_C,name:'Фактический трек',km:d.trackKm,sub:'Измерено GPS'});
     if(d.roadKm)  R.push({key:'road',style:'border-top:4px dashed '+ROAD_C,name:'Достроено по дорогам',km:d.roadKm,sub:'Восстановленные участки'});
     if(d.lineKm)  R.push({key:'line',style:'border-top:4px dashed '+GAP_C,name:'Неизвестные участки',km:d.lineKm,sub:'Без привязки к дорогам'});
     if(factLiveTail(d)) R.push({key:'live',style:'border-top:3px dashed '+LIVE_C,name:'Текущая позиция',sub:'Ожидает сохранения в истории'});

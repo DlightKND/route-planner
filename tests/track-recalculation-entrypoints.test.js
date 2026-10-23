@@ -27,3 +27,10 @@ it('shares the orange and gray dashed line styles while preserving the green spe
  expect(trackLineStyle('road')).toMatchObject({color:'#d87619',dashArray:'7 6',weight:4});expect(trackLineStyle('line')).toMatchObject({color:'#8b8e96',dashArray:'7 6'});
  expect(trackLineStyle('track',{speed:0}).color).toBe(SPEED_RAMP[0]);expect(trackLineStyle('track',{speed:110}).color).toBe(SPEED_RAMP.at(-1));expect(speedColor(20)).not.toBe(speedColor(90));expect(trackLineStyle('track').dashArray).toBeNull();
 });
+
+it('refreshes completed-trip economics when unreliable GPS requires an explicit odometer reading',async()=>{
+ const source=app.slice(app.indexOf('async function settleFactKm('),app.indexOf('async function tripAction('));
+ const writeFactKm=vi.fn(),loadFactHours=vi.fn(),refreshTripEcon=vi.fn(async()=>true);
+ const settle=create(source,{recalculateFactTrack:async()=>({ok:false,why:'Нет трека'}),busy:()=>{},busyDone:()=>{},confirmDialog:async()=>true,askOdometer:async()=>({km:50,a:100,b:150}),writeFactKm,writeFactTrack:vi.fn(),trips:[{id:'t',status:'done'}],tripCache:{},loadFactHours,refreshTripEcon,notify:vi.fn(),showToast:vi.fn()});
+ expect(await settle('t')).toBe(true);expect(writeFactKm).toHaveBeenCalledWith('t',50,'odometer',expect.any(String));expect(loadFactHours).toHaveBeenCalledWith('t');expect(refreshTripEcon).toHaveBeenCalledWith('t');
+});
