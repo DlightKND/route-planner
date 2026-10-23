@@ -82,15 +82,9 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
 
 export function historyHTML(data, profiles = []) {
   const baseline = data.trip.plan_baseline;
-  const grouped=new Map();
-  for(const h of data.history){
-    const key=JSON.stringify([h.recorded_at,h.actor_id,h.reason]);
-    const previous=grouped.get(key);
-    if(!previous)grouped.set(key,{...h});
-    else {previous.revision=Math.min(previous.revision,h.revision);if(h.snapshot.stays||!previous.snapshot.stays)previous.snapshot=h.snapshot;}
-  }
+  const entries=data.history||[];
   return `<h3>История выезда</h3><p class="hint">${baseline ? (baseline.source==='legacy_at_first_edit'?'Для старого выезда сохранён план на момент первого изменения. Первоначальный план неизвестен.':'Сохранена исходная версия плана.') : 'Исходная версия будет сохранена при первом изменении.'}</p>`+
-    (grouped.size?[...grouped.values()].map(h=>`<details class="wb-history"><summary>${time(h.recorded_at)} · ${esc(h.reason)} <span class="hint">${esc(h.actor_id?(profiles.find(p=>p.id===h.actor_id)?.full_name||'Менеджер'):'Автоматически')} · версия ${h.revision}</span></summary>
+    (entries.length?entries.map(h=>`<details class="wb-history"><summary><strong>${esc(h.reason||'Изменение данных выезда')}</strong><span class="hint">${time(h.recorded_at)} · ${esc(h.actor_id?(profiles.find(p=>p.id===h.actor_id)?.full_name||'Менеджер'):'Автоматически')}</span></summary><p class="hint">Версия до изменения: ${h.revision}</p>
       ${h.snapshot.stays?`<p>Сохранено предыдущее состояние ${h.snapshot.stays.length} стоянок.</p>`:`<p>План: ${n(h.snapshot.econ_snapshot?.km)} км · ${(h.snapshot.job_ids||[]).length} заявок · ${esc(h.snapshot.date_from||'дата не задана')}</p><p>${esc((h.snapshot.route_stops||[]).map(s=>s.name).filter(Boolean).join(' → '))}</p>`}</details>`).join(''):'<p class="hint">Изменений пока нет.</p>');
 }
 
