@@ -11,13 +11,33 @@ export function validatedTrackFact(m) {
   return {km:Math.round(m.km*10)/10,source:'track',note:note.join('; ')};
 }
 
+export function normalizedTrack(row) {
+ const data=row?.data||row;
+ return data?{points:[],dropped:[],segments:[],...data,at:data.at||row.updated_at,stored:true}:null;
+}
+
 // A retained, reviewed track must remain readable after raw GPS retention expires.
-export async function resolveFactTrack({trip, cached, readStored, readPositions, measure}) {
-  if (trip?.status !== 'in_progress') {
-    const stored = cached || await readStored();
-    if (stored && (stored.segments?.length || stored.points?.length)) return {measure:stored, raw:[]};
+export async function resolveFactTrack({trip, cached, readStored, readPositions, measure, measureTail=measure}) {
+  const stored=cached||await readStored();
+  const retained=stored&&(stored.segments?.length||stored.points?.length);
+  if(trip?.status!=='in_progress'&&retained)return {measure:stored,raw:[]};
+  const raw=(await readPositions()).filter(p=>p.lat!=null&&p.lng!=null);
+  if(!raw.length)return retained?{measure:stored,raw:[]}:null;
+  if(retained&&trip?.status==='in_progress'){
+    const cutoff=Date.parse(stored.presence?.source_to||stored.segments?.at(-1)?.toTs);
+    if(Number.isFinite(cutoff)){
+      const tail=raw.filter(p=>Date.parse(p.ts)>cutoff);
+      if(!tail.length)return {measure:stored,raw};
+      // The snapshot keeps every reviewed road. Only new telemetry is measured
+      // without planned start/finish anchors or a second routing request.
+      const anchor=raw.filter(p=>Date.parse(p.ts)<=cutoff).at(-1);
+      const extra=await measureTail(anchor?[anchor,...tail]:tail);
+      const joined={...stored,segments:[...(stored.segments||[]),...(extra.segments||[])],
+        points:[...(stored.points||[]),...(extra.points||[])],
+        dropped:[...(stored.dropped||[]),...(extra.dropped||[])],preview:true};
+      for(const key of ['km','trackKm','roadKm','lineKm','jitterKm'])joined[key]=(Number(stored[key])||0)+(Number(extra[key])||0);
+      return {measure:joined,raw};
+    }
   }
-  const raw = (await readPositions()).filter(p=>p.lat!=null&&p.lng!=null);
-  if (!raw.length) return null;
-  return {measure:await measure(raw), raw};
+  return {measure:{...await measure(raw),preview:true},raw};
 }

@@ -10,7 +10,8 @@ import { createUnassignedTracks } from './unassigned-tracks.js';
 import './unassigned-tracks.css';
 import { installModalShell, protectNativeForm } from './modal-shell.js';
 import { openAccountProfile, roleName, initials } from './account-profile.js';
-import { resolveFactTrack, validatedTrackFact } from './core/fact-track.js';
+import {TRACK_STYLE,SPEED_MAX,SPEED_RAMP,speedColor,trackLineStyle} from './core/track-style.js';
+import { resolveFactTrack, validatedTrackFact, normalizedTrack } from './core/fact-track.js';
 import {rebuildTripTrack,presenceBounds} from './core/trip-presence-recovery.js';
 // Приложение DLIGHT. Пока это цельный перенос боевого index.html в сборку:
 // код тот же, но теперь это модуль: ядро подключается импортом.
@@ -63,7 +64,8 @@ const notifications=createNotifications({loadDecisions:uid=>loadNotificationDeci
 const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,period:()=>dashRanges.journal,vehicles:()=>vehicles,people:()=>profilesList,
  confirm:confirmDialog,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,onNavigate:state=>routeSet('journal/trip/'+state.tripId+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),
  jobs:async ids=>{if(!ids.length)return [];const {data,error}=await sb.from('jobs').select('id,clients(name),equipment(model)').in('id',ids);if(error)throw error;return data||[];},renderAllocations:renderTaskAllocationControls,
- rebuild:async id=>{const measured=await measureTripKm(id);try{if(!measured.ok)throw Error(measured.why||'Нет достоверного GPS');await writeFactTrack(id,measured.measure);await loadFactHours();if(measured.measure.rebuildContext.trip.status==='done')await refreshTripEcon(id);}finally{busyDone();}},
+ readTrack:async(trip,stored)=>(await loadFactTrack(trip.id,trip,stored))?.measure||null,
+ rebuild:async id=>{try{const measured=await recalculateFactTrack(id);if(!measured.ok)throw Error(measured.why||'Нет достоверного GPS');}finally{busyDone();}},
  save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {data:revision,error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:decisionReason(stay,note)});if(error)throw error;let nextRevision=revision;try{await loadFactHours(trip.id);if(trip.status==='done'){const updated=await refreshTripEcon(trip.id,revision);if(Number.isInteger(updated))nextRevision=updated;else notify('Решение сохранено; экономику нужно пересчитать.','warn');}}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}return nextRevision;}
 });
 const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
@@ -6735,7 +6737,6 @@ async function remeasureTrip(tid){
   // засчитался. Поэтому обновление тоже под индикатором.
   try{
     busy('Обновляю карточку…',1);
-    if(wasDone) await refreshTripEcon(tid);
     await loadAll();
     if(plannerCur==='mine') renderMine(); else renderTripsView();
     renderTrips();
@@ -6749,17 +6750,11 @@ async function remeasureTrip(tid){
 // станем — лучше выезд повисит на проверке, чем в отчёт уедет выдумка.
 async function settleFactKm(tid){
   let m;
-  try{ busy('Читаю трек…'); m=await measureTripKm(tid); }
-  catch(e){ notify('Пробег посчитать не вышло: '+(e.message||e),'err'); m=null; }
+  try{ busy('Читаю трек…'); m=await recalculateFactTrack(tid,{replaceOdometer:true}); }
+  catch(e){ notify('Пересчёт не завершён; прежний трек сохранён: '+(e.message||e),'err'); return false; }
   finally{ busyDone(); }
 
   if(m&&m.ok){
-    try{
-      busy('Записываю пробег…',1);
-      await writeFactTrack(tid,m.measure,{km:m.km,source:'track',note:m.note});
-    }
-    catch(e){ notify('Пробег посчитан, но не записался: '+(e.message||e),'err'); return false; }
-    finally{ busyDone(); }
     showToast('Факт: '+m.km+' км по треку'+(m.note?(' · '+m.note):''));
     return true;
   }
@@ -6963,9 +6958,9 @@ function factApplyVis(){
 // нарисовать «здесь мы не знаем», чем провести прямую и промолчать.
 // Цвета факт-трека. Три разных утверждения о выезде — три разных вида:
 // что мы видели, что достроили по дорогам и чего не знаем вовсе.
-const TRACK_C='#22c55e';   // измерено приёмником
-const ROAD_C ='#7c3aed';   // достроено маршрутом по дорогам
-const GAP_C  ='#9aa1ad';   // прямая через дыру: где ехали — неизвестно
+const TRACK_C=TRACK_STYLE.measured;   // измерено приёмником
+const ROAD_C =TRACK_STYLE.road;   // достроено маршрутом по дорогам
+const GAP_C  =TRACK_STYLE.gap;   // прямая через дыру: где ехали — неизвестно
 const LIVE_C ='#38bdf8';   // последняя телеметрия, ещё не попавшая в историю
 const DROP_C ='#dc2626';   // выброшено как ошибка приёмника
 const STAY_C ='#dc2626';   // стоянка — знак «стоп», он красный
@@ -6974,18 +6969,11 @@ const STAY_C ='#dc2626';   // стоянка — знак «стоп», он к�
 // «зелёным слоем», а внутри него видно, где машина ползла, а где летела.
 // Разные тона тут были бы вторым языком поверх первого — цвет уже занят
 // под вид отрезка (видели / достроили / не знаем).
-const SPEED_MAX=110;                       // выше — цвет уже не меняется
-const SPEED_RAMP=['#a7f3d0','#4ade80','#16a34a','#15803d','#064e3b'];
 function segKmh(g){
   if(!g||!g.km) return 0;
   const ms=(g.ms!=null)?g.ms:((g.minutes||0)*60000);
   if(!ms) return 0;
   return g.km/(ms/3600000);
-}
-function speedColor(kmh){
-  const t=Math.max(0,Math.min(1,(kmh||0)/SPEED_MAX));
-  const i=Math.min(SPEED_RAMP.length-1,Math.floor(t*(SPEED_RAMP.length-1)+0.5));
-  return SPEED_RAMP[i];
 }
 function atTime(ts){ try{ return new Date(ts).toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return '—'; } }
 function dhm(ms){
@@ -7097,8 +7085,8 @@ function mapPanelRows(){
   const d=factLast;
   if(d){
     if(d.trackKm) R.push({key:'track',style:'border-top:4px dotted '+TRACK_C,name:'Фактический трек',km:d.trackKm,sub:'Измерено GPS'});
-    if(d.roadKm)  R.push({key:'road',style:'border-top:5px solid '+ROAD_C,name:'Достроено по дорогам',km:d.roadKm,sub:'Восстановленные участки'});
-    if(d.lineKm)  R.push({key:'line',style:'border-top:3px dotted '+GAP_C,name:'Прямые линии',km:d.lineKm,sub:'Без привязки к дорогам'});
+    if(d.roadKm)  R.push({key:'road',style:'border-top:4px dashed '+ROAD_C,name:'Достроено по дорогам',km:d.roadKm,sub:'Восстановленные участки'});
+    if(d.lineKm)  R.push({key:'line',style:'border-top:4px dashed '+GAP_C,name:'Неизвестные участки',km:d.lineKm,sub:'Без привязки к дорогам'});
     if(factLiveTail(d)) R.push({key:'live',style:'border-top:3px dashed '+LIVE_C,name:'Текущая позиция',sub:'Ожидает сохранения в истории'});
     if(d.dropped.length) R.push({key:'drop',icon:dropSvg(13),name:'Отброшенные точки',val:d.droppedTotal||d.dropped.length,sub:'Ошибки приёмника'});
     if(!stayBindMap) R.push({key:'stay',icon:stopSvg(13),name:'Стоянки и остановки'});
@@ -7394,13 +7382,13 @@ function drawFact(m){
     if(g.kind==='road'){
       flushRun();
       const line=(g.line&&g.line.length>1)?g.line.map(p=>[p[1],p[0]]):ab;
-      factG.road.addLayer(L.polyline(line,{color:ROAD_C,weight:5,opacity:.9})
+      factG.road.addLayer(L.polyline(line,trackLineStyle('road'))
         .bindPopup(segPopup(g,'достроено по дорогам'+(g.why?(' · '+esc(g.why)):''))));
       return;
     }
     if(g.kind==='line'){
       flushRun();
-      factG.line.addLayer(L.polyline(ab,{color:GAP_C,weight:3,opacity:.85,dashArray:'2 9'})
+      factG.line.addLayer(L.polyline(ab,trackLineStyle('line'))
         .bindPopup(segPopup(g,esc(g.why||'маршрут не строился')+' — цифра занижена')));
       return;
     }
@@ -7413,7 +7401,7 @@ function drawFact(m){
     }
   });
   flushRun();
-  runs.forEach(g=>factG.track.addLayer(L.polyline(g.points,{color:g.color,weight:5,opacity:.95,lineCap:'round'})
+  runs.forEach(g=>factG.track.addLayer(L.polyline(g.points,{...trackLineStyle('track'),color:g.color})
     .bindPopup(segPopup(g))));
   // Выброшенное показываем, а не прячем: если приёмник врёт постоянно,
   // это видно на карте, и разговор с поставщиком трекера предметный.
@@ -7488,19 +7476,26 @@ async function refreshFactLive(){
     const fresh=await loadTripPositions(factTripId,last);
     if(fresh.length){
       factRaw.push(...fresh);
-      const m=await measureTrip(factRaw,trackOpts(),tripEnds(factTrip),null);
+      const {measure:m}=await loadFactTrack(factTripId,factTrip,undefined,factRaw);
       factLast=m; drawFact(m); showFactLegend(m);
     }else if(factLast) drawFact(factLast); // обновить короткий live-хвост
   }catch(e){ console.warn('Не удалось догрузить факт-трек:',e); }
   finally{ factLiveBusy=false; }
+}
+// Both maps read the same persisted review; absent reviews use a read-only GPS
+// preview. Opening a map never writes mileage, attendance or ORS requests.
+function loadFactTrack(tid,trip,stored=undefined,raw=undefined){
+ return resolveFactTrack({trip,cached:stored===undefined?lastMeasure[tid]:normalizedTrack(stored),
+  readStored:()=>stored===undefined?readFactTrack(tid):null,
+  readPositions:()=>raw??loadTripPositions(tid),measure:raw=>measureTrip(raw,trackOpts(),tripEnds(trip),null),
+  measureTail:raw=>measureTrip(raw,trackOpts(),{},null)});
 }
 async function showTripFact(tid,opt){
   const quiet=!!(opt&&opt.quiet);
   factClear();
   try{
     const t=(opt&&opt.trip)||trips.find(x=>x.id==tid)||tripCache[tid]||null;
-    const resolved=await resolveFactTrack({trip:t,cached:lastMeasure[tid],readStored:()=>readFactTrack(tid),
-      readPositions:()=>loadTripPositions(tid),measure:raw=>measureTrip(raw,trackOpts(),tripEnds(t),null)});
+    const resolved=await loadFactTrack(tid,t);
     if(!resolved){setTimeout(()=>map.invalidateSize(),60);if(!quiet)showToast('Фактического трека нет');return false;}
     const {measure:m,raw}=resolved;
     if(!m.segments.length&&!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
@@ -7545,7 +7540,7 @@ let lastMeasure={};
 // граница), и вместе с ним приходит расстояние по дорогам — ровно то,
 // которое идёт в пробег вместо хорды.
 function makeReach(){
-  if(orsKeyMissing()) return null;
+  if(orsKeyMissing()) throw new Error('Маршрутизация не настроена. Прежний разбор трека сохранён.');
   const slack=+appSettings.track_slack>0?+appSettings.track_slack:1.5;
   return async function(a,b,ms){
     try{
@@ -7553,7 +7548,7 @@ function makeReach(){
       const f=(gj.features||[])[0];
       const sm=(f&&f.properties&&f.properties.summary)||{};
       const sec=+sm.duration, km=(+sm.distance||0)/1000;
-      if(!km) return null;
+      if(!(km>0)||!Number.isFinite(sec)||!Array.isArray(f?.geometry?.coordinates)||f.geometry.coordinates.length<2)throw new Error('Маршрутизатор вернул неполный ответ. Повторите проверку позже.');
       // ms не задан — это достройка до финиша: там проверять нечего,
       // выезд закончился там, где закончился. Отдаём одно расстояние.
       const ok=(ms==null)||!isFinite(sec)||sec<=(ms/1000)*slack;
@@ -7562,8 +7557,10 @@ function makeReach(){
       // ОТКАЗ МАРШРУТИЗАЦИИ — ДОВОД ПРОТИВ ТОЧКИ, но только если отказал
       // маршрут, а не связь. Кончилась квота, упала сеть, прокси вернул
       // 500 — это ничего не говорит о точке, и на исчерпанной квоте мы бы
-      // вырезали весь трек. Такое — «не знаю», решает первый гейт.
-      return orsSaysNoRoute(e)?{ok:false,km:0}:null;
+      // вырезали весь трек. Прерываем явный пересчёт: прежний сохранённый
+      // разбор нельзя подменять частичным результатом без достроек.
+      if(orsSaysNoRoute(e))return {ok:false,km:0};
+      throw e;
     }
   };
 }
@@ -7606,6 +7603,16 @@ function trackOpts(){
 // Прошлая версия делала это двумя разными механизмами — проверкой и
 // «достройкой разрывов», — и они расходились: карта показывала одно, а
 // в деньги уходило другое. Теперь источник один.
+async function recalculateFactTrack(tid,{replaceOdometer=false}={}){
+ const measured=await measureTripKm(tid);
+ if(!measured.ok)return measured;
+ busy('Записываю проверенный трек…',1);
+ await writeFactTrack(tid,measured.measure,replaceOdometer?{km:measured.km,source:'track',note:measured.note}:null);
+ try{await loadFactHours(tid);
+  if(measured.measure.rebuildContext.trip.status==='done'&&!await refreshTripEcon(tid))notify('Трек сохранён; экономику нужно пересчитать.','warn');
+ }catch(e){notify('Трек сохранён; обновить сводку не удалось: '+e.message,'warn');}
+ return measured;
+}
 async function measureTripKm(tid){
   const requestedUser=session?.user?.id;
   const {data:context,error:contextError}=await sb.rpc('trip_track_rebuild_context',{p_trip:tid});if(contextError)throw contextError;
@@ -7713,7 +7720,7 @@ async function readFactTrack(tid){
     const {data,error}=await sb.from('trip_tracks').select('data').eq('trip_id',tid).maybeSingle();
     if(error)throw error;if(!data||!data.data)return null;
     const d=data.data;
-    return Object.assign({points:[],dropped:[],segments:[]},d,{stored:true});
+    return normalizedTrack(d);
   }catch(e){ throw e; }
 }
 
@@ -8734,14 +8741,11 @@ async function drawTripMap(t){
   // которой всё и затевалось: на большой карте аномалии вырезаны, а в
   // карточке выезда они по-прежнему торчали.
   //
-  // Считаем тем же проходом и без маршрутизатора: врезка рисуется при
-  // каждом открытии выезда, и платить за неё запросами нельзя. Если выезд
-  // только что сводили, берём готовый результат.
+  // Read the same review as the full maps, including after raw GPS expires.
   try{
-    const raw=(await loadTripPositions(t.id)).filter(r=>r.lat!=null&&r.lng!=null);
-    if(raw.length>1){
-      const m=lastMeasure[t.id]||await readFactTrack(t.id)
-        ||await measureTrip(raw,trackOpts(),tripEnds(t),null);
+    const resolved=await loadFactTrack(t.id,t);
+    if(resolved){
+      const m=resolved.measure;
       // Отрезками, а не одной ломаной: достроенный по дорогам кусок имеет
       // свою геометрию, и прямая через него соврала бы.
       d.factSegs=m.segments.map(g=>(g.kind==='road'&&g.line&&g.line.length>1)
