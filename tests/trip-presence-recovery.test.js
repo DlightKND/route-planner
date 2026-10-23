@@ -1,7 +1,7 @@
 import {it,expect,vi} from 'vitest';
 import {rebuildTripTrack,presenceBounds,acceptedPresenceIntervals,intervalMinutes} from '../src/core/trip-presence-recovery.js';
 const base={lat:49.07,lng:33.42};
-const p=(km,min)=>({...base,lng:base.lng+km/(111.32*Math.cos(base.lat*Math.PI/180)),ts:new Date(Date.UTC(2026,9,12,6,min)).toISOString()});
+const p=(km,min)=>({...base,lng:base.lng+km/(111.32*Math.cos(base.lat*Math.PI/180)),ts:new Date(Date.UTC(2026,9,12,6)+min*60000).toISOString()});
 const run=(km,from,to)=>Array.from({length:to-from+1},(_,i)=>p(km,from+i));
 const stop=km=>({...p(km,0),job_id:'job-'+km,name:'Объект '+km});
 const reach=sec=>vi.fn(async(a,b,dt)=>({sec:typeof sec==='function'?sec(a,b):sec,ok:true,km:Math.abs((a.lng-b.lng))*111,line:[[a.lng,a.lat],[b.lng,b.lat]]}));
@@ -60,4 +60,22 @@ it('uses the shared road gate after a long hole so unreachable samples cannot cr
  const m=await rebuildTripTrack(points,{},context([stop(100)],points),road);
  expect(m.dropped.some(x=>x.why==='по дорогам не доехал бы')).toBe(true);
  expect(m.presence.stays).toEqual([]);
+});
+
+it.each([{gap:137.433,sec:1787.2},{gap:151.133,sec:1494.3}])('proposes an observed unbound idle stop from the gap minus road time: %j',async({gap,sec})=>{
+ const a={...p(0,0),status:'idle'},b={...p(25,gap),status:'moving'},points=[p(-1,-1),a,b,p(26,gap+1)],road=reach(sec);
+ const m=await rebuildTripTrack(points,{},context([stop(100)],points),road);
+ expect(road).toHaveBeenCalledTimes(1);expect(m.presence.stays).toHaveLength(1);
+ const s=m.presence.stays[0];expect(s.job_id).toBeNull();expect(s.gps_minutes).toBe(0);expect(s.recovered_minutes).toBeCloseTo(gap-sec/60,2);expect(s.presence_evidence.origin).toMatchObject({kind:'gps_idle',ts:a.ts,road_seconds:sec});
+ const part=s.presence_evidence.recovery_parts[0],leg=m.segments.find(g=>g.kind==='road');expect(part.from).toBe(a.ts);expect(part.to).toBe(leg.fromTs);expect(leg.toTs).toBe(b.ts);expect(leg.driveSeconds).toBeCloseTo(sec,3);
+ expect(m.presence.motion_intervals.filter(x=>x.source==='ors')[0].from).toBe(part.to);expect(m.presence.skipped).toEqual([]);expect(acceptedPresenceIntervals(s,{})).toEqual([]);expect(intervalMinutes(acceptedPresenceIntervals(s,{[part.key]:30}))).toBe(30);
+});
+it('does not create an unbound stop from a moving fix, an impossible ETA, missing routing or a short remainder',async()=>{
+ const a=p(0,0),b=p(25,137),points=[p(-1,-1),a,b,p(26,138)];
+ expect((await rebuildTripTrack(points,{},context([],points),reach(1800))).presence.stays).toEqual([]);
+ a.status='idle';for(const road of [null,reach(137*60),reach(130*60)])expect((await rebuildTripTrack(points,{},context([],points),road)).presence.stays).toEqual([]);
+});
+it('reuses the mileage route at the call limit instead of spending calls on unrelated objects',async()=>{
+ const points=[p(-1,-1),{...p(0,0),status:'idle'},p(25,137),p(26,138)],road=reach(1800);
+ const m=await rebuildTripTrack(points,{maxOrsCalls:1},context([stop(100),stop(200)],points),road);expect(road).toHaveBeenCalledTimes(1);expect(m.presence.stays[0].job_id).toBeNull();expect(m.presence.stays[0].recovered_minutes).toBe(107);
 });

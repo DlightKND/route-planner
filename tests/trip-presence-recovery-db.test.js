@@ -27,6 +27,8 @@ beforeAll(async()=>{
  await db.exec("create function public.is_owner_or_mgr(uuid) returns boolean language sql stable as $$select public.user_role() in ('admin','logist') or auth.uid()=$1$$;create table trip_tracking_sessions(trip_id uuid,state text,finish_candidate_at timestamptz);");
  await db.exec(file('../supabase/migrations/20261017094833_validated_trip_mileage.sql'));
  await db.exec(file('../supabase/migrations/20261017104054_gps_anchor_serialization.sql'));
+ await db.exec('alter table vehicle_positions add column status text');
+ await db.exec(file('../supabase/migrations/20261023134505_recover_unbound_idle_stops.sql'));
 },30000);
 afterAll(async()=>await db?.close());
 beforeEach(async()=>{
@@ -34,7 +36,7 @@ beforeEach(async()=>{
  await q('select set_config(\'test.uid\',$1,true)',[id(1)]);
  const c=point(100,0);await q("insert into clients values($1,'Объект',$2,$3)",[id(30),c.lat,c.lng]);await q('insert into jobs(id,client_id) values($1,$2)',[id(20),id(30)]);
  await q("insert into trips(id,status,lead_engineer,engineer_ids,started_at,finished_at,owner_id,curator_id) values($1,'finished',$2,array[$2]::uuid[],$3,$4,$5,$5)",[id(10),id(3),raw()[0].ts,raw().at(-1).ts,id(5)]);await q('insert into trip_jobs values($1,$2,0)',[id(10),id(20)]);
- for(const [i,p]of raw().entries())await q('insert into vehicle_positions values($1,$2,$3,$4,$5)',[i+1,id(10),p.ts,p.lat,p.lng]);
+ for(const [i,p]of raw().entries())await q('insert into vehicle_positions(id,trip_id,ts,lat,lng) values($1,$2,$3,$4,$5)',[i+1,id(10),p.ts,p.lat,p.lng]);
 });
 afterEach(async()=>await db.exec('rollback'));
 it('stores observed GPS and proposed time atomically, before confirmation',async()=>{
@@ -87,7 +89,7 @@ it('rejects removing still-observed GPS time in a later reconstruction and rolls
 });
 it('uses the captured GPS cutoff while new later messages arrive',async()=>{
  await as(1);const {c,m}=await calculate();await db.exec('reset role');const p=point(100,541);
- await q('insert into vehicle_positions values($1,$2,$3,$4,$5)',[999,id(10),p.ts,p.lat,p.lng]);await as(1);
+ await q('insert into vehicle_positions(id,trip_id,ts,lat,lng) values($1,$2,$3,$4,$5)',[999,id(10),p.ts,p.lat,p.lng]);await as(1);
  await save(c,m);expect((await stay()).minutes_raw).toBe(180);
 });
 
@@ -158,4 +160,34 @@ it.each(['anchor_from','anchor_to'])('still rejects a changed %s coordinate and 
  await deny(()=>save(c,m),/Опоры достройки/);
  expect(await q('select * from trip_tracks')).toHaveLength(0);
  expect((await q('select fact_km from trips where id=$1',[id(10)]))[0].fact_km).toBeNull();
+});
+
+async function unbound(){
+ await db.exec('reset role');await q('delete from vehicle_positions where trip_id=$1',[id(10)]);
+ const pts=[point(0,-1),{...point(1,0),status:'idle'},{...point(26,137),status:'moving'},point(27,138)];
+ await q('update trips set started_at=$2,finished_at=$3 where id=$1',[id(10),pts[0].ts,pts.at(-1).ts]);
+ for(const [i,p] of pts.entries())await q('insert into vehicle_positions(id,trip_id,ts,lat,lng,status) values($1,$2,$3,$4,$5,$6)',[i+1,id(10),p.ts,p.lat,p.lng,p.status||'moving']);
+ await as(1);const c=await context(),m=await rebuildTripTrack(pts,{maxOrsCalls:1},{...c.trip,stops:c.stops},async(a,b)=>({ok:true,sec:1800,km:28,line:[[a.lng,a.lat],[b.lng,b.lat]]}));
+ Object.assign(m.presence,{source_digest:c.source_digest,source_to:c.source_to,source_from:c.source_from});delete m.presence.input_points;return {c,m};
+}
+it('persists an unassigned idle-stop proposal with zero locked GPS time and separate road time',async()=>{
+ const {c,m}=await unbound();await save(c,m);const s=await stay();expect(s.job_id).toBeNull();expect(s.minutes_raw).toBe(0);expect(s.minutes_mgr).toBeNull();expect(s.status).toBe('detected');expect(s.presence_evidence.recovery_parts[0].minutes).toBe(107);
+ await deny(()=>approve(30,30,{job_id:null}),/Заявка/);await approve(30,30);expect((await stay()).minutes_mgr).toBe('30');const revision=await rev();expect((await save(c,m,revision)).repeated).toBe(true);expect((await stay()).status).toBe('approved');
+});
+it.each(['moving_origin','wrong_location','locked_gps','missing_road','expanded_time'])('rejects an unassigned stop with forged evidence: %s',async kind=>{
+ const {c,m}=await unbound();
+ if(kind==='moving_origin'){await db.exec('reset role');await q("update vehicle_positions set status='moving' where id=2");await as(1);const fresh=await context();c.source_digest=fresh.source_digest;m.presence.source_digest=fresh.source_digest;}
+ const s=m.presence.stays[0],e=s.presence_evidence;
+ if(kind==='wrong_location')s.lng+=.01;
+ if(kind==='locked_gps')e.gps_intervals=[{from:point(1,0).ts,to:point(1,5).ts}];
+ if(kind==='missing_road')m.segments.find(x=>x.kind==='road').gapFromTs=point(1,1).ts;
+ if(kind==='expanded_time')e.recovery_parts[0].to=point(1,137).ts;
+ await deny(()=>save(c,m),/Координаты остановки|GPS/);expect(await q('select * from trip_tracks')).toHaveLength(0);expect(await q('select * from trip_stays')).toHaveLength(0);
+});
+
+it('invalidates a captured source when its idle status changes before reconstruction is saved',async()=>{
+ const {c,m}=await unbound();await db.exec('reset role');await q("update vehicle_positions set status='moving' where id=2");await as(1);await deny(()=>save(c,m),/GPS-данные обновились/);expect(await q('select * from trip_tracks')).toHaveLength(0);
+});
+it('keeps the unbound-origin validator private to the existing guarded rebuild operation',async()=>{
+ expect((await q("select has_function_privilege('authenticated','dlight_private.idle_stop_origin(uuid,timestamptz,float8,float8,jsonb,jsonb)','execute') allowed"))[0].allowed).toBe(false);
 });
