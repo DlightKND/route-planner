@@ -31,6 +31,8 @@ export function mountJournalRoute(root,{trip,track,stays,leaflet:L,makeBase,onSt
  const problems=root.querySelector('[data-route-problems]');if(problems)problems.onclick=()=>{const details=root.querySelector('.journal-route-issues');details.open=true;const target=root.querySelector('[data-route-conflict]')||root.querySelector('[data-route-issue]')||details.querySelector('summary');target.scrollIntoView?.({block:'nearest'});target.focus({preventScroll:true});};
  const button=root.querySelector('[data-route-rebuild]');if(button)button.onclick=async()=>{button.disabled=true;try{await onRebuild();}finally{if(button.isConnected)button.disabled=false;}};
  let map,stopLayer,activeStopId=selectedStopId;let drawStops=()=>{};const box=root.querySelector('.journal-route-map'),lines=new Map(),markers=new Map();
+ // Leaflet restores window scroll after focus, but not this nested route scroller.
+ const keepPointerFocus=e=>{if(!e.target.closest?.('.journal-map-stop'))return;box.focus({preventScroll:true});e.preventDefault();};box.addEventListener('mousedown',keepPointerFocus,true);
  try{if(!L)throw Error('Карта недоступна');map=L.map(box,{scrollWheelZoom:!mini,dragging:!mini,zoomControl:!mini,attributionControl:true});makeBase().addTo(map);const layers=[];
   const gpsLines=[];segments.forEach((s,i)=>{let coords=(s.line||[]).filter(p=>Array.isArray(p)&&p.length>=2).map(p=>[p[1],p[0]]);if(!coords.length&&s.fromPt&&s.toPt)coords=[[s.fromPt.lat,s.fromPt.lng],[s.toPt.lat,s.toPt.lng]];if(!coords.length)return;if(s.kind==='track'){gpsLines.push(coords);return;}const line=L.polyline(coords,trackLineStyle(s.kind)).addTo(map);layers.push(line);lines.set(i,line);});
   if(gpsLines.length)layers.push(L.polyline(gpsLines,trackLineStyle('track')).addTo(map));
@@ -61,5 +63,5 @@ export function mountJournalRoute(root,{trip,track,stays,leaflet:L,makeBase,onSt
   const problems=root.querySelector('[data-route-problems]');if(problems)problems.textContent=problemLabel(amounts.unknown.length+current.length+(amounts.gps==null?1:0));
   const legend=root.querySelector('.journal-route-explainer');for(const conflict of current){const button=root.ownerDocument.createElement('button');button.className='journal-conflict';button.dataset.routeConflict='';button.textContent='Конфликт времени · Остановка '+(stays.indexOf(conflict.stay)+1)+' · '+clock(conflict.from)+'–'+clock(conflict.to);button.onclick=()=>onStop?.(conflict.stay.id);legend.before(button);}
  }
- return {select(id){activeStopId=id;for(const marker of new Set(markers.values()))marker.getElement()?.classList.toggle('selected',markers.get(id)===marker);},refreshPresence,focus,destroy(){observer?.disconnect();map?.off('zoomend',drawStops);map?.remove();}};
+ return {select(id){activeStopId=id;for(const marker of new Set(markers.values()))marker.getElement()?.classList.toggle('selected',markers.get(id)===marker);},refreshPresence,focus,destroy(){box.removeEventListener('mousedown',keepPointerFocus,true);observer?.disconnect();map?.off('zoomend',drawStops);map?.remove();}};
 }
