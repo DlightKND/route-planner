@@ -17,3 +17,5 @@ The fixed upstream host and three-path allowlist remain in place. User-token for
 21 tests execute the actual deployed TypeScript entrypoint with mocked network/SDK boundaries, covering CORS, active-staff authorization, endpoint allowlisting, unchanged routing payloads, secret isolation, transient/persistent connection failures, timeout, body-read failure and ORS HTTP status pass-through. The existing 13 trusted-proxy tests also pass.
 
 Live function v12 has been deployed with JWT verification enabled, and its retrieved source matches the tested file. Real successful route computation still requires an authenticated client and working Supabase-to-ORS connectivity; error-handling tests do not prove that external connectivity has recovered.
+
+Follow-up: official ORS endpoint migration, maintenance-page handling and the independent fallback proposal are tracked in [routing-resilience-plan-20261023.md](routing-resilience-plan-20261023.md).

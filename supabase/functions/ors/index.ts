@@ -16,20 +16,24 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.118.0'
 const ORS_KEY = Deno.env.get('ORS_KEY') ?? ''
 
 // белый список: наружу можно только эти три эндпоинта ORS, ничего больше
-const ALLOWED = new Set([
-  'v2/directions/driving-car/geojson',
-  'v2/isochrones/driving-car',
-  'optimization',
+const UPSTREAM = new Map([
+  ['v2/directions/driving-car/geojson', 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson'],
+  ['v2/isochrones/driving-car', 'https://api.heigit.org/openrouteservice/v2/isochrones/driving-car'],
+  ['optimization', 'https://api.heigit.org/vroom/v0'],
 ])
+// A short, per-operation cooldown stops repeated calls during provider outages.
+// This is local to a warm function instance, not a global availability guarantee.
+const unavailableUntil = new Map<string, number>()
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Expose-Headers': 'Retry-After',
 }
 
-const json = (o: unknown, status = 200) =>
-  new Response(JSON.stringify(o), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+const json = (o: unknown, status = 200, headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify(o), { status, headers: { ...cors, ...headers, 'Content-Type': 'application/json' } })
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -74,8 +78,12 @@ Deno.serve(async (req) => {
   try { payload = await req.json() } catch { return json({ error: { message: 'Битый JSON' } }, 400) }
 
   const path = payload?.path
-  if (typeof path !== 'string' || !ALLOWED.has(path)) {
+  if (typeof path !== 'string' || !UPSTREAM.has(path)) {
     return json({ error: { message: 'Эндпоинт не разрешён: ' + path } }, 400)
+  }
+  const remaining = Math.ceil(((unavailableUntil.get(path) ?? 0) - Date.now()) / 1000)
+  if (remaining > 0) {
+    return json({ error: { code: 'ORS_TEMPORARILY_UNAVAILABLE', message: 'Сервис построения маршрутов ORS временно недоступен. Повторите попытку позже.', retry_after_seconds: remaining } }, 503, { 'Retry-After': String(remaining) })
   }
 
   // A rejected upstream fetch previously escaped Deno.serve without CORS.
@@ -84,13 +92,26 @@ Deno.serve(async (req) => {
   for (let attempt = 0; attempt < 2; attempt++) {
     const signal = AbortSignal.timeout(30_000)
     try {
-      const r = await fetch('https://api.openrouteservice.org/' + path, {
+      const r = await fetch(UPSTREAM.get(path)!, {
         method: 'POST',
         signal,
         headers: { 'Authorization': ORS_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload.body ?? {}),
       })
       const text = await r.text()
+      if ([502, 503, 504].includes(r.status)) unavailableUntil.set(path, Date.now() + 30_000)
+      else if (r.ok) unavailableUntil.delete(path)
+      // Maintenance pages and gateway HTML are not ORS JSON errors. Never pass
+      // them into the UI as raw markup or mistake a 200 HTML page for a route.
+      try { JSON.parse(text) } catch {
+        if (r.ok) unavailableUntil.set(path, Date.now() + 30_000)
+        const maintenance = r.status === 503 && /maintenance/i.test(text)
+        const status = r.status >= 400 ? r.status : 502
+        return json({ error: {
+          code: maintenance ? 'ORS_MAINTENANCE' : 'ORS_INVALID_RESPONSE',
+          message: maintenance ? 'В сервисе построения маршрутов ORS технические работы. Повторите попытку позже.' : 'Сервис построения маршрутов ORS временно не может вернуть расчёт. Повторите попытку позже.',
+        } }, status)
+      }
       return new Response(text, { status: r.status, headers: { ...cors, 'Content-Type': 'application/json' } })
     } catch (e) {
       const error = e as { name?: string; code?: string } | null
@@ -98,12 +119,14 @@ Deno.serve(async (req) => {
       // Never log keys, session headers, coordinates or the raw exception.
       console.error('ORS transport failed', { path, attempt: attempt + 1, code: timedOut ? 'TIMEOUT' : (error?.code || 'FETCH_ERROR') })
       if (timedOut) {
+        unavailableUntil.set(path, Date.now() + 30_000)
         return json({ error: { code: 'ORS_UPSTREAM_TIMEOUT', message: 'Сервис построения маршрутов ORS не ответил за 30 секунд. Повторите попытку позже.' } }, 504)
       }
       if (attempt === 0) {
         await new Promise(resolve => setTimeout(resolve, 300))
         continue
       }
+      unavailableUntil.set(path, Date.now() + 30_000)
       return json({ error: { code: 'ORS_UPSTREAM_UNAVAILABLE', message: 'Нет соединения с сервисом построения маршрутов ORS. Повторите попытку через минуту.' } }, 502)
     }
   }
