@@ -112,7 +112,7 @@ test('journal period filters on the server, navigates months and persists after 
  await expect(page.locator('.unassigned-card .unassigned-period')).toContainText('05.10.2026');
  await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await expect(from).toHaveValue('2026-10-05');await expect(to).toHaveValue('2026-10-05');await expect(page.locator('.unassigned-card')).toHaveCount(1);
- await page.locator('[data-ut-mode=archive]').click();await expect(page.locator('.unassigned-card')).toHaveCount(0);await expect(from).toHaveValue('2026-10-05');
+ await page.locator('.journal-filters>summary').click();await page.locator('[data-ut-mode=archive]').click();await expect(page.locator('.unassigned-card')).toHaveCount(0);await expect(from).toHaveValue('2026-10-05');
  await page.locator('[data-ut-mode=pending]').click();await expect(page.locator('.unassigned-card')).toHaveCount(1);
  await page.locator('[data-journal-month="-1"]').click();await expect(from).toHaveValue('2026-09-01');await expect(to).toHaveValue('2026-09-30');await expect(page.locator('.unassigned-card')).toHaveCount(0);
  await page.locator('[data-journal-month="1"]').click();await expect(from).toHaveValue('2026-10-01');await expect(to).toHaveValue('2026-10-31');await expect(page.locator('.unassigned-card')).toHaveCount(3);
