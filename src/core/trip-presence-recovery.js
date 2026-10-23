@@ -103,7 +103,7 @@ export async function rebuildTripTrack(points,opts={},ctx={},reach=null){
  for(const legs of replacement.values())segments.push(...legs);segments.sort((a,b)=>Date.parse(a.fromTs)-Date.parse(b.fromTs));
  const start=Date.parse(ctx.started_at),end=Date.parse(ctx.finished_at)||time(real.at(-1)||{});const total=Number.isFinite(start)&&end>=start?minutes(start,end):null;
  const driving=motion.reduce((n,x)=>n+x.minutes,0),observed=stays.reduce((n,x)=>n+x.gps_minutes,0);
- const presence={version:1,total_minutes:total,drive_minutes:Math.round(driving*1000)/1000,drive_complete:skipped.length===0,observed_minutes:observed,motion_intervals:motion,stays,skipped,usable,input_points:real.map(p=>({ts:p.ts,...coords(p)}))};
+ const presence={version:1,idle_stop_version:1,total_minutes:total,drive_minutes:Math.round(driving*1000)/1000,drive_complete:skipped.length===0,observed_minutes:observed,motion_intervals:motion,stays,skipped,usable,input_points:real.map(p=>({ts:p.ts,...coords(p)}))};
  const sums={trackKm:0,roadKm:0,lineKm:0};segments.forEach(g=>{const key={track:'trackKm',road:'roadKm',line:'lineKm'}[g.kind];if(key)sums[key]+=Number(g.km)||0;});
  return {...m,...sums,km:sums.trackKm+sums.roadKm+sums.lineKm,segments,checks:calls,presence};
 }

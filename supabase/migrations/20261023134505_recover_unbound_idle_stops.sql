@@ -68,6 +68,7 @@ begin
   or p_fact_km is distinct from round(track_km,1)) then raise exception 'Факт-пробег должен совпадать с проверенным треком';end if;
  fact_changed:=p_fact_km is not null and (t.fact_km is distinct from p_fact_km or t.fact_km_source is distinct from p_fact_source);
  select * into old_track from public.trip_tracks where trip_id=p_trip;
+ if coalesce((p_track->'presence'->>'idle_stop_version')::int,0)<1 and exists(select 1 from public.trip_stays where trip_id=p_trip and presence_evidence->'origin'->>'kind'='gps_idle') then raise exception 'Обнови страницу перед достройкой: этот выезд содержит восстановленные стоянки без заявки';end if;
  -- A network retry must not reset a manager's reviewed presence.
  if old_track.data-'at' is not distinct from p_track-'at' and (p_fact_km is null or (t.fact_km=p_fact_km and t.fact_km_source=p_fact_source)) then
   return jsonb_build_object('revision',t.workbench_revision,'stays_changed',0,'repeated',true,'fact_updated',false);

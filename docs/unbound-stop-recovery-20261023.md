@@ -10,6 +10,7 @@ The rebuild operation already subtracts routed travel time from telemetry gaps, 
 - The global ORS call budget remains unchanged. An idle origin avoids irrelevant route queries via unrelated request objects and reuses the route already obtained for mileage validation.
 - The server accepts an unassigned proposal only when an actual idle message, its location, consecutive gap endpoints, corroborating samples, editable recovery bounds, and the matching road interval are present. Invented locations, locked GPS time and inflated recovered intervals are rejected.
 - Stop status participates in the GPS source digest. A status change during reconstruction invalidates the captured source just like a changed coordinate.
+- Older open clients must refresh before rebuilding a trip that contains these proposals, so their older algorithm cannot withdraw restored or approved stops.
 - Existing request-based recovery, scope checks, guarded revisions, protected GPS and explicit odometer behavior remain intact.
 
 ## Verification and production case

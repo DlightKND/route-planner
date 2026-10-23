@@ -191,3 +191,8 @@ it('invalidates a captured source when its idle status changes before reconstruc
 it('keeps the unbound-origin validator private to the existing guarded rebuild operation',async()=>{
  expect((await q("select has_function_privilege('authenticated','dlight_private.idle_stop_origin(uuid,timestamptz,float8,float8,jsonb,jsonb)','execute') allowed"))[0].allowed).toBe(false);
 });
+
+it('prevents an older open client from withdrawing unassigned proposals or approved attendance',async()=>{
+ const {c,m}=await unbound();await save(c,m);await approve(30,30);const legacy=structuredClone(m);delete legacy.presence.idle_stop_version;legacy.presence.stays=[];
+ const revision=await rev();await deny(()=>save(c,legacy,revision),/Обнови страницу/);expect((await stay()).status).toBe('approved');expect((await stay()).minutes_mgr).toBe('30');
+});
