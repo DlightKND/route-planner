@@ -18,7 +18,7 @@ test('catalogue shares tokens, has accessible targets and fits the viewport',asy
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await expect(page.locator('#reviewForm [data-variant=primary]')).toHaveCount(1);
  expect(await page.locator('h1').evaluate(el=>getComputedStyle(el).fontSize)).toBe(page.viewportSize().width<=760?'23px':'28px');
- expect(await page.locator('h2').first().evaluate(el=>getComputedStyle(el).fontSize)).toBe('18px');
+ expect(await page.locator('#workflow h2').first().evaluate(el=>getComputedStyle(el).fontSize)).toBe('18px');
  for(const b of await page.locator('.ds-button:visible,.ds-chip:visible,.ds-segmented button:visible,nav a:visible').all()){const box=await b.boundingBox();expect(box.height).toBeGreaterThanOrEqual(info.project.use.hasTouch?44:36);expect(box.width).toBeGreaterThanOrEqual(44);}
  await page.locator('#themeToggle').focus();await page.keyboard.press('Enter');await expect(page.locator('html')).toHaveAttribute('data-theme',info.project.metadata.theme==='light'?'dark':'light');await page.keyboard.press('Enter');
  await expect(page.locator('.ds-badge').first()).not.toHaveAttribute('tabindex');

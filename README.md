@@ -4,4 +4,4 @@
 
 Интерактивный каталог: `npm run build`, затем `dist/preview-design-system.html`.
 
-[Аудит покрытия паттернов](docs/design-pattern-audit.md) · [Реестр](docs/design-patterns.json). Проверка: `npm run qa:design-patterns`. Каталог пока версии 0.2.
+[Аудит покрытия паттернов](docs/design-pattern-audit.md) · [Реестр](docs/design-patterns.json). Проверка: `npm run qa:design-patterns`. Каталог версии 0.4: [коррекции по Material Design / Apple HIG](docs/material-hig-review.md), восемь интерактивных групп для просмотра.
