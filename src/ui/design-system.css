@@ -1,0 +1,63 @@
+/* v0.1 candidate components. Opt in with .ds-kit; consumes the application's tokens. */
+.ds-kit{font:400 var(--fs-body)/1.5 var(--sans);color:var(--ink);background:var(--bg);margin:0;padding:24px;overflow:auto;height:auto;display:block}
+.ds-kit *{box-sizing:border-box}
+.ds-kit [hidden]{display:none!important}
+.ds-kit main{max-width:1200px;margin:auto}
+.ds-kit h1{font-size:var(--fs-page);line-height:1.25;font-weight:600;letter-spacing:-.02em;margin:8px 0 16px}
+.ds-kit h2{font-size:var(--fs-section);line-height:1.4;font-weight:600;margin:0 0 12px}
+.ds-kit h3{font-size:16px;margin:0 0 12px}
+.ds-kit p{margin:0 0 12px}.ds-kit .ds-muted{color:var(--ink-dim)}
+.ds-kit .ds-eyebrow{font:500 12px/1.5 var(--mono);color:var(--ink-dim)}
+.ds-kit nav a,.ds-kit #rareActions a{display:inline-flex;align-items:center;min-height:44px;min-width:44px;padding:8px 0}
+.ds-kit .ds-section{margin-block:32px}.ds-kit .ds-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ds-kit .ds-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:24px}
+.ds-kit .ds-card{padding:24px;border:var(--bd);border-radius:var(--r-md);background:var(--panel);box-shadow:var(--shadow-sm);min-width:0}
+.ds-kit :is(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+.ds-kit :is(button,input,select,textarea){font:inherit}.ds-kit a{color:var(--ink);text-underline-offset:4px}
+.ds-kit :is(.ds-button,.ds-chip){display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:44px;padding:8px 16px;border:1px solid var(--input-line);border-radius:var(--r-sm);background:var(--panel);color:var(--ink);font-weight:500;cursor:pointer;text-decoration:none;line-height:1.4;overflow-wrap:anywhere;transition:background-color var(--t-fast),border-color var(--t-fast)}
+.ds-kit .ds-button[data-variant=primary]{background:var(--accent);color:var(--on-accent);border-color:var(--accent-line)}
+.ds-kit .ds-button[data-variant=tertiary]{background:transparent;border-color:transparent}
+.ds-kit .ds-button[data-variant=destructive]{background:var(--danger-bg);color:var(--red);border-color:var(--red)}
+.ds-kit .ds-button[data-variant=danger-confirm]{background:var(--red);color:var(--danger-ink);border-color:var(--red)}
+.ds-kit .ds-button[data-size=s]{min-height:36px;padding:4px 12px;font-size:13px}
+.ds-kit .ds-button[data-size=l]{min-height:48px;padding:12px 24px}
+.ds-kit .ds-button[data-icon]{width:44px;padding:8px;font-size:20px;flex-shrink:0}
+.ds-kit :is(.ds-button,.ds-chip):is(:disabled,[aria-disabled=true]){background:var(--panel-2);color:var(--ink-dim);border-color:var(--line);cursor:not-allowed;opacity:1}
+.ds-kit .ds-button[aria-busy=true]{cursor:progress}
+.ds-kit .ds-button[aria-busy=true]::before{content:'';width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:ds-spin .8s linear infinite;flex-shrink:0}
+.ds-kit .ds-chip{border-radius:var(--r-pill);background:transparent;padding-inline:12px;font-weight:400}
+.ds-kit .ds-chip[aria-pressed=true]{background:var(--panel-2);border-color:var(--focus);font-weight:600}
+.ds-kit .ds-chip[aria-pressed=true]::before{content:'✓';font-weight:600}
+.ds-kit .ds-badge{display:inline-flex;align-items:center;gap:4px;border-radius:var(--r-pill);padding:2px 8px;background:var(--panel-2);color:var(--ink-dim);font-size:12px;line-height:20px}
+.ds-kit .ds-badge[data-tone=success]{background:var(--success-bg);color:var(--green)}
+.ds-kit .ds-badge[data-tone=warning]{background:var(--warning-bg);color:var(--warning)}
+.ds-kit .ds-badge[data-tone=danger]{background:var(--danger-bg);color:var(--red)}
+.ds-kit .ds-field{display:grid;gap:4px;margin-bottom:16px;min-width:0}
+.ds-kit .ds-field>label,.ds-kit legend{font-size:13px;font-weight:500}
+.ds-kit .ds-field :is(input,select,textarea){min-height:44px;width:100%;padding:8px 12px;border:1px solid var(--input-line);border-radius:var(--r-sm);background:var(--panel);color:var(--ink)}
+.ds-kit .ds-field textarea{min-height:88px;resize:vertical}
+.ds-kit .ds-field [aria-invalid=true]{border-color:var(--red)}
+.ds-kit .ds-help{color:var(--ink-dim);font-size:12px}.ds-kit .ds-error{color:var(--red);font-size:13px}
+.ds-kit .ds-option{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+.ds-kit .ds-option input{accent-color:var(--focus);width:20px;height:20px;margin:0;flex-shrink:0}
+.ds-kit fieldset{border:0;margin:0 0 16px;padding:0}.ds-kit legend{padding:0;margin-bottom:8px}
+.ds-kit .ds-switch{display:inline-flex;align-items:center;gap:12px;border:0;background:transparent;color:var(--ink);min-height:44px;padding:0;cursor:pointer}
+.ds-kit .ds-switch-track{display:inline-flex;align-items:center;width:44px;height:26px;padding:3px;background:var(--panel-2);border:1px solid var(--input-line);border-radius:var(--r-pill)}
+.ds-kit .ds-switch-track::before{content:'';height:18px;width:18px;background:var(--ink-dim);border-radius:50%}
+.ds-kit .ds-switch[aria-checked=true] .ds-switch-track{background:var(--accent);border-color:var(--accent-line)}
+.ds-kit .ds-switch[aria-checked=true] .ds-switch-track::before{transform:translateX(18px);background:var(--on-accent)}
+.ds-kit .ds-table-wrap{overflow:auto}.ds-kit table{width:100%;border-collapse:collapse;font-size:13px}.ds-kit :is(th,td){padding:12px;text-align:left;border-bottom:var(--bd);vertical-align:top}.ds-kit th{font-weight:500;color:var(--ink-dim)}
+.ds-kit .ds-swatch{width:20px;height:20px;display:inline-block;vertical-align:middle;border:1px solid var(--input-line);border-radius:4px;margin-right:8px}
+.ds-kit .ds-feedback{padding:12px;border-left:3px solid var(--input-line);background:var(--panel-2);border-radius:var(--r-sm);min-height:48px;margin-block:16px}
+.ds-kit .ds-feedback[data-tone=success]{border-color:var(--green);background:var(--success-bg)}
+.ds-kit .ds-feedback[data-tone=danger]{border-color:var(--red);background:var(--danger-bg)}
+.ds-kit dialog{width:min(520px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow:auto;margin:auto;padding:24px;color:var(--ink);background:var(--panel);border:var(--bd);border-radius:var(--r-lg);box-shadow:var(--shadow-lg)}
+.ds-kit dialog::backdrop{background:var(--overlay-backdrop);backdrop-filter:var(--overlay-blur)}
+.ds-kit details>summary{min-height:44px;cursor:pointer;padding:12px}.ds-kit details>.ds-row{padding:12px}
+@media(hover:hover) and (pointer:fine){.ds-kit :is(.ds-button,.ds-chip):not(:disabled,[aria-disabled=true],[aria-busy=true]):hover{background-image:linear-gradient(color-mix(in srgb,currentColor 8%,transparent),color-mix(in srgb,currentColor 8%,transparent))}}
+.ds-kit :is(.ds-button,.ds-chip):not(:disabled,[aria-disabled=true],[aria-busy=true]):active{background-image:linear-gradient(color-mix(in srgb,currentColor 14%,transparent),color-mix(in srgb,currentColor 14%,transparent))}
+@media(pointer:coarse){.ds-kit .ds-button[data-size=s]{min-height:44px}}
+@media(max-width:760px){.ds-kit{padding:16px;--fs-page:23px}.ds-kit .ds-card{padding:16px}.ds-kit .ds-field :is(input,select,textarea){font-size:16px}.ds-kit [data-action-scope]>.ds-row>.ds-button[data-variant=primary]{width:100%}}
+@media(prefers-reduced-motion:reduce){.ds-kit *{animation:none!important;transition:none!important}}
+@media(forced-colors:active){.ds-kit :is(.ds-button,.ds-chip,.ds-badge,.ds-switch-track){border:1px solid ButtonText}.ds-kit [aria-pressed=true]{outline:2px solid Highlight}}
+@keyframes ds-spin{to{transform:rotate(360deg)}}

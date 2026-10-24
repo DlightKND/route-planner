@@ -11,6 +11,26 @@ concurrency:
   group: visual-qa-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  design-system-catalogue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Verify the design-system foundation in both themes and all viewports
+        run: npx playwright test tests/visual/design-system-catalogue.spec.mjs --retries=0 --timeout=20000
+      - name: Keep catalogue review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: design-system-catalogue-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7
   reference-alignment:
     runs-on: ubuntu-latest
     timeout-minutes: 6
