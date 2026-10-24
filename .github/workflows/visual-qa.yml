@@ -42,8 +42,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium --only-shell
+      - name: Reject undocumented or unrepresented design recommendations
+        run: npm run qa:design-patterns
       - name: Compare every recommendation with actual box metrics
-        run: npx playwright test tests/visual/design-system-complete.spec.mjs --retries=0
+        run: npx playwright test tests/visual/design-system-complete.spec.mjs tests/visual/design-system-behavior.spec.mjs --retries=0
       - name: Keep complete before and after evidence
         if: always()
         uses: actions/upload-artifact@v4
