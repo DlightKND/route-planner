@@ -8,7 +8,7 @@ html:root { --workspace-width:none; }
 .workspace-main { max-width:none;width:100%;margin:auto;padding:24px 32px 48px; }
 .workspace-masthead .crumbs { margin:0 0 12px;font-size:12px; }
 .workspace-masthead .trip-head { margin:0 0 20px;gap:32px; }
-.workspace-masthead .trip-head h2 { font:600 28px/1.25 var(--sans);letter-spacing:-.025em;max-width:36ch; }
+.workspace-masthead .trip-head h2 { font:600 var(--fs-page)/1.25 var(--sans);letter-spacing:-.025em;max-width:36ch; }
 .workspace-masthead :is(.th-sub,.entity-meta) { font-size:13px;line-height:1.5; }
 .workspace-masthead .entity-meta { margin-top:8px; }
 .workspace-page .entity-toolbar { position:static;top:auto;padding:0;margin:0 0 20px;background:transparent;border:0;box-shadow:none; }
@@ -20,12 +20,12 @@ html:root { --workspace-width:none; }
 .view.workspace-page .entity-tabs [aria-selected=true] { color:var(--ink);border-bottom:3px solid var(--accent);background:transparent;box-shadow:none; }
 .workspace-page .card { margin:0;box-shadow:none; }
 .workspace-section-head { display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px; }
-.workspace-section-head h3 { margin:0;font-size:18px; }
+.workspace-section-head h3 { margin:0;font-size:var(--fs-section); }
 .workspace-heading-row { display:flex;align-items:center;justify-content:space-between;gap:24px; }
-.workspace-heading-row h1 { margin:0;font:600 28px/1.25 var(--sans);letter-spacing:-.025em; }
+.workspace-heading-row h1 { margin:0;font:600 var(--fs-page)/1.25 var(--sans);letter-spacing:-.025em; }
 .workspace-subtitle { margin:6px 0 0;font-size:14px;color:var(--ink-dim); }
 .workspace-page .design-page-head { margin:0 0 20px; }
-.workspace-page .design-page-head h2 { font-size:28px; }
+.workspace-page .design-page-head h2 { font-size:var(--fs-page); }
 .workspace-page .design-description { margin-top:6px; }
 
 /* Requests open on the client context and the executable assignments. */
@@ -137,7 +137,7 @@ html:root { --workspace-width:none; }
 .view-planner .kcol[data-kst=in_progress] .kcol-h>span:first-child::before { background:var(--accent);box-shadow:0 0 0 1px var(--ink-dim); }
 .view-planner .kcol[data-kst=review] .kcol-h>span:first-child::before,.view-planner .kcol[data-kst=finished] .kcol-h>span:first-child::before { background:var(--warning); }
 .view-planner .kcol-b { padding:0;gap:12px; }
-.view-planner .kcard { padding:20px;background:var(--panel);border:1px solid var(--line);box-shadow:none;border-radius:10px; }
+.view-planner .kcard { padding:20px;background:var(--panel);border:1px solid var(--line);box-shadow:none;border-radius:var(--r-md); }
 .view-planner .kcard h4,.view-planner .kcard .order-card-title { font:500 16px/1.4 var(--sans);margin:8px 0; }
 .view-planner .kcard h4 .crumb { font:inherit;text-align:left; }
 .view-planner .kcard>.meta,.view-planner .kcard>.hint { margin-top:10px;font-size:12px;line-height:1.6; }
@@ -240,7 +240,7 @@ html:root { --workspace-width:none; }
  .workspace-masthead { padding:16px 16px 0; }
  .workspace-main { padding:20px 16px calc(28px + var(--rail-h)); }
  .workspace-masthead .trip-head { gap:16px;flex-wrap:wrap;margin-bottom:16px; }
- .workspace-masthead .trip-head h2,.workspace-heading-row h1,.workspace-page .design-page-head h2 { font-size:23px; }
+ .workspace-masthead .trip-head h2,.workspace-heading-row h1,.workspace-page .design-page-head h2 { font-size:var(--fs-page); }
  .workspace-masthead .entity-header-actions { width:100%;justify-content:flex-start; }
  .workspace-masthead .entity-header-actions>.btn.amber { flex:1; }
  .workspace-page .entity-tabs { gap:24px; }
