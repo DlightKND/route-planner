@@ -92,6 +92,8 @@ const sandbox = {
   Error, RegExp, Map, Set, isNaN, isFinite, parseInt, parseFloat, encodeURIComponent,
 };
 sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
+// Native ownerDocument.defaultView is the window used by shared UI adapters.
+doc.defaultView = sandbox;
 process.on('unhandledRejection', () => {});
 
 vm.createContext(sandbox);

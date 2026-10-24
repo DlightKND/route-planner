@@ -358,7 +358,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         await expect(result.locator('#orderResultSave')).toBeVisible();
         const bounds=await result.boundingBox(),viewport=testInfo.project.use.viewport;
         if(viewport.width<=480){
-          expect(bounds.x).toBe(0);expect(bounds.y).toBe(0);expect(bounds.width).toBe(viewport.width);expect(bounds.height).toBe(viewport.height);
+          expect(bounds.x).toBe(0);expect(bounds.width).toBe(viewport.width);expect(bounds.height).toBeLessThanOrEqual(viewport.height*.85+1);expect(bounds.y).toBeGreaterThanOrEqual(viewport.height*.15-1);expect(bounds.y+bounds.height).toBeCloseTo(viewport.height,0);
         }else{
           expect(bounds.x).toBeGreaterThanOrEqual(11);expect(bounds.y).toBeGreaterThanOrEqual(11);
           expect(bounds.x+bounds.width).toBeLessThanOrEqual(viewport.width-11);

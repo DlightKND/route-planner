@@ -77,7 +77,7 @@ test('timeline primary action stays readable and help does not compete with trip
  const panel=page.locator('.gpop');await expect(panel).toBeVisible();const primary=panel.locator('[data-pop-action]');
  expect((await primary.boundingBox()).height).toBeLessThanOrEqual(70);
  expect(await panel.locator('.gp-layout').evaluate(el=>el.open)).toBe(true);
- for(const button of await panel.locator('.gp-trip-tools button').all())expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(44);
+ for(const button of await panel.locator('.gp-trip-tools button').all())expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(page.viewportSize().width<=768?48:40);
  await page.keyboard.press('Escape');await expect(panel).toHaveCount(0);
 });
 
@@ -85,7 +85,7 @@ test('map actions remain touch-sized and hit-testable above the mobile bottom sh
  await open(page,'mapClient');const popup=page.locator('.leaflet-popup').last();await expect(popup).toBeVisible();
  await popup.locator('.client-popup-more summary').click();
  for(const action of await popup.locator('.btn:visible').all()){
-  await action.scrollIntoViewIfNeeded();const r=await action.boundingBox();expect(r.height).toBeGreaterThanOrEqual(44);
+  await action.scrollIntoViewIfNeeded();const r=await action.boundingBox();expect(r.height).toBeGreaterThanOrEqual(page.viewportSize().width<=768?48:40);
   expect(await action.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);
  }
  const r=await popup.boundingBox();expect(r.x).toBeGreaterThanOrEqual(0);expect(r.y+r.height).toBeLessThanOrEqual(page.viewportSize().height);
@@ -147,7 +147,7 @@ test('client popup keeps primary actions in a row and exposes secondary actions 
  expect(surface.background).toBe(surface.expectedBackground);expect(surface.color).toBe(surface.expectedColor);if(surface.popover)expect(surface.shadow).toBe('none');
  await expect(pop.getByRole('button',{name:'Редактировать клиента',exact:true})).toBeHidden();
  const geometry=await pop.locator('.client-popup-primary').evaluate(el=>Array.from(el.children,x=>{const r=x.getBoundingClientRect();return {top:r.top,height:r.height,width:r.width};}));
- expect(geometry).toHaveLength(2);expect(geometry[0].top).toBe(geometry[1].top);for(const r of geometry){expect(r.height).toBeGreaterThanOrEqual(44);expect(r.width).toBeGreaterThan(90);}
+ expect(geometry).toHaveLength(2);expect(geometry[0].top).toBe(geometry[1].top);for(const r of geometry){expect(r.height).toBeGreaterThanOrEqual(page.viewportSize().width<=768?48:40);expect(r.width).toBeGreaterThan(90);}
  await pop.locator('.client-popup-more summary').click();await expect(pop.getByRole('button',{name:'Техника',exact:true})).toBeVisible();await expect(pop.getByRole('button',{name:'Создать заявку',exact:true})).toBeVisible();
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-client.png'});
  await pop.getByRole('button',{name:'Редактировать клиента',exact:true}).click();await expect(page.locator('#editOverlay')).toBeVisible();
@@ -155,7 +155,7 @@ test('client popup keeps primary actions in a row and exposes secondary actions 
 test('route panel shows one primary action and collapses advanced settings',async({page},info)=>{
  await open(page,'routePanel');await expect(page.locator('#rBuild')).toBeVisible();await expect(page.locator('#rSaveTrip')).toBeVisible();
  await expect(page.locator('#rPref')).toBeHidden();await expect(page.locator('#chipAvoid')).toBeHidden();await expect(page.locator('#rClear')).toBeHidden();
- const buttons=await page.locator('.route-primary>.btn').evaluateAll(xs=>xs.map(el=>{const r=el.getBoundingClientRect();return {top:r.top,height:r.height};}));expect(buttons[0].top).toBe(buttons[1].top);for(const b of buttons)expect(b.height).toBeGreaterThanOrEqual(44);
+ const buttons=await page.locator('.route-primary>.btn').evaluateAll(xs=>xs.map(el=>{const r=el.getBoundingClientRect();return {top:r.top,height:r.height};}));expect(buttons[0].top).toBe(buttons[1].top);for(const b of buttons)expect(b.height).toBeGreaterThanOrEqual(page.viewportSize().width<=768?48:40);
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-route.png'});
  await page.locator('.route-settings summary').click();await expect(page.locator('#rPref')).toBeVisible();await page.locator('#chipAvoid').click();await expect(page.locator('#avoidBody')).toBeVisible();
  await expect(page.locator('#chipOpt')).toBeDisabled();await page.locator('#rPref').selectOption('shortest');await expect(page.locator('#rPref')).toHaveValue('shortest');

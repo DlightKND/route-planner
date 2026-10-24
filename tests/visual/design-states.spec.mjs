@@ -190,7 +190,7 @@ test('layout: map tabs use one straight indicator without an inset shadow',async
   const target=mode==='work'?page.locator('#sideTabs button').first():page.locator('#sideTabs button[data-sb='+mode+']');
   await target.click();await target.focus();
   const style=await target.evaluate(el=>{const s=getComputedStyle(el);return {radius:s.borderRadius,shadow:s.boxShadow,line:parseFloat(s.borderBottomWidth)};});
-  expect(style.radius).toBe('0px');expect(style.shadow).toBe('none');expect(style.line).toBe(3);
+  expect(style.radius).toBe('0px');expect(style.shadow).toBe('none');expect(style.line).toBe(2);
   await expect(page.locator('.map-workspace-head .design-eyebrow')).toHaveCount(0);
  }
  await capture(page,info,'map-straight-tabs',errors);

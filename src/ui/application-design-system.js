@@ -19,7 +19,7 @@ export function controlKind(el) {
   if(el.matches('.fab-add,#pointToolsFab'))return 'fab';
   if(el.matches('[role=tab],.subtab,.entity-tabs>button,.journal-trip-tabs>button,.side-tabs2>button'))return 'tab';
   if(el.matches('.nav-i,.rail button,.rail a'))return 'navigation';
-  if(el.matches('.chip,.echip,.rchip,[data-activity-filter],.design-filter-chips>button') || el.parentElement?.matches(UI_SELECTORS.filters))return 'chip';
+  if(el.matches('.chip,.echip,.rchip,.veh-btn,.son,[data-activity-filter],.design-filter-chips>button') || el.parentElement?.matches(UI_SELECTORS.filters))return 'chip';
   if(el.parentElement?.matches(UI_SELECTORS.segment))return 'segment';
   if(el.matches('.entity-menu-item,.ctxmenu button,.gp-secondary>button'))return 'menu';
   if(el.matches('.order-child,.order-card-title,.trip-job-open,.trip-review-item,.presence-stop,.gps-record-open,.wf-row,.wk-h,.depot-car,.notice-read,.journal-time-part,.journal-conflict'))return 'row';
@@ -79,18 +79,21 @@ export function installApplicationDesignSystem(root=document) {
     root.querySelectorAll(UI_SELECTORS.badge).forEach(el=>assign(el,'ui','badge'));
     root.querySelectorAll('label').forEach(el=>{if(el.querySelector(':scope>input[type=checkbox],:scope>input[type=radio]'))assign(el,'ui','option');});
   };
-  let queued=false;
-  const schedule=()=>{if(queued)return;queued=true;root.defaultView.queueMicrotask(()=>{queued=false;scan();});};
-  new root.defaultView.MutationObserver(schedule).observe(root.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','role','disabled','aria-busy']});
+  let queued=false,disposed=false;
+  const schedule=()=>{if(queued||disposed)return;queued=true;root.defaultView.queueMicrotask(()=>{queued=false;if(!disposed)scan();});};
+  const observer=new root.defaultView.MutationObserver(schedule);
+  observer.observe(root.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','role','disabled','aria-busy']});
   root.addEventListener('change',schedule);
   root.addEventListener('input',schedule);
-  root.addEventListener('keydown',event=>{
+  const keydown=event=>{
     const button=event.target.closest('[data-ui=segment]'),group=button?.parentElement;
     if(!group||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
     const options=[...group.querySelectorAll(':scope>button:not(:disabled):not([hidden])')],index=options.indexOf(button);
     if(index<0)return;
     event.preventDefault();const next=event.key==='Home'?options[0]:event.key==='End'?options.at(-1):options[(index+(event.key==='ArrowRight'?1:-1)+options.length)%options.length];
     next.focus();next.click();
-  });
+  };
+  root.addEventListener('keydown',keydown);
   scan();
+  return {refresh:scan,destroy(){disposed=true;observer.disconnect();root.removeEventListener('change',schedule);root.removeEventListener('input',schedule);root.removeEventListener('keydown',keydown);}};
 }

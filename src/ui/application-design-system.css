@@ -132,3 +132,13 @@ html#dlight-ui[data-ui-system] [data-ui][aria-busy=true]>*{visibility:hidden}
 html#dlight-ui[data-ui-system] [data-ui][aria-busy=true]::after{content:''!important;display:block;position:absolute;inset:50% auto auto 50%;width:16px;height:16px;margin:-8px 0 0 -8px;border:2px solid var(--ink);border-right-color:transparent;border-radius:999px;animation:ui-spin .8s linear infinite}
 @keyframes ui-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){html#dlight-ui[data-ui-system] [data-ui][aria-busy=true]::after{animation:none}}
+@media(max-width:760px){html#dlight-ui[data-ui-system] dialog.journal-allocation-editor{inset:auto 0 0!important;margin:0!important;width:100%!important;max-width:none!important;height:auto!important;max-height:85dvh!important;border-radius:16px 16px 0 0!important;padding:20px 16px max(20px,env(safe-area-inset-bottom))}}
+/* Tabs keep their full label in a local scroll strip instead of squeezing text. */
+html#dlight-ui[data-ui-system] :is(.subtabs,.entity-tabs,.side-tabs2,.journal-trip-tabs){flex-wrap:nowrap;overflow-x:auto;min-width:0;max-width:100%}
+html#dlight-ui[data-ui-system] [data-ui=tab]{flex:0 0 auto!important;width:auto!important;min-width:max-content!important;max-width:none!important}
+html#dlight-ui[data-ui-system] .journal-periodbar .rangebar{display:grid!important;grid-template-columns:minmax(130px,1fr) auto minmax(130px,1fr);width:360px;max-width:calc(100vw - 32px);gap:8px;padding:16px}
+html#dlight-ui[data-ui-system] .journal-periodbar .rangebar input{width:100%!important;min-width:0!important}
+html#dlight-ui[data-ui-system] .journal-periodbar .rangebar .rquick{grid-column:1/-1}
+@media(max-width:760px){html#dlight-ui[data-ui-system] dialog.entity-panel-dialog{inset:auto 0 0!important;margin:0!important;width:100%!important;max-width:none!important;height:auto!important;max-height:85dvh!important}}
+html#dlight-ui[data-ui-system] [data-ui-group=segments]{width:100%;max-width:480px;flex-wrap:nowrap!important}
+html#dlight-ui[data-ui-system] [data-ui=segment]{white-space:nowrap!important}
