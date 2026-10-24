@@ -149,3 +149,10 @@ html#dlight-ui[data-ui-system] :is(.view,dialog) table :is(th,td){padding:12px}
 html#dlight-ui[data-ui-system] :is(.card h3,.kcard h4,.order-card-title){font:600 16px/1.4 var(--sans)!important}
 html#dlight-ui[data-ui-system] [data-ui-table-frame]{min-width:0;max-width:100%;overflow:auto;overscroll-behavior-x:contain}
 html#dlight-ui[data-ui-system] [data-ui-table-frame]:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+html#dlight-ui[data-ui-system] .ui-compact-icon>.journal-icon{display:block;width:20px;height:20px}
+html#dlight-ui[data-ui-system] [data-journal-exit] .ui-compact-icon{transform:rotate(180deg)}
+html#dlight-ui[data-ui-system] .journal-allocation-editor .wb-task-share-row>span:first-of-type{padding-right:calc(var(--ui-icon) + 8px)}
+html#dlight-ui[data-ui-system] .dispatcher-view-mode{flex:1 0 112px}
+html#dlight-ui[data-ui-system] .dispatcher-view-mode select{min-width:108px!important;width:100%!important;max-width:160px}
+@media(max-width:760px){html#dlight-ui[data-ui-system] .planner-filter-menu>summary[data-ui-compact]{border:1px solid var(--input-line)!important;border-radius:8px!important;background:var(--panel)!important}}
+html#dlight-ui[data-ui-system] small{font:400 var(--ui-help)/1.5 var(--sans)!important}

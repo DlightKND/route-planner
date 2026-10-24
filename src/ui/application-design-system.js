@@ -1,3 +1,4 @@
+import {journalIcon} from '../journal-icons.js';
 // A single visual adapter for static, asynchronously mounted and top-layer UI.
 // Existing IDs, native form state, handlers and permission checks stay owned by screens.
 export const UI_SELECTORS = {
@@ -36,8 +37,8 @@ export function installApplicationDesignSystem(root=document) {
   const scan=()=>{
     root.querySelectorAll('button,a,input,select,textarea,summary,[role=button]').forEach(el=>{
       if(el.closest('.ds-kit'))return;
-      if(el.matches('[data-journal-list-toggle],[data-journal-exit],[data-journal-refresh]')&&!el.querySelector('[data-ui-compact-label]')){
-        const text=el.textContent.trim();if(text){el.setAttribute('aria-label',text);const icon=root.createElement('span'),label=root.createElement('span');icon.className='ui-compact-icon';icon.setAttribute('aria-hidden','true');icon.textContent=el.matches('[data-journal-exit]')?'←':el.matches('[data-journal-refresh]')?'↻':'☷';label.dataset.uiCompactLabel='';label.textContent=text;el.replaceChildren(icon,label);el.dataset.uiCompact='true';}
+      if(el.matches('[data-journal-list-toggle],[data-journal-exit],[data-journal-refresh],.planner-filter-menu>summary')&&!el.querySelector('[data-ui-compact-label]')){
+        const text=el.textContent.trim();if(text){el.setAttribute('aria-label',text);const icon=root.createElement('span'),label=root.createElement('span');icon.className='ui-compact-icon';icon.setAttribute('aria-hidden','true');icon.innerHTML=journalIcon(el.matches('.planner-filter-menu>summary')?'filters':el.matches('[data-journal-refresh]')?'clock':el.matches('[data-journal-exit]')?'chevron':'tasks');label.dataset.uiCompactLabel='';label.textContent=text;el.replaceChildren(icon,label);el.dataset.uiCompact='true';}
       }
       const kind=controlKind(el);assign(el,'ui',kind);
       if(['button','icon','menu'].includes(kind))assign(el,'uiVariant',el.matches('.red,.danger,[data-danger=true]')?'destructive':el.matches('.amber')?'primary':el.matches('.ghost')?'tertiary':'secondary');
@@ -81,7 +82,7 @@ export function installApplicationDesignSystem(root=document) {
       if(table.closest('.ds-kit')||table.parentElement.matches('[data-ui-table-frame],[class*=scroll]'))return;
       const frame=root.createElement('div');frame.dataset.uiTableFrame='';frame.tabIndex=0;frame.setAttribute('role','region');frame.setAttribute('aria-label',table.getAttribute('aria-label')||'Таблица с горизонтальной прокруткой');table.before(frame);frame.append(table);
     });
-    root.querySelectorAll('label').forEach(el=>{if(el.querySelector(':scope>input[type=checkbox],:scope>input[type=radio]'))assign(el,'ui','option');});
+    root.querySelectorAll('label').forEach(el=>{if(el.querySelector(':scope>input[type=checkbox],:scope>input[type=radio]'))assign(el,'ui',el.matches('.wb-task-share-row,[data-task-allocation-row]')?'layout':'option');});
   };
   let queued=false,disposed=false;
   const schedule=()=>{if(queued||disposed)return;queued=true;root.defaultView.queueMicrotask(()=>{queued=false;if(!disposed)scan();});};
