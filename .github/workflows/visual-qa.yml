@@ -31,6 +31,26 @@ jobs:
           name: design-system-catalogue-${{ github.run_id }}
           path: test-results/
           retention-days: 7
+  design-system-complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Compare every recommendation with actual box metrics
+        run: npx playwright test tests/visual/design-system-complete.spec.mjs --retries=0
+      - name: Keep complete before and after evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: design-system-complete-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7
   reference-alignment:
     runs-on: ubuntu-latest
     timeout-minutes: 6
