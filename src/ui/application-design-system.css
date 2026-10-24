@@ -28,7 +28,7 @@ html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=menu
   min-height:var(--ui-h)!important;min-width:var(--ui-h);height:auto!important;
   padding:var(--ui-py) 16px!important;border:1px solid var(--input-line)!important;border-radius:var(--r-sm)!important;
   background:var(--panel);color:var(--ink);font:500 var(--ui-font)/var(--ui-line) var(--sans)!important;
-  gap:8px!important;cursor:pointer;vertical-align:middle;text-decoration:none;transform:none!important;
+  gap:8px!important;cursor:pointer;vertical-align:middle;text-decoration:none;transform:none!important;transition:none!important;
 }
 html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=chip],[data-ui=segment],[data-ui=menu]){align-items:center;justify-content:center}
 :where(html#dlight-ui[data-ui-system] [data-ui=button]){display:inline-flex}
@@ -93,9 +93,9 @@ html#dlight-ui[data-ui-system] [data-ui-surface=dialog]{border-radius:16px!impor
 html#dlight-ui[data-ui-system] dialog::backdrop{background:var(--overlay-backdrop);backdrop-filter:var(--overlay-blur)}
 html#dlight-ui[data-ui-system] :is(.entity-dialog-body,.modal){padding:24px}
 html#dlight-ui[data-ui-system] :is(.summary-period,.period-nav,.journal-period){gap:8px;border-radius:12px}
-html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=chip],[data-ui=segment],[data-ui=tab],[data-ui=field]):disabled{opacity:1!important;color:var(--ink-dim)!important;background:var(--panel-2)!important;border-color:var(--line)!important;cursor:not-allowed!important}
-html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=segment],[data-ui=chip]):not(:disabled):active{background-image:linear-gradient(color-mix(in srgb,currentColor 14%,transparent),color-mix(in srgb,currentColor 14%,transparent));transform:none!important;box-shadow:none!important}
-@media(hover:hover) and (pointer:fine){html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=segment],[data-ui=chip]):not(:disabled):hover{background-image:linear-gradient(color-mix(in srgb,currentColor 8%,transparent),color-mix(in srgb,currentColor 8%,transparent));filter:none!important;box-shadow:none!important}}
+html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=chip],[data-ui=segment],[data-ui=tab],[data-ui=menu],[data-ui=field]):disabled{opacity:1!important;color:var(--ink-dim)!important;background:var(--panel-2)!important;border-color:var(--line)!important;cursor:not-allowed!important}
+html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=segment],[data-ui=chip],[data-ui=menu],[data-ui=tab]):not(:disabled):active{background-image:linear-gradient(color-mix(in srgb,currentColor 14%,transparent),color-mix(in srgb,currentColor 14%,transparent))!important;transform:none!important;box-shadow:none!important}
+@media(hover:hover) and (pointer:fine){html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=segment],[data-ui=chip],[data-ui=menu],[data-ui=tab]):not(:disabled):not(:active):hover{background-image:linear-gradient(color-mix(in srgb,currentColor 8%,transparent),color-mix(in srgb,currentColor 8%,transparent))!important;filter:none!important;box-shadow:none!important}}
 @media(max-width:760px){
   html#dlight-ui[data-ui-system] :is(.pane-head h2,.trip-head h2,.design-page-head h2){font-size:23px!important}
   html#dlight-ui[data-ui-system] :is(.entity-dialog-body,.modal){padding:20px 16px max(20px,env(safe-area-inset-bottom))}
@@ -129,7 +129,7 @@ html#dlight-ui[data-ui-system] .ui-compact-icon{display:none}
 @media(max-width:760px){html#dlight-ui[data-ui-system] [data-ui-compact]{width:48px!important;min-width:48px!important;height:48px!important;padding:11px!important;font-size:20px!important;line-height:24px!important}html#dlight-ui[data-ui-system] [data-ui-compact-label]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}html#dlight-ui[data-ui-system] .ui-compact-icon{display:inline-block}}
 html#dlight-ui[data-ui-system] [data-ui][aria-busy=true]{position:relative;color:transparent!important;cursor:progress!important}
 html#dlight-ui[data-ui-system] [data-ui][aria-busy=true]>*{visibility:hidden}
-html#dlight-ui[data-ui-system] [data-ui][aria-busy=true]::after{content:''!important;display:block;position:absolute;inset:50% auto auto 50%;width:16px;height:16px;margin:-8px 0 0 -8px;border:2px solid var(--ink);border-right-color:transparent;border-radius:999px;animation:ui-spin .8s linear infinite}
+html#dlight-ui[data-ui-system] [data-ui][aria-busy=true]::after{content:''!important;display:block;position:absolute;inset:50% auto auto 50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid var(--ink);border-right-color:transparent;border-radius:999px;animation:ui-spin .8s linear infinite}
 @keyframes ui-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){html#dlight-ui[data-ui-system] [data-ui][aria-busy=true]::after{animation:none}}
 @media(max-width:760px){html#dlight-ui[data-ui-system] dialog.journal-allocation-editor{inset:auto 0 0!important;margin:0!important;width:100%!important;max-width:none!important;height:auto!important;max-height:85dvh!important;border-radius:16px 16px 0 0!important;padding:20px 16px max(20px,env(safe-area-inset-bottom))}}
@@ -173,3 +173,15 @@ html#dlight-ui[data-ui-system] [data-ui-group=filters]>[data-ui=chip]{margin:0!i
 html#dlight-ui[data-ui-system] .engineer-picker{display:flex;align-items:center}
 html#dlight-ui[data-ui-system] .engineer-picker>span:first-child{flex:1 1 auto}
 html#dlight-ui[data-ui-system] .engineer-picker>span:last-child{flex:none}
+/* Day headings retain the schedule's open top edge. */
+html#dlight-ui[data-ui-system] .vg-date{border-top-width:0!important}
+
+html#dlight-ui[data-ui-system] [data-ui=menu][aria-pressed]{display:flex;justify-content:flex-start}
+html#dlight-ui[data-ui-system] [data-ui=menu][aria-pressed]::before{content:'';display:block;width:14px;height:8px;flex:none;border-left:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);opacity:0}
+html#dlight-ui[data-ui-system] [data-ui=menu][aria-pressed=true]{background:var(--panel-2)!important;font-weight:600!important}
+html#dlight-ui[data-ui-system] [data-ui=menu][aria-pressed=true]::before{opacity:1}
+
+/* Narrow desktop toolbars anchor filters to the trigger's left edge. */
+@media(min-width:761px) and (max-width:1180px){html#dlight-ui[data-ui-system] .dispatcher-actions>.planner-filter-menu .planner-filter-panel{left:0;right:auto}}
+/* The narrow map column reserves a separate row for zoom and layer actions. */
+@media(min-width:761px) and (max-width:1050px){html#dlight-ui[data-ui-system] .view-map .leaflet-top.leaflet-left{top:80px}}

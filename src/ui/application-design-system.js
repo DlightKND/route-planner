@@ -20,6 +20,7 @@ export function controlKind(el) {
   if(el.matches('.fab-add,#pointToolsFab'))return 'fab';
   if(el.matches('[role=tab],.subtab,.entity-tabs>button,.journal-trip-tabs>button,.side-tabs2>button'))return 'tab';
   if(el.matches('.nav-i,.rail button,.rail a'))return 'navigation';
+  if(el.matches('#layersBtn'))return 'button';
   if(el.matches('.chip,.echip,.rchip,.veh-btn,.son,#rVariants>button,[data-activity-filter],.design-filter-chips>button') || el.parentElement?.matches(UI_SELECTORS.filters))return 'chip';
   if(el.parentElement?.matches(UI_SELECTORS.segment))return 'segment';
   if(el.matches('.entity-menu-item,.ctxmenu button,.gp-secondary>button'))return 'menu';
