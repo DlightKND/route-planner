@@ -60,10 +60,10 @@ export function installApplicationDesignSystem(root=document) {
         }
         const controls=el.uiExactControls;if(controls)for(const [control,disabled] of [[controls.input,el.disabled],[controls.decrease,el.disabled||value<=min],[controls.increase,el.disabled||value>=max]])if(control.disabled!==disabled)control.disabled=disabled;
       }
-      if(kind==='chip'){
+      if(kind==='chip'||kind==='segment'){
         // Legacy class-driven filters keep their handlers; expose the same state to AT.
-        if(!el.hasAttribute('aria-pressed')&&!el.matches('[aria-haspopup]'))el.dataset.uiPressedOwner='adapter';
-        if(el.dataset.uiPressedOwner==='adapter')el.setAttribute('aria-pressed',String(el.matches('.on')||el.matches('.echip:not(.off):not(.all)')));
+        if(!el.hasAttribute('aria-pressed')&&!el.matches('[aria-haspopup],[data-epop],.design-filter-chips>button'))el.dataset.uiPressedOwner='adapter';
+        if(el.dataset.uiPressedOwner==='adapter')el.setAttribute('aria-pressed',String(el.matches('.on,[data-rnow]')||el.matches('.echip:not(.off):not(.all)')));
       }
     });
     root.querySelectorAll(UI_SELECTORS.segment).forEach(el=>assign(el,'uiGroup','segments'));

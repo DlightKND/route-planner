@@ -17,6 +17,7 @@ export async function auditApplicationDesign(page,root=page.locator('body')){
    if(!s.fontFamily.includes('IBM Plex Sans'))errors.push({name,kind,error:'font',actual:s.fontFamily});
    if(['button','icon','chip','segment','field','tab'].includes(kind)&&s.boxShadow!=='none')errors.push({name,error:'shadow',actual:s.boxShadow});
    if(kind==='field'&&parseFloat(s.fontSize)!==(touch?16:14))errors.push({name,error:'field text',actual:s.fontSize});
+   if(kind==='segment'&&!el.hasAttribute('aria-pressed'))errors.push({name,error:'missing selection state'});
    if(kind==='segment'&&s.borderTopLeftRadius!=='6px')errors.push({name,error:'inset radius',actual:s.borderTopLeftRadius});
   }
   return errors;
