@@ -728,3 +728,5 @@
 .journal-allocation-editor .wb-task-share-row>span:first-of-type{padding-right:var(--sp-8)}
 .view .journal-periodbar>.btn{width:var(--control-h)}
 @media(max-width:760px){.journal-allocation-editor{padding:var(--sp-5) var(--sp-5) max(var(--sp-5),env(safe-area-inset-bottom));border-radius:0}}
+.journal-allocation-editor{inset:0;margin:auto;max-width:calc(100vw - var(--sp-7));max-height:calc(100dvh - var(--sp-7) - env(safe-area-inset-bottom))}
+@media(max-width:760px){.journal-allocation-editor{margin:0;max-width:none;max-height:100dvh}}
