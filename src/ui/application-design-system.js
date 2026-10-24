@@ -3,7 +3,7 @@ import {journalIcon} from '../journal-icons.js';
 // Existing IDs, native form state, handlers and permission checks stay owned by screens.
 export const UI_SELECTORS = {
   segment: '.seg:not(.chipseg):not(.unassigned-filter):not(.journal-trip-tabs),.summary-view-switch,.summary-period-presets,.notice-tabs,.rquick,.presence-kind',
-  filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.design-filter-chips',
+  filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.design-filter-chips,#rVariants',
   count: '.chip-n,.cnt,.rchip .n,.unassigned-filter button b,[data-activity-count],.engineer-picker-count,.ui-count',
   card: '.card,.kcard,.record-card,.notice-row,.staff-row,.stock-row,.emrow,.eqitem,.pt,.order-brief,.order-child,.trip-choice-card,.order-result-summary,.summary-quick-actions,.planwarn',
   popover: '.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover',
@@ -20,7 +20,7 @@ export function controlKind(el) {
   if(el.matches('.fab-add,#pointToolsFab'))return 'fab';
   if(el.matches('[role=tab],.subtab,.entity-tabs>button,.journal-trip-tabs>button,.side-tabs2>button'))return 'tab';
   if(el.matches('.nav-i,.rail button,.rail a'))return 'navigation';
-  if(el.matches('.chip,.echip,.rchip,.veh-btn,.son,[data-activity-filter],.design-filter-chips>button') || el.parentElement?.matches(UI_SELECTORS.filters))return 'chip';
+  if(el.matches('.chip,.echip,.rchip,.veh-btn,.son,#rVariants>button,[data-activity-filter],.design-filter-chips>button') || el.parentElement?.matches(UI_SELECTORS.filters))return 'chip';
   if(el.parentElement?.matches(UI_SELECTORS.segment))return 'segment';
   if(el.matches('.entity-menu-item,.ctxmenu button,.gp-secondary>button'))return 'menu';
   if(el.matches('.order-child,.order-card-title,.trip-job-open,.trip-review-item,.presence-stop,.gps-record-open,.wf-row,.wk-h,.depot-car,.notice-read,.journal-time-part,.journal-conflict'))return 'row';
@@ -63,7 +63,7 @@ export function installApplicationDesignSystem(root=document) {
       if(kind==='chip'||kind==='segment'){
         // Legacy class-driven filters keep their handlers; expose the same state to AT.
         if(!el.hasAttribute('aria-pressed')&&!el.matches('[aria-haspopup],[data-epop],.design-filter-chips>button'))el.dataset.uiPressedOwner='adapter';
-        if(el.dataset.uiPressedOwner==='adapter')el.setAttribute('aria-pressed',String(el.matches('.on,[data-rnow]')||el.matches('.echip:not(.off):not(.all)')));
+        if(el.dataset.uiPressedOwner==='adapter')el.setAttribute('aria-pressed',String(el.matches('.on,[data-rnow],#rVariants>.amber')||el.matches('.echip:not(.off):not(.all)')));
       }
     });
     root.querySelectorAll(UI_SELECTORS.segment).forEach(el=>assign(el,'uiGroup','segments'));

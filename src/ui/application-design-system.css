@@ -169,3 +169,7 @@ html#dlight-ui[data-ui-system] .vg-group.has-act .vg-gtitle{right:calc(var(--ui-
 html#dlight-ui[data-ui-system] .vg-piece.man .vg-label{right:calc(var(--ui-icon)*2 + 16px)}
 html#dlight-ui[data-ui-system] .vg-piece .vg-plan-tools{right:calc(var(--ui-icon) + 12px)}
 html#dlight-ui[data-ui-system] .vg-block.short .vg-plan-tools{display:none}
+html#dlight-ui[data-ui-system] [data-ui-group=filters]>[data-ui=chip]{margin:0!important}
+html#dlight-ui[data-ui-system] .engineer-picker{display:flex;align-items:center}
+html#dlight-ui[data-ui-system] .engineer-picker>span:first-child{flex:1 1 auto}
+html#dlight-ui[data-ui-system] .engineer-picker>span:last-child{flex:none}

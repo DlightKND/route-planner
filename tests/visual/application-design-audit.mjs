@@ -14,7 +14,9 @@ export async function auditApplicationDesign(page,root=page.locator('body')){
    let height=kind==='icon'?(touch?48:44):kind==='chip'?(touch?48:36):kind==='fab'?56:kind==='navigation'?48:kind==='range'?48:min;
    if(kind==='button'&&el.dataset.uiSize==='s'&&!el.parentElement?.querySelector(':scope>[data-ui-variant=primary]'))height=touch?48:36;
    if(r.height+0.6<height)errors.push({name,kind,error:'height',expected:height,actual:r.height});
-   if(!s.fontFamily.includes('IBM Plex Sans'))errors.push({name,kind,error:'font',actual:s.fontFamily});
+   const periodCaption=el.matches('[data-summary-dates],.journal-periodbar>details>summary'),family=periodCaption?'IBM Plex Mono':'IBM Plex Sans';
+   if(!s.fontFamily.includes(family))errors.push({name,kind,error:'font',expected:family,actual:s.fontFamily});
+   if(periodCaption&&s.fontSize!=='13px')errors.push({name,error:'period caption size',actual:s.fontSize});
    if(['button','icon','chip','segment','field','tab'].includes(kind)&&s.boxShadow!=='none')errors.push({name,error:'shadow',actual:s.boxShadow});
    if(kind==='field'&&parseFloat(s.fontSize)!==(touch?16:14))errors.push({name,error:'field text',actual:s.fontSize});
    if(kind==='segment'&&!el.hasAttribute('aria-pressed'))errors.push({name,error:'missing selection state'});
