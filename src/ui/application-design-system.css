@@ -19,6 +19,7 @@ html:root {
   --ui-card-pad:16px;
 }}
 html#dlight-ui[data-ui-system] body{font-family:var(--sans);font-size:var(--ui-body);line-height:1.5}
+html#dlight-ui[data-ui-system] :is(h3,h4){font:600 var(--fs-6)/1.4 var(--sans)!important;color:inherit!important;letter-spacing:normal!important;text-transform:none!important}
 html#dlight-ui[data-ui-system] :is(button,input,select,textarea,summary,a):focus-visible{outline:2px solid var(--focus)!important;outline-offset:3px!important}
 html#dlight-ui[data-ui-system] [hidden]{display:none!important}
 html#dlight-ui[data-ui-system] [data-ui]:not([data-ui=geometry]):not([data-ui=link]):not([data-ui=count]){
@@ -198,7 +199,7 @@ html#dlight-ui[data-ui-system] #qBadge{background:var(--warning-bg)!important;co
 html#dlight-ui[data-ui-system] #qBadge.blocked{background:var(--danger-bg)!important;color:var(--red)!important;border-color:var(--red)!important}
 
 /* Creating a point stays available during route/track work without a second accent command. */
-html#dlight-ui[data-ui-system] [data-ui=fab][data-ui-variant=secondary]:not(:disabled):not([aria-disabled=true]){background:var(--panel)!important;color:var(--ink)!important;border-color:var(--input-line)!important}
+html#dlight-ui[data-ui-system] [data-ui=fab][data-ui-variant=secondary]:not(:disabled):not([aria-disabled=true]){background-color:var(--panel)!important;color:var(--ink)!important;border-color:var(--input-line)!important}
 
 html#dlight-ui[data-ui-system] [data-ui=badge]>.journal-icon{width:16px;height:16px;flex:none}
 
