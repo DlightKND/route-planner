@@ -1,0 +1,9 @@
+/* Approved DLIGHT geometry. Both the paired kit and the production adapter consume it. */
+:root{
+ --ds-desktop-h:40px;--ds-desktop-py:9px;--ds-desktop-font:14px;--ds-desktop-line:20px;
+ --ds-desktop-help:12px;--ds-desktop-chip-h:36px;--ds-desktop-chip-py:6px;--ds-desktop-chip-font:13px;--ds-desktop-chip-line:18px;
+ --ds-touch-h:48px;--ds-touch-py:11px;--ds-touch-font:16px;--ds-touch-line:24px;
+ --ds-touch-help:13px;--ds-touch-chip-h:48px;--ds-touch-chip-py:12px;--ds-touch-chip-font:14px;--ds-touch-chip-line:20px;
+ --ds-control-radius:8px;--ds-inset-radius:6px;--ds-card-radius:12px;--ds-dialog-radius:16px;
+ --ds-count-height:22px;--ds-count-width:24px;--ds-count-font:12px;--ds-count-line:20px;
+}

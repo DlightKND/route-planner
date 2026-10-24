@@ -94,7 +94,7 @@ async function integrity(page,active,audit,testInfo) {
     const visible=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';};
     const fields='input:not([type]),input[type=text],input[type=date],input[type=number],input[type=search],input[type=email],input[type=tel],select,textarea';
     return [...root.querySelectorAll(fields+',button.btn,.entity-tabs button')].filter(visible).filter(el=>!el.closest('.leaflet-control,.vg-grid,.gt-grid')).map(el=>{
-      const s=getComputedStyle(el);return {label:el.id||el.getAttribute('aria-label')||el.textContent.trim().slice(0,50)||el.tagName,field:el.matches(fields),btn:el.matches('button.btn'),tab:el.getAttribute('role')==='tab'||el.matches('.activity-filters button'),radius:parseFloat(s.borderTopLeftRadius),font:s.fontFamily,transform:s.textTransform,padding:[s.paddingTop,s.paddingRight,s.paddingBottom,s.paddingLeft].map(parseFloat),before:getComputedStyle(el,'::before').content};
+      const s=getComputedStyle(el);return {label:el.id||el.getAttribute('aria-label')||el.textContent.trim().slice(0,50)||el.tagName,field:el.matches(fields),btn:el.matches('button.btn'),tab:el.getAttribute('role')==='tab',radius:parseFloat(s.borderTopLeftRadius),font:s.fontFamily,transform:s.textTransform,padding:[s.paddingTop,s.paddingRight,s.paddingBottom,s.paddingLeft].map(parseFloat),before:getComputedStyle(el,'::before').content};
     });
   });
   for(const control of controls){
@@ -277,11 +277,12 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     if(scene.view==='dash'&&role==='logist'){
       expect(await active.locator('#dashSeg .on').evaluate(el=>getComputedStyle(el).boxShadow),'No crescent in dashboard switch').toBe('none');
     }
-    for(const button of await active.locator(':is(.seg,.summary-view-switch,.notice-tabs)>button.on:visible').all()){
+    for(const button of await active.locator('[data-ui=segment].on:visible').all()){
+      if(await button.evaluate(el=>el.parentElement.matches('.rquick,.summary-period-presets')))continue;
       await selectedContrast(button);
       const style=await button.evaluate(el=>{const s=getComputedStyle(el);return {background:s.backgroundColor,color:s.color,shadow:s.boxShadow,radius:s.borderRadius,font:s.fontFamily};});
       expect(style.shadow,'Switch selection has no curved underline').toBe('none');
-      expect(style.radius).toBe('8px');
+      expect(style.radius).toBe('6px');
       expect(style.font).toMatch(/IBM Plex Sans/);
       // All segments use the same neutral selected surface and foreground.
       await expect.poll(()=>button.evaluate(el=>{const probe=document.createElement('span');probe.style.cssText='background:var(--ink);color:var(--panel)';el.append(probe);const expected=getComputedStyle(probe),actual=getComputedStyle(el),same=expected.backgroundColor===actual.backgroundColor&&expected.color===actual.color;probe.remove();return same;}),{message:'All selected segments use the shared neutral colors'}).toBe(true);

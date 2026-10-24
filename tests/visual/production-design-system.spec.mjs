@@ -16,7 +16,7 @@ for(const role of ['logist','engineer','admin'])test('production components cove
  const routes=['dash','notifications','job/'+fixtureIDs.job,'order/'+fixtureIDs.activeOrder,'trip/'+fixtureIDs.trip,'settings'];
  if(role!=='engineer')routes.push('planner/jobs','planner/orders','planner/trips','catalog','map');
  const dir='test-results/production-design/'+info.project.name;mkdirSync(dir,{recursive:true});
- for(const route of routes){await page.goto('/#/'+route);await expect(page.locator('.view.active')).toBeVisible();await expect(page.locator('.view.active .shim')).toHaveCount(0);await auditApplicationDesign(page);await page.screenshot({path:dir+'/'+role+'-'+route.replaceAll('/','-')+'.png',animations:'disabled'});}
+ for(const route of routes){await page.goto('/#/'+route);const section=route.split('/')[0],view=section==='dash'&&role==='engineer'?'planner':section;await expect(page.locator('.view-'+view+'.active')).toBeVisible();await expect(page.locator('.view.active .shim')).toHaveCount(0);await auditApplicationDesign(page);await page.screenshot({path:dir+'/'+role+'-'+route.replaceAll('/','-')+'.png',animations:'disabled'});}
  expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
 test('production searchable crew picker keeps native selection and measured mini-pill',async({page},info)=>{
