@@ -8,9 +8,9 @@ export const UI_SELECTORS = {
   card: '.card,.kcard,.record-card,.notice-row,.staff-row,.stock-row,.emrow,.eqitem,.pt,.order-brief,.order-child,.trip-choice-card,.order-result-summary,.summary-quick-actions,.planwarn',
   popover: '.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover',
   badge: '.pill,.design-status,.journal-recovery-badge,.journal-review-progress,.activity-type',
-  geometry: '.vg-block,.vg-piece,.vg-group,.vg-cut-handle,.vg-divide,.vg-win-line,.vg-plan-tools,.leaflet-marker-icon,.leaflet-interactive,.journal-time-part',
+  geometry: '.vg-block,.vg-piece,.vg-group,.vg-cut-handle,.vg-win-line,.leaflet-marker-icon,.leaflet-interactive,.journal-time-part',
 };
-const isIcon = el => el.matches('.qm,.ph-close,.ph-del,.avx,.foldx-btn,.depot-toggle,.gp-close,.mleg-close,.modal-close,.entity-actions-trigger,.leaflet-control-zoom a,[data-gtools]') ||
+const isIcon = el => el.matches('.vg-plan-tools,.vg-divide,.qm,.ph-close,.ph-del,.avx,.foldx-btn,.depot-toggle,.gp-close,.mleg-close,.modal-close,.entity-actions-trigger,.leaflet-control-zoom a,[data-gtools]') ||
   (!el.querySelector('input,select,textarea') && (/^[←→↗↻↺×✕✖⋯…+−–?☰⌕]$/.test(el.textContent.trim()) || (!el.textContent.trim() && !!el.querySelector('svg'))));
 export function controlKind(el) {
   if(el.matches(UI_SELECTORS.geometry))return 'geometry';

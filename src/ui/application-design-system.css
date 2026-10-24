@@ -163,3 +163,9 @@ html#dlight-ui[data-ui-system] .dispatcher-toolbar{align-items:start}
 html#dlight-ui[data-ui-system] .dispatcher-toolbar>.searchbox{align-self:start}
 html#dlight-ui[data-ui-system] [data-summary-dates],html#dlight-ui[data-ui-system] .journal-periodbar>details>summary{font:600 13px/20px var(--mono)!important;padding-inline:4px!important}
 @media(max-width:760px){html#dlight-ui[data-ui-system] .summary-period-top{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}html#dlight-ui[data-ui-system] .summary-period-top .summary-period-today{justify-self:start;min-width:max-content;width:auto}}
+/* Timeline commands use full icon targets; duration handles retain data geometry. */
+html#dlight-ui[data-ui-system] .vg-group .vg-gtitle{right:calc(var(--ui-icon) + 8px)}
+html#dlight-ui[data-ui-system] .vg-group.has-act .vg-gtitle{right:calc(var(--ui-icon)*2 + 16px)}
+html#dlight-ui[data-ui-system] .vg-piece.man .vg-label{right:calc(var(--ui-icon)*2 + 16px)}
+html#dlight-ui[data-ui-system] .vg-piece .vg-plan-tools{right:calc(var(--ui-icon) + 12px)}
+html#dlight-ui[data-ui-system] .vg-block.short .vg-plan-tools{display:none}

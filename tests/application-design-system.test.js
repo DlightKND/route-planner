@@ -4,8 +4,8 @@ import {installApplicationDesignSystem,controlKind} from '../src/ui/application-
 const windows=[],controllers=[];
 afterEach(async()=>{for(const c of controllers.splice(0))c.destroy();for(const w of windows.splice(0))await w.happyDOM.close();});
 it('covers native controls, semantic tabs, filters and duration-bound data without opt-in classes',()=>{
- const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<button>Сохранить</button><input type="date"><div class="seg"><button>Список</button></div><button class="chip">Все</button><button role="tab">История</button><div role="button" class="vg-piece"></div>';
- expect([...d.querySelectorAll('button,input,[role=button]')].map(controlKind)).toEqual(['button','field','segment','chip','tab','geometry']);
+ const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<button>Сохранить</button><input type="date"><div class="seg"><button>Список</button></div><button class="chip">Все</button><button role="tab">История</button><div role="button" class="vg-piece"></div><button class="vg-plan-tools">⋯</button>';
+ expect([...d.querySelectorAll('button,input,[role=button]')].map(controlKind)).toEqual(['button','field','segment','chip','tab','geometry','icon']);
 });
 it('hydrates existing and subsequently inserted controls and preserves screen-owned handlers',async()=>{
  const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<button class="btn amber">Сохранить</button><button class="btn ghost" id="cancel">Отмена</button>';let clicks=0;d.querySelector('button').onclick=()=>clicks++;controllers.push(installApplicationDesignSystem(d));d.querySelector('button').click();expect(clicks).toBe(1);expect(d.querySelector('button').dataset.uiVariant).toBe('primary');expect(d.querySelector('#cancel').dataset.uiVariant).toBe('secondary');
