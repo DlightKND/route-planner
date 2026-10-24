@@ -38,3 +38,8 @@ test('pending save blocks cancellation and editing while retaining its width',{t
 test('failed reconnect keeps queued data for a later successful retry',{tag:'@kit-offline-retry'},async({page},info)=>{
  const s=await boot(page,info,'offline-sync');await s.locator('[data-x-field=offline]').check();await s.locator('[data-x-field=value]').fill('Выезд из очереди');await s.locator('[data-x-action=offline-save]').click();await expect(s.locator('.x-demo-status')).toContainText('На сервер ещё не записано');await page.locator('#xState').selectOption('error');await s.locator('[data-x-action=reconnect]').click();await expect(s.locator('.x-demo-status')).toContainText('Не удалось');await expect(s).toHaveAttribute('data-queued','true');await expect(s.locator('[data-x-field=value]')).toHaveValue('Выезд из очереди');await page.locator('#xState').selectOption('default');await s.locator('[data-x-action=reconnect]').click();await expect(s.locator('.x-demo-status')).toContainText('подтвердил запись');await expect(s).toHaveAttribute('data-queued','false');
 });
+
+
+test('counted filters retain the promised desktop and touch height',{tag:'@kit-counted-chip-box'},async({page},info)=>{
+ const s=await boot(page,info,'count-badge');for(const [density,height] of [['desktop',36],['touch',48]]){await page.locator('#xDensity').selectOption(density);for(const chip of await s.locator('.x-chip').all()){expect((await chip.boundingBox()).height).toBeCloseTo(height,0);expect((await chip.locator('.x-count').boundingBox()).height).toBeCloseTo(22,0);}}
+});

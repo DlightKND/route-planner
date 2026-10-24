@@ -79,7 +79,13 @@
         "file": "src/unified-journal.css",
         "marker": ".unassigned-filter>button b"
       },
-      "base_example_v04": true
+      "base_example_v04": true,
+      "behavior_checks": [
+        {
+          "key": "counted-chip-box",
+          "label": "точная высота filter chip с вложенным счётчиком: 36/48 px"
+        }
+      ]
     },
     {
       "id": "filter-chip",
