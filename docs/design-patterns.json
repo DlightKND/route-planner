@@ -3,7 +3,7 @@
   "audited_commit": "c3fee9258779de525477fa7f17350164483ece4f",
   "date": "2026-10-24",
   "scope": "Current frontend source. Contract coverage is not runtime integration or user testing.",
-  "catalogue_version": "0.5",
+  "catalogue_version": "0.6",
   "patterns": [
     {
       "id": "action-button",

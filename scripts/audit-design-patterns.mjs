@@ -33,6 +33,9 @@ const reviewIds=new Set(review.map(p=>p.id)),rules=new Set(review.flatMap(p=>p.r
 if(review.length!==registry.patterns.length||reviewIds.size!==review.length)errors.push('Review examples must cover every registry pattern exactly once');
 for(const p of registry.patterns){const example=review.find(v=>v.id===p.id),row=reviewRows.get(p.id);if(!example||!row||example.recommendation!==row.text||example.rules.join(',')!==row.rules.join(','))errors.push('Unreflected recommendation '+p.id);}
 for(const m of reviewDoc.matchAll(/^\| (R\d{2}) \|/gm))if(!rules.has(m[1]))errors.push('Unreflected rule '+m[1]);
+const behaviorTests=read('tests/visual/design-system-behavior.spec.mjs'),behaviorKeys=new Set();
+for(const example of review)for(const check of example.behavior_checks||[]){if(!check.key||!check.label||behaviorKeys.has(check.key))errors.push('Invalid behavior contract '+example.id);behaviorKeys.add(check.key);if(!behaviorTests.includes("'@kit-"+check.key+"'"))errors.push('Missing executable behavior check '+example.id+'/'+check.key);}
+for(const tag of behaviorTests.matchAll(/tag:\s*'@kit-([^']+)'/g))if(!behaviorKeys.has(tag[1]))errors.push('Unregistered behavior check '+tag[1]);
 if(errors.length)throw Error(errors.join('\n'));
 const count=value=>registry.patterns.filter(p=>p.specification_v02===value).length;
 const examples=registry.patterns.filter(p=>p.catalogue.present).length;

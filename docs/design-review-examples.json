@@ -1,5 +1,5 @@
 {
-  "version": "0.5",
+  "version": "0.6",
   "baseline": "0.4 catalogue geometry; new scenario diagrams are not production screenshots",
   "patterns": [
     {
@@ -15,7 +15,13 @@
         "file": "src/entity-actions.js",
         "marker": "data-entity-save"
       },
-      "base_example_v04": true
+      "base_example_v04": true,
+      "behavior_checks": [
+        {
+          "key": "pending-controls",
+          "label": "блокировка отмены и редактирования во время сохранения"
+        }
+      ]
     },
     {
       "id": "icon-button",
@@ -73,7 +79,13 @@
         "file": "src/unified-journal.css",
         "marker": ".unassigned-filter>button b"
       },
-      "base_example_v04": true
+      "base_example_v04": true,
+      "behavior_checks": [
+        {
+          "key": "counted-chip-box",
+          "label": "точная высота filter chip с вложенным счётчиком: 36/48 px"
+        }
+      ]
     },
     {
       "id": "filter-chip",
@@ -87,7 +99,13 @@
         "file": "src/unassigned-tracks.js",
         "marker": "data-ut-mode"
       },
-      "base_example_v04": true
+      "base_example_v04": true,
+      "behavior_checks": [
+        {
+          "key": "filter-controls",
+          "label": "одиночный/множественный выбор и сброс"
+        }
+      ]
     },
     {
       "id": "view-segment",
@@ -172,7 +190,8 @@
         "file": "src/engineer-picker.js",
         "marker": "panel.setAttribute('role','dialog')"
       },
-      "base_example_v04": true
+      "base_example_v04": true,
+      "display_name": "Выбор инженеров: поиск и множественный выбор"
     },
     {
       "id": "search-field",
@@ -363,7 +382,13 @@
         "file": "index.html",
         "marker": "id=\"moreSheet\""
       },
-      "base_example_v04": false
+      "base_example_v04": false,
+      "behavior_checks": [
+        {
+          "key": "navigation-more",
+          "label": "навигация «Ещё» и rail/bottom adaptation"
+        }
+      ]
     },
     {
       "id": "entity-tabs",
@@ -378,7 +403,13 @@
         "file": "src/entity-tabs.js",
         "marker": "export function createEntityTabs("
       },
-      "base_example_v04": false
+      "base_example_v04": false,
+      "behavior_checks": [
+        {
+          "key": "tab-draft",
+          "label": "сохранность черновиков при переключении вкладок"
+        }
+      ]
     },
     {
       "id": "record-card",
@@ -633,7 +664,13 @@
         "file": "src/entity-activity.js",
         "marker": "activity-compose-disclosure"
       },
-      "base_example_v04": false
+      "base_example_v04": false,
+      "behavior_checks": [
+        {
+          "key": "comment-evidence",
+          "label": "комментарий с вложением, повтор и закрепление"
+        }
+      ]
     },
     {
       "id": "notifications-inbox",
@@ -751,7 +788,13 @@
         "file": "src/app.js",
         "marker": "function offlineBanner("
       },
-      "base_example_v04": false
+      "base_example_v04": false,
+      "behavior_checks": [
+        {
+          "key": "offline-retry",
+          "label": "сохранность очереди при ошибке синхронизации"
+        }
+      ]
     },
     {
       "id": "trash-restore",
@@ -810,7 +853,13 @@
         "file": "src/account-profile.js",
         "marker": "export function openAccountProfile("
       },
-      "base_example_v04": false
+      "base_example_v04": false,
+      "behavior_checks": [
+        {
+          "key": "profile-preview",
+          "label": "аватар и тема: preview, ошибка, сохранение, отмена"
+        }
+      ]
     },
     {
       "id": "responsive-sticky",
