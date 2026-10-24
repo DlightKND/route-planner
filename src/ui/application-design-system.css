@@ -142,3 +142,10 @@ html#dlight-ui[data-ui-system] .journal-periodbar .rangebar .rquick{grid-column:
 @media(max-width:760px){html#dlight-ui[data-ui-system] dialog.entity-panel-dialog{inset:auto 0 0!important;margin:0!important;width:100%!important;max-width:none!important;height:auto!important;max-height:85dvh!important}}
 html#dlight-ui[data-ui-system] [data-ui-group=segments]{width:100%;max-width:480px;flex-wrap:nowrap!important}
 html#dlight-ui[data-ui-system] [data-ui=segment]{white-space:nowrap!important}
+html#dlight-ui[data-ui-system] [data-ui]:focus-visible{outline:2px solid var(--focus)!important;outline-offset:3px!important}
+html#dlight-ui[data-ui-system] :is(.view,dialog) table{font:400 var(--ui-font)/1.5 var(--sans)!important}
+html#dlight-ui[data-ui-system] :is(.view,dialog) table th{font-weight:500}
+html#dlight-ui[data-ui-system] :is(.view,dialog) table :is(th,td){padding:12px}
+html#dlight-ui[data-ui-system] :is(.card h3,.kcard h4,.order-card-title){font:600 16px/1.4 var(--sans)!important}
+html#dlight-ui[data-ui-system] [data-ui-table-frame]{min-width:0;max-width:100%;overflow:auto;overscroll-behavior-x:contain}
+html#dlight-ui[data-ui-system] [data-ui-table-frame]:focus-visible{outline:2px solid var(--focus);outline-offset:3px}

@@ -125,7 +125,7 @@
 - `group` → `view-segment`, `checkbox-group`, `filter-chip` (5 файлов)
 - `img` → `map-explorer`, `charts-tables` (3 файла)
 - `note` → `feedback` (1 файл)
-- `region` → `map-explorer`, `record-card` (4 файла)
+- `region` → `map-explorer`, `record-card` (5 файлов)
 - `slider` → `range-slider` (1 файл)
 - `status` → `feedback` (13 файлов)
 - `tab` → `entity-tabs` (2 файла)
@@ -134,4 +134,4 @@
 
 Связь type/role с ID классифицирует сигнал, а не автоматически распознаёт смысл каждого его вхождения.
 
-Хеш проверенных production-исходников: `16d2c6c154c1428774b33f33de4370114eca06e32319f14f075a38f7c433be2d`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
+Хеш проверенных production-исходников: `3d734bc42b175bddbe0e3e5887fe581aae58611303f924421ab268986d923cd8`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.

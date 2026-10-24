@@ -77,6 +77,10 @@ export function installApplicationDesignSystem(root=document) {
       assign(el,'uiTone',tone);assign(el,'uiEmpty',String(/^0$/.test(el.textContent.trim())));
     });
     root.querySelectorAll(UI_SELECTORS.badge).forEach(el=>assign(el,'ui','badge'));
+    root.querySelectorAll('table').forEach(table=>{
+      if(table.closest('.ds-kit')||table.parentElement.matches('[data-ui-table-frame],[class*=scroll]'))return;
+      const frame=root.createElement('div');frame.dataset.uiTableFrame='';frame.tabIndex=0;frame.setAttribute('role','region');frame.setAttribute('aria-label',table.getAttribute('aria-label')||'Таблица с горизонтальной прокруткой');table.before(frame);frame.append(table);
+    });
     root.querySelectorAll('label').forEach(el=>{if(el.querySelector(':scope>input[type=checkbox],:scope>input[type=radio]'))assign(el,'ui','option');});
   };
   let queued=false,disposed=false;
