@@ -8,6 +8,7 @@
 .ds-kit h3{font-size:16px;margin:0 0 12px}
 .ds-kit p{margin:0 0 12px}.ds-kit .ds-muted{color:var(--ink-dim)}
 .ds-kit .ds-eyebrow{font:500 12px/1.5 var(--mono);color:var(--ink-dim)}
+.ds-kit nav a,.ds-kit #rareActions a{display:inline-flex;align-items:center;min-height:44px;min-width:44px;padding:8px 0}
 .ds-kit .ds-section{margin-block:32px}.ds-kit .ds-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ds-kit .ds-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:24px}
 .ds-kit .ds-card{padding:24px;border:var(--bd);border-radius:var(--r-md);background:var(--panel);box-shadow:var(--shadow-sm);min-width:0}
