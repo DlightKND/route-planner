@@ -195,8 +195,8 @@ html#dlight-ui[data-ui-system] [data-ui=badge][data-ui-tone=danger]{background:v
 html#dlight-ui[data-ui-system] [data-ui=badge][data-ui-tone=info]{background:var(--panel-2)!important;color:var(--cyan)!important;border-color:var(--line)!important}
 html#dlight-ui[data-ui-system] [data-ui=badge].is-zero{background:var(--panel-2)!important;color:var(--ink-dim)!important;border:1px solid var(--line)!important}
 html#dlight-ui[data-ui-system] [data-ui=count]:empty{display:none!important}
-html#dlight-ui[data-ui-system] #qBadge{background:var(--warning-bg)!important;color:var(--warning)!important;border-color:var(--warning)!important}
-html#dlight-ui[data-ui-system] #qBadge.blocked{background:var(--danger-bg)!important;color:var(--red)!important;border-color:var(--red)!important}
+html#dlight-ui[data-ui-system] #qBadge{background-color:var(--warning-bg)!important;color:var(--warning)!important;border-color:var(--warning)!important}
+html#dlight-ui[data-ui-system] #qBadge.blocked{background-color:var(--danger-bg)!important;color:var(--red)!important;border-color:var(--red)!important}
 
 /* Creating a point stays available during route/track work without a second accent command. */
 html#dlight-ui[data-ui-system] [data-ui=fab][data-ui-variant=secondary]:not(:disabled):not([aria-disabled=true]){background-color:var(--panel)!important;color:var(--ink)!important;border-color:var(--input-line)!important}
@@ -205,3 +205,6 @@ html#dlight-ui[data-ui-system] [data-ui=badge]>.journal-icon{width:16px;height:1
 
 html#dlight-ui[data-ui-system] [data-ui=fab]{padding:0!important;font:400 28px/1 var(--sans)!important;transform:none!important;transition:none!important;cursor:pointer}
 html#dlight-ui[data-ui-system] [data-ui=row]{transform:none!important;transition:none!important}
+
+/* Fixed queue status centres through insets, so command pressed states never move it. */
+html#dlight-ui[data-ui-system] #qBadge{left:16px!important;right:16px!important;margin-inline:auto!important;inline-size:max-content!important;max-inline-size:calc(100vw - 32px)!important;white-space:normal;text-align:center}

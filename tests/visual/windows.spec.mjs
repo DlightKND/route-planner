@@ -9,6 +9,7 @@ import {auditApplicationDesign} from './application-design-audit.mjs';
 // QA-only entry points exercise the production functions; never shipped.
 const hooks=`
 window.__windowTests={openJob,jobHead,openTrip,openEquip:window.openEquip,editClient:window.editClient,switchTab,ensureRefs,
+ queueStatus:async(blocked=false)=>{await qRefresh();qCount=3;qBlocked=blocked?{blocked_error:'Нет связи'}:null;qDeferred=null;paintQueue();},
  vehicle:()=>{vehState=[{vehicle_id:'vehicle-a',ts:new Date().toISOString(),lat:49.99,lng:36.23,speed:12,depot_state:'outside'}];vehTrackSessions=[];vehActiveTrips={};showVehModal('vehicle-a');},
  routePanel:async()=>{await switchTab('map');document.querySelector('[data-sb=route]').click();},
  nestedPush:()=>{openPush();confirmDialog('Подтвердить изменение?',{okText:'Подтвердить'});},
@@ -168,4 +169,14 @@ test('request context editor keeps its mounted fields visible when the header re
  await page.locator('[data-request-edit-context]').click();const dialog=page.getByRole('dialog',{name:'Изменить заявку',exact:true});await expect(dialog).toBeVisible();await expect(field).toBeVisible();
  await open(page,'jobHead');await expect(field).toBeVisible();await expect(field).toHaveValue(initial);expect(await page.evaluate(()=>window.__originalRequestField===document.getElementById('jbClient'))).toBe(true);
  await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(page.locator('#requestContext')).toBeVisible();await expect(field).toBeHidden();
+});
+
+test('production offline queue banner fits the viewport and keeps its semantic pressed state',async({page})=>{
+ for(const blocked of [false,true]){
+  await open(page,'queueStatus',blocked);const badge=page.locator('#qBadge');await expect(badge).toBeVisible();await expect(badge).toContainText('3');await page.evaluate(()=>document.fonts.ready);
+  const box=await badge.boundingBox(),viewport=page.viewportSize();expect(box.x).toBeGreaterThanOrEqual(16);expect(box.x+box.width).toBeLessThanOrEqual(viewport.width-16);
+  const rail=viewport.width<=760?(await page.locator('.rail').boundingBox()).height:0;expect(box.y+box.height).toBeLessThanOrEqual(viewport.height-rail-8);
+  expect(await badge.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();expect(await badge.evaluate(el=>getComputedStyle(el).backgroundImage)).not.toBe('none');expect(await badge.boundingBox()).toEqual(box);await page.mouse.move(0,0);await page.mouse.up();
+ }
 });
