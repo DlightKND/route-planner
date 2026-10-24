@@ -1,4 +1,4 @@
-/* v0.1 candidate components. Opt in with .ds-kit; consumes the application's tokens. */
+/* v0.2 candidate components. Opt in with .ds-kit; consumes the application's tokens. */
 .ds-kit{font:400 var(--fs-body)/1.5 var(--sans);color:var(--ink);background:var(--bg);margin:0;padding:24px;overflow:auto;height:auto;display:block}
 .ds-kit *{box-sizing:border-box}
 .ds-kit [hidden]{display:none!important}
@@ -62,11 +62,12 @@
 @media(forced-colors:active){.ds-kit :is(.ds-button,.ds-chip,.ds-badge,.ds-switch-track){border:1px solid ButtonText}.ds-kit [aria-pressed=true]{outline:2px solid Highlight}}
 @keyframes ds-spin{to{transform:rotate(360deg)}}
 /* v0.2: count badges mirror the journal; selection never recolors their semantic role. */
-.ds-kit .ds-count{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:22px;padding:1px 6px;border-radius:var(--r-pill);background:var(--panel-2);color:var(--ink);font:600 12px/20px var(--sans);font-variant-numeric:tabular-nums;flex-shrink:0}
+.ds-kit{--count-neutral-bg:color-mix(in srgb,var(--ink) 10%,transparent)}
+.ds-kit .ds-count{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:22px;padding:1px 6px;border-radius:var(--r-pill);background:var(--count-neutral-bg);color:var(--ink);font:600 12px/20px var(--sans);font-variant-numeric:tabular-nums;flex-shrink:0}
 .ds-kit .ds-count[data-tone=danger]{background:var(--danger-bg);color:var(--red)}
 .ds-kit .ds-count[data-tone=warning]{background:var(--warning-bg);color:var(--warning)}
 .ds-kit .ds-count[data-tone=success]{background:var(--success-bg);color:var(--green)}
-.ds-kit .ds-count[data-empty=true],.ds-kit .ds-count[data-state]{background:var(--panel-2);color:var(--ink-dim)}
+.ds-kit .ds-count[data-empty=true],.ds-kit .ds-count[data-state]{background:var(--count-neutral-bg);color:var(--ink)}
 .ds-kit .ds-segmented{display:flex;flex-wrap:wrap;gap:2px;padding:2px;border:var(--bd);border-radius:var(--r-sm);background:var(--panel-2);width:fit-content;max-width:100%;margin-bottom:12px}
 .ds-kit .ds-segmented>button{display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:1 1 auto;min-height:44px;min-width:44px;padding:8px 12px;border:1px solid transparent;border-radius:var(--r-sm);font-weight:500;line-height:1.35;background:transparent;color:var(--ink-dim);cursor:pointer;overflow-wrap:anywhere}
 .ds-kit .ds-segmented>button[aria-pressed=true]{background:var(--ink);color:var(--panel);border-color:var(--ink);font-weight:600}
@@ -81,7 +82,7 @@
 .ds-kit input:is([type=date],[type=month],[type=time],[type=datetime-local]){min-inline-size:0;max-inline-size:100%}
 @media(hover:hover) and (pointer:fine){.ds-kit .ds-segmented>button:not(:disabled,[aria-pressed=true]):hover{background:var(--panel);color:var(--ink)}}
 .ds-kit .ds-segmented>button:not(:disabled):active{box-shadow:inset 0 0 0 1px var(--focus)}
-@media(max-width:760px){.ds-kit .ds-period>.ds-row{align-items:stretch}.ds-kit .ds-period .ds-segmented{flex:1}.ds-kit .ds-period-label{font-size:12px;gap:4px}.ds-kit .ds-period-range{gap:0;padding:2px}}
+@media(max-width:760px){.ds-kit .ds-period>.ds-row{align-items:stretch}.ds-kit .ds-period .ds-segmented{flex:1 0 100%;width:100%}.ds-kit .ds-period-label{font-size:12px;gap:4px}.ds-kit .ds-period-range{gap:0;padding:2px}}
 @media(forced-colors:active){.ds-kit .ds-count,.ds-kit .ds-segmented{border:1px solid ButtonText}.ds-kit .ds-segmented>button[aria-pressed=true]{outline:2px solid Highlight}}
 
 .ds-kit .ds-count-examples{margin-block:12px}

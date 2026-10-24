@@ -39,6 +39,7 @@ test('selection and destructive dialog support keyboard and focus return',async(
 });
 test('nested counters preserve journal semantics when filters change',async({page},info)=>{
  await boot(page,info);const chip=page.locator('[data-filter=review]'),count=chip.locator('.ds-count');
+ const neutral=await page.locator('[data-filter=all] .ds-count').evaluate(el=>({own:getComputedStyle(el).backgroundColor,parent:getComputedStyle(el.parentElement).backgroundColor}));expect(neutral.own).not.toBe(neutral.parent);
  await expect(count).toHaveText('3');await expect(chip).not.toContainText('·');await expect(count).not.toHaveAttribute('tabindex');
  const before=await count.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,fg:getComputedStyle(el).color}));await chip.click();
  expect(await count.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,fg:getComputedStyle(el).color}))).toEqual(before);
