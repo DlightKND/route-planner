@@ -20,7 +20,7 @@
 .g-input-chip{display:inline-flex;align-items:center;gap:4px;min-height:44px;background:var(--panel-2);border:var(--bd);border-radius:var(--r-pill);padding-inline-start:12px;max-width:100%;font-size:13px}
 .g-input-chip>span{min-width:0;overflow-wrap:anywhere}.g-input-chip>button{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--ink);font-size:20px;cursor:pointer}
 .ds-kit .g-dialog{position:fixed;inset:0;width:min(560px,calc(100% - 32px));max-height:calc(100dvh - 32px);margin:auto;overflow:auto;padding:24px;color:var(--ink);background:var(--panel);border:var(--bd);border-radius:var(--r-lg);box-shadow:var(--shadow-lg)}
-.ds-kit .g-dialog::backdrop{background:var(--overlay-backdrop);backdrop-filter:var(--overlay-blur)}
+.ds-kit dialog.g-dialog::backdrop{background:var(--overlay-backdrop);backdrop-filter:var(--overlay-blur)}
 .ds-kit .g-dialog[data-layout=alert]{max-width:400px}.g-dialog h2{font-size:20px!important;line-height:1.4!important}.g-dialog p{line-height:1.55}
 .g-dialog-actions{justify-content:flex-end!important;gap:8px!important;flex-wrap:wrap;margin-top:20px}.g-dialog-actions>.ds-button{min-height:48px}
 .g-date-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px}.g-error-slot{min-height:22px;margin-block:8px!important}
@@ -63,3 +63,13 @@
 .ds-kit[data-guidance=proposed][data-group-style=expressive] .g-choice>button:last-child{border-start-end-radius:24px;border-end-end-radius:24px}
 .ds-kit[data-guidance=proposed][data-group-style=expressive] .g-choice>button[aria-pressed=true]{background:var(--ink);color:var(--panel);border-radius:var(--r-pill)}
 .ds-kit[data-guidance=proposed][data-group-style=expressive] .g-choice>button:active{border-radius:var(--r-md)}
+
+/* Keep labels legible and peer actions equal at narrow widths. */
+.ds-kit .g-status{margin-block:16px}.ds-kit .g-action-row{align-items:stretch}.g-shift-caption{display:none}
+@media(max-width:760px){
+ .ds-kit .g-action-row{display:grid;grid-template-columns:1fr;align-items:stretch}
+ .ds-kit[data-guidance=proposed] #gPane-dates .ds-period-range{display:grid;grid-template-columns:1fr 1fr}
+ .ds-kit[data-guidance=proposed] #gPane-dates .ds-period-label{grid-column:1/-1;grid-row:1;width:100%;font-size:13px;gap:8px}
+ .ds-kit[data-guidance=proposed] #gPane-dates .ds-period-range>.ds-button[data-icon]{grid-row:2;width:100%;font-size:16px}
+ .ds-kit[data-guidance=proposed] .g-shift-caption{display:inline;font:500 14px/1.4 var(--sans)}
+}
