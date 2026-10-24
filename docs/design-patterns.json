@@ -1,0 +1,1129 @@
+{
+  "version": "0.3",
+  "audited_commit": "c3fee9258779de525477fa7f17350164483ece4f",
+  "date": "2026-10-24",
+  "scope": "Current frontend source. Contract coverage is not runtime integration or user testing.",
+  "catalogue_version": "0.2",
+  "patterns": [
+    {
+      "id": "action-button",
+      "name": "Кнопка: primary / secondary / tertiary / destructive",
+      "group": "Действия",
+      "specification_v02": "documented",
+      "contract": "button--iconbutton--link",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/entity-actions.js",
+          "marker": "data-entity-save"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "id=\"saveReview\""
+        }
+      }
+    },
+    {
+      "id": "icon-button",
+      "name": "Кнопка с иконкой и доступным именем",
+      "group": "Действия",
+      "specification_v02": "documented",
+      "contract": "button--iconbutton--link",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/journal-route.js",
+          "marker": "data-expand-map"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "data-icon aria-label=\"Другие действия\""
+        }
+      }
+    },
+    {
+      "id": "navigation-link",
+      "name": "Ссылка, переход и browser back",
+      "group": "Навигация",
+      "specification_v02": "documented",
+      "contract": "button--iconbutton--link",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "function routeUrl("
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "href=\"#selection\""
+        }
+      }
+    },
+    {
+      "id": "status-badge",
+      "name": "Неинтерактивный статус",
+      "group": "Выбор",
+      "specification_v02": "documented",
+      "contract": "badge--filterchip--selectionchip",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/presence-decision.js",
+          "marker": "journal-result-badge"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "class=\"ds-badge\""
+        }
+      }
+    },
+    {
+      "id": "count-badge",
+      "name": "Вложенный счётчик: смысл / 0 / неизвестно",
+      "group": "Выбор",
+      "specification_v02": "documented",
+      "contract": "countbadge-вложенная-мини-пилюля-из-журнала",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/unified-journal.css",
+          "marker": ".unassigned-filter>button b"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "class=\"ds-count\""
+        }
+      }
+    },
+    {
+      "id": "filter-chip",
+      "name": "Фильтры: один или несколько, сброс",
+      "group": "Выбор",
+      "specification_v02": "documented",
+      "contract": "badge--filterchip--selectionchip",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/unassigned-tracks.js",
+          "marker": "data-ut-mode"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "data-filter=\"review\""
+        }
+      }
+    },
+    {
+      "id": "view-segment",
+      "name": "Сегментированный выбор представления",
+      "group": "Выбор",
+      "specification_v02": "documented",
+      "contract": "segmentedcontrol-переключатели-со-сводки",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "data-summary-view"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-controls.js",
+          "marker": "data-segment=\"view\""
+        }
+      }
+    },
+    {
+      "id": "decision-radio",
+      "name": "Radio / взаимоисключающий выбор в черновике",
+      "group": "Выбор",
+      "specification_v02": "documented",
+      "contract": "select--combobox--checkbox--radio--switch--tabs",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "name=\"tpMain\""
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "name=\"presence\""
+        }
+      }
+    },
+    {
+      "id": "checkbox-group",
+      "name": "Один checkbox и множественный выбор",
+      "group": "Выбор",
+      "specification_v02": "documented",
+      "contract": "select--combobox--checkbox--radio--switch--tabs",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/engineer-picker.js",
+          "marker": "input.type='checkbox'"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "Команда выезда · несколько значений"
+        }
+      }
+    },
+    {
+      "id": "boolean-switch",
+      "name": "Немедленная настройка Вкл / Выкл",
+      "group": "Выбор",
+      "specification_v02": "documented",
+      "contract": "select--combobox--checkbox--radio--switch--tabs",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "vehShow=!vehShow"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "role=\"switch\""
+        }
+      }
+    },
+    {
+      "id": "native-select",
+      "name": "Одиночный выбор из списка",
+      "group": "Поля",
+      "specification_v02": "documented",
+      "contract": "select--combobox--checkbox--radio--switch--tabs",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "index.html",
+          "marker": "id=\"jbStatus\""
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "id=\"engineer\""
+        }
+      }
+    },
+    {
+      "id": "multi-select-popover",
+      "name": "Выбор инженеров: popover с checkbox, без поиска",
+      "group": "Поля",
+      "specification_v02": "partial",
+      "contract": "pattern-selection",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/engineer-picker.js",
+          "marker": "panel.setAttribute('role','dialog')"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "search-field",
+      "name": "Поиск списка: debounce / clear / пусто / ошибка",
+      "group": "Поля",
+      "specification_v02": "missing",
+      "contract": "pattern-selection",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/notifications.js",
+          "marker": "searchTimer=setTimeout(()=>load(),250)"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "search-result-picker",
+      "name": "Адресный поиск и выбор результата",
+      "group": "Поля",
+      "specification_v02": "partial",
+      "contract": "pattern-selection",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "async function geocode("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "text-field",
+      "name": "Текст / email / телефон / textarea",
+      "group": "Поля",
+      "specification_v02": "documented",
+      "contract": "field--textarea--number--date",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "index.html",
+          "marker": "id=\"fPhone\""
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "id=\"reason\""
+        }
+      }
+    },
+    {
+      "id": "number-unit",
+      "name": "Количество / деньги / длительность / доля",
+      "group": "Поля",
+      "specification_v02": "partial",
+      "contract": "pattern-inputs",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/service-orders.js",
+          "marker": "data-item-remove"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "id=\"minutes\""
+        }
+      }
+    },
+    {
+      "id": "date-field",
+      "name": "Дата, время, дата со временем, месяц",
+      "group": "Поля",
+      "specification_v02": "documented",
+      "contract": "семейство-datecontrol-не-один-универсальный-календарь",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "'datetime-local'"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-controls.js",
+          "marker": "id=\"kitDeadline\""
+        }
+      }
+    },
+    {
+      "id": "date-range",
+      "name": "Диапазон дат в черновике",
+      "group": "Поля",
+      "specification_v02": "documented",
+      "contract": "семейство-datecontrol-не-один-универсальный-календарь",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "data-summary-dates"
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-controls.js",
+          "marker": "id=\"kitPeriodForm\""
+        }
+      }
+    },
+    {
+      "id": "period-navigator",
+      "name": "Пресеты, стрелки и календарный период",
+      "group": "Выбор",
+      "specification_v02": "documented",
+      "contract": "семейство-datecontrol-не-один-универсальный-календарь",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "function renderPeriodSelector("
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-controls.js",
+          "marker": "data-period-preset"
+        }
+      }
+    },
+    {
+      "id": "month-navigator",
+      "name": "Месяц журнала и выбор произвольных дат",
+      "group": "Выбор",
+      "specification_v02": "documented",
+      "contract": "семейство-datecontrol-не-один-универсальный-календарь",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "function renderJournalPeriod("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "range-slider",
+      "name": "Слайдер расстояния / времени / разрыва",
+      "group": "Поля",
+      "specification_v02": "missing",
+      "contract": "pattern-inputs",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "index.html",
+          "marker": "id=\"rBuf\""
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "color-picker",
+      "name": "Цвет объекта карты с подписью",
+      "group": "Поля",
+      "specification_v02": "missing",
+      "contract": "pattern-inputs",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "index.html",
+          "marker": "id=\"fColor\""
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "photo-upload",
+      "name": "Файлы / фото: выбор, очередь, повтор",
+      "group": "Медиа",
+      "specification_v02": "missing",
+      "contract": "pattern-media",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "async function addJobPhotos("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "image-viewer",
+      "name": "Просмотр фото и выход из него",
+      "group": "Медиа",
+      "specification_v02": "missing",
+      "contract": "pattern-media",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "async function openActivityPhoto("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "application-navigation",
+      "name": "Rail / нижняя навигация / Ещё",
+      "group": "Навигация",
+      "specification_v02": "partial",
+      "contract": "pattern-navigation",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "index.html",
+          "marker": "id=\"moreSheet\""
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "entity-tabs",
+      "name": "Вкладки записи с сохранением состояния панелей",
+      "group": "Навигация",
+      "specification_v02": "documented",
+      "contract": "select--combobox--checkbox--radio--switch--tabs",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/entity-tabs.js",
+          "marker": "export function createEntityTabs("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "record-card",
+      "name": "Карточка, строка списка, доска состояний",
+      "group": "Данные",
+      "specification_v02": "partial",
+      "contract": "pattern-data",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/service-orders.js",
+          "marker": "class=\"kcard\""
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "grouped-list",
+      "name": "Группированный справочник, раскрытие уровней",
+      "group": "Данные",
+      "specification_v02": "missing",
+      "contract": "pattern-data",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "emtree-manu"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "disclosure",
+      "name": "Свёрнутый блок / details / accordion",
+      "group": "Навигация",
+      "specification_v02": "partial",
+      "contract": "pattern-layers",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/journal-route.js",
+          "marker": "journal-timeline-disclosure"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "help-popover",
+      "name": "Пояснение по нажатию с keyboard-доступом",
+      "group": "Слои",
+      "specification_v02": "missing",
+      "contract": "pattern-layers",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/info-hints.js",
+          "marker": "export function installInfoHints("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "context-panel",
+      "name": "Немодальный контекстный popover",
+      "group": "Слои",
+      "specification_v02": "partial",
+      "contract": "pattern-layers",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/context-panels.js",
+          "marker": "export function openContextPanel("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "modal-editor",
+      "name": "Модальный редактор / подтверждение",
+      "group": "Слои",
+      "specification_v02": "documented",
+      "contract": "menu--dialog--feedback",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/modal-shell.js",
+          "marker": "export function protectNativeForm("
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "id=\"deleteDialog\""
+        }
+      }
+    },
+    {
+      "id": "bottom-sheet",
+      "name": "Шторка карты и положения раскрытия",
+      "group": "Слои",
+      "specification_v02": "missing",
+      "contract": "pattern-layers",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "function wireSheetDrag("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "action-menu",
+      "name": "Другие действия: disclosure / menu / dialog",
+      "group": "Слои",
+      "specification_v02": "documented",
+      "contract": "menu--dialog--feedback",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/entity-actions.js",
+          "marker": "export function mountEntityActions("
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "id=\"moreActions\""
+        }
+      }
+    },
+    {
+      "id": "editable-items",
+      "name": "Повторяемые строки работ / материалов",
+      "group": "Редактирование",
+      "specification_v02": "missing",
+      "contract": "pattern-workflows",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/service-orders.js",
+          "marker": "data-item-remove"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "bulk-selection",
+      "name": "Массовый выбор и preview объединения",
+      "group": "Редактирование",
+      "specification_v02": "missing",
+      "contract": "pattern-workflows",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/unassigned-tracks.js",
+          "marker": "function paintSelection("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "reorder",
+      "name": "Перестановка маршрута / карточек / панелей",
+      "group": "Редактирование",
+      "specification_v02": "missing",
+      "contract": "pattern-workflows",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "function wireRouteDrag("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "schedule-manipulation",
+      "name": "Перенос / изменение / разделение графика",
+      "group": "Редактирование",
+      "specification_v02": "missing",
+      "contract": "pattern-workflows",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/schedule-interactions.js",
+          "marker": "export function wireSchedulePieceDrag("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "map-explorer",
+      "name": "Карта / миникарта / маркеры / список",
+      "group": "Данные",
+      "specification_v02": "partial",
+      "contract": "pattern-data",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/gps-track-map.js",
+          "marker": "export function mountGpsTrackMap("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "gps-evidence",
+      "name": "Измерение / восстановление / принятое решение",
+      "group": "Данные",
+      "specification_v02": "partial",
+      "contract": "pattern-data",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/presence-review-controls.js",
+          "marker": "journal-evidence-cards"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "allocation-editor",
+      "name": "Распределение времени / пробега и остаток",
+      "group": "Редактирование",
+      "specification_v02": "partial",
+      "contract": "pattern-workflows",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/presence-review-controls.js",
+          "marker": "data-task-allocation-share"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "charts-tables",
+      "name": "Сопоставимые диаграммы и таблицы",
+      "group": "Данные",
+      "specification_v02": "missing",
+      "contract": "pattern-data",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/dashboard-visuals.js",
+          "marker": "export function comparisonChartHTML("
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-controls.js",
+          "marker": "id=\"kitTables\""
+        }
+      }
+    },
+    {
+      "id": "activity-comments",
+      "name": "Лента, комментарии, закрепление, доказательства",
+      "group": "Данные",
+      "specification_v02": "missing",
+      "contract": "pattern-data",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/entity-activity.js",
+          "marker": "activity-compose-disclosure"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "notifications-inbox",
+      "name": "Входящие: прочитано / действия / счётчик",
+      "group": "Состояния",
+      "specification_v02": "missing",
+      "contract": "pattern-feedback",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/notifications.js",
+          "marker": "data-notice-all"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "load-more",
+      "name": "Догрузка списка без потери выбора и фокуса",
+      "group": "Данные",
+      "specification_v02": "missing",
+      "contract": "pattern-data",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/notifications.js",
+          "marker": "data-notice-more"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "push-permission",
+      "name": "Push: устройство, разрешение, отказ, timeout",
+      "group": "Состояния",
+      "specification_v02": "missing",
+      "contract": "pattern-session",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "async function initPush("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "feedback",
+      "name": "Toast / постоянный banner / inline error",
+      "group": "Состояния",
+      "specification_v02": "documented",
+      "contract": "menu--dialog--feedback",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "function notify("
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "id=\"saveFeedback\""
+        }
+      }
+    },
+    {
+      "id": "loading-progress",
+      "name": "Ожидание и прогресс длительной операции",
+      "group": "Состояния",
+      "specification_v02": "partial",
+      "contract": "pattern-feedback",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "function busy("
+        }
+      ],
+      "catalogue": {
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-preview.js",
+          "marker": "aria-busy=\"true\""
+        }
+      }
+    },
+    {
+      "id": "draft-guard",
+      "name": "Несохранённый черновик и связанное действие",
+      "group": "Состояния",
+      "specification_v02": "partial",
+      "contract": "pattern-recovery",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/entity-draft-resolution.js",
+          "marker": "export function resolveEntityDraft("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "revision-conflict",
+      "name": "Конфликт версии после создания черновика",
+      "group": "Состояния",
+      "specification_v02": "missing",
+      "contract": "pattern-recovery",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/service-orders.js",
+          "marker": "resultExpected!==current.revision"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "offline-sync",
+      "name": "Локальная очередь / серверная запись / блокировка",
+      "group": "Состояния",
+      "specification_v02": "missing",
+      "contract": "pattern-recovery",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "function offlineBanner("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "trash-restore",
+      "name": "Корзина: восстановление и удаление навсегда",
+      "group": "Состояния",
+      "specification_v02": "partial",
+      "contract": "pattern-recovery",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "async function purgeTrash("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "role-authority",
+      "name": "Просмотр, кураторство, передача ответственности",
+      "group": "Состояния",
+      "specification_v02": "partial",
+      "contract": "pattern-session",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/entity-responsibility.js",
+          "marker": "responsibility-form"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "auth-session",
+      "name": "Вход, потеря сессии и выход",
+      "group": "Состояния",
+      "specification_v02": "missing",
+      "contract": "pattern-session",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "async function logoutAccount("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "profile-preferences",
+      "name": "Аватар / профиль / preview и сохранение темы",
+      "group": "Состояния",
+      "specification_v02": "partial",
+      "contract": "pattern-session",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/account-profile.js",
+          "marker": "export function openAccountProfile("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "responsive-sticky",
+      "name": "Адаптация, sticky-footer, safe-area и фокус",
+      "group": "Навигация",
+      "specification_v02": "partial",
+      "contract": "pattern-navigation",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/visual-system.css",
+          "marker": "--touch-h"
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "external-copy",
+      "name": "Копирование и переход во внешнюю карту",
+      "group": "Действия",
+      "specification_v02": "missing",
+      "contract": "pattern-feedback",
+      "priority": "P1",
+      "source": [
+        {
+          "file": "src/app.js",
+          "marker": "function tripGmaps("
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    },
+    {
+      "id": "floating-action",
+      "name": "Существующая FAB «Создать точку» на карте",
+      "group": "Действия",
+      "specification_v02": "partial",
+      "contract": "pattern-navigation",
+      "priority": "P0",
+      "source": [
+        {
+          "file": "index.html",
+          "marker": "id=\"pointToolsFab\""
+        }
+      ],
+      "catalogue": {
+        "present": false
+      }
+    }
+  ],
+  "signal_owners": {
+    "roles": {
+      "alert": "feedback",
+      "button": "action-button",
+      "dialog": [
+        "modal-editor",
+        "context-panel",
+        "multi-select-popover"
+      ],
+      "group": [
+        "view-segment",
+        "checkbox-group",
+        "filter-chip"
+      ],
+      "img": [
+        "map-explorer",
+        "charts-tables"
+      ],
+      "note": "feedback",
+      "region": [
+        "map-explorer",
+        "record-card"
+      ],
+      "slider": "range-slider",
+      "status": "feedback",
+      "tab": "entity-tabs",
+      "tablist": "entity-tabs",
+      "tabpanel": "entity-tabs"
+    },
+    "control_types": {
+      "text": "text-field",
+      "email": "text-field",
+      "tel": "text-field",
+      "password": "auth-session",
+      "search": "search-field",
+      "number": "number-unit",
+      "checkbox": "checkbox-group",
+      "radio": "decision-radio",
+      "date": "date-field",
+      "time": "date-field",
+      "datetime-local": "date-field",
+      "month": "date-field",
+      "range": "range-slider",
+      "color": "color-picker",
+      "file": "photo-upload",
+      "button": "action-button",
+      "submit": "action-button",
+      "reset": "action-button"
+    }
+  }
+}
