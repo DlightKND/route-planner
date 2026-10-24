@@ -23,6 +23,17 @@ export async function auditApplicationDesign(page,root=page.locator('body')){
    if(kind==='segment'&&!el.hasAttribute('aria-pressed'))errors.push({name,error:'missing selection state'});
    if(kind==='segment'&&s.borderTopLeftRadius!=='6px')errors.push({name,error:'inset radius',actual:s.borderTopLeftRadius});
   }
+  for(const el of root.querySelectorAll('[data-ui=count],[data-ui=badge]')){
+   if(!visible(el))continue;const s=getComputedStyle(el),r=el.getBoundingClientRect(),name=el.id||el.textContent.trim().slice(0,70);
+   if(s.fontSize!=='12px'||s.lineHeight!=='20px'||!s.fontFamily.includes('IBM Plex Sans'))errors.push({name,error:'passive indicator typography',font:s.fontSize,line:s.lineHeight});
+   if(el.dataset.ui==='count'&&(r.width<24||r.height!==22))errors.push({name,error:'numeric pill geometry',width:r.width,height:r.height});
+  }
+  const scopes='.view.active,dialog[open],.overlay.on,[popover]:popover-open';
+  for(const scope of [...(root.matches(scopes)?[root]:[]),...root.querySelectorAll(scopes)]){
+   if(!visible(scope))continue;
+   const primary=[...scope.querySelectorAll('[data-ui-variant=primary]')].filter(el=>visible(el)&&!el.matches(':disabled,[aria-disabled=true]')&&el.closest(scopes)===scope);
+   if(primary.length>1)errors.push({name:scope.id||scope.className,error:'competing primary commands',commands:primary.map(el=>el.id||el.textContent.trim())});
+  }
   return errors;
  });
  expect(failures,'Every visible production control uses the approved appearance contract').toEqual([]);

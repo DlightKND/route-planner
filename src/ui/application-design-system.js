@@ -4,10 +4,10 @@ import {journalIcon} from '../journal-icons.js';
 export const UI_SELECTORS = {
   segment: '.seg:not(.chipseg):not(.unassigned-filter):not(.journal-trip-tabs),.summary-view-switch,.summary-period-presets,.notice-tabs,.rquick,.presence-kind',
   filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.design-filter-chips,#rVariants',
-  count: '.chip-n,.cnt,.rchip .n,.unassigned-filter button b,[data-activity-count],.engineer-picker-count,.ui-count',
+  count: '.chip-n,.cnt,.rchip .n,.unassigned-filter button b,[data-activity-count],.engineer-picker-count,.ui-count,.notice-badge,[data-decision-count]',
   card: '.card,.kcard,.record-card,.notice-row,.staff-row,.stock-row,.emrow,.eqitem,.pt,.order-brief,.order-child,.trip-choice-card,.order-result-summary,.summary-quick-actions,.planwarn',
   popover: '.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover',
-  badge: '.pill,.design-status,.journal-recovery-badge,.journal-review-progress,.activity-type',
+  badge: '.pill,.abadge,.design-status,.journal-recovery-badge,.journal-review-progress,.journal-result-badge,.journal-stop-state,.activity-type',
   geometry: '.vg-block,.vg-piece,.vg-group,.vg-cut-handle,.vg-win-line,.leaflet-marker-icon,.leaflet-interactive,.journal-time-part',
 };
 const isIcon = el => el.matches('.vg-plan-tools,.vg-divide,.qm,.ph-close,.ph-del,.avx,.foldx-btn,.depot-toggle,.gp-close,.mleg-close,.modal-close,.entity-actions-trigger,.leaflet-control-zoom a,[data-gtools]') ||
@@ -30,6 +30,15 @@ export function controlKind(el) {
   if(el.matches('summary,[role=button]:not(button)'))return 'disclosure';
   return 'button';
 }
+// Repeated records expose quiet commands; the page/editor owns the main action.
+export function controlVariant(el){
+  if(el.matches('.red,.danger,[data-danger=true]'))return 'destructive';
+  if(/^(Отмена(?: правки)?|Назад|Закрыть|Позже)$/.test(el.textContent.trim()))return 'secondary';
+  if(el.matches('.ghost'))return 'tertiary';
+  const repeated=el.closest('.kcard,.record-card,.notice-row,.notice-decision-card,.pt,.eqitem,.emrow,.staff-row,.leaflet-popup,table');
+  const rowAction=el.matches('[data-decision-open],[data-jst],[data-tstart],[data-tfin],[data-tconf],[data-tstaymap],[data-pok],[data-fok],[data-rok],[data-rt],[data-mhs],[data-stay-select],[data-stay-job],a[href^="tel:"]');
+  return el.matches('.amber')&&!repeated&&!rowAction?'primary':'secondary';
+}
 export function installApplicationDesignSystem(root=document) {
   const html=root.documentElement;
   if(html.dataset.uiSystem)return;
@@ -42,7 +51,8 @@ export function installApplicationDesignSystem(root=document) {
         const text=el.textContent.trim();if(text){el.setAttribute('aria-label',text);const icon=root.createElement('span'),label=root.createElement('span');icon.className='ui-compact-icon';icon.setAttribute('aria-hidden','true');icon.innerHTML=journalIcon(el.matches('.planner-filter-menu>summary')?'filters':el.matches('[data-journal-refresh]')?'clock':el.matches('[data-journal-exit]')?'chevron':'tasks');label.dataset.uiCompactLabel='';label.textContent=text;el.replaceChildren(icon,label);el.dataset.uiCompact='true';}
       }
       const kind=controlKind(el);assign(el,'ui',kind);
-      if(['button','icon','menu'].includes(kind))assign(el,'uiVariant',el.matches('.red,.danger,[data-danger=true]')?'destructive':/^(Отмена(?: правки)?|Назад|Закрыть|Позже)$/.test(el.textContent.trim())?'secondary':el.matches('.amber')?'primary':el.matches('.ghost')?'tertiary':'secondary');
+      if(['button','icon','menu'].includes(kind))assign(el,'uiVariant',controlVariant(el));
+      if(kind==='fab')assign(el,'uiVariant',['route','track'].includes(root.querySelector('.map-workspace')?.dataset.mapPanel)?'secondary':'primary');
       if(el.matches('.sm'))assign(el,'uiSize','s');
       if(kind==='range'){
         const min=Number(el.min||0),max=Number(el.max||100),value=Number(el.value),fill=max>min?Math.max(0,Math.min(100,(value-min)/(max-min)*100)):0;
@@ -75,10 +85,10 @@ export function installApplicationDesignSystem(root=document) {
     root.querySelectorAll(UI_SELECTORS.count).forEach(el=>{
       assign(el,'ui','count');
       const parent=el.closest('button'),key=parent?.dataset.js||parent?.dataset.ts||parent?.dataset.os||parent?.dataset.utMode||'';
-      const tone=el.dataset.uiTone||(['pending','review'].includes(key)?'danger':['completed','approved','accepted'].includes(key)?'success':['paused','recovery','gps'].includes(key)?'warning':'neutral');
+      const tone=el.dataset.uiTone||(el.matches('.notice-badge')?'warning':el.matches('[data-decision-count]')?'danger':['pending','review'].includes(key)?'danger':['completed','approved','accepted'].includes(key)?'success':['paused','recovery','gps'].includes(key)?'warning':'neutral');
       assign(el,'uiTone',tone);assign(el,'uiEmpty',String(/^0$/.test(el.textContent.trim())));
     });
-    root.querySelectorAll(UI_SELECTORS.badge).forEach(el=>assign(el,'ui','badge'));
+    root.querySelectorAll(UI_SELECTORS.badge).forEach(el=>{assign(el,'ui','badge');if(el.matches('.pill,.abadge'))assign(el,'uiTone',el.matches('.warn,.amber')?'warning':el.matches('.good,.green')?'success':el.matches('.red')?'danger':el.matches('.noeng')?'info':'neutral');});
     root.querySelectorAll('table').forEach(table=>{
       if(table.closest('.ds-kit')||table.parentElement.matches('[data-ui-table-frame],[class*=scroll]'))return;
       const frame=root.createElement('div');frame.dataset.uiTableFrame='';frame.tabIndex=0;frame.setAttribute('role','region');frame.setAttribute('aria-label',table.getAttribute('aria-label')||'Таблица с горизонтальной прокруткой');table.before(frame);frame.append(table);

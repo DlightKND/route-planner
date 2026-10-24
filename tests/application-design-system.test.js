@@ -1,6 +1,6 @@
 import {Window} from 'happy-dom';
 import {it,expect,afterEach} from 'vitest';
-import {installApplicationDesignSystem,controlKind} from '../src/ui/application-design-system.js';
+import {installApplicationDesignSystem,controlKind,controlVariant} from '../src/ui/application-design-system.js';
 const windows=[],controllers=[];
 afterEach(async()=>{for(const c of controllers.splice(0))c.destroy();for(const w of windows.splice(0))await w.happyDOM.close();});
 it('covers native controls, semantic tabs, filters and duration-bound data without opt-in classes',()=>{
@@ -16,4 +16,9 @@ it('keeps semantic numeric pills independent of filter selection and neutralizes
 });
 it('segment keyboard navigation calls the real screen action and retains native form values',()=>{
  const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<div class="seg"><button>Список</button><button>Доска</button></div><input value="Черновик">';let calls=0;const target=d.querySelectorAll('button')[1];target.onclick=()=>calls++;controllers.push(installApplicationDesignSystem(d));d.querySelector('button').dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));expect(calls).toBe(1);expect(d.activeElement).toBe(target);expect(d.querySelector('input').value).toBe('Черновик');
+});
+
+it('reserves primary for the page command while repeated decisions remain independently actionable',()=>{
+ const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<button class="btn amber" id="create">Создать задание</button><article class="notice-decision-card"><a class="btn amber" href="#/order/1" data-decision-open>Проверить</a></article><div class="kcard"><button class="btn amber" data-tstart="1">Начать выезд</button></div><button class="btn red">Удалить</button>';
+ expect([...d.querySelectorAll('button,a')].map(controlVariant)).toEqual(['primary','secondary','secondary','destructive']);
 });
