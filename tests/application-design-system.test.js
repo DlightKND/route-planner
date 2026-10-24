@@ -22,3 +22,9 @@ it('reserves primary for the page command while repeated decisions remain indepe
  const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<button class="btn amber" id="create">Создать задание</button><article class="notice-decision-card"><a class="btn amber" href="#/order/1" data-decision-open>Проверить</a></article><div class="kcard"><button class="btn amber" data-tstart="1">Начать выезд</button></div><button class="btn red">Удалить</button>';
  expect([...d.querySelectorAll('button,a')].map(controlVariant)).toEqual(['primary','secondary','secondary','destructive']);
 });
+
+it('moves emphasis from opening a catalogue editor to saving it and restores it on cancel',async()=>{
+ const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<button class="btn amber" id="emShowAdd">Добавить модель</button><div id="emForm" style="display:none"><button class="btn amber" id="emSave">Сохранить модель</button><button id="cancel">Отмена</button></div>';
+ const open=d.querySelector('#emShowAdd'),form=d.querySelector('#emForm');open.onclick=()=>{form.style.display='';};d.querySelector('#cancel').onclick=()=>{form.style.display='none';};controllers.push(installApplicationDesignSystem(d));
+ expect(open.dataset.uiVariant).toBe('primary');open.click();await new Promise(r=>setTimeout(r,10));expect(open.dataset.uiVariant).toBe('secondary');expect(d.querySelector('#emSave').dataset.uiVariant).toBe('primary');d.querySelector('#cancel').click();await new Promise(r=>setTimeout(r,10));expect(open.dataset.uiVariant).toBe('primary');
+});

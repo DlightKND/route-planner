@@ -35,8 +35,9 @@ export function controlVariant(el){
   if(el.matches('.red,.danger,[data-danger=true]'))return 'destructive';
   if(/^(Отмена(?: правки)?|Назад|Закрыть|Позже)$/.test(el.textContent.trim()))return 'secondary';
   if(el.matches('.ghost'))return 'tertiary';
+  if(el.id==='emShowAdd'){const editor=el.ownerDocument.getElementById('emForm');if(editor&&editor.style.display!=='none')return 'secondary';}
   const repeated=el.closest('.kcard,.record-card,.notice-row,.notice-decision-card,.pt,.eqitem,.emrow,.staff-row,.leaflet-popup,table');
-  const rowAction=el.matches('[data-decision-open],[data-jst],[data-tstart],[data-tfin],[data-tconf],[data-tstaymap],[data-pok],[data-fok],[data-rok],[data-rt],[data-mhs],[data-stay-select],[data-stay-job],a[href^="tel:"]');
+  const rowAction=el.matches('#tpStayMap,#profCreate,[data-decision-open],[data-jst],[data-tstart],[data-tfin],[data-tconf],[data-tstaymap],[data-pok],[data-fok],[data-rok],[data-rt],[data-mhs],[data-stay-select],[data-stay-job],a[href^="tel:"]');
   return el.matches('.amber')&&!repeated&&!rowAction?'primary':'secondary';
 }
 export function installApplicationDesignSystem(root=document) {
@@ -99,6 +100,7 @@ export function installApplicationDesignSystem(root=document) {
   const schedule=()=>{if(queued||disposed)return;queued=true;root.defaultView.queueMicrotask(()=>{queued=false;if(!disposed)scan();});};
   const observer=new root.defaultView.MutationObserver(schedule);
   observer.observe(root.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','role','disabled','aria-busy']});
+  root.addEventListener('click',schedule);
   root.addEventListener('change',schedule);
   root.addEventListener('input',schedule);
   const keydown=event=>{
@@ -111,5 +113,5 @@ export function installApplicationDesignSystem(root=document) {
   };
   root.addEventListener('keydown',keydown);
   scan();
-  return {refresh:scan,destroy(){disposed=true;observer.disconnect();root.removeEventListener('change',schedule);root.removeEventListener('input',schedule);root.removeEventListener('keydown',keydown);}};
+  return {refresh:scan,destroy(){disposed=true;observer.disconnect();root.removeEventListener('click',schedule);root.removeEventListener('change',schedule);root.removeEventListener('input',schedule);root.removeEventListener('keydown',keydown);}};
 }

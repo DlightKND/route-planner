@@ -94,8 +94,8 @@ html#dlight-ui[data-ui-system] dialog::backdrop{background:var(--overlay-backdro
 html#dlight-ui[data-ui-system] :is(.entity-dialog-body,.modal){padding:24px}
 html#dlight-ui[data-ui-system] :is(.summary-period,.period-nav,.journal-period){gap:8px;border-radius:12px}
 html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=chip],[data-ui=segment],[data-ui=tab],[data-ui=menu],[data-ui=field],[data-ui=fab],[data-ui=navigation]):is(:disabled,[aria-disabled=true]){opacity:1!important;color:var(--ink-dim)!important;background:var(--panel-2)!important;border-color:var(--line)!important;cursor:not-allowed!important}
-html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=segment],[data-ui=chip],[data-ui=menu],[data-ui=tab]):not(:disabled):not([aria-disabled=true]):active{background-image:linear-gradient(color-mix(in srgb,currentColor 14%,transparent),color-mix(in srgb,currentColor 14%,transparent))!important;transform:none!important;box-shadow:none!important}
-@media(hover:hover) and (pointer:fine){html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=segment],[data-ui=chip],[data-ui=menu],[data-ui=tab]):not(:disabled):not([aria-disabled=true]):not(:active):hover{background-image:linear-gradient(color-mix(in srgb,currentColor 8%,transparent),color-mix(in srgb,currentColor 8%,transparent))!important;filter:none!important;box-shadow:none!important}}
+html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=segment],[data-ui=chip],[data-ui=menu],[data-ui=tab],[data-ui=fab],[data-ui=row],[data-ui=disclosure],[data-ui=navigation]):not(:disabled):not([aria-disabled=true]):active{background-image:linear-gradient(color-mix(in srgb,currentColor 14%,transparent),color-mix(in srgb,currentColor 14%,transparent))!important;transform:none!important;box-shadow:none!important}
+@media(hover:hover) and (pointer:fine){html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=segment],[data-ui=chip],[data-ui=menu],[data-ui=tab],[data-ui=fab],[data-ui=row],[data-ui=disclosure],[data-ui=navigation]):not(:disabled):not([aria-disabled=true]):not(:active):hover{background-image:linear-gradient(color-mix(in srgb,currentColor 8%,transparent),color-mix(in srgb,currentColor 8%,transparent))!important;filter:none!important;box-shadow:none!important}}
 @media(max-width:760px){
   html#dlight-ui[data-ui-system] :is(.pane-head h2,.trip-head h2,.design-page-head h2){font-size:23px!important}
   html#dlight-ui[data-ui-system] :is(.entity-dialog-body,.modal){padding:20px 16px max(20px,env(safe-area-inset-bottom))}
@@ -201,3 +201,6 @@ html#dlight-ui[data-ui-system] #qBadge.blocked{background:var(--danger-bg)!impor
 html#dlight-ui[data-ui-system] [data-ui=fab][data-ui-variant=secondary]:not(:disabled):not([aria-disabled=true]){background:var(--panel)!important;color:var(--ink)!important;border-color:var(--input-line)!important}
 
 html#dlight-ui[data-ui-system] [data-ui=badge]>.journal-icon{width:16px;height:16px;flex:none}
+
+html#dlight-ui[data-ui-system] [data-ui=fab]{padding:0!important;font:400 28px/1 var(--sans)!important;transform:none!important;transition:none!important;cursor:pointer}
+html#dlight-ui[data-ui-system] [data-ui=row]{transform:none!important;transition:none!important}

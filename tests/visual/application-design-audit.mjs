@@ -1,6 +1,6 @@
 import {expect} from '@playwright/test';
 // Measure actual production nodes, including dynamically mounted top-layer controls.
-export async function auditApplicationDesign(page,root=page.locator('body')){
+export async function auditApplicationDesign(page,root=page.locator('body'),{soft=false}={}){
  await expect(page.locator('html')).toHaveAttribute('data-ui-system','0.7');
  const failures=await root.evaluate(root=>{
   const errors=[],touch=matchMedia('(pointer:coarse),(max-width:760px)').matches,min=touch?48:40;
@@ -36,5 +36,5 @@ export async function auditApplicationDesign(page,root=page.locator('body')){
   }
   return errors;
  });
- expect(failures,'Every visible production control uses the approved appearance contract').toEqual([]);
+ (soft?expect.soft:expect)(failures,'Every visible production control uses the approved appearance contract').toEqual([]);
 }
