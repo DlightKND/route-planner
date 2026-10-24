@@ -41,7 +41,7 @@ export function installApplicationDesignSystem(root=document) {
         const text=el.textContent.trim();if(text){el.setAttribute('aria-label',text);const icon=root.createElement('span'),label=root.createElement('span');icon.className='ui-compact-icon';icon.setAttribute('aria-hidden','true');icon.innerHTML=journalIcon(el.matches('.planner-filter-menu>summary')?'filters':el.matches('[data-journal-refresh]')?'clock':el.matches('[data-journal-exit]')?'chevron':'tasks');label.dataset.uiCompactLabel='';label.textContent=text;el.replaceChildren(icon,label);el.dataset.uiCompact='true';}
       }
       const kind=controlKind(el);assign(el,'ui',kind);
-      if(['button','icon','menu'].includes(kind))assign(el,'uiVariant',el.matches('.red,.danger,[data-danger=true]')?'destructive':el.matches('.amber')?'primary':el.matches('.ghost')?'tertiary':'secondary');
+      if(['button','icon','menu'].includes(kind))assign(el,'uiVariant',el.matches('.red,.danger,[data-danger=true]')?'destructive':/^(Отмена(?: правки)?|Назад|Закрыть|Позже)$/.test(el.textContent.trim())?'secondary':el.matches('.amber')?'primary':el.matches('.ghost')?'tertiary':'secondary');
       if(el.matches('.sm'))assign(el,'uiSize','s');
       if(kind==='range'){
         const min=Number(el.min||0),max=Number(el.max||100),value=Number(el.value),fill=max>min?Math.max(0,Math.min(100,(value-min)/(max-min)*100)):0;

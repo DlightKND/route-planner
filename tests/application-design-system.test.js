@@ -8,7 +8,7 @@ it('covers native controls, semantic tabs, filters and duration-bound data witho
  expect([...d.querySelectorAll('button,input,[role=button]')].map(controlKind)).toEqual(['button','field','segment','chip','tab','geometry']);
 });
 it('hydrates existing and subsequently inserted controls and preserves screen-owned handlers',async()=>{
- const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<button class="btn amber">Сохранить</button>';let clicks=0;d.querySelector('button').onclick=()=>clicks++;controllers.push(installApplicationDesignSystem(d));d.querySelector('button').click();expect(clicks).toBe(1);expect(d.querySelector('button').dataset.uiVariant).toBe('primary');
+ const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<button class="btn amber">Сохранить</button><button class="btn ghost" id="cancel">Отмена</button>';let clicks=0;d.querySelector('button').onclick=()=>clicks++;controllers.push(installApplicationDesignSystem(d));d.querySelector('button').click();expect(clicks).toBe(1);expect(d.querySelector('button').dataset.uiVariant).toBe('primary');expect(d.querySelector('#cancel').dataset.uiVariant).toBe('secondary');
  const dialog=d.createElement('dialog');dialog.innerHTML='<input type="month"><button aria-label="Закрыть">×</button>';d.body.append(dialog);await new Promise(r=>setTimeout(r,10));expect(dialog.querySelector('input').dataset.ui).toBe('field');expect(dialog.querySelector('button').dataset.ui).toBe('icon');
 });
 it('keeps semantic numeric pills independent of filter selection and neutralizes a known zero',async()=>{
