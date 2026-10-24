@@ -3,7 +3,7 @@
   "audited_commit": "c3fee9258779de525477fa7f17350164483ece4f",
   "date": "2026-10-24",
   "scope": "Current frontend source. Contract coverage is not runtime integration or user testing.",
-  "catalogue_version": "0.2",
+  "catalogue_version": "0.4",
   "patterns": [
     {
       "id": "action-button",
@@ -250,7 +250,12 @@
         }
       ],
       "catalogue": {
-        "present": false
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-guidance.js",
+          "marker": "id=\"gPeopleOpen\""
+        },
+        "scope": "Review prototype 0.4; not a full production migration or all states."
       }
     },
     {
@@ -267,7 +272,12 @@
         }
       ],
       "catalogue": {
-        "present": false
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-guidance.js",
+          "marker": "id=\"gPeopleSearch\""
+        },
+        "scope": "Review prototype 0.4; not a full production migration or all states."
       }
     },
     {
@@ -423,7 +433,12 @@
         }
       ],
       "catalogue": {
-        "present": false
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-guidance.js",
+          "marker": "id=\"gDistance\""
+        },
+        "scope": "Review prototype 0.4; not a full production migration or all states."
       }
     },
     {
@@ -631,7 +646,12 @@
         }
       ],
       "catalogue": {
-        "present": false
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-guidance.js",
+          "marker": "id=\"gMapSheet\""
+        },
+        "scope": "Review prototype 0.4; not a full production migration or all states."
       }
     },
     {
@@ -970,7 +990,12 @@
         }
       ],
       "catalogue": {
-        "present": false
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-guidance.js",
+          "marker": "id=\"gUndoBar\""
+        },
+        "scope": "Review prototype 0.4; not a full production migration or all states."
       }
     },
     {
@@ -1072,7 +1097,12 @@
         }
       ],
       "catalogue": {
-        "present": false
+        "present": true,
+        "source": {
+          "file": "src/ui/design-system-guidance.js",
+          "marker": "id=\"gFab\""
+        },
+        "scope": "Review prototype 0.4; not a full production migration or all states."
       }
     }
   ],
