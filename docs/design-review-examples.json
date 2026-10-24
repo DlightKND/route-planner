@@ -1,0 +1,860 @@
+{
+  "version": "0.5",
+  "baseline": "0.4 catalogue geometry; new scenario diagrams are not production screenshots",
+  "patterns": [
+    {
+      "id": "action-button",
+      "name": "Кнопка: primary / secondary / tertiary / destructive",
+      "group": "Действия",
+      "rules": [
+        "R01",
+        "R02"
+      ],
+      "recommendation": "Уравнять размер соседних действий; вес задавать стилем. Удерживать ширину loading и блокировать повтор.",
+      "source": {
+        "file": "src/entity-actions.js",
+        "marker": "data-entity-save"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "icon-button",
+      "name": "Кнопка с иконкой и доступным именем",
+      "group": "Действия",
+      "rules": [
+        "R01",
+        "R11"
+      ],
+      "recommendation": "Дать стабильное имя и сенсорную цель 48 CSS px; подсказка не заменяет имя.",
+      "source": {
+        "file": "src/journal-route.js",
+        "marker": "data-expand-map"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "navigation-link",
+      "name": "Ссылка, переход и browser back",
+      "group": "Навигация",
+      "rules": [
+        "R11"
+      ],
+      "recommendation": "Сохранить ссылки для переходов и browser Back; не заменять их кнопками сохранения.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "function routeUrl("
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "status-badge",
+      "name": "Неинтерактивный статус",
+      "group": "Выбор",
+      "rules": [
+        "R03",
+        "R11"
+      ],
+      "recommendation": "Сохранить текстовый статус; убрать состояния нажатия у информационного badge.",
+      "source": {
+        "file": "src/presence-decision.js",
+        "marker": "journal-result-badge"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "count-badge",
+      "name": "Вложенный счётчик: смысл / 0 / неизвестно",
+      "group": "Выбор",
+      "rules": [
+        "R03"
+      ],
+      "recommendation": "Сохранить внутреннюю мини-пилюлю журнала, семантический цвет, различие 0/—/….",
+      "source": {
+        "file": "src/unified-journal.css",
+        "marker": ".unassigned-filter>button b"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "filter-chip",
+      "name": "Фильтры: один или несколько, сброс",
+      "group": "Выбор",
+      "rules": [
+        "R03"
+      ],
+      "recommendation": "Выбранность обозначать формой/маркером и aria-pressed; цвет счётчика не перекрашивать.",
+      "source": {
+        "file": "src/unassigned-tracks.js",
+        "marker": "data-ut-mode"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "view-segment",
+      "name": "Сегментированный выбор представления",
+      "group": "Выбор",
+      "rules": [
+        "R04"
+      ],
+      "recommendation": "Один ряд связанных вариантов, равные доли, клавиатура. Сравнить HIG и M3 connected.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "data-summary-view"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "decision-radio",
+      "name": "Radio / взаимоисключающий выбор в черновике",
+      "group": "Выбор",
+      "rules": [
+        "R05"
+      ],
+      "recommendation": "Взаимоисключающее решение оставлять в черновике до явного сохранения.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "name=\"tpMain\""
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "checkbox-group",
+      "name": "Один checkbox и множественный выбор",
+      "group": "Выбор",
+      "rules": [
+        "R05",
+        "R07"
+      ],
+      "recommendation": "Независимый множественный выбор; нажимается подписанная строка целиком.",
+      "source": {
+        "file": "src/engineer-picker.js",
+        "marker": "input.type='checkbox'"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "boolean-switch",
+      "name": "Немедленная настройка Вкл / Выкл",
+      "group": "Выбор",
+      "rules": [
+        "R05"
+      ],
+      "recommendation": "Немедленную настройку разместить в строке, показать pending и rollback ошибки.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "vehShow=!vehShow"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "native-select",
+      "name": "Одиночный выбор из списка",
+      "group": "Поля",
+      "rules": [
+        "R06"
+      ],
+      "recommendation": "Сохранять нативный одиночный select; не выдавать его за множественный выбор.",
+      "source": {
+        "file": "index.html",
+        "marker": "id=\"jbStatus\""
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "multi-select-popover",
+      "name": "Выбор инженеров: popover с checkbox, без поиска",
+      "group": "Поля",
+      "rules": [
+        "R07"
+      ],
+      "recommendation": "Добавить поиск к существующему checkbox-picker; desktop popover, mobile sheet.",
+      "source": {
+        "file": "src/engineer-picker.js",
+        "marker": "panel.setAttribute('role','dialog')"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "search-field",
+      "name": "Поиск списка: debounce / clear / пусто / ошибка",
+      "group": "Поля",
+      "rules": [
+        "R07"
+      ],
+      "recommendation": "Показывать совпадения и пустой результат отдельно от отсутствия выбранных.",
+      "source": {
+        "file": "src/notifications.js",
+        "marker": "searchTimer=setTimeout(()=>load(),250)"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "search-result-picker",
+      "name": "Адресный поиск и выбор результата",
+      "group": "Поля",
+      "rules": [
+        "R07",
+        "R12"
+      ],
+      "recommendation": "Различать ввод адреса и выбор стабильного результата; проверить async/error/отмену.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "async function geocode("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "text-field",
+      "name": "Текст / email / телефон / textarea",
+      "group": "Поля",
+      "rules": [
+        "R01",
+        "R06"
+      ],
+      "recommendation": "Постоянная подпись и ошибка рядом с полем; сенсорный размер ввода 16 CSS px — политика проекта.",
+      "source": {
+        "file": "index.html",
+        "marker": "id=\"fPhone\""
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "number-unit",
+      "name": "Количество / деньги / длительность / доля",
+      "group": "Поля",
+      "rules": [
+        "R06",
+        "R08"
+      ],
+      "recommendation": "Явная единица и точное число; пустое не приравнивать к нулю.",
+      "source": {
+        "file": "src/service-orders.js",
+        "marker": "data-item-remove"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "date-field",
+      "name": "Дата, время, дата со временем, месяц",
+      "group": "Поля",
+      "rules": [
+        "R06"
+      ],
+      "recommendation": "Оставить нативный ввод и локаль ОС; не подменять его имитацией iOS wheels.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "'datetime-local'"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "date-range",
+      "name": "Диапазон дат в черновике",
+      "group": "Поля",
+      "rules": [
+        "R06"
+      ],
+      "recommendation": "Редактировать диапазон в черновике, валидировать порядок, Cancel сохраняет старый период.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "data-summary-dates"
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "period-navigator",
+      "name": "Пресеты, стрелки и календарный период",
+      "group": "Выбор",
+      "rules": [
+        "R01",
+        "R04",
+        "R06"
+      ],
+      "recommendation": "Расширить цель стрелок; удержать пресеты в одном ряду; явно показывать применённый диапазон.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "function renderPeriodSelector("
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "month-navigator",
+      "name": "Месяц журнала и выбор произвольных дат",
+      "group": "Выбор",
+      "rules": [
+        "R06"
+      ],
+      "recommendation": "Те же правила периода применить к месяцу журнала; отдельно проверить переходы года.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "function renderJournalPeriod("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "range-slider",
+      "name": "Слайдер расстояния / времени / разрыва",
+      "group": "Поля",
+      "rules": [
+        "R08"
+      ],
+      "recommendation": "Добавить заполненную шкалу, видимое число, exact input и ± без перетаскивания.",
+      "source": {
+        "file": "index.html",
+        "marker": "id=\"rBuf\""
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "color-picker",
+      "name": "Цвет объекта карты с подписью",
+      "group": "Поля",
+      "rules": [
+        "R11"
+      ],
+      "recommendation": "Сохранить имя/код выбранного цвета и preview; не передавать смысл одним swatch.",
+      "source": {
+        "file": "index.html",
+        "marker": "id=\"fColor\""
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "photo-upload",
+      "name": "Файлы / фото: выбор, очередь, повтор",
+      "group": "Медиа",
+      "rules": [
+        "R02",
+        "R09",
+        "R12"
+      ],
+      "recommendation": "Указать этап/ошибку по каждому файлу и повтор; не выдавать local preview за загрузку.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "async function addJobPhotos("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "image-viewer",
+      "name": "Просмотр фото и выход из него",
+      "group": "Медиа",
+      "rules": [
+        "R10",
+        "R11"
+      ],
+      "recommendation": "Явный выход, Escape и возврат фокуса; проверить zoom и жесты на устройстве.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "async function openActivityPhoto("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "application-navigation",
+      "name": "Rail / нижняя навигация / Ещё",
+      "group": "Навигация",
+      "rules": [
+        "R04",
+        "R10"
+      ],
+      "recommendation": "Основные разделы — navigation, не сегменты. Проверить safe-area и выделение текущего.",
+      "source": {
+        "file": "index.html",
+        "marker": "id=\"moreSheet\""
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "entity-tabs",
+      "name": "Вкладки записи с сохранением состояния панелей",
+      "group": "Навигация",
+      "rules": [
+        "R04",
+        "R11"
+      ],
+      "recommendation": "Вкладки — связанные панели сущности, tab semantics и стрелки; не смешивать с командами.",
+      "source": {
+        "file": "src/entity-tabs.js",
+        "marker": "export function createEntityTabs("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "record-card",
+      "name": "Карточка, строка списка, доска состояний",
+      "group": "Данные",
+      "rules": [
+        "R02",
+        "R11"
+      ],
+      "recommendation": "Различать открытие карточки и вложенные команды, без конкурирующих primary в списке.",
+      "source": {
+        "file": "src/service-orders.js",
+        "marker": "class=\"kcard\""
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "grouped-list",
+      "name": "Группированный справочник, раскрытие уровней",
+      "group": "Данные",
+      "rules": [
+        "R07",
+        "R11"
+      ],
+      "recommendation": "Сохранить иерархию подписанных групп; раскрытие не меняет выбранность записей.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "emtree-manu"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "disclosure",
+      "name": "Свёрнутый блок / details / accordion",
+      "group": "Навигация",
+      "rules": [
+        "R11"
+      ],
+      "recommendation": "Явная кнопка/details, aria-expanded, целевая область; не роль menu для простого раскрытия.",
+      "source": {
+        "file": "src/journal-route.js",
+        "marker": "journal-timeline-disclosure"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "help-popover",
+      "name": "Пояснение по нажатию с keyboard-доступом",
+      "group": "Слои",
+      "rules": [
+        "R07",
+        "R11"
+      ],
+      "recommendation": "Открытие по нажатию/клавиатуре; важная причина недоступности видна и без hover.",
+      "source": {
+        "file": "src/info-hints.js",
+        "marker": "export function installInfoHints("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "context-panel",
+      "name": "Немодальный контекстный popover",
+      "group": "Слои",
+      "rules": [
+        "R07",
+        "R10"
+      ],
+      "recommendation": "Немодальная панель не блокирует фон и не теряет anchor/фокус при закрытии.",
+      "source": {
+        "file": "src/context-panels.js",
+        "marker": "export function openContextPanel("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "modal-editor",
+      "name": "Модальный редактор / подтверждение",
+      "group": "Слои",
+      "rules": [
+        "R06",
+        "R09",
+        "R10"
+      ],
+      "recommendation": "Настоящая модальность, Cancel/Escape, focus return; опасный alert без default.",
+      "source": {
+        "file": "src/modal-shell.js",
+        "marker": "export function protectNativeForm("
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "bottom-sheet",
+      "name": "Шторка карты и положения раскрытия",
+      "group": "Слои",
+      "rules": [
+        "R10"
+      ],
+      "recommendation": "Явные открыть/закрыть, безопасный низ, доступный контент без обязательного drag.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "function wireSheetDrag("
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "action-menu",
+      "name": "Другие действия: disclosure / menu / dialog",
+      "group": "Слои",
+      "rules": [
+        "R02",
+        "R11"
+      ],
+      "recommendation": "Редкие команды раскрывать отдельно; не навязывать menu semantics без его клавиатуры.",
+      "source": {
+        "file": "src/entity-actions.js",
+        "marker": "export function mountEntityActions("
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "editable-items",
+      "name": "Повторяемые строки работ / материалов",
+      "group": "Редактирование",
+      "rules": [
+        "R06",
+        "R12"
+      ],
+      "recommendation": "Подписать повторяемые поля, управлять фокусом добавления/удаления и ошибками строки.",
+      "source": {
+        "file": "src/service-orders.js",
+        "marker": "data-item-remove"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "bulk-selection",
+      "name": "Массовый выбор и preview объединения",
+      "group": "Редактирование",
+      "rules": [
+        "R09",
+        "R12"
+      ],
+      "recommendation": "Показать число и область выбранного; preview объединения до записи, отмена без потерь.",
+      "source": {
+        "file": "src/unassigned-tracks.js",
+        "marker": "function paintSelection("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "reorder",
+      "name": "Перестановка маршрута / карточек / панелей",
+      "group": "Редактирование",
+      "rules": [
+        "R08",
+        "R12"
+      ],
+      "recommendation": "Дать точный способ перестановки помимо drag; сохранение и отмену не смешивать с preview.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "function wireRouteDrag("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "schedule-manipulation",
+      "name": "Перенос / изменение / разделение графика",
+      "group": "Редактирование",
+      "rules": [
+        "R08",
+        "R12"
+      ],
+      "recommendation": "Точные время/длительность помимо resize/drag; Escape откатывает, split требует preview.",
+      "source": {
+        "file": "src/schedule-interactions.js",
+        "marker": "export function wireSchedulePieceDrag("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "map-explorer",
+      "name": "Карта / миникарта / маркеры / список",
+      "group": "Данные",
+      "rules": [
+        "R10",
+        "R12"
+      ],
+      "recommendation": "Проверить перекрытие Leaflet-контролов/шторок; список — доступная альтернатива геометрии.",
+      "source": {
+        "file": "src/gps-track-map.js",
+        "marker": "export function mountGpsTrackMap("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "gps-evidence",
+      "name": "Измерение / восстановление / принятое решение",
+      "group": "Данные",
+      "rules": [
+        "R11",
+        "R12"
+      ],
+      "recommendation": "Сохранить измеренное/восстановленное/принятое отдельно; зелёный speed ramp и оранжевый пунктир.",
+      "source": {
+        "file": "src/presence-review-controls.js",
+        "marker": "journal-evidence-cards"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "allocation-editor",
+      "name": "Распределение времени / пробега и остаток",
+      "group": "Редактирование",
+      "rules": [
+        "R02",
+        "R06",
+        "R12"
+      ],
+      "recommendation": "Видимый остаток, объяснение блокировки, валидный ноль отдельно от пустого, явный commit.",
+      "source": {
+        "file": "src/presence-review-controls.js",
+        "marker": "data-task-allocation-share"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "charts-tables",
+      "name": "Сопоставимые диаграммы и таблицы",
+      "group": "Данные",
+      "rules": [
+        "R04",
+        "R11"
+      ],
+      "recommendation": "Одинаковые данные в chart/table; единицы и подписи не передавать только цветом.",
+      "source": {
+        "file": "src/dashboard-visuals.js",
+        "marker": "export function comparisonChartHTML("
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "activity-comments",
+      "name": "Лента, комментарии, закрепление, доказательства",
+      "group": "Данные",
+      "rules": [
+        "R02",
+        "R12"
+      ],
+      "recommendation": "Сохранить авторство/время, pending и ошибку публикации; действия рядом с записью.",
+      "source": {
+        "file": "src/entity-activity.js",
+        "marker": "activity-compose-disclosure"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "notifications-inbox",
+      "name": "Входящие: прочитано / действия / счётчик",
+      "group": "Состояния",
+      "rules": [
+        "R03",
+        "R09"
+      ],
+      "recommendation": "Счётчик непрочитанного не путать с числом ошибок; открытия и действия разделены.",
+      "source": {
+        "file": "src/notifications.js",
+        "marker": "data-notice-all"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "load-more",
+      "name": "Догрузка списка без потери выбора и фокуса",
+      "group": "Данные",
+      "rules": [
+        "R02",
+        "R11"
+      ],
+      "recommendation": "Прогресс рядом с кнопкой, повторы блокировать, существующий выбор/фокус сохранять.",
+      "source": {
+        "file": "src/notifications.js",
+        "marker": "data-notice-more"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "push-permission",
+      "name": "Push: устройство, разрешение, отказ, timeout",
+      "group": "Состояния",
+      "rules": [
+        "R09",
+        "R12"
+      ],
+      "recommendation": "Сначала объяснить пользу в контексте, затем запрос ОС; отказ и timeout не успешное включение.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "async function initPush("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "feedback",
+      "name": "Toast / постоянный banner / inline error",
+      "group": "Состояния",
+      "rules": [
+        "R09"
+      ],
+      "recommendation": "Одно сообщение с Undo; actionable не исчезает само; постоянная ошибка остаётся в контексте.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "function notify("
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "loading-progress",
+      "name": "Ожидание и прогресс длительной операции",
+      "group": "Состояния",
+      "rules": [
+        "R02"
+      ],
+      "recommendation": "Показать занятость операции и результат; краткое ожидание без ложного процента.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "function busy("
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "draft-guard",
+      "name": "Несохранённый черновик и связанное действие",
+      "group": "Состояния",
+      "rules": [
+        "R09",
+        "R12"
+      ],
+      "recommendation": "Подтверждать уход только при реальных несохранённых изменениях; сохранить/отбросить/остаться.",
+      "source": {
+        "file": "src/entity-draft-resolution.js",
+        "marker": "export function resolveEntityDraft("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "revision-conflict",
+      "name": "Конфликт версии после создания черновика",
+      "group": "Состояния",
+      "rules": [
+        "R09",
+        "R12"
+      ],
+      "recommendation": "Не перезаписывать новую версию молча; явно показать конфликт и сохранённый черновик.",
+      "source": {
+        "file": "src/service-orders.js",
+        "marker": "resultExpected!==current.revision"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "offline-sync",
+      "name": "Локальная очередь / серверная запись / блокировка",
+      "group": "Состояния",
+      "rules": [
+        "R09",
+        "R12"
+      ],
+      "recommendation": "Локально в очереди и записано на сервере — разные состояния; ошибки не только toast.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "function offlineBanner("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "trash-restore",
+      "name": "Корзина: восстановление и удаление навсегда",
+      "group": "Состояния",
+      "rules": [
+        "R09"
+      ],
+      "recommendation": "Обычное перемещение в корзину с Undo; необратимое удаление с объектом и последствиями.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "async function purgeTrash("
+      },
+      "base_example_v04": true
+    },
+    {
+      "id": "role-authority",
+      "name": "Просмотр, кураторство, передача ответственности",
+      "group": "Состояния",
+      "rules": [
+        "R02",
+        "R12"
+      ],
+      "recommendation": "Видимые границы полномочий и причина запрета; UI-скрытие не заменяет серверную проверку.",
+      "source": {
+        "file": "src/entity-responsibility.js",
+        "marker": "responsibility-form"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "auth-session",
+      "name": "Вход, потеря сессии и выход",
+      "group": "Состояния",
+      "rules": [
+        "R09",
+        "R12"
+      ],
+      "recommendation": "Потерю сессии отличать от сетевого сбоя; возврат после входа без ложного success.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "async function logoutAccount("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "profile-preferences",
+      "name": "Аватар / профиль / preview и сохранение темы",
+      "group": "Состояния",
+      "rules": [
+        "R05",
+        "R12"
+      ],
+      "recommendation": "Preview темы отличать от сохранения профиля; не объявлять немедленный switch, если нужен Save.",
+      "source": {
+        "file": "src/account-profile.js",
+        "marker": "export function openAccountProfile("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "responsive-sticky",
+      "name": "Адаптация, sticky-footer, safe-area и фокус",
+      "group": "Навигация",
+      "rules": [
+        "R01",
+        "R10"
+      ],
+      "recommendation": "Проверить 360–1440, обе темы, низ sheet и незакрытый фокус/CTA; затем zoom/клавиатуру ОС.",
+      "source": {
+        "file": "src/visual-system.css",
+        "marker": "--touch-h"
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "external-copy",
+      "name": "Копирование и переход во внешнюю карту",
+      "group": "Действия",
+      "rules": [
+        "R09",
+        "R11"
+      ],
+      "recommendation": "Ясный внешний переход и результат копирования; ошибка clipboard не success.",
+      "source": {
+        "file": "src/app.js",
+        "marker": "function tripGmaps("
+      },
+      "base_example_v04": false
+    },
+    {
+      "id": "floating-action",
+      "name": "Существующая FAB «Создать точку» на карте",
+      "group": "Действия",
+      "rules": [
+        "R10"
+      ],
+      "recommendation": "Скрывать недоступную FAB, поднять над нижними контролами; одна главная команда режима.",
+      "source": {
+        "file": "index.html",
+        "marker": "id=\"pointToolsFab\""
+      },
+      "base_example_v04": true
+    }
+  ]
+}
