@@ -18,6 +18,7 @@ export async function auditApplicationDesign(page,root=page.locator('body')){
    if(!s.fontFamily.includes(family))errors.push({name,kind,error:'font',expected:family,actual:s.fontFamily});
    if(periodCaption&&s.fontSize!=='13px')errors.push({name,error:'period caption size',actual:s.fontSize});
    if(['button','icon','chip','segment','field','tab'].includes(kind)&&s.boxShadow!=='none')errors.push({name,error:'shadow',actual:s.boxShadow});
+   if(el.matches(':disabled,[aria-disabled=true]')&&!el.matches('[aria-busy=true]')){const tone=getComputedStyle(document.documentElement).getPropertyValue('--ink-dim').trim(),expected=tone.startsWith('#')?'rgb('+tone.slice(1).match(/../g).map(v=>parseInt(v,16)).join(', ')+')':tone;if(s.color!==expected)errors.push({name,error:'disabled tone',expected,actual:s.color});}
    if(kind==='field'&&parseFloat(s.fontSize)!==(touch?16:14))errors.push({name,error:'field text',actual:s.fontSize});
    if(kind==='segment'&&!el.hasAttribute('aria-pressed'))errors.push({name,error:'missing selection state'});
    if(kind==='segment'&&s.borderTopLeftRadius!=='6px')errors.push({name,error:'inset radius',actual:s.borderTopLeftRadius});
