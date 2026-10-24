@@ -4,10 +4,12 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import config from '../../vite.config.js';
 import {installMockBackend} from './mock-backend.mjs';
+import {auditApplicationDesign} from './application-design-audit.mjs';
 
 // QA-only entry points exercise the production functions; never shipped.
 const hooks=`
 window.__windowTests={openJob,jobHead,openTrip,openEquip:window.openEquip,editClient:window.editClient,switchTab,ensureRefs,
+ queueStatus:async(blocked=false)=>{await qRefresh();qCount=3;qBlocked=blocked?{blocked_error:'Нет связи'}:null;qDeferred=null;paintQueue();},
  vehicle:()=>{vehState=[{vehicle_id:'vehicle-a',ts:new Date().toISOString(),lat:49.99,lng:36.23,speed:12,depot_state:'outside'}];vehTrackSessions=[];vehActiveTrips={};showVehModal('vehicle-a');},
  routePanel:async()=>{await switchTab('map');document.querySelector('[data-sb=route]').click();},
  nestedPush:()=>{openPush();confirmDialog('Подтвердить изменение?',{okText:'Подтвердить'});},
@@ -28,7 +30,7 @@ test.beforeEach(async({page},info)=>{
  await expect(page.locator('.overlay.on')).toHaveCount(0);
  await page.waitForFunction(()=>!!window.__windowTests);await page.evaluate(()=>window.__windowTests.ensureRefs());
 });
-test.afterEach(async({page})=>{expect(errors.get(page)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);});
+test.afterEach(async({page})=>{await auditApplicationDesign(page);expect(errors.get(page)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);});
 const open=async(page,name,...args)=>page.evaluate(async({name,args})=>{await window.__windowTests[name](...args);},{name,args});
 
 test('dirty modal preserves input on cancelled discard and contains nested keyboard focus',async({page})=>{
@@ -76,7 +78,7 @@ test('timeline primary action stays readable and help does not compete with trip
  const panel=page.locator('.gpop');await expect(panel).toBeVisible();const primary=panel.locator('[data-pop-action]');
  expect((await primary.boundingBox()).height).toBeLessThanOrEqual(70);
  expect(await panel.locator('.gp-layout').evaluate(el=>el.open)).toBe(true);
- for(const button of await panel.locator('.gp-trip-tools button').all())expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(44);
+ for(const button of await panel.locator('.gp-trip-tools button').all())expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(page.viewportSize().width<=768?48:40);
  await page.keyboard.press('Escape');await expect(panel).toHaveCount(0);
 });
 
@@ -84,7 +86,7 @@ test('map actions remain touch-sized and hit-testable above the mobile bottom sh
  await open(page,'mapClient');const popup=page.locator('.leaflet-popup').last();await expect(popup).toBeVisible();
  await popup.locator('.client-popup-more summary').click();
  for(const action of await popup.locator('.btn:visible').all()){
-  await action.scrollIntoViewIfNeeded();const r=await action.boundingBox();expect(r.height).toBeGreaterThanOrEqual(44);
+  await action.scrollIntoViewIfNeeded();const r=await action.boundingBox();expect(r.height).toBeGreaterThanOrEqual(page.viewportSize().width<=768?48:40);
   expect(await action.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);
  }
  const r=await popup.boundingBox();expect(r.x).toBeGreaterThanOrEqual(0);expect(r.y+r.height).toBeLessThanOrEqual(page.viewportSize().height);
@@ -146,7 +148,7 @@ test('client popup keeps primary actions in a row and exposes secondary actions 
  expect(surface.background).toBe(surface.expectedBackground);expect(surface.color).toBe(surface.expectedColor);if(surface.popover)expect(surface.shadow).toBe('none');
  await expect(pop.getByRole('button',{name:'Редактировать клиента',exact:true})).toBeHidden();
  const geometry=await pop.locator('.client-popup-primary').evaluate(el=>Array.from(el.children,x=>{const r=x.getBoundingClientRect();return {top:r.top,height:r.height,width:r.width};}));
- expect(geometry).toHaveLength(2);expect(geometry[0].top).toBe(geometry[1].top);for(const r of geometry){expect(r.height).toBeGreaterThanOrEqual(44);expect(r.width).toBeGreaterThan(90);}
+ expect(geometry).toHaveLength(2);expect(geometry[0].top).toBe(geometry[1].top);for(const r of geometry){expect(r.height).toBeGreaterThanOrEqual(page.viewportSize().width<=768?48:40);expect(r.width).toBeGreaterThan(90);}
  await pop.locator('.client-popup-more summary').click();await expect(pop.getByRole('button',{name:'Техника',exact:true})).toBeVisible();await expect(pop.getByRole('button',{name:'Создать заявку',exact:true})).toBeVisible();
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-client.png'});
  await pop.getByRole('button',{name:'Редактировать клиента',exact:true}).click();await expect(page.locator('#editOverlay')).toBeVisible();
@@ -154,7 +156,7 @@ test('client popup keeps primary actions in a row and exposes secondary actions 
 test('route panel shows one primary action and collapses advanced settings',async({page},info)=>{
  await open(page,'routePanel');await expect(page.locator('#rBuild')).toBeVisible();await expect(page.locator('#rSaveTrip')).toBeVisible();
  await expect(page.locator('#rPref')).toBeHidden();await expect(page.locator('#chipAvoid')).toBeHidden();await expect(page.locator('#rClear')).toBeHidden();
- const buttons=await page.locator('.route-primary>.btn').evaluateAll(xs=>xs.map(el=>{const r=el.getBoundingClientRect();return {top:r.top,height:r.height};}));expect(buttons[0].top).toBe(buttons[1].top);for(const b of buttons)expect(b.height).toBeGreaterThanOrEqual(44);
+ const buttons=await page.locator('.route-primary>.btn').evaluateAll(xs=>xs.map(el=>{const r=el.getBoundingClientRect();return {top:r.top,height:r.height};}));expect(buttons[0].top).toBe(buttons[1].top);for(const b of buttons)expect(b.height).toBeGreaterThanOrEqual(page.viewportSize().width<=768?48:40);
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-route.png'});
  await page.locator('.route-settings summary').click();await expect(page.locator('#rPref')).toBeVisible();await page.locator('#chipAvoid').click();await expect(page.locator('#avoidBody')).toBeVisible();
  await expect(page.locator('#chipOpt')).toBeDisabled();await page.locator('#rPref').selectOption('shortest');await expect(page.locator('#rPref')).toHaveValue('shortest');
@@ -167,4 +169,14 @@ test('request context editor keeps its mounted fields visible when the header re
  await page.locator('[data-request-edit-context]').click();const dialog=page.getByRole('dialog',{name:'Изменить заявку',exact:true});await expect(dialog).toBeVisible();await expect(field).toBeVisible();
  await open(page,'jobHead');await expect(field).toBeVisible();await expect(field).toHaveValue(initial);expect(await page.evaluate(()=>window.__originalRequestField===document.getElementById('jbClient'))).toBe(true);
  await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(page.locator('#requestContext')).toBeVisible();await expect(field).toBeHidden();
+});
+
+test('production offline queue banner fits the viewport and keeps its semantic pressed state',async({page})=>{
+ for(const blocked of [false,true]){
+  await open(page,'queueStatus',blocked);const badge=page.locator('#qBadge');await expect(badge).toBeVisible();await expect(badge).toContainText('3');await page.evaluate(()=>document.fonts.ready);
+  const box=await badge.boundingBox(),viewport=page.viewportSize();expect(box.x).toBeGreaterThanOrEqual(16);expect(box.x+box.width).toBeLessThanOrEqual(viewport.width-16);
+  const rail=viewport.width<=760?(await page.locator('.rail').boundingBox()).height:0;expect(box.y+box.height).toBeLessThanOrEqual(viewport.height-rail-8);
+  expect(await badge.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();expect(await badge.evaluate(el=>getComputedStyle(el).backgroundImage)).not.toBe('none');expect(await badge.boundingBox()).toEqual(box);await page.mouse.move(0,0);await page.mouse.up();
+ }
 });
