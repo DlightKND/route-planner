@@ -722,3 +722,9 @@
 @media (max-width:1100px){
  .journal-page-head{padding-block:var(--sp-4)}
 }
+/* Floating windows use the same window role as the entity editors. */
+.journal-allocation-editor{padding:var(--pad-window);border-radius:var(--r-lg)}
+.journal-allocation-editor [data-task-remove]{width:var(--control-h);min-height:var(--control-h);right:var(--sp-3);top:var(--sp-2)}
+.journal-allocation-editor .wb-task-share-row>span:first-of-type{padding-right:var(--sp-8)}
+.view .journal-periodbar>.btn{width:var(--control-h)}
+@media(max-width:760px){.journal-allocation-editor{padding:var(--sp-5) var(--sp-5) max(var(--sp-5),env(safe-area-inset-bottom));border-radius:0}}
