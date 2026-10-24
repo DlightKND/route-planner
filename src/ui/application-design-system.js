@@ -1,0 +1,73 @@
+// A single visual adapter for static, asynchronously mounted and top-layer UI.
+// Existing IDs, native form state, handlers and permission checks stay owned by screens.
+export const UI_SELECTORS = {
+  segment: '.seg:not(.chipseg):not(.unassigned-filter):not(.journal-trip-tabs),.summary-view-switch,.summary-period-presets,.notice-tabs,.rquick,.presence-kind',
+  filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.design-filter-chips',
+  count: '.chip-n,.cnt,.rchip .n,.unassigned-filter button b,[data-activity-count],.engineer-picker-count,.ui-count',
+  card: '.card,.kcard,.record-card,.notice-row,.staff-row,.stock-row,.emrow,.eqitem,.pt,.order-brief,.order-child,.trip-choice-card,.order-result-summary,.summary-quick-actions,.planwarn',
+  popover: '.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover',
+  geometry: '.vg-block,.vg-group,.vg-cut-handle,.vg-divide,.vg-win-line,.vg-plan-tools,.leaflet-marker-icon,.leaflet-interactive,.journal-time-part',
+};
+const isIcon = el => el.matches('.qm,.ph-close,.ph-del,.avx,.foldx-btn,.depot-toggle,.gp-close,.mleg-close,.modal-close,.notice-more,.mleg-clear,.entity-actions-trigger,.journal-expand-map,.leaflet-control-zoom a,[data-gtools]') ||
+  (!el.querySelector('input,select,textarea') && (/^[←→↗↻↺×✕✖⋯…+−–?☰⌕]$/.test(el.textContent.trim()) || (!el.textContent.trim() && !!el.querySelector('svg'))));
+export function controlKind(el) {
+  if(el.matches(UI_SELECTORS.geometry))return 'geometry';
+  if(el.matches('input'))return ['checkbox','radio','range','color','file','hidden'].includes(el.type)?el.type:'field';
+  if(el.matches('select,textarea'))return 'field';
+  if(el.matches('[role=switch]'))return 'switch';
+  if(el.matches('.fab-add,#pointToolsFab'))return 'fab';
+  if(el.matches('[role=tab],.subtab,.entity-tabs>button,.journal-trip-tabs>button,.side-tabs2>button'))return 'tab';
+  if(el.matches('.nav-i,.rail button,.rail a'))return 'navigation';
+  if(el.matches('.chip,.echip,.rchip,[data-activity-filter],.design-filter-chips>button') || el.parentElement?.matches(UI_SELECTORS.filters))return 'chip';
+  if(el.parentElement?.matches(UI_SELECTORS.segment))return 'segment';
+  if(el.matches('.entity-menu-item,.ctxmenu button,.gp-secondary>button'))return 'menu';
+  if(el.matches('.order-child,.order-card-title,.trip-job-open,.trip-review-item,.presence-stop,.gps-record-open,.wf-row,.wk-h,.depot-car,.notice-read,.journal-time-part,.journal-conflict'))return 'row';
+  if(isIcon(el))return 'icon';
+  if(el.matches('a:not(.btn):not(.crumb)'))return 'link';
+  if(el.matches('summary'))return 'disclosure';
+  return 'button';
+}
+export function installApplicationDesignSystem(root=document) {
+  const html=root.documentElement;
+  if(html.dataset.uiSystem)return;
+  html.dataset.uiSystem='0.7';
+  const assign=(el,key,value)=>{if(el.dataset[key]!==value)el.dataset[key]=value;};
+  const scan=()=>{
+    root.querySelectorAll('button,a,input,select,textarea,summary,[role=button]').forEach(el=>{
+      if(el.closest('.ds-kit'))return;
+      const kind=controlKind(el);assign(el,'ui',kind);
+      if(['button','icon','menu'].includes(kind))assign(el,'uiVariant',el.matches('.red,.danger,[data-danger=true]')?'destructive':el.matches('.amber')?'primary':el.matches('.ghost')?'tertiary':'secondary');
+      if(el.matches('.sm'))assign(el,'uiSize','s');
+      if(kind==='chip'){
+        // Legacy class-driven filters keep their handlers; expose the same state to AT.
+        if(!el.hasAttribute('aria-pressed')&&!el.matches('[aria-haspopup]'))el.dataset.uiPressedOwner='adapter';
+        if(el.dataset.uiPressedOwner==='adapter')el.setAttribute('aria-pressed',String(el.matches('.on')||el.matches('.echip:not(.off):not(.all)')));
+      }
+    });
+    root.querySelectorAll(UI_SELECTORS.segment).forEach(el=>assign(el,'uiGroup','segments'));
+    root.querySelectorAll(UI_SELECTORS.filters).forEach(el=>assign(el,'uiGroup','filters'));
+    root.querySelectorAll(UI_SELECTORS.card).forEach(el=>assign(el,'uiSurface','card'));
+    root.querySelectorAll(UI_SELECTORS.popover).forEach(el=>assign(el,'uiSurface','popover'));
+    root.querySelectorAll('dialog,.modal,.presence-editor').forEach(el=>assign(el,'uiSurface','dialog'));
+    root.querySelectorAll(UI_SELECTORS.count).forEach(el=>{
+      assign(el,'ui','count');
+      const parent=el.closest('button'),key=parent?.dataset.js||parent?.dataset.ts||parent?.dataset.os||parent?.dataset.utMode||'';
+      const tone=el.dataset.uiTone||(['pending','review'].includes(key)?'danger':['completed','approved','accepted'].includes(key)?'success':['paused','recovery','gps'].includes(key)?'warning':'neutral');
+      assign(el,'uiTone',tone);assign(el,'uiEmpty',String(/^0$/.test(el.textContent.trim())));
+    });
+    root.querySelectorAll('label').forEach(el=>{if(el.querySelector(':scope>input[type=checkbox],:scope>input[type=radio]'))assign(el,'ui','option');});
+  };
+  let queued=false;
+  const schedule=()=>{if(queued)return;queued=true;root.defaultView.queueMicrotask(()=>{queued=false;scan();});};
+  new root.defaultView.MutationObserver(schedule).observe(root.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','role','disabled','aria-busy']});
+  root.addEventListener('change',schedule);
+  root.addEventListener('keydown',event=>{
+    const button=event.target.closest('[data-ui=segment]'),group=button?.parentElement;
+    if(!group||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    const options=[...group.querySelectorAll(':scope>button:not(:disabled):not([hidden])')],index=options.indexOf(button);
+    if(index<0)return;
+    event.preventDefault();const next=event.key==='Home'?options[0]:event.key==='End'?options.at(-1):options[(index+(event.key==='ArrowRight'?1:-1)+options.length)%options.length];
+    next.focus();next.click();
+  });
+  scan();
+}

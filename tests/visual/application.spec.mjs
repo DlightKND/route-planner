@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { installMockBackend, fixtureIDs } from './mock-backend.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {auditApplicationDesign} from './application-design-audit.mjs';
 
 const scenes = [
   {name:'notifications',route:'notifications',view:'notifications',ready:'.notice-row',allRoles:true},
@@ -57,6 +58,7 @@ async function openScene(page,context,testInfo,role,scene) {
   return {active,audit};
 }
 async function integrity(page,active,audit,testInfo) {
+  await auditApplicationDesign(page,active);
   const measurements=await page.evaluate(()=>{
     const view=document.querySelector('.view.active'),pane=view.querySelector('.pane');
     return {viewport:innerWidth,documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,viewWidth:Math.round(view.getBoundingClientRect().width),paneWidth:pane?.clientWidth,paneScrollWidth:pane?.scrollWidth,theme:document.documentElement.dataset.theme,blockedWrites:window.__visualQA.blockedWrites,reads:window.__visualQA.reads};

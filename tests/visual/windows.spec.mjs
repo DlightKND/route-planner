@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import config from '../../vite.config.js';
 import {installMockBackend} from './mock-backend.mjs';
+import {auditApplicationDesign} from './application-design-audit.mjs';
 
 // QA-only entry points exercise the production functions; never shipped.
 const hooks=`
@@ -28,7 +29,7 @@ test.beforeEach(async({page},info)=>{
  await expect(page.locator('.overlay.on')).toHaveCount(0);
  await page.waitForFunction(()=>!!window.__windowTests);await page.evaluate(()=>window.__windowTests.ensureRefs());
 });
-test.afterEach(async({page})=>{expect(errors.get(page)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);});
+test.afterEach(async({page})=>{await auditApplicationDesign(page);expect(errors.get(page)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);});
 const open=async(page,name,...args)=>page.evaluate(async({name,args})=>{await window.__windowTests[name](...args);},{name,args});
 
 test('dirty modal preserves input on cancelled discard and contains nested keyboard focus',async({page})=>{

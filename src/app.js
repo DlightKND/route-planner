@@ -38,6 +38,8 @@ import { installOperationsUI } from './operations-ui.js';
 import './workspace-ui.css';
 import './review-workspaces.css';
 import './unified-journal.css';
+import './ui/application-design-system.css';
+import {installApplicationDesignSystem} from './ui/application-design-system.js';
 import {frameGpsResolutionPrompt,restoreGpsResolutionPrompt,framePresenceWorkspace,installWorkspaceStructure,presentRequestWorkspace,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
@@ -3357,7 +3359,7 @@ function dashEngineerList(){return (profilesList||[]).filter(p=>p&&p.role==='eng
 function dashEnsureEngineers(){const all=dashEngineerList();if(!dashEngineers.size)all.forEach(p=>dashEngineers.add(String(p.id)));else{const valid=new Set(all.map(p=>String(p.id)));dashEngineers=new Set(Array.from(dashEngineers).filter(id=>valid.has(String(id))));if(!dashEngineers.size)all.forEach(p=>dashEngineers.add(String(p.id)));}return all;}
 function dashTripInScope(t){const ids=[t.lead_engineer].concat(t.engineer_ids||[]).filter(Boolean).map(String);return ids.some(id=>dashEngineers.has(id));}
 function engineerScopeHtml(){const all=dashEnsureEngineers(),on=all.length&&dashEngineers.size===all.length;if(all.length<=5)return '<div class="echips"><span class="scope-label">Команда статистики</span><button class="echip all'+(on?' on':'')+'" data-eall>все инженеры</button>'+all.map(p=>'<button class="echip'+(dashEngineers.has(String(p.id))?'':' off')+'" aria-pressed="'+dashEngineers.has(String(p.id))+'" data-eng="'+p.id+'"><i class="dot" style="background:'+esc(p.color||'var(--cyan)')+'"></i>'+esc(p.full_name)+'</button>').join('')+'</div>';
-  return '<div class="echips"><span class="scope-label">Команда статистики</span><button class="echip all" data-epop>Инженеры · '+dashEngineers.size+' из '+all.length+'</button><div class="ctxmenu engineer-pop" hidden><button data-eall>Все</button>'+all.map(p=>'<button class="'+(dashEngineers.has(String(p.id))?'':'off')+'" aria-pressed="'+dashEngineers.has(String(p.id))+'" data-eng="'+p.id+'">'+esc(p.full_name)+'</button>').join('')+'</div></div>';}
+  return '<div class="echips"><span class="scope-label">Команда статистики</span><button class="echip all" data-epop>Инженеры <span class="ui-count">'+dashEngineers.size+'</span> из '+all.length+'</button><div class="ctxmenu engineer-pop" hidden><button data-eall>Все</button>'+all.map(p=>'<button class="'+(dashEngineers.has(String(p.id))?'':'off')+'" aria-pressed="'+dashEngineers.has(String(p.id))+'" data-eng="'+p.id+'">'+esc(p.full_name)+'</button>').join('')+'</div></div>';}
 function metricDelta(plan,fact,dir){if(fact==null||!(plan>0))return {pct:null,cls:'nofact',text:'—'};const pct=(fact-plan)/plan*100;if(Math.abs(pct)<5)return {pct,cls:'flat',text:deltaSign(pct)+Math.abs(pct).toFixed(1)+'%'};const good=dir==='up'?pct>0:pct<0;return {pct,cls:good?'good':'bad',text:deltaSign(pct)+Math.abs(pct).toFixed(1)+'%'};}
 function deltaSign(v){return v>1e-9?'+':v<-1e-9?'−':'±';}
 function metricRow({name,plan,fact,unit='',dir='down',sub='',single=false}){if(single)return '<div class="mrow"><div class="m-top"><span class="m-n">'+esc(name)+'</span><span class="m-v">'+esc(fact)+'<span class="m-u">'+esc(unit)+'</span></span></div></div>';
@@ -8939,3 +8941,4 @@ if($('verCopy')) $('verCopy').onclick=async()=>{
 // Expose everyday controls after the existing screen handlers have been installed.
 installOperationsUI();
 installWorkspaceStructure();
+installApplicationDesignSystem();

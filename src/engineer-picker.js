@@ -27,6 +27,7 @@ export function installEngineerPickers(root = document) {
           panel.setAttribute('aria-label',select.getAttribute('aria-label') || 'Выбор инженеров');
           panel.setAttribute('popover','auto');
           const title = document.createElement('div');title.className='engineer-options-title';title.textContent='Инженеры';panel.append(title);
+          const search=document.createElement('input');search.type='search';search.placeholder='Найти инженера';search.setAttribute('aria-label','Поиск инженеров');panel.append(search);
           for (const option of select.options) {
             const label=document.createElement('label'),input=document.createElement('input'),text=document.createElement('span');
             input.type='checkbox';input.checked=option.selected;input.disabled=option.disabled;
@@ -34,6 +35,8 @@ export function installEngineerPickers(root = document) {
             input.onchange=()=>{option.selected=input.checked;select.dispatchEvent(new window.Event('change',{bubbles:true}));scan();};
           }
           if (!select.options.length) { const empty=document.createElement('p');empty.textContent='Нет доступных инженеров';panel.append(empty); }
+          const emptySearch=document.createElement('p');emptySearch.className='hint';emptySearch.hidden=true;emptySearch.textContent='Никого не найдено';panel.append(emptySearch);
+          search.oninput=()=>{const text=search.value.trim().toLocaleLowerCase('ru-RU');let count=0;for(const row of panel.querySelectorAll('label')){row.hidden=!row.textContent.toLocaleLowerCase('ru-RU').includes(text);if(!row.hidden)count++;}emptySearch.hidden=count>0;};
           const done=document.createElement('button');done.type='button';done.className='btn sm';done.textContent='Готово';panel.append(done);
           done.onclick=()=>{close();button.focus({preventScroll:true});};
           (select.closest('dialog') || document.body).append(panel);
@@ -45,17 +48,18 @@ export function installEngineerPickers(root = document) {
           const height=panel.getBoundingClientRect().height;
           panel.style.top=Math.max(8,Math.min(window.innerHeight-height-8,box.bottom+height+8<window.innerHeight?box.bottom+4:box.top-height-4))+'px';
           panel.addEventListener('toggle',e=>{if(e.newState==='closed'&&active?.panel===panel){panel.remove();button.setAttribute('aria-expanded','false');active=null;}});
-          (panel.querySelector('input:not(:disabled)') || done).focus({preventScroll:true});
+          search.focus({preventScroll:true});
           // Native popover opening and focus can enqueue an ancestor scroll.
           // Allow that opening frame, then keep deliberate external scrolling as dismissal.
           window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{if(active?.panel===panel)active.opening=false;}));
         };
       }
       const names=[...select.options].filter(o=>o.selected).map(o=>o.textContent.trim());
-      const label=names.length>1?names[0]+' +'+(names.length-1):names[0]||'Выбрать инженеров';
-      if(button.textContent!==label+' ▾')button.textContent=label+' ▾';
+      const label=names[0]||'Выбрать инженеров';
+      const signature=names.join('\u0000');
+      if(button.dataset.crewSignature!==signature){button.dataset.crewSignature=signature;const caption=document.createElement('span'),count=document.createElement('span'),arrow=document.createElement('span');caption.textContent=label;count.className='engineer-picker-count';count.textContent=String(names.length);arrow.textContent='▾';button.replaceChildren(caption,count,arrow);}
       button.title=names.join(', ')||label;if(button.disabled!==select.disabled)button.disabled=select.disabled;
-      button.setAttribute('aria-label',(select.getAttribute('aria-label') || 'Инженеры')+': '+label);
+      button.setAttribute('aria-label',(select.getAttribute('aria-label') || 'Инженеры')+': '+names.length+' · '+(names.join(', ')||'не выбраны'));
     });
   };
   new window.MutationObserver(scan).observe(root.body || root,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','selected']});
