@@ -31,7 +31,7 @@ html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=menu
   gap:8px!important;cursor:pointer;vertical-align:middle;text-decoration:none;transform:none!important;
 }
 html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=chip],[data-ui=segment],[data-ui=menu]){align-items:center;justify-content:center}
-html#dlight-ui[data-ui-system] [data-ui=button]{display:inline-flex}
+:where(html#dlight-ui[data-ui-system] [data-ui=button]){display:inline-flex}
 html#dlight-ui[data-ui-system] [data-ui-size=s][data-ui=button]{min-height:var(--ui-small)!important;padding:var(--ui-small-py) 12px!important;font-size:var(--ui-small-font)!important;line-height:var(--ui-small-line)!important}
 html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=chip],[data-ui=segment],[data-ui=tab])::before,
 html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=segment],[data-ui=tab])::after{content:none!important}
@@ -40,7 +40,7 @@ html#dlight-ui[data-ui-system] [data-ui-variant=secondary]{background:var(--pane
 html#dlight-ui[data-ui-system] [data-ui-variant=tertiary]{background:transparent!important;border-color:transparent!important;color:var(--ink)!important}
 html#dlight-ui[data-ui-system] [data-ui-variant=destructive]{background:var(--danger-bg)!important;border-color:var(--red)!important;color:var(--red)!important}
 html#dlight-ui[data-ui-system] :is(#confirmYes,#promptYes).red{background:var(--red)!important;color:var(--danger-ink)!important}
-html#dlight-ui[data-ui-system] [data-ui=icon]{display:inline-flex;width:var(--ui-icon)!important;height:var(--ui-icon)!important;min-width:var(--ui-icon)!important;min-height:var(--ui-icon)!important;max-width:none;padding:calc((var(--ui-icon) - 26px)/2)!important;flex:none;font-size:20px!important;line-height:24px!important}
+html#dlight-ui[data-ui-system] [data-ui=icon]{width:var(--ui-icon)!important;height:var(--ui-icon)!important;min-width:var(--ui-icon)!important;min-height:var(--ui-icon)!important;max-width:none;padding:calc((var(--ui-icon) - 26px)/2)!important;flex:none;font-size:20px!important;line-height:24px!important}
 html#dlight-ui[data-ui-system] [data-ui=icon]>svg{width:20px;height:20px;flex:none}
 html#dlight-ui[data-ui-system] [data-ui=field]{
   min-height:var(--ui-h)!important;height:auto;min-width:0;max-width:100%;padding:var(--ui-py) 12px!important;
@@ -59,7 +59,7 @@ html#dlight-ui[data-ui-system] :is(.entity-activity-form,.responsibility-form) l
 html#dlight-ui[data-ui-system] :is(.hint,.meta,.entity-meta,.th-sub,.activity-meta,.design-description){font-family:var(--sans)!important;font-size:var(--ui-help)!important;line-height:1.5!important;letter-spacing:normal;text-transform:none;overflow-wrap:anywhere}
 html#dlight-ui[data-ui-system] :is(.pane-head h2,.trip-head h2,.design-page-head h2){font:600 28px/1.25 var(--sans)!important;letter-spacing:-.02em!important;text-transform:none!important}
 html#dlight-ui[data-ui-system] :is(.card h3,.modal h3,.entity-dialog-head h3){font:600 18px/1.4 var(--sans)!important;letter-spacing:normal!important;text-transform:none!important}
-html#dlight-ui[data-ui-system] [data-ui=chip]{display:inline-flex;flex:0 0 auto;min-height:var(--ui-chip-h)!important;padding:var(--ui-chip-py) 12px!important;border-radius:var(--r-pill)!important;background:transparent!important;color:var(--ink)!important;font:400 var(--ui-chip-font)/var(--ui-chip-line) var(--sans)!important;box-shadow:none!important}
+html#dlight-ui[data-ui-system] [data-ui=chip]{flex:0 0 auto;min-height:var(--ui-chip-h)!important;padding:var(--ui-chip-py) 12px!important;border-radius:var(--r-pill)!important;background:transparent!important;color:var(--ink)!important;font:400 var(--ui-chip-font)/var(--ui-chip-line) var(--sans)!important;box-shadow:none!important}
 html#dlight-ui[data-ui-system] [data-ui=chip]:is(.on,[aria-pressed=true]){background:var(--panel-2)!important;border-color:var(--focus)!important;font-weight:600!important}
 html#dlight-ui[data-ui-system] [data-ui=count]{display:inline-flex!important;align-items:center;justify-content:center;min-width:24px!important;min-height:22px!important;height:auto!important;padding:1px 6px!important;margin:0!important;border:0!important;border-radius:var(--r-pill)!important;flex:none;background:var(--count-neutral-bg)!important;color:var(--ink)!important;font:600 12px/20px var(--sans)!important;font-variant-numeric:tabular-nums;opacity:1!important}
 html#dlight-ui[data-ui-system] [data-ui=count][data-ui-tone=danger]:not([data-ui-empty=true]){background:var(--danger-bg)!important;color:var(--red)!important}
@@ -115,7 +115,7 @@ html#dlight-ui[data-ui-system] :has(>[data-ui-variant=primary])>[data-ui=button]
 html#dlight-ui[data-ui-system] .stickyhead [data-ui-group=filters]{flex-wrap:nowrap!important;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px!important}
 html#dlight-ui[data-ui-system] .vg-group.has-act [data-gtools]{margin-right:8px}
 @media(max-width:760px){html#dlight-ui[data-ui-system] .dispatcher-toolbar>.searchbox{grid-column:1/-1;width:100%;max-width:none}}
-html#dlight-ui[data-ui-system] [data-ui=badge]{display:inline-flex;align-items:center;gap:4px;padding:2px 8px!important;border-radius:999px!important;font:400 12px/20px var(--sans)!important}
+html#dlight-ui[data-ui-system] [data-ui=badge]{align-items:center;gap:4px;padding:2px 8px!important;border-radius:999px!important;font:400 12px/20px var(--sans)!important}
 html#dlight-ui[data-ui-system] [data-ui=range]{appearance:none;background:transparent!important}
 html#dlight-ui[data-ui-system] [data-ui=range]::-webkit-slider-runnable-track{height:4px;border-radius:999px;background:linear-gradient(to right,var(--ink) var(--ui-range-fill),var(--line) var(--ui-range-fill))}
 html#dlight-ui[data-ui-system] [data-ui=range]::-webkit-slider-thumb{appearance:none;width:22px;height:22px;margin-top:-9px;border:1px solid var(--input-line);border-radius:999px;background:var(--panel)}
@@ -156,3 +156,10 @@ html#dlight-ui[data-ui-system] .dispatcher-view-mode{flex:1 0 112px}
 html#dlight-ui[data-ui-system] .dispatcher-view-mode select{min-width:108px!important;width:100%!important;max-width:160px}
 @media(max-width:760px){html#dlight-ui[data-ui-system] .planner-filter-menu>summary[data-ui-compact]{border:1px solid var(--input-line)!important;border-radius:8px!important;background:var(--panel)!important}}
 html#dlight-ui[data-ui-system] small{font:400 var(--ui-help)/1.5 var(--sans)!important}
+
+/* Low-specificity display defaults preserve every screen-owned display:none rule. */
+:where(html#dlight-ui[data-ui-system] [data-ui=icon],html#dlight-ui[data-ui-system] [data-ui=chip],html#dlight-ui[data-ui-system] [data-ui=badge]){display:inline-flex}
+html#dlight-ui[data-ui-system] .dispatcher-toolbar{align-items:start}
+html#dlight-ui[data-ui-system] .dispatcher-toolbar>.searchbox{align-self:start}
+html#dlight-ui[data-ui-system] [data-summary-dates],html#dlight-ui[data-ui-system] .journal-periodbar>details>summary{font:600 13px/20px var(--mono)!important;padding-inline:4px!important}
+@media(max-width:760px){html#dlight-ui[data-ui-system] .summary-period-top{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}html#dlight-ui[data-ui-system] .summary-period-top .summary-period-today{justify-self:start;min-width:max-content;width:auto}}

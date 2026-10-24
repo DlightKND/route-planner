@@ -23,7 +23,11 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium --only-shell
       - name: Measure the approved components in every role and production section
-        run: npx playwright test tests/visual/production-design-system.spec.mjs --retries=0
+        run: >-
+          npx playwright test tests/visual/production-design-system.spec.mjs
+          tests/visual/layout-filter-regressions.spec.mjs tests/visual/design-states.spec.mjs
+          --grep='production|dashboard hides redundant|dispatcher search geometry|shared period respects'
+          --retries=0
       - name: Keep production migration evidence
         if: always()
         uses: actions/upload-artifact@v4
