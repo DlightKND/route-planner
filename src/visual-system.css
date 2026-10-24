@@ -4,6 +4,10 @@ html:root {
   --touch-h:44px;
   --fs-body:14px;
   --fs-caption:12px;
+  --fs-page:28px;
+  --fs-section:18px;
+  --overlay-backdrop:rgba(12,11,8,.6);
+  --overlay-blur:blur(3px);
   --pad-card:var(--sp-5);
   --gap-card:var(--sp-6);
   --gap-list:var(--sp-4);
@@ -103,7 +107,7 @@ body { font-size:var(--fs-body); }
  .view .order-grid { grid-template-columns:minmax(0,1fr); }
 }
 @media (max-width:760px) {
- html:root { --control-h:var(--touch-h); }
+ html:root { --control-h:var(--touch-h);--fs-page:23px; }
  .view :is(input[type=text],input[type=search],input[type=date],input[type=number],input[type=tel],select,textarea) { font-size:var(--fs-6); }
  .view .pane { padding-left:max(var(--sp-4),env(safe-area-inset-left));padding-right:max(var(--sp-4),env(safe-area-inset-right)); }
  .view :is(.seg,.wb-tabs,.order-savebar) { flex-wrap:wrap; }

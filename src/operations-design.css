@@ -162,7 +162,7 @@ button,input,select,textarea { font-family:var(--sans); }
 .notice-device h2 { margin:0;font-size:16px; }
 .notice-device p { margin:4px 0 0;color:var(--ink-dim);font-size:13px; }
 .notice-device .btn { flex:none; }
-dialog.overlay::backdrop,dialog.entity-panel-dialog::backdrop,dialog.presence-editor::backdrop { background:rgba(12,11,8,.6);backdrop-filter:blur(3px); }
+dialog.overlay::backdrop,dialog.entity-panel-dialog::backdrop,dialog.presence-editor::backdrop { background:var(--overlay-backdrop);backdrop-filter:var(--overlay-blur); }
 dialog.overlay .modal { padding:24px;border-radius:16px; }
 dialog.overlay .modal.s { max-width:440px; }
 dialog.overlay .modal-head { margin-bottom:20px; }
