@@ -3,7 +3,7 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {build} from 'esbuild';
 const read=p=>readFileSync(p,'utf8');
 const source=read('index.html'),app=read('src/app.js');
-const roots=[...source.matchAll(/  :root\s*\{[\s\S]*?\n  \}/g)].map(m=>m[0]).join('\n');
+const roots=[...source.matchAll(/^  :root\s*\{[\s\S]*?\n  \}/gm)].map(m=>m[0]).join('\n');
 const roleTokens=['src/visual-system.css','src/operations-design.css'].map(p=>read(p).match(/html:root\s*\{[\s\S]*?\n\}/)[0]).join('\n');
 const themes=app.slice(app.indexOf('const THEMES='),app.indexOf('function applyTheme('));
 if(!roots.includes('--sp-8')||!themes.includes('--on-accent'))throw Error('Shared token source changed; update catalogue extraction.');
