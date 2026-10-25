@@ -228,3 +228,37 @@ html#dlight-ui[data-ui-system] .anchored-context-panel>[data-ui=menu]{width:100%
 html#dlight-ui[data-ui-system] .anchored-context-panel>.q{display:block;justify-self:stretch;min-height:0;min-width:0}
 html#dlight-ui[data-ui-system] .anchored-context-panel>.q>[data-ui=menu]{width:100%!important}
 html#dlight-ui[data-ui-system] .anchored-context-panel>.q>.qm::after{content:none!important}
+
+/* Journal navigation always has a visible, outlined back arrow in the first slot. */
+html#dlight-ui[data-ui-system] .journal-back[data-ui=icon]{display:inline-flex!important;justify-content:center!important;margin:0!important;border-color:var(--input-line)!important;border-radius:var(--r-sm)!important;background:var(--panel)!important}
+html#dlight-ui[data-ui-system] .journal-page-head{grid-template-columns:var(--ui-icon) minmax(0,1fr) auto minmax(240px,320px) repeat(3,var(--ui-icon))}
+html#dlight-ui[data-ui-system] .journal-page-head>[data-journal-exit]{grid-column:1;grid-row:1}
+html#dlight-ui[data-ui-system] .journal-page-head>h1{grid-column:2;grid-row:1}
+html#dlight-ui[data-ui-system] .journal-page-head>[data-journal-list-toggle]{grid-column:3;grid-row:1}
+html#dlight-ui[data-ui-system] .journal-page-head>[data-journal-period]{grid-column:4;grid-row:1}
+html#dlight-ui[data-ui-system] .journal-page-head>.journal-search-toggle{grid-column:5;grid-row:1}
+html#dlight-ui[data-ui-system] .journal-page-head>.journal-filters{grid-column:6;grid-row:1}
+html#dlight-ui[data-ui-system] .journal-page-head>.journal-actions{grid-column:7;grid-row:1}
+html#dlight-ui[data-ui-system] .journal-trip-head{display:grid;grid-template-columns:var(--ui-icon) minmax(0,1fr) var(--ui-icon);gap:12px 8px}
+html#dlight-ui[data-ui-system] .journal-trip-head>.journal-back{grid-column:1;grid-row:1}
+html#dlight-ui[data-ui-system] .journal-trip-head>.journal-trip-menu{position:relative;inset:auto;grid-column:3;grid-row:1;justify-self:end}
+html#dlight-ui[data-ui-system] .journal-trip-head>div:not(.journal-trip-tabs){grid-column:1/-1;grid-row:2}
+html#dlight-ui[data-ui-system] .journal-trip-head h2{padding-right:0}
+html#dlight-ui[data-ui-system] .presence-review-detail>.journal-back{margin:12px var(--journal-gutter)!important}
+/* Long mutually exclusive labels stack instead of sharing three cramped columns. */
+html#dlight-ui[data-ui-system] .presence-stop-filters{right:var(--journal-gutter);top:8px}
+html#dlight-ui[data-ui-system] .presence-stop-filters>summary[data-ui=icon]{display:flex;border-color:var(--input-line)!important;background:var(--panel)!important}
+html#dlight-ui[data-ui-system] .presence-review-sidebar>header{min-height:calc(var(--ui-icon) + 16px);align-items:center;padding-right:calc(var(--journal-gutter) + var(--ui-icon) + 8px)}
+html#dlight-ui[data-ui-system] .journal-stop-filter-body.anchored-context-panel{padding:16px!important;gap:12px}
+html#dlight-ui[data-ui-system] .presence-review-filter[data-ui-group=segments]{display:grid!important;grid-template-columns:minmax(0,1fr);width:100%}
+html#dlight-ui[data-ui-system] .presence-review-filter>[data-ui=segment]{width:100%;text-align:left;justify-content:flex-start;white-space:normal;overflow-wrap:anywhere}
+html#dlight-ui[data-ui-system] .journal-stop-filter-body input[type=search]{margin:0;width:100%}
+@media(max-width:1100px){
+ html#dlight-ui[data-ui-system] .journal-page-head{grid-template-columns:var(--ui-icon) minmax(0,1fr) repeat(3,var(--ui-icon));gap:12px 8px}
+ html#dlight-ui[data-ui-system] .journal-page-head>h1{grid-column:1/-1;grid-row:2}
+ html#dlight-ui[data-ui-system] .journal-page-head>[data-journal-period]{grid-column:1/-1;grid-row:3;margin:0;width:100%;min-width:0;max-width:none}
+ html#dlight-ui[data-ui-system] .journal-page-head>.journal-search-toggle{grid-column:3}
+ html#dlight-ui[data-ui-system] .journal-page-head>.journal-filters{grid-column:4}
+ html#dlight-ui[data-ui-system] .journal-page-head>.journal-actions{grid-column:5}
+ html#dlight-ui[data-ui-system] .journal-page-head>.journal-search{grid-column:1/-1;grid-row:4}
+}

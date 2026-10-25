@@ -46,7 +46,7 @@ test('list spacing matches the journal and dispatcher trash controls are reachab
  await clickDispatcherControl(page,'#orderTrash');await expect(page.locator('#trashOverlay')).toBeVisible();await expect(page.locator('#trashTabs')).toContainText('Выезды');await page.locator('#trashClose').click();
  await page.goto('/#/planner/trips/tracking');await expect(page.locator('.unassigned-list')).toBeVisible();
  expect(await page.locator('.unassigned-list').evaluate(el=>parseFloat(getComputedStyle(el).gap))).toBe(listGap);
- await page.locator('.journal-actions>summary').click();await page.locator('[data-journal-exit]').click();await clickDispatcherControl(page,'#tripTrash');await expect(page.locator('#trashTitle')).toHaveText('Корзина выездов');await page.locator('#trashClose').click();
+ await page.locator('[data-journal-exit]').click();await clickDispatcherControl(page,'#tripTrash');await expect(page.locator('#trashTitle')).toHaveText('Корзина выездов');await page.locator('#trashClose').click();
  expect(await page.locator('.view-planner .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
  await page.screenshot({path:'test-results/list-consistency/'+info.project.name+'.png'});
 });

@@ -18,6 +18,11 @@ it('segment keyboard navigation calls the real screen action and retains native 
  const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<div class="seg"><button>Список</button><button>Доска</button></div><input value="Черновик">';let calls=0;const target=d.querySelectorAll('button')[1];target.onclick=()=>calls++;controllers.push(installApplicationDesignSystem(d));d.querySelector('button').dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));expect(calls).toBe(1);expect(d.activeElement).toBe(target);expect(d.querySelector('input').value).toBe('Черновик');
 });
 
+it('keeps journal back controls visible as named icon buttons when the parent changes',async()=>{
+ const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<button class="btn ghost gps-back">← К журналу</button><details class="presence-stop-filters"><summary aria-label="Фильтры остановок"><svg></svg><span class="sr-only">Фильтры остановок</span></summary></details>';
+ controllers.push(installApplicationDesignSystem(d));const back=d.querySelector('button');expect(back.dataset.ui).toBe('icon');expect(back.dataset.uiVariant).toBe('secondary');expect(back.getAttribute('aria-label')).toBe('К журналу');expect(d.querySelector('summary').dataset.ui).toBe('icon');back.textContent='← К остановке';await new Promise(r=>setTimeout(r,10));expect(back.getAttribute('aria-label')).toBe('К остановке');expect(back.querySelector('svg')).not.toBeNull();expect(back.textContent).toBe('');
+});
+
 it('reserves primary for the page command while repeated decisions remain independently actionable',()=>{
  const w=new Window();windows.push(w);const d=w.document;d.body.innerHTML='<button class="btn amber" id="create">Создать задание</button><article class="notice-decision-card"><a class="btn amber" href="#/order/1" data-decision-open>Проверить</a></article><div class="kcard"><button class="btn amber" data-tstart="1">Начать выезд</button></div><button class="btn red">Удалить</button>';
  expect([...d.querySelectorAll('button,a')].map(controlVariant)).toEqual(['primary','secondary','secondary','destructive']);

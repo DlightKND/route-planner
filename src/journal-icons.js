@@ -1,4 +1,5 @@
 const paths={
+ back:'<path d="M20 12H4m7-7-7 7 7 7"/>',
  car:'<path d="M2 7a2 2 0 0 1 2-2h10l7 7v6h-3a3 3 0 0 0-6 0H9a3 3 0 0 0-6 0H2z" fill="currentColor"/><path d="M14 7v5h5z" fill="var(--panel)" stroke="none"/><circle cx="6" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>',
  search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
  filters:'<path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>',

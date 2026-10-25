@@ -13,6 +13,7 @@ export const UI_SELECTORS = {
 const isIcon = el => el.matches('.vg-plan-tools,.vg-divide,.qm,.ph-close,.ph-del,.avx,.foldx-btn,.depot-toggle,.gp-close,.mleg-close,.modal-close,.entity-actions-trigger,.leaflet-control-zoom a,[data-gtools]') ||
   (!el.querySelector('input,select,textarea') && (/^[←→↗↻↺×✕✖⋯…+−–?☰⌕]$/.test(el.textContent.trim()) || (!el.textContent.trim() && !!el.querySelector('svg'))));
 export function controlKind(el) {
+  if(el.matches('.journal-back,.presence-stop-filters>summary'))return 'icon';
   if(el.matches(UI_SELECTORS.geometry))return 'geometry';
   if(el.matches('input'))return ['checkbox','radio','range','color','file','hidden'].includes(el.type)?el.type:'field';
   if(el.matches('select,textarea'))return 'field';
@@ -32,6 +33,7 @@ export function controlKind(el) {
 }
 // Repeated records expose quiet commands; the page/editor owns the main action.
 export function controlVariant(el){
+  if(el.matches('.journal-back'))return 'secondary';
   if(el.matches('.red,.danger,[data-danger=true]'))return 'destructive';
   if(/^(Отмена(?: правки)?|Назад|Закрыть|Позже)$/.test(el.textContent.trim()))return 'secondary';
   if(el.matches('.ghost'))return 'tertiary';
@@ -48,7 +50,11 @@ export function installApplicationDesignSystem(root=document) {
   const scan=()=>{
     root.querySelectorAll('button,a,input,select,textarea,summary,[role=button]').forEach(el=>{
       if(el.closest('.ds-kit'))return;
-      if(el.matches('.journal-page-head>[data-journal-list-toggle],.journal-page-head>[data-journal-exit],.journal-page-head>[data-journal-refresh],.planner-filter-menu>summary')&&!el.querySelector('[data-ui-compact-label]')){
+      if(el.matches('[data-journal-exit],.gps-back,.presence-review-back')){
+        if(!el.classList.contains('journal-back'))el.classList.add('journal-back');
+        if(!el.querySelector('[data-ui-back-icon]')){const label=el.textContent.trim().replace(/^←\s*/,'')||el.getAttribute('aria-label')||'Назад';el.setAttribute('aria-label',label==='Выезды'?'К выездам':label);el.title=el.getAttribute('aria-label');el.innerHTML=journalIcon('back');el.querySelector('svg').dataset.uiBackIcon='';}
+      }
+      if(el.matches('.journal-page-head>[data-journal-list-toggle],.journal-page-head>[data-journal-refresh],.planner-filter-menu>summary')&&!el.querySelector('[data-ui-compact-label]')){
         const text=el.textContent.trim();if(text){el.setAttribute('aria-label',text);const icon=root.createElement('span'),label=root.createElement('span');icon.className='ui-compact-icon';icon.setAttribute('aria-hidden','true');icon.innerHTML=journalIcon(el.matches('.planner-filter-menu>summary')?'filters':el.matches('[data-journal-refresh]')?'clock':el.matches('[data-journal-exit]')?'chevron':'tasks');label.dataset.uiCompactLabel='';label.textContent=text;el.replaceChildren(icon,label);el.dataset.uiCompact='true';}
       }
       const kind=controlKind(el);assign(el,'ui',kind);

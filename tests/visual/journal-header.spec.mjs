@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
-import {installMockBackend} from './mock-backend.mjs';
+import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 import {clickDispatcherControl} from './dispatcher-controls.mjs';
 import {auditApplicationDesign} from './application-design-audit.mjs';
 async function boot(page,info,route='journal'){
@@ -32,4 +32,24 @@ test('journal header enters its full layout before a delayed data response',asyn
  try{await expect(page.locator('.view-planner')).toHaveClass(/journal-open/);await expect(page.locator('.journal-page-head')).toBeVisible();await expect(page.locator('#plTrips>.workspace-dispatcher-head')).toBeHidden();initial=await page.locator('#unassignedHost').boundingBox();await shot(page,info,'04-pending-shell');}
  finally{await page.evaluate(()=>window.__releaseJournalRead?.());}
  await expect(page.locator('.unassigned-card')).toHaveCount(3);const loaded=await page.locator('#unassignedHost').boundingBox();expect(loaded).toEqual(initial);await shot(page,info,'05-loaded-shell');expect(errors).toEqual([]);
+});
+
+test('journal header stop filters fit long labels and back arrows stay visible at every level',async({page},info)=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());
+ await page.clock.setFixedTime(new Date('2026-10-05T17:00Z'));await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,unifiedJournalJourney:true,preserveRanges:true});
+ await page.goto('/#/journal/trip/'+fixtureIDs.trip);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.presence-stop')).toHaveCount(5);await page.evaluate(()=>document.fonts.ready);
+ const back=page.locator('.journal-trip-head>[data-ut-back]');await expect(back).toBeVisible();await expect(back).toHaveAccessibleName('К журналу');await expect(back).toHaveAttribute('data-ui','icon');await expect(back).toHaveAttribute('data-ui-variant','secondary');await shot(page,info,'06-trip-back');
+ const filter=page.locator('.presence-stop-filters>summary');await expect(filter).toHaveAttribute('data-ui','icon');
+ const target=info.project.use.hasTouch?48:44;const geometry=await filter.evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {w:r.width,h:r.height,border:s.borderTopWidth};});expect(geometry).toEqual({w:target,h:target,border:'1px'});
+ await filter.click();const panel=page.locator('.journal-stop-filter-body');await expect(panel).toBeVisible();expect(await panel.evaluate(el=>el.matches(':popover-open'))).toBe(true);
+ const bounds=await panel.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(16);expect(bounds.x+bounds.width).toBeLessThanOrEqual(page.viewportSize().width-16);
+ const rows=await panel.locator('[data-review-mode]').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(el);const t=range.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,textLeft:t.left,textRight:t.right,scroll:el.scrollWidth,client:el.clientWidth};}));
+ for(let i=0;i<rows.length;i++){const row=rows[i];expect(row.scroll).toBeLessThanOrEqual(row.client);expect(row.textLeft).toBeGreaterThanOrEqual(row.left+10);expect(row.textRight).toBeLessThanOrEqual(row.right-10);if(i)expect(row.top).toBeGreaterThanOrEqual(rows[i-1].bottom);}
+ await auditApplicationDesign(page);await shot(page,info,'07-stop-filters');
+ await panel.locator('[data-review-mode=done]').click();await expect(page.locator('.presence-stop')).toHaveCount(2);await panel.locator('[data-review-mode=pending]').click();await expect(page.locator('.presence-stop')).toHaveCount(3);await panel.locator('[data-review-mode=all]').click();await expect(page.locator('.presence-stop')).toHaveCount(5);
+ await panel.getByRole('searchbox').fill('нет такого объекта');await expect(page.locator('.presence-stop')).toHaveCount(0);await panel.getByRole('searchbox').fill('');await expect(page.locator('.presence-stop')).toHaveCount(5);
+ await page.keyboard.press('Escape');await expect(panel).toBeHidden();await expect(filter).toBeFocused();
+ await page.locator('[data-review-stop="journal-stay-3"]').click();const stopBack=page.locator('.presence-review-back');await expect(stopBack).toHaveAccessibleName('К поездке');await expect(stopBack).toHaveAttribute('data-ui','icon');await shot(page,info,'08-stop-back');await stopBack.click();await back.click();
+ const exit=page.locator('.journal-page-head>[data-journal-exit]');await expect(exit).toBeVisible();await expect(exit).toHaveAccessibleName('К выездам');await expect(page.locator('.journal-actions [data-journal-exit]')).toHaveCount(0);await shot(page,info,'09-queue-back');await exit.click();await expect(page.locator('#tripBoard')).toBeVisible();expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
