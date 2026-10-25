@@ -23,7 +23,7 @@ export function controlKind(el) {
   if(el.matches('#layersBtn'))return 'button';
   if(el.matches('.chip,.echip,.rchip,.veh-btn,.son,#rVariants>button,[data-ut-mode],[data-activity-filter],.design-filter-chips>button') || el.parentElement?.matches(UI_SELECTORS.filters))return 'chip';
   if(el.parentElement?.matches(UI_SELECTORS.segment))return 'segment';
-  if(el.matches('.entity-menu-item,.ctxmenu button,.gp-secondary>button,.anchored-context-panel>button'))return 'menu';
+  if(el.matches('.entity-menu-item,.ctxmenu button,.gp-secondary>button,.anchored-context-panel>button,.anchored-context-panel>.q>.qm'))return 'menu';
   if(el.matches('.order-child,.order-card-title,.trip-job-open,.trip-review-item,.presence-stop,.gps-record-open,.wf-row,.wk-h,.depot-car,.notice-read,.journal-time-part,.journal-conflict'))return 'row';
   if(isIcon(el))return 'icon';
   if(el.matches('a:not(.btn):not(.crumb)'))return 'link';

@@ -59,7 +59,7 @@
 | bottom-sheet | Шторка карты и положения раскрытия | Пропуск | Есть | P0 | [src/app.js:576](../src/app.js#L576) | [Контракт](design-system.md#pattern-layers) |
 | action-menu | Другие действия: disclosure / menu / dialog | Описан | Есть | P1 | [src/entity-actions.js:5](../src/entity-actions.js#L5) | [Контракт](design-system.md#menu--dialog--feedback) |
 | editable-items | Повторяемые строки работ / материалов | Пропуск | Есть | P0 | [src/service-orders.js:227](../src/service-orders.js#L227) | [Контракт](design-system.md#pattern-workflows) |
-| bulk-selection | Массовый выбор и preview объединения | Пропуск | Есть | P0 | [src/unassigned-tracks.js:96](../src/unassigned-tracks.js#L96) | [Контракт](design-system.md#pattern-workflows) |
+| bulk-selection | Массовый выбор и preview объединения | Пропуск | Есть | P0 | [src/unassigned-tracks.js:97](../src/unassigned-tracks.js#L97) | [Контракт](design-system.md#pattern-workflows) |
 | reorder | Перестановка маршрута / карточек / панелей | Пропуск | Есть | P0 | [src/app.js:8078](../src/app.js#L8078) | [Контракт](design-system.md#pattern-workflows) |
 | schedule-manipulation | Перенос / изменение / разделение графика | Пропуск | Есть | P0 | [src/schedule-interactions.js:2](../src/schedule-interactions.js#L2) | [Контракт](design-system.md#pattern-workflows) |
 | map-explorer | Карта / миникарта / маркеры / список | Частично | Есть | P1 | [src/gps-track-map.js:12](../src/gps-track-map.js#L12) | [Контракт](design-system.md#pattern-data) |
@@ -134,4 +134,4 @@
 
 Связь type/role с ID классифицирует сигнал, а не автоматически распознаёт смысл каждого его вхождения.
 
-Хеш проверенных production-исходников: `74ed56cb72073639dbe2969cdf1abe709674a421ff6b679757c0e7084a859027`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
+Хеш проверенных production-исходников: `4b7727c9954a8b49e4b9c9a366547d2314fd2df44d1b02b086a57e3c6553de0c`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
