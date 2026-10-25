@@ -6,7 +6,7 @@ export const UI_SELECTORS = {
   filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.design-filter-chips,#rVariants',
   count: '.chip-n,.cnt,.rchip .n,.unassigned-filter button b,[data-activity-count],.engineer-picker-count,.ui-count,.notice-badge,[data-decision-count]',
   card: '.card,.kcard,.record-card,.notice-row,.staff-row,.stock-row,.emrow,.eqitem,.pt,.order-brief,.order-child,.trip-choice-card,.order-result-summary,.summary-quick-actions,.planwarn',
-  popover: '.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover',
+  popover: '.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover,.anchored-context-panel',
   badge: '.pill,.abadge,.design-status,.journal-recovery-badge,.journal-review-progress,.journal-result-badge,.journal-stop-state,.activity-type',
   geometry: '.vg-block,.vg-piece,.vg-group,.vg-cut-handle,.vg-win-line,.leaflet-marker-icon,.leaflet-interactive,.journal-time-part',
 };
@@ -21,9 +21,9 @@ export function controlKind(el) {
   if(el.matches('[role=tab],.subtab,.entity-tabs>button,.journal-trip-tabs>button,.side-tabs2>button'))return 'tab';
   if(el.matches('.nav-i,.rail button,.rail a'))return 'navigation';
   if(el.matches('#layersBtn'))return 'button';
-  if(el.matches('.chip,.echip,.rchip,.veh-btn,.son,#rVariants>button,[data-activity-filter],.design-filter-chips>button') || el.parentElement?.matches(UI_SELECTORS.filters))return 'chip';
+  if(el.matches('.chip,.echip,.rchip,.veh-btn,.son,#rVariants>button,[data-ut-mode],[data-activity-filter],.design-filter-chips>button') || el.parentElement?.matches(UI_SELECTORS.filters))return 'chip';
   if(el.parentElement?.matches(UI_SELECTORS.segment))return 'segment';
-  if(el.matches('.entity-menu-item,.ctxmenu button,.gp-secondary>button'))return 'menu';
+  if(el.matches('.entity-menu-item,.ctxmenu button,.gp-secondary>button,.anchored-context-panel>button,.anchored-context-panel>.q>.qm'))return 'menu';
   if(el.matches('.order-child,.order-card-title,.trip-job-open,.trip-review-item,.presence-stop,.gps-record-open,.wf-row,.wk-h,.depot-car,.notice-read,.journal-time-part,.journal-conflict'))return 'row';
   if(isIcon(el))return 'icon';
   if(el.matches('a:not(.btn):not(.crumb)'))return 'link';
@@ -48,7 +48,7 @@ export function installApplicationDesignSystem(root=document) {
   const scan=()=>{
     root.querySelectorAll('button,a,input,select,textarea,summary,[role=button]').forEach(el=>{
       if(el.closest('.ds-kit'))return;
-      if(el.matches('[data-journal-list-toggle],[data-journal-exit],[data-journal-refresh],.planner-filter-menu>summary')&&!el.querySelector('[data-ui-compact-label]')){
+      if(el.matches('.journal-page-head>[data-journal-list-toggle],.journal-page-head>[data-journal-exit],.journal-page-head>[data-journal-refresh],.planner-filter-menu>summary')&&!el.querySelector('[data-ui-compact-label]')){
         const text=el.textContent.trim();if(text){el.setAttribute('aria-label',text);const icon=root.createElement('span'),label=root.createElement('span');icon.className='ui-compact-icon';icon.setAttribute('aria-hidden','true');icon.innerHTML=journalIcon(el.matches('.planner-filter-menu>summary')?'filters':el.matches('[data-journal-refresh]')?'clock':el.matches('[data-journal-exit]')?'chevron':'tasks');label.dataset.uiCompactLabel='';label.textContent=text;el.replaceChildren(icon,label);el.dataset.uiCompact='true';}
       }
       const kind=controlKind(el);assign(el,'ui',kind);

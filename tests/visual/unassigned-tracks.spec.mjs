@@ -102,21 +102,15 @@ test('trips actions keep aligned slots and a reachable journal switch',async({pa
 
 
 test('journal period filters on the server, navigates months and persists after reload',async({page},info)=>{
- await open(page,info,'admin',3);
- const from=page.locator('#tripJournalPeriod [data-rf]'),to=page.locator('#tripJournalPeriod [data-rt]');
- await page.locator('#tripJournalPeriod .journal-periodbar>details>summary').click();await expect(from).toBeVisible();await expect(to).toBeVisible();
+ await open(page,info,'admin',3);const dates=page.locator('#tripJournalPeriod [data-summary-dates]');
+ const pick=async(from,to)=>{await dates.click();await expect(page.locator('#promptOverlay')).toBeVisible();await page.locator('[data-pf=from]').fill(from);await page.locator('[data-pf=to]').fill(to);await page.locator('#promptYes').click();await expect(page.locator('#promptOverlay')).toBeHidden();};
  const toolbar=await page.locator('.journal-page-head').boundingBox(),actions=await page.locator('.journal-actions>summary').boundingBox();expect(actions.x).toBeGreaterThanOrEqual(toolbar.x);expect(actions.x+actions.width).toBeLessThanOrEqual(toolbar.x+toolbar.width+1);
  await page.locator('.journal-actions>summary').click();await page.locator('[data-ut-choose]').click();await page.locator('[data-ut-select]').first().check();await expect(page.locator('.unassigned-merge')).toBeVisible();
- await from.fill('2026-10-05');await from.dispatchEvent('change');await page.locator('#tripJournalPeriod .journal-periodbar>details>summary').click();await to.fill('2026-10-05');await to.dispatchEvent('change');
- await expect(page.locator('.unassigned-card')).toHaveCount(1);await expect(page.locator('.unassigned-merge')).toHaveCount(0);
- await expect(page.locator('.unassigned-card .unassigned-period')).toContainText('5 окт');
- await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
- await expect(from).toHaveValue('2026-10-05');await expect(to).toHaveValue('2026-10-05');await expect(page.locator('.unassigned-card')).toHaveCount(1);
- await page.locator('.journal-filters>summary').click();await page.locator('[data-ut-mode=archive]').click();await expect(page.locator('.unassigned-card')).toHaveCount(0);await expect(from).toHaveValue('2026-10-05');
- await page.locator('[data-ut-mode=pending]').click();await expect(page.locator('.unassigned-card')).toHaveCount(1);
- await page.locator('[data-journal-month="-1"]').click();await expect(from).toHaveValue('2026-09-01');await expect(to).toHaveValue('2026-09-30');await expect(page.locator('.unassigned-card')).toHaveCount(0);
- await page.locator('[data-journal-month="1"]').click();await expect(from).toHaveValue('2026-10-01');await expect(to).toHaveValue('2026-10-31');await expect(page.locator('.unassigned-card')).toHaveCount(3);
- await page.locator('#tripJournalPeriod .journal-periodbar>details>summary').click();for(const input of [from,to])expect(await input.evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThanOrEqual(130);
- expect(await page.locator('.view-planner .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
- await page.screenshot({path:'test-results/journal-period/'+info.project.name+'.png'});await clean(page);
+ await pick('2026-10-05','2026-10-05');await expect(page.locator('.unassigned-card')).toHaveCount(1);await expect(page.locator('.unassigned-merge')).toHaveCount(0);await expect(page.locator('.unassigned-card .unassigned-period')).toContainText('5 окт');
+ await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(dates).toContainText('05.10 — 05.10.2026');await expect(page.locator('.unassigned-card')).toHaveCount(1);
+ await page.locator('.journal-filters>summary').click();await page.locator('[data-ut-mode=archive]').click();await expect(page.locator('.unassigned-card')).toHaveCount(0);await expect(dates).toContainText('05.10 — 05.10.2026');
+ await page.locator('[data-ut-mode=pending]').click();await expect(page.locator('.unassigned-card')).toHaveCount(1);await pick('2026-10-01','2026-10-31');await expect(page.locator('.unassigned-card')).toHaveCount(3);
+ await page.locator('#tripJournalPeriod [data-summary-shift="-1"]').click();await expect(dates).toContainText('01.09 — 30.09.2026');await expect(page.locator('.unassigned-card')).toHaveCount(0);
+ await page.locator('#tripJournalPeriod [data-summary-shift="1"]').click();await expect(dates).toContainText('01.10 — 31.10.2026');await expect(page.locator('.unassigned-card')).toHaveCount(3);
+ expect(await page.locator('.view-planner .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:'test-results/journal-period/'+info.project.name+'.png'});await clean(page);
 });
