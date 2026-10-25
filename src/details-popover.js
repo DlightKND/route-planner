@@ -16,7 +16,7 @@ export function wireDetailsPopover(details,{label}={}){
   panel.style.left=Math.max(gutter,Math.min(win.innerWidth-gutter-box.width,anchor.right-box.width))+'px';
   panel.style.top=Math.max(gutter,Math.min(bottom-gutter-box.height,anchor.bottom+8))+'px';
  };
- const scroll=event=>{if(!panel.contains(event.target))closePanel?.();};
+ const scroll=event=>{if(panel.contains(event.target))return;const anchor=trigger.getBoundingClientRect();if(anchor.bottom<0||anchor.top>win.innerHeight)closePanel?.();else place();};
  const closed=()=>{closePanel=null;details.open=false;win.removeEventListener('resize',place);win.removeEventListener('scroll',scroll,true);win.visualViewport?.removeEventListener('resize',place);};
  const show=()=>{
   if(closePanel)return;
