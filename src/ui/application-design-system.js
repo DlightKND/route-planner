@@ -119,6 +119,14 @@ export function installApplicationDesignSystem(root=document) {
     next.focus();next.click();
   };
   root.addEventListener('keydown',keydown);
+  const revealTab=event=>{
+    const tab=event.target.closest('[data-ui=tab]'),strip=tab?.closest('.subtabs,.entity-tabs,.side-tabs2,.journal-trip-tabs:not(.anchored-context-panel)');
+    if(!strip||strip.scrollWidth<=strip.clientWidth)return;
+    const box=strip.getBoundingClientRect(),item=tab.getBoundingClientRect(),style=root.defaultView.getComputedStyle(strip),left=box.left+strip.clientLeft+parseFloat(style.paddingLeft||0),right=box.left+strip.clientLeft+strip.clientWidth-parseFloat(style.paddingRight||0);
+    const delta=item.left<left?item.left-left:item.right>right?item.right-right:0;
+    if(delta)strip.scrollTo({left:strip.scrollLeft+delta,top:0,behavior:'instant'});
+  };
+  root.addEventListener('focusin',revealTab);
   scan();
-  return {refresh:scan,destroy(){disposed=true;observer.disconnect();root.removeEventListener('click',schedule);root.removeEventListener('change',schedule);root.removeEventListener('input',schedule);root.removeEventListener('keydown',keydown);}};
+  return {refresh:scan,destroy(){disposed=true;observer.disconnect();root.removeEventListener('click',schedule);root.removeEventListener('change',schedule);root.removeEventListener('input',schedule);root.removeEventListener('keydown',keydown);root.removeEventListener('focusin',revealTab);}};
 }
