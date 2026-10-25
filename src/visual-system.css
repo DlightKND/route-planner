@@ -745,9 +745,7 @@ dialog.overlay .modal{max-height:calc(100dvh - 48px);overscroll-behavior:contain
  #signOverlay .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
  #signOverlay .row>.grow{display:none}
 }
-#moreSheet[open]{position:fixed;inset:auto 0 calc(72px + env(safe-area-inset-bottom));margin:0;width:100%;max-width:none;max-height:calc(100dvh - 96px);border:0;color:var(--ink);overflow:auto}
-#moreSheet:not([open]),#phView:not([open]){display:none}
-#moreSheet::backdrop{background:rgb(8 9 11 / .55)}
+#phView:not([open]){display:none}
 #phView[open]{inset:0;margin:0;width:100%;height:100%;max-width:none;max-height:none;border:0;padding:0}
 #phView::backdrop{background:rgb(0 0 0 / .9)}
 .gpop .btn>svg{width:16px;height:16px;fill:currentColor;flex:none}

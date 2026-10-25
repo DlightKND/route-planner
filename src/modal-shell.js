@@ -16,7 +16,7 @@ export function installModalShell({dismiss = {}, canDismiss = () => true, confir
       } finally { state.pending=false; }
     }
   };
-  for(const old of document.querySelectorAll('.overlay,#moreSheet,#phView')) {
+  for(const old of document.querySelectorAll('.overlay,#phView')) {
     const node=document.createElement('dialog');
     for(const attr of old.attributes) node.setAttribute(attr.name,attr.value);
     node.setAttribute('aria-modal','true');if(node.id==='phView')node.setAttribute('aria-label','Просмотр фотографии');

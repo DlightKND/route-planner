@@ -135,8 +135,8 @@ html#dlight-ui[data-ui-system] [data-ui][aria-busy=true]::after{content:''!impor
 @media(prefers-reduced-motion:reduce){html#dlight-ui[data-ui-system] [data-ui][aria-busy=true]::after{animation:none}}
 @media(max-width:760px){html#dlight-ui[data-ui-system] dialog.journal-allocation-editor{inset:auto 0 0!important;margin:0!important;width:100%!important;max-width:none!important;height:auto!important;max-height:85dvh!important;border-radius:16px 16px 0 0!important;padding:20px 16px max(20px,env(safe-area-inset-bottom))}}
 /* Tabs keep their full label in a local scroll strip instead of squeezing text. */
-html#dlight-ui[data-ui-system] :is(.subtabs,.entity-tabs,.side-tabs2,.journal-trip-tabs){flex-wrap:nowrap;overflow-x:auto;min-width:0;max-width:100%}
-html#dlight-ui[data-ui-system] [data-ui=tab]{flex:0 0 auto!important;width:auto!important;min-width:max-content!important;max-width:none!important}
+html#dlight-ui[data-ui-system] :is(.subtabs,.entity-tabs,.side-tabs2,.journal-trip-tabs:not(.anchored-context-panel)){flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;min-width:0;max-width:100%}
+html#dlight-ui[data-ui-system] [data-ui=tab]{margin-bottom:0!important;flex:0 0 auto!important;width:auto!important;min-width:max-content!important;max-width:none!important}
 html#dlight-ui[data-ui-system] .journal-periodbar .rangebar{display:grid!important;grid-template-columns:minmax(130px,1fr) auto minmax(130px,1fr);width:360px;max-width:calc(100vw - 32px);gap:8px;padding:16px}
 html#dlight-ui[data-ui-system] .journal-periodbar .rangebar input{width:100%!important;min-width:0!important}
 html#dlight-ui[data-ui-system] .journal-periodbar .rangebar .rquick{grid-column:1/-1}
@@ -268,3 +268,20 @@ html#dlight-ui[data-ui-system] .journal-stop-filter-body input[type=search]{marg
  html#dlight-ui[data-ui-system] .unified-gps-journal.gps-show-detail>.journal-page-head{display:none}
  html#dlight-ui[data-ui-system] .journal-stop-open:not(.journal-route-open)>.journal-trip-head{display:none}
 }
+
+/* Navigation overflow is a non-modal popover above the live mobile rail. */
+html#dlight-ui[data-ui-system] #moreSheet{position:fixed;inset:auto 16px 16px;margin:0;width:auto;max-width:none;box-sizing:border-box;padding:8px;overflow:auto;overscroll-behavior:contain;color:var(--ink);background:var(--panel);backdrop-filter:none;transform:none;transition:none}
+html#dlight-ui[data-ui-system] #moreSheet:not(:popover-open){display:none!important}
+html#dlight-ui[data-ui-system] #moreSheet::backdrop{background:transparent;backdrop-filter:none}
+html#dlight-ui[data-ui-system] .more-navigation-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 8px}
+html#dlight-ui[data-ui-system] .more-navigation-head h2{margin:0;font:600 18px/24px var(--sans)}
+html#dlight-ui[data-ui-system] #moreSheet .sheet-who{display:flex;flex-wrap:wrap;gap:4px 8px;margin:0 8px 8px;padding:0 0 12px;border-bottom:1px solid var(--line);font:400 var(--ui-help)/1.5 var(--sans);letter-spacing:normal;color:var(--ink-dim)}
+html#dlight-ui[data-ui-system] #moreSheet .sheet-who b{margin:0;font-weight:600;letter-spacing:normal}
+html#dlight-ui[data-ui-system] #moreList{display:grid;gap:4px}
+html#dlight-ui[data-ui-system] #moreList>.sheet-row{display:flex;justify-content:flex-start!important;border-color:transparent!important;width:100%;text-align:left;white-space:normal}
+html#dlight-ui[data-ui-system] #moreList>.sheet-row svg{width:20px;height:20px;flex:none;color:var(--ink-dim)}
+html#dlight-ui[data-ui-system] #moreList>.sheet-row[aria-current=page]{background:var(--panel-2)!important;font-weight:600!important}
+html#dlight-ui[data-ui-system] #moreList>.sheet-row[aria-current=page]::after{content:'✓';margin-left:auto}
+html#dlight-ui[data-ui-system] #sideTabs{scrollbar-width:none}
+html#dlight-ui[data-ui-system] #sideTabs::-webkit-scrollbar{display:none}
+html#dlight-ui[data-ui-system] #sideTabs>[data-ui=tab]:focus-visible{outline-offset:-3px!important}

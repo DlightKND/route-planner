@@ -6,14 +6,14 @@ export const UI_SELECTORS = {
   filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.design-filter-chips,#rVariants',
   count: '.chip-n,.cnt,.rchip .n,.unassigned-filter button b,[data-activity-count],.engineer-picker-count,.ui-count,.notice-badge,[data-decision-count]',
   card: '.card,.kcard,.record-card,.notice-row,.staff-row,.stock-row,.emrow,.eqitem,.pt,.order-brief,.order-child,.trip-choice-card,.order-result-summary,.summary-quick-actions,.planwarn',
-  popover: '.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover,.anchored-context-panel',
+  popover: '#moreSheet,.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover,.anchored-context-panel',
   badge: '.pill,.abadge,.design-status,.journal-recovery-badge,.journal-review-progress,.journal-result-badge,.journal-stop-state,.activity-type',
   geometry: '.vg-block,.vg-piece,.vg-group,.vg-cut-handle,.vg-win-line,.leaflet-marker-icon,.leaflet-interactive,.journal-time-part',
 };
 const isIcon = el => el.matches('.vg-plan-tools,.vg-divide,.qm,.ph-close,.ph-del,.avx,.foldx-btn,.depot-toggle,.gp-close,.mleg-close,.modal-close,.entity-actions-trigger,.leaflet-control-zoom a,[data-gtools]') ||
   (!el.querySelector('input,select,textarea') && (/^[←→↗↻↺×✕✖⋯…+−–?☰⌕]$/.test(el.textContent.trim()) || (!el.textContent.trim() && !!el.querySelector('svg'))));
 export function controlKind(el) {
-  if(el.matches('.anchored-context-panel>button'))return 'menu';
+  if(el.matches('.anchored-context-panel>button,#moreList>.sheet-row'))return 'menu';
   if(el.matches('.journal-back,.presence-stop-filters>summary'))return 'icon';
   if(el.matches(UI_SELECTORS.geometry))return 'geometry';
   if(el.matches('input'))return ['checkbox','radio','range','color','file','hidden'].includes(el.type)?el.type:'field';

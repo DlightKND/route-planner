@@ -1,4 +1,5 @@
 const paths={
+ person:'<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
  back:'<path d="M20 12H4m7-7-7 7 7 7"/>',
  car:'<path d="M2 7a2 2 0 0 1 2-2h10l7 7v6h-3a3 3 0 0 0-6 0H9a3 3 0 0 0-6 0H2z" fill="currentColor"/><path d="M14 7v5h5z" fill="var(--panel)" stroke="none"/><circle cx="6" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>',
  search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
