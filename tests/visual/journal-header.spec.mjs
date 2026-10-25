@@ -53,3 +53,31 @@ test('journal header stop filters fit long labels and back arrows stay visible a
  await page.locator('[data-review-stop="journal-stay-3"]').click();const stopBack=page.locator('.presence-review-back');await expect(stopBack).toHaveAccessibleName('К поездке');await expect(stopBack).toHaveAttribute('data-ui','icon');await shot(page,info,'08-stop-back');await stopBack.click();await back.click();
  const exit=page.locator('.journal-page-head>[data-journal-exit]');await expect(exit).toBeVisible();await expect(exit).toHaveAccessibleName('К выездам');await expect(page.locator('.journal-actions [data-journal-exit]')).toHaveCount(0);await shot(page,info,'09-queue-back');await exit.click();await expect(page.locator('#tripBoard')).toBeVisible();expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
+
+async function checkMenu(page,details){
+ const trigger=details.locator(':scope>summary'),panel=details.locator(':scope>.anchored-context-panel');
+ await trigger.click();await expect(panel).toBeVisible();expect(await panel.evaluate(el=>el.matches(':popover-open'))).toBe(true);
+ const box=await panel.boundingBox(),size=page.viewportSize(),rail=size.width<=760?(await page.locator('.rail').boundingBox()).height:0;
+ expect(box.width).toBeGreaterThanOrEqual(280);expect(box.x).toBeGreaterThanOrEqual(16);expect(box.x+box.width).toBeLessThanOrEqual(size.width-16);expect(box.y).toBeGreaterThanOrEqual(16);expect(box.y+box.height).toBeLessThanOrEqual(size.height-rail-16);
+ let bottom=box.y;
+ for(const button of await panel.locator(':scope>button:visible').all()){
+  await expect(button).toHaveAttribute('data-ui','menu');const r=await button.boundingBox();expect(r.y).toBeGreaterThanOrEqual(bottom);bottom=r.y+r.height;
+  expect(await button.evaluate(el=>{const r=el.getBoundingClientRect(),text=document.createRange();text.selectNodeContents(el);const t=text.getBoundingClientRect();return el.scrollWidth<=el.clientWidth&&t.left>=r.left&&t.right<=r.right&&el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);
+ }
+ await auditApplicationDesign(page);return {trigger,panel};
+}
+test('journal header linked trip sections and stop actions render full vertical menus',async({page},info)=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.setFixedTime(new Date('2026-10-05T17:00Z'));await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,unifiedJournalJourney:true,preserveRanges:true});await page.goto('/#/journal/trip/'+fixtureIDs.trip);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.presence-stop')).toHaveCount(5);await page.evaluate(()=>document.fonts.ready);
+ const menu=page.locator('.journal-trip-menu');
+ for(const pane of ['route','documents','stops']){const {panel}=await checkMenu(page,menu);if(pane==='route')await shot(page,info,'10-trip-sections');await panel.locator('[data-journal-pane='+pane+']').click();await expect(panel).toBeHidden();await expect(page).toHaveURL(new RegExp(pane==='stops'?'/trip/'+fixtureIDs.trip+'$':'/'+pane+'$'));}
+ await page.locator('[data-review-stop="journal-stay-3"]').click();const stopMenu=page.locator('.journal-stop-actions'),{trigger,panel}=await checkMenu(page,stopMenu);await shot(page,info,'11-stop-actions');await page.keyboard.press('Escape');await expect(panel).toBeHidden();await expect(trigger).toBeFocused();await trigger.click();await panel.locator('[data-review-draft]').click();await expect(panel).toBeHidden();await expect(page.locator('.journal-decision-state')).toContainText('Черновик сохранён');
+ const colors=await page.locator('.rail .nav-i.active').evaluate(el=>({marker:getComputedStyle(el,'::before').backgroundColor,ink:getComputedStyle(el).color,tab:getComputedStyle(document.querySelector('.subtab.active[data-ui=tab]')).borderBottomColor,focus:document.documentElement.style.getPropertyValue('--focus')}));expect(colors.marker).toBe(colors.tab);if(info.project.metadata.theme==='light')expect(colors.marker).toBe('rgb(48, 43, 37)');else expect(colors.marker).toBe('rgb(255, 225, 0)');
+ expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
+});
+test('journal header GPS source uses the same unclipped section menu',async({page},info)=>{
+ const errors=await boot(page,info);await page.locator('[data-ut-details]').first().click();await expect(page.locator('.gps-detail-head')).toBeVisible();const menu=page.locator('.gps-detail-head>.journal-trip-menu');
+ for(const pane of ['route','documents','stops']){const {panel}=await checkMenu(page,menu);if(pane==='route')await shot(page,info,'12-source-sections');await panel.locator('[data-orphan-pane='+pane+']').click();await expect(panel).toBeHidden();}
+ const {trigger,panel}=await checkMenu(page,menu);await trigger.click();await expect(panel).toBeHidden();await trigger.click();await expect(panel).toBeVisible();await page.keyboard.press('Escape');await expect(panel).toBeHidden();await expect(trigger).toBeFocused();
+ expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
+});

@@ -71,3 +71,8 @@
 .x-kit [data-skin=proposed] .x-stop-filters .x-segments{grid-template-columns:minmax(0,1fr);grid-auto-flow:row}
 .x-kit [data-skin=proposed] .x-stop-filters .x-segments>button{width:100%;text-align:left;justify-content:flex-start}
 .x-kit .x-stop-filter-popover{width:300px}
+
+/* The kit uses the same theme-aware selection indicator as production navigation. */
+.x-kit [data-skin=proposed] .x-app-nav>button[aria-current=page]{position:relative}
+.x-kit [data-skin=proposed] .x-app-nav>button[aria-current=page]::after{content:'';position:absolute;bottom:0;left:10px;right:10px;height:3px;background:var(--focus)}
+@container(min-width:351px){.x-kit [data-skin=proposed] .x-app-nav>button[aria-current=page]::after{top:10px;bottom:10px;left:0;right:auto;width:3px;height:auto}}
