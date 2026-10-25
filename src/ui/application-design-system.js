@@ -6,14 +6,14 @@ export const UI_SELECTORS = {
   filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.design-filter-chips,#rVariants',
   count: '.chip-n,.cnt,.rchip .n,.unassigned-filter button b,[data-activity-count],.engineer-picker-count,.ui-count,.notice-badge,[data-decision-count]',
   card: '.card,.kcard,.record-card,.notice-row,.staff-row,.stock-row,.emrow,.eqitem,.pt,.order-brief,.order-child,.trip-choice-card,.order-result-summary,.summary-quick-actions,.planwarn',
-  popover: '.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover,.anchored-context-panel',
+  popover: '#moreSheet,.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover,.anchored-context-panel',
   badge: '.pill,.abadge,.design-status,.journal-recovery-badge,.journal-review-progress,.journal-result-badge,.journal-stop-state,.activity-type',
   geometry: '.vg-block,.vg-piece,.vg-group,.vg-cut-handle,.vg-win-line,.leaflet-marker-icon,.leaflet-interactive,.journal-time-part',
 };
 const isIcon = el => el.matches('.vg-plan-tools,.vg-divide,.qm,.ph-close,.ph-del,.avx,.foldx-btn,.depot-toggle,.gp-close,.mleg-close,.modal-close,.entity-actions-trigger,.leaflet-control-zoom a,[data-gtools]') ||
   (!el.querySelector('input,select,textarea') && (/^[←→↗↻↺×✕✖⋯…+−–?☰⌕]$/.test(el.textContent.trim()) || (!el.textContent.trim() && !!el.querySelector('svg'))));
 export function controlKind(el) {
-  if(el.matches('.anchored-context-panel>button'))return 'menu';
+  if(el.matches('.anchored-context-panel>button,#moreList>.sheet-row'))return 'menu';
   if(el.matches('.journal-back,.presence-stop-filters>summary'))return 'icon';
   if(el.matches(UI_SELECTORS.geometry))return 'geometry';
   if(el.matches('input'))return ['checkbox','radio','range','color','file','hidden'].includes(el.type)?el.type:'field';
@@ -119,6 +119,14 @@ export function installApplicationDesignSystem(root=document) {
     next.focus();next.click();
   };
   root.addEventListener('keydown',keydown);
+  const revealTab=event=>{
+    const tab=event.target.closest('[data-ui=tab]'),strip=tab?.closest('.subtabs,.entity-tabs,.side-tabs2,.journal-trip-tabs:not(.anchored-context-panel)');
+    if(!strip||strip.scrollWidth<=strip.clientWidth)return;
+    const box=strip.getBoundingClientRect(),item=tab.getBoundingClientRect(),style=root.defaultView.getComputedStyle(strip),left=box.left+strip.clientLeft+parseFloat(style.paddingLeft||0),right=box.left+strip.clientLeft+strip.clientWidth-parseFloat(style.paddingRight||0);
+    const delta=item.left<left?item.left-left:item.right>right?item.right-right:0;
+    if(delta)strip.scrollTo({left:strip.scrollLeft+delta,top:0,behavior:'instant'});
+  };
+  root.addEventListener('focusin',revealTab);
   scan();
-  return {refresh:scan,destroy(){disposed=true;observer.disconnect();root.removeEventListener('click',schedule);root.removeEventListener('change',schedule);root.removeEventListener('input',schedule);root.removeEventListener('keydown',keydown);}};
+  return {refresh:scan,destroy(){disposed=true;observer.disconnect();root.removeEventListener('click',schedule);root.removeEventListener('change',schedule);root.removeEventListener('input',schedule);root.removeEventListener('keydown',keydown);root.removeEventListener('focusin',revealTab);}};
 }

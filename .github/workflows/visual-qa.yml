@@ -13,7 +13,7 @@ concurrency:
 jobs:
   production-design-system:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,7 +27,7 @@ jobs:
           npx playwright test tests/visual/production-design-system.spec.mjs
           tests/visual/layout-filter-regressions.spec.mjs tests/visual/design-states.spec.mjs
           tests/visual/schedule-regressions.spec.mjs tests/visual/unified-journal.spec.mjs tests/visual/windows.spec.mjs
-          tests/visual/journal-header.spec.mjs tests/visual/unassigned-tracks.spec.mjs
+          tests/visual/journal-header.spec.mjs tests/visual/unassigned-tracks.spec.mjs tests/visual/navigation-surfaces.spec.mjs
           --grep='production|dashboard hides redundant|dispatcher search geometry|shared period respects|dispatcher filters preserve|dispatcher actions keep stable|map actions remain|destructive buttons meet|keeps legacy trip edges|ordinary unconfirmed stop|journal header|journal period filters'
           --retries=0
       - name: Keep production migration evidence

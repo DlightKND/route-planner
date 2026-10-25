@@ -2316,9 +2316,8 @@
 
 <!-- Шторка «Ещё». Содержимое собирается из самих пунктов рельса, а не
      переписывается заново: иначе список расходился бы с ролью. -->
-<div class="sheet-back" id="moreBack"></div>
-<div class="sheet" id="moreSheet" role="dialog" aria-modal="true" aria-label="Ещё">
-  <div class="sheet-grip"></div>
+<div class="more-navigation" id="moreSheet" popover="auto" role="dialog" aria-label="Другие разделы">
+  <header class="more-navigation-head"><h2>Ещё</h2><button type="button" class="btn ghost" data-more-close aria-label="Закрыть меню">×</button></header>
   <div class="sheet-who" id="sheetWho"></div>
   <div class="sheet-list" id="moreList"></div>
 </div>

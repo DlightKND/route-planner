@@ -3,6 +3,7 @@ import {decisionReason} from './core/gps-journal.js';
 import {calendarPeriodBounds} from './core/calendar-period.js';
 import {summaryPreset,summaryUnit,shiftSummaryPeriod,summaryPeriodLabel} from './core/summary-period.js';
 import { openContextPanel } from './context-panels.js';
+import {installMoreNavigation} from './more-navigation.js';
 import { wireSchedulePieceDrag, wireScheduleCutDrag, scheduleJoinCandidate } from './schedule-interactions.js';
 import { readPersonalScheduleTrips } from './personal-schedule.js';
 import {createJournalTrips} from './journal-trips.js';
@@ -295,7 +296,7 @@ const SIGNATURE_CANCELLED=Symbol('signature-cancelled');
 const modalUI=installModalShell({
   dirtyIds:['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay','stockOverlay','profOverlay','pointOverlay','reschedOverlay','fixOverlay','cfgOverlay','promptOverlay'],
   canDismiss:id=>id!=='authOverlay' && (id!=='cfgOverlay'||!!session?.user),
-  dismiss:{pushOverlay:()=>closePush(),moreSheet:()=>closeMore(),phView:()=>{$('phView').hidden=true;$('phViewImg').src='';},confirmOverlay:()=>_cdDone(false),promptOverlay:()=>_pdDone(false),signOverlay:()=>signDone(SIGNATURE_CANCELLED),pointOverlay:()=>{$('cancelBtn').click();}},
+  dismiss:{pushOverlay:()=>closePush(),phView:()=>{$('phView').hidden=true;$('phViewImg').src='';},confirmOverlay:()=>_cdDone(false),promptOverlay:()=>_pdDone(false),signOverlay:()=>signDone(SIGNATURE_CANCELLED),pointOverlay:()=>{$('cancelBtn').click();}},
   confirmDiscard:()=>confirmDialog('Изменения в этом окне ещё не сохранены. Закрыть и отменить их?',{title:'Несохранённые изменения',okText:'Отменить изменения',cancelText:'Продолжить ввод',danger:true})
 });
 
@@ -658,7 +659,7 @@ function applyMobileNav(){
     if(b.id==='moreBtn') return;
     b.classList.toggle('nav-sec',sec.has(navKey(b)));
   });
-  buildMoreSheet();
+  if($('moreSheet').matches(':popover-open'))$('moreSheet').hidePopover();
   railHeight();
 }
 
@@ -746,34 +747,8 @@ document.addEventListener('click',e=>{
   if(folded.has(k)) folded.delete(k); else folded.add(k);
   foldApply();
 });
-// Строки шторки собираются ИЗ САМИХ пунктов рельса и кликают по ним же.
-// Второй список тех же разделов рано или поздно разошёлся бы с первым.
-function buildMoreSheet(){
-  const box=$('moreList'); if(!box) return;
-  box.innerHTML='';
-  document.querySelectorAll('.rail .nav-i.nav-sec').forEach(b=>{
-    if(b.classList.contains('hidden')||b.style.display==='none') return;
-    const svg=b.querySelector('svg'), lab=b.querySelector('span');
-    const r=document.createElement('button');
-    r.type='button';
-    r.className='sheet-row';
-    r.innerHTML=(svg?svg.outerHTML:'')+'<span>'+esc(b.id==='profileBtn'?'Мой профиль':lab?lab.textContent:'')+'</span>';
-    // Клик по исходному пункту — СЛЕДУЮЩИМ тактом. Иначе он срабатывает
-    // внутри обработки текущего касания, и то же самое касание, продолжая
-    // всплывать до document, тут же закрывает открытое им окно: обработчик
-    // «клик мимо» видит целью строку шторки, а не кнопку. Из-за этого «Вид»
-    // на телефоне открывался и закрывался в одно нажатие — то есть
-    // не работал вовсе.
-    r.onclick=()=>{ closeMore(); setTimeout(()=>b.click(),0); };
-    box.appendChild(r);
-  });
-  const w=$('sheetWho'), src=$('whoLabel');
-  if(w) w.innerHTML=src?src.innerHTML:'';
-}
-function openMore(){ buildMoreSheet(); $('moreSheet').classList.add('on'); $('moreBack').classList.add('on'); }
-function closeMore(){ $('moreSheet').classList.remove('on'); $('moreBack').classList.remove('on'); }
-if($('moreBtn')) $('moreBtn').onclick=openMore;
-if($('moreBack')) $('moreBack').onclick=closeMore;
+// Navigation overflow reuses the role-filtered rail destinations.
+installMoreNavigation();
 
 // В рельсе «График» и «Диспетчер» — разные пункты, но ведут в один и тот
 // же view-planner. Поэтому у них есть data-sub, и подсветка идёт по паре
