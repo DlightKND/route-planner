@@ -208,7 +208,7 @@ html:root { --workspace-width:none; }
 /* The desktop rail remains a separate left column; the mobile rail stays below. */
 .workspace-shell .view>.pane { min-height:0;max-height:100%; }
 .workspace-shell .nav-i.active { position:relative;box-shadow:none; }
-.workspace-shell .nav-i.active::before { content:'';position:absolute;left:0;top:10px;bottom:10px;width:3px;background:var(--accent);border-radius:0; }
+.workspace-shell .nav-i.active::before { content:'';position:absolute;left:0;top:10px;bottom:10px;width:3px;background:var(--focus);border-radius:0; }
 @media(min-width:761px){
  .workspace-shell .rail { overflow-y:auto;min-height:0; }
  .workspace-shell .rail-brand,.workspace-shell .rail-items,.workspace-shell .rail-foot { flex-shrink:0; }

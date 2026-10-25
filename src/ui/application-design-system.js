@@ -13,6 +13,7 @@ export const UI_SELECTORS = {
 const isIcon = el => el.matches('.vg-plan-tools,.vg-divide,.qm,.ph-close,.ph-del,.avx,.foldx-btn,.depot-toggle,.gp-close,.mleg-close,.modal-close,.entity-actions-trigger,.leaflet-control-zoom a,[data-gtools]') ||
   (!el.querySelector('input,select,textarea') && (/^[←→↗↻↺×✕✖⋯…+−–?☰⌕]$/.test(el.textContent.trim()) || (!el.textContent.trim() && !!el.querySelector('svg'))));
 export function controlKind(el) {
+  if(el.matches('.anchored-context-panel>button'))return 'menu';
   if(el.matches('.journal-back,.presence-stop-filters>summary'))return 'icon';
   if(el.matches(UI_SELECTORS.geometry))return 'geometry';
   if(el.matches('input'))return ['checkbox','radio','range','color','file','hidden'].includes(el.type)?el.type:'field';
