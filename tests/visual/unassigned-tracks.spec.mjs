@@ -50,7 +50,7 @@ test('engineer sees own charge without manager resolution controls',async({page}
  await open(page,info,'engineer');await expect(page.locator('.unassigned-card')).toContainText('Списание инженеру');
  await expect(page.getByRole('button',{name:'Создать документы',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Посмотреть трек'})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Отменить списание'})).toHaveCount(0);
- await page.locator('.journal-actions>summary').click();await page.locator('[data-journal-exit]').click();await expect(page.locator('#tripAdd')).toBeHidden();await expect(page.locator('#tripTrash')).toBeHidden();
+ await page.locator('[data-journal-exit]').click();await expect(page.locator('#tripAdd')).toBeHidden();await expect(page.locator('#tripTrash')).toBeHidden();
  await clean(page);
 });
 
@@ -66,7 +66,7 @@ test('GPS journal is nested under trips, has standard card gaps and scrolls to t
  expect(await scroll.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
  await scroll.evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.unassigned-card').last()).toBeInViewport();
  await scroll.evaluate(el=>el.scrollTop=0);
- await page.locator('.journal-actions>summary').click();await page.locator('[data-journal-exit]').click();await expect(page.locator('#tripBoard')).toBeVisible();await expect(page.locator('#plUnassigned')).toBeHidden();
+ await page.locator('[data-journal-exit]').click();await expect(page.locator('#tripBoard')).toBeVisible();await expect(page.locator('#plUnassigned')).toBeHidden();
  await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page).toHaveURL(/#\/journal$/);await expect(page.locator('#plUnassigned')).toBeVisible();
  await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('#plTrips .subtab[data-sub=trips]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.unassigned-card')).toHaveCount(14);
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-journal.png'});await clean(page);
@@ -89,13 +89,13 @@ test('manager orders selected tracks and reviews separate GPS pieces before merg
 
 
 test('trips actions keep aligned slots and a reachable journal switch',async({page},info)=>{
- await open(page,info);await page.locator('.journal-actions>summary').click();await page.locator('[data-journal-exit]').click();
+ await open(page,info);await page.locator('[data-journal-exit]').click();
  if(page.viewportSize().width<=760){await expect(page.locator('#tripTrash')).toBeHidden();await expect(page.locator('[data-trip-section=tracking]')).toBeHidden();await expect(page.locator('#tripAdd')).toBeVisible();}
  await revealDispatcherActions(page);
  for(const selector of ['.trip-list-actions .planner-filter-menu>summary','[data-trip-section=tracking]','#tripTrash']){const box=await page.locator(selector).boundingBox();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width);expect(box.height).toBeGreaterThanOrEqual(36);}
  await clickDispatcherControl(page,'.trip-list-actions .planner-filter-menu>summary');await expect(page.locator('#tripLayout')).toBeVisible();await page.keyboard.press('Escape');
  await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page.locator('.unassigned-card')).toBeVisible();await expect(page.locator('#tripAdd')).toBeHidden();
- await page.locator('.journal-actions>summary').click();await page.locator('[data-journal-exit]').click();await clickDispatcherControl(page,'#tripTrash');await expect(page.locator('#trashOverlay')).toBeVisible();await page.locator('#trashClose').click();
+ await page.locator('[data-journal-exit]').click();await clickDispatcherControl(page,'#tripTrash');await expect(page.locator('#trashOverlay')).toBeVisible();await page.locator('#trashClose').click();
  await expect(page.locator('#tripAdd')).toBeVisible();
  await page.screenshot({path:'test-results/gps-map-header/'+info.project.name+'-trips.png'});await clean(page);
 });

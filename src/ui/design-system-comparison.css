@@ -66,3 +66,8 @@
 .x-kit .x-btn[aria-busy=true]{position:relative;color:transparent!important}.x-kit .x-btn[aria-busy=true]>*{visibility:hidden}.x-kit .x-btn[aria-busy=true]::before{position:absolute;inset:0;margin:auto;border-color:var(--ink);border-right-color:transparent}.x-kit .x-btn[data-kind=primary][aria-busy=true]::before{border-color:var(--on-accent);border-right-color:transparent}
 
 .x-kit [data-skin=proposed] .x-app-nav>button>span{line-height:24px}
+
+.x-kit .x-stop-filters .x-segments{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-flow:row}
+.x-kit [data-skin=proposed] .x-stop-filters .x-segments{grid-template-columns:minmax(0,1fr);grid-auto-flow:row}
+.x-kit [data-skin=proposed] .x-stop-filters .x-segments>button{width:100%;text-align:left;justify-content:flex-start}
+.x-kit .x-stop-filter-popover{width:300px}
