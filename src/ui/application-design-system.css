@@ -208,3 +208,19 @@ html#dlight-ui[data-ui-system] [data-ui=row]{transform:none!important;transition
 
 /* Fixed queue status centres through insets, so command pressed states never move it. */
 html#dlight-ui[data-ui-system] #qBadge{left:16px!important;right:16px!important;margin-inline:auto!important;inline-size:max-content!important;max-inline-size:calc(100vw - 32px)!important;white-space:normal;text-align:center}
+
+/* Journal uses the shared compact period and native top-layer header panels. */
+html#dlight-ui[data-ui-system] #tripJournalPeriod.summary-period-compact{display:block;margin:0;min-width:0}
+html#dlight-ui[data-ui-system] #tripJournalPeriod .summary-period-range{width:100%;box-sizing:border-box}
+html#dlight-ui[data-ui-system] #tripJournalPeriod [data-summary-dates]{flex:1;min-width:0}
+html#dlight-ui[data-ui-system] .journal-page-head>details>.anchored-context-panel{position:fixed;inset:auto;margin:0!important;width:300px;max-width:calc(100vw - 32px);box-sizing:border-box;overflow:auto;overscroll-behavior:contain;padding:8px!important;display:grid;gap:4px;z-index:auto}
+html#dlight-ui[data-ui-system] .anchored-context-panel:not(:popover-open){display:none!important}
+html#dlight-ui[data-ui-system] .anchored-context-panel>[data-ui=menu]{justify-content:flex-start}
+html#dlight-ui[data-ui-system] .unified-gps-journal .gps-journal-sidebar{padding-top:16px}
+@media(max-width:760px){
+ html#dlight-ui[data-ui-system] .unified-gps-journal .gps-journal-sidebar{padding-top:8px}
+ html#dlight-ui[data-ui-system] .unified-gps-journal .unassigned-filter[data-ui-group=filters]{flex-wrap:nowrap!important;overflow-x:auto;overscroll-behavior-x:contain;padding:8px!important;margin:0 -8px 8px;max-width:none;scrollbar-width:thin}
+}
+html#dlight-ui[data-ui-system] .journal-page-head>details>.anchored-context-panel{grid-template-columns:minmax(0,1fr)}
+html#dlight-ui[data-ui-system] .anchored-context-panel>*{grid-column:1!important;grid-row:auto!important}
+html#dlight-ui[data-ui-system] .anchored-context-panel>[data-ui=menu]{width:100%!important}

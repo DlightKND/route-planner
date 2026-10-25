@@ -906,12 +906,13 @@ async function plannerSub(name){ if(dispCur==='tracking'&&name!=='tracking'&&!aw
   document.querySelectorAll('.nav-i[data-sub]').forEach(t=>
     t.classList.toggle('active', t.dataset.tab==='planner' && t.dataset.sub===navSub(name)));
   document.querySelectorAll('.view-planner .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.sub===plannerCur);t.setAttribute('aria-pressed',String(t.dataset.sub===plannerCur));});
-  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=plannerCur==='trips'?'':'none';$('tripBoard').style.display=journal?'none':'';$('tripBoardToolbar').style.display=journal?'none':''; $('plOrders').style.display=name==='orders'?'':'none'; $('plUnassigned').style.display=name==='tracking'?'':'none'; if(name==='mine') renderMine(); else if(name==='jobs') renderJobs(); else if(name==='orders') serviceOrders.board(); else if(name==='tracking')await unassignedTracks.open(); else renderTripsView();
+  if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=plannerCur==='trips'?'':'none';$('tripBoard').style.display=journal?'none':'';$('tripBoardToolbar').style.display=journal?'none':''; $('plOrders').style.display=name==='orders'?'':'none'; $('plUnassigned').style.display=name==='tracking'?'':'none';
   presentDispatcherSection(journal);document.querySelectorAll('[data-trip-journal-only]').forEach(el=>el.style.display=journal?'':'none');if(journal)renderJournalPeriod();
   document.querySelectorAll('[data-trip-board-only]').forEach(el=>el.style.display=journal||(el.id==='tripAdd'&&!canWrite())?'none':'');
   document.querySelectorAll('[data-trip-section]').forEach(b=>{if(b.classList.contains('subtab'))return;if(b.dataset.tripSection==='tracking'){b.textContent=journal?'← Выезды':'GPS-журнал';b.setAttribute('aria-label',journal?'Вернуться к выездам':'Открыть GPS-журнал');}const on=journal?b.dataset.tripSection==='tracking':b.dataset.tripSection==='board';b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});
   document.querySelector('.view-planner').classList.toggle('journal-open',journal);
-  routeSet(journal?'journal':'planner/'+name); }
+  routeSet(journal?'journal':'planner/'+name);
+  if(name==='mine')renderMine();else if(name==='jobs')renderJobs();else if(name==='orders')serviceOrders.board();else if(journal)await unassignedTracks.open();else renderTripsView(); }
 document.querySelectorAll('[data-trip-section]').forEach(b=>b.onclick=()=>plannerSub(b.dataset.tripSection==='tracking'&&dispCur!=='tracking'?'tracking':'trips'));
 // Поворот телефона и открытие на планшете меняют раскладку списков —
 // перерисовываем, когда пересекли границу, а не на каждый пиксель.
@@ -3284,24 +3285,24 @@ function renderSummaryPeriod(){
  renderPeriodSelector(bar,'summary');
 }
 // Presentation is shared across roles; each caller retains its own range and refresh path.
-function renderPeriodSelector(bar,kind){
+function renderPeriodSelector(bar,kind,{compact=false}={}){
  const focused=bar.contains(document.activeElement)?document.activeElement:null;
  const focusKey=focused&&['data-summary-preset','data-summary-shift','data-summary-dates','data-summary-today'].find(key=>focused.hasAttribute(key));
  const focusValue=focusKey?focused.getAttribute(focusKey):null;
  const range=dashRanges[kind],personal=kind==='gt',length=Math.round((utcOf(range.to)-utcOf(range.from))/DAY_MS)+1;
  const unit=personal?({7:'week',14:'fortnight',30:'month'}[length]||'custom'):summaryUnit(range);
- const apply=value=>personal?setRange('gt',value.from,value.to):setSummaryPeriod(value);
+ const apply=value=>kind==='summary'?setSummaryPeriod(value):setRange(kind,value.from,value.to);
  const preset=key=>personal?{from:todayISO(),to:isoOf(utcOf(todayISO())+({week:7,fortnight:14,month:30}[key]-1)*DAY_MS)}:summaryPreset(todayISO(),key);
- bar.innerHTML='<div class="summary-period-top"><button type="button" class="summary-period-today" data-summary-today>Сегодня</button><div class="summary-period-presets" role="group" aria-label="Масштаб периода">'+[['week','Неделя'],['fortnight','2 недели'],['month','Месяц']].map(([key,label])=>'<button type="button" data-summary-preset="'+key+'" aria-pressed="'+(unit===key)+'">'+label+'</button>').join('')+'</div></div>'
+ bar.innerHTML=(compact?'':'<div class="summary-period-top"><button type="button" class="summary-period-today" data-summary-today>Сегодня</button><div class="summary-period-presets" role="group" aria-label="Масштаб периода">'+[['week','Неделя'],['fortnight','2 недели'],['month','Месяц']].map(([key,label])=>'<button type="button" data-summary-preset="'+key+'" aria-pressed="'+(unit===key)+'">'+label+'</button>').join('')+'</div></div>')
   +'<div class="summary-period-range"><button type="button" data-summary-shift="-1" aria-label="Предыдущий период">←</button><button type="button" data-summary-dates aria-label="Выбрать период: '+esc(summaryPeriodLabel(range))+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/></svg><span>'+esc(summaryPeriodLabel(range))+'</span></button><button type="button" data-summary-shift="1" aria-label="Следующий период">→</button></div>';
  bar.querySelectorAll('[data-summary-preset]').forEach(b=>b.onclick=()=>apply(preset(b.dataset.summaryPreset)));
  bar.querySelectorAll('[data-summary-shift]').forEach(b=>b.onclick=()=>{const r=dashRanges[kind],offset=+b.dataset.summaryShift*length*DAY_MS;apply(personal?{from:isoOf(utcOf(r.from)+offset),to:isoOf(utcOf(r.to)+offset)}:shiftSummaryPeriod(r,+b.dataset.summaryShift));});
- bar.querySelector('[data-summary-today]').onclick=()=>{const current=dashRanges[kind];apply(personal||unit==='custom'?{from:todayISO(),to:isoOf(utcOf(todayISO())+utcOf(current.to)-utcOf(current.from))}:summaryPreset(todayISO(),unit));};
+ const todayControl=bar.querySelector('[data-summary-today]');if(todayControl)todayControl.onclick=()=>{const current=dashRanges[kind];apply(personal||unit==='custom'?{from:todayISO(),to:isoOf(utcOf(todayISO())+utcOf(current.to)-utcOf(current.from))}:summaryPreset(todayISO(),unit));};
  if(focusKey)bar.querySelector('['+focusKey+'="'+focusValue+'"]')?.focus({preventScroll:true});
  bar.querySelector('[data-summary-dates]').onclick=async()=>{
-  const picked=await promptDialog(personal?'Период личного графика':'Период сводки',[{key:'from',label:'Начало периода',type:'date',value:dashRanges[kind].from,required:true},{key:'to',label:'Конец периода',type:'date',value:dashRanges[kind].to,required:true}],{okText:'Применить период'});
+  const picked=await promptDialog(personal?'Период личного графика':kind==='journal'?'Период GPS-журнала':'Период сводки',[{key:'from',label:'Начало периода',type:'date',value:dashRanges[kind].from,required:true},{key:'to',label:'Конец периода',type:'date',value:dashRanges[kind].to,required:true}],{okText:'Применить период'});
   if(!picked)return;if(picked.from>picked.to)[picked.from,picked.to]=[picked.to,picked.from];
-  try{calendarPeriodBounds(picked);apply(picked);bar.querySelector('[data-summary-dates]').focus({preventScroll:true});}catch(e){notify(e.message,'warn');}
+  try{calendarPeriodBounds(picked);await apply(picked);bar.querySelector('[data-summary-dates]').focus({preventScroll:true});}catch(e){notify(e.message,'warn');}
  };
 }
 function setSummaryPeriod(range){dashRanges.summary={...range};saveRange('summary');Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderDashboard();}
@@ -3315,7 +3316,7 @@ function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<
   +(kind==='rev'||kind==='journal'?'<span class="rquick"><button data-rmonth="-1" aria-label="Предыдущий месяц">←</button><button data-rmonth="0">Этот месяц</button><button data-rmonth="1" aria-label="Следующий месяц">→</button></span>':'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
   +meta.lengths.map(x=>'<button data-rlen="'+x[0]+'">'+x[1]+'</button>').join('')+'</span>')+'</div>';}
 async function setRange(kind,from,to){if(!from||!to)return;if(kind==='journal'&&!await unassignedTracks.leave())return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='journal'){renderJournalPeriod();unassignedTracks.refresh();}else if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderFeedAgain();}else renderDashboard();}
-function renderJournalPeriod(){const box=$('tripJournalPeriod'),range=dashRanges.journal,start=new Date(range.from+'T12:00:00Z'),label=start.toLocaleDateString('ru-RU',{month:'long',year:'numeric',timeZone:'Europe/Kyiv'});box.innerHTML='<div class="journal-periodbar"><button type="button" class="btn ghost" data-journal-month="-1" aria-label="Предыдущий месяц журнала">‹</button><details><summary>'+esc(label)+'</summary>'+rangeBar('journal')+'</details><button type="button" class="btn ghost" data-journal-month="1" aria-label="Следующий месяц журнала">›</button></div>';box.title='Поездки, пересекающие выбранный период · время Киева';wireRangeBar(box);box.querySelectorAll('[data-journal-month]').forEach(b=>b.onclick=()=>box.querySelector('[data-rmonth="'+b.dataset.journalMonth+'"]').click());}
+function renderJournalPeriod(){const box=$('tripJournalPeriod');box.className='summary-period summary-period-compact';box.setAttribute('role','group');box.setAttribute('aria-label','Период GPS-журнала');renderPeriodSelector(box,'journal',{compact:true});box.title='Поездки, пересекающие выбранный период · время Киева';}
 function wireRangeBar(box){box.querySelectorAll('.rangebar').forEach(bar=>{const kind=bar.dataset.rk,read=()=>[bar.querySelector('[data-rf]').value,bar.querySelector('[data-rt]').value];
   bar.querySelectorAll('input').forEach(i=>i.onchange=()=>setRange(kind,...read()));
   bar.querySelectorAll('[data-rshift]').forEach(b=>b.onclick=()=>{const r=dashRanges[kind],n=Math.round((utcOf(r.to)-utcOf(r.from))/DAY_MS)+1,d=(+b.dataset.rshift)*n;setRange(kind,isoOf(utcOf(r.from)+d*DAY_MS),isoOf(utcOf(r.to)+d*DAY_MS));});
