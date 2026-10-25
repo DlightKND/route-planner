@@ -213,7 +213,7 @@ html#dlight-ui[data-ui-system] #qBadge{left:16px!important;right:16px!important;
 html#dlight-ui[data-ui-system] #tripJournalPeriod.summary-period-compact{display:block;margin:0;min-width:0;padding:0;border:0;background:transparent}
 html#dlight-ui[data-ui-system] #tripJournalPeriod .summary-period-range{width:100%;box-sizing:border-box}
 html#dlight-ui[data-ui-system] #tripJournalPeriod [data-summary-dates]{flex:1;min-width:0}
-html#dlight-ui[data-ui-system] .anchored-context-panel{position:fixed;inset:auto;margin:0!important;width:300px;max-width:calc(100vw - 32px);box-sizing:border-box;overflow:auto;overscroll-behavior:contain;padding:8px!important;display:grid!important;grid-template-columns:minmax(0,1fr);gap:4px;z-index:auto}
+html#dlight-ui[data-ui-system] .anchored-context-panel{position:fixed;inset:auto;margin:0!important;width:300px;max-width:calc(100vw - 32px);box-sizing:border-box;overflow:auto;overscroll-behavior:contain;padding:8px!important;display:grid!important;grid-template-columns:minmax(0,1fr);gap:4px!important;z-index:auto}
 html#dlight-ui[data-ui-system] .anchored-context-panel:not(:popover-open){display:none!important}
 html#dlight-ui[data-ui-system] .anchored-context-panel>[data-ui=menu]{justify-content:flex-start}
 html#dlight-ui[data-ui-system] .unified-gps-journal .gps-journal-sidebar{padding-top:16px}
@@ -223,7 +223,7 @@ html#dlight-ui[data-ui-system] .unified-gps-journal .gps-journal-sidebar{padding
 }
 html#dlight-ui[data-ui-system] .journal-page-head>details>.anchored-context-panel{grid-template-columns:minmax(0,1fr)}
 html#dlight-ui[data-ui-system] .anchored-context-panel>*{grid-column:1!important;grid-row:auto!important}
-html#dlight-ui[data-ui-system] .anchored-context-panel>[data-ui=menu]{width:100%!important}
+html#dlight-ui[data-ui-system] .anchored-context-panel>[data-ui=menu]{width:100%!important;border-color:transparent!important}
 
 html#dlight-ui[data-ui-system] .anchored-context-panel>.q{display:block;justify-self:stretch;min-height:0;min-width:0}
 html#dlight-ui[data-ui-system] .anchored-context-panel>.q>[data-ui=menu]{width:100%!important}
@@ -261,4 +261,10 @@ html#dlight-ui[data-ui-system] .journal-stop-filter-body input[type=search]{marg
  html#dlight-ui[data-ui-system] .journal-page-head>.journal-filters{grid-column:4}
  html#dlight-ui[data-ui-system] .journal-page-head>.journal-actions{grid-column:5}
  html#dlight-ui[data-ui-system] .journal-page-head>.journal-search{grid-column:1/-1;grid-row:4}
+}
+
+/* Keep nested mobile navigation scoped to the current screen. */
+@media(max-width:1100px){
+ html#dlight-ui[data-ui-system] .unified-gps-journal.gps-show-detail>.journal-page-head{display:none}
+ html#dlight-ui[data-ui-system] .journal-stop-open:not(.journal-route-open)>.journal-trip-head{display:none}
 }
