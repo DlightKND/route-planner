@@ -1,0 +1,23 @@
+import {test,expect} from '@playwright/test';
+import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
+import {mkdirSync} from 'node:fs';
+async function boot(page,info,role='logist'){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T10:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,canonicalPlanner:true});await page.goto('/#/schedule');if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.pw-plan')).toHaveCount(role==='engineer'?3:6);return errors;
+}
+async function shot(page,info,name){const path='test-results/canonical-planner/'+info.project.name;mkdirSync(path,{recursive:true});await page.screenshot({path:path+'/'+name+'.png',animations:'disabled'});expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);}
+async function selectWork(page){if(page.viewportSize().width<=760)await page.locator('.pw-plan-hit').nth(1).click();else await page.locator('.pw-plan[data-part=work-first]').first().click();}
+async function clean(page,errors){expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.queryErrors)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);}
+
+test('canonical planner: same-column fact, physical selection and flat desktop tabs',async({page},info)=>{
+ const errors=await boot(page,info),mobile=page.viewportSize().width<=760;await expect(page.locator('.pw-fact-mark')).toHaveCount(4);if(!mobile){await expect(page.locator('.pw-tabs [data-mode=graph]')).toHaveCSS('background-color','rgba(0, 0, 0, 0)');await expect(page.locator('.pw-tick').first()).toHaveText('00:00');}
+ await page.locator('.pw-calendar').evaluate(e=>{e.scrollTop=330;});await selectWork(page);await expect(page.locator('.pw-plan[data-state=primary]')).toHaveCount(1);await expect(page.locator('.pw-plan[data-state=shared]')).toHaveCount(1);await expect(page.locator('.pw-plan[data-state=related]')).toHaveCount(4);await expect(page.locator('.pw-floating')).toBeVisible();await shot(page,info,'plan-selection');
+ await page.locator('.pw-fact-hit').first().click();await expect(page.locator(mobile?'.pw-context':'.pw-fact-popover')).toContainText('Достроено');await expect(page.locator(mobile?'.pw-context':'.pw-fact-popover')).toContainText('Ожидает проверки');expect(await page.locator('.pw-fact-mark').first().evaluate(e=>e.getBoundingClientRect().width)).toBe(10);await shot(page,info,'fact-details');await clean(page,errors);
+});
+
+test('canonical planner: split and undo use new layout RPC and preserve measurements',async({page},info)=>{
+ const errors=await boot(page,info);await page.locator('.pw-calendar').evaluate(e=>{e.scrollTop=330;});await selectWork(page);await page.locator('[data-pw=part-menu]').click();await page.locator('[data-pw=edit-split]').click();await expect(page.locator('.pw-cut-line')).toHaveCount(2);await page.locator('.pw-editor [name=cut]').fill('12:00');await shot(page,info,'split-preview');expect(await page.evaluate(()=>window.__visualQA.plannerWrites)).toEqual([]);await page.locator('.pw-editor [type=submit]').click();await expect(page.locator('.pw-plan')).toHaveCount(8);expect(await page.evaluate(()=>window.__visualQA.plannerWrites[0].p_changes[0].source_key)).toContain(fixtureIDs.order);await expect(page.locator('.pw-fact-mark')).toHaveCount(4);await page.locator('[data-pw=undo]').click();await expect(page.locator('.pw-plan')).toHaveCount(6);expect(await page.evaluate(()=>window.__visualQA.scheduleWrites)).toEqual([]);await clean(page,errors);
+});
+
+test('canonical planner: engineer day frame, no money and collapsing statistics header',async({page},info)=>{
+ const errors=await boot(page,info,'engineer');await page.setViewportSize({width:page.viewportSize().width,height:600});await expect(page.locator('.pw-tick').first()).toHaveText('07:00');await expect(page.locator('.pw-root')).not.toContainText('допуск');const mode=page.viewportSize().width<=760?'.pw-mobile-mode':'.pw-tabs [data-mode=stats]';await page.locator(mode).click();await expect(page.locator('.pw-statistics')).toContainText('Моя статистика');await expect(page.locator('.pw-statistics')).not.toContainText('Выручка');await page.locator('.pw-statistics').evaluate(e=>{e.scrollTop=200;});await expect(page.locator('.pw-root')).toHaveAttribute('data-collapsed','true');await shot(page,info,'engineer-statistics');await clean(page,errors);
+});

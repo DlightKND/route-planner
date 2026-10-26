@@ -217,3 +217,22 @@ jobs:
             playwright-report/
           retention-days: 7
           if-no-files-found: warn
+  canonical-planner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Verify independent task planner, actual ribbon and layout writes
+        run: npx playwright test tests/visual/canonical-planner.spec.mjs --project=mobile-360-light --project=mobile-390-dark --project=desktop-1024-light --project=desktop-1440-dark --retries=0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: canonical-planner-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7

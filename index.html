@@ -2283,7 +2283,7 @@
 <nav class="rail" id="nav">
   <div class="rail-brand"><img id="logoImg" alt=""><span id="wordmark">DL</span></div>
   <div class="rail-items">
-    <button class="nav-i" data-tab="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 9h8V3h-8z"/></svg><span>Сводка</span></button>
+    <button class="nav-i" data-tab="schedule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 9h8V3h-8z"/></svg><span>График</span></button>
     <button class="nav-i" data-tab="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3z"/><path d="M9 3v15M15 6v15"/></svg><span>Карта</span></button>
     <button class="nav-i" data-tab="planner" data-sub="mine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><span>График</span></button>
     <!-- Заявки и выезды — две очереди одной работы: заявка попадает в выезд,
@@ -2326,6 +2326,7 @@
 
   <!-- MAP / CLIENTS -->
   <div class="view view-notifications"><div class="pane scrollp"><div id="noticeHost" class="notice-host"></div></div></div>
+  <div class="view view-schedule"><div id="canonicalPlannerHost" class="pw-root" aria-label="График и статистика"></div></div>
   <div class="view view-dash"><div class="pane scrollp">
     <!-- Чипы «График / Инфокарты» — только на узком экране: там две колонки
          не помещаются, и вместо того чтобы гнать инфокарты в подвал ленты,

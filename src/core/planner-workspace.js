@@ -1,0 +1,152 @@
+// Canonical planner: assignments own work, trips own roads and measurements.
+// This module has no DOM, database client, legacy request scheduling or fake facts.
+import {dayWindow,dayMs,dayIso} from './schedule.js';
+
+export const PLANNER_STEP=.25;
+export const uniquePeople=row=>[...new Set([row?.lead_engineer,...(row?.engineer_ids||[])].filter(Boolean))];
+export const plannerClock=value=>{const n=Math.round(Number(value)*60);return Number.isFinite(n)?`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`:'—';};
+export const plannerDate=(date,days=0)=>dayIso(dayMs(date)+days*86400000);
+export const partHours=part=>Number(part.end)-Number(part.start);
+export const groupHours=group=>(group.parts||[]).reduce((n,p)=>n+partHours(p),0);
+export const plannerStamp=p=>dayMs(p.date)/3600000+Number(p.start);
+export const plannerSnap=value=>Math.round(Number(value)/PLANNER_STEP)*PLANNER_STEP;
+const clone=value=>JSON.parse(JSON.stringify(value));
+const byId=rows=>new Map(rows.map(r=>[String(r.id),r]));
+const intersects=(a,b)=>a.date===b.date&&a.start<b.end-1e-7&&b.start<a.end-1e-7;
+
+export function plannerCanManage(row,actor){
+  return !!row&&!!actor?.id&&actor.active!==false&&(['admin','logist'].includes(actor.role)||[row.owner_id,row.curator_id].includes(actor.id));
+}
+export function plannerEditIssue(group,data,actor){
+  const order=data.orders.find(o=>o.id===group.order_id),trip=data.trips.find(t=>t.id===group.trip_id);
+  if(group.trip_id&&!trip)return 'Контекст выезда доступен только для просмотра. Откройте задание для проверки размещения.';
+  if(group.schedule_only)return 'Исторический план без подтверждённого экипажа доступен только для просмотра.';
+  if(!plannerCanManage(group.kind==='road'?trip:order,actor))return 'Нет права изменять размещение этой сущности.';
+  if(order&&['review','completed','cancelled'].includes(order.status))return 'Размещение переданного или завершённого задания защищено.';
+  if(trip&&['finished','done','cancelled'].includes(trip.status))return 'Размещение завершённого выезда защищено.';
+  if(group.stale)return 'Состав или команда изменились. Обновите автоматическое размещение перед переносом.';
+  return '';
+}
+export function normalizePlannerData(input={}){
+  const orders=(input.orders||[]).filter(o=>!o.deleted_at),trips=(input.trips||[]).filter(t=>!t.deleted_at),orderIds=new Set(orders.map(o=>o.id)),tripIds=new Set(trips.map(t=>t.id));
+  const links=(input.links||[]).filter(l=>orderIds.has(l.order_id));
+  const groups=(input.groups||[]).filter(g=>g.kind==='work'?orderIds.has(g.order_id):tripIds.has(g.trip_id)).map(g=>({...g,people:[...new Set(g.people||[])],parts:clone(g.parts||[]).sort((a,b)=>a.offset-b.offset)}));
+  for(const g of groups)if(g.order_id&&g.trip_id&&!links.some(l=>l.order_id===g.order_id&&l.trip_id===g.trip_id))links.push({order_id:g.order_id,trip_id:g.trip_id});
+  return {...input,orders,trips,links,groups,requests:input.requests||[],profiles:input.profiles||[],stays:input.stays||[],tracks:input.tracks||[],settings:input.settings||{dayStart:7,dayEnd:16,toleranceH:1,weekend:[0,6],staffDay:{}}};
+}
+export function plannerAssignments(data){
+  const orders=byId(data.orders),trips=byId(data.trips);
+  return data.groups.flatMap(g=>g.parts.flatMap(part=>g.people.map(person=>({...part,person,source_key:g.source_key,kind:g.kind,order_id:g.order_id,trip_id:g.trip_id,group:g,order:orders.get(g.order_id),trip:trips.get(g.trip_id)}))));
+}
+export function plannerRelations(selection,data){
+  if(!selection)return {groups:new Set(),people:new Set()};
+  let orderIds=new Set(),tripIds=new Set();
+  if(selection.kind==='order')orderIds.add(selection.id);
+  if(selection.kind==='request')data.orders.filter(o=>o.job_id===selection.id).forEach(o=>orderIds.add(o.id));
+  if(['trip','fact'].includes(selection.kind))tripIds.add(selection.trip_id||selection.id);
+  if(orderIds.size)data.links.filter(l=>orderIds.has(l.order_id)).forEach(l=>tripIds.add(l.trip_id));
+  const groups=data.groups.filter(g=>selection.kind==='trip'||selection.kind==='fact'?tripIds.has(g.trip_id):g.order_id&&orderIds.has(g.order_id)||g.kind==='road'&&tripIds.has(g.trip_id));
+  return {groups:new Set(groups.map(g=>g.source_key)),people:new Set(groups.flatMap(g=>g.people))};
+}
+export function plannerSelectionState(row,selection,data){
+  if(!selection)return '';
+  if(selection.source_key===row.source_key&&selection.part_id===row.id)return selection.person===row.person?'primary':'shared';
+  if(selection.source_key===row.source_key)return 'part';
+  return plannerRelations(selection,data).groups.has(row.source_key)?'related':'muted';
+}
+export function plannerFilter(data,filter,actor){
+  const own=actor.role==='engineer',ownOrders=new Set(data.orders.filter(o=>uniquePeople(o).includes(actor.id)||plannerCanManage(o,actor)).map(o=>o.id)),ownTrips=new Set(data.trips.filter(t=>uniquePeople(t).includes(actor.id)||plannerCanManage(t,actor)).map(t=>t.id));
+  const groups=data.groups.filter(g=>!own||g.people.includes(actor.id)||g.order_id&&ownOrders.has(g.order_id)||g.trip_id&&ownTrips.has(g.trip_id));
+  const rows=plannerAssignments({...data,groups}).filter(r=>r.date>=filter.from&&r.date<=filter.to&&(!own||filter.colleagues||r.person===actor.id)&&(!filter.people?.length||filter.people.includes(r.person)));
+  return rows.filter(r=>{
+    const o=r.order,taskFilter=filter.status||filter.workMode||filter.warranty!=='any'&&filter.warranty!=null;
+    if(r.kind==='road'&&taskFilter)return data.links.filter(l=>l.trip_id===r.trip_id).some(l=>{const task=data.orders.find(t=>t.id===l.order_id);return task&&plannerOrderMatches(task,filter);});
+    return !o||plannerOrderMatches(o,filter);
+  });
+}
+export function plannerOrderMatches(order,filter){
+  const items=order.service_order_items||[],warranty=items.some(i=>i.billable===false&&!i.request_finance_void_event_id);
+  return (!filter.status||order.status===filter.status)&&(!filter.workMode||order.work_mode===filter.workMode)&&(filter.warranty==null||filter.warranty==='any'||warranty===(filter.warranty==='yes'));
+}
+export function plannerJointWindow(people,date,settings){
+  const windows=people.map(id=>dayWindow(id,date,settings));if(!windows.length||windows.some(w=>!w))return null;
+  const start=Math.max(...windows.map(w=>w.start)),end=Math.min(...windows.map(w=>w.end)),ceiling=Math.min(...windows.map(w=>w.ceiling));return ceiling>start?{start,end,ceiling}:null;
+}
+export function plannerCapacity(people,from,to,settings){
+  let hours=0;const daily=[];
+  for(let date=from;date<=to;date=plannerDate(date,1)){let capacity=0;for(const person of people){const window=dayWindow(person,date,settings);if(window)capacity+=Math.max(0,window.end-window.start);}daily.push({date,capacity});hours+=capacity;}
+  return {hours,daily};
+}
+export function plannerDayFrame(date,data,actor,facts=[],showColleagues=false){
+  if(actor.role!=='engineer')return {start:0,end:24,span:24,closed:false};
+  const window=dayWindow(actor.id,date,data.settings),rows=plannerAssignments(data).filter(p=>p.date===date&&p.person===actor.id),actual=facts.filter(f=>f.date===date&&f.people.includes(actor.id));
+  // Hidden filters and colleagues never crop an engineer's own late return.
+  const starts=[...rows.map(p=>p.start),...actual.map(p=>p.start)],ends=[...rows.map(p=>p.end),...actual.map(p=>p.end)];
+  if(window){starts.push(window.start);ends.push(window.ceiling);}
+  if(!starts.length)return {start:0,end:24,span:24,closed:true};
+  const start=Math.max(0,Math.floor(Math.min(...starts)*4)/4),end=Math.min(24,Math.ceil(Math.max(...ends)*4)/4);return {start,end,span:Math.max(.25,end-start),closed:false};
+}
+export function plannerGeometry(part,frame,pxPerHour){return {top:(part.start-frame.start)*pxPerHour,height:Math.max(1,(part.end-part.start)*pxPerHour)};}
+
+export function splitPlannerPart(group,partId,cut,newId){
+  const result=clone(group),index=result.parts.findIndex(p=>p.id===partId),part=result.parts[index];
+  if(!part||!Number.isFinite(cut)||Math.abs(cut*4-Math.round(cut*4))>1e-7||cut<part.start+.25||cut>part.end-.25)throw Error('Разрез должен оставить с каждой стороны хотя бы 15 минут.');
+  result.parts.splice(index,1,{...part,end:cut},{...part,id:newId,start:cut,offset:part.offset+cut-part.start});return result;
+}
+export function movePlannerPart(group,partId,date,start){
+  const result=clone(group),part=result.parts.find(p=>p.id===partId);if(!part)throw Error('Участок не найден.');
+  const length=partHours(part);Object.assign(part,{date,start,end:start+length});return result;
+}
+export function joinPlannerParts(group,aId,bId){
+  const result=clone(group),a=result.parts.find(p=>p.id===aId),b=result.parts.find(p=>p.id===bId);if(!a||!b||a===b)throw Error('Выберите две части одного исходного бруска.');
+  const [first,last]=a.offset<b.offset?[a,b]:[b,a];if(Math.abs(first.offset+partHours(first)-last.offset)>1e-7)throw Error('Можно сцепить только соседние части.');
+  // The drop target anchors the joined bar, including when halves were on different days.
+  const joined={...first,date:b.date,start:b.start,end:b.start+partHours(first)+partHours(last)};result.parts=result.parts.filter(p=>p!==first&&p!==last);result.parts.push(joined);result.parts.sort((p,q)=>p.offset-q.offset);return result;
+}
+export function shiftPlannerTrip(groups,tripId,days,hours=0){return groups.filter(g=>g.trip_id===tripId).map(g=>({...clone(g),parts:g.parts.map(p=>({...p,date:plannerDate(p.date,days),start:p.start+hours,end:p.end+hours}))}));}
+export function plannerChangeIssue(changes,data,actor){
+  const changed=new Map(changes.map(g=>[g.source_key,g]));
+  for(const group of changes){const old=data.groups.find(g=>g.source_key===group.source_key),issue=plannerEditIssue(group,data,actor);if(issue)return issue;
+    if(old&&Math.abs(groupHours(old)-groupHours(group))>1e-6)return 'Общая длительность исходного бруска должна сохраниться.';
+    let offset=0,previous=null;const ids=new Set();
+    for(const p of [...group.parts].sort((a,b)=>a.offset-b.offset)){
+      const original=old?.parts.find(q=>q.id===p.id),sameStart=original&&original.date===p.date&&Math.abs(original.start-p.start)<1e-7;
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(p.date||'')||plannerDate(p.date)!==p.date||!Number.isFinite(p.start)||!Number.isFinite(p.end)||p.start<0||p.end>24||partHours(p)<=0||partHours(p)<.25&&!original||!sameStart&&Math.abs(p.start*4-Math.round(p.start*4))>1e-7||ids.has(p.id))return 'Укажите корректные дату и время с шагом 15 минут в пределах суток.';
+      if(Math.abs(p.offset-offset)>1e-6)return 'Нарушен порядок частей бруска.';
+      if(previous&&plannerStamp(p)<plannerStamp(previous)+partHours(previous)-1e-7)return 'Продолжение должно идти после предыдущей части.';
+      ids.add(p.id);offset+=partHours(p);previous=p;
+    }
+  }
+  const next=data.groups.map(g=>changed.get(g.source_key)||g),parts=next.flatMap(g=>g.parts.map(p=>({...p,group:g})));
+  for(const g of changes)for(const p of g.parts){const conflict=parts.find(q=>q.group.source_key!==g.source_key&&intersects(p,q)&&g.people.some(id=>q.group.people.includes(id)));if(conflict)return 'В это время у участника уже есть работа или дорога. Учитываются и скрытые назначения.';}
+  return '';
+}
+
+const dateFormatter=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Kyiv',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+export function plannerLocalTime(value){const parts=Object.fromEntries(dateFormatter.formatToParts(new Date(value)).map(p=>[p.type,p.value]));return {date:`${parts.year}-${parts.month}-${parts.day}`,hour:+parts.hour+(+parts.minute)/60+(+parts.second)/3600};}
+function localMidnight(date){let time=dayMs(date);for(let i=0;i<4;i++){const local=plannerLocalTime(time),difference=dayMs(local.date)-dayMs(date)+local.hour*3600000;if(Math.abs(difference)<1)return time;time-=difference;}return time;}
+export function splitPlannerFact(from,to){
+  let start=Date.parse(from),end=Date.parse(to);if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start)return [];
+  const rows=[];for(let guard=0;start<end&&guard<400;guard++){const local=plannerLocalTime(start),midnight=localMidnight(plannerDate(local.date,1)),finish=Math.min(end,midnight),last=finish===midnight?24:plannerLocalTime(finish).hour;
+    if(finish<=start)break;
+    // Retain UTC endpoints and real elapsed minutes across DST; clock geometry is a projection.
+    rows.push({date:local.date,start:local.hour,end:last>local.hour?last:Math.min(24,local.hour+(finish-start)/3600000),from:new Date(start).toISOString(),to:new Date(finish).toISOString(),minutes:(finish-start)/60000});start=finish;
+  }return rows;
+}
+export function plannerFacts(data){
+  const facts=[],trips=byId(data.trips),add=(id,tripId,kind,from,to,source,people,extra={})=>{
+    const trip=trips.get(tripId);if(!trip||trip.status==='cancelled')return;
+    for(const part of splitPlannerFact(from,to))facts.push({...part,id:`${id}:${part.date}`,source_id:id,trip_id:tripId,kind,source,people:[...new Set(people)],...extra});
+  };
+  for(const stay of data.stays){if(stay.status==='rejected')continue;const trip=trips.get(stay.trip_id);if(!trip)continue;const people=['snapshot','manager'].includes(stay.crew_source)?stay.crew_ids||[]:uniquePeople(trip),evidence=stay.presence_evidence,extra={stay_id:stay.id,confirmed:stay.status==='approved',order_id:stay.service_order_id||null,crew_known:['snapshot','manager'].includes(stay.crew_source)};
+    if(evidence){for(const [i,p] of (evidence.gps_intervals||[]).entries())add(`${stay.id}:gps:${i}`,stay.trip_id,'stop',p.from,p.to,'gps',people,extra);
+      for(const [i,p] of (evidence.recovery_parts||[]).entries()){const approved=Number(stay.recovery_acceptance?.[p.key]),end=Date.parse(p.to),start=Date.parse(p.from),accepted=Number.isFinite(approved)&&approved>=0?Math.min(end-start,approved*60000):null;const from=accepted!=null&&p.side==='before'?new Date(end-accepted).toISOString():p.from,to=accepted!=null&&p.side!=='before'?new Date(start+accepted).toISOString():p.to;add(`${stay.id}:estimated:${i}`,stay.trip_id,'stop',from,to,'estimated',people,{...extra,confirmed:extra.confirmed&&accepted!=null});}
+    }else add(stay.id,stay.trip_id,'stop',stay.stay_from,stay.stay_to,'gps',people,extra);
+  }
+  for(const track of data.tracks){const trip=trips.get(track.trip_id);if(!trip)continue;const content=track.data||track,people=uniquePeople(trip),motion=content.presence?.usable?content.presence.motion_intervals:[],blocked=data.stays.filter(s=>s.trip_id===trip.id&&s.status!=='rejected').map(s=>[Date.parse(s.stay_from),Date.parse(s.stay_to)]).filter(([a,b])=>Number.isFinite(a)&&b>a);
+    const addRoad=(p,i,measured)=>{let intervals=[[Date.parse(p.from??p.fromTs),Date.parse(p.to??p.toTs)]];for(const [a,b] of blocked)intervals=intervals.flatMap(([x,y])=>y<=a||x>=b?[[x,y]]:[[x,Math.min(y,a)],[Math.max(x,b),y]].filter(([u,v])=>v>u));for(const [a,b] of intervals)if(Number.isFinite(a)&&b>a){add(`${track.trip_id}:road:${i}`,track.trip_id,'road',new Date(a).toISOString(),new Date(b).toISOString(),measured?'gps':'estimated',people,{confirmed:false,crew_known:false});blocked.push([a,b]);}};
+    if(motion?.length)motion.forEach((p,i)=>addRoad(p,i,p.source==='gps'));
+    else (content.segments||[]).filter(p=>['track','road','line'].includes(p.kind)&&Number(p.km)>0).forEach((p,i)=>addRoad(p,i,p.kind==='track'));
+  }
+  return facts.sort((a,b)=>a.date.localeCompare(b.date)||a.start-b.start);
+}
