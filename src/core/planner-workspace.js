@@ -118,8 +118,10 @@ export function movePlannerPart(group,partId,date,start){
 export function joinPlannerParts(group,aId,bId){
   const result=clone(group),a=result.parts.find(p=>p.id===aId),b=result.parts.find(p=>p.id===bId);if(!a||!b||a===b)throw Error('Выберите две части одного исходного бруска.');
   const [first,last]=a.offset<b.offset?[a,b]:[b,a];if(Math.abs(first.offset+partHours(first)-last.offset)>1e-7)throw Error('Можно сцепить только соседние части.');
-  // The drop target anchors the joined bar, including when halves were on different days.
-  const joined={...first,date:b.date,start:b.start,end:b.start+partHours(first)+partHours(last)};result.parts=result.parts.filter(p=>p!==first&&p!==last);result.parts.push(joined);result.parts.sort((p,q)=>p.offset-q.offset);return result;
+  // Preserve the target half's clock. Joining an untouched split restores its original span.
+  let start=b===last?b.start-partHours(first):b.start;
+  if(b.date!==first.date||Math.abs(start-first.start)>1e-7)start=plannerSnap(start);
+  const joined={...first,date:b.date,start,end:start+partHours(first)+partHours(last)};result.parts=result.parts.filter(p=>p!==first&&p!==last);result.parts.push(joined);result.parts.sort((p,q)=>p.offset-q.offset);return result;
 }
 export function shiftPlannerTrip(groups,tripId,days,hours=0){return groups.filter(g=>g.trip_id===tripId).map(g=>({...clone(g),parts:g.parts.map(p=>({...p,date:plannerDate(p.date,days),start:p.start+hours,end:p.end+hours}))}));}
 export function plannerChangeIssue(changes,data,actor){
