@@ -59,13 +59,25 @@ export function plannerFilter(data,filter,actor){
   const groups=data.groups.filter(g=>!own||g.people.includes(actor.id)||g.order_id&&ownOrders.has(g.order_id)||g.trip_id&&ownTrips.has(g.trip_id));
   const rows=plannerAssignments({...data,groups}).filter(r=>r.date>=filter.from&&r.date<=filter.to&&(!own||filter.colleagues||r.person===actor.id)&&(!filter.people?.length||filter.people.includes(r.person)));
   return rows.filter(r=>{
-    const o=r.order,taskFilter=filter.status||filter.workMode||filter.warranty!=='any'&&filter.warranty!=null;
-    if(r.kind==='road'&&taskFilter)return data.links.filter(l=>l.trip_id===r.trip_id).some(l=>{const task=data.orders.find(t=>t.id===l.order_id);return task&&plannerOrderMatches(task,filter);});
-    return !o||plannerOrderMatches(o,filter);
+    const o=r.order,taskFilter=plannerHasTaskFilter(filter);
+    if(r.kind==='road'&&taskFilter)return data.links.filter(l=>l.trip_id===r.trip_id).some(l=>{const task=data.orders.find(t=>t.id===l.order_id);return task&&plannerOrderMatches(task,filter,data);});
+    return !o||plannerOrderMatches(o,filter,data);
   });
 }
-export function plannerOrderMatches(order,filter){
-  const items=order.service_order_items||[],warranty=items.some(i=>i.billable===false&&!i.request_finance_void_event_id);
+export const plannerHasTaskFilter=f=>!!(f.status||f.workMode||f.warranty&&f.warranty!=='any'||['durationMin','durationMax','profitMin','profitMax'].some(k=>f[k]!=null));
+export function plannerOrderFinance(order,source='plan'){
+ const rows=(order.service_order_items||[]).filter(i=>!i.request_finance_void_event_id&&!i.legacy_snapshot?.request_finance_voided_at);if(!rows.length||source==='fact'&&order.status!=='completed')return null;
+ let revenue=0,cost=0;
+ for(const i of rows){const qty=source==='fact'?i.done_qty:Math.max(0,Number(i.planned_qty||0)-Number(i.transferred_qty||0));if(qty==null||!Number.isFinite(+qty))return null;
+  const r=i.kind==='material'?i.unit_price_snapshot:i.financial_revenue_snapshot,c=i.kind==='material'?i.unit_cost_snapshot:i.financial_cost_snapshot;
+  if(r==null||c==null||!Number.isFinite(+r)||!Number.isFinite(+c)||i.kind!=='material'&&!(Number(i.planned_qty)>0))return null;
+  const factor=i.kind==='material'?Number(qty):Number(qty)/Number(i.planned_qty);revenue+=(i.kind==='material'&&i.billable===false?0:Number(r))*factor;cost+=Number(c)*factor;
+ }return {revenue,cost,profit:revenue-cost,margin:revenue>0?(revenue-cost)/revenue*100:null};
+}
+export function plannerOrderMatches(order,filter,data){
+  const items=order.service_order_items||[],warranty=items.some(i=>i.kind==='work'&&i.billable===false&&!i.request_finance_void_event_id&&!i.legacy_snapshot?.request_finance_voided_at);
+  if(filter.durationMin!=null||filter.durationMax!=null){const groups=data?.groups.filter(g=>g.order_id===order.id),total=data?.orderPlanHours?.[order.id];if(total==null&&!groups?.length)return false;const hours=total??groups.reduce((n,g)=>n+groupHours(g),0);if(filter.durationMin!=null&&hours<filter.durationMin||filter.durationMax!=null&&hours>filter.durationMax)return false;}
+  if(filter.profitMin!=null||filter.profitMax!=null){const value=plannerOrderFinance(order,filter.profitSource)?.[filter.profitMetric||'margin'];if(value==null||filter.profitMin!=null&&value<filter.profitMin||filter.profitMax!=null&&value>filter.profitMax)return false;}
   return (!filter.status||order.status===filter.status)&&(!filter.workMode||order.work_mode===filter.workMode)&&(filter.warranty==null||filter.warranty==='any'||warranty===(filter.warranty==='yes'));
 }
 export function plannerJointWindow(people,date,settings){
@@ -76,6 +88,12 @@ export function plannerCapacity(people,from,to,settings){
   let hours=0;const daily=[];
   for(let date=from;date<=to;date=plannerDate(date,1)){let capacity=0;for(const person of people){const window=dayWindow(person,date,settings);if(window)capacity+=Math.max(0,window.end-window.start);}daily.push({date,capacity});hours+=capacity;}
   return {hours,daily};
+}
+export function plannerWorkload(data,person,from,to){
+ const rows=plannerAssignments(data).filter(p=>p.person===person&&p.date>=from&&p.date<=to),union=parts=>{let end=-Infinity,total=0;for(const p of [...parts].sort((a,b)=>a.start-b.start)){total+=Math.max(0,p.end-Math.max(p.start,end));end=Math.max(end,p.end);}return total;};
+ let busy=0,overlap=0,outside=0,excess=0;
+ for(let date=from;date<=to;date=plannerDate(date,1)){const parts=rows.filter(p=>p.date===date),hours=union(parts),w=dayWindow(person,date,data.settings),inside=w?union(parts.map(p=>({...p,start:Math.max(w.start,p.start),end:Math.min(w.end,p.end)})).filter(p=>p.end>p.start)):0;busy+=hours;overlap+=parts.reduce((n,p)=>n+partHours(p),0)-hours;outside+=hours-inside;excess+=Math.max(0,hours-(w?w.end-w.start:0));}
+ const capacity=plannerCapacity([person],from,to,data.settings).hours;return {busy,overlap,outside,excess,capacity,free:Math.max(0,capacity-(busy-outside)),percent:capacity?busy/capacity*100:null,work:rows.filter(p=>p.kind==='work').reduce((n,p)=>n+partHours(p),0),road:rows.filter(p=>p.kind==='road').reduce((n,p)=>n+partHours(p),0)};
 }
 export function plannerDayFrame(date,data,actor,facts=[],showColleagues=false){
   if(actor.role!=='engineer')return {start:0,end:24,span:24,closed:false};
@@ -136,7 +154,7 @@ export function splitPlannerFact(from,to){
 export function plannerFacts(data){
   const facts=[],trips=byId(data.trips),add=(id,tripId,kind,from,to,source,people,extra={})=>{
     const trip=trips.get(tripId);if(!trip||trip.status==='cancelled')return;
-    for(const part of splitPlannerFact(from,to))facts.push({...part,id:`${id}:${part.date}`,source_id:id,trip_id:tripId,kind,source,people:[...new Set(people)],...extra});
+    for(const part of splitPlannerFact(from,to))facts.push({...part,id:`${id}:${part.from}:${part.to}`,source_id:id,trip_id:tripId,kind,source,people:[...new Set(people)],...extra});
   };
   for(const stay of data.stays){if(stay.status==='rejected')continue;const trip=trips.get(stay.trip_id);if(!trip)continue;const people=['snapshot','manager'].includes(stay.crew_source)?stay.crew_ids||[]:uniquePeople(trip),evidence=stay.presence_evidence,extra={stay_id:stay.id,confirmed:stay.status==='approved',order_id:stay.service_order_id||null,crew_known:['snapshot','manager'].includes(stay.crew_source)};
     if(evidence){for(const [i,p] of (evidence.gps_intervals||[]).entries())add(`${stay.id}:gps:${i}`,stay.trip_id,'stop',p.from,p.to,'gps',people,extra);

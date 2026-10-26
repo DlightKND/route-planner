@@ -1,10 +1,10 @@
-import {plannerCapacity,plannerOrderMatches,uniquePeople} from './planner-workspace.js';
+import {plannerCapacity,plannerOrderMatches,plannerHasTaskFilter,uniquePeople} from './planner-workspace.js';
 import {dashboardMetrics,roadPersonHours} from './dashboard-metrics.js';
 import {presenceSummary,presenceDaily} from './trip-review.js';
 
 // Task filters never apportion a whole trip's frozen money or GPS by guesswork.
 export function plannerStatistics(data,state,people,rows){
- const period={from:state.from,to:state.to},selected=new Set(people),category=!!(state.status||state.workMode||state.warranty&&state.warranty!=='any'),orders=data.orders.filter(o=>plannerOrderMatches(o,state)),orderIds=new Set(orders.map(o=>o.id));
+ const period={from:state.from,to:state.to},selected=new Set(people),category=plannerHasTaskFilter(state),orders=data.orders.filter(o=>plannerOrderMatches(o,state,data)),orderIds=new Set(orders.map(o=>o.id));
  const trips=data.trips.filter(t=>!category||data.links.some(l=>l.trip_id===t.id&&orderIds.has(l.order_id))),tripIds=new Set(trips.map(t=>t.id)),mixed=new Set(category?trips.filter(t=>data.links.some(l=>l.trip_id===t.id&&!orderIds.has(l.order_id))).map(t=>t.id):[]);
  const stays=data.stays.filter(s=>tripIds.has(s.trip_id)&&(!category||orderIds.has(s.service_order_id))),confirmed=presenceDaily(stays,state.from,state.to,selected),road=roadPersonHours({trips:category?[]:trips,tracks:data.tracks,presence:stays,period,engineerIds:people}),capacity=plannerCapacity(people,state.from,state.to,data.settings),hours={};
  for(const trip of trips){const source=data.stays.filter(s=>s.trip_id===trip.id),summary=presenceSummary(source);if(source.length&&summary.complete)hours[trip.id]=summary.approved;}

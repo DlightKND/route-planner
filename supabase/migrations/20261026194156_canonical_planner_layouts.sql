@@ -53,7 +53,7 @@ begin
  select to_jsonb(s) into cfg from public.settings s where id=true;
  foreach person in array p_people loop
   select * into staff from public.staff_day where engineer=person and date=p_date;
-  if not found and extract(dow from p_date) in (0,6) and not p_open then return null; end if;
+  if staff.start_h is null and staff.end_h is null and extract(dow from p_date) in (0,6) and not p_open then return null; end if;
   ds:=coalesce(staff.start_h,(cfg->>'day_start')::numeric,7);
   de:=coalesce(staff.end_h,(cfg->>'day_end')::numeric,16);
   tol:=greatest(0,coalesce(staff.tol_h,(cfg->>'tolerance_h')::numeric,1));
@@ -114,7 +114,7 @@ begin
     select * into pos from public.job_point(assignment.job_id);
     if point_count>2 and not (i=1 and (select count(*) from public.trip_service_orders where trip_id=trip.id)=1)
       and (pos.lat is null or stop->>'lat' is null or abs(pos.lat-(stop->>'lat')::double precision)>.00002 or abs(pos.lng-(stop->>'lng')::double precision)>.00002) then continue; end if;
-    select coalesce(sum(greatest(0,x.planned_qty-x.transferred_qty)),0) into hours from public.service_order_items x where x.order_id=assignment.id and x.kind='work' and lower(trim(x.unit)) in ('ч','час','часа','часов','год','година','години','годин','h','hr','hour','hours') and x.request_finance_void_event_id is null;
+    select coalesce(sum(greatest(0,x.planned_qty-x.transferred_qty)),0) into hours from public.service_order_items x where x.order_id=assignment.id and x.kind='work' and lower(trim(x.unit)) in ('ч','час','часа','часов','год','година','години','годин','h','hr','hour','hours') and x.request_finance_void_event_id is null and nullif(x.legacy_snapshot->>'request_finance_voided_at','') is null;
     select greatest(1,count(*)) into allocated from public.trip_service_orders l join public.trips t on t.id=l.trip_id where l.order_id=assignment.id and t.deleted_at is null and t.status<>'cancelled';
     -- A saved legacy clock plan retains its booked duration, independently of task volume.
     if trip.day_plan is null or trip.day_plan='{}' then hours:=hours/allocated; end if;
@@ -129,9 +129,9 @@ begin
   projected:=dlight_private.planner_place(segments,start_day,start_hour,case when trip.day_plan ? 'start' then array[coalesce(trip.lead_engineer,crew[1])] else crew end,true,coalesce(trip.day_plan->'cuts','[]'));
   output:=output||projected;
  end loop;
- for assignment in select * from public.service_orders o where o.status not in ('cancelled','completed') and o.date_from is not null and not exists(select 1 from public.trip_service_orders l join public.trips t on t.id=l.trip_id where l.order_id=o.id and t.deleted_at is null and t.status<>'cancelled') order by date_from,id loop
+ for assignment in select * from public.service_orders o where o.status<>'cancelled' and o.date_from is not null and not exists(select 1 from public.trip_service_orders l join public.trips t on t.id=l.trip_id where l.order_id=o.id and t.deleted_at is null and t.status<>'cancelled') order by date_from,id loop
   crew:=array(select distinct x from unnest(array[assignment.lead_engineer]||coalesce(assignment.engineer_ids,'{}')) x where x is not null);if cardinality(crew)=0 then continue; end if;
-  select coalesce(sum(greatest(0,x.planned_qty-x.transferred_qty)),0) into hours from public.service_order_items x where x.order_id=assignment.id and x.kind='work' and lower(trim(x.unit)) in ('ч','час','часа','часов','год','година','години','годин','h','hr','hour','hours') and x.request_finance_void_event_id is null;
+  select coalesce(sum(greatest(0,x.planned_qty-x.transferred_qty)),0) into hours from public.service_order_items x where x.order_id=assignment.id and x.kind='work' and lower(trim(x.unit)) in ('ч','час','часа','часов','год','година','години','годин','h','hr','hour','hours') and x.request_finance_void_event_id is null and nullif(x.legacy_snapshot->>'request_finance_voided_at','') is null;
   if hours<=0 then continue; end if;
   segments:=jsonb_build_array(jsonb_build_object('source_key','work:'||assignment.id||':base','kind','work','order_id',assignment.id,'trip_id',null,'people',to_jsonb(crew),'hours',hours,'order_revision',assignment.revision,'trip_revision',null));
   start_day:=assignment.date_from;start_hour:=0;
@@ -162,14 +162,20 @@ end $$;
 
 create function dlight_private.planner_snapshot(p_from date,p_to date)
 returns jsonb language plpgsql stable security definer set search_path='' as $$
-declare groups jsonb;
+declare groups jsonb; all_groups jsonb; durations jsonb;
 begin
  if auth.uid() is null or public.user_role() is null then raise exception 'Нужно войти в приложение'; end if;
  if p_from is null or p_to is null or p_to<p_from or p_to-p_from>366 then raise exception 'Выбери период не длиннее года'; end if;
- select coalesce(jsonb_agg(g),'[]') into groups from jsonb_array_elements(dlight_private.planner_project()) g where
+ all_groups:=dlight_private.planner_project();
+ select coalesce(jsonb_agg(g),'[]') into groups from jsonb_array_elements(all_groups) g where
   ((g->>'order_id' is not null and dlight_private.order_access((g->>'order_id')::uuid)) or (g->>'trip_id' is not null and dlight_private.responsibility_access('trip',(g->>'trip_id')::uuid)))
   and exists(select 1 from jsonb_array_elements(g->'parts') p where (p->>'date')::date between p_from and p_to);
- return jsonb_build_object('groups',groups);
+ select coalesce(jsonb_object_agg(order_id,hours),'{}') into durations from (
+  select g->>'order_id' order_id,sum((p->>'end')::numeric-(p->>'start')::numeric) hours
+  from jsonb_array_elements(all_groups) g cross join lateral jsonb_array_elements(g->'parts') p
+  where g->>'kind'='work' and dlight_private.order_access((g->>'order_id')::uuid) group by g->>'order_id'
+ ) x;
+ return jsonb_build_object('groups',groups,'order_plan_hours',durations);
 end $$;
 
 create function public.planner_snapshot(p_from date,p_to date) returns jsonb language sql security invoker set search_path='' as $$select dlight_private.planner_snapshot(p_from,p_to)$$;

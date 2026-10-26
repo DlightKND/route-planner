@@ -32,8 +32,9 @@ export function createPlannerStore(ctx){
   if(!silent){state.status='loading';state.error='';emit();}
   try{
    await ctx.ensureRefs?.();
+   const itemColumns='id,kind,title,unit,planned_qty,done_qty,transferred_qty,billable,request_finance_void_event_id,legacy_snapshot'+(manager?',financial_revenue_snapshot,financial_cost_snapshot,unit_price_snapshot,unit_cost_snapshot':'');
    const [orders,requests,trips,days,plan]=await Promise.all([
-    readPlannerRows(db(),'service_orders','id,number,title,status,work_mode,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,revision,job_id,seed_request_id,created_by,created_at,result_note,instructions,service_order_items(id,kind,title,unit,planned_qty,done_qty,transferred_qty,billable,request_finance_void_event_id)'),
+    readPlannerRows(db(),'service_orders','id,number,title,status,work_mode,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,revision,job_id,seed_request_id,created_by,created_at,result_note,instructions,service_order_items('+itemColumns+')'),
     readPlannerRows(db(),'jobs','id,status,due_date,owner_id,curator_id,clients(name),equipment(model)'),
     readPlannerRows(db(),'trips','id,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,status,vehicle_id,vehicle_label,vehicles(name,plate),started_at,finished_at,fact_km,workbench_revision,day_plan,deleted_at'+(manager?',econ_snapshot,plan_econ_snapshot,tariffs_snapshot':'')),
     readPlannerRows(db(),'staff_day','engineer,date,start_h,end_h,tol_h,proposed_end_h,proposed_by,proposed_at',{order:'date'}),
@@ -47,7 +48,7 @@ export function createPlannerStore(ctx){
    ]);
    if(reads[0].status==='rejected')throw reads[0].reason;
    const notices=[];if(reads[1].status==='rejected')notices.push('Не удалось загрузить стоянки. Факт присутствия временно недоступен.');if(reads[2].status==='rejected')notices.push('Не удалось загрузить GPS. Измеренная дорога временно недоступна.');
-   const groups=plan?.groups||[],profiles=clone(ctx.profiles?.()||[]),source=normalizePlannerData({orders,requests,trips:live,groups,links:reads[0].value,stays:reads[1].status==='fulfilled'?reads[1].value:[],tracks:reads[2].status==='fulfilled'?reads[2].value:[],profiles,settings:settingsForPlanner(ctx.settings?.()||{},days,live,groups),notices,period:{...period}});
+   const groups=plan?.groups||[],profiles=clone(ctx.profiles?.()||[]),source=normalizePlannerData({orders,requests,trips:live,groups,orderPlanHours:plan?.order_plan_hours||{},links:reads[0].value,stays:reads[1].status==='fulfilled'?reads[1].value:[],tracks:reads[2].status==='fulfilled'?reads[2].value:[],profiles,settings:settingsForPlanner(ctx.settings?.()||{},days,live,groups),notices,period:{...period}});
    if(ticket!==version||identity!==key())return data;
    data=overlayPending(source);state={status:'ready',offline:false,error:'',savedAt:Date.now()};try{cache();}catch{state.error='Данные загружены. Сохранить копию для работы без связи не удалось.';}emit();return data;
   }catch(error){if(ticket!==version||identity!==key())return data;
@@ -84,9 +85,9 @@ export function createPlannerStore(ctx){
  }
  async function retry(){if(busy)return;for(const operation of pending)delete operation.blocked_error;persistPending();return flush();}
  async function discardPending(id){if(busy)throw Error('Дождитесь окончания отправки.');const original=pending;pending=pending.filter(op=>op.id!==id);try{persistPending();}catch(error){pending=original;throw error;}await load(data?.period||ctx.period());}
- async function undoLast(){
+ async function undoLast(reason='Отмена изменения графика'){
   if(!undo.length)throw Error('Нет изменения для отмены.');const last=undo.at(-1),changes=last.before.map(before=>{const current=data.groups.find(g=>g.source_key===before.source_key),after=last.after.find(g=>g.source_key===before.source_key);if(!current||current.revision!==after?.revision)throw Error('После этого изменения график уже обновился. Отмена недоступна.');return {...before,revision:current.revision,order_revision:current.order_revision,trip_revision:current.trip_revision,stale:false};});
-  const result=await save(changes,'Отмена изменения графика',{windows:last.windows});if(result.queued)return result;undo.splice(Math.max(0,undo.length-2),2);emit();return result;
+  const result=await save(changes,reason,{windows:last.windows});if(result.queued)return result;undo.splice(Math.max(0,undo.length-2),2);emit();return result;
  }
- return {load,save,flush,retry,discardPending,undoLast,get data(){return data;},get state(){return {...state,busy,pending:clone(pending),canUndo:undo.length>0};},editIssue:group=>group.pending?'Изменение ожидает отправки.':plannerEditIssue(group,data,actor())};
+ return {load,save,flush,retry,discardPending,undoLast,get undoGroups(){return clone(undo.at(-1)?.before||[]);},get data(){return data;},get state(){return {...state,busy,pending:clone(pending),canUndo:undo.length>0};},editIssue:group=>group.pending?'Изменение ожидает отправки.':plannerEditIssue(group,data,actor())};
 }
