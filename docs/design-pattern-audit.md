@@ -122,16 +122,16 @@
 - `alert` → `feedback` (8 файлов)
 - `button` → `action-button` (2 файла)
 - `dialog` → `modal-editor`, `context-panel`, `multi-select-popover` (5 файлов)
-- `group` → `view-segment`, `checkbox-group`, `filter-chip` (7 файлов)
+- `group` → `view-segment`, `checkbox-group`, `filter-chip` (6 файлов)
 - `img` → `map-explorer`, `charts-tables` (3 файла)
 - `note` → `feedback` (1 файл)
 - `region` → `map-explorer`, `record-card` (5 файлов)
 - `slider` → `range-slider` (2 файла)
 - `status` → `feedback` (15 файлов)
-- `tab` → `entity-tabs` (2 файла)
-- `tablist` → `entity-tabs` (2 файла)
-- `tabpanel` → `entity-tabs` (2 файла)
+- `tab` → `entity-tabs` (3 файла)
+- `tablist` → `entity-tabs` (3 файла)
+- `tabpanel` → `entity-tabs` (3 файла)
 
 Связь type/role с ID классифицирует сигнал, а не автоматически распознаёт смысл каждого его вхождения.
 
-Хеш проверенных production-исходников: `74f518e345cf9dd9bc1986de82b506138ddfb51468eb99cf52f65e7c63b16eca`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
+Хеш проверенных production-исходников: `088e2a4ad5f84e09632d9d4e50364274b720162db193e08030badf75e79e74b1`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.

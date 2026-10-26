@@ -78,7 +78,7 @@ begin
    if ci<jsonb_array_length(cuts) and placed>=(cuts->ci->>'after')::numeric-.000001 then
     cut:=cuts->ci;cursor_date:=(cut#>>'{at,d}')::date;clock:=(cut#>>'{at,t}')::numeric;ci:=ci+1;
    end if;
-   w:=dlight_private.planner_window(p_people,cursor_date,p_open);
+   w:=dlight_private.planner_window(case when segment ? 'clock_people' then array(select x::uuid from jsonb_array_elements_text(segment->'clock_people') x) else p_people end,cursor_date,p_open);
    if w is null or clock>=(w->>'ceiling')::numeric-.000001 then cursor_date:=cursor_date+1;clock:=0;continue; end if;
    clock:=greatest(clock,(w->>'start')::numeric);
    next_cut:=case when ci<jsonb_array_length(cuts) then (cuts->ci->>'after')::numeric-placed else remaining end;
@@ -88,7 +88,7 @@ begin
    clock:=clock+take;placed:=placed+take;used:=used+take;remaining:=remaining-take;
   end loop;
   if remaining>.000001 then segment:=segment||jsonb_build_object('incomplete',true); end if;
-  output:=output||jsonb_build_array((segment-'hours')||jsonb_build_object('parts',parts));
+  output:=output||jsonb_build_array((segment-'hours'-'clock_people')||jsonb_build_object('parts',parts));
  end loop;
  return output;
 end $$;
@@ -118,8 +118,9 @@ begin
     select greatest(1,count(*)) into allocated from public.trip_service_orders l join public.trips t on t.id=l.trip_id where l.order_id=assignment.id and t.deleted_at is null and t.status<>'cancelled';
     -- A saved legacy clock plan retains its booked duration, independently of task volume.
     if trip.day_plan is null or trip.day_plan='{}' then hours:=hours/allocated; end if;
+    taskcrew:=array(select distinct x from unnest(array[assignment.lead_engineer]||coalesce(assignment.engineer_ids,'{}')) x where x is not null);
     if hours>0 then
-     segments:=segments||jsonb_build_array(jsonb_build_object('source_key','work:'||assignment.id||':'||trip.id,'kind','work','order_id',assignment.id,'trip_id',trip.id,'people',to_jsonb(crew),'hours',hours,'order_revision',assignment.revision,'trip_revision',trip.workbench_revision,'needs_assignment',cardinality(assignment.engineer_ids)=0));
+     segments:=segments||jsonb_build_array(jsonb_build_object('source_key','work:'||assignment.id||':'||trip.id,'kind','work','order_id',assignment.id,'trip_id',trip.id,'people',to_jsonb(case when cardinality(taskcrew)>0 then taskcrew else crew end),'hours',hours,'order_revision',assignment.revision,'trip_revision',trip.workbench_revision,'needs_assignment',cardinality(taskcrew)=0)||case when trip.day_plan ? 'start' then '{}'::jsonb else jsonb_build_object('clock_people',to_jsonb(case when cardinality(taskcrew)>0 then taskcrew else crew end)) end);
     end if;
     encountered:=encountered||assignment.id;
    end loop;
@@ -303,3 +304,13 @@ end $$;
 create function public.planner_apply(p_operation uuid,p_changes jsonb,p_reason text,p_windows jsonb default '[]') returns jsonb language sql security invoker set search_path='' as $$select dlight_private.planner_apply(p_operation,p_changes,p_reason,p_windows)$$;
 revoke all on function dlight_private.planner_apply(uuid,jsonb,text,jsonb),public.planner_apply(uuid,jsonb,text,jsonb) from public,anon,authenticated;
 grant execute on function dlight_private.planner_apply(uuid,jsonb,text,jsonb),public.planner_apply(uuid,jsonb,text,jsonb) to authenticated;
+
+-- Preserve the existing saved clocks as explicit canonical placements at cutover.
+-- No task is completed and no measured fact is reconstructed by this migration.
+insert into public.planner_layouts(source_key,kind,order_id,trip_id,people,parts,manual,basis)
+select g->>'source_key',g->>'kind',(g->>'order_id')::uuid,(g->>'trip_id')::uuid,
+ array(select x::uuid from jsonb_array_elements_text(g->'people') x),g->'parts',true,g->>'basis'
+from jsonb_array_elements(dlight_private.planner_project()) g
+join public.trips t on t.id=(g->>'trip_id')::uuid
+where t.day_plan is not null and t.day_plan<>'{}'::jsonb and jsonb_array_length(g->'parts')>0
+on conflict(source_key) do nothing;

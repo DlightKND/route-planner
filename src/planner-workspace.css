@@ -200,3 +200,10 @@
 .pw-workload>p{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:7px 0}.pw-workload b{white-space:nowrap}
 
 .pw-dialog [hidden]{display:none!important}.pw-context input[type=search]{min-height:44px;background:var(--panel-2);color:var(--ink);border:1px solid var(--input-line);border-radius:7px;padding:8px;font:inherit}
+
+.pw-filter-icon{display:none}.pw-filter-icon svg{display:block;width:20px;height:20px}
+.pw-mobile .pw-filter-label{display:none}.pw-mobile .pw-filter-icon{display:block}
+html#dlight-ui[data-ui-system] .pw-mobile .pw-toolbar>[data-pw=filters]{width:44px;min-width:44px;padding:0!important}
+html#dlight-ui[data-ui-system] .pw-mobile .pw-period>.btn{padding:5px 4px!important;min-width:32px}
+html#dlight-ui[data-ui-system] .pw-mobile .pw-period>[data-pw=period]{font-size:12px!important;min-width:0;flex:1 1 auto}
+.pw-mobile .pw-has-fact>.pw-plan-area{right:44px}

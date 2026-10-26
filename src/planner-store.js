@@ -32,7 +32,7 @@ export function createPlannerStore(ctx){
   if(!silent){state.status='loading';state.error='';emit();}
   try{
    await ctx.ensureRefs?.();
-   const itemColumns='id,kind,title,unit,planned_qty,done_qty,transferred_qty,billable,request_finance_void_event_id,legacy_snapshot'+(manager?',financial_revenue_snapshot,financial_cost_snapshot,unit_price_snapshot,unit_cost_snapshot':'');
+   const itemColumns='id,kind,title,unit,planned_qty,done_qty,transferred_qty,billable,request_finance_void_event_id,finance_voided_at:legacy_snapshot->>request_finance_voided_at'+(manager?',financial_revenue_snapshot,financial_cost_snapshot,unit_price_snapshot,unit_cost_snapshot':'');
    const [orders,requests,trips,days,plan]=await Promise.all([
     readPlannerRows(db(),'service_orders','id,number,title,status,work_mode,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,revision,job_id,seed_request_id,created_by,created_at,result_note,instructions,service_order_items('+itemColumns+')'),
     readPlannerRows(db(),'jobs','id,status,due_date,owner_id,curator_id,clients(name),equipment(model)'),
@@ -48,6 +48,7 @@ export function createPlannerStore(ctx){
    ]);
    if(reads[0].status==='rejected')throw reads[0].reason;
    const notices=[];if(reads[1].status==='rejected')notices.push('Не удалось загрузить стоянки. Факт присутствия временно недоступен.');if(reads[2].status==='rejected')notices.push('Не удалось загрузить GPS. Измеренная дорога временно недоступна.');
+   for(const order of orders)for(const item of order.service_order_items||[])if(item.finance_voided_at)item.legacy_snapshot={request_finance_voided_at:item.finance_voided_at};
    const groups=plan?.groups||[],profiles=clone(ctx.profiles?.()||[]),source=normalizePlannerData({orders,requests,trips:live,groups,orderPlanHours:plan?.order_plan_hours||{},links:reads[0].value,stays:reads[1].status==='fulfilled'?reads[1].value:[],tracks:reads[2].status==='fulfilled'?reads[2].value:[],profiles,settings:settingsForPlanner(ctx.settings?.()||{},days,live,groups),notices,period:{...period}});
    if(ticket!==version||identity!==key())return data;
    data=overlayPending(source);state={status:'ready',offline:false,error:'',savedAt:Date.now()};try{cache();}catch{state.error='Данные загружены. Сохранить копию для работы без связи не удалось.';}emit();return data;
