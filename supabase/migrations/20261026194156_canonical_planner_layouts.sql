@@ -140,9 +140,9 @@ begin
    projected:=dlight_private.planner_place(segments,start_day,start_hour,crew,false);
    select (b->>'date')::date,(b->>'end')::numeric into busy_date,busy_end
     from jsonb_array_elements(projected) candidate cross join lateral jsonb_array_elements(candidate->'parts') p
-    cross join lateral jsonb_array_elements(output) prior cross join lateral jsonb_array_elements(prior->'parts') b
+    cross join lateral jsonb_array_elements(output) prior cross join lateral jsonb_array_elements(coalesce((select l.parts from public.planner_layouts l where l.source_key=prior->>'source_key' and l.manual),prior->'parts')) b
     where p->>'date'=b->>'date' and (p->>'start')::numeric<(b->>'end')::numeric and (b->>'start')::numeric<(p->>'end')::numeric
-     and exists(select 1 from jsonb_array_elements_text(prior->'people') x where x.value::uuid=any(crew))
+     and exists(select 1 from jsonb_array_elements_text(coalesce((select to_jsonb(l.people) from public.planner_layouts l where l.source_key=prior->>'source_key' and l.manual),prior->'people')) x where x.value::uuid=any(crew))
     order by b->>'date',(b->>'end')::numeric limit 1;
    if not found then exit; end if;
    start_day:=busy_date;start_hour:=ceil(busy_end*4)/4;
@@ -156,7 +156,7 @@ begin
   select * into lay from public.planner_layouts where source_key=segment->>'source_key';
   if found and lay.manual then segment:=segment||jsonb_build_object('parts',lay.parts,'people',to_jsonb(lay.people),'manual',true,'stale',lay.basis<>fingerprint,'revision',lay.revision);
   else segment:=segment||jsonb_build_object('manual',false,'stale',false,'revision',coalesce(lay.revision,0)); end if;
-  projected:=projected||jsonb_build_array(segment||jsonb_build_object('basis',fingerprint));
+  projected:=projected||jsonb_build_array(segment||jsonb_build_object('basis',fingerprint,'placement_token',md5((segment->'parts')::text||(segment->'people')::text)));
  end loop;
  return projected;
 end $$;
@@ -212,6 +212,7 @@ begin
   if base is null then raise exception 'Исходное размещение изменилось. Обновите график'; end if;
   select * into old from public.planner_layouts where source_key=source for update;
   if coalesce(old.revision,0) is distinct from (change->>'expected_revision')::integer then raise exception 'Размещение изменено другим пользователем. Обновите график'; end if;
+  if base->>'placement_token' is distinct from change->>'placement_token' then raise exception 'Автоматическое размещение изменилось. Обновите график'; end if;
   manual:=coalesce((change->>'manual')::boolean,true);
   if manual and (base->>'stale')::boolean then raise exception 'Изменены состав или команда. Сначала обновите автоматическое размещение'; end if;
   if base->>'order_id' is not null then
@@ -297,6 +298,10 @@ begin
   where a->>'source_key'<>b->>'source_key' and exists(select 1 from jsonb_array_elements(candidates) c where c->>'source_key'=a->>'source_key')
    and ap->>'date'=bp->>'date' and (ap->>'start')::numeric<(bp->>'end')::numeric-.000001 and (bp->>'start')::numeric<(ap->>'end')::numeric-.000001
    and exists(select 1 from jsonb_array_elements_text(a->'people') x join jsonb_array_elements_text(b->'people') y on x.value=y.value)) then raise exception 'Пересечение после изменения периода выезда'; end if;
+ select coalesce(jsonb_agg(to_jsonb(l)||jsonb_build_object('parts',g->'parts','people',g->'people','trip_revision',g->'trip_revision','order_revision',g->'order_revision','placement_token',g->'placement_token') order by l.source_key),'[]') into result_rows
+ from public.planner_layouts l join jsonb_array_elements(projected) g on g->>'source_key'=l.source_key
+ where exists(select 1 from jsonb_array_elements(candidates) c where c->>'source_key'=l.source_key);
+ update public.planner_layout_history h set after_plan=r.value from jsonb_array_elements(result_rows) r where h.operation_id=p_operation and h.source_key=r.value->>'source_key';
  operation_result:=jsonb_build_object('layouts',result_rows,'restore_windows',bounds);
  update public.planner_operations set result=operation_result where id=p_operation;
  return operation_result;
@@ -314,3 +319,18 @@ from jsonb_array_elements(dlight_private.planner_project()) g
 join public.trips t on t.id=(g->>'trip_id')::uuid
 where t.day_plan is not null and t.day_plan<>'{}'::jsonb and jsonb_array_length(g->'parts')>0
 on conflict(source_key) do nothing;
+
+-- Old clients may read the retained clock metadata, but direct legacy schedule writes
+-- must not create a second editable plan after the canonical cutover.
+create function dlight_private.planner_legacy_schedule_guard() returns trigger
+language plpgsql set search_path='' as $$
+begin
+ if current_user='authenticated' and (
+  to_jsonb(new)->'day_plan' is distinct from to_jsonb(old)->'day_plan'
+  or (tg_table_name='jobs' and to_jsonb(new)->'scheduled_date' is distinct from to_jsonb(old)->'scheduled_date')
+ ) then raise exception 'Размещение меняется в новом графике. Откройте раздел «График»'; end if;
+ return new;
+end $$;
+revoke all on function dlight_private.planner_legacy_schedule_guard() from public,anon,authenticated;
+create trigger planner_legacy_schedule_guard before update on public.trips for each row execute function dlight_private.planner_legacy_schedule_guard();
+create trigger planner_legacy_schedule_guard before update on public.jobs for each row execute function dlight_private.planner_legacy_schedule_guard();
