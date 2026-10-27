@@ -3827,6 +3827,7 @@ function configureEntityActions(kind,record){
   mountEntityActions({trigger,items:()=>[
    {label:'Зафиксировать результат',hidden:!id,onSelect:()=>recordEntityResult(kind,id)},
    {label:'Изменить срок и заметку',onSelect:()=>openRequestEditor($('jobDeadlineFields'),'Срок заявки и заметка',trigger)},
+   {label:'График работ',hidden:!id,onSelect:()=>switchTab('schedule')},
    {label:'Передать ответственность',hidden:!id,onSelect:()=>panel('Ответственность',$('jobResponsibilitySection'))},
    {label:'Фото и вложения',hidden:!id,onSelect:()=>panel('Фото и вложения',document.querySelector('.job-photos'))},
    {label:'Согласования и правки',hidden:!id,onSelect:()=>panel('Согласования и правки',$('jbFixCard'))},
@@ -3983,7 +3984,7 @@ function buildJobRead(){
       ['Техника',($('jbEquip')&&$('jbEquip').selectedIndex>0)?selText('jbEquip'):'без привязки'],
       ['Статус',selText('jbStatus')],
       ['Инженер',selectedEngineerIds('jbEng').length?engineerNames(selectedEngineerIds('jbEng')).join(', '):'не назначены'],
-      ['Дата визита',dateHuman($('jbDate').value)],
+      ['Прежняя дата визита',dateHuman($('jbDate').value)],
       ['Окно',$('jbWindow').value.trim()||'—'],
       ['Дедлайн SLA',dateHuman($('jbDue').value)],
       ['Заметка',$('jbNotes').value.trim()||'—']];
@@ -4088,9 +4089,9 @@ function jobHead(){
     : ('<div class="te-k">Записано</div>'
       +'<div class="te-v">'+hrs.toFixed(hrs%1?1:0)+' ч</div>'
       +'<div class="te-s">'+works+'</div>');
-  // Дата словами рядом с системным полем: «09/11/2026» читается и как
-  // 9 ноября, и как 11 сентября — формат берётся из браузера, не из страницы.
-  if($('jbDateHint')) $('jbDateHint').textContent=$('jbDate').value?dateHuman($('jbDate').value):'';
+  // Preserve the historical request date in ordinary saves. New work clocks
+  // belong to canonical task/trip layouts; this value is reference-only.
+  if($('jbDateHint')) $('jbDateHint').textContent=$('jbDate').value?'Прежняя дата визита: '+dateHuman($('jbDate').value):'';
   if($('jbDueHint')) $('jbDueHint').textContent=$('jbDue').value?dateHuman($('jbDue').value):'';
   if(document.querySelector('.view-job.job-task')) buildJobRead();
   presentRequestWorkspace({saved:!!jobEditId,editable:canWriteJob(),client:cl?.name||'Не указан',equipment:eqName,status:selText('jbStatus'),engineers:engineerNames(selectedEngineerIds('jbEng')).join(', '),due:due?dateHuman(due):'',notes:$('jbNotes').value.trim(),phone:cl?.phone||'',address:cl?.address||cl?.addr||'',confirmDiscard:()=>leaveJobEditor(),editContext:(trigger,field)=>openRequestEditor($('requestContextFields'),'Изменить заявку',trigger,field),editDeadline:trigger=>openRequestEditor($('jobDeadlineFields'),'Срок заявки и заметка',trigger)});
