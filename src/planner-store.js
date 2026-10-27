@@ -1,4 +1,4 @@
-import {normalizePlannerData,plannerChangeIssue,plannerEditIssue,plannerDate,plannerLocalTime,uniquePeople} from './core/planner-workspace.js';
+import {normalizePlannerData,plannerChangeIssue,plannerEditIssue,plannerLocalTime} from './core/planner-workspace.js';
 import {flushQueueItems} from './core/offline-queue.js';
 
 const clone=v=>JSON.parse(JSON.stringify(v));
@@ -9,12 +9,9 @@ export async function readPlannerRows(db,table,columns,{tripIds=null,order='id'}
  for(const batch of batches)for(let start=0;;start+=1000){let query=db.from(table).select(columns).order(order);if(batch)query=query.in('trip_id',batch);const {data,error}=await query.range(start,start+999);if(error)throw error;rows.push(...data||[]);if(!data||data.length<1000)break;}
  return rows;
 }
-function settingsForPlanner(settings,days,trips,groups){
- const staffDay=Object.fromEntries(days.map(d=>[d.engineer+'|'+d.date,d])),output={dayStart:Number(settings.day_start??7),dayEnd:Number(settings.day_end??16),toleranceH:Number(settings.tolerance_h??1),weekend:[0,6],staffDay};
- const open=(people,date)=>{if(![0,6].includes(new Date(date+'T00:00:00Z').getUTCDay()))return;for(const id of people)if(!staffDay[id+'|'+date])staffDay[id+'|'+date]={start_h:output.dayStart,end_h:output.dayEnd,tol_h:output.toleranceH,synthetic:true};};
- for(const trip of trips.filter(t=>t.status!=='cancelled'&&t.date_from)){let guard=0;for(let date=trip.date_from;date<=(trip.date_to||trip.date_from)&&guard++<400;date=plannerDate(date,1))open(uniquePeople(trip),date);}
- for(const group of groups)if(group.manual)for(const p of group.parts||[])open(group.people,p.date);
- return output;
+function settingsForPlanner(settings,days){
+ // A booking outside the calendar never silently creates ordinary working hours.
+ return {dayStart:Number(settings.day_start??7),dayEnd:Number(settings.day_end??16),toleranceH:Number(settings.tolerance_h??1),weekend:[0,6],staffDay:Object.fromEntries(days.map(d=>[d.engineer+'|'+d.date,d]))};
 }
 export function createPlannerStore(ctx){
  let data=null,identity=null,pending=[],undo=[],busy=false,version=0,state={status:'idle',offline:false,error:'',savedAt:null};
@@ -49,7 +46,7 @@ export function createPlannerStore(ctx){
    if(reads[0].status==='rejected')throw reads[0].reason;
    const notices=[];if(reads[1].status==='rejected')notices.push('Не удалось загрузить стоянки. Факт присутствия временно недоступен.');if(reads[2].status==='rejected')notices.push('Не удалось загрузить GPS. Измеренная дорога временно недоступна.');
    for(const order of orders)for(const item of order.service_order_items||[])if(item.finance_voided_at)item.legacy_snapshot={request_finance_voided_at:item.finance_voided_at};
-   const groups=plan?.groups||[],profiles=clone(ctx.profiles?.()||[]),source=normalizePlannerData({orders,requests,trips:live,groups,orderPlanHours:plan?.order_plan_hours||{},links:reads[0].value,stays:reads[1].status==='fulfilled'?reads[1].value:[],tracks:reads[2].status==='fulfilled'?reads[2].value:[],profiles,settings:settingsForPlanner(ctx.settings?.()||{},days,live,groups),notices,period:{...period}});
+   const groups=plan?.groups||[],profiles=clone(ctx.profiles?.()||[]),source=normalizePlannerData({orders,requests,trips:live,groups,orderPlanHours:plan?.order_plan_hours||{},links:reads[0].value,stays:reads[1].status==='fulfilled'?reads[1].value:[],tracks:reads[2].status==='fulfilled'?reads[2].value:[],profiles,settings:settingsForPlanner(ctx.settings?.()||{},days),notices,period:{...period}});
    if(ticket!==version||identity!==key())return data;
    data=overlayPending(source);state={status:'ready',offline:false,error:'',savedAt:Date.now()};try{cache();}catch{state.error='Данные загружены. Сохранить копию для работы без связи не удалось.';}emit();return data;
   }catch(error){if(ticket!==version||identity!==key())return data;
