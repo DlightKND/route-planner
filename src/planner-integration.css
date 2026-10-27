@@ -83,4 +83,10 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .mob
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar{grid-column:1;grid-row:1;min-width:0!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .app-period{min-width:0!important;gap:0!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .period-selector{min-width:0!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .date-text{white-space:normal}
+/* Collapse the period itself to a calendar button in the compact rail. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .collapsed .top .toolbar .app-period{width:max-content!important;flex:none;padding:0!important;border:0!important;background:transparent!important;gap:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .collapsed .top .toolbar .period-step,
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .collapsed .top .toolbar .date-text{display:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .collapsed .top .toolbar .period-selector{width:44px!important;min-width:44px!important;max-width:44px;height:44px;min-height:44px!important;padding:0!important;gap:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .collapsed .top .toolbar .period-selector .di{display:inline-flex!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .period-selector{width:48px!important;min-width:48px!important;max-width:48px;height:48px;min-height:48px!important}
