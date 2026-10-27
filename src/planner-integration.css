@@ -1,0 +1,60 @@
+/* Application bindings only. Visual rules come from the approved HTML stylesheet. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost{--sans:'IBM Plex Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace;--pw-gutter:68px;--gutter:var(--pw-gutter);--lane:var(--pw-lane);height:100%;min-height:0;overflow:hidden}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost>.app{height:100%;min-height:0;border:0!important;border-radius:0!important;margin:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .main{min-height:0;padding-bottom:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-title-row{margin:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile-top-actions{display:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .mobile-top-actions{display:flex}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-tabs{grid-column:auto}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-mobile-mode{display:flex!important;width:auto!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-period{justify-content:flex-start}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-toolbar>[data-pw=filters]{margin-left:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-root{min-height:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-body{min-height:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-calendar{scroll-padding-top:56px;scrollbar-width:auto}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-day-body{--calendar-grid-offset:var(--pw-grid-offset)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-crew{height:100%;width:var(--lane);min-width:0;flex:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar-person-window{position:absolute;left:14px;right:6px;bottom:5px;font:10px/13px var(--mono)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-plan{min-height:0!important;min-width:0;box-sizing:border-box}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-road{flex-direction:row;justify-content:flex-start}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-road>span:last-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-plan-warning{font:10px/14px var(--sans);color:var(--warning);font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-context{bottom:auto;max-width:calc(100% - 32px)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-context-body{display:block}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-context-body>.pw-caption{margin-bottom:12px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-context{bottom:0;left:0;right:0;width:auto;max-width:100%;height:var(--sheet-height,370px)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-context.pw-expanded{height:calc(100% - 60px)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-context>header::before{content:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-statistics{scroll-behavior:auto}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-info,.pw-approved-info .info-hint-trigger{min-width:40px!important;min-height:40px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-card-head .info-hint-trigger{min-width:40px!important;min-height:40px!important;background:none!important;border:0!important;padding:8px!important;color:var(--dim)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-card-head h3{font-size:18px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .stat-card-head h3{font-size:16px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-comparison h4{font-size:13px!important;line-height:1.35!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .desktop-scale>.ui-range-exact{display:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .desktop-scale input{min-width:60px;width:100px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-dialog{inset:auto;max-height:calc(100% - 32px)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-dialog:not([data-floating=true]):not([data-mobile=true]){position:fixed;inset:0;margin:auto}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-dialog .pw-dialog-body{display:block}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-dialog[data-floating=true]{right:16px;top:156px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-dialog .dialog-head{flex-wrap:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-dialog[data-mobile=true]{position:absolute;left:0;right:0;bottom:0;top:auto;width:100%;height:var(--sheet-height,75%);max-height:calc(100% - 16px);border-bottom:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-save-state:not([hidden]){min-height:26px;flex:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-has-fact>.pw-plan-area{right:24px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-fact-hit{width:44px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .canvas-actions{display:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-check{display:flex;align-items:center;gap:9px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-now{border-color:var(--now-line)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-card-head .qm{min-width:40px!important;min-height:40px!important;width:40px!important;height:40px!important;background:none!important;border:0!important;padding:8px!important;color:var(--dim)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .sheet-handle{border:0!important;background:transparent!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-dialog.pw-expanded{height:calc(100% - 16px)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost>.app{height:100%!important;min-height:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .main,html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .main{margin-left:0;min-height:0!important;padding-bottom:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar{--lane:var(--pw-lane);--gutter:var(--pw-gutter)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .week-lane .pw-plan{position:relative;top:auto!important;left:auto!important;right:auto!important;width:100%!important;height:90px!important;flex:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .week-lane .pw-road{height:40px!important;min-height:40px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-mobile .week-lane .pw-plan{pointer-events:auto}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-mode button,html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-tabs button{gap:normal!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .top{display:block}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-card-head h3{font-weight:700!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-mode button[aria-pressed=false]{color:var(--dim)!important;border-color:var(--dim)!important}

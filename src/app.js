@@ -59,6 +59,8 @@ import { flushQueueItems, assertReplayableJobSnapshot } from './core/offline-que
 import { pendingJobState, queuedJobDraftIssue } from './core/offline-job.js';
 import {createPlannerWorkspace} from './planner-workspace.js';
 import './planner-workspace.css';
+import './planner-approved.css';
+import './planner-integration.css';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
