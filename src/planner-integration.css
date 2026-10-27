@@ -62,3 +62,25 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-controls{color:var(--in
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-entity-link.entity-link{flex-direction:row}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-entity-link.entity-card{display:block}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .sheet-handle::before{content:''!important}
+
+/* Keep timeline decorations inside the calendar's own stacking context. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-calendar{isolation:isolate;z-index:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .calendar{--lane:var(--pw-lane)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar-date-pill{left:var(--pw-date-center,calc(var(--gutter) + (100% - var(--gutter))/2))}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-floating{display:block;padding:0;box-sizing:border-box}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .schedule-floating-main{min-width:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .schedule-floating-main>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .schedule-floating-main>button{flex:none;width:44px;height:44px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .schedule-floating-menu>button{white-space:normal;box-sizing:border-box}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-body>.pw-dialog[data-floating=true]{top:calc(var(--focus-rail-height,0px) + 56px + 100px);height:calc(100% - var(--focus-rail-height,0px) - 172px);max-height:calc(100% - var(--focus-rail-height,0px) - 172px)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-dialog>form{width:100%;max-height:100%;box-sizing:border-box}
+/* A collapsed phone rail is a single row: period, scale, filters and overview. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px!important;padding:4px 8px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row{display:contents!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row>h1,
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row>.app-notice{display:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .mobile-top-actions{grid-column:2;grid-row:1;gap:4px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar{grid-column:1;grid-row:1;min-width:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .app-period{min-width:0!important;gap:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .period-selector{min-width:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .date-text{white-space:normal}
