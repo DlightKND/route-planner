@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false } = {}) {
   if(managerJourney){financeJourney=true;entityAudit=true;}
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
@@ -425,6 +425,15 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   }
   const managerState=()=>({request:{due_date:request.due_date,status:request.status,engineer_ids:[...(request.engineer_ids||[])]},order:{status:task.status,date_from:task.date_from,date_to:task.date_to,engineer_ids:[...task.engineer_ids],lead_engineer:task.lead_engineer,revision:task.revision,items:task.service_order_items.map(i=>({id:i.id,done_qty:i.done_qty,planned_qty:i.planned_qty}))},trip:{date_from:ride.date_from,date_to:ride.date_to,engineer_ids:[...ride.engineer_ids]}});
   if(managerJourney){for(const row of task.service_order_items)if(row.kind==='material'&&!row.stock_catalog_id)row.stock_catalog_id='stock-a';task.status=typeof managerJourney==='string'?managerJourney:managerJourney.stage||'assigned';audit.managerWrites=[];audit.managerState=managerState();}
+  const plannerGroups=[
+    {source_key:'road:'+trip+':0',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-first',date:'2026-10-05',start:7,end:9,offset:0}]},
+    {source_key:'work:'+order+':'+trip,kind:'work',trip_id:trip,order_id:order,people:[engineer,other],parts:[{id:'work-first',date:'2026-10-05',start:9,end:15,offset:0}]},
+    {source_key:'road:'+trip+':1',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-last',date:'2026-10-05',start:15,end:17,offset:0}]}
+  ].map(g=>({...g,revision:0,order_revision:g.order_id?task.revision:null,trip_revision:ride.workbench_revision,manual:false,stale:false,basis:'synthetic',auto_parts:structuredClone(g.parts),auto_people:[...g.people]}));
+  const plannerReceipts=new Map();audit.plannerWrites=[];tables.planner_layout_history=[];
+  if(canonicalPlanner){
+    stays.splice(0,stays.length);stays.push({id:'planner-stay',trip_id:trip,job_id:job,service_order_id:order,status:'detected',crew_source:'snapshot',crew_ids:[engineer,other],minutes_raw:120,stay_from:'2026-10-05T07:30:00Z',stay_to:'2026-10-05T10:30:00Z',presence_evidence:{gps_intervals:[{from:'2026-10-05T07:30:00Z',to:'2026-10-05T09:30:00Z'}],recovery_parts:[{key:'extension',from:'2026-10-05T09:30:00Z',to:'2026-10-05T10:30:00Z',side:'after',minutes:60}]}});
+  }
   const db = {
     auth: {
       getSession: async () => ({ data: { session: signedOut?null:session }, error: null }),
@@ -545,6 +554,15 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(name==='planner_snapshot')return {data:{groups:structuredClone(plannerGroups.filter(g=>g.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to)))},error:null};
+      if(name==='planner_apply'&&canonicalPlanner){
+        if(plannerReceipts.has(args.p_operation))return {data:structuredClone(plannerReceipts.get(args.p_operation)),error:null};
+        if(role==='engineer')return {data:null,error:{message:'Нет права изменять это задание'}};
+        const layouts=[];
+        for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);if(!g||g.revision!==c.expected_revision)return {data:null,error:{message:'Размещение изменено другим пользователем'}};}
+        for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);Object.assign(g,{parts:structuredClone(c.parts),manual:c.manual,revision:g.revision+1});layouts.push(structuredClone(g));tables.planner_layout_history.push({source_key:g.source_key,reason:args.p_reason,actor_id:session.user.id,created_at:stamp});}
+        audit.plannerWrites.push(structuredClone(args));const receipt={layouts,restore_windows:[]};plannerReceipts.set(args.p_operation,receipt);return {data:structuredClone(receipt),error:null};
+      }
       if(presenceRecoveryJourney&&name==='trip_track_rebuild_save'){
         if(role==='engineer')return reject(name);
         const previous=tables.trip_tracks.find(t=>t.trip_id===trip),same=JSON.stringify(previous?.data.presence)===JSON.stringify(args.p_track.presence);
@@ -678,6 +696,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   window.supabase = { createClient: () => db };
   const savedRanges=preserveRanges?Object.fromEntries(['gt','load','rev','journal','summary'].map(k=>[k,localStorage.getItem('dl_range_'+k)])):{};
   localStorage.clear();
+  localStorage.setItem('dlight:planner-view:https://anqfbljgfimoaziztdxe.supabase.co:'+session.user.id,JSON.stringify({from:'2026-10-05',to:'2026-10-06',people:[engineer,other]}));
   localStorage.setItem(
     "dl_range_gt",
     JSON.stringify({ from: "2026-10-05", to: "2026-10-18" }),

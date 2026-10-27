@@ -57,6 +57,8 @@ import { requestRouteProxy } from './core/route-proxy.js';
 import { saveCanonicalRequest, saveRequestAndWorks } from './core/request-save.js';
 import { flushQueueItems, assertReplayableJobSnapshot } from './core/offline-queue.js';
 import { pendingJobState, queuedJobDraftIssue } from './core/offline-job.js';
+import {createPlannerWorkspace} from './planner-workspace.js';
+import './planner-workspace.css';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
@@ -75,6 +77,18 @@ const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>s
  onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state={})=>routeSet('journal/trip/'+id+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
+
+const plannerWorkspace=createPlannerWorkspace({host:()=>document.getElementById('canonicalPlannerHost'),db:()=>sb,
+ actor:()=>({...profile,id:session?.user?.id,role}),project:()=>sb?.supabaseUrl||SB_URL_BUILTIN,
+ profiles:()=>profilesList,settings:()=>appSettings,ensureRefs,notify,confirm:confirmDialog,
+ plannerReason:async(changes,data,reason)=>{const rows=changes.map(g=>g.kind==='road'?data.trips.find(t=>t.id===g.trip_id):data.orders.find(o=>o.id===g.order_id));if(rows.some(delegatedOwnerIntervenes)){const detail=await askInterventionReason();return detail==null?null:reason+': '+detail;}return reason;},
+ openEntity:async(kind,id)=>{if(!await plannerWorkspace.leave())return;if(kind==='order')return serviceOrders.open(id);if(kind==='request')return openJob(id);return openTrip(id);},
+ createOrder:()=>serviceOrders.open(null),openResult:id=>serviceOrders.openResult(id),tripAction,
+ openJournal:async(id,stopId)=>{if(!await plannerWorkspace.leave())return;await switchTab('planner','tracking');await unassignedTracks.openRecord(id,{stopId,pane:'stops'});},
+ transitionOrder:async(order,status)=>{const reason=delegatedOwnerIntervenes(order)?await askInterventionReason():'Изменение стадии из графика';if(reason===null)return;const {error}=await sb.rpc('service_order_transition',{p_id:order.id,p_expected:order.revision,p_status:status,p_reason:reason});if(error)throw error;},
+ saveWorkDay:async({person,date,start,end,tolerance,propose})=>{if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end>24||end<=start||start*4%1||end*4%1||!Number.isFinite(tolerance)||tolerance<0||tolerance>8||!propose&&end+tolerance>24)throw Error('Укажите корректное рабочее время с шагом 15 минут.');const row=propose?{engineer:person,date,proposed_end_h:end,proposed_by:session.user.id,proposed_at:new Date().toISOString()}:{engineer:person,date,start_h:start,end_h:end,tol_h:tolerance};const {error}=await sb.from('staff_day').upsert(row);if(error)throw error;},
+ decideWorkDay:async({person,date,accept,row})=>{if(!canWrite())throw Error('Только менеджер подтверждает рабочие часы.');const {error}=await sb.from('staff_day').upsert({engineer:person,date,start_h:row.start_h,end_h:accept?row.proposed_end_h:row.end_h,tol_h:row.tol_h,proposed_end_h:null,proposed_by:null,proposed_at:null});if(error)throw error;}
+});
 
 // ── Аварийный перехватчик ────────────────────────────────────────────────────
 // Если что-то падает при старте, модуль обрывается и остаётся серый экран
@@ -623,11 +637,11 @@ function wireSheetDrag(){
   if(sheetIsSheet()) sheetSnapTo(1);
 }
 wireSheetDrag();
-function tabAllowed(name){ if(name==='catalog'||name==='dash') return canWrite(); if(name==='settings') return !!role; return true; }
+function tabAllowed(name){ if(name==='catalog'||name==='dash') return canWrite(); if(name==='settings'||name==='schedule') return !!role; return true; }
 // Пункт «Мой день» нужен инженеру; менеджеру он дублирует сводку.
 function navAllowed(el){
   if(!tabAllowed(el.dataset.tab)) return false;
-  if(el.dataset.sub==='mine' && canWrite()) return false;
+  if(el.dataset.sub==='mine') return false;
   return true;
 }
 function applyTabs(){
@@ -791,7 +805,7 @@ async function applyRoute(){
     if(!await leaveSettingsEditor()||!await leaveJobEditor())return;
     const raw=location.hash.replace(/^#\/?/,'');
     const p=raw.split('/').filter(Boolean).map(x=>{ try{ return decodeURIComponent(x); }catch(e){ return x; } });
-    if(!p.length){ const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
+    if(!p.length){ const name='schedule', sub=null;
       await switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
     if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:['stop','route'].includes(p[3])?p[4]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});else if(p[1]==='record'&&p[2])await unassignedTracks.openSource(p[2],{pane:['route','documents'].includes(p[3])?p[3]:'stops'});else await unassignedTracks.showList();return;}
     if(p[0]==='order'&&p[1]){await serviceOrders.open(p[1]);return;}
@@ -809,9 +823,9 @@ async function applyRoute(){
     }
     if(p[0]==='planner'&&['mine','jobs','trips','orders','tracking'].includes(p[1])){ await switchTab('planner',p[1]==='trips'&&p[2]==='tracking'?'tracking':p[1]); return; }
     if(p[0]==='dash'&&role==='engineer'){await switchTab('planner','mine');return;}
-    if(['dash','map','catalog','settings','notifications'].includes(p[0])){ await switchTab(p[0]); return; }
+    if(['schedule','dash','map','catalog','settings','notifications'].includes(p[0])){ await switchTab(p[0]); return; }
     notify('Ссылка не распознана. Открыта сводка.','warn');
-    const name=role==='engineer'?'planner':'dash', sub=role==='engineer'?'mine':null;
+    const name='schedule', sub=null;
     await switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub)));
   } finally { routeApplying=false; }
 }
@@ -837,6 +851,7 @@ async function checkLeaveTripEditor(){
 function cardOrigin(){const cur=document.querySelector('.view.active');const name=(cur?.className.match(/view-(\w+)/)||[])[1]||'planner';return {name,sub:name==='planner'?plannerCur:null,id:name==='order'?serviceOrders.currentId():name==='job'?jobEditId:name==='trip'?tripEditId:null};}
 async function returnToCard(origin){if(origin.name==='order'&&origin.id)return serviceOrders.open(origin.id);if(origin.name==='job'&&origin.id)return openJob(origin.id);if(origin.name==='trip'&&origin.id)return openTrip(origin.id);switchTab(origin.name,origin.sub);}
 async function switchTab(name, sub){ if(!tabAllowed(name)) return;
+  if(name!=='schedule'&&document.querySelector('.view-schedule.active')&&!await plannerWorkspace.leave())return;
   if(document.querySelector('.view-planner.active')&&dispCur==='tracking'&&(name!=='planner'||sub&&sub!=='tracking')&&!await unassignedTracks.leave())return;
   if(document.querySelector('.view-settings.active')&&(settingsParamsDirty||settingsThemeDirty||document.querySelector('.staff-row[data-dirty]'))&&!await leaveSettingsEditor())return;
   if(name!=='job'&&document.querySelector('.view-job.active')&&(jobEditorDirty||jobSaveT||jobSaveFlight||Object.keys(partT).length)){
@@ -865,6 +880,7 @@ async function switchTab(name, sub){ if(!tabAllowed(name)) return;
   $('pushBtn')?.classList.toggle('active',name==='notifications');
   if(name==='notifications')notifications.open();
   if(name==='dash') renderDashboard(); if(name==='settings') renderSettings();
+  if(name==='schedule')await plannerWorkspace.open();
   routeSet(routeForView(name,sub)); }
 document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
   el.onclick=()=>switchTab(el.dataset.tab, el.dataset.sub||null);
@@ -1011,7 +1027,7 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
     if(rt) rt.style.display=canWrite()?'':'none';
     if(tb) tb.classList.remove('solo');
     if(!canWrite()) sideTab('points'); }
-  if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobTrash')) $('jobTrash').style.display=canWrite()?'':'none'; if($('orderTrash')) $('orderTrash').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; if($('tripTrash')) $('tripTrash').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('planner'); }
+  if($('jobAdd')) $('jobAdd').style.display=canWrite()?'':'none'; if($('jobTrash')) $('jobTrash').style.display=canWrite()?'':'none'; if($('orderTrash')) $('orderTrash').style.display=canWrite()?'':'none'; if($('jobEngFilter')) $('jobEngFilter').style.display=canWrite()?'':'none'; if($('tripAdd')) $('tripAdd').style.display=canWrite()?'':'none'; if($('tripTrash')) $('tripTrash').style.display=canWrite()?'':'none'; applyTabs(); if(role==='engineer'){ plannerCur='mine'; switchTab('schedule'); }
   // Show durable pending edits before any network-dependent screen loads.
   await qRefresh();
   setTimeout(()=>{ map.invalidateSize(); fitUkraine(); },80);
@@ -2594,7 +2610,7 @@ async function gtSaveCuts(b,cuts,date=null,focusDay=null){
     return true;
   }catch(e){notify('Не сохранилось: '+e.message,'err');return false;}
 }
-async function renderFeedAgain(){if(document.querySelector('.view-dash.active'))await renderAttention();else if(plannerCur==='mine')await renderMine();else await renderAttention();}
+async function renderFeedAgain(){if(document.querySelector('.view-schedule.active'))await plannerWorkspace.refresh();else if(document.querySelector('.view-dash.active'))await renderAttention();else if(plannerCur==='mine')await renderMine();else await renderAttention();}
 function gtPop(key,b,trigger){
   const old=document.querySelector('.gpop');if(old)old.remove();
   const cuts=(b.cuts||[]).map(c=>({after:+c.after,at:{d:c.at.d,t:+c.at.t}}));
@@ -3811,6 +3827,7 @@ function configureEntityActions(kind,record){
   mountEntityActions({trigger,items:()=>[
    {label:'Зафиксировать результат',hidden:!id,onSelect:()=>recordEntityResult(kind,id)},
    {label:'Изменить срок и заметку',onSelect:()=>openRequestEditor($('jobDeadlineFields'),'Срок заявки и заметка',trigger)},
+   {label:'График работ',hidden:!id,onSelect:()=>switchTab('schedule')},
    {label:'Передать ответственность',hidden:!id,onSelect:()=>panel('Ответственность',$('jobResponsibilitySection'))},
    {label:'Фото и вложения',hidden:!id,onSelect:()=>panel('Фото и вложения',document.querySelector('.job-photos'))},
    {label:'Согласования и правки',hidden:!id,onSelect:()=>panel('Согласования и правки',$('jbFixCard'))},
@@ -3967,7 +3984,7 @@ function buildJobRead(){
       ['Техника',($('jbEquip')&&$('jbEquip').selectedIndex>0)?selText('jbEquip'):'без привязки'],
       ['Статус',selText('jbStatus')],
       ['Инженер',selectedEngineerIds('jbEng').length?engineerNames(selectedEngineerIds('jbEng')).join(', '):'не назначены'],
-      ['Дата визита',dateHuman($('jbDate').value)],
+      ['Прежняя дата визита',dateHuman($('jbDate').value)],
       ['Окно',$('jbWindow').value.trim()||'—'],
       ['Дедлайн SLA',dateHuman($('jbDue').value)],
       ['Заметка',$('jbNotes').value.trim()||'—']];
@@ -4072,9 +4089,9 @@ function jobHead(){
     : ('<div class="te-k">Записано</div>'
       +'<div class="te-v">'+hrs.toFixed(hrs%1?1:0)+' ч</div>'
       +'<div class="te-s">'+works+'</div>');
-  // Дата словами рядом с системным полем: «09/11/2026» читается и как
-  // 9 ноября, и как 11 сентября — формат берётся из браузера, не из страницы.
-  if($('jbDateHint')) $('jbDateHint').textContent=$('jbDate').value?dateHuman($('jbDate').value):'';
+  // Preserve the historical request date in ordinary saves. New work clocks
+  // belong to canonical task/trip layouts; this value is reference-only.
+  if($('jbDateHint')) $('jbDateHint').textContent=$('jbDate').value?'Прежняя дата визита: '+dateHuman($('jbDate').value):'';
   if($('jbDueHint')) $('jbDueHint').textContent=$('jbDue').value?dateHuman($('jbDue').value):'';
   if(document.querySelector('.view-job.job-task')) buildJobRead();
   presentRequestWorkspace({saved:!!jobEditId,editable:canWriteJob(),client:cl?.name||'Не указан',equipment:eqName,status:selText('jbStatus'),engineers:engineerNames(selectedEngineerIds('jbEng')).join(', '),due:due?dateHuman(due):'',notes:$('jbNotes').value.trim(),phone:cl?.phone||'',address:cl?.address||cl?.addr||'',confirmDiscard:()=>leaveJobEditor(),editContext:(trigger,field)=>openRequestEditor($('requestContextFields'),'Изменить заявку',trigger,field),editDeadline:trigger=>openRequestEditor($('jobDeadlineFields'),'Срок заявки и заметка',trigger)});
