@@ -117,6 +117,7 @@ begin
  ) sources;
  if current_facts<>original_facts then raise exception 'QA changed a business source'; end if;
  insert into planner_qa_results values('business_sources_unchanged',true),('anonymous_write_denied',not has_function_privilege('anon','public.planner_apply(uuid,jsonb,text,jsonb)','execute'));
+ insert into planner_qa_results values('trip_purge_not_blocked',exists(select 1 from pg_constraint where conrelid='public.planner_layouts'::regclass and confrelid='public.trips'::regclass and contype='f' and confdeltype='c'));
  if exists(select 1 from planner_qa_results where not passed) then raise exception 'QA check failed'; end if;
 end $$;
 select * from planner_qa_results order by check_name;

@@ -4,7 +4,7 @@ create table public.planner_layouts (
  source_key text primary key check(length(source_key) between 1 and 240),
  kind text not null check(kind in ('work','road')),
  order_id uuid references public.service_orders(id) on delete restrict,
- trip_id uuid references public.trips(id) on delete restrict,
+ trip_id uuid references public.trips(id) on delete cascade,
  people uuid[] not null,
  parts jsonb not null default '[]' check(jsonb_typeof(parts)='array'),
  manual boolean not null default true,
@@ -16,6 +16,7 @@ create table public.planner_layouts (
 create index planner_layouts_order on public.planner_layouts(order_id) where order_id is not null;
 create index planner_layouts_trip on public.planner_layouts(trip_id) where trip_id is not null;
 create index planner_layouts_people on public.planner_layouts using gin(people);
+create index planner_layouts_updated_by on public.planner_layouts(updated_by) where updated_by is not null;
 -- Calendar envelopes may grow without moving the untouched automatic route.
 create table dlight_private.planner_trip_origins (
  trip_id uuid primary key references public.trips(id) on delete cascade,
@@ -32,6 +33,9 @@ create table public.planner_layout_history (
  reason text not null,before_plan jsonb,after_plan jsonb not null,created_at timestamptz not null default now()
 );
 create index planner_layout_history_source on public.planner_layout_history(source_key,created_at desc);
+create index planner_operations_actor on public.planner_operations(actor_id,created_at desc);
+create index planner_layout_history_operation on public.planner_layout_history(operation_id);
+create index planner_layout_history_actor on public.planner_layout_history(actor_id,created_at desc);
 alter table public.planner_layouts enable row level security;
 alter table public.planner_operations enable row level security;
 alter table public.planner_layout_history enable row level security;

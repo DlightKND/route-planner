@@ -61,3 +61,12 @@ it('migrates saved legacy cuts as explicit layouts and preserves them after volu
 
 it('honors manual bookings during automatic placement and rejects an outdated automatic clock',async()=>{await db.exec('reset role');await q("insert into service_orders(id,title,engineer_ids,date_from,date_to) values($1,'Автоматическая работа',$2,'2026-10-26','2026-10-26')",[id(21),[id(2)]]);await q("insert into service_order_items(id,order_id,kind,unit,planned_qty) values($1,$2,'work','ч',1)",[id(41),id(21)]);await as(1);const initial=await snapshot(),task=initial.groups.find(g=>g.order_id===id(21)),road=initial.groups[0];expect(task.parts[0].start).toBe(11);await save(road,road.parts.map(p=>({...p,date:'2026-10-27'})));const fresh=(await snapshot()).groups.find(g=>g.order_id===id(21));expect(fresh.parts[0].start).toBe(7);expect(fresh.revision).toBe(task.revision);await expect(save(task,task.parts,id(502))).rejects.toThrow(/размещение изменилось/);});
 it('blocks direct legacy clock writes while canonical envelope edits remain available',async()=>{await db.exec('reset role');await db.exec('grant select,update on public.trips to authenticated');await as(1);await expect(q('update public.trips set day_plan=$1 where id=$2',[{start:{d:'2026-10-27',t:7}},id(30)])).rejects.toThrow(/новом графике/);});
+
+it('retains layouts on soft deletion and does not block authorized trip purge or delete task history',async()=>{
+ const groups=(await snapshot()).groups;await save(groups[0]);await save(groups[1],groups[1].parts,id(501));
+ await db.exec('reset role');await q('update trips set deleted_at=now() where id=$1',[id(30)]);
+ expect(await q('select * from planner_layouts')).toHaveLength(2);
+ await q('update trips set deleted_at=null where id=$1',[id(30)]);await as(1);expect((await snapshot()).groups[0].revision).toBe(1);
+ await db.exec('reset role');await q('delete from trip_service_orders where trip_id=$1',[id(30)]);await q('delete from trips where id=$1',[id(30)]);
+ expect(await q('select * from planner_layouts')).toHaveLength(0);expect(await q('select * from planner_layout_history')).toHaveLength(2);expect(await q('select * from planner_operations')).toHaveLength(2);expect(await q('select * from service_orders')).toHaveLength(1);
+});
