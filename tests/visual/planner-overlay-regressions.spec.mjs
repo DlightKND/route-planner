@@ -57,3 +57,23 @@ test('planner overlays: phone rail becomes one row and each engineer fills the c
  expect(await calendar.evaluate(el=>el.querySelector('.pw-crew').getBoundingClientRect().width+el.querySelector('.pw-time-head').getBoundingClientRect().width)).toBeCloseTo(await calendar.evaluate(el=>el.clientWidth),0);await capture(page,info,'phone-single-engineer');
  await page.setViewportSize({width:page.viewportSize().width+40,height:page.viewportSize().height});await expect.poll(()=>calendar.evaluate(el=>el.querySelector('.pw-crew').getBoundingClientRect().width+el.querySelector('.pw-time-head').getBoundingClientRect().width-el.clientWidth)).toBe(0);expect(errors).toEqual([]);
 });
+
+test('planner overlays: compact rail folds the period into a working calendar icon in graph and statistics',async({page},info)=>{
+ const errors=await boot(page,info),isMobile=await mobile(page),period=page.locator('[data-pw=period]');
+ const title=await period.getAttribute('title');expect(title).toContain('05.10 — 06.10.2026');
+ for(const mode of ['graph','stats']){
+  if(mode==='stats')await page.locator(isMobile?'.pw-mobile-mode':'#pw-tab-stats').click();
+  const scroller=page.locator(mode==='graph'?'.pw-calendar':'.pw-statistics');
+  await expect(period.locator('.date-text')).toBeVisible();await scroller.evaluate(el=>el.scrollTop=200);
+  await expect(page.locator('.pw-root')).toHaveAttribute('data-collapsed','true');
+  await expect(period.locator('.date-text')).toBeHidden();await expect(period.locator('.di')).toBeVisible();
+  const rect=await period.boundingBox();expect(rect.width).toBe(isMobile?48:44);expect(rect.height).toBe(rect.width);
+  expect((await page.locator('.pw-period').boundingBox()).width).toBe(rect.width);
+  await expect(period).toHaveAttribute('title',title);await capture(page,info,'compact-calendar-'+mode);
+  await period.click();await expect(page.locator('.pw-dialog [name=from]')).toHaveValue('2026-10-05');await expect(page.locator('.pw-dialog [name=to]')).toHaveValue('2026-10-06');
+  await page.locator('.pw-dialog [data-pw-dialog-close]').first().click();await scroller.evaluate(el=>el.scrollTop=0);
+  await expect(page.locator('.pw-root')).toHaveAttribute('data-collapsed','false');await expect(period.locator('.date-text')).toBeVisible();
+  expect((await period.boundingBox()).width).toBeGreaterThan(rect.width);
+ }
+ expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.plannerWrites)).toEqual([]);
+});
