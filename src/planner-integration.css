@@ -61,3 +61,4 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-mode button[aria-pres
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-controls{color:var(--ink)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-entity-link.entity-link{flex-direction:row}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-entity-link.entity-card{display:block}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .sheet-handle::before{content:''!important}
