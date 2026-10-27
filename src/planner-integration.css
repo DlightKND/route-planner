@@ -58,3 +58,6 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-mode button,html#dlig
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .top{display:block}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-card-head h3{font-weight:700!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-mode button[aria-pressed=false]{color:var(--dim)!important;border-color:var(--dim)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-controls{color:var(--ink)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-entity-link.entity-link{flex-direction:row}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-entity-link.entity-card{display:block}
