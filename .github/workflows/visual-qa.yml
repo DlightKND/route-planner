@@ -236,3 +236,22 @@ jobs:
           name: canonical-planner-${{ github.run_id }}
           path: test-results/
           retention-days: 7
+  approved-planner-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Capture the approved mockup without changing its design
+        run: npx playwright test tests/visual/approved-planner-reference.spec.mjs --project=desktop-1440-dark --project=desktop-1024-light --project=mobile-390-dark --project=mobile-360-light --retries=0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: approved-planner-reference-${{ github.run_id }}
+          path: test-results/approved-planner-reference/
+          retention-days: 7
