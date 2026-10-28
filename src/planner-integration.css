@@ -111,6 +111,9 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundar
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.start{transform:none}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.start::before{top:0}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.start small{top:3px}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance{transform:translateY(-100%)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance{transform:translateY(-100%)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance::before{top:100%}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance small{top:calc(100% - 18px)}
+
+/* An empty day has no hourly grid, and its shading belongs to that day only. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-day[data-closed=true] .pw-lane{background-image:none!important;overflow:clip}
