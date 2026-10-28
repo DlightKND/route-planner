@@ -24,3 +24,21 @@ it('filters duration by booked elapsed work rather than duplicated crew copies',
 it('keeps unknown or unaccepted financial facts out of an active profitability range',()=>{const d=fixture(),o=d.orders[0];o.service_order_items=[{kind:'work',planned_qty:2,done_qty:1,financial_revenue_snapshot:100,financial_cost_snapshot:60}];expect(plannerFilter(d,{from:date,to:date,warranty:'any',profitSource:'plan',profitMetric:'margin',profitMin:39,profitMax:41},actor)).toHaveLength(4);expect(plannerFilter(d,{from:date,to:date,warranty:'any',profitSource:'fact',profitMetric:'margin',profitMin:0},actor)).toHaveLength(0);o.service_order_items[0].financial_cost_snapshot=null;expect(plannerFilter(d,{from:date,to:date,warranty:'any',profitMin:0},actor)).toHaveLength(0);});
 
 it('workload counts overlapping busy time once and still reports hidden conflicts',()=>{const d=fixture();d.groups.push({...d.groups[0],source_key:'work:other',parts:[{id:'extra',date,start:11,end:13,offset:0}]});const load=plannerWorkload(d,'a',date,date);expect(load.busy).toBe(3);expect(load.overlap).toBe(1.5);expect(load.capacity).toBe(5);expect(load.outside).toBe(1);expect(load.free).toBe(3);});
+
+it('crops manager off-hours to the selected engineers without hiding late work or GPS',()=>{
+ const d=fixture(),view={hideOffHours:true,people:['a']};
+ expect(plannerDayFrame(date,d,actor,[],view)).toMatchObject({start:7,end:13,scaleSpan:10});
+ expect(plannerDayFrame(date,d,actor,[],{...view,people:['a','b']})).toMatchObject({start:7,end:17});
+ expect(plannerDayFrame(date,d,actor,[{date,start:20,end:22,people:['a']}],view)).toMatchObject({start:7,end:22});
+ expect(plannerDayFrame(date,d,actor,[{date,start:20,end:22,people:['b']}],view)).toMatchObject({start:7,end:13});
+ expect(plannerDayFrame(date,d,actor)).toMatchObject({start:0,end:24});
+});
+it('moves a workday start with its duration and clamps tolerance to the same day',async()=>{
+ const {plannerWorkWindowChange}=await import('../src/core/planner-workspace.js'),window={start:7,end:16,tol:1,ceiling:17},original=structuredClone(window);
+ expect(plannerWorkWindowChange(window,'start',8)).toEqual({start:8,end:17,tolerance:1});
+ expect(plannerWorkWindowChange(window,'start',25)).toEqual({start:14,end:23,tolerance:1});
+ expect(plannerWorkWindowChange(window,'tolerance',15)).toEqual({start:7,end:16,tolerance:0});
+ expect(plannerWorkWindowChange(window,'tolerance',30)).toEqual({start:7,end:16,tolerance:8});
+ expect(plannerWorkWindowChange({...window,end:23},'tolerance',25)).toEqual({start:7,end:23,tolerance:1});
+ expect(window).toEqual(original);expect(()=>plannerWorkWindowChange(window,'start',NaN)).toThrow();
+});
