@@ -1,9 +1,10 @@
 import {test,expect} from '@playwright/test';
 import {installMockBackend} from './mock-backend.mjs';
 import {mkdirSync} from 'node:fs';
+import {TRACK_STYLE} from '../../src/core/track-style.js';
 const engineer='00000000-0000-4000-8000-000000000002',other='00000000-0000-4000-8000-000000000003',date='2026-10-05';
-async function boot(page,info,role='logist'){
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T10:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,canonicalPlanner:true});await page.goto('/#/schedule');if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.pw-plan')).toHaveCount(role==='engineer'?3:6);return errors;
+async function boot(page,info,role='logist',canonicalPlanner=true){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T10:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,canonicalPlanner});await page.goto('/#/schedule');if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.pw-plan')).toHaveCount(role==='engineer'?3:6);return errors;
 }
 async function filters(page){await page.getByRole('button',{name:'Открыть мультифильтр',exact:true}).filter({visible:true}).first().click();await expect(page.locator('#pw-filter-panel')).toBeVisible();return page.locator('#pw-filter-panel');}
 async function apply(page){await page.locator('#pw-filter-panel [type=submit]').click();await expect(page.locator('#pw-filter-panel')).toHaveCount(0);}
@@ -77,4 +78,34 @@ for(const role of ['logist','engineer'])test(`planner worktime: ${role} weekend 
  if(mobile)await page.locator('.pw-dialog [data-pw-dialog-close]').first().click();
  await page.locator('.pw-calendar').evaluate(el=>el.scrollTop=0);await capture(page,info,'weekend-'+role);
  expect(await page.evaluate(()=>window.__visualQA.staffDayWrites)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.plannerWrites)).toEqual([]);await clean(page,errors);
+});
+
+
+test('planner fact palette: daily ribbons, legend, details and week cards match the main map',async({page},info)=>{
+ const errors=await boot(page,info,'logist','palette');await expect(page.locator('.pw-fact-mark')).toHaveCount(10);
+ const rgb=hex=>'rgb('+hex.slice(1).match(/../g).map(n=>parseInt(n,16)).join(', ')+')';
+ const colors={gps:TRACK_STYLE.measured,stop:TRACK_STYLE.stop,estimated:TRACK_STYLE.road,unknown:TRACK_STYLE.gap};
+ for(const [tone,color] of Object.entries(colors)){
+  const ribbons=page.locator('.pf-ribbon[data-fact-tone='+tone+']');await expect(ribbons).toHaveCount(tone==='estimated'?4:2);
+  for(const ribbon of await ribbons.all()){
+   if(tone==='gps'||tone==='stop')await expect(ribbon.locator('.pf-part')).toHaveCSS('background-color',rgb(color));
+   else expect(await ribbon.locator('.pf-part').evaluate(el=>getComputedStyle(el).backgroundImage)).toContain(rgb(color));
+   expect(await ribbon.evaluate(el=>getComputedStyle(el,el.classList.contains('pf-ribbon-first')?'::before':'::after').backgroundColor)).toBe(rgb(color));
+  }
+ }
+ let panel=await filters(page);await panel.locator('[name=showLegend]').check();await apply(page);
+ for(const [tone,color] of Object.entries(colors)){
+  const key=page.locator('.pf-legend .pf-key-'+tone);
+  if(tone==='gps'||tone==='stop')await expect(key).toHaveCSS('background-color',rgb(color));else expect(await key.evaluate(el=>getComputedStyle(el).backgroundImage)).toContain(rgb(color));
+ }
+ await center(page,12);await page.locator('.pw-fact-hit[data-person="'+engineer+'"][data-facts*="planner-stay"]').first().click();
+ await expect(page.locator('.pf-sources .pf-key-stop')).toHaveCSS('background-color',rgb(TRACK_STYLE.stop));
+ expect(await page.locator('.pf-sources .pf-key-estimated').evaluate(el=>getComputedStyle(el).backgroundImage)).toContain(rgb(TRACK_STYLE.road));
+ await capture(page,info,'fact-palette');await page.locator('.pf-popover-head [data-pw=selection-clear], [data-pw=context-close]').filter({visible:true}).first().click();
+ const mobile=await page.locator('.pw-root').evaluate(el=>el.classList.contains('pw-mobile'));if(mobile)await page.locator('[data-pw=scale]').click();await page.locator('[data-pw-scale]:visible').first().press('End');
+ await expect(page.locator('.pf-week-fact')).toHaveCount(10);
+ for(const [tone,color] of Object.entries(colors))for(const card of await page.locator('.pf-week-fact[data-fact-tone='+tone+']').all())await expect(card).toHaveCSS('border-right-color',rgb(color));
+ await expect(page.locator('.pf-week-fact[data-fact-tone=estimated]').first()).toHaveCSS('border-right-style','dashed');await expect(page.locator('.pf-week-fact[data-fact-tone=unknown]').first()).toHaveCSS('border-right-style','dotted');
+ if(mobile)await page.locator('.pw-dialog [data-pw-dialog-close]').first().click();await capture(page,info,'fact-palette-week');
+ expect(await page.evaluate(()=>window.__visualQA.plannerWrites)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.staffDayWrites)).toEqual([]);await clean(page,errors);
 });

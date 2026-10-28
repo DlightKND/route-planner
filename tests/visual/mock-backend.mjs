@@ -433,6 +433,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   const plannerReceipts=new Map();audit.plannerWrites=[];tables.planner_layout_history=[];
   if(canonicalPlanner){
     tables.staff_day=JSON.parse(localStorage.getItem('qa:planner-staff-days')||'[]');audit.staffDayRows=tables.staff_day;audit.staffDayWrites=[];
+    if(canonicalPlanner==='palette')tables.trip_tracks.push({trip_id:trip,data:{segments:[{kind:'track',km:20,fromTs:'2026-10-05T04:00Z',toTs:'2026-10-05T05:00Z'},{kind:'road',km:20,fromTs:'2026-10-05T05:00Z',toTs:'2026-10-05T06:00Z'},{kind:'line',km:20,fromTs:'2026-10-05T06:00Z',toTs:'2026-10-05T07:00Z'}]}});
     stays.splice(0,stays.length);stays.push({id:'planner-stay',trip_id:trip,job_id:job,service_order_id:order,status:'detected',crew_source:'snapshot',crew_ids:[engineer,other],minutes_raw:120,stay_from:'2026-10-05T07:30:00Z',stay_to:'2026-10-05T10:30:00Z',presence_evidence:{gps_intervals:[{from:'2026-10-05T07:30:00Z',to:'2026-10-05T09:30:00Z'}],recovery_parts:[{key:'extension',from:'2026-10-05T09:30:00Z',to:'2026-10-05T10:30:00Z',side:'after',minutes:60}]}});
   }
   const db = {

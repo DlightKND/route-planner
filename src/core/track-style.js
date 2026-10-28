@@ -1,6 +1,6 @@
 // One visual language for measured GPS, reconstructed roads and unknown gaps.
 export const TRACK_STYLE = Object.freeze({
- measured: '#3c7954', road: '#d87619', gap: '#8b8e96',
+ measured: '#3c7954', road: '#d87619', gap: '#8b8e96', stop: '#dc2626',
  weight: 4, dashArray: '7 6',
 });
 export const SPEED_MAX = 110;
