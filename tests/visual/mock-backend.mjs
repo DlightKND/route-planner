@@ -432,6 +432,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   ].map(g=>({...g,revision:0,order_revision:g.order_id?task.revision:null,trip_revision:ride.workbench_revision,manual:false,stale:false,basis:'synthetic',auto_parts:structuredClone(g.parts),auto_people:[...g.people]}));
   const plannerReceipts=new Map();audit.plannerWrites=[];tables.planner_layout_history=[];
   if(canonicalPlanner){
+    tables.staff_day=JSON.parse(localStorage.getItem('qa:planner-staff-days')||'[]');audit.staffDayRows=tables.staff_day;audit.staffDayWrites=[];
     stays.splice(0,stays.length);stays.push({id:'planner-stay',trip_id:trip,job_id:job,service_order_id:order,status:'detected',crew_source:'snapshot',crew_ids:[engineer,other],minutes_raw:120,stay_from:'2026-10-05T07:30:00Z',stay_to:'2026-10-05T10:30:00Z',presence_evidence:{gps_intervals:[{from:'2026-10-05T07:30:00Z',to:'2026-10-05T09:30:00Z'}],recovery_parts:[{key:'extension',from:'2026-10-05T09:30:00Z',to:'2026-10-05T10:30:00Z',side:'after',minutes:60}]}});
   }
   const db = {
@@ -537,6 +538,12 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
             },
           };
         };
+      if(canonicalPlanner&&table==='staff_day')b.upsert=row=>{
+        const allowed=['admin','logist'].includes(role)&&[engineer,other].includes(row.engineer)&&/^\d{4}-\d{2}-\d{2}$/.test(row.date),valid=allowed&&Number.isFinite(row.start_h)&&Number.isFinite(row.end_h)&&row.start_h>=0&&row.end_h>row.start_h&&row.end_h+row.tol_h<=24;
+        if(!valid)return Promise.resolve(reject('staff_day.upsert'));
+        audit.staffDayWrites.push(structuredClone(row));const prior=tables.staff_day.find(r=>r.engineer===row.engineer&&r.date===row.date);if(prior)Object.assign(prior,structuredClone(row));else tables.staff_day.push(structuredClone(row));
+        localStorage.setItem('qa:planner-staff-days',JSON.stringify(tables.staff_day));return Promise.resolve({data:[structuredClone(row)],error:null});
+      };
       if(entityJourney&&Object.values(activityConfig).some(c=>c.table===table))b.insert=record=>{
         const config=Object.values(activityConfig).find(c=>c.table===table),target=config.rows.find(r=>r.id===record[config.key]);
         const allowed=target&&(role!=='engineer'||target.engineer_ids?.includes(session.user.id)||[target.owner_id,target.curator_id].includes(session.user.id));
@@ -695,8 +702,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   };
   window.supabase = { createClient: () => db };
   const savedRanges=preserveRanges?Object.fromEntries(['gt','load','rev','journal','summary'].map(k=>[k,localStorage.getItem('dl_range_'+k)])):{};
+  const savedPlanner=canonicalPlanner?Object.fromEntries(['dlight:planner-view:https://anqfbljgfimoaziztdxe.supabase.co:'+session.user.id,'qa:planner-staff-days'].map(k=>[k,localStorage.getItem(k)])):{};
   localStorage.clear();
-  localStorage.setItem('dlight:planner-view:https://anqfbljgfimoaziztdxe.supabase.co:'+session.user.id,JSON.stringify({from:'2026-10-05',to:'2026-10-06',people:[engineer,other]}));
+  for(const [key,value] of Object.entries(savedPlanner))if(value!==null)localStorage.setItem(key,value);
+  if(!canonicalPlanner||!localStorage.getItem('dlight:planner-view:https://anqfbljgfimoaziztdxe.supabase.co:'+session.user.id))localStorage.setItem('dlight:planner-view:https://anqfbljgfimoaziztdxe.supabase.co:'+session.user.id,JSON.stringify({from:'2026-10-05',to:'2026-10-06',people:[engineer,other]}));
   localStorage.setItem(
     "dl_range_gt",
     JSON.stringify({ from: "2026-10-05", to: "2026-10-18" }),

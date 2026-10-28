@@ -103,7 +103,7 @@
 ### Типы input и программно заданные .type
 
 - `button` → `action-button` (14 файлов)
-- `checkbox` → `checkbox-group` (9 файлов)
+- `checkbox` → `checkbox-group` (8 файлов)
 - `color` → `color-picker` (1 файл)
 - `date` → `date-field` (4 файла)
 - `email` → `text-field` (1 файл)
@@ -126,7 +126,7 @@
 - `img` → `map-explorer`, `charts-tables` (3 файла)
 - `note` → `feedback` (1 файл)
 - `region` → `map-explorer`, `record-card` (5 файлов)
-- `slider` → `range-slider` (2 файла)
+- `slider` → `range-slider` (3 файла)
 - `status` → `feedback` (15 файлов)
 - `tab` → `entity-tabs` (3 файла)
 - `tablist` → `entity-tabs` (3 файла)
@@ -134,4 +134,4 @@
 
 Связь type/role с ID классифицирует сигнал, а не автоматически распознаёт смысл каждого его вхождения.
 
-Хеш проверенных production-исходников: `e1d754dbf7dbb90ea7afbc0756ed367cb07c5deddead1313cfdde671dc275757`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
+Хеш проверенных production-исходников: `8303e8686777e52d88acb92c51b72527f838628bef6c228686ab510165a4403b`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.

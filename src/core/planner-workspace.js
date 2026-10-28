@@ -95,15 +95,29 @@ export function plannerWorkload(data,person,from,to){
  for(let date=from;date<=to;date=plannerDate(date,1)){const parts=rows.filter(p=>p.date===date),hours=union(parts),w=dayWindow(person,date,data.settings),inside=w?union(parts.map(p=>({...p,start:Math.max(w.start,p.start),end:Math.min(w.end,p.end)})).filter(p=>p.end>p.start)):0;busy+=hours;overlap+=parts.reduce((n,p)=>n+partHours(p),0)-hours;outside+=hours-inside;excess+=Math.max(0,hours-(w?w.end-w.start:0));}
  const capacity=plannerCapacity([person],from,to,data.settings).hours;return {busy,overlap,outside,excess,capacity,free:Math.max(0,capacity-(busy-outside)),percent:capacity?busy/capacity*100:null,work:rows.filter(p=>p.kind==='work').reduce((n,p)=>n+partHours(p),0),road:rows.filter(p=>p.kind==='road').reduce((n,p)=>n+partHours(p),0)};
 }
-export function plannerDayFrame(date,data,actor,facts=[],showColleagues=false){
-  if(actor.role!=='engineer')return {start:0,end:24,span:24,closed:false};
-  const window=dayWindow(actor.id,date,data.settings),rows=plannerAssignments(data).filter(p=>p.date===date&&p.person===actor.id),actual=facts.filter(f=>f.date===date&&f.people.includes(actor.id));
-  // Hidden filters and colleagues never crop an engineer's own late return.
-  const starts=[...rows.map(p=>p.start),...actual.map(p=>p.start)],ends=[...rows.map(p=>p.end),...actual.map(p=>p.end)];
-  if(window){starts.push(window.start);ends.push(window.ceiling);}
+export function plannerDayFrame(date,data,actor,facts=[],view={}){
+  const personal=actor.role==='engineer';
+  if(!personal&&!view.hideOffHours)return {start:0,end:24,span:24,closed:false};
+  const people=personal?[actor.id]:(view.people||[...new Set(plannerAssignments(data).map(p=>p.person))]);
+  const windows=people.map(id=>dayWindow(id,date,data.settings)).filter(Boolean),rows=plannerAssignments(data).filter(p=>p.date===date&&people.includes(p.person)),actual=facts.filter(f=>f.date===date&&f.people.some(id=>people.includes(id)));
+  // Keep every booking and measurement in the selected columns, even outside a shift.
+  const starts=[...windows.map(w=>w.start),...rows.map(p=>p.start),...actual.map(p=>p.start)],ends=[...windows.map(w=>w.ceiling),...rows.map(p=>p.end),...actual.map(p=>p.end)];
   if(!starts.length)return {start:0,end:24,span:24,closed:true};
-  const start=Math.max(0,Math.floor(Math.min(...starts)*4)/4),end=Math.min(24,Math.ceil(Math.max(...ends)*4)/4);return {start,end,span:Math.max(.25,end-start),closed:false};
+  const start=Math.max(0,Math.floor(Math.min(...starts)*4)/4),end=Math.min(24,Math.ceil(Math.max(...ends)*4)/4),frame={start,end,span:Math.max(.25,end-start),closed:false};
+  // A personal override changes that window, not the zoom of every other column/day.
+  if(!personal)frame.scaleSpan=Math.max(.25,Number(data.settings.dayEnd??16)+Number(data.settings.toleranceH??1)-Number(data.settings.dayStart??7));
+  return frame;
 }
+export function plannerWorkWindowChange(window,boundary,value){
+  if(!window||!Number.isFinite(value))throw Error('Рабочее окно недоступно.');
+  if(boundary==='start'){
+    const length=window.end-window.start,max=Math.max(0,24-length-window.tol),start=Math.max(0,Math.min(max,plannerSnap(value)));
+    return {start,end:start+length,tolerance:window.tol};
+  }
+  if(boundary==='tolerance')return {start:window.start,end:window.end,tolerance:Math.max(0,Math.min(8,24-window.end,plannerSnap(value)-window.end))};
+  throw Error('Неизвестная граница рабочего дня.');
+}
+
 export function plannerGeometry(part,frame,pxPerHour){return {top:(part.start-frame.start)*pxPerHour,height:Math.max(1,(part.end-part.start)*pxPerHour)};}
 
 export function splitPlannerPart(group,partId,cut,newId){
