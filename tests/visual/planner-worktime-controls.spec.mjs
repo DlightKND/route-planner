@@ -44,3 +44,37 @@ test('planner worktime: start and tolerance change only one engineer/day, cancel
 test('planner worktime: engineers keep a personal frame and cannot edit working boundaries',async({page},info)=>{
  const errors=await boot(page,info,'engineer');await expect(page.locator('.pw-day').first()).toHaveAttribute('data-start','7');await expect(page.locator('.pw-day-boundary')).toHaveCount(0);const panel=await filters(page);await expect(panel.locator('[name=showFact]')).toBeVisible();await expect(panel.locator('[name=hideOffHours]')).toHaveCount(0);expect(await page.evaluate(()=>window.__visualQA.staffDayWrites)).toEqual([]);await clean(page,errors);
 });
+
+for(const role of ['logist','engineer'])test(`planner worktime: ${role} weekend shading stays inside each day at every daily zoom`,async({page},info)=>{
+ const errors=await boot(page,info,role);
+ await page.evaluate(({other,role})=>{
+  const key=Object.keys(localStorage).find(k=>k.startsWith('dlight:planner-view:'));
+  localStorage.setItem(key,JSON.stringify({...JSON.parse(localStorage.getItem(key)),from:'2026-10-09',to:'2026-10-13',hideOffHours:role==='logist',zoom:18,contextOpen:false}));
+  localStorage.setItem('qa:planner-staff-days',JSON.stringify([{engineer:other,date:'2026-10-11',start_h:10,end_h:14,tol_h:.5}]));
+ },{other,role});
+ await page.clock.setFixedTime(new Date('2026-10-10T10:00Z'));await page.reload();
+ if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
+ await expect(page.locator('.pw-day')).toHaveCount(5);await expect(page.locator('.pw-now')).toHaveCount(0);
+ const check=async()=>{
+  const geometry=await page.locator('.pw-day').evaluateAll(days=>days.map(day=>{
+   const body=day.querySelector('.pw-day-body').getBoundingClientRect();
+   return {date:day.dataset.date,start:day.dataset.start,end:day.dataset.end,closed:day.dataset.closed,height:body.height,zones:[...day.querySelectorAll('.pw-zone')].map(zone=>{const box=zone.getBoundingClientRect();return {top:box.top-body.top,bottom:box.bottom-body.top};}),ticks:[...day.querySelectorAll('.pw-tick')].map(tick=>{const box=tick.getBoundingClientRect();return {top:box.top,bottom:box.bottom};}).sort((a,b)=>a.top-b.top),labels:[...day.querySelectorAll('.calendar-boundary small')].map(label=>{const box=label.getBoundingClientRect();return {top:box.top-body.top,bottom:box.bottom-body.top};}),grid:getComputedStyle(day.querySelector('.pw-lane')).backgroundImage};
+  }));
+  for(const day of geometry){
+   for(let i=1;i<day.ticks.length;i++)expect(day.ticks[i-1].bottom,day.date).toBeLessThanOrEqual(day.ticks[i].top+.5);
+   for(const zone of [...day.zones,...day.labels]){expect(zone.top,day.date).toBeGreaterThanOrEqual(-.5);expect(zone.bottom,day.date).toBeLessThanOrEqual(day.height+.5);}
+   if(day.date==='2026-10-10'||role==='engineer'&&day.date==='2026-10-11'){expect(day.closed).toBe('true');expect(day.height).toBe(72);expect(day.grid).toBe('none');}
+   else if(day.date==='2026-10-11')expect(day).toMatchObject({start:'10',end:'14.5',closed:'false'});
+   else expect(day).toMatchObject({start:'7',end:'17',closed:'false'});
+  }
+  expect(await page.locator('.pw-calendar').evaluate(el=>el.scrollHeight<=el.querySelector('.pw-calendar-inner').getBoundingClientRect().height+el.clientHeight+1)).toBe(true);
+ };
+ await check();const mobile=await page.locator('.pw-root').evaluate(el=>el.classList.contains('pw-mobile'));
+ if(mobile)await page.locator('[data-pw=scale]').click();const slider=page.locator('[data-pw-scale]:visible').first();
+ await slider.focus();await slider.press('Home');await check();
+ for(let step=0;step<3;step++)await slider.press('PageUp');await check();
+ for(let step=0;step<3;step++)await slider.press('PageUp');await check();
+ if(mobile)await page.locator('.pw-dialog [data-pw-dialog-close]').first().click();
+ await page.locator('.pw-calendar').evaluate(el=>el.scrollTop=0);await capture(page,info,'weekend-'+role);
+ expect(await page.evaluate(()=>window.__visualQA.staffDayWrites)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.plannerWrites)).toEqual([]);await clean(page,errors);
+});
