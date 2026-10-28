@@ -117,3 +117,17 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundar
 
 /* An empty day has no hourly grid, and its shading belongs to that day only. */
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-day[data-closed=true] .pw-lane{background-image:none!important;overflow:clip}
+
+/* Fact uses the map/directory TRACK_STYLE palette supplied by the planner shell. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-legend{flex-wrap:wrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-key-gps{background:var(--pf-gps)!important;border-color:var(--pf-gps)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-key-stop{background:var(--pf-stop)!important;border:1px solid var(--pf-stop)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost :is(.pf-key-estimated,.pf-estimated){background:repeating-linear-gradient(135deg,transparent 0 4px,var(--pf-estimated) 4px 5px),color-mix(in srgb,var(--pf-estimated) 16%,var(--panel))!important;border-color:var(--pf-estimated)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost :is(.pf-key-unknown,.pf-unknown){background:repeating-linear-gradient(to bottom,var(--pf-unknown) 0 5px,transparent 5px 8px)!important;border:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .pf-ribbon .pf-measured{background:var(--pf-fact-color)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-ribbon-first::before,
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-ribbon-last::after{background:var(--pf-fact-color)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-ribbon[data-shared=true]{outline-color:var(--pf-fact-color)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-week-fact{border-right-color:var(--pf-fact-color)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-week-fact[data-fact-tone=estimated]{border-right-style:dashed!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-week-fact[data-fact-tone=unknown]{border-right-style:dotted!important}
