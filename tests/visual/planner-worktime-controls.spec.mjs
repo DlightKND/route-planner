@@ -58,9 +58,10 @@ for(const role of ['logist','engineer'])test(`planner worktime: ${role} weekend 
  const check=async()=>{
   const geometry=await page.locator('.pw-day').evaluateAll(days=>days.map(day=>{
    const body=day.querySelector('.pw-day-body').getBoundingClientRect();
-   return {date:day.dataset.date,start:day.dataset.start,end:day.dataset.end,closed:day.dataset.closed,height:body.height,zones:[...day.querySelectorAll('.pw-zone')].map(zone=>{const box=zone.getBoundingClientRect();return {top:box.top-body.top,bottom:box.bottom-body.top};}),labels:[...day.querySelectorAll('.calendar-boundary small')].map(label=>{const box=label.getBoundingClientRect();return {top:box.top-body.top,bottom:box.bottom-body.top};}),grid:getComputedStyle(day.querySelector('.pw-lane')).backgroundImage};
+   return {date:day.dataset.date,start:day.dataset.start,end:day.dataset.end,closed:day.dataset.closed,height:body.height,zones:[...day.querySelectorAll('.pw-zone')].map(zone=>{const box=zone.getBoundingClientRect();return {top:box.top-body.top,bottom:box.bottom-body.top};}),ticks:[...day.querySelectorAll('.pw-tick')].map(tick=>{const box=tick.getBoundingClientRect();return {top:box.top,bottom:box.bottom};}).sort((a,b)=>a.top-b.top),labels:[...day.querySelectorAll('.calendar-boundary small')].map(label=>{const box=label.getBoundingClientRect();return {top:box.top-body.top,bottom:box.bottom-body.top};}),grid:getComputedStyle(day.querySelector('.pw-lane')).backgroundImage};
   }));
   for(const day of geometry){
+   for(let i=1;i<day.ticks.length;i++)expect(day.ticks[i-1].bottom,day.date).toBeLessThanOrEqual(day.ticks[i].top+.5);
    for(const zone of [...day.zones,...day.labels]){expect(zone.top,day.date).toBeGreaterThanOrEqual(-.5);expect(zone.bottom,day.date).toBeLessThanOrEqual(day.height+.5);}
    if(day.date==='2026-10-10'||role==='engineer'&&day.date==='2026-10-11'){expect(day.closed).toBe('true');expect(day.height).toBe(72);expect(day.grid).toBe('none');}
    else if(day.date==='2026-10-11')expect(day).toMatchObject({start:'10',end:'14.5',closed:'false'});
