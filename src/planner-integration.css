@@ -273,3 +273,42 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .period-step,
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .date-text{display:none!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .period-selector .di{display:inline-flex!important;width:20px;height:20px}
+
+/* Weekly overview: shared day rows, paired plan and read-only trip fact. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-columns{display:flex;border-bottom:1px solid var(--line);background:var(--panel)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-week-column,.pw-week-pair-body){display:grid;grid-template-columns:minmax(0,1fr) minmax(112px,.55fr);gap:8px;align-items:stretch}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-column{width:var(--lane);flex:none;padding:8px;border-right:1px solid var(--line);font:500 14px/20px var(--sans);color:var(--dim)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-plan-only{grid-template-columns:minmax(0,1fr)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-day{align-items:stretch;min-height:56px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-day-label{display:flex;flex-direction:column;gap:4px;padding:12px 4px 8px 8px!important;align-items:flex-start;background:var(--panel)!important;color:var(--ink)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-day-label strong{font:600 14px/20px var(--sans);text-transform:capitalize}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-day-label>span{font:12px/18px var(--mono);color:var(--dim)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-day-lane{gap:12px!important;min-width:0;padding:8px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-pair{min-width:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-pair-title{font:var(--pw-help)/var(--pw-help-line) var(--sans);color:var(--dim);margin-bottom:4px;overflow-wrap:anywhere}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-plans{display:flex;flex-direction:column;gap:4px;min-width:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .week-lane .pw-plan.pw-week-plan{position:static!important;inset:auto!important;width:100%!important;min-width:0!important;height:auto!important;min-height:54px!important;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px!important;padding:8px!important;text-align:left;white-space:normal;overflow-wrap:anywhere;border-radius:8px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-plan strong{font:500 14px/20px var(--sans)!important;white-space:normal!important;overflow:visible!important;max-width:100%}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-plan-time{font:var(--pw-help)/var(--pw-help-line) var(--mono)!important;color:var(--ink);white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-plan .pw-plan-warning{white-space:normal;overflow:visible}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-pair-body>.pf-week-fact.pw-week-fact-summary{display:flex;flex-direction:row;align-items:stretch;gap:6px!important;padding:7px 6px!important;min-width:0!important;min-height:72px!important;width:100%;border:1px solid var(--input-line)!important;border-radius:8px!important;background-color:var(--panel)!important;color:var(--ink)!important;text-align:left;font:var(--pw-help)/var(--pw-help-line) var(--sans)!important;box-shadow:none!important;position:relative}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-strip{display:flex;flex-direction:column;flex:none;width:5px;overflow:hidden;border-radius:3px;background:var(--raised)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-strip i{min-height:2px;background:var(--pf-fact-color)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-copy{display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-copy>span{white-space:nowrap;font-variant-numeric:tabular-nums}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-range{color:var(--dim)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-summary[data-selected=true]{outline:2px solid var(--focus)!important;outline-offset:-2px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-summary:focus-visible{outline:2px solid var(--focus)!important;outline-offset:3px}
+@media(hover:hover) and (pointer:fine){html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-summary:hover{background-image:linear-gradient(color-mix(in srgb,currentColor 8%,transparent),color-mix(in srgb,currentColor 8%,transparent))!important}}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-summary:active{background-image:linear-gradient(color-mix(in srgb,currentColor 14%,transparent),color-mix(in srgb,currentColor 14%,transparent))!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-empty{display:flex;align-items:center;min-height:48px;padding:8px;color:var(--dim);font:var(--pw-help)/var(--pw-help-line) var(--sans)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-day-lane .pw-week-day-actions{padding:0;gap:8px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-detail-time{font:500 16px/24px var(--mono)!important;margin:12px 0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-totals{display:flex;flex-wrap:wrap;gap:8px 16px;padding-bottom:16px;border-bottom:1px solid var(--line);font-size:14px;line-height:20px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-fact-totals>span{display:flex;gap:8px;align-items:baseline}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode{display:grid;grid-template-columns:auto 6px minmax(0,1fr);gap:8px;padding:12px 0;border-bottom:1px solid var(--line);align-items:start}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode-time{font:var(--pw-help)/var(--pw-help-line) var(--mono);white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode-key{width:6px;min-height:18px;border-radius:2px;background:var(--pf-fact-color)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode>span:last-child{min-width:0;overflow-wrap:anywhere}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode strong{display:block;font-size:14px;line-height:20px;font-weight:500}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode small{display:block;font:var(--pw-help)/var(--pw-help-line) var(--sans)!important;color:var(--dim)}
