@@ -22,6 +22,7 @@ test('planner audit: panel geometry, tool states, error fields and Escape preser
  await expect(panel.locator('[name=profitMin]')).toHaveAttribute('aria-invalid','true');await expect(panel.locator('[name=profitMin]')).toHaveAttribute('aria-describedby','pw-dialog-error');await expect(panel.locator('[name=profitMin]')).toBeFocused();
  await expect(panel.locator('[type=submit]')).toBeEnabled();await panel.locator('[name=profitMax]').fill('20');await expect(panel.locator('[aria-invalid]')).toHaveCount(0);
  await panel.locator('[name=profitMax]').press('Escape');await page.locator('#confirmYes').click();await expect(panel).toHaveCount(0);await expect(overview).toHaveAttribute('aria-expanded','true');
+ if(!mobile){await filter.click();await filter.click();await expect(filter).toHaveAttribute('aria-expanded','true');await page.locator('#pw-filter-panel [data-pw-dialog-close]').first().click();await expect(filter).toHaveAttribute('aria-expanded','false');}
  await expect(page.locator('.pw-plan')).toHaveCount(6);expect(await page.evaluate(()=>window.__visualQA.plannerWrites)).toEqual([]);
 });
 test('planner audit: busy day form locks every control and recovers a failed save without losing draft',async({page},info)=>{
