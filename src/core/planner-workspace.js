@@ -108,6 +108,13 @@ export function plannerDayFrame(date,data,actor,facts=[],view={}){
   if(!personal)frame.scaleSpan=Math.max(.25,Number(data.settings.dayEnd??16)+Number(data.settings.toleranceH??1)-Number(data.settings.dayStart??7));
   return frame;
 }
+export function plannerWorkDayValues({start,end,tolerance,closed=false,propose=false}){
+ if(closed)return {start:0,end:0,tolerance:0};
+ if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end>24||end<=start||start*4%1||end*4%1||!Number.isFinite(tolerance)||tolerance<0||tolerance>8||tolerance*4%1||!propose&&end+tolerance>24)throw Error('Укажите корректное рабочее время с шагом 15 минут.');
+ return {start,end,tolerance};
+}
+export const plannerWorkDayFields=['start_h','end_h','tol_h','proposed_end_h','proposed_by','proposed_at'];
+export function plannerWorkDayReceipt(row){return Object.fromEntries(plannerWorkDayFields.map(k=>[k,row?.[k]??null]));}
 export function plannerWorkWindowChange(window,boundary,value){
   if(!window||!Number.isFinite(value))throw Error('Рабочее окно недоступно.');
   if(boundary==='start'){
