@@ -14,11 +14,11 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-body{min-height:0}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-calendar{scroll-padding-top:56px;scrollbar-width:auto}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-day-body{--calendar-grid-offset:var(--pw-grid-offset)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-crew{height:100%;width:var(--lane);min-width:0;flex:none}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar-person-window{position:absolute;left:14px;right:6px;bottom:5px;font:10px/13px var(--mono)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar-person-window{position:absolute;left:14px;right:6px;bottom:5px;font:12px/18px var(--mono)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-plan{min-height:0!important;min-width:0;box-sizing:border-box}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-road{flex-direction:row;justify-content:flex-start}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-road>span:last-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-plan-warning{font:10px/14px var(--sans);color:var(--warning);font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-plan-warning{font:12px/18px var(--sans);color:var(--warning);font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-context{bottom:auto;max-width:calc(100% - 32px)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-context-body{display:block}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-context-body>.pw-caption{margin-bottom:12px}
@@ -51,8 +51,8 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-dialog.pw-expanded{heig
 html#dlight-ui[data-ui-system] #canonicalPlannerHost>.app{height:100%!important;min-height:0!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .main,html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .main{margin-left:0;min-height:0!important;padding-bottom:0!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar{--lane:var(--pw-lane);--gutter:var(--pw-gutter)}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .week-lane .pw-plan{position:relative;top:auto!important;left:auto!important;right:auto!important;width:100%!important;height:90px!important;flex:none}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .week-lane .pw-road{height:40px!important;min-height:40px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .week-lane .pw-plan{position:relative;top:auto!important;left:auto!important;right:auto!important;width:100%!important;min-height:112px!important;height:auto!important;flex:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .week-lane .pw-road{height:auto!important;min-height:48px!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-mobile .week-lane .pw-plan{pointer-events:auto}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-mode button,html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-tabs button{gap:normal!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .top{display:block}
@@ -74,23 +74,6 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .schedule-floating-main>but
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .schedule-floating-menu>button{white-space:normal;box-sizing:border-box}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-body>.pw-dialog[data-floating=true]{top:calc(var(--focus-rail-height,0px) + 56px + 100px);height:calc(100% - var(--focus-rail-height,0px) - 172px);max-height:calc(100% - var(--focus-rail-height,0px) - 172px)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-dialog>form{width:100%;max-height:100%;box-sizing:border-box}
-/* A collapsed phone rail is a single row: period, scale, filters and overview. */
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px!important;padding:4px 8px!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row{display:contents!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row>h1,
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row>.app-notice{display:none!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .mobile-top-actions{grid-column:2;grid-row:1;gap:4px!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar{grid-column:1;grid-row:1;min-width:0!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .app-period{min-width:0!important;gap:0!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .period-selector{min-width:0!important}
-/* Collapse the period itself to a calendar button in the compact rail. */
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .app-period{width:max-content!important;flex:none;padding:0!important;border:0!important;background:transparent!important;gap:0!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .period-step,
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .date-text{display:none!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .period-selector{width:44px!important;min-width:44px!important;max-width:44px;height:44px;min-height:44px!important;padding:0!important;gap:0!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .period-selector .di{display:inline-flex!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar .period-selector{width:48px!important;min-width:48px!important;max-width:48px;height:48px;min-height:48px!important}
-
 /* Keep the desktop period and scale in the compact rail. */
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile).collapsed .top .desktop-scale{display:flex!important;flex:0 1 225px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile).collapsed .top .period-step{display:inline-flex!important}
@@ -98,7 +81,7 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile).collapsed
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary{height:28px;min-height:28px!important;transform:translateY(-50%);border:0!important;padding:0!important;background:transparent!important;pointer-events:auto;touch-action:none;cursor:ns-resize;z-index:18;box-shadow:none!important;border-radius:0!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary::before{content:'';position:absolute;left:0;right:0;top:50%;border-top:1px dashed var(--cyan)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance::before{border-color:var(--warning)}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary small{top:calc(50% + 3px);font-size:10px!important;padding:2px 5px!important;border-radius:4px;background:var(--panel)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary small{top:calc(50% + 3px);font-size:12px!important;line-height:18px!important;padding:2px 5px!important;border-radius:4px;background:var(--panel)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance small{top:calc(50% - 18px)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary:is(:hover,:focus-visible,.is-dragging)::before{border-top-width:2px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .calendar .calendar-boundary.pw-day-boundary{height:44px;min-height:44px!important}
@@ -106,14 +89,14 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost[data-workday-saving=true] .
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-check input[type=checkbox]{flex:none}
 
 /* The line spans the column; only its labelled grip captures pointer input. */
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary{left:auto;right:0;width:96px}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary::before{left:calc(96px - var(--pw-lane));pointer-events:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary{left:auto;right:0;width:112px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary::before{left:calc(112px - var(--pw-lane));pointer-events:none}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.start{transform:none}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.start::before{top:0}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.start small{top:3px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance{transform:translateY(-100%)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance::before{top:100%}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance small{top:calc(100% - 18px)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance small{top:calc(100% - 24px)}
 
 /* An empty day has no hourly grid, and its shading belongs to that day only. */
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-day[data-closed=true] .pw-lane{background-image:none!important;overflow:clip}
@@ -131,28 +114,6 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-ribbon[data-shared=true
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-week-fact{border-right-color:var(--pf-fact-color)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-week-fact[data-fact-tone=estimated]{border-right-style:dashed!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-week-fact[data-fact-tone=unknown]{border-right-style:dotted!important}
-
-/* Multiple selection retains the semantic fill of every work/road block. */
-.pw-root .pw-plan[data-multi-selected="true"]{outline:3px solid var(--accent,#ffe500)!important;outline-offset:-3px;box-shadow:inset 0 0 0 5px var(--surface,#24251f)!important}
-.pw-root .pw-plan[data-multi-selected="true"]::after{content:'✓';position:absolute;right:5px;top:3px;background:var(--accent,#ffe500);color:#161710;border-radius:50%;width:20px;height:20px;text-align:center;font-weight:700}
-.pw-multi-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px;font-size:12px;max-width:260px}
-.pw-multi-tools button{min-height:36px;padding:4px 12px}
-
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-multi-tools{flex-wrap:nowrap;gap:6px;padding:6px 8px;font-size:11px}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-multi-tools span{flex:1;min-width:0}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-multi-tools button{min-width:60px!important;min-height:36px!important;padding:4px 8px!important}
-
-/* Approved compact phone rail: section switch at left, calendar with tools at right. */
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row>h1{display:block!important;grid-column:1;grid-row:1;min-width:0!important;margin:0}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row .mobile-title-mode{display:flex!important;width:auto;height:44px;min-height:44px!important;font-size:14px!important;padding:0!important;gap:4px!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar{display:none!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .mobile-top-actions{display:flex;grid-column:2;grid-row:1;gap:4px!important;margin-left:auto}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .mobile-top-actions>.btn,
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .period-selector{width:44px!important;min-width:44px!important;max-width:44px;height:44px;min-height:44px!important;padding:10px!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period{width:44px!important;min-width:44px!important;flex:none;padding:0!important;border:0!important;background:none!important;gap:0!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .period-step,
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .date-text{display:none!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .period-selector .di{display:inline-flex!important;width:20px;height:20px}
 
 /* Per-engineer weekend access remains reachable in the compact 72px closed day. */
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-day-access{position:absolute;top:26px;left:8px;right:8px;height:44px;z-index:19}
@@ -205,3 +166,110 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-workday-notice{width:ma
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-workday-notice [data-pw=workday-notice-close]{min-width:36px!important;color:var(--dim)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-workday-dialog[data-mobile=true]{height:var(--sheet-height,auto)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-workday-dialog.pw-expanded[data-mobile=true]{height:calc(100% - 12px)!important}
+
+/* Planner controls share the production kit. Timeline pixels remain data geometry. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app{--pw-help:12px;--pw-help-line:18px;--pw-control:40px;--pw-control-font:14px;--pw-control-line:20px;--pw-control-py:9px;--pw-sheet-padding:16px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile{--pw-help:13px;--pw-help-line:19.5px;--pw-control:48px;--pw-control-font:16px;--pw-control-line:24px;--pw-control-py:11px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-crew-head{height:64px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-crew{min-height:64px!important;padding-bottom:24px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-crew .calendar-person-window{font:var(--pw-help)/var(--pw-help-line) var(--mono)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.tick,.calendar-date-pill){font-size:var(--pw-help)!important;line-height:var(--pw-help-line)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .calendar-date-pill{min-height:24px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .calendar-boundary small{font:var(--pw-help)/var(--pw-help-line) var(--mono)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .calendar .calendar-boundary.pw-day-boundary{height:48px;min-height:48px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .calendar .calendar-boundary.end small{top:calc(-1 * var(--pw-help-line) - 4px);padding:2px 5px!important;background:var(--panel)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-day-access{top:24px;height:48px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-day-window-cell{height:48px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-day-window-row{height:56px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button{min-height:var(--pw-control)!important;gap:8px!important;padding:var(--pw-control-py) 12px!important;border:1px solid var(--input-line)!important;border-radius:var(--ds-control-radius)!important;background:var(--panel)!important;color:var(--ink)!important;font:500 var(--pw-control-font)/var(--pw-control-line) var(--sans)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .calendar .pw-workday-button{background:var(--panel)!important;color:var(--ink)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button .di,html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button .di svg{width:20px;height:20px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-notice{box-shadow:none!important;font-size:var(--pw-help);line-height:var(--pw-help-line);gap:12px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-notice button{min-height:var(--pw-control)!important;color:var(--ink)!important;font:500 var(--pw-control-font)/var(--pw-control-line) var(--sans)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-notice [data-pw=workday-undo]{color:var(--accent-line)!important;text-decoration:underline;text-underline-offset:3px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-notice [data-pw=workday-notice-close]{width:44px;min-width:44px!important;min-height:44px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-workday-notice [data-pw=workday-notice-close]{width:48px;min-width:48px!important;min-height:48px!important}
+
+/* One compact working-panel geometry; phone forms keep their modal behavior. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-context,.pw-editor){border-radius:var(--ds-card-radius)!important;border-color:var(--line)!important;background:var(--panel)!important;box-shadow:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-context,.pw-dialog[data-floating=true]){width:360px!important;max-width:calc(100% - 32px)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-body>.pw-dialog[data-floating=true]{width:360px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.dialog-head,.context-head){padding:16px!important;gap:8px!important;min-height:0!important;align-items:center}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost :is(#pw-dialog-title,#pw-context-title){font:600 18px/25px var(--sans)!important;margin:0;min-width:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.dialog-head,.context-head) .btn.icon{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;padding:9px!important;flex:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-context) :is(.dialog-scroll,.context-body){padding:16px!important;gap:16px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-dialog .dialog-foot{padding:16px!important;gap:8px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-editor) :is(button,input,select,textarea){font-size:var(--pw-control-font)!important;line-height:var(--pw-control-line)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-editor) .btn{min-height:var(--pw-control)!important;padding:var(--pw-control-py) 16px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-editor) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea){min-height:var(--pw-control)!important;padding:var(--pw-control-py) 12px!important;color:var(--ink)!important;background:var(--panel)!important;border:1px solid var(--input-line)!important;border-radius:8px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-editor) :is(input,select,textarea)[aria-invalid=true]{border:2px solid var(--red)!important;padding:calc(var(--pw-control-py) - 1px) 11px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-editor) label{gap:4px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-mode label{padding:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-mode label span{min-height:var(--pw-control);font-size:var(--pw-control-font);line-height:var(--pw-control-line);padding:8px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-mode input:checked+span{background:var(--ink)!important;color:var(--panel)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-workday-hours,.pw-workday-times){gap:16px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-workday-scope,.pw-workday-ceiling,.pw-preview-note,.pw-form-error,.pw-form-status,.pw-caption,.hint,.pf-footnote,.canvas-control-label){font-size:var(--pw-help)!important;line-height:var(--pw-help-line)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-form-status{color:var(--ink);font-weight:500}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-editor{padding:16px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-editor header strong{font-size:16px;line-height:22px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-editor footer{gap:8px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context h3{font:600 16px/22px var(--sans)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context p{font-size:14px;line-height:21px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-editor) :is(button,input,select,textarea):disabled{background:var(--panel-2)!important;color:var(--ink-dim)!important;border-color:var(--line)!important;opacity:1!important;cursor:not-allowed!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-mode input:disabled+span{background:var(--panel-2)!important;color:var(--ink-dim)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile :is(.pw-context,.pw-editor){border-radius:16px 16px 0 0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-context{width:auto!important;max-width:100%!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-dialog[data-mobile=true]{width:100%!important;max-width:100%!important;border-radius:16px 16px 0 0!important;box-shadow:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile :is(.dialog-head,.context-head){padding:8px 16px 16px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile :is(.dialog-head,.context-head) .btn.icon{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;padding:11px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-dialog.pw-workday-dialog[data-mobile=true] .dialog-foot{padding:16px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-context p{font-size:16px;line-height:24px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-busy-spinner{width:16px;height:16px;flex:none;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:pw-spin .8s linear infinite}
+@keyframes pw-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-busy-spinner{animation:none;border-style:dashed}}
+
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-dialog .dialog-head .btn{min-height:48px!important;font-size:16px!important;line-height:24px!important}
+
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .context-body button{min-height:var(--pw-control)!important;font-size:var(--pw-control-font)!important;line-height:var(--pw-control-line)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .context-body :is(small,.section-title){font-size:var(--pw-help)!important;line-height:var(--pw-help-line)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .action-row strong{font-size:var(--pw-control-font)!important;line-height:var(--pw-control-line)!important}
+
+/* Tool state is independent of keyboard focus and applied-filter counts. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost :is(.app .canvas-control .canvas-button,.app.mobile .top .mobile-top-actions>.toolbar-filter,.app.mobile .top .mobile-top-actions>.mobile-overview,.app:not(.mobile)[data-view=stats] .toolbar-filter,.app:not(.mobile)[data-view=stats] .mobile-overview){background-color:var(--panel)!important;color:var(--ink)!important;border-color:var(--input-line)!important;box-shadow:none!important;outline:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost :is(.app .canvas-control .canvas-button,.app.mobile .top .mobile-top-actions>.toolbar-filter,.app.mobile .top .mobile-top-actions>.mobile-overview,.app:not(.mobile)[data-view=stats] .toolbar-filter,.app:not(.mobile)[data-view=stats] .mobile-overview)[aria-expanded=true]{background-color:var(--raised)!important;border-color:var(--accent-line)!important;box-shadow:inset 0 0 0 2px var(--accent-line)!important;outline:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.canvas-button,.mobile-top-actions>.btn,.pw-workday-button):not(:disabled):active{background-image:linear-gradient(color-mix(in srgb,currentColor 14%,transparent),color-mix(in srgb,currentColor 14%,transparent))!important;transform:none!important}
+@media(hover:hover) and (pointer:fine){html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.canvas-button,.mobile-top-actions>.btn,.pw-workday-button):not(:disabled):not(:active):hover{background-image:linear-gradient(color-mix(in srgb,currentColor 8%,transparent),color-mix(in srgb,currentColor 8%,transparent))!important}}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.canvas-button,.mobile-top-actions>.btn,.pw-workday-button):focus-visible{outline:2px solid var(--focus)!important;outline-offset:3px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-multi-tools{display:flex;gap:8px;align-items:center;padding:8px;font-size:var(--pw-help);line-height:var(--pw-help-line);max-width:320px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-multi-tools button{min-width:64px!important;min-height:var(--pw-control)!important;padding:var(--pw-control-py) 12px!important;font:500 var(--pw-control-font)/var(--pw-control-line) var(--sans)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-plan[data-multi-selected=true]{outline:3px solid var(--focus)!important;outline-offset:-3px;box-shadow:inset 0 0 0 5px var(--panel)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-plan[data-multi-selected=true]::after{content:'✓';position:absolute;right:5px;top:3px;width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--panel);text-align:center;font:600 14px/20px var(--sans)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .schedule-floating-menu small{font-size:var(--pw-help)!important;line-height:var(--pw-help-line)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .focusbar button{font-size:var(--pw-control-font)!important;line-height:var(--pw-control-line)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .schedule-floating-main>button{padding:0!important;min-height:44px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .schedule-floating-main>button{width:48px;min-width:48px!important;height:48px;min-height:48px!important}
+
+/* Calendar weeks keep explicit dates even when time geometry becomes a list. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .week-block .day-heading{height:auto;min-height:40px;display:flex;gap:8px;flex-wrap:wrap;padding:8px 12px!important;font-size:14px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .week-block .day-heading small{font:400 var(--pw-help)/var(--pw-help-line) var(--sans)!important;color:var(--dim)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .week-lane .pw-plan{height:auto!important;min-height:112px!important;padding:12px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .week-lane .pw-road{height:auto!important;min-height:48px!important;white-space:normal}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .week-lane .pw-road>span:last-child{white-space:normal}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .week-lane :is(.event-clock,.pf-week-fact small){font:500 var(--pw-help)/var(--pw-help-line) var(--mono)!important;white-space:normal}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pf-week-fact{border-radius:8px!important;padding:12px!important;gap:8px!important;font-size:14px!important;line-height:20px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pf-week-fact{font-size:16px!important;line-height:24px!important}
+
+/* Approved compact phone rail: section switch at left, four equal icon targets. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px!important;padding:4px 8px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row{display:contents!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row>h1{display:block!important;grid-column:1;grid-row:1;min-width:0!important;margin:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .title-row>.app-notice{display:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .mobile-title-mode{display:flex!important;width:auto;min-height:44px!important;height:44px;font-size:14px!important;padding:0!important;gap:4px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .toolbar{display:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .mobile-top-actions{display:flex;grid-column:2;grid-row:1;gap:4px!important;margin-left:auto}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .mobile-top-actions>.btn,
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .period-selector{width:44px!important;min-width:44px!important;max-width:44px;height:44px!important;min-height:44px!important;padding:10px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period{width:44px!important;min-width:44px!important;flex:none;padding:0!important;border:0!important;background:none!important;gap:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .period-step,
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .date-text{display:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .period-selector .di{display:inline-flex!important;width:20px;height:20px}
