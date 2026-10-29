@@ -235,7 +235,7 @@ Escape закрывает текущую панель, сохраняя сост
 Опубликована сборка **`aecbc70`**. [PR #215](https://github.com/DlightKND/route-planner/pull/215), проверенный head `54a8ae3e980661bf3f67be0f38dc771d406f55ec`, release main `07a36ad1ce7b64c90ec9fef373f831ecc9aa6f8c`. Дерево release совпало с проверенным PR и локальными исходниками: `e4b915e49f3fac2f835df854c8a837005fd827d4`.
 
 - [PR build](https://github.com/DlightKND/route-planner/actions/runs/40945347791) — success: lint, 1043 теста в UTC и America/Los_Angeles, build, smoke.
-- [PR visual-qa](https://github.com/DlightKND/route-planner/actions/runs/40945347834): профильный `canonical-planner` — success, 174 passed / 6 skipped; сравнение с макетом, полная дизайн-система, менеджерские/GPS-сценарии — success.
+- [PR visual-qa](https://github.com/DlightKND/route-planner/actions/runs/40945347834) — все 15 заданий success, включая общую матрицу пяти ширин и обеих тем. Профильный `canonical-planner` — success, 174 passed / 6 skipped; сравнение с макетом, полная дизайн-система, менеджерские/GPS-сценарии — success.
 - [Release](https://github.com/DlightKND/route-planner/actions/runs/40946806464) — build и deploy success.
 - Рабочий сайт и оба assets проверены HTTP-запросами после публикации. JS `assets/index-AubDlQpb.js` содержит штамп `aecbc70`. CSS `assets/index-DKzYxuMw.css` побайтно совпал с локальной сборкой, SHA-256 `3357c91264d3680c873cfde9d4923c2b95acd92eb46c3291b2fa5f8f073e8705`.
 
