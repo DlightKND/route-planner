@@ -16,7 +16,7 @@ async function clean(page,errors){expect(errors).toEqual([]);expect(await page.e
 test('planner worktime: desktop keeps dates and interactive zoom on scroll; phone keeps the calendar button',async({page},info)=>{
  const errors=await boot(page,info),mobile=await page.locator('.pw-root').evaluate(el=>el.classList.contains('pw-mobile'));
  await expect(page.locator('.pf-controls,.calendar-window-legend')).toHaveCount(0);await page.locator('.pw-calendar').evaluate(el=>el.scrollTop=200);await expect(page.locator('.pw-root')).toHaveAttribute('data-collapsed','true');
- const period=page.locator('[data-pw=period]');if(mobile){await expect(period.locator('.date-text')).toBeHidden();expect((await period.boundingBox()).width).toBe(48);}else{
+ const period=page.locator('[data-pw=period]');if(mobile){await expect(period.locator('.date-text')).toBeHidden();expect((await period.boundingBox()).width).toBe(44);}else{
   await expect(period.locator('.date-text')).toBeVisible();await expect(page.locator('.period-step').first()).toBeVisible();await expect(page.locator('.desktop-scale')).toBeVisible();const slider=page.locator('.desktop-scale [data-pw-scale]'),before=Number(await slider.inputValue()),scale=await page.locator('.pw-day').first().getAttribute('data-scale');await slider.focus();await slider.press('ArrowRight');await expect(slider).toHaveValue(String(before+1));expect(await page.locator('.pw-day').first().getAttribute('data-scale')).not.toBe(scale);
  }
  await capture(page,info,'compact-rail');await clean(page,errors);

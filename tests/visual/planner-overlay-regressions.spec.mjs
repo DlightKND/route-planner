@@ -66,8 +66,8 @@ test('planner overlays: compact rail keeps desktop dates and zoom while the phon
   const scroller=page.locator(mode==='graph'?'.pw-calendar':'.pw-statistics');
   await expect(period.locator('.date-text')).toBeVisible();await scroller.evaluate(el=>el.scrollTop=200);
   await expect(page.locator('.pw-root')).toHaveAttribute('data-collapsed','true');
-  if(isMobile)await expect(period.locator('.date-text')).toBeHidden();else{await expect(period.locator('.date-text')).toBeVisible();if(mode==='graph')await expect(page.locator('.desktop-scale')).toBeVisible();}await expect(period.locator('.di')).toBeVisible();
-  const rect=await period.boundingBox();if(isMobile){expect(rect.width).toBe(48);expect(rect.height).toBe(rect.width);expect((await page.locator('.pw-period').boundingBox()).width).toBe(rect.width);}else expect(rect.width).toBeGreaterThan(100);
+  if(isMobile){await expect(period.locator('.date-text')).toBeHidden();const modeButton=page.locator('.pw-mobile-mode');await expect(modeButton).toBeVisible();await expect(modeButton).toHaveText(mode==='graph'?'Статистика→':'График→');const left=await modeButton.boundingBox(),right=await period.boundingBox();expect(left.x+left.width).toBeLessThanOrEqual(right.x+1);expect(Math.abs(left.y-right.y)).toBeLessThan(5);}else{await expect(period.locator('.date-text')).toBeVisible();if(mode==='graph')await expect(page.locator('.desktop-scale')).toBeVisible();}await expect(period.locator('.di')).toBeVisible();
+  const rect=await period.boundingBox();if(isMobile){expect(rect.width).toBe(44);expect(rect.height).toBe(rect.width);expect((await page.locator('.pw-period').boundingBox()).width).toBe(rect.width);}else expect(rect.width).toBeGreaterThan(100);
   await expect(period).toHaveAttribute('title',title);await capture(page,info,'compact-calendar-'+mode);
   await period.click();await expect(page.locator('.pw-dialog [name=from]')).toHaveValue('2026-10-05');await expect(page.locator('.pw-dialog [name=to]')).toHaveValue('2026-10-06');
   await page.locator('.pw-dialog [data-pw-dialog-close]').first().click();await scroller.evaluate(el=>el.scrollTop=0);

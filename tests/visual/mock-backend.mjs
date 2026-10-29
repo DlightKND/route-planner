@@ -541,10 +541,18 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
           };
         };
       if(canonicalPlanner&&table==='staff_day')b.upsert=row=>{
-        const allowed=['admin','logist'].includes(role)&&[engineer,other].includes(row.engineer)&&/^\d{4}-\d{2}-\d{2}$/.test(row.date),valid=allowed&&Number.isFinite(row.start_h)&&Number.isFinite(row.end_h)&&row.start_h>=0&&row.end_h>row.start_h&&row.end_h+row.tol_h<=24;
+        const allowed=['admin','logist'].includes(role)&&[engineer,other].includes(row.engineer)&&/^\d{4}-\d{2}-\d{2}$/.test(row.date),valid=allowed&&Number.isFinite(row.start_h)&&Number.isFinite(row.end_h)&&row.start_h>=0&&(row.end_h>row.start_h||row.start_h===0&&row.end_h===0&&row.tol_h===0)&&row.end_h+row.tol_h<=24;
         if(!valid)return Promise.resolve(reject('staff_day.upsert'));
         audit.staffDayWrites.push(structuredClone(row));const prior=tables.staff_day.find(r=>r.engineer===row.engineer&&r.date===row.date);if(prior)Object.assign(prior,structuredClone(row));else tables.staff_day.push(structuredClone(row));
         localStorage.setItem('qa:planner-staff-days',JSON.stringify(tables.staff_day));return Promise.resolve({data:[structuredClone(row)],error:null});
+      };
+      if(canonicalPlanner&&table==='staff_day')for(const method of ['update','delete'])b[method]=values=>{
+        const conditions=[];const chain={eq:(k,v)=>{conditions.push([k,v]);return chain;},is:(k,v)=>{conditions.push([k,v]);return chain;},select:async()=>{
+          if(!['admin','logist'].includes(role))return reject('staff_day.'+method);
+          const matched=tables.staff_day.filter(row=>conditions.every(([k,v])=>(row[k]??null)===v));
+          for(const row of matched){if(method==='delete')tables.staff_day.splice(tables.staff_day.indexOf(row),1);else Object.assign(row,structuredClone(values));audit.staffDayWrites.push({action:method,engineer:row.engineer,date:row.date,...(values||{})});}
+          localStorage.setItem('qa:planner-staff-days',JSON.stringify(tables.staff_day));return {data:matched.map(row=>({engineer:row.engineer,date:row.date})),error:null};
+        }};return chain;
       };
       if(entityJourney&&Object.values(activityConfig).some(c=>c.table===table))b.insert=record=>{
         const config=Object.values(activityConfig).find(c=>c.table===table),target=config.rows.find(r=>r.id===record[config.key]);
