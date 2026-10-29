@@ -431,6 +431,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     {source_key:'road:'+trip+':1',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-last',date:'2026-10-05',start:15,end:17,offset:0}]}
   ].filter(g=>canonicalPlanner!=='carryover'||g.kind==='work').map(g=>canonicalPlanner==='carryover'?{...g,parts:[{id:'work-first',date:'2026-10-05',start:12,end:17,offset:0}]}:g).map(g=>({...g,revision:0,order_revision:g.order_id?task.revision:null,trip_revision:ride.workbench_revision,manual:false,stale:false,basis:'synthetic',auto_parts:structuredClone(g.parts),auto_people:[...g.people]}));
   const plannerReceipts=new Map();audit.plannerWrites=[];tables.planner_layout_history=[];
+  if(canonicalPlanner==='historical'){task.status='completed';ride.status='done';}
   if(canonicalPlanner){
     tables.staff_day=JSON.parse(localStorage.getItem('qa:planner-staff-days')||'[]');audit.staffDayRows=tables.staff_day;audit.staffDayWrites=[];
     if(canonicalPlanner==='palette')tables.trip_tracks.push({trip_id:trip,data:{segments:[{kind:'track',km:20,fromTs:'2026-10-05T04:00Z',toTs:'2026-10-05T05:00Z'},{kind:'road',km:20,fromTs:'2026-10-05T05:00Z',toTs:'2026-10-05T06:00Z'},{kind:'line',km:20,fromTs:'2026-10-05T06:00Z',toTs:'2026-10-05T07:00Z'}]}});

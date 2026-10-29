@@ -27,6 +27,7 @@ beforeAll(async()=>{
  grant usage on schema public,auth,dlight_private to authenticated;grant execute on all functions in schema public,auth,dlight_private to authenticated;
  `);
  await db.exec(readFileSync(new URL('../supabase/migrations/20261026194156_canonical_planner_layouts.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261029093102_planner_sequence_ergonomics.sql',import.meta.url),'utf8'));
 },30000);
 afterAll(async()=>db?.close());
 beforeEach(async()=>{await db.exec('begin');transactional=true;await q("insert into profiles values($1,'admin',true),($2,'engineer',true),($3,'engineer',true),($4,'engineer',true)",[1,2,3,4].map(id));await q('insert into jobs values($1,50,36,null,null)',[id(10)]);await q("insert into service_orders(id,title,job_id,engineer_ids,date_from,date_to) values($1,'Ремонт',$2,$3,'2026-10-26','2026-10-27')",[id(20),id(10),[id(2),id(3)]]);await q("insert into trips(id,date_from,date_to,lead_engineer,engineer_ids,route_stops,econ_snapshot) values($1,'2026-10-26','2026-10-27',$2,$3,$4,$5)",[id(30),id(2),[id(2),id(3)],[{type:'place',lat:49,lng:35},{type:'job',lat:50,lng:36},{type:'place',lat:49,lng:35}],{driveH:2,legs:[{a:'depot',b:'job',h:1},{a:'job',b:'depot',h:1}]}]);await q('insert into trip_service_orders values($1,$2,0)',[id(30),id(20)]);await q("insert into service_order_items(id,order_id,kind,unit,planned_qty) values($1,$2,'work','ч',2)",[id(40),id(20)]);await as(1);});
@@ -36,7 +37,7 @@ it('retains saved manual trip cuts in the canonical task clock',async()=>{await 
 it('saves a split atomically and replays its operation ID without duplicate history',async()=>{const group=(await snapshot()).groups[1],p=group.parts[0],parts=[{...p,end:9},{...p,id:'second',start:9,offset:1}];await save(group,parts);await save(group,parts);const next=(await snapshot()).groups[1];expect(next.parts).toHaveLength(2);expect(next.revision).toBe(1);expect(next.stale).toBe(false);await expect(save(group,parts,id(501))).rejects.toThrow(/другим/);await db.exec('reset role');expect(await q('select * from planner_layout_history')).toHaveLength(1);});
 it('checks entity authority, RLS and direct-write denial',async()=>{let group=(await snapshot()).groups[1];await as(2);await expect(save(group)).rejects.toThrow(/Нет права/);await as(4);expect((await snapshot()).groups).toHaveLength(0);await expect(q("insert into planner_layouts(source_key) values('fake')")).rejects.toThrow(/permission denied/);});
 it('allows an engineer curator to manage only their own task',async()=>{await db.exec('reset role');await q('update service_orders set curator_id=$1 where id=$2',[id(2),id(20)]);await as(2);const group=(await snapshot()).groups[1];await save(group);expect((await snapshot()).groups[1].revision).toBe(1);const road=(await snapshot()).groups[0];await expect(save(road,road.parts,id(501))).rejects.toThrow(/Нет права/);});
-it('rejects a road collision and completed-entity placement without a partial commit',async()=>{let group=(await snapshot()).groups[1],parts=group.parts.map(p=>({...p,start:9,end:11}));await expect(save(group,parts)).rejects.toThrow(/Пересечение/);await db.exec('reset role');expect(await q('select * from planner_layouts')).toHaveLength(0);await q("update trips set status='done'");await as(1);await expect(save(group)).rejects.toThrow(/завершённого/);});
+it('rejects a road collision and completed-entity placement without a partial commit',async()=>{let group=(await snapshot()).groups[1],parts=group.parts.map(p=>({...p,start:9,end:11}));await expect(save(group,parts)).rejects.toThrow(/Пересечение/);await db.exec('reset role');expect(await q('select * from planner_layouts')).toHaveLength(0);await q("update trips set status='done'");await as(1);await save(group,group.parts,id(590));});
 it('extends the trip envelope for a moved task part and never changes actual timestamps',async()=>{const group=(await snapshot()).groups[1],parts=group.parts.map(p=>({...p,date:'2026-10-28'}));const result=(await save(group,parts))[0].data;expect(result.restore_windows).toHaveLength(1);await db.exec('reset role');const trip=(await q('select * from trips'))[0];expect(new Date(trip.date_to).toISOString().slice(0,10)).toBe('2026-10-28');expect(trip.started_at).toBeNull();expect(trip.finished_at).toBeNull();});
 it('rejects null fields, duplicate IDs and new tiny fragments atomically',async()=>{
  const g=(await snapshot()).groups[1],p=g.parts[0];
@@ -63,7 +64,7 @@ it('persists calendar carryover and its logical identity through the actual RPC,
  await save(g,before,id(512));expect((await snapshot()).groups.find(g=>g.kind==='work').parts).toEqual(before);
  await db.exec('reset role');expect(await q('select * from staff_day')).toHaveLength(0);expect((await q('select status from service_orders'))[0].status).toBe('assigned');expect(Number((await q('select planned_qty from service_order_items'))[0].planned_qty)).toBe(5);
 });
-it('retains accepted non-trip task history as a protected plan',async()=>{await db.exec('reset role');await q('delete from trip_service_orders');await q("update service_orders set status='completed',work_mode='depot'");await as(1);const g=(await snapshot()).groups.find(g=>g.order_id===id(20));expect(g).toBeTruthy();await expect(save(g)).rejects.toThrow(/завершённого/);});
+it('retains accepted non-trip task history as a protected plan',async()=>{await db.exec('reset role');await q('delete from trip_service_orders');await q("update service_orders set status='completed',work_mode='depot'");await as(1);const g=(await snapshot()).groups.find(g=>g.order_id===id(20));expect(g).toBeTruthy();await save(g);});
 
 it('does not revive voided financial work into the plan',async()=>{await db.exec('reset role');await q('update service_order_items set legacy_snapshot=$1',[{request_finance_voided_at:'2026-10-26'}]);await as(1);expect((await snapshot()).groups.every(g=>g.kind==='road')).toBe(true);});
 it('uses the canonical task team independently of the road crew',async()=>{await db.exec('reset role');await q('update service_orders set engineer_ids=$1',[ [id(4)] ]);await q("insert into staff_day values($1,'2026-10-26',10,16,0)",[id(4)]);await as(1);const groups=(await snapshot()).groups;expect(groups[1].people).toEqual([id(4)]);expect(groups[1].parts[0].start).toBe(10);expect(groups[0].people).not.toContain(id(4));});
@@ -79,4 +80,37 @@ it('retains layouts on soft deletion and does not block authorized trip purge or
  await q('update trips set deleted_at=null where id=$1',[id(30)]);await as(1);expect((await snapshot()).groups[0].revision).toBe(1);
  await db.exec('reset role');await q('delete from trip_service_orders where trip_id=$1',[id(30)]);await q('delete from trips where id=$1',[id(30)]);
  expect(await q('select * from planner_layouts')).toHaveLength(0);expect(await q('select * from planner_layout_history')).toHaveLength(2);expect(await q('select * from planner_operations')).toHaveLength(2);expect(await q('select * from service_orders')).toHaveLength(1);
+});
+
+it('places a newly linked task after a manually shifted trip and advances the saved return road',async()=>{
+ const before=await snapshot(),changes=before.groups.map(g=>({source_key:g.source_key,expected_revision:g.revision,placement_token:g.placement_token,order_revision:g.order_revision,trip_revision:g.trip_revision,people:g.people,parts:g.parts.map(p=>({...p,start:p.start+2,end:p.end+2})),manual:true}));
+ await q('select planner_apply($1,$2,$3)',[id(550),changes,'Совместный перенос выезда']);
+ await db.exec('reset role');await q("insert into service_orders(id,title,job_id,engineer_ids,date_from,date_to) values($1,'Добавленная работа',$2,$3,'2026-10-26','2026-10-27')",[id(21),id(10),[id(2),id(3)]]);await q("insert into service_order_items(id,order_id,kind,unit,planned_qty) values($1,$2,'work','ч',1)",[id(41),id(21)]);await q('insert into trip_service_orders values($1,$2,1)',[id(30),id(21)]);await as(1);
+ const next=(await snapshot()).groups;expect(next.map(g=>g.parts.map(p=>[p.start,p.end]))).toEqual([[[9,10]],[[10,12]],[[12,13]],[[13,14]]]);
+ // Turning the inserted automatic task into a manual split must not revive
+ // the return road's old stored anchor under the new work.
+ const inserted=next[2],p=inserted.parts[0];await save(inserted,[{...p,end:12.5},{...p,id:'inserted-cut',start:12.5,offset:.5}],id(553));expect((await snapshot()).groups.at(-1).parts[0]).toMatchObject({start:13,end:14});
+ // The effective continuation is editable with a fresh token, not a stale stored clock.
+ const back=(await snapshot()).groups.at(-1);await save(back,back.parts,id(551));expect((await snapshot()).groups.at(-1).parts).toEqual(back.parts);
+ const current=(await snapshot()).groups,reset=current.map(g=>({source_key:g.source_key,expected_revision:g.revision,placement_token:g.placement_token,order_revision:g.order_revision,trip_revision:g.trip_revision,people:g.auto_people,parts:g.trip_auto_parts||g.auto_parts,manual:false,reset_trip:true}));
+ await q('select planner_apply($1,$2,$3)',[id(552),reset,'Сброс всего выезда']);expect((await snapshot()).groups.map(g=>g.parts.map(p=>[p.start,p.end]))).toEqual([[[7,8]],[[8,10]],[[10,11]],[[11,12]]]);
+});
+it('edits and splits accepted historical plans without changing facts, statuses or dates',async()=>{
+ await db.exec('reset role');await q("update trips set status='done',started_at='2026-10-26T07:00Z',finished_at='2026-10-26T11:00Z'");await q("update service_orders set status='completed'");const before=(await q('select row_to_json(t) value from trips t'))[0].value;await as(1);
+ const g=(await snapshot()).groups[1],p=g.parts[0];await save(g,[{...p,end:p.start+1},{...p,id:'historical-cut',start:p.start+1,offset:1}],id(560));const split=(await snapshot()).groups[1];await save(split,split.parts.map(p=>({...p,date:'2026-10-28'})),id(561));await db.exec('reset role');expect((await q('select row_to_json(t) value from trips t'))[0].value).toEqual(before);expect((await q('select status from service_orders'))[0].status).toBe('completed');
+});
+it('keeps historical saved volumes editable after a plan-volume change when crew remains the same',async()=>{
+ const g=(await snapshot()).groups[1];await save(g);await db.exec('reset role');await q('update service_order_items set planned_qty=4');await as(1);const stale=(await snapshot()).groups[1];expect(stale.stale).toBe(true);await save(stale,stale.parts,id(570));expect((await snapshot()).groups[1].parts).toEqual(g.parts);
+});
+it('loads the complete trip for one-day views and rejects a partial whole-trip reset atomically',async()=>{
+ const initial=(await snapshot()).groups,work=initial[1];await save(work,work.parts.map(p=>({...p,date:'2026-10-28'})),id(580));
+ const narrow=(await q("select planner_snapshot('2026-10-28','2026-10-28') data"))[0].data;expect(narrow.groups).toHaveLength(3);const g=narrow.groups[1];await expect(save(g,g.auto_parts,id(581),{manual:false,reset_trip:true})).rejects.toThrow(/весь выезд/);
+ await db.exec('reset role');expect(await q('select * from planner_operations where id=$1',[id(581)])).toHaveLength(0);
+});
+it('resets the whole minute-precision route including short original road fragments',async()=>{
+ await db.exec('reset role');await q('update trips set econ_snapshot=$1',[{driveH:.4,legs:[{h:.1},{h:.3}]}]);await as(1);let groups=(await snapshot()).groups;
+ const changes=groups.map((g,i)=>({source_key:g.source_key,expected_revision:g.revision,placement_token:g.placement_token,order_revision:g.order_revision,trip_revision:g.trip_revision,people:g.people,parts:g.parts.map(p=>({...p,start:[8,8.25,10.25][i],end:[8.1,10.25,10.55][i]})),manual:true}));
+ await q('select planner_apply($1,$2,$3)',[id(582),changes,'Перенос минутной дороги и работы']);groups=(await snapshot()).groups;
+ const reset=groups.map(g=>({source_key:g.source_key,expected_revision:g.revision,placement_token:g.placement_token,order_revision:g.order_revision,trip_revision:g.trip_revision,people:g.auto_people,parts:g.trip_auto_parts,manual:false,reset_trip:true}));await q('select planner_apply($1,$2,$3)',[id(583),reset,'Сброс всего выезда']);
+ expect((await snapshot()).groups.map(g=>g.parts.map(p=>[p.start,p.end]))).toEqual([[[7,7.1]],[[7.1,9.1]],[[9.1,9.4]]]);
 });

@@ -131,3 +131,13 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-ribbon[data-shared=true
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-week-fact{border-right-color:var(--pf-fact-color)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-week-fact[data-fact-tone=estimated]{border-right-style:dashed!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pf-week-fact[data-fact-tone=unknown]{border-right-style:dotted!important}
+
+/* Multiple selection retains the semantic fill of every work/road block. */
+.pw-root .pw-plan[data-multi-selected="true"]{outline:3px solid var(--accent,#ffe500)!important;outline-offset:-3px;box-shadow:inset 0 0 0 5px var(--surface,#24251f)!important}
+.pw-root .pw-plan[data-multi-selected="true"]::after{content:'✓';position:absolute;right:5px;top:3px;background:var(--accent,#ffe500);color:#161710;border-radius:50%;width:20px;height:20px;text-align:center;font-weight:700}
+.pw-multi-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px;font-size:12px;max-width:260px}
+.pw-multi-tools button{min-height:36px;padding:4px 12px}
+
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-multi-tools{flex-wrap:nowrap;gap:6px;padding:6px 8px;font-size:11px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-multi-tools span{flex:1;min-width:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-multi-tools button{min-width:60px!important;min-height:36px!important;padding:4px 8px!important}

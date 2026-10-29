@@ -22,9 +22,9 @@ export function plannerEditIssue(group,data,actor){
   if(group.trip_id&&!trip)return 'Контекст выезда доступен только для просмотра. Откройте задание для проверки размещения.';
   if(group.schedule_only)return 'Исторический план без подтверждённого экипажа доступен только для просмотра.';
   if(!plannerCanManage(group.kind==='road'?trip:order,actor))return 'Нет права изменять размещение этой сущности.';
-  if(order&&['review','completed','cancelled'].includes(order.status))return 'Размещение переданного или завершённого задания защищено.';
-  if(trip&&['finished','done','cancelled'].includes(trip.status))return 'Размещение завершённого выезда защищено.';
-  if(group.stale)return 'Состав или команда изменились. Обновите автоматическое размещение перед переносом.';
+  if(order?.status==='cancelled')return 'Отменённое задание недоступно для размещения.';
+  if(trip?.status==='cancelled')return 'Отменённый выезд недоступен для размещения.';
+  if(group.stale&&JSON.stringify([...group.people].sort())!==JSON.stringify([...(group.auto_people||[])].sort()))return 'Состав или команда изменились. Обновите автоматическое размещение перед переносом.';
   return '';
 }
 export function normalizePlannerData(input={}){
@@ -184,6 +184,26 @@ export function joinPlannerParts(group,aId,bId,settings){
   if(b.date!==first.date||Math.abs(start-first.start)>1e-7)start=plannerSnap(start);
   const joined={...first,date:b.date,start,end:start+partHours(first)+partHours(last)};result.parts=result.parts.filter(p=>p!==first&&p!==last);result.parts.push(joined);result.parts.sort((p,q)=>p.offset-q.offset);return result;
 }
+// One logical selection can contain work, road and deliberately split pieces.
+export function plannerSelectionParts(groups,selection){
+ const result=[],seen=new Set();
+ for(const pick of selection){const group=groups.find(g=>g.source_key===(pick.source_key||pick.key)),part=group?.parts.find(p=>p.id===(pick.part_id||pick.part));if(!part)continue;const chain=plannerPartChain(group,part.id),root=chain[0],key=group.source_key+'|'+root.id;if(seen.has(key))continue;seen.add(key);result.push({group,part:root,chain});}
+ return result.sort((a,b)=>plannerStamp(a.part)-plannerStamp(b.part)||a.part.offset-b.part.offset);
+}
+export function movePlannerSelection(groups,selection,anchor,date,start,settings){
+ const entries=plannerSelectionParts(groups,selection),source=groups.find(g=>g.source_key===anchor.source_key),part=source?.parts.find(p=>p.id===anchor.part_id);if(!entries.length||!part)throw Error('Выберите переносимые бруски.');
+ const delta=(dayMs(date)-dayMs(part.date))/3600000+start-part.start,changed=new Map(),placed=[];
+ for(const entry of entries){const base=changed.get(entry.group.source_key)||entry.group,stamp=plannerStamp(entry.part)+delta,day=dayIso(Math.floor(stamp/24)*86400000),clock=plannerSnap(stamp-Math.floor(stamp/24)*24);let moved=movePlannerPart(base,entry.part.id,day,clock,settings);
+  // Carrying an earlier selected part may consume the next working morning.
+  // Keep selected neighbours in order for their shared engineers.
+  const prior=placed.filter(x=>x.people.some(id=>base.people.includes(id))).flatMap(x=>x.parts),chain=plannerPartChain(moved,entry.part.id),last=prior.sort((a,b)=>plannerStamp(a)+partHours(a)-plannerStamp(b)-partHours(b)).at(-1);
+  if(last&&plannerStamp(chain[0])<plannerStamp(last)+partHours(last)-1e-7)moved=movePlannerPart(base,entry.part.id,last.date,last.end,settings);
+  placed.push({people:base.people,parts:plannerPartChain(moved,entry.part.id)});
+  changed.set(base.source_key,moved);
+ }
+ return [...changed.values()];
+}
+export function resetPlannerTrip(groups,tripId){const selected=groups.filter(g=>g.trip_id===tripId);if(!selected.length)throw Error('В выезде нет плановых брусков.');return selected.map(g=>({...clone(g),parts:clone(g.trip_auto_parts||g.auto_parts),people:clone(g.auto_people),manual:false,stale:false,reset_trip:true}));}
 export function shiftPlannerTrip(groups,tripId,days,hours=0){return groups.filter(g=>g.trip_id===tripId).map(g=>({...clone(g),manual:true,parts:g.parts.map(p=>({...p,date:plannerDate(p.date,days),start:p.start+hours,end:p.end+hours}))}));}
 export function plannerChangeIssue(changes,data,actor){
   const changed=new Map(changes.map(g=>[g.source_key,g]));
