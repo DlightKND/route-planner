@@ -103,9 +103,8 @@ test('planner fact palette: daily ribbons, legend, details and week cards match 
  expect(await page.locator('.pf-sources .pf-key-estimated').evaluate(el=>getComputedStyle(el).backgroundImage)).toContain(rgb(TRACK_STYLE.road));
  await capture(page,info,'fact-palette');await page.locator('.pf-popover-head [data-pw=selection-clear], [data-pw=context-close]').filter({visible:true}).first().click();
  const mobile=await page.locator('.pw-root').evaluate(el=>el.classList.contains('pw-mobile'));if(mobile)await page.locator('[data-pw=scale]').click();await page.locator('[data-pw-scale]:visible').first().press('End');
- await expect(page.locator('.pf-week-fact')).toHaveCount(10);
- for(const [tone,color] of Object.entries(colors))for(const card of await page.locator('.pf-week-fact[data-fact-tone='+tone+']').all())await expect(card).toHaveCSS('border-right-color',rgb(color));
- await expect(page.locator('.pf-week-fact[data-fact-tone=estimated]').first()).toHaveCSS('border-right-style','dashed');await expect(page.locator('.pf-week-fact[data-fact-tone=unknown]').first()).toHaveCSS('border-right-style','dotted');
+ await expect(page.locator('.pf-week-fact')).toHaveCount(2);
+ for(const [tone,color] of Object.entries(colors))for(const segment of await page.locator('.pw-week-fact-strip [data-fact-tone='+tone+']').all())await expect(segment).toHaveCSS('background-color',rgb(color));
  if(mobile)await page.locator('.pw-dialog [data-pw-dialog-close]').first().click();await capture(page,info,'fact-palette-week');
  expect(await page.evaluate(()=>window.__visualQA.plannerWrites)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.staffDayWrites)).toEqual([]);await clean(page,errors);
 });

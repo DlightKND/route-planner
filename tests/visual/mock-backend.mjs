@@ -713,6 +713,13 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   };
   window.supabase = { createClient: () => db };
   const savedRanges=preserveRanges?Object.fromEntries(['gt','load','rev','journal','summary'].map(k=>[k,localStorage.getItem('dl_range_'+k)])):{};
+  if(canonicalPlanner==='week-facts'){
+    const start=Date.parse('2026-10-05T04:00:00Z'),segments=Array.from({length:200},(_,i)=>({kind:'track',km:1,fromTs:new Date(start+i*30000).toISOString(),toTs:new Date(start+(i+1)*30000).toISOString()}));
+    segments.push({kind:'line',km:1,fromTs:'2026-10-05T06:00:00Z',toTs:'2026-10-05T06:30:00Z'},{kind:'road',km:1,fromTs:'2026-10-05T06:30:00Z',toTs:'2026-10-05T07:30:00Z'});
+    tables.trip_tracks.push({trip_id:trip,data:{segments}});
+    const extra={...ride,id:'30000000-0000-4000-8000-000000000005',number:205,date_from:'2026-10-05',date_to:'2026-10-05',lead_engineer:other,engineer_ids:[other]};tables.trips.push(extra);
+    tables.trip_tracks.push({trip_id:extra.id,data:{segments:[{kind:'track',km:1,fromTs:'2026-10-05T12:00:00Z',toTs:'2026-10-05T13:00:00Z'}]}});
+  }
   const savedPlanner=canonicalPlanner?Object.fromEntries(['dlight:planner-view:https://anqfbljgfimoaziztdxe.supabase.co:'+session.user.id,'qa:planner-staff-days'].map(k=>[k,localStorage.getItem(k)])):{};
   localStorage.clear();
   for(const [key,value] of Object.entries(savedPlanner))if(value!==null)localStorage.setItem(key,value);

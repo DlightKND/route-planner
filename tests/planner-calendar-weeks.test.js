@@ -20,7 +20,7 @@ it('labels partial weeks and bar dates without including out-of-period work or d
  const sections=[...win.document.querySelectorAll('.week-block')];
  expect(sections.map(s=>s.querySelector('.day-heading').textContent)).toEqual(['Неделя · 26.10–01.11Показано 29.10–01.11','Неделя · 02.11–08.11Показано 02.11–02.11']);
  expect([...win.document.querySelectorAll('.pw-plan')].map(b=>b.dataset.part)).toEqual(['p1','p2']);
- expect(sections[0].querySelector('.pw-plan').textContent).toContain('чт, 29.10 · 09:00–10:00');
- expect(sections[1].querySelector('.pw-plan').textContent).toContain('пн, 02.11 · 09:00–10:00');
+ expect(sections[0].querySelector('.pw-plan').textContent).toContain('09:00–10:00');expect(sections[0].querySelector('.pw-week-day-label').textContent).toBe('чт29.10');
+ expect(sections[1].querySelector('.pw-plan').textContent).toContain('09:00–10:00');expect(sections[1].querySelector('.pw-week-day-label').textContent).toBe('пн02.11');expect(win.document.querySelector('.pw-time-head').textContent).toBe('День');
  expect([...win.document.querySelectorAll('[data-pw=workday-edit]')].map(b=>b.dataset.date)).toEqual(['2026-10-31','2026-11-01']);
 });
