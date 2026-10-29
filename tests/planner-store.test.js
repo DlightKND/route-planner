@@ -11,3 +11,19 @@ it('does not treat a missing migration as successful empty data or offline fallb
 it('isolates cached edits and late save receipts when switching accounts',async()=>{const f=make();await f.s.load(period);let release;f.hold(new Promise(r=>release=r));const pending=f.s.save([movePlannerPart(f.s.data.groups[0],'p',day,12)],'Перенос');f.person({id:'another',role:'engineer'});f.hold(null);await f.s.load(period);release();await expect(pending).rejects.toThrow(/запись изменилась/);expect(f.s.state.canUndo).toBe(false);expect(f.s.state.pending).toHaveLength(0);});
 
 it('keeps weekend bookings separate from the configured working fund',async()=>{const f=make(),saturday='2026-10-31',weekend={from:saturday,to:saturday};f.tables.trips[0].date_from=saturday;f.tables.trips[0].date_to=saturday;f.groups[0].parts[0].date=saturday;await f.s.load(weekend);expect(f.s.data.groups).toHaveLength(1);expect(plannerCapacity(['a'],saturday,saturday,f.s.data.settings).hours).toBe(0);f.tables.staff_day.push({engineer:'a',date:saturday,start_h:7,end_h:12,tol_h:1});await f.s.load(weekend);expect(plannerCapacity(['a'],saturday,saturday,f.s.data.settings).hours).toBe(5);});
+it('sends automatic carryover as a manual layout, reloads it and undoes without changing working hours',async()=>{
+ const f=make();f.groups[0].manual=false;f.groups[0].parts=[{id:'p',date:day,start:12,end:17,offset:0}];f.groups[0].auto_parts=structuredClone(f.groups[0].parts);await f.s.load({from:day,to:'2026-10-27'});
+ const moved=movePlannerPart(f.s.data.groups[0],'p',day,13,f.s.data.settings);await f.s.save([moved],'Перенос с остатком');
+ expect(f.calls.find(c=>c.name==='planner_apply').args.p_changes[0].manual).toBe(true);expect(f.s.data.groups[0].parts).toHaveLength(2);
+ await f.s.load({from:day,to:'2026-10-27'});expect(f.s.data.groups[0].parts[1]).toMatchObject({date:'2026-10-27',start:7,end:8,offset:4,carry_root:'p'});
+ await f.s.undoLast();expect(f.s.data.groups[0].parts).toEqual([{id:'p',date:day,start:12,end:17,offset:0}]);expect(f.tables.staff_day).toEqual([]);
+});
+it('undoes repeated carryover moves without treating its own undo as another actor edit',async()=>{
+ const f=make();f.groups[0].parts=[{id:'p',date:day,start:12,end:17,offset:0}];f.groups[0].auto_parts=structuredClone(f.groups[0].parts);await f.s.load({from:day,to:'2026-10-27'});
+ for(const hour of [12.25,12.5,12.75,13])await f.s.save([movePlannerPart(f.s.data.groups[0],'p',day,hour,f.s.data.settings)],'Перенос');
+ for(let i=0;i<4;i++)await f.s.undoLast();expect(f.s.data.groups[0].parts).toEqual([{id:'p',date:day,start:12,end:17,offset:0}]);expect(f.s.state.canUndo).toBe(false);
+});
+it('still rejects an external revision after a local undo has rebased the earlier entry',async()=>{
+ const f=make();await f.s.load(period);for(const hour of [10,11])await f.s.save([movePlannerPart(f.s.data.groups[0],'p',day,hour,f.s.data.settings)],'Перенос');await f.s.undoLast();
+ f.groups[0].revision++;await f.s.load(period);await expect(f.s.undoLast()).rejects.toThrow(/график уже обновился/);
+});

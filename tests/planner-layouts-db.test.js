@@ -1,6 +1,7 @@
 import {beforeAll,afterAll,beforeEach,afterEach,it,expect} from 'vitest';
 import {PGlite} from '@electric-sql/pglite';
 import {readFileSync} from 'node:fs';
+import {movePlannerPart} from '../src/core/planner-workspace.js';
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 let db,transactional=false;const q=async(sql,args=[])=>{if(transactional)await db.exec('savepoint test_statement');try{const rows=(await db.query(sql,args)).rows;if(transactional)await db.exec('release savepoint test_statement');return rows;}catch(error){if(transactional)await db.exec('rollback to savepoint test_statement;release savepoint test_statement');throw error;}};
 const as=async n=>{await db.exec('reset role');await q("select set_config('test.uid',$1,true)",[id(n)]);await db.exec('set local role authenticated');};
@@ -53,6 +54,15 @@ it('rejects stale source revisions and operation ID reuse with another payload',
  await db.exec('reset role');await q('update service_orders set revision=revision+1');await as(1);const current=(await snapshot()).groups[1];await expect(save({...current,order_revision:0},current.parts,id(502))).rejects.toThrow(/Задание изменено/);
 });
 it('a pending staff-day proposal does not open a weekend automatically',async()=>{await db.exec('reset role');await q("insert into staff_day(engineer,date) values($1,'2026-10-25')",[id(2)]);const rows=await q("select dlight_private.planner_window($1,'2026-10-25',false) value",[[id(2)]]);expect(rows[0].value).toBeNull();});
+it('persists calendar carryover and its logical identity through the actual RPC, then restores the original placement',async()=>{
+ await db.exec('reset role');await q('delete from trip_service_orders');await q("update trips set deleted_at=now()");await q("update service_orders set work_mode='depot'");await q('update service_order_items set planned_qty=5');await as(1);
+ const settings={dayStart:7,dayEnd:16,toleranceH:1,weekend:[0,6],staffDay:{}};
+ let g=(await snapshot()).groups.find(g=>g.kind==='work'),noon=movePlannerPart(g,g.parts[0].id,'2026-10-26',12,settings);await save(g,noon.parts,id(510),{manual:noon.manual});
+ g=(await snapshot()).groups.find(g=>g.kind==='work');const before=structuredClone(g.parts),moved=movePlannerPart(g,g.parts[0].id,'2026-10-26',13,settings);await save(g,moved.parts,id(511),{manual:moved.manual});
+ g=(await snapshot()).groups.find(g=>g.kind==='work');expect(g.manual).toBe(true);expect(g.parts.map(({date,start,end,offset})=>({date,start,end,offset}))).toEqual([{date:'2026-10-26',start:13,end:17,offset:0},{date:'2026-10-27',start:7,end:8,offset:4}]);expect(new Set(g.parts.map(p=>p.carry_root)).size).toBe(1);
+ await save(g,before,id(512));expect((await snapshot()).groups.find(g=>g.kind==='work').parts).toEqual(before);
+ await db.exec('reset role');expect(await q('select * from staff_day')).toHaveLength(0);expect((await q('select status from service_orders'))[0].status).toBe('assigned');expect(Number((await q('select planned_qty from service_order_items'))[0].planned_qty)).toBe(5);
+});
 it('retains accepted non-trip task history as a protected plan',async()=>{await db.exec('reset role');await q('delete from trip_service_orders');await q("update service_orders set status='completed',work_mode='depot'");await as(1);const g=(await snapshot()).groups.find(g=>g.order_id===id(20));expect(g).toBeTruthy();await expect(save(g)).rejects.toThrow(/завершённого/);});
 
 it('does not revive voided financial work into the plan',async()=>{await db.exec('reset role');await q('update service_order_items set legacy_snapshot=$1',[{request_finance_voided_at:'2026-10-26'}]);await as(1);expect((await snapshot()).groups.every(g=>g.kind==='road')).toBe(true);});

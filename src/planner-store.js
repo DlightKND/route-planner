@@ -85,7 +85,11 @@ export function createPlannerStore(ctx){
  async function discardPending(id){if(busy)throw Error('Дождитесь окончания отправки.');const original=pending;pending=pending.filter(op=>op.id!==id);try{persistPending();}catch(error){pending=original;throw error;}await load(data?.period||ctx.period());}
  async function undoLast(reason='Отмена изменения графика'){
   if(!undo.length)throw Error('Нет изменения для отмены.');const last=undo.at(-1),changes=last.before.map(before=>{const current=data.groups.find(g=>g.source_key===before.source_key),after=last.after.find(g=>g.source_key===before.source_key);if(!current||current.revision!==after?.revision)throw Error('После этого изменения график уже обновился. Отмена недоступна.');return {...before,revision:current.revision,order_revision:current.order_revision,trip_revision:current.trip_revision,stale:false};});
-  const result=await save(changes,reason,{windows:last.windows});if(result.queued)return result;undo.splice(Math.max(0,undo.length-2),2);emit();return result;
+  const result=await save(changes,reason,{windows:last.windows});if(result.queued)return result;undo.splice(Math.max(0,undo.length-2),2);
+  // Our own undo creates a new revision. Rebase only the identical restored state,
+  // so the next local undo remains available without accepting somebody else's edit.
+  for(const restored of result.receipt?.layouts||[]){const previous=undo.at(-1)?.after.find(g=>g.source_key===restored.source_key);if(previous&&previous.manual===restored.manual&&JSON.stringify(previous.parts)===JSON.stringify(restored.parts)&&JSON.stringify(previous.people)===JSON.stringify(restored.people))previous.revision=restored.revision;}
+  emit();return result;
  }
  return {load,save,flush,retry,discardPending,undoLast,get undoGroups(){return clone(undo.at(-1)?.before||[]);},get data(){return data;},get state(){return {...state,busy,pending:clone(pending),canUndo:undo.length>0};},editIssue:group=>group.pending?'Изменение ожидает отправки.':plannerEditIssue(group,data,actor())};
 }

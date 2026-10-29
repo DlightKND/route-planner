@@ -121,23 +121,70 @@ export function plannerWorkWindowChange(window,boundary,value){
 export function plannerGeometry(part,frame,pxPerHour){return {top:(part.start-frame.start)*pxPerHour,height:Math.max(1,(part.end-part.start)*pxPerHour)};}
 
 export function splitPlannerPart(group,partId,cut,newId){
-  const result=clone(group),index=result.parts.findIndex(p=>p.id===partId),part=result.parts[index];
+  const result={...clone(group),manual:true},index=result.parts.findIndex(p=>p.id===partId),part=result.parts[index];
+  if(group.manual===false&&result.parts.length>1)for(const p of result.parts)p.carry_root=result.parts[0].id;
   if(!part||!Number.isFinite(cut)||Math.abs(cut*4-Math.round(cut*4))>1e-7||cut<part.start+.25||cut>part.end-.25)throw Error('Разрез должен оставить с каждой стороны хотя бы 15 минут.');
-  result.parts.splice(index,1,{...part,end:cut},{...part,id:newId,start:cut,offset:part.offset+cut-part.start});return result;
+  result.parts.splice(index,1,{...part,end:cut},{...part,id:newId,start:cut,offset:part.offset+cut-part.start});
+  if(part.carry_root){const offset=part.offset+cut-part.start;for(const p of result.parts)if(p.carry_root===part.carry_root)p.carry_root=p.offset<offset-1e-8?part.carry_root:newId;}
+  return result;
 }
-export function movePlannerPart(group,partId,date,start){
-  const result=clone(group),part=result.parts.find(p=>p.id===partId);if(!part)throw Error('Участок не найден.');
-  const length=partHours(part);Object.assign(part,{date,start,end:start+length});return result;
+export function plannerPartChain(group,partId){
+ const part=group.parts.find(p=>p.id===partId);if(!part)throw Error('Участок не найден.');
+ return (group.manual===false?group.parts:part.carry_root?group.parts.filter(p=>p.carry_root===part.carry_root):[part]).slice().sort((a,b)=>a.offset-b.offset);
 }
-export function joinPlannerParts(group,aId,bId){
-  const result=clone(group),a=result.parts.find(p=>p.id===aId),b=result.parts.find(p=>p.id===bId);if(!a||!b||a===b)throw Error('Выберите две части одного исходного бруска.');
+function plannerCarryStart(people,date,clock,before,settings){
+ let window;
+ for(let guard=0;guard<400;guard++,date=plannerDate(date,1),clock=0){window=plannerJointWindow(people,date,settings);if(window&&clock<window.ceiling-1e-8){clock=Math.max(clock,window.start);break;}window=null;}
+ if(!window)throw Error('Не найден общий рабочий день команды.');
+ for(let guard=0;guard<400;guard++){
+  const room=clock-window.start;if(before<=room+1e-8)return {date,start:plannerSnap(clock-before)};
+  before-=room;window=null;
+  for(let skipped=0;skipped<400;skipped++){date=plannerDate(date,-1);window=plannerJointWindow(people,date,settings);if(window)break;}
+  if(!window)break;clock=window.ceiling;
+ }
+ throw Error('Не удалось найти начало переносимой части в рабочем календаре.');
+}
+export function movePlannerPart(group,partId,date,start,settings){
+  const result={...clone(group),manual:true},index=result.parts.findIndex(p=>p.id===partId),part=result.parts[index];if(!part)throw Error('Участок не найден.');
+  let length=partHours(part);
+  // Without calendar context this remains a clock translation for geometry callers.
+  if(!settings){Object.assign(part,{date,start,end:start+length});return result;}
+  if(!Number.isFinite(start)||start<0||start>24||plannerDate(date)!==date||!(length>0))throw Error('Укажите корректные дату и время переноса.');
+  if(!group.people.length)throw Error('Для переноса по рабочим часам нужна назначенная команда.');
+  const chain=plannerPartChain(group,partId).map(p=>result.parts.find(q=>q.id===p.id)),first=chain[0],moving=new Set(chain.map(p=>p.id));length=groupHours({parts:chain});
+  ({date,start}=plannerCarryStart(group.people,date,start,part.offset-first.offset,settings));
+  const round=value=>Math.round(value*1e8)/1e8,parts=[],ids=new Set(result.parts.filter(p=>!moving.has(p.id)).map(p=>p.id));let left=length,used=0,clock=start;
+  for(let guard=0;left>1e-8&&guard<400;guard++,date=plannerDate(date,1),clock=0){
+    const window=plannerJointWindow(group.people,date,settings);if(!window)continue;
+    clock=Math.max(window.start,clock);const room=round(window.ceiling-clock);if(room<=1e-8)continue;
+    let take=Math.min(left,room);
+    // Preserve minute-precision durations while respecting the RPC's 15-minute minimum for new fragments.
+    if(left-take>1e-8&&left-take<PLANNER_STEP)take=round(left-PLANNER_STEP);
+    if(take<PLANNER_STEP-1e-8&&(parts.length||Math.abs(take-partHours(first))>1e-8))continue;
+    let id=first.id;if(parts.length){const base=first.id.slice(0,120)+':carry:'+round(used);id=base;for(let suffix=2;ids.has(id);suffix++)id=base+':'+suffix;}
+    ids.add(id);parts.push({...first,id,date,start:clock,end:round(clock+take),offset:round(first.offset+used),carry_root:first.carry_root||first.id});used=round(used+take);left=round(length-used);
+  }
+  if(left>1e-8)throw Error('Не удалось найти достаточно общих рабочих часов команды в ближайшие 400 дней.');
+  result.parts=result.parts.filter(p=>!moving.has(p.id)).concat(parts).sort((a,b)=>a.offset-b.offset);return result;
+}
+export function joinPlannerParts(group,aId,bId,settings){
+  const result={...clone(group),manual:true},a=result.parts.find(p=>p.id===aId),b=result.parts.find(p=>p.id===bId);if(!a||!b||a===b)throw Error('Выберите две части одного исходного бруска.');
+  if(settings){
+   const left=plannerPartChain(group,aId),right=plannerPartChain(group,bId);if(left.some(p=>right.some(q=>p.id===q.id)))return clone(group);
+   const [first,last]=left[0].offset<right[0].offset?[left,right]:[right,left],hours=groupHours({parts:first}),firstPart=first[0];
+   if(Math.abs(firstPart.offset+hours-last[0].offset)>1e-7)throw Error('Можно сцепить только соседние части.');
+   const anchor=plannerCarryStart(group.people,b.date,b.start,b.offset-firstPart.offset,settings),removed=new Set([...first,...last].map(p=>p.id));
+   const joined={...firstPart,date:anchor.date,start:anchor.start,end:anchor.start+hours+groupHours({parts:last}),carry_root:firstPart.id};
+   result.parts=result.parts.filter(p=>!removed.has(p.id)).concat(joined).sort((p,q)=>p.offset-q.offset);
+   return movePlannerPart(result,joined.id,joined.date,joined.start,settings);
+  }
   const [first,last]=a.offset<b.offset?[a,b]:[b,a];if(Math.abs(first.offset+partHours(first)-last.offset)>1e-7)throw Error('Можно сцепить только соседние части.');
   // Preserve the target half's clock. Joining an untouched split restores its original span.
   let start=b===last?b.start-partHours(first):b.start;
   if(b.date!==first.date||Math.abs(start-first.start)>1e-7)start=plannerSnap(start);
   const joined={...first,date:b.date,start,end:start+partHours(first)+partHours(last)};result.parts=result.parts.filter(p=>p!==first&&p!==last);result.parts.push(joined);result.parts.sort((p,q)=>p.offset-q.offset);return result;
 }
-export function shiftPlannerTrip(groups,tripId,days,hours=0){return groups.filter(g=>g.trip_id===tripId).map(g=>({...clone(g),parts:g.parts.map(p=>({...p,date:plannerDate(p.date,days),start:p.start+hours,end:p.end+hours}))}));}
+export function shiftPlannerTrip(groups,tripId,days,hours=0){return groups.filter(g=>g.trip_id===tripId).map(g=>({...clone(g),manual:true,parts:g.parts.map(p=>({...p,date:plannerDate(p.date,days),start:p.start+hours,end:p.end+hours}))}));}
 export function plannerChangeIssue(changes,data,actor){
   const changed=new Map(changes.map(g=>[g.source_key,g]));
   for(const group of changes){const old=data.groups.find(g=>g.source_key===group.source_key),issue=plannerEditIssue(group,data,actor);if(issue)return issue;
