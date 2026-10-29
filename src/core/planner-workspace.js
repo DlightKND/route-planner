@@ -203,7 +203,7 @@ export function movePlannerSelection(groups,selection,anchor,date,start,settings
  }
  return [...changed.values()];
 }
-export function resetPlannerTrip(groups,tripId){const selected=groups.filter(g=>g.trip_id===tripId);if(!selected.length)throw Error('В выезде нет плановых брусков.');return selected.map(g=>({...clone(g),parts:clone(g.trip_auto_parts||g.auto_parts),people:clone(g.auto_people),manual:false,stale:false,reset_trip:true}));}
+export function resetPlannerTrip(groups,tripId){const selected=groups.filter(g=>g.trip_id===tripId);if(!selected.length)throw Error('В выезде нет плановых брусков.');return selected.map(g=>({...clone(g),parts:clone(g.trip_auto_parts||g.auto_parts),people:clone(g.auto_people),manual:false,stale:false,reset_trip:true,clock_reset:true}));}
 export function shiftPlannerTrip(groups,tripId,days,hours=0){return groups.filter(g=>g.trip_id===tripId).map(g=>({...clone(g),manual:true,parts:g.parts.map(p=>({...p,date:plannerDate(p.date,days),start:p.start+hours,end:p.end+hours}))}));}
 export function plannerChangeIssue(changes,data,actor){
   const changed=new Map(changes.map(g=>[g.source_key,g]));

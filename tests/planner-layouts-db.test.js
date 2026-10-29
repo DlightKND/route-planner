@@ -28,6 +28,7 @@ beforeAll(async()=>{
  `);
  await db.exec(readFileSync(new URL('../supabase/migrations/20261026194156_canonical_planner_layouts.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261029093102_planner_sequence_ergonomics.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261029095227_planner_trip_auto_reset.sql',import.meta.url),'utf8'));
 },30000);
 afterAll(async()=>db?.close());
 beforeEach(async()=>{await db.exec('begin');transactional=true;await q("insert into profiles values($1,'admin',true),($2,'engineer',true),($3,'engineer',true),($4,'engineer',true)",[1,2,3,4].map(id));await q('insert into jobs values($1,50,36,null,null)',[id(10)]);await q("insert into service_orders(id,title,job_id,engineer_ids,date_from,date_to) values($1,'Ремонт',$2,$3,'2026-10-26','2026-10-27')",[id(20),id(10),[id(2),id(3)]]);await q("insert into trips(id,date_from,date_to,lead_engineer,engineer_ids,route_stops,econ_snapshot) values($1,'2026-10-26','2026-10-27',$2,$3,$4,$5)",[id(30),id(2),[id(2),id(3)],[{type:'place',lat:49,lng:35},{type:'job',lat:50,lng:36},{type:'place',lat:49,lng:35}],{driveH:2,legs:[{a:'depot',b:'job',h:1},{a:'job',b:'depot',h:1}]}]);await q('insert into trip_service_orders values($1,$2,0)',[id(30),id(20)]);await q("insert into service_order_items(id,order_id,kind,unit,planned_qty) values($1,$2,'work','ч',2)",[id(40),id(20)]);await as(1);});
@@ -104,7 +105,7 @@ it('keeps historical saved volumes editable after a plan-volume change when crew
 });
 it('loads the complete trip for one-day views and rejects a partial whole-trip reset atomically',async()=>{
  const initial=(await snapshot()).groups,work=initial[1];await save(work,work.parts.map(p=>({...p,date:'2026-10-28'})),id(580));
- const narrow=(await q("select planner_snapshot('2026-10-28','2026-10-28') data"))[0].data;expect(narrow.groups).toHaveLength(3);const g=narrow.groups[1];await expect(save(g,g.auto_parts,id(581),{manual:false,reset_trip:true})).rejects.toThrow(/весь выезд/);
+ const narrow=(await q("select planner_snapshot('2026-10-28','2026-10-28') data"))[0].data;expect(narrow.groups).toHaveLength(3);const g=narrow.groups[1];await expect(save(g,g.auto_parts,id(581),{manual:false,reset_trip:true})).rejects.toThrow(/весь выезд|всего выезда/);
  await db.exec('reset role');expect(await q('select * from planner_operations where id=$1',[id(581)])).toHaveLength(0);
 });
 it('resets the whole minute-precision route including short original road fragments',async()=>{
@@ -113,4 +114,19 @@ it('resets the whole minute-precision route including short original road fragme
  await q('select planner_apply($1,$2,$3)',[id(582),changes,'Перенос минутной дороги и работы']);groups=(await snapshot()).groups;
  const reset=groups.map(g=>({source_key:g.source_key,expected_revision:g.revision,placement_token:g.placement_token,order_revision:g.order_revision,trip_revision:g.trip_revision,people:g.auto_people,parts:g.trip_auto_parts,manual:false,reset_trip:true}));await q('select planner_apply($1,$2,$3)',[id(583),reset,'Сброс всего выезда']);
  expect((await snapshot()).groups.map(g=>g.parts.map(p=>[p.start,p.end]))).toEqual([[[7,7.1]],[[7.1,9.1]],[[9.1,9.4]]]);
+});
+it('whole-trip reset removes imported legacy start/cuts and undo restores them without rewriting trip metadata',async()=>{
+ await db.exec('reset role');const legacy={start:{d:'2026-10-26',t:8},cuts:[{after:1,at:{d:'2026-10-27',t:7}},{after:3,at:{d:'2026-10-27',t:12}}]};await q('update trips set day_plan=$1',[legacy]);
+ const sql=readFileSync(new URL('../supabase/migrations/20261026194156_canonical_planner_layouts.sql',import.meta.url),'utf8'),a=sql.lastIndexOf('insert into public.planner_layouts(source_key,kind'),z=sql.indexOf('on conflict(source_key) do nothing;',a)+'on conflict(source_key) do nothing;'.length;await db.exec(sql.slice(a,z));await as(1);
+ const before=(await snapshot()).groups;expect(before.map(g=>g.parts[0].date)).toEqual(['2026-10-26','2026-10-27','2026-10-27']);const command=(g,parts,extra={})=>({source_key:g.source_key,expected_revision:g.revision,placement_token:g.placement_token,order_revision:g.order_revision,trip_revision:g.trip_revision,people:g.people,parts,manual:true,...extra});
+ await q('select planner_apply($1,$2,$3)',[id(584),before.map(g=>command(g,g.trip_auto_parts,{manual:false,reset_trip:true,clock_reset:true})),'Полный автоматический сброс старого выезда']);
+ let current=(await snapshot()).groups;expect(current.map(g=>g.parts.map(p=>[p.date,p.start,p.end]))).toEqual([[['2026-10-26',7,8]],[['2026-10-26',8,10]],[['2026-10-26',10,11]]]);expect(current.every(g=>g.clock_reset)).toBe(true);
+ // A normal edit retains the shared automatic base and cannot bring legacy cuts back.
+ await save(current[1],current[1].parts,id(585));current=(await snapshot()).groups;expect(current.every(g=>g.clock_reset)).toBe(true);
+ const undo=before.map(g=>command(current.find(x=>x.source_key===g.source_key),g.parts,{manual:g.manual,clock_reset:false}));await q('select planner_apply($1,$2,$3)',[id(586),undo,'Отмена полного сброса старого выезда']);const restored=(await snapshot()).groups;expect(restored.map(g=>g.parts)).toEqual(before.map(g=>g.parts));expect(restored.every(g=>!g.clock_reset)).toBe(true);
+ await db.exec('reset role');expect((await q('select day_plan from trips'))[0].day_plan).toEqual(legacy);expect((await q('select workbench_revision from trips'))[0].workbench_revision).toBe(0);
+});
+it('does not accept a forged automatic-clock marker or a partial clock-mode rollback',async()=>{
+ let groups=(await snapshot()).groups,g=groups[1];await save(g,g.parts.map(p=>({...p,automatic_trip_clock:true})),id(587));groups=(await snapshot()).groups;expect(groups.every(g=>!g.clock_reset)).toBe(true);
+ const changes=groups.map(g=>({source_key:g.source_key,expected_revision:g.revision,placement_token:g.placement_token,order_revision:g.order_revision,trip_revision:g.trip_revision,people:g.people,parts:g.trip_auto_parts,manual:false,reset_trip:true,clock_reset:true}));await q('select planner_apply($1,$2,$3)',[id(588),changes,'Сброс всего выезда']);g=(await snapshot()).groups[1];await expect(save(g,g.parts,id(589),{clock_reset:false})).rejects.toThrow(/всего выезда/);
 });

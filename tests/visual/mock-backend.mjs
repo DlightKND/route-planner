@@ -563,13 +563,13 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
-      if(name==='planner_snapshot')return {data:{groups:structuredClone(plannerGroups.filter(g=>g.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to)))},error:null};
+      if(name==='planner_snapshot')return {data:{groups:structuredClone(plannerGroups.filter(g=>g.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to)||g.trip_id&&plannerGroups.some(h=>h.trip_id===g.trip_id&&h.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to))))},error:null};
       if(name==='planner_apply'&&canonicalPlanner){
         if(plannerReceipts.has(args.p_operation))return {data:structuredClone(plannerReceipts.get(args.p_operation)),error:null};
         if(role==='engineer')return {data:null,error:{message:'Нет права изменять это задание'}};
         const layouts=[];
         for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);if(!g||g.revision!==c.expected_revision)return {data:null,error:{message:'Размещение изменено другим пользователем'}};}
-        for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);Object.assign(g,{parts:structuredClone(c.manual===false?g.auto_parts:c.parts),manual:c.manual,revision:g.revision+1});layouts.push(structuredClone(g));tables.planner_layout_history.push({source_key:g.source_key,reason:args.p_reason,actor_id:session.user.id,created_at:stamp});}
+        for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);Object.assign(g,{parts:structuredClone(c.manual===false?(c.reset_trip?g.trip_auto_parts||g.auto_parts:g.auto_parts):c.parts),manual:c.manual,clock_reset:c.clock_reset??g.clock_reset,revision:g.revision+1});layouts.push(structuredClone(g));tables.planner_layout_history.push({source_key:g.source_key,reason:args.p_reason,actor_id:session.user.id,created_at:stamp});}
         audit.plannerWrites.push(structuredClone(args));const receipt={layouts,restore_windows:[]};plannerReceipts.set(args.p_operation,receipt);return {data:structuredClone(receipt),error:null};
       }
       if(presenceRecoveryJourney&&name==='trip_track_rebuild_save'){

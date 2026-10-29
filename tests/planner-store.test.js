@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {createPlannerStore} from '../src/planner-store.js';
 import {plannerFixture,actor,day} from './planner-fixture.mjs';
-import {movePlannerPart,plannerCapacity} from '../src/core/planner-workspace.js';
+import {movePlannerPart,plannerCapacity,resetPlannerTrip} from '../src/core/planner-workspace.js';
 const period={from:day,to:day};
 function make(){const f=plannerFixture();let person={...actor};const s=createPlannerStore({db:()=>f.db,actor:()=>person,storage:()=>f.storage,profiles:()=>f.profiles,settings:()=>f.settings,period:()=>period});return {...f,s,person:p=>person=p};}
 it('saves through the canonical RPC and undoes against its returned revision',async()=>{const f=make();await f.s.load(period);await f.s.save([movePlannerPart(f.s.data.groups[0],'p',day,12)],'Перенос');expect(f.s.data.groups[0].parts[0].start).toBe(12);expect(f.s.state.canUndo).toBe(true);await f.s.undoLast();expect(f.s.data.groups[0].parts[0].start).toBe(9);expect(f.calls.filter(c=>c.name==='planner_apply').map(c=>c.args.p_changes[0].expected_revision)).toEqual([0,1]);expect(f.s.state.canUndo).toBe(false);});
@@ -27,3 +27,5 @@ it('still rejects an external revision after a local undo has rebased the earlie
  const f=make();await f.s.load(period);for(const hour of [10,11])await f.s.save([movePlannerPart(f.s.data.groups[0],'p',day,hour,f.s.data.settings)],'Перенос');await f.s.undoLast();
  f.groups[0].revision++;await f.s.load(period);await expect(f.s.undoLast()).rejects.toThrow(/график уже обновился/);
 });
+
+it('carries the complete trip clock choice through reset, refresh and undo',async()=>{const f=make();f.groups[0].clock_reset=false;f.groups[0].manual=true;await f.s.load(period);await f.s.save(resetPlannerTrip(f.s.data.groups,'t'),'Сброс всего выезда');expect(f.s.data.groups[0].clock_reset).toBe(true);await f.s.undoLast();expect(f.calls.filter(c=>c.name==='planner_apply').map(c=>c.args.p_changes[0].clock_reset)).toEqual([true,false]);expect(f.s.data.groups[0].clock_reset).toBe(false);});
