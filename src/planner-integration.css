@@ -275,6 +275,7 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile.collapsed .top .app-period .period-selector .di{display:inline-flex!important;width:20px;height:20px}
 
 /* Weekly overview: shared day rows, paired plan and read-only trip fact. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .week-lane .pw-plan.pw-week-plan{pointer-events:auto!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-columns{display:flex;border-bottom:1px solid var(--line);background:var(--panel)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-week-column,.pw-week-pair-body){display:grid;grid-template-columns:minmax(0,1fr) minmax(112px,.55fr);gap:8px;align-items:stretch}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-column{width:var(--lane);flex:none;padding:8px;border-right:1px solid var(--line);font:500 14px/20px var(--sans);color:var(--dim)}
