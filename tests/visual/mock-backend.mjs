@@ -429,7 +429,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     {source_key:'road:'+trip+':0',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-first',date:'2026-10-05',start:7,end:9,offset:0}]},
     {source_key:'work:'+order+':'+trip,kind:'work',trip_id:trip,order_id:order,people:[engineer,other],parts:[{id:'work-first',date:'2026-10-05',start:9,end:15,offset:0}]},
     {source_key:'road:'+trip+':1',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-last',date:'2026-10-05',start:15,end:17,offset:0}]}
-  ].map(g=>({...g,revision:0,order_revision:g.order_id?task.revision:null,trip_revision:ride.workbench_revision,manual:false,stale:false,basis:'synthetic',auto_parts:structuredClone(g.parts),auto_people:[...g.people]}));
+  ].filter(g=>canonicalPlanner!=='carryover'||g.kind==='work').map(g=>canonicalPlanner==='carryover'?{...g,parts:[{id:'work-first',date:'2026-10-05',start:12,end:17,offset:0}]}:g).map(g=>({...g,revision:0,order_revision:g.order_id?task.revision:null,trip_revision:ride.workbench_revision,manual:false,stale:false,basis:'synthetic',auto_parts:structuredClone(g.parts),auto_people:[...g.people]}));
   const plannerReceipts=new Map();audit.plannerWrites=[];tables.planner_layout_history=[];
   if(canonicalPlanner){
     tables.staff_day=JSON.parse(localStorage.getItem('qa:planner-staff-days')||'[]');audit.staffDayRows=tables.staff_day;audit.staffDayWrites=[];
@@ -568,7 +568,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         if(role==='engineer')return {data:null,error:{message:'Нет права изменять это задание'}};
         const layouts=[];
         for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);if(!g||g.revision!==c.expected_revision)return {data:null,error:{message:'Размещение изменено другим пользователем'}};}
-        for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);Object.assign(g,{parts:structuredClone(c.parts),manual:c.manual,revision:g.revision+1});layouts.push(structuredClone(g));tables.planner_layout_history.push({source_key:g.source_key,reason:args.p_reason,actor_id:session.user.id,created_at:stamp});}
+        for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);Object.assign(g,{parts:structuredClone(c.manual===false?g.auto_parts:c.parts),manual:c.manual,revision:g.revision+1});layouts.push(structuredClone(g));tables.planner_layout_history.push({source_key:g.source_key,reason:args.p_reason,actor_id:session.user.id,created_at:stamp});}
         audit.plannerWrites.push(structuredClone(args));const receipt={layouts,restore_windows:[]};plannerReceipts.set(args.p_operation,receipt);return {data:structuredClone(receipt),error:null};
       }
       if(presenceRecoveryJourney&&name==='trip_track_rebuild_save'){
