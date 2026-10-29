@@ -177,7 +177,7 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.tick,.calendar-da
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .calendar-date-pill{min-height:24px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .calendar-boundary small{font:var(--pw-help)/var(--pw-help-line) var(--mono)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .calendar .calendar-boundary.pw-day-boundary{height:48px;min-height:48px!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .calendar .calendar-boundary.end small{padding:2px 5px!important;background:var(--panel)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .calendar .calendar-boundary.end small{top:calc(-1 * var(--pw-help-line) - 4px);padding:2px 5px!important;background:var(--panel)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-day-access{top:24px;height:48px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-day-window-cell{height:48px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-day-window-row{height:56px}
