@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0 } = {}) {
   if(managerJourney){financeJourney=true;entityAudit=true;}
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
@@ -540,7 +540,8 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
             },
           };
         };
-      if(canonicalPlanner&&table==='staff_day')b.upsert=row=>{
+      if(canonicalPlanner&&table==='staff_day')b.upsert=async row=>{
+        if(staffDayDelay)await new Promise(resolve=>setTimeout(resolve,staffDayDelay));if(staffDayFailures>0){staffDayFailures--;return {data:null,error:{message:'Тест: связь прервана при сохранении'}};}
         const allowed=['admin','logist'].includes(role)&&[engineer,other].includes(row.engineer)&&/^\d{4}-\d{2}-\d{2}$/.test(row.date),valid=allowed&&Number.isFinite(row.start_h)&&Number.isFinite(row.end_h)&&row.start_h>=0&&(row.end_h>row.start_h||row.start_h===0&&row.end_h===0&&row.tol_h===0)&&row.end_h+row.tol_h<=24;
         if(!valid)return Promise.resolve(reject('staff_day.upsert'));
         audit.staffDayWrites.push(structuredClone(row));const prior=tables.staff_day.find(r=>r.engineer===row.engineer&&r.date===row.date);if(prior)Object.assign(prior,structuredClone(row));else tables.staff_day.push(structuredClone(row));
