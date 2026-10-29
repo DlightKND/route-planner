@@ -17,7 +17,7 @@ async function drag(page,hours,{cancel=false,expected}={}){
  if(expected){await expect(page.locator('.pw-ghost.invalid')).toHaveCount(0);for(const text of expected)await expect(page.locator('.pw-ghost').filter({hasText:text})).toHaveCount(2);}
  expect((await writes(page)).length).toBe(count);
  if(cancel)await page.keyboard.press('Escape');await page.mouse.up();
- if(cancel){await expect(page.locator('.pw-ghost')).toHaveCount(0);expect((await writes(page)).length).toBe(count);}else await expect.poll(async()=>(await writes(page)).length).toBe(count+1);
+ if(cancel){await expect(page.locator('.pw-ghost')).toHaveCount(0);expect((await writes(page)).length).toBe(count);}else{await expect.poll(async()=>(await writes(page)).length).toBe(count+1);await expect(page.locator('.pw-context')).toBeHidden();}
 }
 async function clean(page,errors){expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.queryErrors)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.staffDayWrites)).toEqual([]);}
 async function capture(page,info,name){const dir='test-results/planner-carryover/'+info.project.name;mkdirSync(dir,{recursive:true});await page.screenshot({path:dir+'/'+name+'.png'});}
