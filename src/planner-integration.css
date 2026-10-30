@@ -351,3 +351,13 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .pw-day-boundary.
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .pw-day-boundary.is-dragging small{top:auto!important;bottom:calc(100% + 12px)!important;padding:6px 10px!important;border-radius:8px;background:var(--focus)!important;color:var(--on-accent,#211d12)!important;box-shadow:0 3px 12px #0003;white-space:nowrap;pointer-events:none}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost[data-theme=light] .calendar .pw-day-boundary.is-dragging small{color:var(--panel)!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .pw-day-boundary.is-dragging small::after{content:' · Перенос'}
+
+/* A single heading/close-button geometry for planner panels and dialogs. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-context) :is(.dialog-head,.context-head){display:flex;flex:none;align-items:center;gap:8px!important;padding:16px!important;min-height:0!important;box-sizing:border-box;border-bottom:1px solid var(--line)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-context) :is(.dialog-head,.context-head)>h2{flex:1;min-width:0;margin:0!important;font:600 18px/25px var(--sans)!important;text-align:left!important;justify-content:flex-start!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-context) :is(.dialog-head,.context-head)>.btn.icon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;padding:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-context) :is(.dialog-head,.context-head)>.btn.icon .di,
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-dialog,.pw-context) :is(.dialog-head,.context-head)>.btn.icon svg{display:inline-flex;flex:none;width:20px;height:20px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile :is(.pw-dialog,.pw-context) :is(.dialog-head,.context-head)>.btn.icon{width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile #pw-filter-panel .dialog-foot{display:flex!important;flex:none;gap:8px!important;padding:16px!important;padding-bottom:max(16px,env(safe-area-inset-bottom))!important;border-top:1px solid var(--line)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile #pw-filter-panel .dialog-foot>[type=submit]{flex:1}

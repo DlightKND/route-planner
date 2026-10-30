@@ -229,7 +229,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium --only-shell
       - name: Verify independent task planner, actual ribbon and layout writes
-        run: npx playwright test tests/visual/canonical-planner.spec.mjs tests/visual/planner-overlay-regressions.spec.mjs tests/visual/planner-worktime-controls.spec.mjs tests/visual/planner-carryover.spec.mjs tests/visual/planner-selection.spec.mjs tests/visual/planner-weekend-entry.spec.mjs tests/visual/planner-audit-fixes.spec.mjs tests/visual/planner-week-facts.spec.mjs tests/visual/planner-zoom-performance.spec.mjs --project=mobile-360-light --project=mobile-390-dark --project=tablet-768-light --project=tablet-768-dark --project=desktop-1024-light --project=desktop-1440-dark --retries=0
+        run: npx playwright test tests/visual/canonical-planner.spec.mjs tests/visual/planner-overlay-regressions.spec.mjs tests/visual/planner-worktime-controls.spec.mjs tests/visual/planner-carryover.spec.mjs tests/visual/planner-selection.spec.mjs tests/visual/planner-weekend-entry.spec.mjs tests/visual/planner-audit-fixes.spec.mjs tests/visual/planner-week-facts.spec.mjs tests/visual/planner-zoom-performance.spec.mjs tests/visual/surface-header-consistency.spec.mjs --project=mobile-360-light --project=mobile-390-dark --project=tablet-768-light --project=tablet-768-dark --project=desktop-1024-light --project=desktop-1440-dark --retries=0
       - uses: actions/upload-artifact@v4
         if: always()
         with:

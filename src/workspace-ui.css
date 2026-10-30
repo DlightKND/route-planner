@@ -769,3 +769,21 @@ html[data-theme=light] .mleg-symbol { width:24px;border-radius:0;background:tran
  .entity-editor-footer .btn{white-space:normal;min-height:44px}
  .entity-draft-dialog .entity-dialog-foot{display:grid;grid-template-columns:1fr}
 }
+
+/* Dispatcher and catalogue share the same page rail and tab baseline. */
+.view .workspace-section-rail{--workspace-rail-gutter:32px;padding:24px var(--workspace-rail-gutter) 0;border-bottom:1px solid var(--line)}
+.view .workspace-section-rail .workspace-heading-row{align-items:center;gap:24px}
+.view .workspace-section-rail .workspace-heading-row>.design-page-head{margin:0}
+.view .workspace-section-rail :is(h1,#catalogTitle){margin:0;font:600 var(--fs-page)/1.25 var(--sans);letter-spacing:-.025em}
+.view .workspace-section-rail :is(.workspace-subtitle,.design-description){margin:6px 0 0}
+.view .workspace-section-rail .workspace-page-tabs{display:flex;align-items:stretch;flex-wrap:nowrap;gap:28px;min-height:48px;margin:16px 0 -1px;padding:0;border:0;overflow-x:auto;scrollbar-width:none}
+.view .workspace-section-rail .workspace-page-tabs>.subtab{display:inline-flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box;min-height:48px;margin:0;padding:12px 16px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--ink-dim);font:500 14px/20px var(--sans);white-space:nowrap;box-shadow:none}
+.view .workspace-section-rail .workspace-page-tabs>.subtab:is(.active,.on,[aria-pressed=true]){border-bottom-color:var(--accent-line);background:transparent;color:var(--ink);font-weight:600}
+.view .workspace-section-rail .workspace-page-tabs>.subtab:focus-visible{outline:2px solid var(--focus);outline-offset:-4px}
+@media(max-width:760px){
+ .view .workspace-section-rail{--workspace-rail-gutter:16px;padding-top:16px}
+ .view .workspace-section-rail .workspace-heading-row{align-items:flex-start;gap:12px}
+ .view .workspace-section-rail .workspace-page-tabs{gap:16px}
+}
+
+.view .workspace-section-rail .workspace-page-tabs::-webkit-scrollbar{display:none}
