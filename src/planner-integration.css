@@ -78,7 +78,7 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-dialog>form{width:100%;
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile).collapsed .top .desktop-scale{display:flex!important;flex:0 1 225px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile).collapsed .top .period-step{display:inline-flex!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile).collapsed .top .period-selector .date-text{display:inline!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary{height:28px;min-height:28px!important;transform:translateY(-50%);border:0!important;padding:0!important;background:transparent!important;pointer-events:auto;touch-action:none;cursor:ns-resize;z-index:18;box-shadow:none!important;border-radius:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary{height:28px;min-height:28px!important;transform:translateY(-50%);border:0!important;padding:0!important;background:transparent!important;pointer-events:auto;touch-action:auto;user-select:none;-webkit-touch-callout:none;cursor:ns-resize;z-index:18;box-shadow:none!important;border-radius:0!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary::before{content:'';position:absolute;left:0;right:0;top:50%;border-top:1px dashed var(--cyan)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary.tolerance::before{border-color:var(--warning)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary small{top:calc(50% + 3px);font-size:12px!important;line-height:18px!important;padding:2px 5px!important;border-radius:4px;background:var(--panel)!important}
@@ -343,3 +343,11 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-body>.pw-workday-d
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-mode label:active input:not(:disabled)+span{box-shadow:inset 0 0 0 1px var(--focus)}
 @media(forced-colors:active){html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-mode input:checked+span{outline:2px solid Highlight;outline-offset:-2px}}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-week-day-lane{--pw-week-fact-width:112px}
+
+/* Hold-activated day-boundary drag: lifted time pill stays clear of the finger. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar[data-boundary-dragging],
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .pw-day-boundary.is-dragging{cursor:grabbing!important;user-select:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .pw-day-boundary.is-dragging::before{border-top:3px solid var(--focus)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .pw-day-boundary.is-dragging small{top:auto!important;bottom:calc(100% + 12px)!important;padding:6px 10px!important;border-radius:8px;background:var(--focus)!important;color:var(--on-accent,#211d12)!important;box-shadow:0 3px 12px #0003;white-space:nowrap;pointer-events:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost[data-theme=light] .calendar .pw-day-boundary.is-dragging small{color:var(--panel)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .pw-day-boundary.is-dragging small::after{content:' · Перенос'}
