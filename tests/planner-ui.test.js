@@ -2,6 +2,7 @@ import {it,expect,vi,afterEach} from 'vitest';
 import {Window} from 'happy-dom';
 import {createPlannerWorkspace} from '../src/planner-workspace.js';
 import {plannerFixture,actor,day} from './planner-fixture.mjs';
+import * as plannerCore from '../src/core/planner-workspace.js';
 import {plannerOverlapRows} from '../src/planner-view.js';
 let win;
 afterEach(async()=>{vi.unstubAllGlobals();vi.restoreAllMocks();await win?.happyDOM.close();});
@@ -53,4 +54,10 @@ it('zooms only the calendar on Ctrl+wheel, clamps the scale and leaves previews 
  wheel(120,{ctrlKey:true,deltaMode:1});await vi.waitFor(()=>expect(f.workspace.state.zoom).toBeGreaterThan(before));
  const slider=f.root.querySelector('[data-pw-scale]');slider.value='100';slider.dispatchEvent(new win.Event('input',{bubbles:true}));wheel(-120,{ctrlKey:true});await new Promise(r=>win.requestAnimationFrame(r));expect(f.workspace.state.zoom).toBe(0);
  click(f.root,'.pw-plan');click(f.root,'[data-pw=part-menu]');click(win.document,'[data-pw=edit-split]');wheel(120,{ctrlKey:true});await new Promise(r=>win.requestAnimationFrame(r));expect(f.workspace.state.zoom).toBe(0);expect(f.workspace.isDirty()).toBe(true);expect(f.calls.some(c=>c.name==='planner_apply')).toBe(false);
+});
+
+it('reuses the GPS projection through zooms and reloads it after a data refresh',async()=>{
+ const project=vi.spyOn(plannerCore,'plannerFacts'),f=await mount(),slider=f.root.querySelector('[data-pw-scale]'),before=project.mock.calls.length;
+ const scale=value=>{slider.value=String(value);slider.dispatchEvent(new win.Event('input',{bubbles:true}));};for(const value of [80,79,75,10,0,20,85])scale(value);
+ expect(project.mock.calls.length).toBe(before);f.tables.trip_tracks.push({trip_id:'t',data:{segments:[{kind:'track',km:1,fromTs:day+'T06:00:00Z',toTs:day+'T07:00:00Z'}]}});await f.workspace.refresh();expect(project.mock.calls.length).toBe(before+1);expect(f.root.querySelectorAll('.pw-fact-mark')).toHaveLength(2);expect(f.calls.some(c=>c.name==='planner_apply')).toBe(false);
 });
