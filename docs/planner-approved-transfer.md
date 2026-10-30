@@ -263,3 +263,9 @@ Escape закрывает текущую панель, сохраняя сост
 - Production assets проверены после публикации: JS `assets/index-8fexXUlb.js` содержит stamp `828d676`; CSS `assets/index-DUDBc3ho.css` побайтно совпадает с локальной сборкой, SHA-256 `484d1281e877fca57abb7beefbcad13de941740c8e3c0be6f1e22dd66c9b32a1`.
 
 Испытания браузера проводились на синтетических данных. Проверка production подтверждает опубликованный код/стили, не изменения реальных выездов и смен.
+
+## 2026-10-30 — scale direction and Ctrl + wheel
+
+- The range now runs from weeks on the left to hours on the right, on desktop and in the phone scale panel. Plus, Right and larger values approach hours; minus moves toward weeks. Existing persisted `zoom` values retain their exact meaning through a control-only inversion.
+- A non-passive calendar wheel listener handles Ctrl + vertical wheel: up approaches hours, down approaches weeks. Ordinary wheel scrolling and the rest of the page retain native behavior. Events are combined per animation frame, bounded to the supported scale and ignored during edits, gestures and dialogs. The date/hour under the pointer anchors the redraw; slider/buttons anchor the visible top date. Accessible value text reports the visible span.
+- Validation: 1052 tests passed in UTC and America/Los_Angeles; lint/build/smoke and design inventory passed. Five related browser suites: 50 passed, 2 intended viewport skips at 360 light and 1440 dark, including real Ctrl+wheel input, browser scale unchanged, pointer hour preserved, plus/minus/keyboard, phone dialog and preference reload. Existing weekly/day opening/overlay tests were adjusted only to use the inverted slider positions. Browser QA used synthetic backend data; no database or migration changes.
