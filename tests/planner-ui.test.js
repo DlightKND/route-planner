@@ -39,3 +39,18 @@ it('opens one compact trip/day chronology for 200 GPS pieces without changing sc
  click(f.root,'.pw-week-fact-summary');expect(f.workspace.state.selection).toMatchObject({kind:'fact',fact_day:true,trip_id:'t',date:day,person:'a'});expect(f.workspace.state.viewDays).toBeGreaterThanOrEqual(7);expect(f.root.querySelector('.pw-context').hidden).toBe(false);expect(f.root.querySelectorAll('.pw-week-episode')).toHaveLength(1);expect(f.root.querySelector('.pw-week-episode').textContent).toContain('Дорога');expect(f.root.querySelector('.pw-week-fact-summary').getAttribute('aria-expanded')).toBe('true');
  click(f.root,'[data-pw=context-close]');expect(f.root.querySelector('.pw-context').hidden).toBe(true);expect(f.root.querySelector('.pw-fact-popover')).toBeNull();click(f.root,'.pw-week-fact-summary');expect(f.root.querySelector('.pw-context').hidden).toBe(false);expect(f.calls.some(c=>c.name==='planner_apply')).toBe(false);
 });
+
+it('moves the scale toward hours with Right/+ and preserves saved zoom preferences',async()=>{
+ const f=await mount(actor,{zoom:70}),slider=f.root.querySelector('[data-pw-scale]');expect(slider.value).toBe('30');expect(f.workspace.state.viewDays).toBeGreaterThanOrEqual(7);
+ slider.value='100';slider.dispatchEvent(new win.Event('input',{bubbles:true}));expect(f.workspace.state.zoom).toBe(0);expect(f.workspace.state.viewDays).toBeLessThan(1);expect(slider.getAttribute('aria-valuetext')).toBe('8 ч');
+ click(f.root,'[data-pw=zoom-out]');await vi.waitFor(()=>expect(f.workspace.state.zoom).toBe(7));click(f.root,'[data-pw=zoom-in]');await vi.waitFor(()=>expect(f.workspace.state.zoom).toBe(0));
+ expect(JSON.parse(win.localStorage.getItem('dlight:planner-view:test-project:'+actor.id)).zoom).toBe(0);expect(f.calls.some(c=>c.name==='planner_apply')).toBe(false);
+});
+it('zooms only the calendar on Ctrl+wheel, clamps the scale and leaves previews unchanged',async()=>{
+ const f=await mount(actor,{zoom:70}),cal=f.root.querySelector('.pw-calendar');const wheel=(deltaY,options={})=>{const e=new win.WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY,...options});Object.defineProperty(e,'ctrlKey',{value:options.ctrlKey??false});cal.dispatchEvent(e);return e;};
+ expect(wheel(-120).defaultPrevented).toBe(false);expect(f.workspace.state.zoom).toBe(70);
+ expect(wheel(-120,{ctrlKey:true}).defaultPrevented).toBe(true);await vi.waitFor(()=>expect(f.workspace.state.zoom).toBeLessThan(70));const before=f.workspace.state.zoom;
+ wheel(120,{ctrlKey:true,deltaMode:1});await vi.waitFor(()=>expect(f.workspace.state.zoom).toBeGreaterThan(before));
+ const slider=f.root.querySelector('[data-pw-scale]');slider.value='100';slider.dispatchEvent(new win.Event('input',{bubbles:true}));wheel(-120,{ctrlKey:true});await new Promise(r=>win.requestAnimationFrame(r));expect(f.workspace.state.zoom).toBe(0);
+ click(f.root,'.pw-plan');click(f.root,'[data-pw=part-menu]');click(win.document,'[data-pw=edit-split]');wheel(120,{ctrlKey:true});await new Promise(r=>win.requestAnimationFrame(r));expect(f.workspace.state.zoom).toBe(0);expect(f.workspace.isDirty()).toBe(true);expect(f.calls.some(c=>c.name==='planner_apply')).toBe(false);
+});

@@ -31,7 +31,7 @@ test('planner overlays: filters remain above day and week decorations with acces
  await capture(page,info,'filters-over-days');await panel.locator('[data-pw-dialog-close]').first().click();
  await page.locator('.pw-calendar').evaluate(el=>el.scrollTop=0);await expect(page.locator('.pw-root')).toHaveAttribute('data-collapsed','false');
  if(await mobile(page))await page.locator('[data-pw=scale]:visible').click();
- await page.locator('[data-pw-scale]:visible').first().fill('100');
+ await page.locator('[data-pw-scale]:visible').first().fill('0');
  if(await page.locator('.pw-dialog').isVisible())await page.locator('.pw-dialog [data-pw-dialog-close]').first().click();
  await expect(page.locator('.week-block')).toHaveCount(1);
  await page.getByRole('button',{name:'Открыть мультифильтр',exact:true}).filter({visible:true}).first().click();await capture(page,info,'filters-over-weeks');expect(errors).toEqual([]);

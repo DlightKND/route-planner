@@ -17,7 +17,7 @@ test('planner worktime: desktop keeps dates and interactive zoom on scroll; phon
  const errors=await boot(page,info),mobile=await page.locator('.pw-root').evaluate(el=>el.classList.contains('pw-mobile'));
  await expect(page.locator('.pf-controls,.calendar-window-legend')).toHaveCount(0);await page.locator('.pw-calendar').evaluate(el=>el.scrollTop=200);await expect(page.locator('.pw-root')).toHaveAttribute('data-collapsed','true');
  const period=page.locator('[data-pw=period]');if(mobile){await expect(period.locator('.date-text')).toBeHidden();expect((await period.boundingBox()).width).toBe(44);}else{
-  await expect(period.locator('.date-text')).toBeVisible();await expect(page.locator('.period-step').first()).toBeVisible();await expect(page.locator('.desktop-scale')).toBeVisible();const slider=page.locator('.desktop-scale [data-pw-scale]'),before=Number(await slider.inputValue()),scale=await page.locator('.pw-day').first().getAttribute('data-scale');await slider.focus();await slider.press('ArrowRight');await expect(slider).toHaveValue(String(before+1));expect(await page.locator('.pw-day').first().getAttribute('data-scale')).not.toBe(scale);
+  await expect(period.locator('.date-text')).toBeVisible();await expect(page.locator('.period-step').first()).toBeVisible();await expect(page.locator('.desktop-scale')).toBeVisible();const slider=page.locator('.desktop-scale [data-pw-scale]'),before=Number(await slider.inputValue()),scale=await page.locator('.pw-day').first().getAttribute('data-scale');await slider.focus();await slider.press('ArrowRight');await expect(slider).toHaveValue(String(before+1));expect(Number(await page.locator('.pw-day').first().getAttribute('data-scale'))).toBeGreaterThan(Number(scale));
  }
  await capture(page,info,'compact-rail');await clean(page,errors);
 });
@@ -72,9 +72,9 @@ for(const role of ['logist','engineer'])test(`planner worktime: ${role} weekend 
  };
  await check();const mobile=await page.locator('.pw-root').evaluate(el=>el.classList.contains('pw-mobile'));
  if(mobile)await page.locator('[data-pw=scale]').click();const slider=page.locator('[data-pw-scale]:visible').first();
- await slider.focus();await slider.press('Home');await check();
- for(let step=0;step<3;step++)await slider.press('PageUp');await check();
- for(let step=0;step<3;step++)await slider.press('PageUp');await check();
+ await slider.focus();await slider.press('End');await check();
+ for(let step=0;step<3;step++)await slider.press('PageDown');await check();
+ for(let step=0;step<3;step++)await slider.press('PageDown');await check();
  if(mobile)await page.locator('.pw-dialog [data-pw-dialog-close]').first().click();
  await page.locator('.pw-calendar').evaluate(el=>el.scrollTop=0);await capture(page,info,'weekend-'+role);
  expect(await page.evaluate(()=>window.__visualQA.staffDayWrites)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.plannerWrites)).toEqual([]);await clean(page,errors);
@@ -102,9 +102,28 @@ test('planner fact palette: daily ribbons, legend, details and week cards match 
  await expect(page.locator('.pf-sources .pf-key-stop')).toHaveCSS('background-color',rgb(TRACK_STYLE.stop));
  expect(await page.locator('.pf-sources .pf-key-estimated').evaluate(el=>getComputedStyle(el).backgroundImage)).toContain(rgb(TRACK_STYLE.road));
  await capture(page,info,'fact-palette');await page.locator('.pf-popover-head [data-pw=selection-clear], [data-pw=context-close]').filter({visible:true}).first().click();
- const mobile=await page.locator('.pw-root').evaluate(el=>el.classList.contains('pw-mobile'));if(mobile)await page.locator('[data-pw=scale]').click();await page.locator('[data-pw-scale]:visible').first().press('End');
+ const mobile=await page.locator('.pw-root').evaluate(el=>el.classList.contains('pw-mobile'));if(mobile)await page.locator('[data-pw=scale]').click();await page.locator('[data-pw-scale]:visible').first().press('Home');
  await expect(page.locator('.pf-week-fact')).toHaveCount(2);
  for(const [tone,color] of Object.entries(colors))for(const segment of await page.locator('.pw-week-fact-strip [data-fact-tone='+tone+']').all())await expect(segment).toHaveCSS('background-color',rgb(color));
  if(mobile)await page.locator('.pw-dialog [data-pw-dialog-close]').first().click();await capture(page,info,'fact-palette-week');
  expect(await page.evaluate(()=>window.__visualQA.plannerWrites)).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.staffDayWrites)).toEqual([]);await clean(page,errors);
+});
+
+test('planner zoom: plus approaches hours; Ctrl+wheel zooms at the pointer without browser zoom',async({page},info)=>{
+ const errors=await boot(page,info),mobile=await page.locator('.pw-root').evaluate(el=>el.classList.contains('pw-mobile'));
+ if(await page.locator('.pw-context').isVisible())await page.locator('[data-pw=context-close]').click();
+ if(mobile)await page.locator('[data-pw=scale]').click();const slider=page.locator('[data-pw-scale]:visible').first();
+ await slider.fill('0');await expect(page.locator('.week-block')).toHaveCount(1);await expect(slider).toHaveAttribute('aria-valuetext','Недели');
+ await slider.fill('100');await expect(page.locator('.pw-day')).toHaveCount(2);await expect(slider).toHaveAttribute('aria-valuetext','8 ч');
+ await slider.fill('50');const scale=Number(await page.locator('.pw-day').first().getAttribute('data-scale'));await slider.press('ArrowRight');expect(Number(await page.locator('.pw-day').first().getAttribute('data-scale'))).toBeGreaterThan(scale);
+ if(mobile)await page.locator('.pw-zoom [data-pw-dialog-close]').first().click();else{
+  const before=Number(await slider.inputValue());await page.locator('[data-pw=zoom-in]').click();await expect(slider).toHaveValue(String(before+7));await page.locator('[data-pw=zoom-out]').click();await expect(slider).toHaveValue(String(before));
+  await slider.fill('82');await center(page,12);const cal=page.locator('.pw-calendar'),box=await cal.boundingBox(),x=box.x+150,y=box.y+Math.min(300,box.height-30);await page.mouse.move(x,y);
+  const anchor=()=>cal.evaluate((el,y)=>{const day=[...el.querySelectorAll('.pw-day')].find(d=>d.getBoundingClientRect().bottom>y);return {date:day.dataset.date,hour:Number(day.dataset.start)+(y-day.querySelector('.pw-day-body').getBoundingClientRect().top)/Number(day.dataset.scale)};},y);
+  const old=await anchor(),browserScale=await page.evaluate(()=>window.visualViewport.scale);await page.keyboard.down('Control');await page.mouse.wheel(0,-120);await page.clock.runFor(80);await page.keyboard.up('Control');await expect(slider).toHaveValue('88');const after=await anchor();expect(after.date).toBe(old.date);expect(after.hour).toBeCloseTo(old.hour,1);expect(await page.evaluate(()=>window.visualViewport.scale)).toBe(browserScale);
+  await page.keyboard.down('Control');await page.mouse.wheel(0,120);await page.clock.runFor(80);await page.keyboard.up('Control');await expect(slider).toHaveValue('82');
+  await page.mouse.wheel(0,120);await page.clock.runFor(80);await expect(slider).toHaveValue('82');
+ }
+ await page.reload();await expect(page.locator('.pw-plan')).toHaveCount(6);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();if(mobile)await page.locator('[data-pw=scale]').click();await expect(page.locator('[data-pw-scale]:visible').first()).toHaveValue(mobile?'51':'82');
+ expect(await page.evaluate(()=>window.__visualQA.plannerWrites)).toEqual([]);await clean(page,errors);
 });
