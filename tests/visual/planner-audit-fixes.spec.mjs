@@ -28,7 +28,7 @@ test('planner audit: panel geometry, tool states, error fields and Escape preser
 test('planner audit: busy day form locks every control and recovers a failed save without losing draft',async({page},info)=>{
  const mobile=await boot(page,info,{staffDayDelay:2000,staffDayFailures:1});
  await page.locator('[data-pw=period]').click();await page.locator('.pw-dialog [name=from]').fill('2026-10-10');await page.locator('.pw-dialog [name=to]').fill('2026-10-11');await page.locator('.pw-dialog [type=submit]').click();
- await page.locator('[data-pw=workday-edit]').first().click();const panel=page.locator('.pw-workday-dialog');await panel.locator('[name=start]').fill('09:00');await panel.locator('[name=end]').fill('14:00');
+ await page.locator('[data-pw=workday-edit]').first().click();const panel=page.locator('.pw-workday-dialog');await panel.locator('[name=dayMode][value=work]').check();await panel.locator('[name=start]').fill('09:00');await panel.locator('[name=end]').fill('14:00');
  await expect(panel.locator('.dialog-foot [data-pw-dialog-close]')).toHaveCSS('min-height',mobile?'48px':'40px');await panel.locator('[type=submit]').click();await expect(panel).toHaveAttribute('aria-busy','true');
  expect(await panel.locator('button,input,select,textarea').evaluateAll(els=>els.every(e=>e.disabled))).toBe(true);await expect(panel.locator('.pw-form-status')).toContainText('Сохраняются рабочие часы');
  await page.clock.runFor(2100);await expect(panel).toHaveAttribute('aria-busy','false');await expect(panel.locator('.pw-form-error')).toContainText('связь прервана');await expect(panel.locator('[name=start]')).toHaveValue('09:00');await expect(panel.locator('[type=submit]')).toBeEnabled();

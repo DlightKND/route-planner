@@ -81,10 +81,10 @@ export function installWorkspaceStructure(root=document){
   ['plTrips','Выезды','Планы поездок, маршруты и GPS-журнал','trip']
  ]){
   const section=root.getElementById(id);if(!section)continue;
-  const sticky=section.querySelector('.stickyhead'),header=element(root,'header','workspace-dispatcher-head'),line=element(root,'div','workspace-heading-row');
+  const sticky=section.querySelector('.stickyhead'),header=element(root,'header','workspace-dispatcher-head workspace-section-rail'),line=element(root,'div','workspace-heading-row');
   line.innerHTML=`<div><h1>${escape(title)}</h1><p class="workspace-subtitle">${escape(description)}</p></div>`;
   const add=root.getElementById(prefix+'Add');if(add){const label=add.querySelector('.dispatcher-add-label');if(label)label.textContent='Создать';line.append(add);}
-  header.append(line,sticky.querySelector('.subtabs'));sticky.prepend(header);
+  const tabs=sticky.querySelector('.subtabs');tabs.classList.add('workspace-page-tabs');header.append(line,tabs);sticky.prepend(header);
   const toolbar=sticky.querySelector('.dispatcher-toolbar');toolbar.classList.add('workspace-filterbar');
   const chips=sticky.querySelector('.chips');if(chips)toolbar.after(chips);
   const board=element(root,'div','workspace-board-heading');board.innerHTML='<h2>Рабочая очередь</h2><span class="hint" data-board-count></span>';sticky.after(board);
@@ -97,10 +97,11 @@ export function installWorkspaceStructure(root=document){
  }
  const catalog=root.querySelector('.view-catalog'),catalogHead=catalog?.querySelector('.workspace-header-inner');
  if(catalogHead){
+  catalogHead.closest('.workspace-masthead').classList.add('workspace-section-rail');
   const row=element(root,'div','workspace-heading-row'),actions=element(root,'div','catalog-page-actions');
   row.append(catalogHead.firstElementChild,actions);catalogHead.append(row);
   for(const id of ['catAdd','emShowAdd','stockAdd'])actions.append(root.getElementById(id));
-  const tabs=[...catalog.querySelectorAll('.subtabs')];if(tabs.length){tabs[0].classList.add('catalog-main-nav');catalogHead.append(tabs[0]);tabs.slice(1).forEach(tab=>tab.remove());}
+  const tabs=[...catalog.querySelectorAll('.subtabs')];if(tabs.length){tabs[0].classList.add('catalog-main-nav','workspace-page-tabs');catalogHead.append(tabs[0]);tabs.slice(1).forEach(tab=>tab.remove());}
   setCatalogWorkspace('works',root);
  }
  const fleet=root.querySelector('[data-sec-panel="fleet"]');

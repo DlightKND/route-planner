@@ -57,7 +57,7 @@ html#dlight-ui[data-ui-system] [data-ui=option]{display:flex!important;align-ite
 html#dlight-ui[data-ui-system] label:not([data-ui=option]){font-family:var(--sans)!important;font-size:var(--ui-help)!important;line-height:1.5;letter-spacing:normal!important;text-transform:none!important}
 html#dlight-ui[data-ui-system] label>:is([data-ui=field],[data-ui=file]){margin-top:4px}
 html#dlight-ui[data-ui-system] :is(.entity-activity-form,.responsibility-form) label>[data-ui=field]{margin-top:8px}
-html#dlight-ui[data-ui-system] :is(.hint,.meta,.entity-meta,.th-sub,.activity-meta,.design-description){font-family:var(--sans)!important;font-size:var(--ui-help)!important;line-height:1.5!important;letter-spacing:normal;text-transform:none;overflow-wrap:anywhere}
+html#dlight-ui[data-ui-system] :is(.hint,.meta,.entity-meta,.th-sub,.activity-meta,.design-description,.workspace-subtitle){font-family:var(--sans)!important;font-size:var(--ui-help)!important;line-height:1.5!important;letter-spacing:normal;text-transform:none;overflow-wrap:anywhere}
 html#dlight-ui[data-ui-system] :is(.pane-head h2,.trip-head h2,.design-page-head h2){font:600 28px/1.25 var(--sans)!important;letter-spacing:-.02em!important;text-transform:none!important}
 html#dlight-ui[data-ui-system] :is(.card h3,.modal h3,.entity-dialog-head h3){font:600 18px/1.4 var(--sans)!important;letter-spacing:normal!important;text-transform:none!important}
 html#dlight-ui[data-ui-system] [data-ui=chip]{flex:0 0 auto;min-height:var(--ui-chip-h)!important;padding:var(--ui-chip-py) 12px!important;border-radius:var(--r-pill)!important;background:transparent!important;color:var(--ink)!important;font:400 var(--ui-chip-font)/var(--ui-chip-line) var(--sans)!important;box-shadow:none!important}
