@@ -126,8 +126,6 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-workday-button .di svg{
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-day-window-row{display:flex;height:52px;padding-top:8px;background:var(--panel);box-sizing:border-box}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-window-gutter{width:var(--pw-gutter);flex:none;border-right:1px solid var(--line)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-day-window-row>.pw-day-window-cell{width:var(--pw-lane);flex:none;border-right:1px solid var(--line)}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-day[data-custom-window=true]>.calendar-date-overlay{position:relative!important;height:28px!important;min-height:28px!important;max-height:28px!important;background:var(--panel)!important}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-day[data-custom-window=true]>.calendar-date-overlay>.calendar-date-pill{top:2px!important;transform:translateX(-50%)!important}
 
 /* Same work-day form: anchored desktop popover and mobile bottom sheet. */
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-workday-dialog{width:360px;height:auto!important;max-width:calc(100% - 16px);max-height:calc(100% - 16px)}
@@ -316,3 +314,25 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode small
 
 /* Fixed day dimensions keep offscreen hours out of layout/paint while zooming. */
 .pw-root .pw-day-body{content-visibility:auto;contain-intrinsic-block-size:auto 600px}
+
+/* Every day has a compact per-engineer control; date dividers never occupy a row. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-day-window-row{height:auto;min-height:56px;padding:16px 0 8px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-day:first-of-type>.pw-day-window-row{padding-top:30px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-day-window-cell{height:auto;min-height:32px;justify-content:flex-start;padding:0 8px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-workday-button,.pw-workday-status){display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;min-width:0;min-height:32px!important;max-width:100%;padding:5px 8px!important;border:1px solid var(--input-line)!important;border-radius:8px!important;background:var(--panel)!important;color:var(--ink)!important;font:500 12px/20px var(--mono)!important;white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-status{border-color:transparent!important;color:var(--dim)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button[data-closed=true]{border-style:dashed!important;color:var(--dim)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button .di{flex:none;width:16px;height:16px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button>.di:last-child{width:12px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button:focus-visible{outline:2px solid var(--focus)!important;outline-offset:2px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button:active{background:var(--raised)!important}
+@media(hover:hover) and (pointer:fine){html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button:hover{border-color:var(--ink)!important;background:var(--raised)!important}}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-workday-button{min-height:44px!important;padding:11px 8px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-day-window-row{min-height:68px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .week-block{position:relative;padding:0!important;margin:0!important;border:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .week-block>.calendar-date-overlay{position:absolute;top:0;left:0;right:0;z-index:21;display:block;box-sizing:content-box;height:0;min-height:0!important;max-height:0;padding:0!important;margin:0;border:0!important;background:none!important;pointer-events:none;overflow:visible}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .week-block:first-of-type>.calendar-date-overlay>.calendar-date-pill{transform:translate(-50%,0)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-day-lane>.pw-day-window-cell{padding:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-date+.pw-week-day>:is(.pw-week-day-lane,.pw-week-day-label){padding-top:16px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .week-block:first-of-type>.pw-week-date+.pw-week-day>:is(.pw-week-day-lane,.pw-week-day-label){padding-top:30px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-body>.pw-workday-dialog[data-floating=true]{width:340px!important}
