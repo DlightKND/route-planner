@@ -313,3 +313,6 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode-key{w
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode>span:last-child{min-width:0;overflow-wrap:anywhere}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode strong{display:block;font-size:14px;line-height:20px;font-weight:500}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-week-episode small{display:block;font:var(--pw-help)/var(--pw-help-line) var(--sans)!important;color:var(--dim)}
+
+/* Fixed day dimensions keep offscreen hours out of layout/paint while zooming. */
+.pw-root .pw-day-body{content-visibility:auto;contain-intrinsic-block-size:auto 600px}
