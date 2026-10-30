@@ -1,3 +1,6 @@
+import {Window} from 'happy-dom';
+import {normalizePlannerData} from '../src/core/planner-workspace.js';
+import {plannerTimelineHTML} from '../src/planner-view.js';
 import {it,expect} from 'vitest';
 import {plannerFactDays,summarizePlannerFactDay} from '../src/core/planner-week.js';
 const date='2026-10-26';
@@ -26,3 +29,8 @@ it('uses elapsed UTC minutes across the DST change while preserving displayed lo
  expect(s.roadMinutes).toBe(120);expect(s.minutes).toBe(120);expect(s).toMatchObject({start:3.5,end:4.5});
 });
 it('does not invent evidence for an empty or invalid day',()=>{expect(summarizePlannerFactDay([],'a')).toBeNull();expect(plannerFactDays([road('invalid',10,9)])).toEqual([]);});
+
+it('renders chronological weekly ribbon pieces with repeated tones and duration ratios instead of totals grouped by color',async()=>{
+ const facts=[road('first',7,8),road('stop',8,10,{kind:'stop',stay_id:'s'}),road('again',10,10.25),road('estimate',10.25,10.75,{source:'estimated'}),road('last',11,12)],data=normalizePlannerData({profiles:[{id:'a',full_name:'Анна'}],trips:[{id:'t'}],settings:{dayStart:7,dayEnd:16,toleranceH:1,weekend:[0,6]}}),win=new Window();
+ try{win.document.body.innerHTML=plannerTimelineHTML(data,{from:date,to:date,people:['a'],viewDays:7,showFact:true},{id:'m',role:'logist'},[],facts);const pieces=[...win.document.querySelectorAll('.pw-week-fact-strip i')];expect(pieces.map(p=>p.dataset.factTone)).toEqual(['gps','stop','gps','estimated','unknown','gps']);expect(pieces.map(p=>[Number(p.dataset.start),Number(p.dataset.end)])).toEqual([[7,8],[8,10],[10,10.25],[10.25,10.75],[10.75,11],[11,12]]);expect(pieces.map(p=>parseFloat(p.style.height))).toEqual([20,40,5,10,5,20]);expect(pieces[3].classList.contains('pf-estimated')).toBe(true);expect(pieces[4].classList.contains('pf-unknown')).toBe(true);expect(win.document.querySelectorAll('.pw-week-fact-summary')).toHaveLength(1);}finally{await win.happyDOM.close();}
+});
