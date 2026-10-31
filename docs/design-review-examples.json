@@ -437,7 +437,7 @@
       "recommendation": "Сохранить иерархию подписанных групп; раскрытие не меняет выбранность записей.",
       "source": {
         "file": "src/app.js",
-        "marker": "emtree-manu"
+        "marker": "renderCwModelsTree"
       },
       "base_example_v04": false
     },

@@ -2832,22 +2832,33 @@
            здесь тот же класс — и поведение получается то же. -->
       <div class="settings-navwrap stickyhead">
       <div class="settings-nav" id="settingsNav">
-        <button class="son on" data-sec="tariffs">Тарифы и параметры</button>
-        <button class="son" data-sec="fleet">Автопарк</button>
-        <button class="son" data-sec="users">Пользователи и роли</button>
-        <button class="son" data-sec="theme">Оформление</button>
+        <div class="settings-nav-label" data-settings-admin-group>Работа</div>
+        <button type="button" class="son on" data-sec="day">Рабочий день</button>
+        <button type="button" class="son" data-sec="tariffs">Тарифы и себестоимость</button>
+        <button type="button" class="son" data-sec="gps">GPS и маршруты</button>
+        <button type="button" class="son" data-sec="fleet">Автопарк</button>
+        <button type="button" class="son" data-sec="users">Пользователи и роли</button>
+        <div class="settings-nav-label">Личное</div>
+        <button type="button" class="son" data-sec="theme">Оформление</button>
+        <div class="settings-nav-label" data-settings-admin-group>Система</div>
+        <button type="button" class="son" data-sec="diagnostics">Диагностика</button>
       </div>
       </div>
       <div class="settings-body">
 <div class="card" data-sec-panel="theme" data-personal-settings style="display:none"><h3>Моё оформление</h3><p class="design-description">Тема применяется к вашему аккаунту. Оформление других сотрудников не изменится.</p><label>Тема приложения</label><div class="seg" role="group" aria-label="Личная тема"><button type="button" id="modeDark">Тёмная</button><button type="button" id="modeLight">Светлая</button></div><p id="personalThemeStatus" class="hint" role="status"></p></div>
-    <div class="card" data-admin-settings data-sec-panel="tariffs"><h3 class="cardhead">Тарифы и параметры</h3><p class="design-description">Правила для новых расчётов. Сохранённые снимки стоимости в документах сохраняют свою основу.</p>
-      <h3>Рабочий день</h3>
+<div class="settings-param-shell" data-admin-settings data-sec-panel="tariffs">
+<section class="card settings-param-section" data-settings-section="day">      <h3>Рабочий день</h3><p class="hint">Значения по умолчанию для новых дней. Индивидуальные изменения задаются в графике инженера.</p>
       <div class="row"><div class="grow"><label>Начало</label><input type="number" id="stDayStart" step="0.25" min="0" max="23.75"></div><div class="grow"><label>Конец</label><input type="number" id="stDayEnd" step="0.25" min="0.25" max="24"></div><div class="grow"><label>Допуск, ч</label><input type="number" id="stTolerance" step="0.25" min="0" max="8"></div></div>
-      <h3>Тарифные сутки <span class="q"><button class="qm" type="button" aria-label="О тарифных сутках" aria-expanded="false">?</button><span class="qbody">Только для расчёта суток по суточному тарифу; на график не влияют.</span></span></h3>
+</section>
+<section class="card settings-param-section" data-settings-section="tariffs" hidden>      <h3>Тарифные сутки <span class="q"><button class="qm" type="button" aria-label="О тарифных сутках" aria-expanded="false">?</button><span class="qbody">Только для расчёта суток по суточному тарифу; на график не влияют.</span></span></h3>
       <div class="row"><div class="grow"><label>Валюта</label><input type="text" id="stCur"></div><div class="grow"><label>Смена тарифа, ч</label><input type="number" id="stShift" step="0.5"></div><div class="grow"><label>Допуск тарифа, %</label><input type="number" id="stDev" step="1"></div></div>
       <div class="meta" style="margin-top: var(--sp-4)">Себестоимость по умолчанию <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">За км, час, день и ночь. Профиль тарифа может переопределить эти значения своими.</span></span></div>
       <div class="row"><div class="grow"><label>за км</label><input type="number" id="csKm" step="0.01"></div><div class="grow"><label>за час</label><input type="number" id="csHour" step="0.01"></div><div class="grow"><label>за день</label><input type="number" id="csDay" step="0.01"></div><div class="grow"><label>за ночь</label><input type="number" id="csNight" step="0.01"></div></div>
-      <details class="settings-advanced"><summary>GPS, стоянки и маршрутизация</summary>
+
+      <label style="margin-top: var(--sp-4)">Гарантия на ремонт по умолчанию, дней</label><input type="number" id="stWarrDays" placeholder="90">
+      <label style="margin-top: var(--sp-4)">Период регулярного контакта, дней (0 — выкл)</label><input type="number" id="stContact" placeholder="0">
+</section>
+<section class="card settings-param-section" data-settings-section="gps" hidden>      <h3>GPS и маршруты</h3>
       <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Стоянки → факт-часы <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Стоянка засчитывается в работу, только если попала в радиус точки заявки. Обед на трассе и ночёвка не попадут. Идёт только в себестоимость — нормочасы не трогаются.</span></span></div>
       <div class="row"><div class="grow"><label>Радиус вокруг точки, м</label><input type="number" id="stStayRad" step="10"></div><div class="grow"><label>Короче этого не считать, мин</label><input type="number" id="stStayMin" step="1"></div></div>
       <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Проверка факт-трека <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Два порога, по которым выезд признаётся достоверным. Скорость — грубый отсев: быстрее неё по прямой техника не ездит, такая точка выбрасывается сразу и бесплатно. Запас времени — точная проверка: после сбоя связи спрашиваем у ORS, сколько ехать по дорогам до следующей точки, и сравниваем с тем временем, которое реально было. Запас 1,5 значит «принимаем, если уложился в полтора раза дольше доступного». Меньше — строже и больше ложных срабатываний, больше — мягче.</span></span></div>
@@ -2862,16 +2873,14 @@
            Ключ жил в settings.ors_key, а эту строку читал любой сотрудник —
            то есть ключ мог утащить кто угодно и сжечь квоту. Теперь он
            только в секрете Edge Function ors, наружу не отдаётся. -->
-      </details>
-      <label style="margin-top: var(--sp-4)">Гарантия на ремонт по умолчанию, дней</label><input type="number" id="stWarrDays" placeholder="90">
-      <label style="margin-top: var(--sp-4)">Период регулярного контакта, дней (0 — выкл)</label><input type="number" id="stContact" placeholder="0">
-      <details class="settings-advanced"><summary>Диагностика приложения</summary>
+      </section>
+<section class="card settings-param-section" data-settings-section="diagnostics" hidden>      <h3>Диагностика</h3>
       <div class="meta" style="margin: var(--sp-4) 0 var(--sp-2)">Версия сборки <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Считается по содержимому файлов, а не пишется руками. Совпал отпечаток с тем, что назван в поставке, — прод собран ровно из переданных файлов. Не совпал — в списке видно, какой файл отстал. Там же проверяется, применены ли миграции базы.</span></span></div>
       <button class="verline" id="verBtn" type="button"><span id="verId">—</span><span class="qc">?</span></button>
-</details>
-      <div class="settings-savebar"><span class="hint" id="stStatus" role="status"></span><button class="btn amber" id="stSave">Сохранить параметры</button></div>
-    </div>
-    <div class="card" data-admin-settings data-sec-panel="tariffs"><h3 class="cardhead">Профили тарифов <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Профиль — это плательщик со своими ставками. Две ветки: платно и гарантия; на строку работ в заявке подставляется по её признаку. Флажки «по умолчанию» задают, какой профиль ставить автоматически. Дорожные ставки понадобятся в расчёте выезда.</span></span></h3>
+</section>
+      <div class="settings-savebar" hidden><span class="hint" id="stStatus" role="status"></span><button type="button" class="btn" id="stCancel">Отмена</button><button type="button" class="btn amber" id="stSave">Сохранить</button></div>
+</div>
+    <div class="card" data-admin-settings data-sec-panel="tariffs" data-settings-only="tariffs"><h3 class="cardhead">Профили тарифов <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Профиль — это плательщик со своими ставками. Две ветки: платно и гарантия; на строку работ в заявке подставляется по её признаку. Флажки «по умолчанию» задают, какой профиль ставить автоматически. Дорожные ставки понадобятся в расчёте выезда.</span></span></h3>
       <div id="tpList" style="margin-top: var(--sp-3)"></div>
       <button class="btn sm amber" id="profCreate" style="margin-top: var(--sp-4)">+ Создать профиль</button>
     </div>

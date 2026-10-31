@@ -5,6 +5,32 @@ import {plannerFixture,actor,day} from './planner-fixture.mjs';
 import * as plannerCore from '../src/core/planner-workspace.js';
 import {plannerOverlapRows} from '../src/planner-view.js';
 let win;
+
+it('discloses one working-day strip at a time without changing assignments or hours',async()=>{
+ const f=await mount(actor,{from:day,to:'2026-11-01'}),days=[...f.root.querySelectorAll('.pw-day')];
+ expect(days[0].querySelector('.pw-day-window-row').hidden).toBe(true);
+ click(days[0],'[data-pw=day-toggle]');expect(days[0].querySelector('.pw-day-window-row').hidden).toBe(false);
+ click(days[1],'[data-pw=day-toggle]');expect(days[0].querySelector('.pw-day-window-row').hidden).toBe(true);expect(days[1].querySelector('.pw-day-window-row').hidden).toBe(false);
+ expect(f.workspace.state.dayControlsDate).toBe(days[1].dataset.date);expect(f.calls.some(c=>c.name==='planner_apply')).toBe(false);
+});
+
+it('removes the displayed chronological multi-selection rather than insertion-order neighbour',async()=>{
+ const f=await mount(),group=f.groups[0];group.parts[0].start=8;group.parts[0].end=10;f.groups.unshift({source_key:'road:t:0',trip_id:'t',kind:'road',people:['a','b'],parts:[{id:'r',date:day,start:7,end:8,offset:0}],auto_parts:[{id:'r',date:day,start:7,end:8,offset:0}],auto_people:['a','b'],manual:false,revision:0,trip_revision:0});await f.workspace.refresh();const work=f.root.querySelector('.pw-plan:not(.pw-road)'),road=f.root.querySelector('.pw-road');
+ work.click();click(f.root,'[data-pw=part-menu]');click(f.root,'[data-pw=selection-start]');road.click();
+ expect(f.workspace.state.multiParts).toHaveLength(2);expect(f.root.querySelector('.pw-selection-count').textContent).toBe('Выбрано 2');
+ click(f.root,'.pw-selection-remove');expect(f.workspace.state.multiParts).toHaveLength(1);expect(f.workspace.state.multiParts[0].source_key).toBe(work.dataset.key);
+ expect(f.root.querySelector('.focus-name').textContent).toContain('Задание');expect(f.calls.some(c=>c.name==='planner_apply')).toBe(false);
+});
+
+it('keeps many selected blocks in a bounded rail and exposes the complete selection list',async()=>{
+ const f=await mount();
+ for(let i=0;i<6;i++)f.groups.push({source_key:'road:t:'+i,trip_id:'t',kind:'road',people:['a','b'],parts:[{id:'r'+i,date:day,start:7+i,end:7.25+i,offset:0}],auto_parts:[{id:'r'+i,date:day,start:7+i,end:7.25+i,offset:0}],auto_people:['a','b'],manual:false,revision:0,trip_revision:0});
+ await f.workspace.refresh();click(f.root,'.pw-plan:not(.pw-road)');click(f.root,'[data-pw=part-menu]');click(f.root,'[data-pw=selection-start]');
+ for(let i=0;i<6;i++)click(f.root,'.pw-plan[data-part=r'+i+']');
+ expect(f.root.querySelectorAll('.pw-selection-chip')).toHaveLength(4);expect(f.root.querySelector('[data-pw=selection-overflow]').textContent).toContain('Ещё 3');
+ click(f.root,'[data-pw=selection-overflow]');expect(win.document.querySelectorAll('.pw-selection-list-row')).toHaveLength(7);
+ click(win.document,'.pw-selection-list-row [data-pw=selection-remove]');expect(f.workspace.state.multiParts).toHaveLength(6);expect(f.calls.some(c=>c.name==='planner_apply')).toBe(false);
+});
 afterEach(async()=>{vi.unstubAllGlobals();vi.restoreAllMocks();await win?.happyDOM.close();});
 async function mount(person=actor,view={}){win=new Window({width:1200,height:900,url:'https://test.invalid'});for(const key of ['window','document','requestAnimationFrame'])vi.stubGlobal(key,typeof win[key]==='function'?win[key].bind(win):win[key]);vi.spyOn(globalThis,'setInterval').mockImplementation(()=>0);const f=plannerFixture();win.localStorage.setItem('dlight:planner-view:test-project:'+person.id,JSON.stringify({from:day,to:day,people:['a','b'],...view}));win.document.body.innerHTML='<section class="view view-schedule active"><div id="canonicalPlannerHost"></div></section>';const notify=vi.fn(),workspace=createPlannerWorkspace({host:()=>win.document.getElementById('canonicalPlannerHost'),db:()=>f.db,actor:()=>person,project:()=>f.db.supabaseUrl,profiles:()=>f.profiles,settings:()=>f.settings,notify,confirm:async()=>true});await workspace.open();return {...f,workspace,notify,root:win.document.getElementById('canonicalPlannerHost')};}
 const click=(root,selector)=>root.querySelector(selector).click();

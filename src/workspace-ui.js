@@ -1,3 +1,4 @@
+import {journalIcon} from './journal-icons.js';
 import {openEntityPanel} from './entity-actions.js';
 import {presenceBounds} from './core/trip-presence-recovery.js';
 
@@ -95,6 +96,7 @@ export function installWorkspaceStructure(root=document){
  for(const selector of ['.view-catalog','.view-settings']){
   const view=root.querySelector(selector);if(view)framePane(view,[view.querySelector('.design-page-head')]);
  }
+ for(const button of root.querySelectorAll('#settingsNav [data-sec]')){const icon=({day:'clock',tariffs:'file',gps:'route',fleet:'car',users:'crew',theme:'person',diagnostics:'tasks'})[button.dataset.sec];button.insertAdjacentHTML('afterbegin',journalIcon(icon));}
  const catalog=root.querySelector('.view-catalog'),catalogHead=catalog?.querySelector('.workspace-header-inner');
  if(catalogHead){
   catalogHead.closest('.workspace-masthead').classList.add('workspace-section-rail');
@@ -177,8 +179,9 @@ export function setCatalogWorkspace(name,root=document){
 }
 
 export function setSettingsWorkspace(name,root=document){
- const heading=root.querySelector('.view-settings .design-page-head h2');if(heading)heading.textContent=({tariffs:'Тарифы и параметры',fleet:'Автопарк',users:'Пользователи и роли',theme:'Моё оформление'})[name]||'Настройки';
- const description=root.querySelector('.view-settings .design-description');if(description)description.textContent=({tariffs:'Правила рабочего дня и тарифы для новых расчётов.',fleet:'Служебные автомобили, связь с GPS и проверенный одометр.',users:'Сотрудники, подчинённость и доступ к приложению.',theme:'Личное оформление вашего рабочего места.'})[name]||'';
+ const heading=root.querySelector('.view-settings .design-page-head h2');if(heading)heading.textContent='Настройки';
+ const description=root.querySelector('.view-settings .design-description');if(description)description.hidden=true;
+ root.querySelector('.view-settings')?.setAttribute('data-settings-current',name);
 }
 
 export function presentDispatcherSection(journal,root=document){
