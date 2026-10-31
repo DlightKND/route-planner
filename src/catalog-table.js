@@ -43,10 +43,27 @@ class CatalogTable{
    else this.filters[key]={values:facets.every(v=>selected.has(v.key))?null:[...selected]};
    this.paint();this.host.querySelector(`[data-column="${key}"]`)?.focus();
   };
-  const position=()=>{if(!popup.isConnected)return;const r=trigger.getBoundingClientRect(),width=Math.min(336,window.innerWidth-24);popup.style.width=width+'px';popup.style.left=Math.max(12,Math.min(r.left,window.innerWidth-width-12))+'px';const h=popup.getBoundingClientRect().height;popup.style.top=Math.max(12,r.bottom+h+8>window.innerHeight?Math.min(r.top-h-8,window.innerHeight-h-12):r.bottom+8)+'px';};
-  popup.addEventListener('toggle',event=>{if(event.newState==='closed'){trigger.setAttribute('aria-expanded','false');popup.remove();if(this.popup===popup){this.popup=null;this.trigger=null;}}});
-  popup.showPopover();position();popup.querySelector('input')?.focus({preventScroll:true});
-  const abort=new window.AbortController();this.popupAbort=abort;window.addEventListener('resize',()=>this.close(),{signal:abort.signal});document.addEventListener('scroll',event=>{if(!popup.contains(event.target))position();},{capture:true,signal:abort.signal});popup.addEventListener('toggle',event=>{if(event.newState==='closed')abort.abort();});
+  const abort=new window.AbortController();this.popupAbort=abort;
+  const position=()=>{
+   if(!popup.isConnected)return;
+   const viewport=window.visualViewport,left=viewport?.offsetLeft||0,top=viewport?.offsetTop||0,viewWidth=viewport?.width||window.innerWidth,viewHeight=viewport?.height||window.innerHeight;
+   const r=trigger.getBoundingClientRect(),width=Math.min(336,viewWidth-24),height=Math.max(0,viewHeight-24);
+   popup.style.setProperty('--catalog-popup-max-height',height+'px');popup.style.width=width+'px';
+   popup.style.left=Math.max(left+12,Math.min(r.left,left+viewWidth-width-12))+'px';
+   const h=popup.getBoundingClientRect().height;
+   popup.style.top=Math.max(top+12,Math.min(r.bottom+h+8>top+viewHeight?r.top-h-8:r.bottom+8,top+viewHeight-h-12))+'px';
+  };
+  let frame;const schedulePosition=()=>{window.cancelAnimationFrame(frame);frame=requestAnimationFrame(position);};
+  abort.signal.addEventListener('abort',()=>window.cancelAnimationFrame(frame),{once:true});
+  popup.addEventListener('toggle',event=>{if(event.newState==='closed'){abort.abort();popup.remove();if(this.popup===popup){trigger.setAttribute('aria-expanded','false');this.popup=null;this.trigger=null;}}});
+  window.addEventListener('resize',schedulePosition,{signal:abort.signal});
+  window.visualViewport?.addEventListener('resize',schedulePosition,{signal:abort.signal});
+  window.visualViewport?.addEventListener('scroll',schedulePosition,{signal:abort.signal});
+  document.addEventListener('scroll',event=>{if(!popup.contains(event.target))schedulePosition();},{capture:true,signal:abort.signal});
+  popup.showPopover();position();
+  // Opening a touch filter must not summon the keyboard or discard the draft on resize.
+  if(!window.matchMedia('(pointer:coarse)').matches)popup.querySelector('input')?.focus({preventScroll:true});
+
  }
 }
 export {escape as escapeCatalog};
