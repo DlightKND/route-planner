@@ -381,9 +381,9 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .focusbar[hidden]{disp
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-count{flex:none;font:500 13px/20px var(--sans);white-space:nowrap}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-chips{display:flex;gap:8px;min-width:0;flex:1;overflow:hidden}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-chip{display:flex;min-width:0;max-width:220px;border:1px solid var(--input-line);border-radius:8px;background:var(--panel)}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-chip button{background:none!important;border:0!important;border-radius:6px!important;color:var(--ink)!important;height:40px;min-height:40px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-chip button{background:none!important;border:0!important;border-radius:6px!important;color:var(--ink)!important;height:44px;min-height:44px!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-chip .entity-focus-open{min-width:0!important;max-width:none;padding:8px!important;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-chip .pw-selection-remove{display:flex;align-items:center;justify-content:center;flex:none;width:32px;padding:4px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-chip .pw-selection-remove{display:flex;align-items:center;justify-content:center;flex:none;width:44px;padding:4px!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .focus-clear{margin-left:auto;flex:none;white-space:nowrap;border-radius:8px!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .focus-offscreen{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-selection-list-row{display:flex;align-items:center;gap:8px}
@@ -392,7 +392,7 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .focusbar{padding:4
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-selection-count{font-size:12px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .focusbar>.focus-offscreen{display:none!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-selection-chip button{min-height:48px!important;height:48px}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-selection-chip .pw-selection-remove{width:40px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .mobile .pw-selection-chip .pw-selection-remove{width:48px}
 
 /* Date disclosures reveal one settings strip, without reserving a collapsed row. */
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .pw-day-disclosure{pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;color:var(--ink);font:500 12px/18px var(--sans)}
