@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0 } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false } = {}) {
   if(managerJourney){financeJourney=true;entityAudit=true;}
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
@@ -339,6 +339,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   if(decisionQueue)tables.trip_stays.find(s=>s.id==='stay-past').status='detected';
   if(reviewOrder||decisionQueue){activeTask.status='review';activeTask.result_note='Диагностика завершена. Осталась замена уплотнения.';}
   if(designTripChoices){tables.trips.push({...ride,id:'30000000-0000-4000-8000-000000000010',vehicle_label:'Выезд с ответственным инженером',engineer_ids:[engineer],trip_service_orders:[]},{...ride,id:'30000000-0000-4000-8000-000000000011',vehicle_label:'Выезд с другой командой',engineer_ids:[other],trip_service_orders:[]});}
+  if(catalogueJourney){
+    tables.equipment_models=[{id:'model-a',manufacturer:'PALMS',kind:'Кран-манипулятор',model:'5.72',warranty_months:24,service_interval_hours:500},{id:'model-b',manufacturer:'HIAB',kind:'Кран-манипулятор',model:'X-HiPro 192',warranty_months:12,service_interval_hours:1000},{id:'model-c',manufacturer:'Hatz',kind:'Двигатель',model:'1B40',warranty_months:0,service_interval_hours:null}];
+    tables.stock_catalog.push({id:'stock-b',name:'Масло HLP 46',sku:'HLP46',unit:'л',price:140,cost:95,active:true,current_since:'2026-10-20T07:00:00Z'},{id:'stock-c',name:'Фильтр старой серии',sku:'HF-180',unit:'шт',price:900,cost:600,active:false,current_since:'2026-09-01T07:00:00Z'});
+  }
   const audit = (window.__visualQA = {
     reads: [],
     queryErrors: [],

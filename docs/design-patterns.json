@@ -609,7 +609,7 @@
       "source": [
         {
           "file": "src/app.js",
-          "marker": "emtree-manu"
+          "marker": "renderCwModelsTree"
         }
       ],
       "catalogue": {

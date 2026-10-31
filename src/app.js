@@ -38,6 +38,8 @@ import './entity-pages.css';
 import './operations-design.css';
 import { installOperationsUI } from './operations-ui.js';
 import './workspace-ui.css';
+import {renderCatalogTable} from './catalog-table.js';
+import './catalog-table.css';
 import './review-workspaces.css';
 import './unified-journal.css';
 import './ui/application-design-system.css';
@@ -1603,21 +1605,14 @@ function renderEqModels(){ const box=$('emList'); if(!box) return;if(eqModelsErr
   if($('emManuList')) $('emManuList').innerHTML=manus.map(x=>'<option value="'+esc(x)+'">').join('');
   if($('emKindList')) $('emKindList').innerHTML=kinds.map(x=>'<option value="'+esc(x)+'">').join('');
   const list=eqModels.filter(m=>!q||emLabel(m).toLowerCase().includes(q)||(m.kind||'').toLowerCase().includes(q));
-  if(!list.length){
-    box.innerHTML=eqModels.length
-      ? '<div class="kempty">По запросу ничего не нашлось.</div>'
-      : '<div class="kempty">Моделей нет.<br>Модель задаёт срок гарантии и интервал ТО — по ним техника попадает в «требующие внимания».<br><br>Начни с кнопки «+ Модель».</div>';
-    return; }
-  const tree={}; list.forEach(m=>{ const mn=m.manufacturer||'Без производителя'; const kn=m.kind||'Без типа'; tree[mn]=tree[mn]||{}; tree[mn][kn]=tree[mn][kn]||[]; tree[mn][kn].push(m); });
-  let h=''; Object.keys(tree).sort().forEach(mn=>{ h+='<div class="emtree-manu"><div class="emtree-h" data-emg="'+esc(mn)+'">▾ '+esc(mn)+'</div><div class="emtree-body">';
-    Object.keys(tree[mn]).sort().forEach(kn=>{ h+='<div class="emtree-kind"><div class="emtree-kh">'+esc(kn)+'</div>';
-      tree[mn][kn].sort((a,b)=>(a.model||'').localeCompare(b.model||'')).forEach(m=>{ h+='<div class="emrow"><span class="emname">'+esc(m.model)+'</span><span class="emmeta">'+(m.warranty_months?(m.warranty_months+' мес'):'—')+((+m.service_interval_hours>0)?(' · '+Math.round(m.service_interval_hours)+' мч'):'')+'</span><button class="btn sm" data-emedit="'+m.id+'">Редактировать</button><button class="btn sm ghost" data-emdel="'+m.id+'" title="Удалить">×</button></div>'; });
-      h+='</div>'; });
-    h+='</div></div>'; });
-  box.innerHTML=h;
-  box.querySelectorAll('[data-emg]').forEach(hd=>hd.onclick=()=>{ const b=hd.nextElementSibling; const open=b.style.display!=='none'; b.style.display=open?'none':''; hd.textContent=(open?'▸ ':'▾ ')+hd.dataset.emg; });
-  box.querySelectorAll('[data-emedit]').forEach(b=>b.onclick=()=>editEqModel(b.dataset.emedit));
-  box.querySelectorAll('[data-emdel]').forEach(b=>b.onclick=()=>delEqModel(b.dataset.emdel)); }
+  renderCatalogTable(box,{label:'Модели техники',scope:role,rows:list,rowClass:'emrow',rowLabel:m=>emLabel(m),empty:eqModels.length?'По запросу ничего не найдено.':'Моделей пока нет. Добавьте первую модель.',columns:[
+    {key:'manufacturer',label:'Производитель',value:m=>m.manufacturer||null},
+    {key:'kind',label:'Тип техники',value:m=>m.kind||null},
+    {key:'model',label:'Модель',value:m=>m.model,render:m=>'<button type="button" class="catalog-record-link" data-emedit="'+esc(m.id)+'">'+esc(m.model)+'</button>'},
+    {key:'warranty',label:'Гарантия, мес',type:'number',value:m=>m.warranty_months},
+    {key:'service',label:'ТО, моточасы',type:'number',value:m=>m.service_interval_hours}
+  ],actions:[{attribute:'data-emedit',label:'Редактировать',run:editEqModel},{attribute:'data-emdel',label:'Удалить модель',danger:true,run:delEqModel}]}); }
+
 function emReset(){ emEditId=null; $('emManu').value='';$('emKind').value='';$('emModel').value='';$('emWarr').value='';$('emInt').value='';$('emNotes').value='';$('emErr').textContent=''; $('emFormTitle').textContent='Добавить модель'; }
 $('emShowAdd').onclick=()=>{ emReset(); $('emForm').style.display=''; $('emManu').focus(); };
 $('emSave').onclick=async ()=>{ const model=$('emModel').value.trim(); if(!model){ $('emErr').textContent='Введи модель.'; return; } const rec={manufacturer:$('emManu').value.trim(),kind:$('emKind').value.trim(),model,warranty_months:parseInt($('emWarr').value)||0,service_interval_hours:+$('emInt').value||0,notes:$('emNotes').value.trim()};
@@ -1643,30 +1638,21 @@ function renderCwModelsTree(){ const box=$('cwModelsTree'); if(!box) return; if(
   let h=''; Object.keys(tree).sort().forEach(mn=>{ h+='<div style="font-weight:600;font-size: var(--fs-3);margin-top: var(--sp-3)">'+esc(mn)+'</div>'; Object.keys(tree[mn]).sort().forEach(kn=>{ h+='<div style="font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-2) 0 var(--sp-1) var(--sp-3)">'+esc(kn)+'</div>'; tree[mn][kn].forEach(m=>{ h+='<label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);padding: var(--sp-1) 0 var(--sp-1) var(--sp-5)"><input type="checkbox" data-cwm="'+m.id+'" '+(cwModelSel.has(m.id)?'checked':'')+' style="width:auto">'+esc(m.model)+'</label>'; }); }); });
   box.innerHTML=h; box.querySelectorAll('[data-cwm]').forEach(c=>c.onchange=()=>{ if(c.checked) cwModelSel.add(c.dataset.cwm); else cwModelSel.delete(c.dataset.cwm); }); }
 document.querySelectorAll('#cwScope [data-cs]').forEach(b=>b.onclick=()=>setCwScope(b.dataset.cs));
-function catGrp(title,inner){ return '<div class="emtree-manu"><div class="emtree-h" data-emg="'+esc(title)+'">▾ '+esc(title)+'</div><div class="emtree-body">'+inner+'</div></div>'; }
-function workRow(w){ const estR=((+w.norm_hours||0)*((appSettings.tariffs&&appSettings.tariffs.hour)||0)); return '<div class="emrow"><span class="emname">'+esc(w.name)+' · '+(+w.norm_hours||0)+'ч'+(w.warranty_eligible?'':' · платно')+'</span><span class="emmeta">'+(w.price?('оверр. '+(+w.price)):('≈'+estR.toFixed(0)))+' '+esc(appSettings.currency||'грн')+'</span><button class="btn sm" data-cwedit="'+w.id+'">Редактировать</button><button class="btn sm ghost" data-cwdel="'+w.id+'" title="Удалить">×</button></div>'; }
-async function renderCatalog(){ if(!catalog.length) await loadCatalog(); if(!eqModels.length) await loadEqModels(); const q=$('catSearch').value.trim().toLowerCase(); const fil=$('catFilter')?$('catFilter').value:''; const box=$('catList');if(catalogError){listLoadError(box,catalogError,async()=>{await loadCatalog();renderCatalog();});return;}
-  const res=catalog.filter(w=>{ const mn=workModelNames(w); const hay=(w.name+' '+((w.applicable_kinds||[]).join(' '))+' '+mn.join(' ')).toLowerCase(); if(q&&!hay.includes(q)) return false; if(fil==='warranty'&&!w.warranty_eligible) return false; if(fil==='paid'&&w.warranty_eligible) return false; if(fil==='maint'&&!w.is_maintenance) return false; return true; });
-  if(!res.length){
-    // Пустое состояние объясняет, зачем раздел нужен, а не просто сообщает
-    // об отсутствии строк. Нормированная работа — это то, из чего потом
-    // собирается заявка и считается выручка.
-    box.innerHTML=catalog.length
-      ? '<div class="kempty">По запросу ничего не нашлось.<br>Измени фильтр или строку поиска.</div>'
-      : '<div class="kempty">Каталог пуст.<br>Нормированная работа задаёт часы и цену — из них собирается заявка и считается выручка.<br><br>Начни с кнопки «+ Работа» вверху.</div>';
-    return; }
-  const general=res.filter(w=>!(w.model_ids&&w.model_ids.length)&&!(w.applicable_kinds&&w.applicable_kinds.length));
-  const byKind=res.filter(w=>!(w.model_ids&&w.model_ids.length)&&(w.applicable_kinds&&w.applicable_kinds.length));
-  const byModel=res.filter(w=>w.model_ids&&w.model_ids.length);
-  let h='';
-  if(general.length) h+=catGrp('Общий набор ('+general.length+')', general.map(workRow).join(''));
-  if(byKind.length){ const kinds={}; byKind.forEach(w=>(w.applicable_kinds||[]).forEach(k=>{ (kinds[k]=kinds[k]||[]).push(w); })); let inner=''; Object.keys(kinds).sort().forEach(k=>{ inner+='<div class="emtree-kind"><div class="emtree-kh">'+esc(k)+'</div>'+kinds[k].map(workRow).join('')+'</div>'; }); h+=catGrp('По типам', inner); }
-  if(byModel.length){ const tree={}; byModel.forEach(w=>(w.model_ids||[]).forEach(id=>{ const m=eqModels.find(x=>x.id===id); if(!m) return; const mn=m.manufacturer||'Без производителя', kn=m.kind||'Без типа', ml=m.model||'—'; tree[mn]=tree[mn]||{}; tree[mn][kn]=tree[mn][kn]||{}; (tree[mn][kn][ml]=tree[mn][kn][ml]||[]).push(w); }));
-    let inner=''; Object.keys(tree).sort().forEach(mn=>{ inner+='<div style="font-weight:600;font-size: var(--fs-3);margin-top: var(--sp-3)">'+esc(mn)+'</div>'; Object.keys(tree[mn]).sort().forEach(kn=>{ inner+='<div class="emtree-kh">'+esc(kn)+'</div>'; Object.keys(tree[mn][kn]).sort().forEach(ml=>{ inner+='<div style="font-size: var(--fs-2);color:var(--ink-dim);margin: var(--sp-1) 0 var(--sp-1) var(--sp-3)">'+esc(ml)+'</div>'+tree[mn][kn][ml].map(workRow).join(''); }); }); }); h+=catGrp('По моделям', inner); }
-  box.innerHTML=h;
-  box.querySelectorAll('[data-emg]').forEach(hd=>hd.onclick=()=>{ const b=hd.nextElementSibling; const open=b.style.display!=='none'; b.style.display=open?'none':''; hd.textContent=(open?'▸ ':'▾ ')+hd.dataset.emg; });
-  box.querySelectorAll('[data-cwedit]').forEach(b=>b.onclick=()=>openCw(b.dataset.cwedit));
-  box.querySelectorAll('[data-cwdel]').forEach(b=>b.onclick=()=>delCw(b.dataset.cwdel)); }
+async function renderCatalog(){
+  if(!catalog.length)await loadCatalog();if(!eqModels.length)await loadEqModels();
+  const q=$('catSearch').value.trim().toLowerCase(),fil=$('catFilter')?.value||'',box=$('catList');
+  if(catalogError){listLoadError(box,catalogError,async()=>{await loadCatalog();renderCatalog();});return;}
+  const applicability=w=>w.model_ids?.length?(workModelNames(w).length?workModelNames(w):['Модель недоступна']):w.applicable_kinds?.length?w.applicable_kinds:['Все модели'];
+  const price=w=>Number(w.price)||Number(w.norm_hours||0)*Number(appSettings.tariffs?.hour||0);
+  const rows=catalog.filter(w=>(!q||(w.name+' '+applicability(w).join(' ')).toLowerCase().includes(q))&&(!fil||fil==='warranty'&&w.warranty_eligible||fil==='paid'&&!w.warranty_eligible||fil==='maint'&&w.is_maintenance));
+  renderCatalogTable(box,{label:'Нормированные работы',scope:role,rows,rowClass:'emrow',rowLabel:w=>w.name,empty:catalog.length?'По запросу ничего не найдено.':'Каталог пуст. Добавьте нормированную работу.',columns:[
+    {key:'name',label:'Работа',value:w=>w.name,render:w=>'<button type="button" class="catalog-record-link" data-cwedit="'+esc(w.id)+'">'+esc(w.name)+'</button>'},
+    {key:'hours',label:'Норма, ч',type:'number',value:w=>w.norm_hours},
+    {key:'applicability',label:'Применимость',value:applicability,render:w=>esc(applicability(w).join(', '))},
+    {key:'type',label:'Тип работ',value:w=>[w.warranty_eligible?'Гарантийная':'Платная',...(w.is_maintenance?['ТО / сервис']:[])],render:w=>esc((w.warranty_eligible?'Гарантийная':'Платная')+(w.is_maintenance?' · ТО / сервис':''))},
+    {key:'price',label:'Цена, '+(appSettings.currency||'грн'),type:'number',value:price,render:w=>price(w).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+(!Number(w.price)?'<small>по тарифу</small>':'')}
+  ],actions:[{attribute:'data-cwedit',label:'Редактировать',run:openCw},{attribute:'data-cwdel',label:'Удалить работу',danger:true,run:delCw}]});
+}
 $('catAdd').onclick=()=>openCw(null);
 function openCw(id){ cwEditId=id; const w=id?catalog.find(x=>x.id==id):null;
   $('catFormTitle').textContent=id?'Правка работы':'Новая работа';
@@ -1695,9 +1681,17 @@ async function renderStockCatalog(){
   const q=$('stockSearch').value.trim().toLowerCase(),showInactive=$('stockShowInactive').checked;
   const rows=stockCatalog.filter(x=>(showInactive||x.active)&&(!q||(x.name+' '+x.sku).toLowerCase().includes(q)));
   const mayManage=role==='admin'||role==='logist'; $('stockAdd').hidden=!mayManage;
-  box.innerHTML=rows.map(x=>'<div class="eqitem stock-row"><div class="stock-title"><b>'+esc(x.name)+'</b><small>'+(x.sku?'Артикул '+esc(x.sku):'Без артикула')+' · '+esc(x.unit)+'</small><small>Цены актуальны с '+esc(new Date(x.current_since).toLocaleDateString('ru-RU'))+(x.legacy_part_id?' · перенесено из старой строки':'')+'</small></div><div class="stock-cell"><small>Продажа, '+esc(appSettings.currency||'грн')+'</small><b>'+Number(x.price||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b></div><div class="stock-cell"><small>Себестоимость, '+esc(appSettings.currency||'грн')+'</small><b>'+Number(x.cost||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b></div><div class="stock-cell stock-state">'+(x.active?'Активна':'В архиве')+'</div><div class="stock-actions">'+(mayManage?'<button type="button" class="btn sm ghost" data-stock-edit="'+x.id+'">Изменить</button>':'')+'</div></div>').join('')||'<div class="kempty">'+(q?'Ничего не найдено.':'В этой выборке пока нет позиций.')+'</div>';
-  box.querySelectorAll('[data-stock-edit]').forEach(b=>b.onclick=()=>openStockItem(b.dataset.stockEdit));
+  const currency=appSettings.currency||'грн',money=value=>value==null?'—':Number(value).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}),since=x=>x.current_since?new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Kyiv'}).format(new Date(x.current_since)):null;
+  renderCatalogTable(box,{label:'Материалы и цены',scope:role,rows,rowClass:'eqitem stock-row',rowLabel:x=>x.name,empty:'В этой выборке пока нет позиций.',columns:[
+    {key:'name',label:'Материал / артикул',value:x=>[x.name,x.sku||null],render:x=>'<button type="button" class="catalog-record-link" data-stock-edit="'+esc(x.id)+'">'+esc(x.name)+'</button><small>'+esc(x.sku||'Без артикула')+'</small>'},
+    {key:'unit',label:'Ед.',value:x=>x.unit||null},
+    {key:'cost',label:'Себестоимость, '+currency,type:'number',value:x=>x.cost,render:x=>money(x.cost)},
+    {key:'price',label:'Продажа, '+currency,type:'number',value:x=>x.price,render:x=>money(x.price)},
+    {key:'since',label:'Цены с',type:'date',value:since,render:x=>since(x)?since(x).split('-').reverse().join('.'):'—'},
+    {key:'active',label:'Статус',value:x=>x.active?'Активен':'В архиве',render:x=>x.active?'Активен':'<span class="catalog-archived">В архиве</span>'}
+  ],actions:mayManage?[{attribute:'data-stock-edit',label:'Изменить материал',run:openStockItem}]:[]});
 }
+
 function openStockItem(id){
   stockEditId=id; const x=id?stockCatalog.find(r=>r.id===id):null;
   $('stockFormTitle').textContent=x?'Изменить материал':'Новая позиция';
@@ -6264,7 +6258,11 @@ async function loadSettings(){ try{
   // без зон объезда и без маршрутизации, и искать причину пришлось бы наугад.
   else loadFail('настройки',new Error('settings и settings_public вернули пусто'));
   }catch(e){ loadFail('настройки',e); } }
-let settingsParamsDirty=false,settingsThemeDirty=false,settingsGeneration=0;
+let settingsParamsDirty=false,settingsThemeDirty=false,settingsGeneration=0,settingsBaseline=null;
+function settingsDraftValues(){return new Map([...document.querySelectorAll('.settings-param-shell input')].map(input=>[input.id,{value:input.value,checked:input.checked}]));}
+function captureSettingsDraft(){settingsBaseline=settingsDraftValues();}
+function syncSettingsSavebar(){const bar=document.querySelector('.settings-savebar');if(bar)bar.hidden=!settingsParamsDirty&&!$('stStatus').textContent;}
+$('stCancel').onclick=()=>{if($('stSave').disabled)return;for(const [id,value] of settingsBaseline||[]){const input=$(id);if(input){input.value=value.value;input.checked=value.checked;}}settingsParamsDirty=false;settingsGeneration++;$('stStatus').textContent='';syncSettingsSavebar();};
 let settingsLeaveFlight=null;
 function leaveSettingsEditor(){
   if(settingsLeaveFlight)return settingsLeaveFlight;
@@ -6278,14 +6276,15 @@ async function checkLeaveSettingsEditor(){
 document.querySelector('.view-settings')?.addEventListener('input',e=>{
   const staff=e.target.closest('.staff-row');if(staff){staff.dataset.dirty='1';return;}
   if(e.target.id==='dtMode'){settingsThemeDirty=true;$('dtStatus').textContent='Изменено · сохрани тему отдельно';}
-  else if(e.target.closest('[data-sec-panel="tariffs"]')&&e.target.matches('input')){settingsParamsDirty=true;settingsGeneration++;$('stStatus').textContent='Изменено · не сохранено';}
+  else if(e.target.closest('[data-sec-panel="tariffs"]')&&e.target.matches('input')){settingsParamsDirty=true;settingsGeneration++;$('stStatus').textContent='Есть несохранённые изменения';syncSettingsSavebar();}
 });
 document.querySelector('.view-settings')?.addEventListener('change',e=>{if(e.target.closest('.staff-row'))e.target.closest('.staff-row').dataset.dirty='1';if(e.target.id==='dtMode'){settingsThemeDirty=true;$('dtStatus').textContent='Изменено · не сохранено';}});
 window.addEventListener('beforeunload',e=>{if(settingsParamsDirty||settingsThemeDirty||document.querySelector('.staff-row[data-dirty]')){e.preventDefault();e.returnValue='';}});
 function renderSettings(){
   document.querySelectorAll('#settingsNav [data-sec]').forEach(b=>b.hidden=role!=='admin'&&b.dataset.sec!=='theme');
   document.querySelectorAll('.settings-body [data-admin-settings]').forEach(p=>p.hidden=role!=='admin');
-  settingsNav(role==='admin'?document.querySelector('#settingsNav .son.on')?.dataset.sec||'tariffs':'theme');
+  settingsNav(role==='admin'?document.querySelector('#settingsNav .son.on')?.dataset.sec||'day':'theme');
+  document.querySelectorAll('[data-settings-admin-group]').forEach(el=>el.hidden=role!=='admin');
   if(role!=='admin')return;
   const s=appSettings; $('stShift').value=s.shift_hours; $('stDev').value=s.deviation_pct;
   if($('stDayStart')) $('stDayStart').value=(s.day_start==null?7:s.day_start); if($('stDayEnd')) $('stDayEnd').value=(s.day_end==null?16:s.day_end); if($('stTolerance')) $('stTolerance').value=(s.tolerance_h==null?1:s.tolerance_h); $('stCur').value=s.currency||'';
@@ -6295,7 +6294,7 @@ function renderSettings(){
   if($('stTrkKmh')) $('stTrkKmh').value=(s.track_max_kmh==null?300:s.track_max_kmh);
   if($('stTrkSlack')) $('stTrkSlack').value=(s.track_slack==null?1.5:s.track_slack);
   $('stDepotRad').value=(s.depot_radius_m==null?5000:s.depot_radius_m); $('stDepotMargin').value=(s.depot_exit_margin_m==null?300:s.depot_exit_margin_m); $('stDepotOut').value=(s.depot_outside_minutes==null?60:s.depot_outside_minutes);
-  const dt=s.default_theme||{}; $('dtMode').value=dt.mode||'dark'; $('orsProxy').value=s.ors_proxy||''; $('stWarrDays').value=(s.repair_warranty_days==null?90:s.repair_warranty_days); $('stContact').value=s.contact_period_days||0;
+  const dt=s.default_theme||{}; $('dtMode').value=dt.mode||'dark'; $('orsProxy').value=s.ors_proxy||''; $('stWarrDays').value=(s.repair_warranty_days==null?90:s.repair_warranty_days); $('stContact').value=s.contact_period_days||0;captureSettingsDraft();syncSettingsSavebar();
   renderProfiles(); renderVehicles(); renderUsersAdmin(); renderVersionLine(); }
 let profEditId=null;
 function tpProfiles(){ return appSettings.tariff_profiles||[]; }
@@ -6327,12 +6326,16 @@ async function profileSave(){ const name=$('tpfName').value.trim(); if(!name){ $
 async function profileDel(id){ if(!await confirmDialog('Удалить профиль тарифа?',{danger:true,okText:'Удалить'})) return; const list=tpProfiles().filter(x=>x.id!==id); const {error}=await sb.from('settings').update({tariff_profiles:list}).eq('id',true); if(error){ notify(error.message,'err'); return; } appSettings.tariff_profiles=list; renderProfiles(); if(profEditId===id) profileResetForm(); }
 if($('tpfSave')) $('tpfSave').onclick=profileSave; if($('tpfCancel')) $('tpfCancel').onclick=()=>{ profileResetForm(); $('profOverlay').classList.remove('on'); };
 if($('profCreate')) $('profCreate').onclick=()=>{ profileResetForm(); $('profOverlay').classList.add('on'); setTimeout(()=>{ try{ $('tpfName').focus(); }catch(e){} },40); };
-function settingsNav(sec){ if(role!=='admin')sec='theme'; setSettingsWorkspace(sec); document.querySelectorAll('#settingsNav .son').forEach(b=>b.classList.toggle('on',b.dataset.sec===sec)); document.querySelectorAll('.settings-body [data-sec-panel]').forEach(p=>p.style.display=(p.dataset.secPanel===sec)?'':'none'); }
-document.querySelectorAll('#settingsNav .son').forEach(b=>b.onclick=()=>settingsNav(b.dataset.sec));
-document.querySelectorAll('.settings-body > .card > h3:first-of-type').forEach(h=>{h.tabIndex=0;h.setAttribute('role','button');h.setAttribute('aria-expanded','true');const toggle=()=>{const collapsed=h.parentElement.classList.toggle('collapsed');h.setAttribute('aria-expanded',String(!collapsed));};h.onclick=e=>{if(!e.target.closest('.q'))toggle();};h.onkeydown=e=>{if(e.target===h&&['Enter',' '].includes(e.key)){e.preventDefault();toggle();}};});
-$('stSave').onclick=async ()=>{ if(role!=='admin')return; const invalid=document.querySelector('[data-sec-panel="tariffs"] input:invalid');if(invalid){const details=invalid.closest('details');if(details)details.open=true;invalid.reportValidity();return;}const negative=[...document.querySelectorAll('[data-sec-panel="tariffs"] input[type=number]')].find(el=>Number(el.value)<0);if(negative){notify('Значение не может быть отрицательным','warn');const details=negative.closest('details');if(details)details.open=true;negative.focus();return;}const start=parseFloat($('stDayStart').value),end=parseFloat($('stDayEnd').value); if(!(end>start)){notify('Конец рабочего дня должен быть позже начала','warn');return;} const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:start,day_end:end,tolerance_h:Math.max(0,parseFloat($('stTolerance').value)||0),currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,depot_radius_m:parseInt($('stDepotRad').value)||5000,depot_exit_margin_m:Math.max(0,parseInt($('stDepotMargin').value)||0),depot_outside_minutes:parseInt($('stDepotOut').value)||60,updated_at:new Date().toISOString()};
+function settingsNav(sec){
+ if(role!=='admin')sec='theme';setSettingsWorkspace(sec);const parameter=['day','tariffs','gps','diagnostics'].includes(sec);
+ document.querySelectorAll('#settingsNav .son').forEach(button=>{button.classList.toggle('on',button.dataset.sec===sec);button.setAttribute('aria-current',button.dataset.sec===sec?'page':'false');});
+ document.querySelectorAll('.settings-body [data-sec-panel]').forEach(panel=>panel.style.display=panel.dataset.secPanel===(parameter?'tariffs':sec)&&(!panel.dataset.settingsOnly||panel.dataset.settingsOnly===sec)?'':'none');
+ document.querySelectorAll('[data-settings-section]').forEach(section=>section.hidden=section.dataset.settingsSection!==sec);
+}
+document.querySelectorAll('#settingsNav .son').forEach(button=>button.onclick=()=>settingsNav(button.dataset.sec));
+$('stSave').onclick=async ()=>{ if(role!=='admin')return; const invalid=document.querySelector('[data-sec-panel="tariffs"] input:invalid');if(invalid){settingsNav(invalid.closest('[data-settings-section]')?.dataset.settingsSection||'day');const details=invalid.closest('details');if(details)details.open=true;invalid.reportValidity();return;}const negative=[...document.querySelectorAll('[data-sec-panel="tariffs"] input[type=number]')].find(el=>Number(el.value)<0);if(negative){settingsNav(negative.closest('[data-settings-section]')?.dataset.settingsSection||'day');notify('Значение не может быть отрицательным','warn');const details=negative.closest('details');if(details)details.open=true;negative.focus();return;}const start=parseFloat($('stDayStart').value),end=parseFloat($('stDayEnd').value); if(!(end>start)){settingsNav('day');notify('Конец рабочего дня должен быть позже начала','warn');return;} const rec={shift_hours:parseFloat($('stShift').value)||8,deviation_pct:parseFloat($('stDev').value)||0,day_start:start,day_end:end,tolerance_h:Math.max(0,parseFloat($('stTolerance').value)||0),currency:$('stCur').value.trim()||'грн',costs:{km:+$('csKm').value||0,hour:+$('csHour').value||0,day:+$('csDay').value||0,night:+$('csNight').value||0},ors_proxy:$('orsProxy').value.trim(),repair_warranty_days:parseInt($('stWarrDays').value)||0,contact_period_days:parseInt($('stContact').value)||0,stay_radius_m:parseInt($('stStayRad').value)||300,stay_min_minutes:parseInt($('stStayMin').value)||10,track_max_kmh:parseFloat($('stTrkKmh').value)||300,track_slack:parseFloat($('stTrkSlack').value)||1.5,depot_radius_m:parseInt($('stDepotRad').value)||5000,depot_exit_margin_m:Math.max(0,parseInt($('stDepotMargin').value)||0),depot_outside_minutes:parseInt($('stDepotOut').value)||60,updated_at:new Date().toISOString()};
   if(!hasDayStart) delete rec.day_start;
-  const generation=settingsGeneration;$('stSave').disabled=true;$('stStatus').textContent='Сохраняю…';let error;try{({error}=await sb.from('settings').update(rec).eq('id',true));}catch(e){error=e;}finally{$('stSave').disabled=false;}if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } settingsParamsDirty=generation!==settingsGeneration;appSettings=Object.assign(appSettings,rec);$('stStatus').textContent=settingsParamsDirty?'Сохранён предыдущий вариант · новые изменения не сохранены':'Сохранено'; };
+  const submittedValues=settingsDraftValues(),generation=settingsGeneration;$('stSave').disabled=true;$('stCancel').disabled=true;$('stStatus').textContent='Сохраняю…';let error;try{({error}=await sb.from('settings').update(rec).eq('id',true));}catch(e){error=e;}finally{$('stSave').disabled=false;$('stCancel').disabled=false;}if(error){ $('stStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } settingsParamsDirty=generation!==settingsGeneration;appSettings=Object.assign(appSettings,rec);$('stStatus').textContent=settingsParamsDirty?'Сохранён предыдущий вариант · новые изменения не сохранены':'';settingsBaseline=submittedValues;syncSettingsSavebar(); };
 $('dtSave').onclick=async ()=>{ if(role!=='admin')return; const dt={mode:$('dtMode').value,accent:'#ffe100'}; const {error}=await sb.from('settings').update({default_theme:dt}).eq('id',true); if(error){ $('dtStatus').innerHTML='<span class="err">'+esc(error.message)+'</span>'; return; } settingsThemeDirty=false;appSettings.default_theme=dt; $('dtStatus').innerHTML='<span class="ok">Сохранено</span>'; };
 async function renderUsersAdmin(){
   const box=$('usersList');

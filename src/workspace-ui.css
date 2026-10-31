@@ -787,3 +787,63 @@ html[data-theme=light] .mleg-symbol { width:24px;border-radius:0;background:tran
 }
 
 .view .workspace-section-rail .workspace-page-tabs::-webkit-scrollbar{display:none}
+
+/* Compact section navigation replaces duplicated page headings. */
+.view .workspace-section-rail{padding:0 32px}
+.view .workspace-section-rail .workspace-heading-row{display:contents}
+.view .workspace-section-rail .workspace-heading-row>:is(div:not(.catalog-page-actions),.design-page-head){position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.view .workspace-section-rail .workspace-header-inner{display:flex;align-items:stretch;gap:24px;max-width:none;padding:0}
+.view .workspace-dispatcher-head{display:flex;align-items:stretch;gap:24px}
+.view .workspace-section-rail .workspace-page-tabs{order:0;flex:1;min-width:0;min-height:64px;margin:0 0 -1px;padding:0}
+.view .workspace-section-rail .workspace-page-tabs>.subtab{min-height:64px}
+.view .workspace-section-rail .workspace-page-tabs{box-sizing:border-box;height:64px;max-height:64px}
+.view .workspace-section-rail .workspace-page-tabs>.subtab{box-sizing:border-box;height:64px;max-height:64px}
+.view .workspace-section-rail .workspace-heading-row>.btn,.view .workspace-section-rail .catalog-page-actions{order:1;align-self:center;flex:none;margin:0}
+.view .workspace-section-rail .catalog-page-actions{display:flex}
+.view-settings .workspace-masthead{padding:24px 32px 16px}
+.view-settings .workspace-masthead .design-description{display:none}
+.view-settings .settings-layout{display:grid;grid-template-columns:220px minmax(0,900px);gap:32px;align-items:start}
+.view-settings .settings-body{display:flex;flex-direction:column;align-items:stretch;min-width:0;gap:24px}
+.view-settings .settings-nav{display:flex;flex-direction:column;gap:4px;padding:0}
+.view-settings .settings-nav .son{display:flex;align-items:center;justify-content:flex-start;min-height:48px;padding:10px 16px;text-align:left;border:0;border-left:3px solid transparent;border-radius:8px;background:transparent;white-space:normal;font:500 14px/21px var(--sans)}
+.view-settings .settings-nav .son.on{background:var(--panel-2);border-left-color:var(--accent-line);color:var(--ink)}
+.view-settings .settings-nav-label{padding:16px 16px 4px;color:var(--ink-dim);font:500 12px/18px var(--sans)}
+.view-settings .settings-nav-label:first-child{padding-top:0}
+.view-settings .settings-param-shell{padding:0!important;border:0;background:none}
+.view-settings .settings-param-section{padding:24px;margin:0}
+.view-settings .settings-param-section>h3:first-child{margin-top:0;border:0;padding-top:0}
+.view-settings .settings-param-section>.row{gap:16px}
+.view-settings .settings-param-section[hidden]{display:none!important}
+.view-settings .settings-savebar{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);z-index:3}
+.view-settings .settings-savebar[hidden]{display:none!important}
+.view-settings .settings-savebar>#stStatus{flex:1;min-width:0}
+.view-settings .settings-savebar>.btn{flex:none}
+@media(max-width:760px){
+ .view .workspace-section-rail{padding:0 16px}
+ .view .workspace-section-rail .workspace-header-inner,.view .workspace-dispatcher-head{gap:12px;flex-wrap:wrap}
+ .view .workspace-section-rail .workspace-page-tabs{flex-basis:100%;order:1;gap:8px}
+ .view .workspace-section-rail .workspace-page-tabs{height:48px;min-height:48px;max-height:48px}
+ .view .workspace-section-rail .workspace-page-tabs>.subtab{min-height:48px;padding:12px 8px}
+ .view .workspace-section-rail .workspace-page-tabs>.subtab{height:48px;max-height:48px}
+ .view .workspace-section-rail .workspace-heading-row>.btn,.view .workspace-section-rail .catalog-page-actions{order:0;margin:8px 0 0 auto}
+ .view-settings .workspace-masthead{padding:16px}
+ .view-settings .settings-layout{grid-template-columns:minmax(0,1fr);gap:16px}
+ .view-settings .settings-nav{flex-direction:row;overflow-x:auto;scrollbar-width:none;max-width:100%}
+ .view-settings .settings-nav-label{display:none}
+ .view-settings .settings-nav .son{flex:none;border-left:0;border-bottom:2px solid transparent;border-radius:0;white-space:nowrap;font:500 16px/24px var(--sans)}
+ .view-settings .settings-nav .son.on{border-bottom-color:var(--accent-line)}
+ .view-settings .settings-param-section{padding:16px}
+ .view-settings .settings-savebar{flex-wrap:wrap;padding-bottom:max(16px,env(safe-area-inset-bottom))}
+ .view-settings .settings-savebar>#stStatus{flex-basis:100%}
+ .view-settings .settings-savebar>.btn{flex:1}
+}
+
+html#dlight-ui[data-ui-system] .view-settings .settings-nav .son{display:flex!important;justify-content:flex-start!important;min-height:48px!important;padding:10px 16px!important;border:0!important;border-left:3px solid transparent!important;border-radius:8px!important;background:transparent!important;color:var(--ink-dim)!important;text-align:left!important;font:500 14px/21px var(--sans)!important}
+html#dlight-ui[data-ui-system] .view-settings .settings-nav .son.on{background:var(--panel-2)!important;border-left-color:var(--accent-line)!important;color:var(--ink)!important}
+html#dlight-ui[data-ui-system] .view-settings .settings-nav .son{gap:12px!important}
+html#dlight-ui[data-ui-system] .view-settings .settings-nav .son .journal-icon{width:20px;height:20px;flex:none}
+html#dlight-ui[data-ui-system] .view-settings .settings-param-section>h3{cursor:default;padding-right:0}
+html#dlight-ui[data-ui-system] .view-settings .settings-param-section>h3::after{content:none}
+html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3{cursor:default}
+html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{content:none!important}
+@media(max-width:760px){html#dlight-ui[data-ui-system] .view-settings .settings-nav .son{border-left:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;font:500 16px/24px var(--sans)!important}html#dlight-ui[data-ui-system] .view-settings .settings-nav .son.on{border-bottom-color:var(--accent-line)!important}}
