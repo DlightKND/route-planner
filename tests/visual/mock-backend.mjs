@@ -472,7 +472,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
        plan_qty:2,fact_qty:1,base_revenue:50,base_cost:10,editable:false}
     ],extra_parts_cost:15,
     trips:[{id:trip,title:ride.vehicle_label,whole:scope==='trip',request_id:job,lower:0,upper:1,
-      plan_km:20,plan_revenue:400,plan_cost:160,fact_km:20,approved_cost:160,road:{...roadModel(),sections:[roads[0]]}}],
+      plan_km:20,plan_revenue:400,plan_cost:160,plan_editable:true,
+      plan_legs:[{id:'base-to-site',title:'База → Объект',km:8,rates:financeLocal('road_plan',trip,'base-to-site')},
+        {id:'site-to-base',title:'Объект → База',km:12,rates:financeLocal('road_plan',trip,'site-to-base')}],
+      fact_km:20,approved_cost:160,road:{...roadModel(),sections:[roads[0]]}}],
     corrections:Object.fromEntries(['plan:revenue','plan:cost','fact:revenue','fact:cost'].map(key=>[key,financeLocal(scope,id,key)]).filter(([,value])=>Object.keys(value).length))});
   if(scopedFinanceJourney)audit.scopedFinanceWrites=[];
   const visitPayload={items:task.service_order_items.map(row=>({id:row.id,qty:row===visitWork?3:0,

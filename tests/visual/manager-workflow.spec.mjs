@@ -115,6 +115,7 @@ test('M16: road shares, payment terms and an edited tariff survive a split and r
 test('M17: accepted road and work feed the three financial views and total adjustments stay in their card',async({page},info)=>{
  const errors=await boot(page,info,{route:'order/'+order+'/plan-fact',scopedFinanceJourney:true,roadJourney:true,stage:'in_progress'});
  const finance=page.locator('.view.active .scoped-finance'),fact=finance.locator('.scoped-finance-money').nth(1);
+ const plan=finance.locator('.scoped-finance-money').first();
  const totals=(revenue,cost)=>expect(fact.locator('dd')).toHaveText([revenue,cost]);
  await totals('950 грн','635 грн');
  await finance.getByRole('button',{name:'Таблицы',exact:true}).click();
@@ -129,6 +130,13 @@ test('M17: accepted road and work feed the three financial views and total adjus
  await editor.locator('[data-finance-save]').click();
  await totals(/1\s050 грн/,'395 грн');
  await shot(page,info,'task-finance-rates');
+ await finance.getByRole('button',{name:'Изменить тарифы · База → Объект',exact:true}).click();
+ await expect(editor.locator('legend')).toHaveText('План');
+ await editor.locator('[data-road-rate-metric=revenue]').fill('25');
+ await editor.locator('[data-road-rate-metric=cost]').fill('6');
+ await editor.locator('[data-finance-save]').click();
+ await expect(plan.locator('dd')).toHaveText([/1\s540 грн/,'914 грн']);
+ await totals(/1\s050 грн/,'395 грн');
  await navigate(page,'trip','/trip/'+trip+'/economy');
  await totals(/1\s050 грн/,'395 грн');
  await finance.locator('[data-finance-section=totals] summary').click();
@@ -144,6 +152,7 @@ test('M17: accepted road and work feed the three financial views and total adjus
  await shot(page,info,'trip-finance-correction');
  await navigate(page,'job','/job/'+job+'/plan-fact');
  await totals(/1\s050 грн/,'395 грн');
+ await expect(plan.locator('dd')).toHaveText([/1\s540 грн/,'914 грн']);
  await navigate(page,'trip','/trip/'+trip+'/economy');
  await totals(/1\s600 грн/,'395 грн');
  await finance.locator('[data-finance-section=totals] summary').click();
@@ -152,7 +161,8 @@ test('M17: accepted road and work feed the three financial views and total adjus
  await totals(/1\s050 грн/,'395 грн');
  const writes=await page.evaluate(()=>window.__visualQA.scopedFinanceWrites);
  expect(writes.map(row=>[row.p_scope,row.p_value])).toEqual([
-  ['work',{fact:{revenue:600,cost:70}}],['trip',{value:1600,reason:'Согласовано с заказчиком'}],['trip',{}]]);
+  ['work',{fact:{revenue:600,cost:70}}],['road_plan',{revenue:25,cost:6}],
+  ['trip',{value:1600,reason:'Согласовано с заказчиком'}],['trip',{}]]);
  await clean(page,errors);
 });
 

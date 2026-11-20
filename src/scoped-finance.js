@@ -52,10 +52,24 @@ function calculateLine(line,pricing){
 function calculateTrip(row){
  const scope=row.whole?null:row;
  const book=row.road?.tariffs?calculateRoadAccounting(row.road,row.fact_km,scope):null;
+ const planLegs=row.plan_legs||[];
+ const planKm=planLegs.reduce((sum,section)=>sum+Number(section.km),0);
+ const basePlan={revenue:amount(row.plan_revenue),cost:amount(row.plan_cost)};
+ const baseRates=Object.fromEntries(Object.entries(basePlan).map(([metric,value])=>[metric,value!=null&&planKm>0?value/planKm:null]));
+ const planSections=planLegs.map(section=>({...section,defaults:baseRates,mode:'plan'}));
+ const plan=Object.fromEntries(Object.entries(basePlan).map(([metric,baseline])=>{
+  const changed=planSections.filter(section=>section.rates?.[metric]!=null);
+  if(!changed.length)return [metric,baseline];
+  if(baseline==null)return [metric,changed.length===planSections.length
+   ?knownSum(changed.map(section=>product(section.km,section.rates[metric]))):null];
+  const delta=changed.reduce((sum,section)=>sum+section.km*(section.rates[metric]-baseRates[metric]),0);
+  return [metric,round(baseline+delta)];
+ }));
  return {...row,computed:{
-  plan:{revenue:amount(row.plan_revenue),cost:amount(row.plan_cost)},
+  plan,
   fact:{revenue:book?book.revenue:null,cost:amount(row.approved_cost)??(book?book.cost:amount(row.legacy_fact_cost))}
- },actual:book?book.total:amount(row.legacy_fact_km),sections:book?.rows.filter(section=>row.whole||section.assigned>0)||[],
+ },actual:book?book.total:amount(row.legacy_fact_km),
+  sections:[...planSections,...(book?.rows.filter(section=>row.whole||section.assigned>0)||[]).map(section=>({...section,mode:'fact'}))],
   incomplete:!!book?.unmeasured||!!book?.rows.some(section=>section.returning&&(section.km==null||section.pending>0)&&!section.local?.payer&&!row.road.item.local?.payer)};
 }
 
@@ -130,6 +144,7 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip}){
    if(error)throw error;
    if(!current())return false;
    if(target==='work')model.lines.find(line=>line.id===subject).rates=data;
+   else if(target==='road_plan')model.trips.find(trip=>trip.id===parent).plan_legs.find(leg=>leg.id===subject).rates=data;
    else if(Object.keys(data).length)model.corrections[subject]=data;
    else delete model.corrections[subject];
    return true;
@@ -170,10 +185,10 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip}){
        <td>${Object.keys(metricTitles).map(metric=>metricTitles[metric]+' '+cash(row.rates?.plan?.[metric]??row.defaults.plan[metric])).map(esc).join(' · ')}
        ${row.rates?.plan||row.rates?.fact?'<small class="hint payment-term-exception">Тариф задан вручную</small>':''}</td>
        <td>${row.editable?`<button class="btn" type="button" data-finance-rate="${index}" aria-label="Изменить тарифы · ${esc(row.title)}">Изменить</button>`:''}</td></tr>`).join('')}
-     ${sections.map(({trip,section},index)=>`<tr><th scope="row">Дорога · ${esc(section.title)}<small class="hint">${esc(section.defaults.payer)}</small></th>
-       <td>${Object.keys(metricTitles).map(metric=>metricTitles[metric]+' '+cash(section.defaults[metric])).map(esc).join(' · ')}
-       ${Object.keys(section.rates||{}).length?'<small class="hint payment-term-exception">Факт · вручную</small>':''}</td>
-       <td>${trip.road.editable?`<button class="btn" type="button" data-finance-road-rate="${index}" aria-label="Изменить тарифы · ${esc(section.title)}">Изменить</button>`:''}</td></tr>`).join('')}
+     ${sections.map(({trip,section},index)=>`<tr><th scope="row">Дорога · ${esc(section.title)}<small class="hint">${modeTitles[section.mode]} · ${esc(section.defaults.payer||distanceText(section.km))}</small></th>
+       <td>${Object.keys(metricTitles).map(metric=>metricTitles[metric]+' '+cash(section.rates?.[metric]??section.defaults[metric])).map(esc).join(' · ')}
+       ${Object.keys(section.rates||{}).length?'<small class="hint payment-term-exception">Тариф задан вручную</small>':''}</td>
+       <td>${(section.mode==='plan'?trip.plan_editable:trip.road.editable)?`<button class="btn" type="button" data-finance-road-rate="${index}" aria-label="Изменить тарифы · ${esc(section.title)}">Изменить</button>`:''}</td></tr>`).join('')}
      </tbody></table></div>`):''}
     ${disclosure('totals','Корректировки итогов',Object.entries(modeTitles).flatMap(([mode,heading])=>Object.entries(metricTitles).map(([metric,title])=>{
      const key=mode+':'+metric,override=model.corrections[key];
@@ -296,6 +311,7 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip}){
  function editRoadRate({trip,index,section},trigger){
   const previous=section.rates||{};
   const saveRates=async value=>{
+   if(section.mode==='plan')return save('road_plan',section.id,previous,value,trip.id);
    if(!current())return false;
    if(saving)throw Error('Дождитесь сохранения');
    saving=true;
@@ -306,7 +322,7 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip}){
     return true;
    }finally{saving=false;}
   };
-  panelEditor('Тарифы · '+section.title,`<fieldset class="scoped-finance-road-rates"><legend>Факт</legend>
+  panelEditor('Тарифы · '+section.title,`<fieldset class="scoped-finance-road-rates"><legend>${modeTitles[section.mode]}</legend>
    ${Object.entries(metricTitles).map(([key,name])=>`<label>${name}, ${esc(model.currency)}/км
     <input data-road-rate-metric="${key}" type="text" inputmode="decimal" value="${financeValue(previous[key])}"
     placeholder="${esc(section.defaults[key]==null?'Тариф не задан':format.format(section.defaults[key]))}"></label>`).join('')}

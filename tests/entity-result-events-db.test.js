@@ -70,6 +70,7 @@ beforeAll(async()=>{
       source_track_updated_at timestamptz,fact_km numeric);
     create table public.trip_cost_allocations(run_id uuid,cost_type text,service_order_id uuid,quantity numeric,amount numeric);`);
   await db.exec(file('../supabase/migrations/20261120200145_scoped_finance_workspace.sql'));
+  await db.exec(file('../supabase/migrations/20261120202510_planned_road_tariffs.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -136,6 +137,41 @@ it('projects accepted work, road and approved allocation across cards with audit
   expect(await q('select scope,subject,actor_id from dlight_private.finance_adjustment_events order by id')).toHaveLength(3);
   expect(await q('select financial_revenue_snapshot,financial_cost_snapshot from service_order_items where id=$1',[id(40)]))
     .toEqual([{financial_revenue_snapshot:'2500',financial_cost_snapshot:'1234'}]);
+});
+
+it('keeps planned leg rates separate from GPS rates and rejects a leg removed from the saved route',async()=>{
+  const finance=(scope,parent)=>q('select public.entity_finance_read($1,$2) model',[scope,id(parent)]).then(rows=>rows[0].model);
+  const save=(subject,previous,value)=>q("select public.entity_finance_adjust('road_plan',$1,$2,$3,$4) saved",
+    [id(50),subject,previous,value]).then(rows=>rows[0].saved);
+  const stops=[{name:'База',lat:50,lng:30},{name:'Объект',lat:50.1,lng:30.1}];
+  const a='50.00000,30.00000',b='50.10000,30.10000';
+  const first={a,b,km:8},second={a:b,b:a,km:12};
+  const plan={km:20,rTravel:400,legs:[first,second]};
+  await db.exec('reset role');
+  await q('update trips set plan_econ_snapshot=$2,route_stops=$3::jsonb,tariffs_snapshot=$4 where id=$1',
+    [id(50),plan,JSON.stringify(stops),{costs:{km:8}}]);
+  await as(6);
+  const legs=(await finance('trip',50)).trips[0].plan_legs;
+  expect(legs.map(leg=>[leg.title,leg.km])).toEqual([['База → Объект',8],['Объект → База',12]]);
+  const subject=legs[0].id,override={revenue:25,cost:6};
+  await rejected(()=>save(subject,{},{revenue:-1}),/плановые тарифы/);
+  expect(await save(subject,{},override)).toEqual(override);
+  await rejected(()=>save(subject,{},override),/изменились/);
+  for(const [scope,parent] of [['trip',50],['job',10],['order',30]]){
+    const road=calculateEntityFinance(await finance(scope,parent)).mileage[0];
+    expect(road.computed).toEqual({plan:{revenue:440,cost:144},fact:{revenue:null,cost:null}});
+  }
+  await as(3);
+  await rejected(()=>save(subject,override,{}),/куратор/);
+  await as(6);
+  expect(await save(subject,override,{})).toEqual({});
+  await db.exec('reset role');
+  await q('update trips set plan_econ_snapshot=$2 where id=$1',[id(50),{km:12,rTravel:240,legs:[second]}]);
+  await as(6);
+  await rejected(()=>save(subject,{},override),/маршрута изменился/);
+  await db.exec('reset role');
+  expect(await q("select previous,new_value from dlight_private.finance_adjustment_events where scope='road_plan' order by id"))
+    .toEqual([{previous:{},new_value:override},{previous:override,new_value:{}}]);
 });
 
 it('prices verified road intervals independently of stops, preserves shares on split and guards stale edits',async()=>{
