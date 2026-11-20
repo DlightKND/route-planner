@@ -776,6 +776,11 @@
   height:clamp(220px,43vh,520px);
  }
 }
+@media (min-width:761px) and (max-width:1100px) {
+ .unified-gps-journal:not(.gps-show-detail)>.gps-journal-detail.journal-trip-detail {
+  display:none;
+ }
+}
 @media (max-width:760px) {
  .journal-overview-modes:not([hidden]) {
   display:flex;

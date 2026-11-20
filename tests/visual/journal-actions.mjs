@@ -1,11 +1,20 @@
 // Follow the visible disclosure controls introduced by the compact journal.
+export async function showJournalOverview(page,mode){
+ if(page.viewportSize().width<=760)await page.locator('[data-journal-overview-mode="'+mode+'"]').click();
+}
+
+export async function openOrphanDocuments(page){
+ if(page.viewportSize().width<=1100)await page.locator('[data-ut-details]').first().click();
+ await page.locator('[data-orphan-pane=documents]').click();
+}
+
 export async function openJournalPane(page,pane){
  if(pane==='route'){
-  const map=page.locator('[data-journal-overview-mode=map]');
   const expand=page.locator('.journal-overview-map [data-expand-map]');
   const stopMap=page.locator('.presence-review-map [data-presence-route]');
+  await openLocation(page);
   if(await stopMap.isVisible()){await stopMap.click();return;}
-  if(await map.isVisible())await map.click();
+  await showJournalOverview(page,'map');
   await expand.click();
   return;
  }

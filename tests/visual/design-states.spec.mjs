@@ -1,3 +1,4 @@
+import {openOrphanDocuments} from './journal-actions.mjs';
 import {test,expect} from '@playwright/test';
 import {clickDispatcherControl} from './dispatcher-controls.mjs';
 import {mkdirSync} from 'node:fs';
@@ -44,7 +45,7 @@ test('design state: result draft remains distinct from saved data and review',as
  await capture(page,info,'result-editor-draft',errors);await dialog.locator('#orderResultLater').click();await page.locator('#confirmNo').click();await expect(dialog.locator('[data-result-qty]').first()).toHaveValue('3');
 });
 test('design state: curator review explains both remaining work and active travel',async({page},info)=>{
- const errors=await start(page,info,'order/'+fixtureIDs.activeOrder,{reviewOrder:true});await page.locator('[data-open-result-review]').click();
+ const errors=await start(page,info,'order/'+fixtureIDs.activeOrder,{reviewOrder:true});await page.locator('#orderTab-scope').click();await page.locator('[data-open-result-review]').click();
  const dialog=page.locator('dialog.entity-review-dialog');await expect(dialog).toBeVisible();await expect(dialog.locator('[data-review-accept]')).toBeDisabled();
  await expect(dialog.locator('.review-blockers')).toContainText('Выезд не завершён');await expect(dialog.locator('.review-blockers')).toContainText('количественный остаток');
  await capture(page,info,'result-review-blocked',errors);
@@ -112,7 +113,7 @@ test('design state: presence evidence and decision stay separate',async({page},i
 });
 test('design state: GPS resolution separates the operation, parameters and saved facts',async({page},info)=>{
  const errors=await start(page,info,'planner/tracking',{role:'admin',unassignedJourney:true});
- if(page.viewportSize().width<=1100)await page.locator('[data-ut-details]').first().click();if(await page.locator('[data-orphan-documents]').isVisible())await page.locator('[data-orphan-documents]').click();await page.getByRole('button',{name:'Создать документы',exact:true}).click();const overlay=page.locator('#promptOverlay');
+ await openOrphanDocuments(page);await page.getByRole('button',{name:'Создать документы',exact:true}).click();const overlay=page.locator('#promptOverlay');
  await expect(overlay.locator('.gps-resolution-workspace')).toBeVisible();await expect(overlay.locator('[data-gps-choice]')).toHaveCount(3);
  await overlay.locator('[data-pf=title]').fill('Черновик названия');await expect(overlay.locator('#promptYes')).toBeInViewport();await expect(overlay.locator('#promptNo')).toBeInViewport();await capture(page,info,'gps-resolution',errors);
  await overlay.locator('[data-gps-choice=charge]').click();await expect(overlay.locator('[data-pf=km]')).toBeVisible();await expect(overlay.locator('.gps-resolution-summary')).toContainText('12,5');
@@ -122,7 +123,7 @@ test('design state: GPS resolution separates the operation, parameters and saved
 test('design state: request estimate keeps the agreed scope separate from execution',async({page},info)=>{
  const errors=await start(page,info,'job/'+fixtureIDs.job,{financeJourney:true});await page.locator('#jobTabEstimate').click();
  await expect(page.locator('.request-estimate-base')).toBeVisible();await expect(page.locator('#jbWorks')).toBeVisible();await expect(page.locator('#jbParts').locator('..')).toBeVisible();
- await capture(page,info,'request-estimate',errors);await page.locator('[data-estimate-tasks]').click();await expect(page.locator('#jobOverviewPane')).toBeVisible();
+ await capture(page,info,'request-estimate',errors);await page.locator('#jobTabTasks').click();await expect(page.locator('#jobOrders')).toBeVisible();
 });
 test('design state: new assignment keeps editable organization and scope together',async({page},info)=>{
  const errors=await start(page,info,'planner/orders');await page.locator('#orderAdd').click();
@@ -133,7 +134,7 @@ test('design state: current decisions remain separate from incoming notification
  const errors=await start(page,info,'notifications',{decisionQueue:true});const queue=page.locator('.notice-decisions');
  await expect(queue.locator('.notice-decision-card')).toHaveCount(2);await expect(queue).toContainText('Проверка результата');await expect(queue).toContainText('Проверка присутствия');
  await expect(page.locator('.notice-incoming .notice-toolbar')).toBeVisible();await capture(page,info,'notifications-decisions',errors);
- await queue.getByRole('link',{name:'Проверить результат',exact:true}).click();await expect(page.locator('[data-open-result-review]')).toBeVisible();expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
+ await queue.getByRole('link',{name:'Проверить результат',exact:true}).click();await page.locator('#orderTab-scope').click();await expect(page.locator('[data-open-result-review]')).toBeVisible();expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
 });
 async function expandMapSheet(page){if(page.viewportSize().width<=760)await page.locator('#sideHandle').click();}
 test('design state: map work and directory have one scope navigation and working filters',async({page},info)=>{
@@ -222,7 +223,7 @@ test('layout: summary schedule and statistics scroll independently below a fixed
 test('polish: wide workspaces use the available width and the rail indicator sits at the edge',async({page},info)=>{
  test.skip(page.viewportSize().width<1440,'Wide desktop composition');await page.setViewportSize({width:1920,height:1000});
  const errors=await start(page,info,'planner/orders');
- const heading=await page.locator('#plOrders .workspace-heading-row').boundingBox();expect(heading.x).toBe(108);expect(heading.x+heading.width).toBe(1888);
+ const header=page.locator('#plOrders .workspace-dispatcher-head');await expect(header).toBeVisible();const heading=await header.evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {left:r.left+parseFloat(s.paddingLeft),right:r.right-parseFloat(s.paddingRight)};});expect(heading).toEqual({left:108,right:1888});
  const marker=await page.locator('.rail .nav-i.active').evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el,'::before');return {edge:r.left+parseFloat(s.left),width:parseFloat(s.width)};});expect(marker.edge).toBe(0);expect(marker.width).toBe(4);
  await capture(page,info,'wide-dispatcher',errors);
  for(const route of ['catalog','job/'+fixtureIDs.job,'order/'+fixtureIDs.activeOrder,'trip/'+fixtureIDs.trip]){
@@ -234,12 +235,13 @@ test('polish: wide workspaces use the available width and the rail indicator sit
  await capture(page,info,'wide-request',errors);
 });
 
-test('polish: settings advanced panels have padding and scrolled navigation stays flat',async({page},info)=>{
- const errors=await start(page,info,'settings',{role:'admin'});const details=page.locator('.settings-advanced').first();
- await details.locator('summary').click();await expect(page.locator('#stTrkKmh')).toBeVisible();
- expect(await details.evaluate(el=>{const s=getComputedStyle(el);return [s.paddingTop,s.paddingRight,s.paddingBottom,s.paddingLeft];})).toEqual(['20px','20px','20px','20px']);
- const bounds=await details.boundingBox(),title=await details.locator('summary').boundingBox();expect(title.x-bounds.x).toBeGreaterThanOrEqual(20);
- await page.locator('.view-settings>.pane').evaluate(el=>el.scrollTop=500);
+test('polish: settings panels have padding and scrolled navigation stays flat',async({page},info)=>{
+ const errors=await start(page,info,'settings',{role:'admin'});await page.locator('#settingsNav [data-sec=gps]').click();const panel=page.locator('[data-settings-section=gps]');
+ await expect(page.locator('#stTrkKmh')).toBeVisible();
+ const padding=page.viewportSize().width<=900?16:24;
+ expect(await panel.evaluate(el=>{const s=getComputedStyle(el);return [s.paddingTop,s.paddingRight,s.paddingBottom,s.paddingLeft].map(parseFloat);})).toEqual(Array(4).fill(padding));
+ const bounds=await panel.boundingBox(),title=await panel.locator('h3').boundingBox();expect(title.x-bounds.x).toBeGreaterThanOrEqual(padding);
+ await page.locator('.view-settings .workspace-main').evaluate(el=>el.scrollTop=500);
  const shadows=await page.evaluate(()=>[...document.querySelectorAll('.view-settings *,.rail *')].flatMap(el=>['', '::before','::after'].map(p=>getComputedStyle(el,p).boxShadow)).filter(v=>v!=='none'));
  expect(shadows).toEqual([]);await capture(page,info,'settings-flat-padding',errors);
 });

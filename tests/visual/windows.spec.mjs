@@ -53,7 +53,7 @@ test('signature cancel aborts closing, while unsigned completion is a separate r
 });
 
 test('engineer choices survive opening and repeated opening, and dismiss on external scroll',async({page})=>{
- await open(page,'openTrip',trip);const button=page.locator('#tpEng + .engineer-picker');await button.scrollIntoViewIfNeeded();
+ await open(page,'openTrip',trip);await page.locator('#tpTabPlan').click();await page.locator('.workflow-trip-edit>summary').click();const button=page.locator('#tpEng + .engineer-picker');await button.scrollIntoViewIfNeeded();
  for(let i=0;i<2;i++){
   await button.click();const panel=page.locator('.engineer-options');await expect(panel).toBeVisible();await page.waitForTimeout(150);await expect(panel).toBeVisible();
   expect((await panel.boundingBox()).y).toBeGreaterThanOrEqual(0);
@@ -64,7 +64,7 @@ test('engineer choices survive opening and repeated opening, and dismiss on exte
 });
 
 test('trip navigation waits for discard and keeps the draft after cancellation',async({page})=>{
- await open(page,'openTrip',trip);const field=page.locator('#tpFrom');const original=await field.inputValue();await field.fill('2026-10-09');
+ await open(page,'openTrip',trip);await page.locator('#tpTabPlan').click();await page.locator('.workflow-trip-edit>summary').click();const field=page.locator('#tpFrom');const original=await field.inputValue();await field.fill('2026-10-09');
  // Two fast route requests must share one pending discard decision.
  await page.evaluate(()=>{window.__windowTests.switchTab('dash');window.__windowTests.switchTab('dash');});
  await expect(page.locator('#confirmOverlay')).toBeVisible();await page.locator('#confirmNo').click();

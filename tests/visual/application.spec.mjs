@@ -19,7 +19,7 @@ const scenes = [
   {name:'catalog-models',route:'catalog',view:'catalog',catalog:'models',ready:'#emList .emrow'},
   {name:'catalog-materials',route:'catalog',view:'catalog',catalog:'materials',ready:'#stockList .stock-row'},
   {name:'map',route:'map',view:'map',ready:'.leaflet-container'},
-  {name:'settings',route:'settings',view:'settings',ready:'#stCur',admin:true},
+  {name:'settings',route:'settings',view:'settings',section:'tariffs',ready:'#stCur',admin:true},
   {name:'settings-fleet',route:'settings',view:'settings',section:'fleet',ready:'#vehList .pt',admin:true},
   {name:'settings-users',route:'settings',view:'settings',section:'users',ready:'#usersList .staff-row',admin:true},
   {name:'settings-appearance',route:'settings',view:'settings',section:'theme',ready:'#modeDark',allRoles:true},
@@ -176,7 +176,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
   const scene=role==='engineer'&&source.name==='dashboard-graph'?{...source,route:'planner/mine',view:'planner',ready:'#plMine .vg-feed'}:source;
   test(`${role} ${scene.name}`,async({page,context},testInfo)=>{
     const {active,audit}=await openScene(page,context,testInfo,role,scene);
-    if(scene.name==='settings'){await active.locator('.settings-advanced').evaluateAll(list=>list.forEach(d=>d.open=true));await expect(active.locator('#stTrkKmh')).toBeVisible();await expect(active.locator('#verBtn')).toBeVisible();}
+    if(scene.name==='settings'){await active.locator('#settingsNav [data-sec=gps]').click();await expect(active.locator('#stTrkKmh')).toBeVisible();await active.locator('#settingsNav [data-sec=diagnostics]').click();await expect(active.locator('#verBtn')).toBeVisible();}
     if(scene.name==='request')for(const action of await active.locator('.th-acts .btn:visible').all())await reveal(action);
     if(scene.name==='catalog')await expect(active.locator('#catList')).toContainText('Диагностика гидросистемы');
     if(scene.view==='catalog'){

@@ -15,7 +15,7 @@ async function clean(page,errors){expect(errors).toEqual([]);expect(await page.e
 
 test('audit 03: compact mobile queue keeps two records visible and retains filters and merge selection',async({page},info)=>{
  const errors=await start(page,info,{queue:true});await expect(page.locator('.unassigned-card')).toHaveCount(14);
- if(page.viewportSize().width<=760){await expect(page.locator('[data-journal-shared-timeline]')).toBeHidden();const first=await page.locator('.unassigned-card').first().boundingBox();expect(first.y).toBeLessThanOrEqual(290);await expect(page.locator('.unassigned-card').nth(1)).toBeInViewport({ratio:1});}
+ if(page.viewportSize().width<=760){await expect(page.locator('[data-journal-shared-timeline]')).toBeHidden();const tabs=page.locator('#plTrips .workspace-page-tabs');await expect(tabs).toBeVisible();const first=await page.locator('.unassigned-card').first().boundingBox(),rail=await tabs.boundingBox();expect(first.y-rail.height).toBeLessThanOrEqual(290);await expect(page.locator('.unassigned-card').nth(1)).toBeInViewport({ratio:1});}
  await capture(page,info,'01-compact-queue');await page.locator('.journal-filters>summary').click();await expect(page.locator('[data-ut-vehicle]')).toBeVisible();await page.locator('.journal-filters>summary').click();await page.locator('.journal-actions>summary').click();await page.locator('[data-ut-choose]').click();await expect(page.locator('[data-ut-select]').first()).toBeVisible();await clean(page,errors);
 });
 for(const accepted of [0,30,60])test('audit 01/02/04: explicit '+accepted+' minutes produce the correct hours and complete the attention queue',async({page},info)=>{
