@@ -18,7 +18,7 @@ test('manager rebuilds the track, edits only the GPS gap and keeps approval on r
  await page.goto('/#/trip/'+fixtureIDs.trip);
  await expect(page.locator('.view-trip.active')).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
- await page.locator('#tpReviewPresence').click();
+ await page.locator('#tpTabEconomy').click();await page.locator('#tpReviewPresence').click();
  await openJournalPane(page,'route');await expect(page.locator('.journal-track-preview')).toBeVisible();await expect(page.locator('.journal-trip-route .journal-route-map path[stroke="#3c7954"]')).toHaveCount(1);expect(orsCalls).toBe(0);await page.locator('[data-route-rebuild]').click();await expect(page.locator('.journal-trip-message')).toContainText('Трек проверен');await openJournalPane(page,'stops');if(await page.locator('[data-review-stop]').first().isVisible())await page.locator('[data-review-stop]').first().click();await page.locator('[data-presence-kind=visit]').click();const row=page.locator('.journal-trip-stops [data-presence-id]');await expect(row).toHaveCount(1);
  await expect(row.locator('[data-presence="minutes_mgr"]')).toHaveValue('180');expect(await row.locator('[data-presence="minutes_mgr"]').evaluate(e=>e.readOnly)).toBe(true);
  expect(orsCalls).toBe(1);
@@ -50,7 +50,7 @@ test('engineer sees GPS and proposed presence without review controls',async({pa
  await page.addInitScript(installMockBackend,{role:'engineer',theme:info.project.metadata.theme,presenceRecoveryJourney:true});
  await page.goto('/#/trip/'+fixtureIDs.trip);await expect(page.locator('.view-trip.active')).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
- await page.locator('#tpReviewPresence').click();
+ await page.locator('#tpTabEconomy').click();await page.locator('#tpReviewPresence').click();
  if(await page.locator('[data-review-stop]').first().isVisible())await page.locator('[data-review-stop]').first().click();await expect(page.locator('.journal-saved-decision .journal-result-evidence')).toContainText('3 ч');await expect(page.locator('[data-presence-save],[data-review-edit],[data-presence-edit]')).toHaveCount(0);
  const state=await page.evaluate(()=>window.__visualQA);expect(state.recoveryWrites).toEqual([]);expect(state.blockedWrites).toEqual([]);expect(state.queryErrors).toEqual([]);expect(errors).toEqual([]);
 });
@@ -68,7 +68,7 @@ test('journal and trip-card recalculation persist identical reconstructed geomet
  const first=await page.evaluate(()=>window.__visualQA.recoveryWrites.find(w=>w.name==='trip_track_rebuild_save').args);expect(first.p_track.roadKm).toBeGreaterThan(0);
  await page.evaluate(id=>location.hash='#/trip/'+id,fixtureIDs.trip);await expect(page.locator('.view-trip.active')).toBeVisible();await page.locator('.wb-route-more>summary').click();await page.locator('#tpKmCalc').click();await page.locator('#confirmYes').click();await expect.poll(()=>page.evaluate(()=>window.__visualQA.recoveryWrites.filter(w=>w.name==='trip_track_rebuild_save').length)).toBe(2);
  const second=await page.evaluate(()=>window.__visualQA.recoveryWrites.filter(w=>w.name==='trip_track_rebuild_save').at(-1).args);expect(second.p_track.segments).toEqual(first.p_track.segments);expect(second.p_fact_km).toBe(first.p_fact_km);
- await expect(page.locator('#busyOverlay')).toBeHidden();await page.locator('#tpReviewPresence').click();await openJournalPane(page,'route');await expect(page.locator('.journal-track-preview')).toHaveCount(0);await expect(page.locator('.journal-trip-route .journal-route-map path[stroke="#d87619"][stroke-dasharray="7 6"]')).toHaveCount(1);expect(calls).toBe(2);await info.attach('journal-rebuilt-orange-road',{body:await page.screenshot(),contentType:'image/png'});
+ await expect(page.locator('#busyOverlay')).toBeHidden();await page.locator('#tpTabEconomy').click();await page.locator('#tpReviewPresence').click();await openJournalPane(page,'route');await expect(page.locator('.journal-track-preview')).toHaveCount(0);await expect(page.locator('.journal-trip-route .journal-route-map path[stroke="#d87619"][stroke-dasharray="7 6"]')).toHaveCount(1);expect(calls).toBe(2);await info.attach('journal-rebuilt-orange-road',{body:await page.screenshot(),contentType:'image/png'});
 });
 
 test('rebuild proposes an unassigned idle stop and manager accepts only selected recovered time',async({page},info)=>{

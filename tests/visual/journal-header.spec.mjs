@@ -66,18 +66,26 @@ async function checkMenu(page,details){
  }
  await auditApplicationDesign(page);return {trigger,panel};
 }
-test('journal header linked trip sections and stop actions render full vertical menus',async({page},info)=>{
+test('journal header linked trip uses two sections and keeps the stop actions menu',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.setFixedTime(new Date('2026-10-05T17:00Z'));await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,unifiedJournalJourney:true,preserveRanges:true});await page.goto('/#/journal/trip/'+fixtureIDs.trip);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.presence-stop')).toHaveCount(5);await page.evaluate(()=>document.fonts.ready);
- const menu=page.locator('.journal-trip-menu');
- for(const pane of ['route','documents','stops']){const {panel}=await checkMenu(page,menu);if(pane==='route')await shot(page,info,'10-trip-sections');await panel.locator('[data-journal-pane='+pane+']').click();await expect(panel).toBeHidden();await expect(page).toHaveURL(new RegExp(pane==='stops'?'/trip/'+fixtureIDs.trip+'$':'/'+pane+'$'));}
+ const tabs=page.locator('[data-journal-pane]');
+ await expect(tabs).toHaveText(['Обзор','Данные']);
+ await tabs.last().click();await expect(page).toHaveURL(/\/documents$/);
+ await tabs.first().click();await expect(page).toHaveURL(new RegExp('/trip/'+fixtureIDs.trip+'$'));
+ await shot(page,info,'10-trip-sections');
  await page.locator('[data-review-stop="journal-stay-3"]').click();if(page.viewportSize().width<=1100)await expect(page.locator('.journal-trip-head')).toBeHidden();const stopMenu=page.locator('.journal-stop-actions'),{trigger,panel}=await checkMenu(page,stopMenu);await shot(page,info,'11-stop-actions');await page.keyboard.press('Escape');await expect(panel).toBeHidden();await expect(trigger).toBeFocused();await trigger.click();await panel.locator('[data-review-draft]').click();await expect(panel).toBeHidden();await expect(page.locator('.journal-decision-state')).toContainText('Черновик сохранён');
  const colors=await page.locator('.rail .nav-i.active').evaluate(el=>({marker:getComputedStyle(el,'::before').backgroundColor,ink:getComputedStyle(el).color,tab:getComputedStyle(document.querySelector('.subtab.active[data-ui=tab]')).borderBottomColor,focus:document.documentElement.style.getPropertyValue('--focus')}));expect(colors.marker).toBe(colors.tab);if(info.project.metadata.theme==='light')expect(colors.marker).toBe('rgb(48, 43, 37)');else expect(colors.marker).toBe('rgb(255, 225, 0)');
  expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
-test('journal header GPS source uses the same unclipped section menu',async({page},info)=>{
- const errors=await boot(page,info);await page.locator('[data-ut-details]').first().click();await expect(page.locator('.gps-detail-head')).toBeVisible();const menu=page.locator('.gps-detail-head>.journal-trip-menu');
- for(const pane of ['route','documents','stops']){const {panel}=await checkMenu(page,menu);if(pane==='route')await shot(page,info,'12-source-sections');await panel.locator('[data-orphan-pane='+pane+']').click();await expect(panel).toBeHidden();}
- const {trigger,panel}=await checkMenu(page,menu);await trigger.click();await expect(panel).toBeHidden();await trigger.click();await expect(panel).toBeVisible();await page.keyboard.press('Escape');await expect(panel).toBeHidden();await expect(trigger).toBeFocused();
+test('journal header GPS source uses the same two sections',async({page},info)=>{
+ const errors=await boot(page,info);
+ await page.locator('[data-ut-details]').first().click();
+ const tabs=page.locator('[data-orphan-pane]');
+ await expect(tabs).toHaveText(['Обзор','Данные']);
+ await tabs.last().click();await expect(page.locator('.journal-trip-documents')).toBeVisible();
+ await tabs.first().click();await expect(page.locator('.journal-orphan-overview')).toBeVisible();
+ await page.locator('[data-orphan-route]').click();await expect(page.locator('.journal-trip-route')).toBeVisible();
+ await shot(page,info,'12-source-sections');
  expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });

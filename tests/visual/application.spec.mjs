@@ -12,9 +12,9 @@ const scenes = [
   {name:'dispatcher-requests',route:'planner/jobs',view:'planner',ready:'#jobList .kcard'},
   {name:'dispatcher-trips',route:'planner/trips',view:'planner',ready:'#tripList .kcard'},
   {name:'request',route:'job/'+fixtureIDs.job,view:'job',ready:'#jobTitle'},
-  {name:'task',route:'order/'+fixtureIDs.order,view:'order',ready:'#orderEditor .order-grid'},
+  {name:'task',route:'order/'+fixtureIDs.order,view:'order',ready:'#orderOverviewState h2'},
   {name:'task-active',route:'order/'+fixtureIDs.activeOrder,view:'order',ready:'#orderRecordResult'},
-  {name:'trip',route:'trip/'+fixtureIDs.trip,view:'trip',ready:'#tpReviewSummary'},
+  {name:'trip',route:'trip/'+fixtureIDs.trip,view:'trip',ready:'#tripOverviewState h2'},
   {name:'catalog',route:'catalog',view:'catalog',ready:'#catList .emrow'},
   {name:'catalog-models',route:'catalog',view:'catalog',catalog:'models',ready:'#emList .emrow'},
   {name:'catalog-materials',route:'catalog',view:'catalog',catalog:'materials',ready:'#stockList .stock-row'},
@@ -140,7 +140,7 @@ async function integrity(page,active,audit,testInfo) {
     return [{id:next.id,gap:next.getBoundingClientRect().top-grid.getBoundingClientRect().bottom,minimum:innerWidth<=760?16:24}];
   }));
   for(const item of sectionGaps)expect(item.gap,`${item.id}: full gap after the form grid`).toBeGreaterThanOrEqual(item.minimum-0.5);
-  if(await active.locator('#tpHistoryPane').isVisible()){
+  if(await active.locator('#tpOverviewPane').isVisible()){
     await expect(active.locator('#tripActivity')).toBeVisible();
     await expect(active.locator('#tpHistoryLog')).toBeHidden();
     await expect(active.locator('#tripResponsibilitySection')).toBeHidden();
@@ -247,11 +247,13 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     }
     if(scene.name==='trip'){
       if(testInfo.project.use.viewport.width>1050){
-        const bounds=await active.evaluate(root=>['.wb-plan-card','.wb-route-card'].map(selector=>{const r=root.querySelector(selector).getBoundingClientRect();return {top:r.top,height:r.height,width:r.width};}));
-        expect(Math.abs(bounds[0].top-bounds[1].top),'Plan and route share a baseline').toBeLessThan(1);
+        const bounds=await active.evaluate(root=>['.workflow-overview-state','.wb-route-card'].map(selector=>{const r=root.querySelector(selector).getBoundingClientRect();return {top:r.top,height:r.height,width:r.width};}));
+        expect(Math.abs(bounds[0].top-bounds[1].top),'Overview state and route share a baseline').toBeLessThan(1);
         expect(bounds[1].width,'The route gets the primary workspace column').toBeGreaterThan(bounds[0].width);
-        expect(bounds[1].width/bounds[0].width,'Balanced route/plan widths').toBeLessThan(1.5);
+        expect(bounds[1].width/bounds[0].width,'Balanced route and state widths').toBeLessThan(1.5);
       }
+      await active.locator('#tpTabPlan').click();
+      await active.locator('.workflow-trip-edit>summary').click();
       await reveal(active.locator('#tpFrom'));
       if(role==='engineer'){
         await expect(active.locator('#tpSave')).toBeHidden();
@@ -261,6 +263,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         await expect(active.locator('#tpFrom')).toBeEnabled();
         await expect(active.locator('#tpChangeReasonGroup')).toBeVisible();
       }
+      await active.locator('#tpTabOverview').click();
     }
     if(testInfo.project.use.viewport.width<=390&&scene.name.startsWith('dispatcher')){
       expect(await active.locator('.stickyhead:visible').evaluate(el=>el.getBoundingClientRect().height),'Page heading, tabs and filters leave a usable working viewport').toBeLessThanOrEqual(testInfo.project.use.viewport.height*.58);
@@ -321,8 +324,8 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     }
     if(scene.name==='request'){
       await expect(active.locator('[data-request-pane]:not([hidden])')).toHaveAttribute('data-request-pane','overview');
-      await expect(active.getByRole('tab')).toHaveCount(3);
-      for(const key of ['estimate','history','overview']){
+      await expect(active.getByRole('tab')).toHaveCount(4);
+      for(const key of ['tasks','trips','estimate','overview']){
         await active.locator(`[data-request-tab="${key}"]`).click();
         const panel=active.locator(`[data-request-pane="${key}"]`);
         await expect(panel).toBeVisible();await expect(active.locator('[data-request-pane]:not([hidden])')).toHaveCount(1);
@@ -332,10 +335,10 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       }
     }
     if(['task','task-active'].includes(scene.name)){
-      const expectedDefault='scope';
+      const expectedDefault='overview';
       await expect(active.locator(`[data-entity-panel="${expectedDefault}"]`)).toBeVisible();
-      await expect(active.getByRole('tab')).toHaveCount(3);
-      for(const [key,label] of [['travel','Выезды'],['history','Лента'],['scope','Состав']]){
+      await expect(active.getByRole('tab')).toHaveCount(4);
+      for(const [key,label] of [['travel','Выезды'],['plan-fact','План/факт'],['scope','Работы'],['overview','Обзор']]){
         await active.getByRole('tab',{name:label,exact:true}).click();
         await expect(active.locator(`[data-entity-panel="${key}"]`)).toBeVisible();
         await expect(active.locator('[data-entity-panel]:not([hidden])')).toHaveCount(1);
@@ -344,14 +347,15 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         if(await heading.count())await reveal(heading);
         await shot(page,testInfo,`${role}-${scene.name}-${key}`);
       }
-      const historyTab=active.getByRole('tab',{name:'Лента',exact:true});await historyTab.focus();await page.keyboard.press('Home');
-      await expect(active.getByRole('tab',{name:'Состав',exact:true})).toBeFocused();
+      const lastTab=active.getByRole('tab',{name:'План/факт',exact:true});await lastTab.focus();await page.keyboard.press('Home');
+      await expect(active.getByRole('tab',{name:'Обзор',exact:true})).toBeFocused();
+      await checkedPane(page,active,active.locator('#orderPane-overview'),audit,testInfo);
+      await page.keyboard.press('ArrowRight');await expect(active.getByRole('tab',{name:'Работы',exact:true})).toBeFocused();
       await checkedPane(page,active,active.locator('#orderPane-scope'),audit,testInfo);
-      await page.keyboard.press('ArrowRight');await expect(active.getByRole('tab',{name:'Выезды',exact:true})).toBeFocused();
-      await checkedPane(page,active,active.locator('#orderPane-travel'),audit,testInfo);
       await shot(page,testInfo,`${role}-${scene.name}-tab-focus`);
       await expect(active.locator('#orderExecution')).toBeHidden();
       if(scene.name==='task-active'){
+        await active.locator('#orderTab-overview').click();
         const trigger=active.locator('#orderRecordResult');await reveal(trigger);await trigger.click();
         const result=page.getByRole('dialog',{name:'Зафиксировать результат',exact:true});
         await expect(result).toBeVisible();await expect(result.locator('[data-result-qty]').first()).toBeEnabled();
@@ -369,7 +373,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         await page.keyboard.press('Escape');await expect(result).toHaveCount(0);await expect(trigger).toBeFocused();
         await expect(active.locator('#orderExecution')).toBeHidden();
       }
-      await active.getByRole('tab',{name:'Состав',exact:true}).click();
+      await active.getByRole('tab',{name:'Работы',exact:true}).click();
       await checkedPane(page,active,active.locator('#orderPane-scope'),audit,testInfo);
       await reveal(active.locator('#orderResultSummary > h3'));
       await shot(page,testInfo,`${role}-${scene.name}-composition`);
@@ -396,6 +400,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     }
     if(scene.name==='trip'){
       await expect(active.locator('#tpTabPresence')).toHaveCount(0);
+      await active.locator('#tpTabEconomy').click();
       await active.locator('#tpReviewPresence').click();
       await expect(page.locator('.view-planner.active .presence-review-workspace')).toBeVisible();
       await page.locator('[data-review-stop]').first().click();
@@ -411,14 +416,15 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await active.locator('#tpTabPlan').click();
       await checkedPane(page,active,active.locator('#tpPlanPane'),audit,testInfo);
       await shot(page,testInfo,`${role}-trip-plan-return`);
+      await active.locator('#tpTabEconomy').click();
       await reveal(active.locator('#tpReviewCosts'));
       await active.locator('#tpReviewCosts').click();
       await expect(active.locator('#tpEconomyPane')).toBeVisible();
       await checkedPane(page,active,active.locator('#tpTripAllocation'),audit,testInfo);
       await visibleTarget(active.locator('#tpTripAllocation h3').first());
       await shot(page,testInfo,`${role}-trip-economics`);
-      await active.locator('#tpTabHistory').click();
-      await checkedPane(page,active,active.locator('#tpHistoryPane'),audit,testInfo);
+      await active.locator('#tpTabOverview').click();
+      await checkedPane(page,active,active.locator('#tpOverviewPane'),audit,testInfo);
       await reveal(active.locator('#tripActivity .activity-controls'));
       await expect(active.locator('#tripActivity .entity-activity-feed')).toContainText('Уточнён порядок');
       await shot(page,testInfo,`${role}-trip-history`);

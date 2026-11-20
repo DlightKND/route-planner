@@ -730,3 +730,73 @@
 @media(max-width:760px){.journal-allocation-editor{padding:var(--sp-5) var(--sp-5) max(var(--sp-5),env(safe-area-inset-bottom));border-radius:0}}
 .journal-allocation-editor{inset:0;margin:auto;max-width:calc(100vw - var(--sp-7));max-height:calc(100dvh - var(--sp-7) - env(safe-area-inset-bottom))}
 @media(max-width:760px){.journal-allocation-editor{margin:0;max-width:none;max-height:100dvh}}
+
+.journal-overview-modes { display:none; }
+.view .unified-gps-journal .journal-trip-head .journal-trip-tabs {
+ display:flex!important;
+ overflow-x:auto;
+}
+.view .unified-gps-journal .journal-trip-head .journal-trip-tabs button {
+ flex:none;
+}
+.view-planner.journal-open #plTrips:has(.unified-gps-journal:not(.gps-show-detail))>.stickyhead {
+ display:block!important;
+ flex:none;
+ position:static;
+}
+.view-planner.journal-open #plTrips>.stickyhead>:not(.workspace-dispatcher-head),
+.view-planner.journal-open #plTrips>.stickyhead>.workspace-dispatcher-head>.workspace-heading-row {
+ display:none!important;
+}
+@media (min-width:761px) {
+ .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open) {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-rows:auto minmax(0,1fr) auto;
+ }
+ .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-head {
+  grid-column:1/-1;
+ }
+ .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-stops {
+  grid-column:1;
+  grid-row:2;
+ }
+ .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-overview {
+  grid-column:2;
+  grid-row:2;
+  min-width:0;
+  min-height:0;
+  padding:var(--journal-gutter);
+  overflow:auto;
+ }
+ .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-message {
+  grid-column:1/-1;
+ }
+ .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open) .journal-overview-map {
+  height:clamp(220px,43vh,520px);
+ }
+}
+@media (max-width:760px) {
+ .journal-overview-modes:not([hidden]) {
+  display:flex;
+  flex:none;
+  gap:8px;
+  padding:8px var(--journal-gutter);
+ }
+ .journal-overview-modes>[aria-pressed=true] {
+  color:var(--ink);
+  border-color:var(--accent);
+ }
+ .journal-trip-detail[data-journal-section=stops][data-journal-map-mode=list]:not(.journal-stop-open)>.journal-trip-overview,
+ .journal-trip-detail[data-journal-section=stops][data-journal-map-mode=map]:not(.journal-stop-open)>.journal-trip-stops {
+  display:none;
+ }
+ .journal-trip-detail[data-journal-map-mode=map]>.journal-trip-overview {
+  flex:1;
+  min-height:0;
+  overflow:auto;
+ }
+ .journal-trip-detail[data-journal-map-mode=map] .journal-overview-map {
+  height:clamp(190px,43vh,420px);
+ }
+}

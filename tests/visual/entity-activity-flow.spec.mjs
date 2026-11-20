@@ -13,7 +13,7 @@ async function open(page,info,role){
   if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
   await expect(page.locator('.overlay.on')).toHaveCount(0);
   await expect(page.locator('#orderRecordResult')).toBeVisible();
-  await page.locator('#orderTab-history').click();
+  await page.locator('#orderTab-overview').click();
   await expect(page.locator('#orderActivity .entity-activity-feed .is-comment')).toHaveCount(3);
   await page.evaluate(()=>document.fonts.ready);
   return failures;
@@ -40,7 +40,7 @@ for(const role of ['admin','logist','engineer'])test(`${role}: cumulative result
   await composer().fill(draft);
   await expect(page.locator('#orderSaveState')).toHaveText('Сохранено');
   await page.locator('#orderTab-scope').click();
-  await page.locator('#orderTab-history').click();
+  await page.locator('#orderTab-overview').click();
   await expect(composer()).toHaveValue(draft);
   await activity.locator('[data-activity-filter="event"]').click();
   await expect(activity.locator('.entity-activity-feed .is-comment')).toHaveCount(0);
@@ -64,7 +64,7 @@ for(const role of ['admin','logist','engineer'])test(`${role}: cumulative result
   await expect(page.locator('#confirmOverlay')).toBeVisible();
   await expect(page.locator('#confirmMsg')).toContainText('останется в черновике');
   await page.locator('#confirmYes').click();await expect(result).toHaveCount(0);
-  await page.locator('#orderTab-scope').click();await page.locator('#orderTab-history').click();
+  await page.locator('#orderTab-scope').click();await page.locator('#orderTab-overview').click();
   await expect(composer()).toHaveValue(draft);
   await page.locator('#orderRecordResult').click();await expect(result).toBeVisible();
   await expect(result.locator('[data-result-item="task-active-item"] [data-result-qty]')).toHaveValue('3');
@@ -73,7 +73,7 @@ for(const role of ['admin','logist','engineer'])test(`${role}: cumulative result
   await page.locator('#orderResultSave').click();await expect(result).toHaveCount(0);
 
   // Saving produces a typed event with a cumulative snapshot, never a text comment.
-  await page.locator('#orderTab-history').click();
+  await page.locator('#orderTab-overview').click();
   await page.locator('#orderActivity [data-activity-filter="result"]').click();
   const resultEntry=page.locator('#orderActivity .entity-activity-feed .is-result').filter({hasText:note});
   await expect(resultEntry).toHaveCount(1);await expect(resultEntry).toContainText('3 / 6 ч');

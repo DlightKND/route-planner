@@ -18,14 +18,14 @@ async function capture(page,info,name,errors){
  await page.screenshot({path:'test-results/design-states/'+info.project.name+'/'+name+'.png',animations:'disabled'});
 }
 test('design state: assignment timeline and explicit independent composer',async({page},info)=>{
- const errors=await start(page,info,'order/'+fixtureIDs.activeOrder);await page.locator('#orderTab-history').click();
+ const errors=await start(page,info,'order/'+fixtureIDs.activeOrder);await page.locator('#orderTab-overview').click();
  const activity=page.locator('#orderActivity');await expect(activity.locator('.activity-entry')).toHaveCount(7);
- await expect(activity.getByRole('heading',{name:'Лента и доказательства'})).toBeVisible();await expect(activity.locator('textarea')).toBeHidden();
+ await expect(activity.getByRole('heading',{name:'Комментарии и события'})).toBeVisible();await expect(activity.locator('textarea')).toBeHidden();
  await capture(page,info,'assignment-timeline',errors);
  await activity.locator('[data-activity-filter=result]').click();await expect(activity.locator('.is-result')).toHaveCount(1);await expect(activity.locator('.is-comment')).toHaveCount(0);
  await activity.locator('[data-activity-open-result]').click();await expect(page.locator('#orderPane-scope')).toBeVisible();
- await page.locator('#orderTab-history').click();await activity.locator('[data-activity-compose]').click();await activity.locator('textarea').fill('Черновик комментария');
- await page.locator('#orderTab-travel').click();await page.locator('#orderTab-history').click();await expect(activity.locator('textarea')).toHaveValue('Черновик комментария');
+ await page.locator('#orderTab-overview').click();await activity.locator('[data-activity-compose]').click();await activity.locator('textarea').fill('Черновик комментария');
+ await page.locator('#orderTab-travel').click();await page.locator('#orderTab-overview').click();await expect(activity.locator('textarea')).toHaveValue('Черновик комментария');
  expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
 });
 test('design state: assignment travel and crew-aware trip selection',async({page},info)=>{
@@ -105,7 +105,7 @@ test('design state: schedule ellipsis leaves room for the stop action',async({pa
  await capture(page,info,'summary-schedule-stop',errors);await group.locator('[data-gtools]').click();await expect(page.locator('.gpop-workspace')).toBeVisible();
 });
 test('design state: presence evidence and decision stay separate',async({page},info)=>{
- const errors=await start(page,info,'trip/'+fixtureIDs.trip);await page.locator('#tpReviewPresence').click();
+ const errors=await start(page,info,'trip/'+fixtureIDs.trip);await page.locator('#tpTabEconomy').click();await page.locator('#tpReviewPresence').click();
  const workspace=page.locator('.presence-review-workspace');await expect(workspace).toBeVisible();
  await expect(workspace.locator('.presence-review-sidebar')).toBeVisible();await expect(workspace.locator('.presence-review-detail')).toBeHidden();await capture(page,info,'presence-list',errors);await workspace.locator('[data-review-stop]').first().click();await expect(workspace.locator('.presence-review-detail')).toBeVisible();
  await capture(page,info,'presence-review',errors);
@@ -229,7 +229,7 @@ test('polish: wide workspaces use the available width and the rail indicator sit
   await page.goto('/#/'+route);const main=page.locator('.view-'+route.split('/')[0]+'.active .workspace-main');await expect(main).toBeVisible();
   await expect.poll(async()=>{const r=await main.boundingBox();return r&&{x:r.x,width:r.width};}).toEqual({x:76,width:1844});
  }
- const card=page.locator('#jobOrders .order-child').first();await page.goto('/#/job/'+fixtureIDs.job);await expect(card).toBeVisible();
+ const card=page.locator('#jobOrders .order-child').first();await page.goto('/#/job/'+fixtureIDs.job+'/tasks');await expect(card).toBeVisible();
  expect(await card.evaluate(el=>[...['Top','Right','Bottom','Left']].map(side=>getComputedStyle(el)['border'+side+'Width']))).toEqual(['1px','1px','1px','1px']);
  await capture(page,info,'wide-request',errors);
 });

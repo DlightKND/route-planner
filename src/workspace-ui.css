@@ -847,3 +847,307 @@ html#dlight-ui[data-ui-system] .view-settings .settings-param-section>h3::after{
 html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3{cursor:default}
 html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{content:none!important}
 @media(max-width:760px){html#dlight-ui[data-ui-system] .view-settings .settings-nav .son{border-left:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;font:500 16px/24px var(--sans)!important}html#dlight-ui[data-ui-system] .view-settings .settings-nav .son.on{border-bottom-color:var(--accent-line)!important}}
+
+/* Shared card geometry follows the workflow reference on each viewport. */
+.view.workflow-card {
+ --workflow-card-padding:24px;
+ --workflow-card-gap:24px;
+}
+.workflow-card .workspace-masthead {
+ padding:16px var(--workflow-card-padding) 0;
+}
+.workflow-card .workspace-main {
+ padding:24px var(--workflow-card-padding) 32px;
+}
+.workflow-card .workspace-masthead .crumbs {
+ display:flex;
+ align-items:center;
+ flex-wrap:wrap;
+ gap:12px;
+ min-height:40px;
+ margin:0 0 12px;
+}
+.workflow-card .crumbs .entity-header-actions {
+ width:auto;
+ margin-inline-start:auto;
+ gap:8px;
+}
+.workflow-card .crumbs .entity-actions-trigger {
+ width:40px;
+ min-width:40px;
+ height:40px;
+ min-height:40px;
+}
+.workflow-card .workspace-masthead .trip-head {
+ display:block;
+ margin:0 0 12px;
+}
+.workflow-card .workspace-masthead .trip-head h2 {
+ display:inline-block;
+ max-width:none;
+ margin:0;
+ font:600 28px/35px var(--sans);
+}
+.workflow-card .workflow-subject {
+ margin:5px 0 8px;
+ color:var(--ink);
+ font:400 16px/24px var(--sans);
+ overflow-wrap:anywhere;
+}
+.workflow-card .request-workspace-stage {
+ margin:8px 0 0;
+}
+.view.workflow-card.workspace-page .entity-tabs {
+ gap:12px;
+ min-height:44px;
+ scrollbar-width:none;
+}
+.view.workflow-card.workspace-page .entity-tabs [role=tab] {
+ flex:none;
+ min-height:44px;
+ padding:10px 12px;
+ border-bottom:2px solid transparent;
+}
+.view.workflow-card.workspace-page .entity-tabs [aria-selected=true] {
+ border-bottom:2px solid var(--accent);
+}
+.workflow-overview-state {
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ flex-wrap:wrap;
+ gap:16px 24px;
+ padding:16px 24px;
+ margin:0 0 var(--workflow-card-gap);
+ background:var(--panel);
+ border:1px solid var(--line);
+ border-radius:var(--r-md);
+}
+.workflow-overview-state>div {
+ flex:1 1 380px;
+}
+.workflow-overview-state span {
+ display:block;
+ color:var(--ink-dim);
+ font-size:12px;
+ line-height:19px;
+ margin-bottom:5px;
+}
+.workflow-overview-state h2,.workflow-card .request-context h2,.workflow-trip-description h2 {
+ margin:0 0 6px;
+ font:600 18px/26px var(--sans);
+}
+.workflow-overview-state p,.workflow-trip-description p,.request-description {
+ margin:0;
+ font-size:14px;
+ line-height:22px;
+ overflow-wrap:anywhere;
+}
+.workflow-overview-state p {
+ color:var(--ink-dim);
+}
+.view.workflow-card #requestContext,.view.workflow-card #orderBrief {
+ background:transparent;
+ border:0;
+ padding:0;
+ margin:0 0 28px;
+}
+.workflow-card :is(.request-context-data,.order-brief-context) {
+ display:grid;
+ grid-template-columns:repeat(4,minmax(0,1fr));
+ gap:24px;
+ margin:16px 0 0;
+}
+.workflow-card :is(#jobActivitySection,#tripActivitySection,#orderHistory) {
+ min-width:0;
+ margin-top:16px;
+}
+.workflow-related-table {
+ width:100%;
+ border-collapse:collapse;
+ font-size:14px;
+ line-height:22px;
+}
+.workflow-related-table th,.workflow-related-table td {
+ padding:10px 12px;
+ border-bottom:1px solid var(--line);
+ text-align:start;
+ overflow-wrap:anywhere;
+}
+.workflow-related-table th {
+ color:var(--ink-dim);
+ font-weight:500;
+}
+.workflow-related-table tr:last-child td {
+ border-bottom:0;
+}
+.workflow-related-table .btn {
+ max-width:100%;
+ white-space:normal;
+}
+.workflow-request-cost:not(:empty),.workflow-card #orderPlanFact {
+ margin-bottom:var(--workflow-card-gap);
+}
+.workflow-trip-overview {
+ display:grid;
+ grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+ grid-template-areas:"route state" "route details";
+ align-items:start;
+ gap:16px var(--workflow-card-gap);
+}
+.workflow-trip-overview>.wb-route-card { grid-area:route; }
+.workflow-trip-overview>.workflow-overview-state { grid-area:state;margin:0;padding:16px; }
+.workflow-trip-details { grid-area:details;min-width:0; }
+.workflow-trip-description {
+ padding:16px;
+ background:var(--panel);
+ border:1px solid var(--line);
+ border-radius:var(--r-md);
+}
+.view.workflow-card #tpPlanPane .trip-grid {
+ display:block;
+}
+.workflow-trip-edit summary {
+ min-height:44px;
+ cursor:pointer;
+ padding:12px 0;
+}
+.workflow-trip-edit[open]>summary {
+ margin-bottom:8px;
+}
+.workflow-card #tripOrderParent {
+ margin-bottom:16px;
+}
+@media(max-width:760px){
+ .view.workflow-card { --workflow-card-padding:12px;--workflow-card-gap:16px; }
+ .workflow-card .workspace-masthead { padding-top:12px; }
+ .workflow-card .workspace-main { padding-top:16px; }
+ .workflow-card .workspace-masthead .trip-head h2 { font-size:24px;line-height:32px; }
+ .workflow-card .crumbs .entity-header-actions .workflow-edit { max-width:100px; }
+ .workflow-overview-state { padding:14px 16px; }
+ .workflow-overview-state>.btn { width:100%; }
+ .workflow-card :is(.request-context-data,.order-brief-context) { grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
+ .workflow-trip-overview { display:flex;flex-direction:column;align-items:stretch; }
+ .workflow-trip-overview>.workflow-overview-state { order:-1; }
+ .workflow-related-table th,.workflow-related-table td { padding-inline:6px; }
+}
+
+.workflow-card .workspace-masthead .crumbs {
+ flex-wrap:nowrap;
+ min-width:0;
+}
+.workflow-card .crumbs>.crumb:not(.workflow-back) {
+ min-width:0;
+}
+.workflow-card .crumbs .entity-header-actions {
+ flex:0 0 auto;
+ flex-wrap:nowrap;
+}
+.workflow-card .crumbs .entity-header-actions>.btn {
+ flex:none;
+}
+.workflow-card :is(.workflow-back,.workflow-edit) svg {
+ display:block;
+ width:20px;
+ height:20px;
+ flex:none;
+}
+.workflow-card .crumbs .workflow-back {
+ width:44px;
+ min-width:44px;
+ padding:8px;
+}
+.workflow-card .workflow-edit {
+ display:inline-flex;
+ align-items:center;
+ justify-content:center;
+ gap:8px;
+}
+.workflow-card .workflow-stage {
+ display:inline-flex;
+ vertical-align:middle;
+ margin:0 0 3px 12px;
+ padding:0 7px;
+ font-size:12px;
+ line-height:20px;
+ background:transparent;
+ color:var(--ink-dim);
+ border:1px solid var(--line);
+}
+.workflow-card :is(#jobResponsibilityMeta,.trip-head #tripResponsibilityMeta) {
+ display:none;
+}
+.workflow-metadata {
+ display:flex;
+ gap:20px 32px;
+ flex-wrap:wrap;
+ margin:12px 0 0;
+}
+.workflow-metadata>div {
+ display:grid;
+ gap:3px;
+ min-width:155px;
+}
+.workflow-metadata dt {
+ color:var(--ink-dim);
+ font-size:12px;
+}
+.workflow-metadata dd {
+ margin:0;
+ color:var(--ink);
+ font-size:14px;
+ font-weight:500;
+ line-height:22px;
+}
+.workflow-card .workflow-trip-overview {
+ grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);
+ grid-template-rows:auto 1fr;
+ column-gap:20px;
+}
+@media(max-width:760px){
+ .view.workflow-card { --workflow-card-padding:16px; }
+ .workflow-card .workspace-masthead { padding-top:10px; }
+ .workflow-card .workspace-main { padding-top:20px;padding-bottom:calc(32px + var(--rail-h)); }
+ .workflow-card .workspace-masthead .crumbs { gap:8px;margin-bottom:10px; }
+ .workflow-card .crumbs .entity-header-actions { width:auto;gap:4px; }
+ html#dlight-ui .workflow-card .crumbs :is(.workflow-back,.workflow-edit,.entity-actions-trigger) {
+  width:48px!important;
+  height:48px!important;
+  min-width:48px!important;
+  min-height:48px!important;
+  padding:10px!important;
+ }
+ .workflow-card .workflow-edit span,.workflow-card .entity-head-meta #orderRequest { display:none; }
+ .workflow-card .workflow-stage { margin-inline-start:8px; }
+ html#dlight-ui .view.workflow-card.workspace-page .entity-tabs { gap:0!important; }
+ html#dlight-ui .view.workflow-card.workspace-page .entity-tabs [role=tab] {
+  font-size:14px!important;
+  font-weight:400;
+  min-height:48px!important;
+  padding:12px 10px!important;
+ }
+ html#dlight-ui .view.workflow-card.workspace-page .entity-tabs [aria-selected=true] { font-weight:600; }
+ .workflow-metadata { display:grid;gap:6px; }
+ .workflow-metadata>div { display:flex;align-items:baseline;gap:10px; }
+ .workflow-metadata dt { width:102px;flex:none; }
+ .workflow-metadata dd { min-width:0;font-size:13px;line-height:20px; }
+}
+
+.workflow-card .eleg .workflow-gps-line { background:#3c7954; }
+.workflow-card .eleg .workflow-road-line { background:repeating-linear-gradient(to right,#d87619 0 5px,transparent 5px 9px); }
+.workflow-card .eleg .workflow-gap-line { background:repeating-linear-gradient(to right,#8b8e96 0 5px,transparent 5px 9px); }
+.workflow-route-marker.leaflet-tooltip {
+ padding:0;
+ border:0;
+ color:#302b25;
+ background:transparent;
+ box-shadow:none;
+ font-weight:600;
+}
+
+.workflow-card #orderBrief #orderRequest { margin-top:12px; }
+.workflow-card .workflow-work-result { margin-bottom:12px; }
+@media(max-width:760px){
+ .view-order.workflow-card:has(#orderPane-overview[hidden]) .workspace-main::after{display:none;}
+ .view-order.workflow-card:has(#orderPane-overview[hidden]) .workspace-main{padding-bottom:calc(32px + var(--rail-h));}
+}

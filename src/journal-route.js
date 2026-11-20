@@ -24,7 +24,7 @@ export function wireJournalTimeline(root){
  const close=e=>{if(e.target.closest('[data-journal-stop]')){const choices=root.querySelector('.journal-timeline-stops');if(choices)choices.open=false;}};root.addEventListener('click',close);
  return {fit,destroy(){observer?.disconnect();root.removeEventListener('click',close);root.removeEventListener('toggle',toggle,true);}};
 }
-export function mountJournalRoute(root,{trip,track,stays,leaflet:L,makeBase,onStop,onRebuild,canEdit,mini=false,selectedStopId=null,jobs=[]}){
+export function mountJournalRoute(root,{trip,track,stays,leaflet:L,makeBase,onStop,onRebuild,onExpand,canEdit,mini=false,selectedStopId=null,jobs=[]}){
  const data=track?.data||track||{},amounts=routeAmounts(track),segments=data.segments||[],issues=segments.map((s,i)=>({...s,index:i})).filter(s=>s.kind!=='track'),conflicts=stays.flatMap(s=>presenceRoadConflicts(s,track).map(m=>({stay:s,...m})));
  const percent=v=>amounts.total>0&&v!=null?' · '+Number(v/amounts.total*100).toLocaleString('ru-RU',{maximumFractionDigits:1})+'%':'';
  const problemCount=amounts.unknown.length+conflicts.length+(amounts.gps==null?1:0);const problemLabel=count=>count?'Требуют внимания: '+count:'Посмотреть восстановленные участки: '+issues.length;
@@ -55,7 +55,7 @@ export function mountJournalRoute(root,{trip,track,stays,leaflet:L,makeBase,onSt
 
  }catch{map?.remove();map=null;box.innerHTML='<p class="hint">Карта недоступна. Данные маршрута и остановок сохранены.</p>';}
  function focus(index){const line=lines.get(index);lines.forEach(l=>l.setStyle({weight:l===line?7:TRACK_STYLE.weight}));if(map&&line)map.fitBounds(line.getBounds(),{padding:[40,40],maxZoom:15});root.querySelectorAll('[data-route-issue]').forEach(b=>b.classList.toggle('is-selected',Number(b.dataset.routeIssue)===index));}
- root.querySelectorAll('[data-route-issue]').forEach(b=>b.onclick=()=>focus(Number(b.dataset.routeIssue)));root.querySelectorAll('[data-route-conflict]').forEach(b=>b.onclick=()=>onStop?.(conflicts[Number(b.dataset.routeConflict)].stay.id));root.querySelector('[data-expand-map]')?.addEventListener('click',()=>root.closest('.journal-trip-detail')?.querySelector('[data-journal-pane="route"]')?.click());
+ root.querySelectorAll('[data-route-issue]').forEach(b=>b.onclick=()=>focus(Number(b.dataset.routeIssue)));root.querySelectorAll('[data-route-conflict]').forEach(b=>b.onclick=()=>onStop?.(conflicts[Number(b.dataset.routeConflict)].stay.id));root.querySelector('[data-expand-map]')?.addEventListener('click',()=>onExpand?.());
  const observer=map&&typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>map.invalidateSize({pan:false})):null;observer?.observe(box);
  function refreshPresence(){
   drawStops();

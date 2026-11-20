@@ -3,6 +3,7 @@ import vm from 'node:vm';
 import {Window} from 'happy-dom';
 import {afterEach, expect, it, vi} from 'vitest';
 import {createEntityTabs} from '../src/entity-tabs.js';
+import {installWorkspaceStructure,setOverviewState} from '../src/workspace-ui.js';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
@@ -10,19 +11,20 @@ const windows=[];
 afterEach(async()=>{await Promise.all(windows.splice(0).map(win=>win.happyDOM.close()));});
 function setup({writable=true}={}){
   const win=new Window();windows.push(win);win.document.body.innerHTML=html;
-  const context=vm.createContext({document:win.document,window:win,createEntityTabs,
+  const context=vm.createContext({document:win.document,window:win,createEntityTabs,setOverviewState,requestAnimationFrame:()=>{},
     $:id=>win.document.getElementById(id),canWriteJob:()=>writable,
     mountEntityActions:vi.fn(),openEntityPanel:vi.fn(),confirmDialog:vi.fn(async()=>true)});
   const prepareStart=app.indexOf('function prepareEntityPages()'),prepareEnd=app.indexOf('async function openActivityPhoto(',prepareStart);
   vm.runInContext(app.slice(prepareStart,prepareEnd),context);
+  installWorkspaceStructure(win.document);
   vm.runInContext(app.slice(app.indexOf('const requestTabs=createEntityTabs'),app.indexOf('async function openJob(')),context);
   return {win,context,root:win.document.querySelector('.view-job'),get:id=>win.document.getElementById(id)};
 }
 it('organizes the actual request DOM without dropping or duplicating financial and operational controls',()=>{
   const {get}=setup();
-  const groups={jobOverviewPane:['jbClient','jobOrders'],
+  const groups={jobOverviewPane:['jbClient','jobActivity','jobPendingDecisions'],
+    jobTasksPane:['jobOrders'],jobTripsPane:['jobLinkedTrips'],
     jobEstimatePane:['jobHeadEcon','jbWorks','jbParts','jbPartTotals'],
-    jobHistoryPane:['jobActivity','jobPendingDecisions'],
     jobAuxiliary:['jbDue','jbNotes','jobResponsibilitySection','jbFixes','jbPhotoList']};
   for(const [panel,ids] of Object.entries(groups))for(const id of ids){
     expect(get(panel).contains(get(id)),`${id} in ${panel}`).toBe(true);
@@ -39,7 +41,7 @@ it('switches request sections while preserving unsaved values, permission flags 
   const field=root.ownerDocument.createElement('input');field.value='1250';field.disabled=true;works.append(field);
   const autosave=vi.fn();root.addEventListener('input',autosave);root.addEventListener('change',autosave);
   get('jobTabEstimate').click();expect(get('jobEstimatePane').hidden).toBe(false);
-  get('jobTabHistory').click();get('jobTabOverview').click();
+  get('jobTabTrips').click();get('jobTabOverview').click();
   expect(get('jbNotes')).toBe(notes);expect(notes.value).toBe('Неотправленная заметка');
   expect(get('jbWorks').contains(field)).toBe(true);expect(field.value).toBe('1250');expect(field.disabled).toBe(true);
   expect(autosave).not.toHaveBeenCalled();
@@ -52,17 +54,17 @@ it('starts readonly engineers in overview and exposes plain request details ther
   vm.runInContext("configureRequestTabs(true,'estimate')",context);
   expect(get('jobEstimatePane').hidden).toBe(false);
   vm.runInContext("configureRequestTabs(true,'execution')",context);
-  expect(get('jobHistoryPane').hidden).toBe(false);
+  expect(get('jobTasksPane').hidden).toBe(false);
 });
 it('keeps new requests on useful sections and keyboard navigation skips unsaved-only sections',()=>{
   const {get,context,win}=setup();vm.runInContext('configureRequestTabs(false)',context);
   expect(get('jobUnsavedPanelsNotice').hidden).toBe(false);
-  expect(get('jobTabExecution')).toBeNull();expect(get('jobTabHistory').disabled).toBe(true);
+  expect(get('jobTabExecution')).toBeNull();expect(get('jobTabTasks').hidden).toBe(true);expect(get('jobTabTrips').hidden).toBe(true);
   get('jobTabOverview').dispatchEvent(new win.KeyboardEvent('keydown',{key:'End',bubbles:true}));
   expect(get('jobTabEstimate').getAttribute('aria-selected')).toBe('true');
   expect(win.document.activeElement).toBe(get('jobTabEstimate'));
   vm.runInContext("configureRequestTabs(false,'history')",context);expect(get('jobOverviewPane').hidden).toBe(false);
-  vm.runInContext('configureRequestTabs(true)',context);expect(get('jobTabHistory').disabled).toBe(false);
+  vm.runInContext('configureRequestTabs(true)',context);expect(get('jobTabTasks').hidden).toBe(false);expect(get('jobTabTrips').hidden).toBe(false);
   expect(get('jobUnsavedPanelsNotice').hidden).toBe(true);
 });
 it('opens the canonical journal from the trip review CTA without changing trip form or dirty flags',()=>{
@@ -127,7 +129,7 @@ it('reveals the actual invalid field when saving from a different request sectio
   vm.runInContext(helpers,context);
   const start=app.indexOf("$('jobSave').onclick=async"),end=app.indexOf('// Ловим правки',start);
   vm.runInContext(app.slice(start,end),context);
-  get('jobTabHistory').click();await get('jobSave').onclick();
+  get('jobTabTrips').click();await get('jobSave').onclick();
   expect(get('jobOverviewPane').hidden).toBe(false);expect(win.document.activeElement).toBe(get('jbClient'));
   expect(get('jobErr').textContent).toContain('не выбран клиент');
   get('jbClient').innerHTML='<option value="c1">Клиент</option>';

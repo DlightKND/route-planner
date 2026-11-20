@@ -29,7 +29,7 @@ test('journal and its body-level dialog share the dispatcher design system',asyn
 
 test('request, assignment and trip headings retain the same shared typography',async({page},info)=>{
  test.setTimeout(60000);const errors=await boot(page,info);const titles=[];
- for(const [name,route,ready] of [['request','job/'+fixtureIDs.job,'.request-planning-summary dd'],['assignment','order/'+fixtureIDs.activeOrder,'#orderRecordResult'],['trip','trip/'+fixtureIDs.trip,'#tpReviewSummary button']]){
+ for(const [name,route,ready] of [['request','job/'+fixtureIDs.job,'#jobOverviewState h2'],['assignment','order/'+fixtureIDs.activeOrder,'#orderRecordResult'],['trip','trip/'+fixtureIDs.trip,'#tripOverviewState h2']]){
   await navigate(page,route,ready);const title=page.locator('.view.active .workspace-masthead .trip-head h2');const c=await style(title);const t=await inherited(title);expect(c.fontSize).toBe(t['--fs-page']);expect(c.fontWeight).toBe('600');titles.push(typography(c));await shot(page,info,'07-'+name);
  }
  expect(titles[1]).toEqual(titles[0]);expect(titles[2]).toEqual(titles[0]);expect(errors).toEqual([]);
