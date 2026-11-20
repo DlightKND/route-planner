@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 const job=fixtureIDs.job,order=fixtureIDs.order,trip=fixtureIDs.trip,other='00000000-0000-4000-8000-000000000003';
-async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false}={}){
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
+async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false,paymentJourney=false}={}){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan,paymentJourney}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
 }
 async function navigate(page,view,hash){await page.evaluate(hash=>{location.hash=hash;},hash);await expect(page.locator('.view-'+view)).toHaveClass(/active/);}
 async function reopenRequest(page){await navigate(page,'planner','/planner/jobs');await navigate(page,'job','/job/'+job);}
@@ -12,6 +12,56 @@ async function clean(page,errors){expect(errors).toEqual([]);expect(await page.e
 const dialog=page=>page.locator('dialog.entity-panel-dialog:visible').last();
 async function cancelEditor(page){await dialog(page).locator('[data-entity-cancel]').click();await expect(page.locator('#confirmOverlay')).toBeVisible();await page.locator('#confirmYes').click();await expect(page.locator('[data-entity-save]')).toHaveCount(0);}
 async function keepOnlyOther(page,select){await page.locator(select+' + .engineer-picker').click();const choices=page.locator('.engineer-options');await expect(choices).toBeVisible();await choices.locator('input[type=checkbox]').first().uncheck();await choices.getByRole('button',{name:'Готово',exact:true}).click();}
+
+test('M15: payment fields inherit independently and open the work exception for reset',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',tripResultJourney:'engineer',paymentJourney:true});
+ const card=view=>page.locator('.view-'+view+'.active .entity-payment-terms');
+ const field=(root,key)=>root.locator('[data-payment-field="'+key+'"]');
+ const values=(root,...terms)=>expect(root.locator('.payment-term-values dd')).toHaveText(terms);
+ const edit=async(root,terms)=>{
+  await root.getByRole('button',{name:'Изменить условия'}).click();
+  const form=dialog(page);
+  for(const [key,value] of Object.entries(terms))await field(form,key).selectOption(value);
+  await form.locator('[data-entity-save]').click();
+  await expect(form).toHaveCount(0);
+ };
+ await expect(card('job')).toBeVisible();
+ await edit(card('job'),{warranty:'warranty',payer:'warranty-dept'});
+ await values(card('job'),'Гарантийная','Гарантийный отдел');
+ await shot(page,info,'request-payment-terms');
+ await navigate(page,'order','/order/'+order+'/overview');
+ await values(card('order'),'Гарантийная','Гарантийный отдел');
+ await edit(card('order'),{payer:'service'});
+ await values(card('order'),'Гарантийная','Сервисный отдел');
+ await navigate(page,'order','/order/'+order+'/scope/'+trip);
+ const panel=page.locator('#orderTripResults'),expand=panel.locator('[data-visit-expand]').first();
+ await expand.click();
+ const resultNote=panel.locator('[data-visit-line] [data-visit-field=note]').first();
+ await resultNote.fill('Черновик остаётся в работе');
+ const work=panel.locator('[data-work-payment]').first();
+ await expect(field(work,'warranty').locator('option').first()).toHaveText('Наследовать · Гарантийная');
+ await expect(field(work,'payer').locator('option').first()).toHaveText('Наследовать · Сервисный отдел');
+ await field(work,'warranty').selectOption('paid');
+ await work.locator('[data-payment-save]').click();
+ await expect(panel.locator('.payment-work-cue').first()).toContainText('Вне гарантии · Сервисный отдел · Свои условия');
+ await expect(resultNote).toHaveValue('Черновик остаётся в работе');
+ await shot(page,info,'work-payment-terms');
+ await page.locator('#orderTab-overview').click();
+ await card('order').locator('[data-payment-exception]').click();
+ await expect(work).toBeVisible();
+ await work.locator('[data-payment-reset]').click();
+ await expect(panel.locator('.payment-work-cue').first()).toHaveText('Гарантийная · Сервисный отдел');
+ await expect(resultNote).toHaveValue('Черновик остаётся в работе');
+ await navigate(page,'trip','/trip/'+trip+'/overview');
+ await values(card('trip'),'Смешанные условия','Разные плательщики');
+ await edit(card('trip'),{payer:'service'});
+ await values(card('trip'),'Смешанные условия','Сервисный отдел');
+ await shot(page,info,'trip-payment-terms');
+ const writes=await page.evaluate(()=>window.__visualQA.paymentWrites);
+ expect(writes.map(row=>[row.p_scope,row.p_terms])).toEqual([
+  ['job',{warranty:'warranty',payer:'warranty-dept'}],['order',{payer:'service'}],['work',{warranty:'paid'}],['work',{}],['trip',{payer:'service'}]]);
+ await clean(page,errors);
+});
 
 test('M1 M2: request deadline, note, team and status have explicit save and real cancellation',async({page},info)=>{
  const errors=await boot(page,info);await expect(page.locator('#jobOverviewState')).toBeVisible();const initialDue=await page.locator('#jbDue').inputValue(),initialStatus=await page.locator('#jbStatus').inputValue(),initialVisit=await page.locator('#jbDate').inputValue(),initialCrew=await page.locator('#jbEng').evaluate(e=>[...e.selectedOptions].map(o=>o.value));

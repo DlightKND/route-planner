@@ -22,7 +22,8 @@ beforeAll(async()=>{
     alter table trip_revision_history enable row level security;grant select on trip_revision_history to authenticated;`);
   await db.exec(file('../supabase/migrations/20260922190447_service_orders.sql'));
   await db.exec(`alter table service_orders add column job_id uuid references jobs(id),add column seed_request_id uuid references jobs(id),add column owner_id uuid,add column curator_id uuid;
-    alter table service_order_items add column kind text default 'work',add column legacy_snapshot jsonb not null default '{}',add column request_finance_void_event_id bigint,add column financial_revenue_snapshot numeric,add column financial_cost_snapshot numeric,add column unit_price_snapshot numeric,add column unit_cost_snapshot numeric;
+    alter table service_order_items add column kind text default 'work',add column billable boolean not null default true,
+      add column legacy_snapshot jsonb not null default '{}',add column request_finance_void_event_id bigint,add column financial_revenue_snapshot numeric,add column financial_cost_snapshot numeric,add column unit_price_snapshot numeric,add column unit_cost_snapshot numeric;
     create table trip_service_orders(trip_id uuid references trips(id),order_id uuid references service_orders(id),primary key(trip_id,order_id));
     alter table trip_service_orders enable row level security;grant select on trip_service_orders to authenticated;
     grant select on jobs,trips,profiles to authenticated;
@@ -55,6 +56,7 @@ beforeAll(async()=>{
   await db.exec(file('../supabase/migrations/20261120145437_order_extra_parts.sql'));
   await db.exec(file('./fixtures/order-photo-storage.sql'));
   await db.exec(file('../supabase/migrations/20261120150932_order_result_photos.sql'));
+  await db.exec(file('../supabase/migrations/20261120190426_entity_payment_terms.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -74,6 +76,33 @@ beforeEach(async()=>{
   await q("insert into trip_comments(id,trip_id,body) values($1,$2,'Выезд начат')",[id(72),id(50)]);
 });
 afterEach(async()=>{await db.exec('rollback');});
+
+it('saves independent payment overrides and resets them with an audit trail',async()=>{
+  const readTerms=(scope,parent)=>q('select public.entity_payment_terms_read($1,$2) model',[scope,id(parent)]).then(rows=>rows[0].model);
+  const save=(scope,parent,previous,terms,subject='')=>q('select public.entity_payment_terms_save($1,$2,$3,$4,$5) terms',
+    [scope,id(parent),subject,previous,terms]).then(rows=>rows[0].terms);
+  expect(await readTerms('order',30)).toMatchObject({editable:false,item:{job:{id:id(10)},local:{},works:[{id:id(40),local:{}}]}});
+  await rejected(()=>readTerms('order',31),/недоступны/);
+  await rejected(()=>save('work',30,{},{warranty:'warranty'},id(40)),/куратор/);
+  await rejected(()=>q('select * from dlight_private.payment_terms'),/permission denied/);
+  await as(6);
+  const jobTerms={warranty:'warranty',payer:'warranty-dept'};
+  expect(await save('job',10,{},jobTerms)).toEqual(jobTerms);
+  await rejected(()=>save('job',10,{},jobTerms),/Обновите карточку/);
+  await rejected(()=>save('work',30,{},{warranty:'warranty'},id(41)),/не принадлежит/);
+  await rejected(()=>save('trip',50,{},{payer:'client:'+id(11)}),/связанных заявок/);
+  await rejected(()=>save('order',30,{},{cost:9}),/Проверьте условия/);
+  const workTerms={payer:'service'};
+  expect(await save('work',30,{},workTerms,id(40))).toEqual(workTerms);
+  expect(await readTerms('job',10)).toMatchObject({editable:true,item:{local:jobTerms},orders:[{local:{},works:[{local:workTerms}]}],
+    trips:[{id:id(50),local:{},jobs:[{local:jobTerms}]}]});
+  expect(await save('work',30,workTerms,{},id(40))).toEqual({});
+  await db.exec('reset role');
+  const history=await q('select scope,actor_id,current_terms from dlight_private.payment_term_changes order by id');
+  expect(history).toEqual([['job',jobTerms],['work',workTerms],['work',{}]].map(([scope,current_terms])=>({scope,actor_id:id(6),current_terms})));
+  expect(await q('select financial_revenue_snapshot,financial_cost_snapshot from service_order_items where id=$1',[id(40)]))
+    .toEqual([{financial_revenue_snapshot:'2500',financial_cost_snapshot:'1234'}]);
+});
 
 it('saves an audited planning norm with a fresh revision and preserves the quantity and finance snapshots',async()=>{
   const save=(revision,hours,item=40)=>q('select public.service_order_work_plan_save($1,$2,$3,$4) result',

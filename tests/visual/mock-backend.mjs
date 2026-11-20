@@ -438,6 +438,16 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   const standaloneWorkPlan=managerJourney?.standaloneWorkPlan;
   const visitWork=task.service_order_items.find(row=>row.kind==='work');
   const visitPart=task.service_order_items.find(row=>row.kind==='material');
+  const paymentTerms=new Map();
+  const termsKey=(scope,id,subject='')=>[scope,id,subject].join('/');
+  const savedTerms=(scope,id,subject)=>paymentTerms.get(termsKey(scope,id,subject))||{};
+  const paymentJob={id:job,title:client.name};
+  const secondPaymentJob={id:'10000000-0000-4000-8000-000000000099',title:'Демо · второй заказчик',local:{}};
+  const paymentRequest=()=>({...paymentJob,local:savedTerms('job',job)});
+  const paymentOrder=()=>({id:order,number:task.number,title:task.title,job:paymentRequest(),local:savedTerms('order',order),
+    works:task.service_order_items.filter(row=>row.kind==='work').map(row=>({id:row.id,title:row.title,local:savedTerms('work',order,row.id)}))});
+  const paymentTrip=()=>({id:trip,title:ride.vehicle_label,local:savedTerms('trip',trip),jobs:[paymentRequest(),secondPaymentJob]});
+  if(managerJourney?.paymentJourney)audit.paymentWrites=[];
   const visitPayload={items:task.service_order_items.map(row=>({id:row.id,qty:row===visitWork?3:0,
     hours:row===visitWork?2:0,note:row===visitWork?'Осталась проверка':''})),hours:2,reason:'',correction:''};
   const visit={id:trip,date_from:ride.date_from,date_to:ride.date_to,label:'Сервисный автомобиль',status:'done',
@@ -625,6 +635,20 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(name==='entity_payment_terms_read'){
+        if(!managerJourney?.paymentJourney)return {data:null,error:{code:'PGRST202',message:'RPC unavailable'}};
+        const scope=args.p_scope,resolved={job:[job,paymentRequest],order:[order,paymentOrder],trip:[trip,paymentTrip]}[scope];
+        if(!resolved||resolved[0]!==args.p_id)return {data:null,error:{code:'42501',message:'Условия оплаты недоступны'}};
+        return {data:structuredClone({scope,item:resolved[1](),editable:role!=='engineer',
+          ...(scope==='job'?{orders:[paymentOrder()],trips:[paymentTrip()]}:{})}),error:null};
+      }
+      if(name==='entity_payment_terms_save'&&managerJourney?.paymentJourney){
+        const {p_scope:scope,p_id:id,p_subject:subject,p_previous:previous,p_terms:terms}=args;
+        if(role==='engineer'||JSON.stringify(savedTerms(scope,id,subject))!==JSON.stringify(previous))return reject(name);
+        paymentTerms.set(termsKey(scope,id,subject),structuredClone(terms));
+        audit.paymentWrites.push(structuredClone(args));
+        return {data:structuredClone(terms),error:null};
+      }
       if(name==='service_order_trip_results'){
         const linked=!!visitJourney&&args.p_order===order;
         const accepted=visit.versions.at(-1)?.result;

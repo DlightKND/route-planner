@@ -2,6 +2,7 @@ import {planningPeriod} from './core/planning-dates.js';
 import {journalIcon} from './journal-icons.js';
 import {openEntityPanel} from './entity-actions.js';
 import {orderPhotoDrafts,orderResultPhotoPath} from './order-photo-drafts.js';
+import {bindWorkPayment,paymentView,workPaymentCue,workPaymentHTML} from './payment-terms.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:6});
@@ -34,7 +35,8 @@ export function proposedTripHours(items,accepted,budget,catalog){
  return hours;
 }
 
-export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onWrite,onPlanWrite,onPartWrite,onReturnReason,onGPS,onTrip,onReload,preparePhoto,uploadPhoto,downloadPhoto}){
+export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onWrite,onPlanWrite,onPartWrite,onReturnReason,onGPS,onTrip,onReload,preparePhoto,uploadPhoto,downloadPhoto,savePayment,onPaymentChange}){
+ let paymentModel=null;
  const trips=data?.trips||[],works=items.filter(item=>item.kind!=='material'),material=items.filter(item=>item.kind==='material');
  const workIds=new Set(works.map(item=>item.id));
  let selected=trips.find(trip=>trip.id===requestedTrip)||(trips.length===1?trips[0]:null);
@@ -120,7 +122,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
    <td class="order-trip-number" data-label="Факт, чел·ч" data-visit-preview>${hours===''||hours==null?'—':esc(fmt(hours))}</td>
    <td class="order-trip-note" data-empty="${!note?.trim()}"><span data-visit-note>${esc(notePreview(note))}</span></td>
    <td class="order-trip-disclosure"><button type="button" class="btn" data-visit-expand="${id}" aria-label="Детали работы «${esc(item.title)}»" aria-expanded="${open}" aria-controls="trip-work-${id}">${journalIcon('chevron')}</button></td>
-  </tr><tr class="order-trip-work-detail" id="trip-work-${id}" ${open?'':'hidden'}><td colspan="5">${details}</td></tr>`;
+  </tr><tr class="order-trip-work-detail" id="trip-work-${id}" ${open?'':'hidden'}><td colspan="5"><div class="order-trip-work-fields">${details}</div></td></tr>`;
  }
  function workTable(rows,hours,actions='',live=false){
   const plan=works.reduce((sum,item)=>sum+plannedHours(item,entries),0);
@@ -153,7 +155,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
      <span class="hint">${esc(stateLabel(trip))}</span><span>${row?fmt(row.hours)+' чел·ч':'—'}</span><p>${esc(row?.note||'—')}</p></div>`).join('')}</div>`:'';
    const manualOutcome=data?'':`<section class="order-trip-outcome"><h4>Результат работы</h4><p>Выполнено ${fmt(item.done_qty)} ${esc(item.unit)}</p>${note?`<p class="order-trip-work-note">${esc(note)}</p>`:''}</section>`;
    const photos=trips.map(trip=>photoDetails(lastVersion(trip)?.photos,trip.id,item.id)).join('');
-   const details=`<div class="order-trip-work-fields">${planEditor(item)}${related}${manualOutcome}${photos}${materialTable(cumulativeMaterials,{work:item})}</div>`;
+   const details=`${planEditor(item)}${related}${manualOutcome}${photos}${materialTable(cumulativeMaterials,{work:item})}`;
    return workRow(item,data?.accepted_hours?.[item.id],note,details,maxQty(item,null)===0);
   }).join('');
   const accepted=Object.values(data?.accepted_hours||{});
@@ -165,7 +167,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
    const value=fields.rows.find(row=>row.id===item.id),max=maxQty(item,accepted),id=esc(item.id);
    const complete=max>0&&nonnegative(value.qty)===max;
    const history=Number(data.accepted_hours?.[item.id]||0)-Number(accepted?.items?.find(row=>row.id===item.id)?.hours||0);
-   const details=`<div class="order-trip-work-fields"><div data-visit-line="${id}">
+   const details=`<div data-visit-line="${id}">
     <div class="order-trip-work-edit"><section><h4>Трудозатраты</h4><div class="order-trip-work-labor">
      ${planEditor(item)}
      <div><label>Факт, чел·ч<input type="text" inputmode="decimal" data-visit-field="hours" value="${esc(value.hours)}" aria-describedby="work-source-${id}"></label>
@@ -178,7 +180,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
       <span>Частично</span><span class="order-trip-complete-track" aria-hidden="true"></span><span>Завершена</span></label>
      <label class="order-trip-quantity" data-visit-partial ${complete?'hidden':''}>Выполнено, ${esc(item.unit)}<input type="text" inputmode="decimal" data-visit-field="qty" value="${esc(value.qty)}"><span class="hint">Доступно ${fmt(max)} ${esc(item.unit)}</span></label>
      <p data-visit-completed ${complete?'':'hidden'}>Выполнено <strong>${fmt(max)}</strong> ${esc(item.unit)}</p>
-    </div>${photoDetails(fields.photos,selected.id,item.id,true)}</section></div>${materialTable(fields,{work:item,editable:true})}</div>`;
+    </div>${photoDetails(fields.photos,selected.id,item.id,true)}</section></div>${materialTable(fields,{work:item,editable:true})}`;
    return workRow(item,value.hours,value.note,details,complete);
   }).join('');
  }
@@ -246,11 +248,11 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
  function readOnlyRows(result){
   return works.map(item=>{
    const value=result.items?.find(row=>row.id===item.id);
-   const details=`<div class="order-trip-work-fields"><div class="order-trip-work-edit">
+   const details=`<div class="order-trip-work-edit">
     <section><h4>Трудозатраты</h4><div class="order-trip-work-labor">${planEditor(item)}
     <div><span class="hint">Факт, чел·ч</span><p>${value?fmt(value.hours):'—'}</p></div></div></section>
     <div class="order-trip-work-note"><span class="hint">Комментарий</span><p>${esc(value?.note||'—')}</p></div></div>
-    <section class="order-trip-outcome"><h4>Результат работы</h4><p>${value?'Выполнено '+fmt(value.qty)+' '+esc(item.unit):'Результат пока не внесён.'}</p>${photoDetails(result.photos,selected.id,item.id)}</section>${materialTable(result,{work:item,snapshot:!!result.items})}</div>`;
+    <section class="order-trip-outcome"><h4>Результат работы</h4><p>${value?'Выполнено '+fmt(value.qty)+' '+esc(item.unit):'Результат пока не внесён.'}</p>${photoDetails(result.photos,selected.id,item.id)}</section>${materialTable(result,{work:item,snapshot:!!result.items})}`;
    return workRow(item,value?.hours,value?.note,details);
   }).join('');
  }
@@ -467,7 +469,25 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   root.innerHTML=context+'<p data-trip-result-error role="alert" tabindex="-1" hidden></p>'+content;
   if(!data&&manualResult)root.querySelector('.order-trip-result-head').append(manualResult);
   updateMetrics();
+  paintWorkPayment();
   bind(proposal);
+ }
+ function paintWorkPayment(onlyWork){
+  root.querySelectorAll('[data-work-row]').forEach(row=>{
+   const work=row.dataset.workRow;
+   if(onlyWork&&work!==onlyWork)return;
+   const view=paymentView(paymentModel,work);
+   const title=row.querySelector('th'),fields=row.nextElementSibling.querySelector('.order-trip-work-fields');
+   title.querySelector('.payment-work-cue')?.remove();fields.querySelector('[data-work-payment]')?.remove();
+   if(!view)return;
+   title.insertAdjacentHTML('beforeend',workPaymentCue(view));
+   fields.insertAdjacentHTML('beforeend',workPaymentHTML(view));
+   bindWorkPayment(fields.lastElementChild,view,savePayment,()=>{
+    if(!root.isConnected)return;
+    paintWorkPayment(work);onPaymentChange?.();
+    fields.querySelector('[data-payment-save]')?.focus({preventScroll:true});
+   });
+  });
  }
  function bind(proposal){
   const get=selector=>root.querySelector(selector);
@@ -574,5 +594,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   });
  }
  restore();render();
- return {select:switchTrip};
+ return {select:switchTrip,setPaymentModel(model){paymentModel=model;paintWorkPayment();},showWork(id){
+  const button=[...root.querySelectorAll('[data-visit-expand]')].find(toggle=>toggle.dataset.visitExpand===id);
+  if(!button)return;setExpanded(button,true);button.scrollIntoView({block:'nearest'});button.focus({preventScroll:true});
+ }};
 }

@@ -1,4 +1,5 @@
 import {mountOrderTripResults} from './order-trip-results.js';
+import {mountPaymentCard,readPaymentModel,savePaymentModel} from './payment-terms.js';
 import {setButtonBusy} from './ui/button-state.js';
 import {resolveEntityDraft} from './entity-draft-resolution.js';
 import {planningDate,planningPeriod,planningWarnings} from './core/planning-dates.js';
@@ -250,6 +251,26 @@ export function createServiceOrders(ctx){
    ...(selectedJob?[{label:'Открыть заявку и смету',onSelect:async()=>{if(await leave()){if(ctx.openJobEstimate)ctx.openJobEstimate(selectedJob);else ctx.openJob(selectedJob);}}}]:[])
   ]});restoreResultDraft();
  }updateSaveState();frameOrderWorkspace({record:o,editable:edit,people:ctx.profiles()});renderPlanning(o);
+ const paymentHost=o.id?document.createElement('section'):null;
+ const paymentUser=loadedUser;
+ let paymentModel=null;
+ const paymentCurrent=()=>current===o&&ctx.userId()===paymentUser&&paymentHost?.isConnected;
+ const savePayment=async(view,terms)=>{
+  if(!paymentCurrent())throw Error('Откройте актуальное задание');
+  await savePaymentModel(api(),view,terms);
+ };
+ const paintPayment=()=>mountPaymentCard({root:paymentHost,model:paymentModel,save:savePayment,
+  onOpen:row=>showWork(row.work),onChange:()=>{if(paymentCurrent())visitPanel?.setPaymentModel(paymentModel);}});
+ if(paymentHost){
+  paymentHost.className='card entity-payment-terms';paymentHost.hidden=true;$('orderOverviewState').after(paymentHost);
+  void readPaymentModel(api(),'order',o.id).then(model=>{
+   if(!paymentCurrent()||!model)return;
+   paymentModel=model;paintPayment();visitPanel?.setPaymentModel(model);
+  }).catch(error=>{
+   if(!paymentCurrent())return;
+   paymentHost.hidden=false;paymentHost.innerHTML=`<p class="err" role="alert">${esc(error.message||'Условия оплаты недоступны')}</p>`;
+  });
+ }
  const standaloneWorks=o.id&&
   items.some(item=>item.kind==='work'&&!isFinanceVoided(item)&&Object.hasOwn(item,'planned_labor_hours'));
  if(visitResults||visitError||standaloneWorks){
@@ -270,6 +291,7 @@ export function createServiceOrders(ctx){
    const user=loadedUser;
    visitPanel=mountOrderTripResults({root:panel,order:o,items:items.filter(item=>!isFinanceVoided(item)),catalog:workCatalog,
     data:visitResults,manualResult,user,manager:manager(o),mayReport:['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.engineer_ids?.includes(user)),requestedTrip,
+    savePayment,onPaymentChange:paintPayment,
     preparePhoto:ctx.preparePhoto,
     uploadPhoto:async(path,blob)=>{
      if(current!==o||ctx.userId()!==user||!panel.isConnected)throw Error('Откройте актуальный отчёт');
@@ -318,6 +340,10 @@ export function createServiceOrders(ctx){
   if(trip)visitPanel?.select(trip);
   $('orderTripResults')?.scrollIntoView({block:'nearest'});
  }
+ function showWork(id){
+  entityTabs?.select('scope');visitPanel?.showWork(id);
+ }
+ async function openWork(id,work){if(await open(id,null,{pane:'scope'}))showWork(work);}
  async function settleDraft(title='Перед изменением плана'){
   const id=current?.id,planChanged=dirty,resultChanged=reportDirty;if(!dirty&&!reportDirty)return {record:current};
   const choice=await resolveEntityDraft({title,message:reportDirty?'Сохранить план перед действием? Введённый результат останется в черновике этого браузера для отдельной проверки.':'Сохранить текущие изменения задания перед действием?',saveLabel:'Сохранить и продолжить'});if(choice==='cancel')return false;
@@ -481,5 +507,5 @@ export function createServiceOrders(ctx){
  function leave(){if(!dirty&&!reportDirty)return Promise.resolve(true);if(leaveFlight)return leaveFlight;leaveFlight=(async()=>{if(!await ctx.confirmLeave())return false;if(reportDirty)storeResultDraft();dirty=false;reportDirty=false;return true;})().finally(()=>{leaveFlight=null;});return leaveFlight;}
  async function tripParent(t){const el=$('tripOrderParent');if(!el)return;el.innerHTML='';if(!t?.id)return;try{const {data,error}=await api().from('trip_service_orders').select('order_id,service_orders(id,number,title,job_id)').eq('trip_id',t.id);if(error)throw error;const linked=(data||[]).map(x=>x.service_orders).filter(o=>o?.job_id);if(!linked.length){el.innerHTML='<span class="hint">Задания пока не связаны</span>';return;}el.innerHTML='<span class="hint">Задания выезда:</span> '+linked.map(o=>`<button type="button" class="crumb" data-trip-order="${o.id}">№${o.number} · ${esc(o.title)}</button>`).join('');el.querySelectorAll('[data-trip-order]').forEach(b=>b.onclick=()=>open(b.dataset.tripOrder,null));}catch(e){el.innerHTML='<span class="hint">Не удалось загрузить задания выезда: '+esc(e.message)+'</span>';}}
  function init(){ if($('orderViewMode'))$('orderViewMode').onchange=e=>{viewMode=e.target.value;return board();};if($('orderHistorical'))$('orderHistorical').onchange=e=>{showHistorical=e.target.checked;return board();};$('orderSearch').oninput=e=>{query=e.target.value.trim().toLowerCase();board();};$('orderEngineer').onchange=e=>{crewFilter=e.target.value;board();};$('orderClosed').onchange=e=>{showClosed=e.target.checked;visibleStates.completed=showClosed;visibleStates.cancelled=showClosed;return board();};$('orderScopeClear').onclick=()=>{scope=null;board();};$('orderAdd').onclick=()=>open(null,scope);}
- return {init,board,open,openResult,eligibleOrdersForRequest,attachJobs,requestPanel,tripParent,leave,isDirty:()=>dirty||reportDirty,currentId:()=>current?.id,loaded:()=>loaded};
+ return {init,board,open,openWork,openResult,eligibleOrdersForRequest,attachJobs,requestPanel,tripParent,leave,isDirty:()=>dirty||reportDirty,currentId:()=>current?.id,loaded:()=>loaded};
 }

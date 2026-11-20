@@ -51,6 +51,8 @@ import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
 import {readExtraPartCosts} from './planner-store.js';
+import {mountPaymentCard,readPaymentModel,savePaymentModel} from './payment-terms.js';
+import './payment-terms.css';
 import { dashboardSummaryHTML } from './dashboard-summary.js';
 import { createNotifications, loadNotificationDecisions } from './notifications.js';
 import { installEngineerPickers } from './engineer-picker.js';
@@ -3880,6 +3882,26 @@ function configureRequestTabs(saved,requestedPane){
   requestTabs.select(({execution:'tasks',history:'overview','plan-fact':'estimate'})[requestedPane]||requestedPane||'overview');
   updateRequestReadPane();
 }
+async function loadCardPayment(scope,id,anchor,currentId){
+  const hostId='payment-'+scope+'-card';$(hostId)?.remove();
+  if(!id||!anchor)return;
+  const host=document.createElement('section'),user=session?.user?.id;
+  host.id=hostId;host.className='card entity-payment-terms';host.hidden=true;anchor.after(host);
+  const current=()=>host.isConnected&&id===currentId()&&user===session?.user?.id;
+  try{
+    const model=await readPaymentModel(sb,scope,id);
+    if(!current())return;
+    mountPaymentCard({root:host,model,save:async(view,terms)=>{
+      if(!current())throw Error('Откройте актуальную карточку');
+      await savePaymentModel(sb,view,terms);
+    },onOpen:row=>{
+      if(!current())return;
+      if(row.scope==='work')return serviceOrders.openWork(row.id,row.work);
+      if(row.scope==='order')return serviceOrders.open(row.id,id);
+      return openTrip(row.id);
+    }});
+  }catch(error){if(current()){host.hidden=false;host.textContent=error.message||'Условия оплаты недоступны';}}
+}
 async function openJob(id,presetClient,presetEquip,{pane:requestedPane}={}){ if(!await leaveSettingsEditor())return;if(!await leaveJobEditor())return;if(!await leaveTripEditor())return;if(serviceOrders.isDirty()&&!await serviceOrders.leave())return; await ensureRefs(); jobEditId=id;
   let j=null,pendingEdit=false;
   if(id){
@@ -3957,6 +3979,7 @@ async function openJob(id,presetClient,presetEquip,{pane:requestedPane}={}){ if(
   $('jobActivitySection').hidden=!id;
   $('jobResponsibilitySection').hidden=true;
   configureRequestTabs(!!id,requestedPane);
+  void loadCardPayment('job',id,$('jobOverviewState'),()=>jobEditId);
   if(id) mountEntityActivity({root:$('jobActivity'),db:sb,entity:'job',id,userId:()=>session?.user?.id,people:()=>profilesList,canPin:()=>canWriteJob(),onOpenPhoto:openActivityPhoto});
   if(id&&j)mountEntityResponsibility({root:$('jobResponsibilitySection'),db:sb,kind:'job',id,record:j,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,showHistory:false,beforeAssign:async()=>{const saved=!!(jobEditorDirty||jobSaveT||jobSaveFlight||Object.keys(partT).length);if(!await leaveJobEditor())return false;if((await qAll()).some(x=>x.payload?.jobId===id)){notify('Сначала дождитесь отправки изменений заявки на сервер.','warn');return false;}return {saved};},onChange:data=>canWrite()||[data.owner_id,data.curator_id].includes(session?.user?.id)?openJob(id):switchTab('planner','jobs'),onError:e=>notify(e.message,'err')});
   configureEntityActions('job',j);
@@ -6100,7 +6123,7 @@ async function openTrip(id,{includeOrderId=null,newPlan=false,pane:requestedPane
   }
   edit.hidden=!id||ro;
   if(includeOrderId){const order=tripOrdersAll.find(o=>o.id===includeOrderId);if(!t||!canWriteTrip(t)||!['planned','assigned'].includes(t.status)||!order||['completed','cancelled','review'].includes(order.status)){notify('Задание нельзя добавить в этот план выезда.','warn');}else if(curTripOrders.has(includeOrderId)){notify('Задание уже включено в выезд.');}else{curTripOrders.add(includeOrderId);syncTripJobsFromOrders();syncRouteStops();resetTripRoute();renderRouteStops();renderTripJobs();tripPlanDirty=true;notify('Задание добавлено в план. Проверь команду и маршрут, затем сохрани выезд.');}}
-  renderTripReviewSummary();const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
+  renderTripReviewSummary();void loadCardPayment('trip',id,$('tripOverviewState'),()=>tripEditId);const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
 // Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
 // было собирать глазами из четырёх мест модалки.
 // Факт-пробег в карточке выезда: число, откуда оно взято, что было с треком
