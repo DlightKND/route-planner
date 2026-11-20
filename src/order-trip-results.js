@@ -1,4 +1,5 @@
 import {planningPeriod} from './core/planning-dates.js';
+import {journalIcon} from './journal-icons.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:6});
@@ -29,13 +30,12 @@ export function proposedTripHours(items,accepted,budget,catalog){
  return hours;
 }
 
-const header='<thead><tr><th scope="col">Работа</th><th scope="col">План, н-ч</th><th scope="col">Факт, чел·ч</th><th scope="col">Комментарий</th></tr></thead>';
-
 export function mountOrderTripResults({root,order,items,catalog,data,user,manager,mayReport,requestedTrip,onWrite,onReturnReason,onGPS,onTrip,onReload}){
  const trips=data.trips||[],works=items.filter(item=>item.kind!=='material'),material=items.filter(item=>item.kind==='material');
  let selected=trips.find(trip=>trip.id===requestedTrip)||(trips.length===1?trips[0]:null);
  let editing=false,review=false,busy=false,fields=null,operation=null;
  const entries=new Map(catalog.map(item=>[item.id,item]));
+ const expanded=new Set();
  const buttons=(title,attribute,kind='')=>'<button type="button" class="btn '+kind+'" '+attribute+'>'+title+'</button>';
  const key=trip=>'dlight:order-trip-result:'+user+':'+order.id+':'+trip.id;
  function saved(trip){
@@ -67,18 +67,20 @@ export function mountOrderTripResults({root,order,items,catalog,data,user,manage
  function switchTrip(id){
   persist();
   selected=trips.find(trip=>trip.id===id)||null;
+  expanded.clear();
   editing=false;review=false;operation=null;restore();render();
  }
  function distributed(){return fields?.rows.reduce((sum,row)=>sum+(nonnegative(row.hours)||0),0)||0;}
  function updateMetrics(){
   const total=root.querySelector('[data-trip-distributed]');if(total)total.textContent=fmt(distributed())+' чел·ч';
+  const tableTotal=root.querySelector('[data-trip-work-total]');if(tableTotal)tableTotal.textContent=fmt(distributed());
   const explanation=root.querySelector('[data-trip-override]');if(explanation)explanation.hidden=Math.round(distributed()*100)===Math.round(Number(selected.presence?.available||0)*100);
  }
  function visibleRows(result){
-  return items.map(item=>{
-   const row=result?.items?.find(entry=>entry.id===item.id);
-   return '<tr><th scope="row">'+esc(item.title)+'</th><td>'+esc(fmt(row?.qty||0)+' '+item.unit)+'</td>'
-    +'<td>'+esc(item.kind==='material'?'—':fmt(row?.hours||0))+'</td><td>'+esc(row?.note||'—')+'</td></tr>';
+  return (result?.items||[]).map(row=>{
+   const item=items.find(item=>item.id===row.id)||{};
+   return '<tr><th scope="row">'+esc(row.title??item.title)+'</th><td>'+esc(fmt(row.qty)+' '+(row.unit??item.unit??''))+'</td>'
+    +'<td>'+esc((row.kind??item.kind)==='material'?'—':fmt(row.hours))+'</td><td>'+esc(row.note||'—')+'</td></tr>';
   }).join('');
  }
  function tableResult(result){
@@ -86,38 +88,108 @@ export function mountOrderTripResults({root,order,items,catalog,data,user,manage
   return '<div class="order-trip-result-scroll" role="region" aria-label="Результат по работам" tabindex="0"><table class="workflow-related-table"><thead><tr><th scope="col">Позиция</th><th scope="col">Объём</th><th scope="col">Факт, чел·ч</th><th scope="col">Комментарий</th></tr></thead><tbody>'
    +visibleRows(result)+'</tbody><tfoot><tr><th scope="row">Итого, чел·ч</th><td></td><td>'+fmt(total)+'</td><td></td></tr></tfoot></table></div>';
  }
- function cumulative(){
-  return '<div class="order-trip-result-scroll" role="region" aria-label="Принятые работы по выездам" tabindex="0"><table class="workflow-related-table">'+header+'<tbody>'+works.map(item=>{
-   const rows=trips.map(trip=>({trip,row:lastVersion(trip)?.items?.find(entry=>entry.id===item.id)}));
-   const hours=data.accepted_hours?.[item.id];
-   return '<tr><th scope="row">'+esc(item.title)+'</th><td>'+fmt(plannedHours(item,entries))+'</td><td>'+(hours==null?'—':fmt(hours))+'</td><td>'
-    +(rows.length?'<details><summary>По выездам</summary>'+rows.map(({trip,row})=>'<p>'+buttons(esc(tripLabel(trip)),'data-trip-receipt="'+esc(trip.id)+'"','ghost')+
-      ' <span class="hint">'+esc(stateLabel(trip))+(row?' · '+fmt(row.hours)+' чел·ч':'')+'</span>'+(row?.note?'<br>'+esc(row.note):'')+'</p>').join('')+'</details>':'—')
-    +'</td></tr>';
-  }).join('')+'</tbody></table></div>';
+ function notePreview(note){return note?.trim().split(/\r?\n/,1)[0]||'—';}
+ function workRow(item,hours,note,details,complete=false){
+  const id=esc(item.id),open=expanded.has(item.id);
+  return `<tr class="order-trip-work-row" data-work-row="${id}">
+   <th scope="row"><strong>${esc(item.title)}</strong><span class="hint order-trip-work-completed" ${complete?'':'hidden'}>Завершена</span></th>
+   <td class="order-trip-number" data-label="План, н-ч">${fmt(plannedHours(item,entries))}</td>
+   <td class="order-trip-number" data-label="Факт, чел·ч" data-visit-preview>${hours===''||hours==null?'—':esc(fmt(hours))}</td>
+   <td class="order-trip-note" data-empty="${!note?.trim()}"><span data-visit-note>${esc(notePreview(note))}</span></td>
+   <td class="order-trip-disclosure"><button type="button" class="btn" data-visit-expand="${id}" aria-label="Детали работы «${esc(item.title)}»" aria-expanded="${open}" aria-controls="trip-work-${id}">${journalIcon('chevron')}</button></td>
+  </tr><tr class="order-trip-work-detail" id="trip-work-${id}" ${open?'':'hidden'}><td colspan="5">${details}</td></tr>`;
  }
- function editorRows(){
-  const accepted=lastVersion(selected);
-  return [...works,...material].map(item=>{
-   const value=fields.rows.find(row=>row.id===item.id),max=maxQty(item,accepted);
-   const hours=item.kind!=='material'?'<label>Факт, чел·ч<input type="text" inputmode="decimal" data-visit-field="hours" value="'+esc(value.hours)+'"></label>':'';
-   return '<details class="order-trip-work" data-visit-line="'+esc(item.id)+'"><summary><span>'+esc(item.title)+'</span><span class="hint">'+
-    (item.kind==='material'?'Материал':fmt(plannedHours(item,entries))+' н-ч')+'</span><span data-visit-preview>'+esc(item.kind==='material'?fmt(value.qty)+' '+item.unit:value.hours===''?'—':fmt(value.hours)+' чел·ч')+
-    '</span></summary><div class="order-trip-work-fields">'+hours+
-    '<label>'+(item.kind==='material'?'Использовано':'Выполнено')+' · '+esc(item.unit)+'<input type="text" inputmode="decimal" data-visit-field="qty" value="'+esc(value.qty)+'"><span class="hint">Доступно '+fmt(max)+' '+esc(item.unit)+'</span></label>'+
-    (item.kind==='material'?'':'<label class="order-trip-complete"><input type="checkbox" data-visit-complete '+(max>0&&Number(value.qty)===max?'checked':'')+'> Работа завершена</label>')+
-    '<label class="order-trip-work-note">Комментарий<textarea maxlength="4000" rows="2" data-visit-field="note">'+esc(value.note)+'</textarea></label></div></details>';
+ function workTable(rows,hours,actions='',live=false){
+  const plan=works.reduce((sum,item)=>sum+plannedHours(item,entries),0);
+  return `<section class="order-trip-work-card"><header class="order-trip-result-head"><h3>Работы задания</h3>${actions}</header>
+   ${rows?`<table class="order-trip-work-table" aria-label="Работы задания">
+    <colgroup><col class="order-trip-work-name"><col class="order-trip-value"><col class="order-trip-value"><col><col class="order-trip-command"></colgroup>
+    <thead><tr><th scope="col">Работа</th><th scope="col" class="order-trip-number">План, н-ч</th><th scope="col" class="order-trip-number">Факт, чел·ч</th><th scope="col">Комментарий</th><th scope="col"><span class="sr-only">Детали работы</span></th></tr></thead>
+    <tbody>${rows}</tbody><tfoot><tr><th scope="row">Итого</th><td class="order-trip-number" data-label="План, н-ч">${fmt(plan)}</td><td class="order-trip-number" data-label="Факт, чел·ч" ${live?'data-trip-work-total':''}>${hours==null?'—':fmt(hours)}</td><td></td><td></td></tr></tfoot></table>`:
+    '<p class="hint order-trip-work-empty">Работы ещё не добавлены.</p>'}</section>`;
+ }
+ function cumulative(actions){
+  const rows=works.map(item=>{
+   const visits=trips.map(trip=>({trip,row:lastVersion(trip)?.items?.find(entry=>entry.id===item.id)}));
+   const latest=visits.findLast(({row})=>row?.note)?.row;
+   const details=`<div class="order-trip-work-fields"><div class="order-trip-related-visits">${visits.map(({trip,row})=>
+    `<div>${buttons(esc(tripLabel(trip)),'data-trip-receipt="'+esc(trip.id)+'"','ghost')}
+     <span class="hint">${esc(stateLabel(trip))}</span><span>${row?fmt(row.hours)+' чел·ч':'—'}</span><p>${esc(row?.note||'—')}</p></div>`).join('')}</div></div>`;
+   return workRow(item,data.accepted_hours?.[item.id],latest?.note,details,maxQty(item,null)===0);
   }).join('');
+  const accepted=Object.values(data.accepted_hours||{});
+  return workTable(rows,accepted.length?accepted.reduce((sum,hours)=>sum+Number(hours),0):null,actions);
+ }
+ function editorRows(proposal){
+  const accepted=lastVersion(selected);
+  return works.map(item=>{
+   const value=fields.rows.find(row=>row.id===item.id),max=maxQty(item,accepted),id=esc(item.id);
+   const complete=max>0&&nonnegative(value.qty)===max;
+   const history=Number(data.accepted_hours?.[item.id]||0)-Number(accepted?.items?.find(row=>row.id===item.id)?.hours||0);
+   const details=`<div class="order-trip-work-fields" data-visit-line="${id}">
+    <div class="order-trip-work-edit"><section><h4>Трудозатраты</h4><div class="order-trip-work-labor">
+     <div><span class="hint">План, н-ч</span><p>${fmt(plannedHours(item,entries))}</p></div>
+     <div><label>Факт, чел·ч<input type="text" inputmode="decimal" data-visit-field="hours" value="${esc(value.hours)}" aria-describedby="work-source-${id}"></label>
+     <p class="hint" id="work-source-${id}" data-visit-source></p>${selected.presence?.confirmed?
+      buttons('Вернуть '+fmt(proposal[item.id])+' чел·ч','data-visit-reset hidden','ghost'):''}</div></div>
+     ${history>0?`<p class="hint">Ранее принято ${fmt(history)} чел·ч · всего с этим выездом <span data-visit-cumulative data-prior="${history}"></span> чел·ч</p>`:''}
+    </section><label class="order-trip-work-note">Комментарий<textarea maxlength="4000" rows="3" placeholder="Комментарий к работе" data-visit-field="note">${esc(value.note)}</textarea></label></div>
+    <section class="order-trip-outcome"><h4>Результат работы</h4><div class="order-trip-outcome-controls">
+     <label class="order-trip-complete"><input class="sr-only" type="checkbox" role="switch" aria-label="Работа завершена" data-visit-complete ${complete?'checked':''}>
+      <span>Частично</span><span class="order-trip-complete-track" aria-hidden="true"></span><span>Завершена</span></label>
+     <label class="order-trip-quantity" data-visit-partial ${complete?'hidden':''}>Выполнено, ${esc(item.unit)}<input type="text" inputmode="decimal" data-visit-field="qty" value="${esc(value.qty)}"><span class="hint">Доступно ${fmt(max)} ${esc(item.unit)}</span></label>
+     <p data-visit-completed ${complete?'':'hidden'}>Выполнено <strong>${fmt(max)}</strong> ${esc(item.unit)}</p>
+    </div></section></div>`;
+   return workRow(item,value.hours,value.note,details,complete);
+  }).join('');
+ }
+ function materialTable(result,editable=false){
+  if(!material.length)return '';
+  return `<details class="order-trip-materials"><summary>Материалы задания · ${material.length}</summary>
+   <table class="workflow-related-table" aria-label="Материалы задания"><thead><tr><th scope="col">Материал</th><th scope="col">План</th><th scope="col">Факт</th><th scope="col">Комментарий</th></tr></thead>
+   <tbody>${material.map(item=>{
+    const row=result?.items?.find(entry=>entry.id===item.id);
+    return `<tr ${editable?'data-visit-line="'+esc(item.id)+'"':''}><th scope="row">${esc(item.title)}<span class="hint">${esc(item.unit)}</span></th>
+     <td>${fmt(item.planned_qty)}</td><td>${editable?`<input type="text" inputmode="decimal" data-visit-field="qty" aria-label="Использовано, ${esc(item.title)}" value="${esc(row.qty)}"><span class="hint">Доступно ${fmt(maxQty(item,lastVersion(selected)))}</span>`:row?fmt(row.qty):'—'}</td>
+     <td>${editable?`<textarea rows="2" maxlength="4000" data-visit-field="note" aria-label="Комментарий, ${esc(item.title)}">${esc(row.note)}</textarea>`:esc(row?.note||'—')}</td></tr>`;
+   }).join('')}</tbody></table></details>`;
+ }
+ function readOnlyRows(result){
+  return works.map(item=>{
+   const value=result.items?.find(row=>row.id===item.id);
+   const details=`<div class="order-trip-work-fields"><div class="order-trip-work-edit">
+    <section><h4>Трудозатраты</h4><div class="order-trip-work-labor"><div><span class="hint">План, н-ч</span><p>${fmt(plannedHours(item,entries))}</p></div>
+    <div><span class="hint">Факт, чел·ч</span><p>${value?fmt(value.hours):'—'}</p></div></div></section>
+    <div class="order-trip-work-note"><span class="hint">Комментарий</span><p>${esc(value?.note||'—')}</p></div></div>
+    <section class="order-trip-outcome"><h4>Результат работы</h4><p>${value?'Выполнено '+fmt(value.qty)+' '+esc(item.unit):'Результат пока не внесён.'}</p></section></div>`;
+   return workRow(item,value?.hours,value?.note,details);
+  }).join('');
+ }
+ function setExpanded(toggle,open){
+  const row=root.ownerDocument.getElementById(toggle.getAttribute('aria-controls'));
+  row.hidden=!open;
+  toggle.setAttribute('aria-expanded',String(open));
+  if(open)expanded.add(toggle.dataset.visitExpand);else expanded.delete(toggle.dataset.visitExpand);
  }
  function error(message,target){
   const output=root.querySelector('[data-trip-result-error]');
   if(!output)return;
   output.textContent=message;output.hidden=false;
-  if(target){target.closest('details').open=true;target.focus();}else output.focus();
+  if(!target){output.focus();return;}
+  const details=target.closest('details');
+  if(details)details.open=true;
+  const row=target.closest('.order-trip-work-detail');
+  if(row){
+   const toggle=row.previousElementSibling.querySelector('[data-visit-expand]');
+   setExpanded(toggle,true);
+   if(target.closest('[hidden]')){target.closest('[data-visit-line]').querySelector('[data-visit-complete]').focus();return;}
+  }
+  target.focus();
  }
  function formError(){
   if(!selected.presence?.confirmed||!['finished','done'].includes(selected.status))return ['Сначала завершите выезд и подтвердите рабочие посещения в GPS-журнале'];
   if(fields.presenceRevision!==selected.revision)return ['Данные GPS изменились. Обновите предложенные часы'];
+  if(!fields.rows.length)return ['В задании нет работ или материалов для отчёта'];
   for(const row of fields.rows){
    const item=items.find(item=>item.id===row.id),line=root.querySelector('[data-visit-line="'+row.id+'"]');
    const max=maxQty(item,lastVersion(selected)),quantity=nonnegative(row.qty),hours=item.kind==='material'?0:nonnegative(row.hours);
@@ -152,49 +224,77 @@ export function mountOrderTripResults({root,order,items,catalog,data,user,manage
  function render(){
   const trip=selected,accepted=trip&&lastVersion(trip),readOnly=trip&&(!trip.linked||trip.status==='cancelled'||!mayReport||
    !!accepted&&!editing||trip.state==='submitted'&&!manager);
-  const tabs='<label class="order-trip-picker">Результат по выезду<select data-visit-select><option value="">Все выезды</option>'+trips.map(t=>
-   '<option value="'+esc(t.id)+'" '+(t===trip?'selected':'')+'>'+esc(tripLabel(t)+' · '+stateLabel(t))+'</option>').join('')+'</select></label>';
-  let content=trips.length?cumulative():'<p class="hint">Связанные выезды недоступны.</p>';
-  if(trip){
-   const state='<p class="hint">'+esc(stateLabel(trip))+'</p>';
-   const links='<div class="order-trip-actions">'+buttons('Открыть выезд','data-visit-trip')+buttons('Сверить данные GPS','data-visit-gps','ghost')+'</div>';
+  const picker='<select class="order-trip-picker" data-visit-select aria-label="Результат по выезду"><option value="">Все выезды</option>'+trips.map(t=>
+   '<option value="'+esc(t.id)+'" '+(t===trip?'selected':'')+'>'+esc(tripLabel(t))+'</option>').join('')+'</select>';
+  const tripControl=trip?buttons('Открыть выезд','data-visit-trip','ghost'):'';
+  const selection=picker+tripControl;
+  const confirmed=trips.filter(t=>t.presence?.confirmed&&t.linked&&t.status!=='cancelled');
+  const available=trip?(trip.presence?.confirmed?Number(trip.presence.available):null):
+   (confirmed.length?confirmed.reduce((sum,t)=>sum+Number(t.presence.available),0):null);
+  const metric=value=>value==null?'—':fmt(value)+' чел·ч';
+  const recorded=trips.flatMap(t=>lastVersion(t)?.items||[]);
+  const distributedHours=trip?(readOnly?trip.latest?.hours:distributed()):recorded.length?recorded.reduce((sum,row)=>sum+Number(row.hours||0),0):null;
+  const context=`<div class="order-trip-context"><dl class="order-trip-metrics">
+   <div><dt>На распределении</dt><dd>${metric(available)}</dd></div>
+   <div><dt>Распределено</dt><dd ${trip&&!readOnly?'data-trip-distributed':''}>${metric(distributedHours)}</dd></div></dl>
+   ${trip&&!trip.presence?.confirmed?buttons('Сверить данные GPS','data-visit-gps'):''}</div>`;
+  let content='';
+  const proposal=trip&&!readOnly?proposedTripHours(items,accepted,available,entries):null;
+  if(!trip){
+   content=cumulative(selection)+materialTable({items:material.flatMap(item=>{
+    const contributions=recorded.filter(row=>row.id===item.id);
+    return contributions.length?[{id:item.id,qty:contributions.reduce((sum,row)=>sum+Number(row.qty),0)}]:[];
+   })});
+  }else{
+   const tripContext=trip.state?`<p class="hint">${esc(stateLabel(trip))}${accepted?' · версия '+trip.versions.length:''}</p>`:'';
    if(readOnly){
-    content=state+links+(trip.latest?tableResult(trip.latest):'<p class="hint">Результат пока не внесён.</p>');
-    if(accepted&&manager&&mayReport&&trip.linked&&trip.status!=='cancelled')content+=buttons('Исправить результат','data-visit-edit');
+    content=tripContext;
+    const revise=accepted&&manager&&mayReport&&trip.linked&&trip.status!=='cancelled'?buttons('Исправить результат','data-visit-edit'):'';
+    content+=workTable(readOnlyRows(trip.latest||{}),trip.latest?.hours,selection+revise)+materialTable(trip.latest);
    }else{
     const mismatch=fields.presenceRevision!==trip.revision;
-    content='<dl class="order-trip-metrics"><div><dt>На распределении</dt><dd>'+(trip.presence?.confirmed?fmt(trip.presence.available)+' чел·ч':'—')+'</dd></div><div><dt>Распределено</dt><dd data-trip-distributed></dd></div></dl>'+state+links;
+    content=tripContext;
     if(trip.state==='returned')content+='<p class="hint">Причина возврата · '+esc(trip.latest?.correction)+'</p>';
-    content+=review?'<h3>Проверьте результат задания</h3>'+tableResult({items:fields.rows.map(row=>({...row,qty:nonnegative(row.qty),hours:nonnegative(row.hours)}))})+
+    content+=review?'<section class="order-trip-review"><header class="order-trip-result-head"><h3 tabindex="-1">Проверьте результат задания</h3>'+
+      buttons('Вернуться к работам','data-visit-back')+'</header><p class="order-trip-review-hours">'+metric(distributed())+'</p><p class="hint">'+esc(tripLabel(trip))+'</p>'+
+      tableResult({items:fields.rows.map(row=>({...row,qty:nonnegative(row.qty),hours:nonnegative(row.hours)}))})+
       (fields.reason?'<p>Причина корректировки · '+esc(fields.reason)+'</p>':'')+
-      '<div class="order-trip-actions">'+buttons('Вернуться к работам','data-visit-back','ghost')+buttons(manager?'Принять результат':'Передать на приёмку','data-visit-commit','amber')+'</div>'
+      '</section><div class="order-trip-submit">'+buttons(manager?'Принять результат':'Передать на приёмку','data-visit-commit','amber')+'</div>'
      :(mismatch?'<p class="hint">Данные GPS изменились. Ручной ввод сохранён.</p>':'')+
-      (trip.presence?.confirmed?buttons(mismatch?'Обновить предложенные часы':'Распределить по нормам','data-visit-suggest','ghost'):'<p class="hint">Отчёт можно подготовить до подтверждения посещений.</p>')+
-      editorRows()+'<label data-trip-override>Причина корректировки трудозатрат<textarea data-visit-key="reason" maxlength="1000">'+esc(fields.reason)+'</textarea></label>'+
+      (trip.presence?.confirmed?'':'<p class="hint">Отчёт можно подготовить до подтверждения посещений.</p>')+
+      workTable(editorRows(proposal),distributed(),selection+(trip.presence?.confirmed?
+       buttons(mismatch?'Обновить предложенные часы':'Распределить по нормам','data-visit-suggest'):''),true)+
+      materialTable({items:fields.rows},true)+'<label data-trip-override>Причина корректировки трудозатрат<textarea data-visit-key="reason" maxlength="1000">'+esc(fields.reason)+'</textarea></label>'+
       (editing?'<label>Причина исправления<textarea data-visit-key="correction" maxlength="1000">'+esc(fields.correction)+'</textarea></label>':'')+
-      '<p class="hint">Черновик сохраняется на этом устройстве</p><div class="order-trip-actions">'+buttons('Проверить результат','data-visit-review')+
-      (trip.state==='submitted'&&manager?buttons('Вернуть на доработку','data-visit-return','ghost'):'')+'</div>';
+      '<p class="hint">Черновик сохраняется на этом устройстве</p>'+
+      (trip.state==='submitted'&&manager?buttons('Вернуть на доработку','data-visit-return','ghost'):'')+
+      '<div class="order-trip-submit">'+buttons('Проверить результат →','data-visit-review','amber')+'</div>';
    }
    if(trip.versions?.length)content+='<details class="order-trip-versions"><summary>Версии результата · '+trip.versions.length+'</summary>'+trip.versions.map((v,i)=>
     '<details><summary>Версия '+(i+1)+' · '+fmt(v.result.hours)+' чел·ч</summary>'+
     (v.result.correction?'<p>'+esc(v.result.correction)+'</p>':'')+tableResult(v.result)+'</details>').join('')+'</details>';
   }
-  root.innerHTML='<header class="order-trip-result-head"><h3>Работы задания по выездам</h3>'+tabs+'</header><p data-trip-result-error role="alert" tabindex="-1" hidden></p>'+content;updateMetrics();
-  bind();
+  root.innerHTML=context+'<p data-trip-result-error role="alert" tabindex="-1" hidden></p>'+content;
+  updateMetrics();
+  bind(proposal);
  }
- function bind(){
+ function bind(proposal){
   const get=selector=>root.querySelector(selector);
-  get('[data-visit-select]').onchange=e=>switchTrip(e.target.value);
+  const picker=get('[data-visit-select]');
+  if(picker)picker.onchange=e=>switchTrip(e.target.value);
   root.querySelectorAll('[data-trip-receipt]').forEach(button=>{button.onclick=()=>switchTrip(button.dataset.tripReceipt);});
+  root.querySelectorAll('[data-visit-expand]').forEach(button=>{button.onclick=()=>setExpanded(button,button.getAttribute('aria-expanded')!=='true');});
   const wire=(selector,fn)=>{const button=get(selector);if(button)button.onclick=fn;};
   wire('[data-visit-trip]',()=>onTrip(selected.id));wire('[data-visit-gps]',()=>onGPS(selected.id));
   wire('[data-visit-edit]',()=>{editing=true;persist();render();});
-  wire('[data-visit-back]',()=>{review=false;render();});
-  wire('[data-visit-review]',()=>{const issue=formError();if(issue){error(...issue);return;}review=true;persist();render();});
+  wire('[data-visit-back]',()=>{review=false;render();get('[data-visit-review]').focus();});
+  wire('[data-visit-review]',()=>{
+   const issue=formError();if(issue){error(...issue);return;}
+   review=true;persist();render();get('.order-trip-review h3').focus();
+  });
   wire('[data-visit-commit]',()=>write(manager?'accepted':'submitted'));
   wire('[data-visit-return]',async()=>{const reason=await onReturnReason();if(reason?.trim())await write('returned',reason.trim());});
   wire('[data-visit-suggest]',()=>{
-   const proposal=proposedTripHours(items,lastVersion(selected),selected.presence?.available,entries);
    const refreshed=fields.presenceRevision!==selected.revision;
    for(const row of fields.rows)if(!row.manual||!refreshed){row.hours=proposal[row.id];row.manual=false;}
    fields.presenceRevision=selected.revision;persist();render();
@@ -203,14 +303,42 @@ export function mountOrderTripResults({root,order,items,catalog,data,user,manage
   root.querySelectorAll('[data-visit-line]').forEach(line=>{
    const row=fields.rows.find(value=>value.id===line.dataset.visitLine),item=items.find(value=>value.id===row.id);
    const qty=line.querySelector('[data-visit-field=qty]'),complete=line.querySelector('[data-visit-complete]');
-   if(complete)complete.onchange=()=>{row.qty=complete.checked?(row.partial=row.qty,maxQty(item,lastVersion(selected))):row.partial??0;qty.value=row.qty;persist();};
+   const summary=line.closest('.order-trip-work-detail')?.previousElementSibling;
+   const labor=line.querySelector('[data-visit-field=hours]'),reset=line.querySelector('[data-visit-reset]');
+   const max=maxQty(item,lastVersion(selected));
+   function refreshRow(){
+    if(!summary)return;
+    const hours=nonnegative(row.hours),done=max>0&&nonnegative(row.qty)===max;
+    summary.querySelector('[data-visit-preview]').textContent=Number.isFinite(hours)?fmt(hours):'—';
+    summary.querySelector('.order-trip-work-completed').hidden=!done;
+    const note=summary.querySelector('[data-visit-note]');
+    note.textContent=notePreview(row.note);note.parentElement.dataset.empty=String(!row.note.trim());
+    const source=line.querySelector('[data-visit-source]');
+    source.textContent=row.manual?'Вручную':selected.presence?.confirmed?'Предложено '+fmt(proposal[row.id])+' чел·ч':'';
+    if(reset)reset.hidden=!row.manual;
+    const cumulative=line.querySelector('[data-visit-cumulative]');
+    if(cumulative)cumulative.textContent=fmt(Number(cumulative.dataset.prior)+(hours||0));
+    complete.checked=done;
+    line.querySelector('[data-visit-partial]').hidden=done;
+    line.querySelector('[data-visit-completed]').hidden=!done;
+   }
+   if(complete)complete.onchange=()=>{
+    if(complete.checked)row.partial=row.qty;
+    row.qty=complete.checked?max:row.partial??0;qty.value=row.qty;
+    refreshRow();persist();
+   };
+   if(reset)reset.onclick=()=>{
+    row.hours=proposal[row.id];row.manual=false;labor.value=row.hours;labor.focus();
+    refreshRow();updateMetrics();persist();
+   };
    line.querySelectorAll('[data-visit-field]').forEach(input=>{input.oninput=()=>{
     const field=input.dataset.visitField;row[field]=input.value;
-    if(field==='hours'){row.manual=true;line.querySelector('[data-visit-preview]').textContent=input.value?input.value+' чел·ч':'—';}
-    if(field==='qty'&&item.kind==='material')line.querySelector('[data-visit-preview]').textContent=input.value?input.value+' '+item.unit:'—';
-    if(field==='qty'&&complete)complete.checked=maxQty(item,lastVersion(selected))>0&&nonnegative(row.qty)===maxQty(item,lastVersion(selected));
+    if(field==='hours')row.manual=true;
+    if(field==='qty'&&complete&&max>0&&nonnegative(row.qty)===max){row.partial=0;complete.focus();}
+    refreshRow();
     updateMetrics();persist();
    };});
+   refreshRow();
   });
  }
  restore();render();

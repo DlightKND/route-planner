@@ -251,7 +251,7 @@ export function createServiceOrders(ctx){
   ]});restoreResultDraft();
  }updateSaveState();frameOrderWorkspace({record:o,editable:edit,people:ctx.profiles()});renderPlanning(o);
  if(visitResults||visitError){
-  const panel=document.createElement('section');panel.id='orderTripResults';panel.className='card order-trip-results';
+  const panel=document.createElement('section');panel.id='orderTripResults';panel.className=visitResults?'order-trip-results':'card order-trip-results';
   $('orderPane-scope').prepend(panel);
   if(visitResults){
    editor.querySelector('.workflow-work-result')?.remove();

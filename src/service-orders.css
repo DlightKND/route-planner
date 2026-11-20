@@ -78,16 +78,33 @@ button.subtab{background:transparent;border-top:0;border-left:0;border-right:0;}
  min-width:0;
  gap:16px;
 }
+.order-trip-work-card,.order-trip-context,.order-trip-review,.order-trip-materials,.order-trip-versions {
+ border:1px solid var(--line);
+ border-radius:var(--r-md);
+ background:var(--panel);
+ min-width:0;
+}
+.order-trip-work-card { container-type:inline-size; }
 .order-trip-result-head {
  display:flex;
  flex-wrap:wrap;
  justify-content:space-between;
  align-items:center;
- gap:12px;
+ gap:8px 16px;
 }
-.order-trip-result-head h3 { margin:0; }
-.order-trip-picker { width:min(100%,360px); }
+.order-trip-work-card>.order-trip-result-head { padding:12px 16px; border-bottom:1px solid var(--line); }
+.order-trip-result-head h3 { flex:1 1 160px; margin:0; }
+html#dlight-ui[data-ui-system] .order-trip-result-head h3 { font-size:18px!important; }
+.order-trip-picker { width:min(100%,280px); }
 .order-trip-results p { margin:0; }
+.order-trip-context {
+ display:flex;
+ flex-wrap:wrap;
+ justify-content:space-between;
+ align-items:center;
+ gap:12px 24px;
+ padding:12px 16px;
+}
 .order-trip-result-scroll { overflow:auto; min-width:0; }
 .order-trip-result-scroll table { width:100%; min-width:580px; }
 .order-trip-result-scroll td:last-child { overflow-wrap:break-word; }
@@ -95,46 +112,148 @@ button.subtab{background:transparent;border-top:0;border-left:0;border-right:0;}
 .order-trip-metrics {
  display:grid;
  grid-template-columns:repeat(2,minmax(0,1fr));
- gap:12px;
+ gap:12px 24px;
  margin:0;
- padding:12px;
- border:1px solid var(--line);
- border-radius:var(--r-sm);
- background:var(--raised);
 }
 .order-trip-metrics dt { font-size:var(--fs-caption); color:var(--ink-dim); }
-.order-trip-metrics dd { margin:4px 0 0; font-weight:600; font-variant-numeric:tabular-nums; }
-.order-trip-actions { display:flex; flex-wrap:wrap; gap:8px; }
-.order-trip-work,.order-trip-versions {
- border:1px solid var(--line);
- border-radius:var(--r-sm);
-}
-.order-trip-work>summary {
- display:grid;
- grid-template-columns:minmax(0,1fr) auto auto;
- align-items:center;
- gap:12px;
- padding:8px 12px;
- list-style:none;
- cursor:pointer;
-}
-.order-trip-work>summary>span:first-child::before { content:'▸'; margin-right:8px; color:var(--ink-dim); }
-.order-trip-work[open]>summary>span:first-child::before { content:'▾'; }
-.order-trip-work>summary>span:last-child { font-variant-numeric:tabular-nums; }
-.order-trip-work-fields {
- display:grid;
- grid-template-columns:repeat(2,minmax(0,1fr));
- gap:12px;
- padding:12px;
+.order-trip-metrics dd { margin:3px 0 0; font-size:20px; font-weight:500; font-variant-numeric:tabular-nums; }
+.order-trip-results>button { justify-self:start; }
+.order-trip-results:has(>.order-trip-submit) { padding-bottom:72px; }
+.order-trip-submit {
+ display:flex;
+ justify-content:end;
+ position:fixed;
+ inset-inline:var(--rail-w) 0;
+ bottom:var(--rail-h);
+ z-index:22;
+ padding:12px 24px;
  border-top:1px solid var(--line);
+ background:var(--panel);
 }
-.order-trip-work-note,.order-trip-complete { grid-column:1/-1; }
-.order-trip-complete { display:flex; align-items:center; gap:8px; }
-.order-trip-versions { padding:12px; }
+.order-trip-work-table {
+ width:100%;
+ table-layout:fixed;
+ border-collapse:collapse;
+}
+.order-trip-work-name { width:34%; }
+.order-trip-value { width:112px; }
+.order-trip-command { width:76px; }
+html#dlight-ui[data-ui-system] .view .order-trip-work-table :is(th,td) {
+ padding:8px 16px;
+ text-align:left;
+ border-bottom:1px solid var(--line);
+ vertical-align:middle;
+}
+.order-trip-work-table thead { background:var(--raised); }
+html#dlight-ui[data-ui-system] .view .order-trip-work-table thead th { padding-block:12px; color:var(--ink-dim); font-size:12px; font-weight:500; }
+html#dlight-ui[data-ui-system] .view .order-trip-work-table tfoot :is(th,td) { padding-block:12px; border-bottom:0; font-weight:600; }
+html#dlight-ui[data-ui-system] .view .order-trip-work-table .order-trip-number { text-align:right; font-variant-numeric:tabular-nums; }
+.order-trip-work-row:has([aria-expanded=true]),.order-trip-work-detail { background:var(--panel-2); }
+.order-trip-work-row th strong { display:block; font-size:15px; font-weight:500; overflow-wrap:anywhere; }
+.order-trip-work-completed { display:inline-block; margin-top:4px; }
+.order-trip-note span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-dim); }
+.order-trip-disclosure .btn {
+ display:grid;
+ place-items:center;
+ width:44px;
+ height:44px;
+ padding:0;
+}
+.order-trip-disclosure .btn>svg { transform:rotate(90deg); }
+.order-trip-disclosure .btn[aria-expanded=true]>svg { transform:rotate(-90deg); }
+html#dlight-ui[data-ui-system] .view .order-trip-work-detail>td { padding:12px 16px; }
+.order-trip-work-fields {
+ padding:16px;
+ border:1px solid var(--line);
+ border-radius:var(--r-md);
+ background:var(--panel);
+ font-size:14px;
+}
+.order-trip-work-edit { display:grid; grid-template-columns:minmax(278px,1fr) minmax(0,1fr); gap:16px; }
+.order-trip-work-edit h4,.order-trip-outcome h4 { margin:0 0 8px; font-size:14px; font-weight:600; line-height:20px; }
+.order-trip-work-edit p { margin-block:4px 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.order-trip-work-labor { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.view #orderEditor .order-trip-results label { margin:0; }
+.order-trip-work-note { padding-top:28px; }
+.order-trip-work-note textarea,.order-trip-work-labor input,.order-trip-quantity input,.order-trip-materials :is(input,textarea) { width:100%; min-width:0; }
+.order-trip-work-labor [data-visit-reset] { margin-top:8px; max-width:100%; white-space:normal; }
+.order-trip-outcome { margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
+.order-trip-outcome-controls { display:flex; align-items:end; flex-wrap:wrap; gap:12px 24px; }
+#orderEditor .order-trip-complete {
+ display:inline-flex;
+ align-items:center;
+ gap:8px;
+ min-height:44px;
+ cursor:pointer;
+ color:var(--ink-dim);
+ white-space:nowrap;
+}
+.order-trip-complete:not(:has(input:checked))>span:first-of-type,.order-trip-complete:has(input:checked)>span:last-child { color:var(--ink); font-weight:600; }
+.order-trip-complete-track {
+ position:relative;
+ display:inline-flex;
+ width:42px;
+ height:24px;
+ flex:none;
+ padding:3px;
+ border:1px solid var(--input-line);
+ border-radius:var(--r-pill);
+ background:var(--raised);
+}
+.order-trip-complete-track::before { content:''; width:16px; height:16px; border-radius:50%; background:var(--ink-dim); }
+.order-trip-complete:has(input:checked) .order-trip-complete-track { justify-content:flex-end; background:var(--accent); border-color:var(--accent-line); }
+.order-trip-complete:has(input:checked) .order-trip-complete-track::before { background:var(--on-accent); }
+.order-trip-complete:has(input:focus-visible) { outline:2px solid var(--focus); outline-offset:3px; border-radius:var(--r-sm); }
+.order-trip-quantity { width:min(100%,180px); }
+.order-trip-quantity .hint,.order-trip-materials table .hint { display:block; margin-top:4px; }
+.order-trip-outcome-controls>p { min-height:44px; align-content:center; }
+.order-trip-related-visits>div { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; }
+.order-trip-related-visits>div+div { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
+.order-trip-related-visits p { flex-basis:100%; white-space:pre-wrap; overflow-wrap:anywhere; }
+.order-trip-work-empty,.order-trip-materials>summary,.order-trip-versions { padding:12px 16px; }
+.order-trip-materials>summary,.order-trip-versions summary { cursor:pointer; }
+.order-trip-materials table { table-layout:fixed; }
+.order-trip-materials :is(th,td) { overflow-wrap:anywhere; }
+.order-trip-review { display:grid; gap:12px; padding:24px; }
+.order-trip-review-hours { font-size:20px; font-weight:500; }
 .order-trip-versions details { margin-top:8px; }
 .order-trip-results [data-trip-result-error]:not([hidden]) { color:var(--red); }
+@container (max-width:620px){
+ .order-trip-work-edit { grid-template-columns:minmax(0,1fr); gap:12px; }
+ .order-trip-work-labor { grid-template-columns:repeat(2,minmax(0,184px)); }
+ .order-trip-work-note { padding-top:0; }
+}
 @media(max-width:760px){
  .order-trip-picker { width:100%; }
- .order-trip-work>summary { grid-template-columns:minmax(0,1fr) auto; }
- .order-trip-work>summary>span:nth-child(2) { grid-row:2; }
+ .order-trip-metrics { flex-basis:100%; }
+ .order-trip-metrics dd { font-size:16px; }
+ .order-trip-work-card>.order-trip-result-head>h3 { flex-basis:100%; }
+ .order-trip-submit { inset-inline:0; padding-inline:16px; }
+ .order-trip-submit>.btn { width:100%; }
+ .order-trip-work-table :is(colgroup,thead) { position:absolute; clip-path:inset(50%); width:1px; height:1px; overflow:hidden; }
+ .order-trip-work-table :is(tbody,tfoot),.order-trip-work-detail>td { display:block; }
+ .order-trip-work-table :is(.order-trip-work-row,tfoot tr) {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:center;
+  gap:4px 12px;
+  padding:8px 12px;
+ }
+ .order-trip-work-row,.order-trip-work-detail { border-bottom:1px solid var(--line); }
+ .order-trip-work-detail:not([hidden]) { display:block; padding:12px; }
+ html#dlight-ui[data-ui-system] .view .order-trip-work-table :is(.order-trip-work-row,.order-trip-work-detail,tfoot tr)>:is(th,td) { padding:0; border:0; text-align:left; }
+ html#dlight-ui[data-ui-system] .view .order-trip-work-table .order-trip-work-row th { grid-area:1/1/2/-1; padding-right:56px; }
+ .order-trip-work-row .order-trip-disclosure { grid-area:1/2; justify-self:end; }
+ .order-trip-note,.order-trip-work-table tfoot th { grid-column:1/-1; }
+ .order-trip-note[data-empty=true],.order-trip-work-table tfoot td:empty { display:none; }
+ .order-trip-work-table .order-trip-number::before { content:attr(data-label) ' '; margin-right:4px; color:var(--ink-dim); font-size:12px; }
+ .order-trip-work-fields,.order-trip-review { padding:12px; }
+ .order-trip-materials table,.order-trip-materials tbody { display:block; }
+ .order-trip-materials thead { position:absolute; clip-path:inset(50%); width:1px; height:1px; overflow:hidden; }
+ .order-trip-materials tbody tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px; padding:8px 12px; border-top:1px solid var(--line); }
+ html#dlight-ui[data-ui-system] .view .order-trip-materials tbody :is(th,td) { padding:0; border:0; }
+ .order-trip-materials tbody :is(th,td:last-child) { grid-column:1/-1; }
+ .order-trip-materials td:nth-child(2)::before,.order-trip-materials td:nth-child(3)::before { display:block; color:var(--ink-dim); font-size:12px; }
+ .order-trip-materials td:nth-child(2)::before { content:'План'; }
+ .order-trip-materials td:nth-child(3)::before { content:'Факт'; }
 }

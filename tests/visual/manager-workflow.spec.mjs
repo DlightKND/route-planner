@@ -152,18 +152,44 @@ test('M9: remaining travel is calculated from current GPS without changing confi
 test('M10: the engineer resumes a trip draft, reviews it and sends it to the curator',async({page},info)=>{
  const errors=await boot(page,info,{role:'engineer',stage:'in_progress',route:'order/'+order+'/scope/'+trip,tripResultJourney:'engineer'});
  const panel=page.locator('#orderTripResults'),line=panel.locator('[data-visit-line]').first();
+ const expand=panel.locator('[data-visit-expand]').first();
+ const materials=panel.locator('.order-trip-materials');
+ const used=materials.locator('[data-visit-field=qty]').first();
  await expect(panel.locator('[data-visit-select]')).toHaveValue(trip);
- await line.locator('summary').click();
+ await expect(panel.locator('[data-visit-review]')).toBeInViewport();
+ const workTable=panel.getByRole('table',{name:'Работы задания',exact:true});
+ await expect(workTable.locator('thead th')).toHaveText(['Работа','План, н-ч','Факт, чел·ч','Комментарий','Детали работы']);
+ await expect(expand).toHaveAttribute('aria-expanded','false');
+ await expect(expand.locator('svg')).toBeVisible();
+ expect((await expand.boundingBox()).height).toBeGreaterThanOrEqual(44);
+ await expand.click();
+ await expect(expand).toHaveAttribute('aria-expanded','true');
  await expect(line.locator('[data-visit-field=hours]')).toHaveValue('2');
+ await expect(line.locator('[data-visit-source]')).toHaveText('Предложено 2 чел·ч');
+ await line.locator('[data-visit-field=hours]').fill('1,5');
+ await expect(workTable.locator('[data-trip-work-total]')).toHaveText('1,5');
+ await expect(line.locator('[data-visit-source]')).toHaveText('Вручную');
+ await line.locator('[data-visit-reset]').click();
+ await expect(workTable.locator('[data-trip-work-total]')).toHaveText('2');
  await line.locator('[data-visit-field=qty]').fill('3');
+ await line.locator('.order-trip-complete').click();
+ await expect(line.getByRole('switch')).toBeChecked();
+ await expect(line.locator('[data-visit-field=qty]')).toBeHidden();
+ await line.locator('.order-trip-complete').click();
+ await expect(line.locator('[data-visit-field=qty]')).toHaveValue('3');
  await panel.locator('[data-visit-review]').click();
  await expect(panel.locator('[role=alert]')).toContainText('Укажите, что осталось сделать');
  await line.locator('[data-visit-field=note]').fill('Осталась проверка');
+ await materials.locator('summary').click();
+ await used.fill('1');
  await page.reload();
  await expect(panel.locator('[data-visit-select]')).toHaveValue(trip);
- await line.locator('summary').click();
+ await expand.click();
  await expect(line.locator('[data-visit-field=qty]')).toHaveValue('3');
  await expect(line.locator('[data-visit-field=note]')).toHaveValue('Осталась проверка');
+ await shot(page,info,'trip-result-work-details');
+ await materials.locator('summary').click();
+ await expect(used).toHaveValue('1');
  await panel.locator('[data-visit-review]').click();
  await expect(panel).toContainText('Проверьте результат задания');
  await shot(page,info,'trip-result-review');
@@ -173,6 +199,7 @@ test('M10: the engineer resumes a trip draft, reviews it and sends it to the cur
  const [write]=await page.evaluate(()=>window.__visualQA.visitWrites);
  expect(write).toMatchObject({p_action:'submitted',p_order:order,p_trip:trip,p_trip_revision:4});
  expect(write.p_result.items[0]).toMatchObject({qty:3,hours:2,note:'Осталась проверка'});
+ expect(write.p_result.items[1]).toMatchObject({qty:1,hours:0});
  await clean(page,errors);
 });
 
@@ -189,7 +216,7 @@ test('M10: the curator accepts a trip report and corrects it with version histor
  await expect(plan.locator('td').nth(2)).toHaveText('3 ч');
  await page.getByRole('tab',{name:'Работы'}).click();
  await panel.locator('[data-visit-edit]').click();
- await line.locator('summary').click();
+ await panel.locator('[data-visit-expand]').first().click();
  await line.locator('[data-visit-field=qty]').fill('4');
  await panel.locator('[data-visit-review]').click();
  await expect(panel.locator('[role=alert]')).toContainText('Укажите причину исправления');
@@ -205,5 +232,10 @@ test('M10: the curator accepts a trip report and corrects it with version histor
  expect(corrected).toMatchObject({p_action:'accepted',p_expected_event:accepted.p_operation,p_order_revision:1,
   p_result:{correction:'Уточнили по акту'}});
  expect(corrected.p_result.items[0]).toMatchObject({qty:4,hours:2});
+ await panel.locator('[data-visit-select]').selectOption('');
+ await expect(panel.getByRole('table',{name:'Работы задания',exact:true}).locator('tfoot .order-trip-number').last()).toHaveText('2');
+ await panel.locator('[data-visit-expand]').first().click();
+ await panel.locator('[data-trip-receipt]').first().click();
+ await expect(panel.locator('[data-visit-select]')).toHaveValue(trip);
  await clean(page,errors);
 });
