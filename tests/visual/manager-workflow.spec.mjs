@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 const job=fixtureIDs.job,order=fixtureIDs.order,trip=fixtureIDs.trip,other='00000000-0000-4000-8000-000000000003';
-async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false}={}){
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,managerJourney:{stage,failAssignment,routeBuilder}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
+async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false}={}){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
 }
 async function navigate(page,view,hash){await page.evaluate(hash=>{location.hash=hash;},hash);await expect(page.locator('.view-'+view)).toHaveClass(/active/);}
 async function reopenRequest(page){await navigate(page,'planner','/planner/jobs');await navigate(page,'job','/job/'+job);}
@@ -146,5 +146,64 @@ test('M9: remaining travel is calculated from current GPS without changing confi
  expect(save.args.p_plan.remaining_route).toMatchObject({position_ts:'2026-10-05T16:58:00Z',stops:[{type:'start',lat:49.98,lng:36.22},{type:'wp',name:'Промежуточная точка'}]});
  expect(save.args.p_plan).not.toHaveProperty('fact_km');
  expect(save.args.p_plan.route_stops.map(point=>point.type)).toEqual(['start','job','wp']);
+ await clean(page,errors);
+});
+
+test('M10: the engineer resumes a trip draft, reviews it and sends it to the curator',async({page},info)=>{
+ const errors=await boot(page,info,{role:'engineer',stage:'in_progress',route:'order/'+order+'/scope/'+trip,tripResultJourney:'engineer'});
+ const panel=page.locator('#orderTripResults'),line=panel.locator('[data-visit-line]').first();
+ await expect(panel.locator('[data-visit-select]')).toHaveValue(trip);
+ await line.locator('summary').click();
+ await expect(line.locator('[data-visit-field=hours]')).toHaveValue('2');
+ await line.locator('[data-visit-field=qty]').fill('3');
+ await panel.locator('[data-visit-review]').click();
+ await expect(panel.locator('[role=alert]')).toContainText('Укажите, что осталось сделать');
+ await line.locator('[data-visit-field=note]').fill('Осталась проверка');
+ await page.reload();
+ await expect(panel.locator('[data-visit-select]')).toHaveValue(trip);
+ await line.locator('summary').click();
+ await expect(line.locator('[data-visit-field=qty]')).toHaveValue('3');
+ await expect(line.locator('[data-visit-field=note]')).toHaveValue('Осталась проверка');
+ await panel.locator('[data-visit-review]').click();
+ await expect(panel).toContainText('Проверьте результат задания');
+ await shot(page,info,'trip-result-review');
+ await panel.locator('[data-visit-commit]').click();
+ await expect(panel).toContainText('На приёмке');
+ await expect(panel.locator('[data-visit-line]')).toHaveCount(0);
+ const [write]=await page.evaluate(()=>window.__visualQA.visitWrites);
+ expect(write).toMatchObject({p_action:'submitted',p_order:order,p_trip:trip,p_trip_revision:4});
+ expect(write.p_result.items[0]).toMatchObject({qty:3,hours:2,note:'Осталась проверка'});
+ await clean(page,errors);
+});
+
+test('M10: the curator accepts a trip report and corrects it with version history',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope/'+trip,tripResultJourney:'manager'});
+ const panel=page.locator('#orderTripResults'),line=panel.locator('[data-visit-line]').first();
+ await expect(panel).toContainText('На приёмке');
+ await panel.locator('[data-visit-review]').click();
+ await panel.locator('[data-visit-commit]').click();
+ await expect(panel).toContainText('Версии результата · 1');
+ await page.getByRole('tab',{name:'План/факт'}).click();
+ const plan=page.locator('#orderPlanFactRows tbody tr').first();
+ await expect(plan.locator('td').last()).toHaveText('2');
+ await expect(plan.locator('td').nth(2)).toHaveText('3 ч');
+ await page.getByRole('tab',{name:'Работы'}).click();
+ await panel.locator('[data-visit-edit]').click();
+ await line.locator('summary').click();
+ await line.locator('[data-visit-field=qty]').fill('4');
+ await panel.locator('[data-visit-review]').click();
+ await expect(panel.locator('[role=alert]')).toContainText('Укажите причину исправления');
+ await panel.locator('[data-visit-key=correction]').fill('Уточнили по акту');
+ await panel.locator('[data-visit-review]').click();
+ await panel.locator('[data-visit-commit]').click();
+ await expect(panel).toContainText('Версии результата · 2');
+ await panel.locator('.order-trip-versions > summary').click();
+ await expect(panel.locator('.order-trip-versions > details')).toHaveCount(2);
+ await shot(page,info,'trip-result-accepted');
+ const [accepted,corrected]=await page.evaluate(()=>window.__visualQA.visitWrites);
+ expect(accepted).toMatchObject({p_action:'accepted',p_order:order,p_trip:trip,p_order_revision:0});
+ expect(corrected).toMatchObject({p_action:'accepted',p_expected_event:accepted.p_operation,p_order_revision:1,
+  p_result:{correction:'Уточнили по акту'}});
+ expect(corrected.p_result.items[0]).toMatchObject({qty:4,hours:2});
  await clean(page,errors);
 });

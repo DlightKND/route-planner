@@ -8,7 +8,7 @@
 
 ## Как проверено
 
-Просканированы 81 файлов: index.html и production-модули src/**/*.js, кроме демонстрационных модулей каталога (design-system-preview.js, design-system-controls.js, design-system-guidance.js и design-system-comparison.js). Новые компоненты src/ui в сканирование включаются. Собраны явные input types и значения DOM .type (включая button), роли в HTML/JS и роли через setAttribute; затем вручную сопоставлены маршруты, обработчики pointer/keyboard, сохранение, медиа, карта, график, уведомления и offline-очередь с пользовательскими задачами. Для каждой строки проверено существование конкретного маркера в исходном файле. Указатели строк рассчитаны автоматически.
+Просканированы 82 файлов: index.html и production-модули src/**/*.js, кроме демонстрационных модулей каталога (design-system-preview.js, design-system-controls.js, design-system-guidance.js и design-system-comparison.js). Новые компоненты src/ui в сканирование включаются. Собраны явные input types и значения DOM .type (включая button), роли в HTML/JS и роли через setAttribute; затем вручную сопоставлены маршруты, обработчики pointer/keyboard, сохранение, медиа, карта, график, уведомления и offline-очередь с пользовательскими задачами. Для каждой строки проверено существование конкретного маркера в исходном файле. Указатели строк рассчитаны автоматически.
 
 Сканирование не исполняет интерфейс и не понимает произвольную генерацию HTML/ARIA через переменные. Оно не может автоматически обнаружить новый пользовательский сценарий из того же button. Новые режимы, права, сторонние Leaflet-контролы и touch/assistive-tech требуют ручного просмотра. Скриншоты каталога 0.2 и его 60 Chromium-проверок не являются проверкой всех этих семейств на рабочих экранах. В 0.7 отдельные production-проверки измеряют реальные элементы в разделах и окнах; статический реестр дополняет эти проверки.
 
@@ -36,10 +36,10 @@
 | boolean-switch | Немедленная настройка Вкл / Выкл | Описан | Есть | P1 | [src/app.js:8073](../src/app.js#L8073) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | native-select | Одиночный выбор из списка | Описан | Есть | P1 | [index.html:2545](../index.html#L2545) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | multi-select-popover | Выбор инженеров: popover с checkbox, без поиска | Частично | Есть | P1 | [src/engineer-picker.js:26](../src/engineer-picker.js#L26) | [Контракт](design-system.md#pattern-selection) |
-| search-field | Поиск списка: debounce / clear / пусто / ошибка | Пропуск | Есть | P1 | [src/notifications.js:68](../src/notifications.js#L68) | [Контракт](design-system.md#pattern-selection) |
+| search-field | Поиск списка: debounce / clear / пусто / ошибка | Пропуск | Есть | P1 | [src/notifications.js:75](../src/notifications.js#L75) | [Контракт](design-system.md#pattern-selection) |
 | search-result-picker | Адресный поиск и выбор результата | Частично | Есть | P1 | [src/app.js:1751](../src/app.js#L1751) | [Контракт](design-system.md#pattern-selection) |
 | text-field | Текст / email / телефон / textarea | Описан | Есть | P1 | [index.html:3077](../index.html#L3077) | [Контракт](design-system.md#field--textarea--number--date) |
-| number-unit | Количество / деньги / длительность / доля | Частично | Есть | P1 | [src/service-orders.js:334](../src/service-orders.js#L334) | [Контракт](design-system.md#pattern-inputs) |
+| number-unit | Количество / деньги / длительность / доля | Частично | Есть | P1 | [src/service-orders.js:377](../src/service-orders.js#L377) | [Контракт](design-system.md#pattern-inputs) |
 | date-field | Дата, время, дата со временем, месяц | Описан | Есть | P1 | [src/app.js:287](../src/app.js#L287) | [Контракт](design-system.md#семейство-datecontrol-не-один-универсальный-календарь) |
 | date-range | Диапазон дат в черновике | Описан | Есть | P1 | [src/app.js:3281](../src/app.js#L3281) | [Контракт](design-system.md#семейство-datecontrol-не-один-универсальный-календарь) |
 | period-navigator | Пресеты, стрелки и календарный период | Описан | Есть | P1 | [src/app.js:3279](../src/app.js#L3279) | [Контракт](design-system.md#семейство-datecontrol-не-один-универсальный-календарь) |
@@ -50,7 +50,7 @@
 | image-viewer | Просмотр фото и выход из него | Пропуск | Есть | P1 | [src/app.js:3790](../src/app.js#L3790) | [Контракт](design-system.md#pattern-media) |
 | application-navigation | Rail / нижняя навигация / Ещё | Частично | Есть | P1 | [index.html:2319](../index.html#L2319) | [Контракт](design-system.md#pattern-navigation) |
 | entity-tabs | Вкладки записи с сохранением состояния панелей | Описан | Есть | P1 | [src/entity-tabs.js:3](../src/entity-tabs.js#L3) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
-| record-card | Карточка, строка списка, доска состояний | Частично | Есть | P1 | [src/service-orders.js:160](../src/service-orders.js#L160) | [Контракт](design-system.md#pattern-data) |
+| record-card | Карточка, строка списка, доска состояний | Частично | Есть | P1 | [src/service-orders.js:162](../src/service-orders.js#L162) | [Контракт](design-system.md#pattern-data) |
 | grouped-list | Группированный справочник, раскрытие уровней | Пропуск | Есть | P1 | [src/app.js:1637](../src/app.js#L1637) | [Контракт](design-system.md#pattern-data) |
 | disclosure | Свёрнутый блок / details / accordion | Частично | Есть | P1 | [src/journal-route.js:15](../src/journal-route.js#L15) | [Контракт](design-system.md#pattern-layers) |
 | help-popover | Пояснение по нажатию с keyboard-доступом | Пропуск | Есть | P1 | [src/info-hints.js:8](../src/info-hints.js#L8) | [Контракт](design-system.md#pattern-layers) |
@@ -58,7 +58,7 @@
 | modal-editor | Модальный редактор / подтверждение | Описан | Есть | P1 | [src/modal-shell.js:75](../src/modal-shell.js#L75) | [Контракт](design-system.md#menu--dialog--feedback) |
 | bottom-sheet | Шторка карты и положения раскрытия | Пропуск | Есть | P0 | [src/app.js:599](../src/app.js#L599) | [Контракт](design-system.md#pattern-layers) |
 | action-menu | Другие действия: disclosure / menu / dialog | Описан | Есть | P1 | [src/entity-actions.js:5](../src/entity-actions.js#L5) | [Контракт](design-system.md#menu--dialog--feedback) |
-| editable-items | Повторяемые строки работ / материалов | Пропуск | Есть | P0 | [src/service-orders.js:334](../src/service-orders.js#L334) | [Контракт](design-system.md#pattern-workflows) |
+| editable-items | Повторяемые строки работ / материалов | Пропуск | Есть | P0 | [src/service-orders.js:377](../src/service-orders.js#L377) | [Контракт](design-system.md#pattern-workflows) |
 | bulk-selection | Массовый выбор и preview объединения | Пропуск | Есть | P0 | [src/unassigned-tracks.js:97](../src/unassigned-tracks.js#L97) | [Контракт](design-system.md#pattern-workflows) |
 | reorder | Перестановка маршрута / карточек / панелей | Пропуск | Есть | P0 | [src/app.js:8180](../src/app.js#L8180) | [Контракт](design-system.md#pattern-workflows) |
 | schedule-manipulation | Перенос / изменение / разделение графика | Пропуск | Есть | P0 | [src/schedule-interactions.js:2](../src/schedule-interactions.js#L2) | [Контракт](design-system.md#pattern-workflows) |
@@ -67,13 +67,13 @@
 | allocation-editor | Распределение времени / пробега и остаток | Частично | Есть | P0 | [src/presence-review-controls.js:18](../src/presence-review-controls.js#L18) | [Контракт](design-system.md#pattern-workflows) |
 | charts-tables | Сопоставимые диаграммы и таблицы | Пропуск | Есть | P1 | [src/dashboard-visuals.js:7](../src/dashboard-visuals.js#L7) | [Контракт](design-system.md#pattern-data) |
 | activity-comments | Лента, комментарии, закрепление, доказательства | Пропуск | Есть | P1 | [src/entity-activity.js:54](../src/entity-activity.js#L54) | [Контракт](design-system.md#pattern-data) |
-| notifications-inbox | Входящие: прочитано / действия / счётчик | Пропуск | Есть | P1 | [src/notifications.js:56](../src/notifications.js#L56) | [Контракт](design-system.md#pattern-feedback) |
-| load-more | Догрузка списка без потери выбора и фокуса | Пропуск | Есть | P1 | [src/notifications.js:56](../src/notifications.js#L56) | [Контракт](design-system.md#pattern-data) |
+| notifications-inbox | Входящие: прочитано / действия / счётчик | Пропуск | Есть | P1 | [src/notifications.js:63](../src/notifications.js#L63) | [Контракт](design-system.md#pattern-feedback) |
+| load-more | Догрузка списка без потери выбора и фокуса | Пропуск | Есть | P1 | [src/notifications.js:63](../src/notifications.js#L63) | [Контракт](design-system.md#pattern-data) |
 | push-permission | Push: устройство, разрешение, отказ, timeout | Пропуск | Есть | P1 | [src/app.js:6537](../src/app.js#L6537) | [Контракт](design-system.md#pattern-session) |
 | feedback | Toast / постоянный banner / inline error | Описан | Есть | P1 | [src/app.js:261](../src/app.js#L261) | [Контракт](design-system.md#menu--dialog--feedback) |
 | loading-progress | Ожидание и прогресс длительной операции | Частично | Есть | P1 | [src/app.js:253](../src/app.js#L253) | [Контракт](design-system.md#pattern-feedback) |
 | draft-guard | Несохранённый черновик и связанное действие | Частично | Есть | P0 | [src/entity-draft-resolution.js:2](../src/entity-draft-resolution.js#L2) | [Контракт](design-system.md#pattern-recovery) |
-| revision-conflict | Конфликт версии после создания черновика | Пропуск | Есть | P0 | [src/service-orders.js:291](../src/service-orders.js#L291) | [Контракт](design-system.md#pattern-recovery) |
+| revision-conflict | Конфликт версии после создания черновика | Пропуск | Есть | P0 | [src/service-orders.js:332](../src/service-orders.js#L332) | [Контракт](design-system.md#pattern-recovery) |
 | offline-sync | Локальная очередь / серверная запись / блокировка | Пропуск | Есть | P0 | [src/app.js:4292](../src/app.js#L4292) | [Контракт](design-system.md#pattern-recovery) |
 | trash-restore | Корзина: восстановление и удаление навсегда | Частично | Есть | P0 | [src/app.js:1911](../src/app.js#L1911) | [Контракт](design-system.md#pattern-recovery) |
 | role-authority | Просмотр, кураторство, передача ответственности | Частично | Есть | P0 | [src/entity-responsibility.js:23](../src/entity-responsibility.js#L23) | [Контракт](design-system.md#pattern-session) |
@@ -103,7 +103,7 @@
 ### Типы input и программно заданные .type
 
 - `button` → `action-button` (14 файлов)
-- `checkbox` → `checkbox-group` (9 файлов)
+- `checkbox` → `checkbox-group` (10 файлов)
 - `color` → `color-picker` (1 файл)
 - `date` → `date-field` (4 файла)
 - `email` → `text-field` (1 файл)
@@ -114,12 +114,12 @@
 - `range` → `range-slider` (3 файла)
 - `search` → `search-field` (7 файлов)
 - `tel` → `text-field` (1 файл)
-- `text` → `text-field` (3 файла)
+- `text` → `text-field` (4 файла)
 - `time` → `date-field` (2 файла)
 
 ### Явные ARIA-роли
 
-- `alert` → `feedback` (8 файлов)
+- `alert` → `feedback` (9 файлов)
 - `button` → `action-button` (2 файла)
 - `dialog` → `modal-editor`, `context-panel`, `multi-select-popover` (6 файлов)
 - `group` → `view-segment`, `checkbox-group`, `filter-chip` (10 файлов)
@@ -134,4 +134,4 @@
 
 Связь type/role с ID классифицирует сигнал, а не автоматически распознаёт смысл каждого его вхождения.
 
-Хеш проверенных production-исходников: `e2673b64c9cab3fb073ae89cef9d0c104c2741e08e8d166eeb13513cf698b627`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
+Хеш проверенных production-исходников: `23081d547b7906b448770c5a69c506c96ba263d54bfde3a9c714512f994d77c9`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.

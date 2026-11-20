@@ -68,7 +68,7 @@ import './planner-approved.css';
 import './planner-integration.css';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
- showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
+ showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,openJournalTrip,canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
  tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
  confirm:(message,options)=>confirmDialog(message,options),beforeOpen:async()=>await unassignedTracks.leave()&&await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});
 serviceOrders.init();
@@ -816,7 +816,7 @@ async function applyRoute(){
     if(!p.length){ const name='schedule', sub=null;
       await switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
     if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:['stop','route'].includes(p[3])?p[4]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});else if(p[1]==='record'&&p[2])await unassignedTracks.openSource(p[2],{pane:['route','documents'].includes(p[3])?p[3]:'stops'});else await unassignedTracks.showList();return;}
-    if(p[0]==='order'&&p[1]){await serviceOrders.open(p[1],null,{pane:p[2]});return;}
+    if(p[0]==='order'&&p[1]){await serviceOrders.open(p[1],null,{pane:p[2],trip:p[3]});return;}
     if(p[0]==='job'&&p[1]){
       const j=await fetchJobFull(p[1]);
       if(!j){ notify('Заявка по ссылке не найдена.','warn'); switchTab('planner','jobs'); return; }
@@ -3799,9 +3799,9 @@ async function eligibleEntityResults(kind,id){
 async function recordEntityResult(kind,id){
  try{
   const rows=await eligibleEntityResults(kind,id);if(!rows.length){notify('Нет заданий, для которых сейчас можно зафиксировать результат. Начни работу в задании.','warn');return;}
-  if(rows.length===1){await serviceOrders.openResult(rows[0].id,kind==='job'?id:null);return;}
+  if(rows.length===1){await serviceOrders.openResult(rows[0].id,kind==='job'?id:null,kind==='trip'?id:null);return;}
   const dialog=document.createElement('dialog');dialog.className='entity-panel-dialog';dialog.setAttribute('aria-label','Выбери задание');dialog.innerHTML='<div class="entity-dialog-head"><h3>Результат какого задания?</h3><form method="dialog"><button class="btn" aria-label="Закрыть">×</button></form></div><div class="entity-dialog-body entity-menu-list">'+rows.map((r,i)=>`<button class="entity-menu-item" type="button" data-result-order="${i}">№${r.number} · ${esc(r.title)}</button>`).join('')+'</div>';
-  dialog.querySelectorAll('[data-result-order]').forEach(b=>b.onclick=()=>{dialog.close();serviceOrders.openResult(rows[Number(b.dataset.resultOrder)].id,kind==='job'?id:null);});document.body.append(dialog);protectNativeForm(dialog,{trigger:document.activeElement,confirmDiscard:async()=>true});dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
+  dialog.querySelectorAll('[data-result-order]').forEach(b=>b.onclick=()=>{dialog.close();serviceOrders.openResult(rows[Number(b.dataset.resultOrder)].id,kind==='job'?id:null,kind==='trip'?id:null);});document.body.append(dialog);protectNativeForm(dialog,{trigger:document.activeElement,confirmDiscard:async()=>true});dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
  }catch(e){notify(e.message||'Не удалось загрузить задания.','err');}
 }
 async function openRequestEditor(panel,title,trigger,focusId){

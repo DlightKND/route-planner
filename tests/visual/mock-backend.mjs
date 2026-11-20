@@ -434,6 +434,18 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   }
   const managerState=()=>({request:{due_date:request.due_date,status:request.status,engineer_ids:[...(request.engineer_ids||[])]},order:{status:task.status,date_from:task.date_from,date_to:task.date_to,engineer_ids:[...task.engineer_ids],lead_engineer:task.lead_engineer,revision:task.revision,items:task.service_order_items.map(i=>({id:i.id,done_qty:i.done_qty,planned_qty:i.planned_qty}))},trip:{date_from:ride.date_from,date_to:ride.date_to,engineer_ids:[...ride.engineer_ids]}});
   if(managerJourney){for(const row of task.service_order_items)if(row.kind==='material'&&!row.stock_catalog_id)row.stock_catalog_id='stock-a';task.status=typeof managerJourney==='string'?managerJourney:managerJourney.stage||'assigned';audit.managerWrites=[];audit.managerState=managerState();}
+  const visitJourney=managerJourney?.tripResultJourney;
+  const visitWork=task.service_order_items.find(row=>row.kind==='work');
+  const visitPayload={items:task.service_order_items.map(row=>({id:row.id,qty:row===visitWork?3:0,
+    hours:row===visitWork?2:0,note:row===visitWork?'Осталась проверка':''})),hours:2,reason:'',correction:''};
+  const visit={id:trip,date_from:ride.date_from,date_to:ride.date_to,label:'Сервисный автомобиль',status:'done',
+    revision:4,linked:true,presence:{confirmed:true,base:2,used:0,available:2},state:null,event:null,latest:null,versions:[]};
+  if(visitJourney){
+    ride.status='done';ride.workbench_revision=visit.revision;
+    if(visitJourney==='manager')Object.assign(visit,{state:'submitted',latest:visitPayload,submitted_revision:4,
+      event:'00000000-0000-4000-8000-000000000091'});
+    audit.visitWrites=[];
+  }
   const plannerGroups=[
     {source_key:'road:'+trip+':0',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-first',date:'2026-10-05',start:7,end:9,offset:0}]},
     {source_key:'work:'+order+':'+trip,kind:'work',trip_id:trip,order_id:order,people:[engineer,other],parts:[{id:'work-first',date:'2026-10-05',start:9,end:15,offset:0}]},
@@ -581,6 +593,27 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(name==='service_order_trip_results'){
+        const linked=!!visitJourney&&args.p_order===order;
+        const accepted=visit.versions.at(-1)?.result;
+        return {data:{has_links:linked,has_receipts:linked&&!!visit.event,trips:linked?[structuredClone(visit)]:[],
+          accepted_hours:linked&&accepted?Object.fromEntries(accepted.items.map(row=>[row.id,row.hours])):{}},error:null};
+      }
+      if(name==='service_order_trip_review_queue')return {data:visitJourney==='manager'&&visit.state==='submitted'?
+        [{order_id:order,trip_id:trip,number:task.number,title:task.title,vehicle_label:visit.label,date_from:visit.date_from,at:stamp}]:[],error:null};
+      if(name==='service_order_trip_result_write'&&visitJourney){
+        if(args.p_order!==order||args.p_trip!==trip||args.p_expected_event!==visit.event||
+          args.p_order_revision!==task.revision||args.p_trip_revision!==visit.revision)return reject(name);
+        const latest={...structuredClone(args.p_result),hours:args.p_result.items.reduce((sum,row)=>sum+row.hours,0)};
+        if(args.p_action==='accepted'){
+          for(const row of task.service_order_items)row.done_qty=latest.items.find(entry=>entry.id===row.id).qty;
+          task.revision++;
+          visit.versions.push({event:args.p_operation,result:latest,at:stamp,actor:manager});
+        }
+        Object.assign(visit,{latest,event:args.p_operation,state:args.p_action,submitted_revision:visit.revision});
+        audit.visitWrites.push(structuredClone(args));
+        return {data:{revision:task.revision,event:visit.event},error:null};
+      }
       if(name==='planner_snapshot')return {data:{groups:structuredClone(plannerGroups.filter(g=>g.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to)||g.trip_id&&plannerGroups.some(h=>h.trip_id===g.trip_id&&h.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to))))},error:null};
       if(name==='planner_apply'&&canonicalPlanner){
         if(plannerReceipts.has(args.p_operation))return {data:structuredClone(plannerReceipts.get(args.p_operation)),error:null};

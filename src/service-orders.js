@@ -1,3 +1,4 @@
+import {mountOrderTripResults} from './order-trip-results.js';
 import {setButtonBusy} from './ui/button-state.js';
 import {resolveEntityDraft} from './entity-draft-resolution.js';
 import {planningDate,planningPeriod,planningWarnings} from './core/planning-dates.js';
@@ -56,6 +57,7 @@ export function createServiceOrders(ctx){
  const $=id=>document.getElementById(id);let orders=[],current=null,items=[],selectedJob=null,allJobs=[],stockCatalog=[],workCatalog=[],tariffProfiles=[],stockLoaded=false,stockError='',dirty=false,scope=null,query='',crewFilter='',showClosed=false,showHistorical=false,viewMode='kanban',loaded=false;
  const visibleStates=Object.fromEntries(Object.keys(ORDER_STATUS).map(s=>[s,!['completed','cancelled'].includes(s)]));
  let remainderGeneration=0,remainderLoading=false,remainderRows=[],remainderAttempt=null;
+ let visitResults=null,visitError='',visitPanel=null;
  let entityTabs=null,tabEntity=null,tabValue=null,resultDialog=null,reportDirty=false,resultAttempt=null,resultExpected=null,loadedUser=null;
  const actualDate=()=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Kyiv',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}`;};
  const reportAllowed=o=>!!o?.id&&(manager(o)&&historicalClosedDraft(o)||['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.status!=='review'&&o.engineer_ids?.includes(ctx.userId())));
@@ -177,17 +179,22 @@ export function createServiceOrders(ctx){
  if(!onBoard&&(dirty||reportDirty)){ctx.notify('Сначала сохрани изменения задания.','warn');return;}
  let reason='';const intervention=o.owner_id===ctx.userId()&&o.curator_id!==ctx.userId();if(['paused','cancelled'].includes(status)||intervention){reason=await ctx.reason(intervention?'Причина вмешательства владельца':'Причина '+(status==='paused'?'приостановки':'отмены'));if(reason===null){if(onBoard)await board();return;}if(intervention&&reason.trim().length<5){ctx.notify('Укажи причину вмешательства не короче пяти символов.','warn');if(onBoard)await board();return;}}
  try{await rpc('service_order_transition',{p_id:o.id,p_expected:o.revision,p_status:status,p_reason:reason});ctx.notify('Задание: '+ORDER_STATUS[status]);if(onBoard)await board();else await open(o.id,scope);}catch(e){fail(e);if(onBoard)await board();}}
- async function open(id,origin=null,{pane:requestedPane}={}){if(ctx.beforeOpen&&!await ctx.beforeOpen())return false;if(loadedUser!==ctx.userId()){dirty=false;reportDirty=false;}if((dirty||reportDirty)&&!await leave())return false;scope=origin||null;await ctx.ensureRefs();
+ async function open(id,origin=null,{pane:requestedPane,trip:requestedTrip}={}){if(ctx.beforeOpen&&!await ctx.beforeOpen())return false;if(loadedUser!==ctx.userId()){dirty=false;reportDirty=false;}if((dirty||reportDirty)&&!await leave())return false;scope=origin||null;await ctx.ensureRefs();
  try{const jr=await api().from('jobs').select('id,notes,at_depot,due_date,clients(name)').is('deleted_at',null).order('created_at',{ascending:false});if(jr.error)throw jr.error;allJobs=jr.data||[];try{await loadStock();}catch(e){stockError=e.message;}try{await loadWorkCatalog();}catch(e){ctx.notify('Каталог работ временно недоступен: '+e.message,'warn');}
  if(id){const {data,error}=await api().from('service_orders').select('*,jobs!service_orders_job_id_fkey(status,due_date,clients(name),equipment(model)),service_order_items(*),trip_service_orders(trip_id,trips(id,date_from,date_to,status,vehicle_label,engineer_ids,deleted_at))').eq('id',id).single();if(error)throw error;current=data;}else current={id:null,status:'draft',title:'',job_id:scope||null,work_mode:allJobs.find(j=>j.id===scope)?.at_depot?'depot':'onsite',engineer_ids:[],service_order_items:[],trip_service_orders:[]};
+ visitResults=null;visitError='';visitPanel=null;
+ if(id&&current.work_mode==='onsite'){
+  try{const result=await rpc('service_order_trip_results',{p_order:id});if(result?.has_links||result?.has_receipts)visitResults=result;}
+  catch(error){if(!['PGRST202','42883'].includes(error.code))visitError=error.message||'Не удалось загрузить результаты выездов';}
+ }
  if(id&&manager(current)&&!ctx.canWrite()){
   const finance=await rpc('entity_finance_config',{p_kind:'order',p_id:id});
   tariffProfiles=finance?.tariff_profiles||[];
  }
- resultDialog?.close();resultDialog=null;loadedUser=ctx.userId();items=(current.service_order_items||[]).map(i=>({...i}));selectedJob=current.job_id||(!id?scope:null);dirty=false;reportDirty=false;resultAttempt=null;remainderAttempt=null;remainderRows=[];remainderLoading=false;remainderGeneration++;render(requestedPane);ctx.showOrder();if(!id)await loadRemainders();return true;
+ resultDialog?.close();resultDialog=null;loadedUser=ctx.userId();items=(current.service_order_items||[]).map(i=>({...i}));selectedJob=current.job_id||(!id?scope:null);dirty=false;reportDirty=false;resultAttempt=null;remainderAttempt=null;remainderRows=[];remainderLoading=false;remainderGeneration++;render(requestedPane,requestedTrip);ctx.showOrder();if(!id)await loadRemainders();return true;
  }catch(e){fail(e);return false;}}
  function field(label,html){return `<label>${label}${html}</label>`;}
- function render(requestedPane){document.querySelectorAll('dialog.entity-panel-dialog').forEach(d=>{if(d.querySelector('#orderResponsibility,#orderDeadlinePanel,#orderExecution,#orderTripPicker,#orderReviewPanel'))d.close();});if(entityTabs){tabValue=entityTabs.value;entityTabs.destroy();entityTabs=null;}const o=current,base=!!o.seed_request_id&&o.seed_request_id===o.job_id,edit=manager(o)&&['draft','assigned'].includes(o.status),historicalResult=manager(o)&&historicalClosedDraft(o),report=reportAllowed(o),primary=nextOrderStates(o.status,manager(o)).find(s=>s===({draft:'assigned',assigned:'in_progress',paused:'in_progress',review:'completed'}[o.status]));
+ function render(requestedPane,requestedTrip){document.querySelectorAll('dialog.entity-panel-dialog').forEach(d=>{if(d.querySelector('#orderResponsibility,#orderDeadlinePanel,#orderExecution,#orderTripPicker,#orderReviewPanel'))d.close();});if(entityTabs){tabValue=entityTabs.value;entityTabs.destroy();entityTabs=null;}const o=current,base=!!o.seed_request_id&&o.seed_request_id===o.job_id,edit=manager(o)&&['draft','assigned'].includes(o.status),historicalResult=manager(o)&&historicalClosedDraft(o),report=reportAllowed(o),primary=nextOrderStates(o.status,manager(o)).find(s=>s===({draft:'assigned',assigned:'in_progress',paused:'in_progress',review:'completed'}[o.status]));
  $('orderEditor').innerHTML=`<div class="crumbs"><button class="crumb" id="orderBack">${scope?'Заявка → задания':'Диспетчер → задания'}</button>${o.job_id?`<button class="crumb" id="orderRequest">Исходная заявка</button>`:''}<span>› ${o.id?'Задание №'+o.number:'Новое задание'}</span></div>
  <div class="trip-head"><div><h2>${o.id?'Задание №'+o.number:'Новое сервисное задание'}${o.title?' · '+esc(o.title):''}</h2><div class="hint">${esc(jobName(o.job_id))}${o.jobs?.equipment?.model?' · '+esc(o.jobs.equipment.model):''}</div><div class="entity-head-meta"><span class="design-status" data-state="${o.status}">${ORDER_STATUS[o.status]}</span><span>${esc(modes[o.work_mode])}</span>${o.id?`<span>${esc(humanDate(o.date_from)||'Без периода')}${o.date_to?' — '+esc(humanDate(o.date_to)):''}</span>${o.owner_id&&o.owner_id!==o.curator_id?`<span>Владелец: ${esc(name(o.owner_id))}</span>`:''}`:''}</div></div><div class="acts entity-header-actions">${o.id?`${report&&(!primary||o.status==='in_progress'||historicalResult)?'<button class="btn amber" id="orderRecordResult">Зафиксировать результат</button>':primary?`<button class="btn amber" data-order-next="${primary}" title="${esc(orderTransitionBlocker(o,primary))}">${orderActionLabel(o.status,primary)}</button>`:''}<button id="orderMore" type="button" class="btn" aria-label="Другие действия">⋯</button>`:''}</div></div>
  ${o.id?`<p class="hint" role="status">${[...new Set(nextOrderStates(o.status,manager(o)).map(s=>orderTransitionBlocker(o,s)).filter(Boolean))].map(esc).join(' ')}</p>`:''}
@@ -230,7 +237,7 @@ export function createServiceOrders(ctx){
  if($('orderCarry'))$('orderCarry').onclick=()=>perform(async()=>{if(dirty||reportDirty)throw Error('Сначала сохрани результат');if(!canCloseWithRemainder(o))throw Error('Проверьте выполненные работы и связанные выезды');const reason=await ctx.reason('Причина закрытия задания с остатком');if(reason===null)return;await rpc('service_order_close_with_remainder',{p_order:o.id,p_expected:o.revision,p_reason:reason});if(await open(o.id,scope,{pane:'overview'}))ctx.notify('Задание закрыто. Остаток доступен в заявке.');});
  if($('orderTripExisting'))$('orderTripExisting').onclick=()=>chooseExistingTrip(o);
  if($('orderTripAdd'))$('orderTripAdd').onclick=()=>perform(async()=>{if(dirty||reportDirty)throw Error('Сначала сохрани задание');const id=await rpc('service_order_trip',{p_id:o.id,p_expected:o.revision});await ctx.openTrip(id,{newPlan:true});});
- if(o.id){mountEntityActivity({root:$('orderActivity'),db:api(),entity:'order',id:o.id,userId:ctx.userId,people:ctx.profiles,canPin:()=>manager(o),onOpenResult:()=>{if(o.status==='review'&&manager(o))openReview(o);else{entityTabs.select('scope');$('orderResultSummary')?.scrollIntoView?.({block:'start'});}}});mountEntityResponsibility({root:$('orderResponsibility'),showHistory:false,db:api(),kind:'order',id:o.id,record:o,people:ctx.profiles,userId:ctx.userId,role:ctx.role,beforeAssign:()=>settleDraft('Перед передачей ответственности'),onChange:async data=>{if(ctx.canWrite()||[data.owner_id,data.curator_id].includes(ctx.userId())){if(!await open(o.id,scope)){ctx.notify('Ответственность передана. Откройте задание заново для загрузки актуальной версии.','warn');ctx.showBoard();}}else ctx.showBoard();},onError:e=>{if($('orderError'))$('orderError').textContent=e.message;fail(e);}});tripCosts(o.id);deadlineRequests(o.id);
+ if(o.id){mountEntityActivity({root:$('orderActivity'),db:api(),entity:'order',id:o.id,userId:ctx.userId,people:ctx.profiles,canPin:()=>manager(o),onOpenResult:entry=>{if(entry?.snapshot?.trip_id&&visitResults){showVisitResult(entry.snapshot.trip_id);return;}if(o.status==='review'&&manager(o))openReview(o);else{entityTabs.select('scope');$('orderResultSummary')?.scrollIntoView?.({block:'start'});}}});mountEntityResponsibility({root:$('orderResponsibility'),showHistory:false,db:api(),kind:'order',id:o.id,record:o,people:ctx.profiles,userId:ctx.userId,role:ctx.role,beforeAssign:()=>settleDraft('Перед передачей ответственности'),onChange:async data=>{if(ctx.canWrite()||[data.owner_id,data.curator_id].includes(ctx.userId())){if(!await open(o.id,scope)){ctx.notify('Ответственность передана. Откройте задание заново для загрузки актуальной версии.','warn');ctx.showBoard();}}else ctx.showBoard();},onError:e=>{if($('orderError'))$('orderError').textContent=e.message;fail(e);}});tripCosts(o.id);deadlineRequests(o.id);
   if($('orderDeadlineSend'))$('orderDeadlineSend').onclick=()=>perform(async()=>{if(dirty||reportDirty)throw Error('Сначала сохрани изменения задания');const date=$('orderDeadlineDate').value,reason=$('orderDeadlineReason').value.trim();if(!date||reason.length<5)throw Error('Укажи новый срок и причину не короче пяти символов');await rpc('service_order_deadline_propose',{p_order:o.id,p_date_to:date,p_reason:reason});await deadlineRequests(o.id);$('orderDeadlineReason').value='';ctx.notify('Предложение отправлено куратору');});
   mountEntityActions({trigger:$('orderMore'),items:()=>[
    ...nextOrderStates(o.status,manager(o)).filter(s=>(s!==primary||o.status==='in_progress')&&!$('orderEditor').querySelector('[data-order-next="'+s+'"]')).map(s=>({label:orderActionLabel(o.status,s),onSelect:()=>transition(o,s),disabled:dirty||reportDirty||!!orderTransitionBlocker(o,s),danger:s==='cancelled'})),
@@ -242,7 +249,41 @@ export function createServiceOrders(ctx){
    ...(manager(o)&&selectedJob?[{label:'Дополнительное задание',onSelect:()=>open(null,selectedJob),disabled:dirty||reportDirty}]:[]),
    ...(selectedJob?[{label:'Открыть заявку и смету',onSelect:async()=>{if(await leave()){if(ctx.openJobEstimate)ctx.openJobEstimate(selectedJob);else ctx.openJob(selectedJob);}}}]:[])
   ]});restoreResultDraft();
- }updateSaveState();frameOrderWorkspace({record:o,editable:edit,people:ctx.profiles()});renderPlanning(o);}
+ }updateSaveState();frameOrderWorkspace({record:o,editable:edit,people:ctx.profiles()});renderPlanning(o);
+ if(visitResults||visitError){
+  const panel=document.createElement('section');panel.id='orderTripResults';panel.className='card order-trip-results';
+  $('orderPane-scope').prepend(panel);
+  if(visitResults){
+   editor.querySelector('.workflow-work-result')?.remove();
+   if(!edit)$('orderComposition').hidden=true;
+   $('orderPane-plan-fact').append($('orderResultSummary'));
+   const user=loadedUser;
+   visitPanel=mountOrderTripResults({root:panel,order:o,items:items.filter(item=>!isFinanceVoided(item)),catalog:workCatalog,
+    data:visitResults,user,manager:manager(o),mayReport:['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.engineer_ids?.includes(user)),requestedTrip,
+    onWrite:payload=>{
+     if(current?.id!==o.id||ctx.userId()!==user||dirty||!panel.isConnected)throw Error('Карточка или сеанс изменились. Обновите задание');
+     return rpc('service_order_trip_result_write',payload);
+    },
+    onReturnReason:()=>ctx.reason('Причина возврата результата'),
+    onTrip:id=>ctx.openTrip(id),onGPS:id=>ctx.openJournalTrip?ctx.openJournalTrip(id):ctx.openTrip(id),
+    onReload:async(id,action)=>{
+     if(current?.id!==o.id||ctx.userId()!==user||!panel.isConnected)return;
+     if(!await open(o.id,scope,{pane:'scope',trip:id}))throw Error('Результат сохранён. Обновите карточку');
+     ctx.notify({accepted:'Результат принят',submitted:'Результат передан на приёмку',returned:'Результат возвращён на доработку'}[action]);
+    }});
+   const pending=visitResults.trips.some(trip=>trip.linked&&trip.status!=='cancelled'&&trip.state==='submitted');
+   if(pending)editor.querySelectorAll('[data-summary-carry],[data-order-next=completed]').forEach(button=>{button.disabled=true;});
+  }else{
+   panel.innerHTML='<p class="err" role="alert">'+esc(visitError)+'</p><button type="button" class="btn">Обновить результаты</button>';
+   panel.querySelector('button').onclick=()=>open(o.id,scope,{pane:'scope',trip:requestedTrip});
+  }
+ }
+ }
+ function showVisitResult(trip){
+  entityTabs.select('scope');
+  if(trip)visitPanel?.select(trip);
+  $('orderTripResults')?.scrollIntoView({block:'nearest'});
+ }
  async function settleDraft(title='Перед изменением плана'){
   const id=current?.id,planChanged=dirty,resultChanged=reportDirty;if(!dirty&&!reportDirty)return {record:current};
   const choice=await resolveEntityDraft({title,message:reportDirty?'Сохранить план перед действием? Введённый результат останется в черновике этого браузера для отдельной проверки.':'Сохранить текущие изменения задания перед действием?',saveLabel:'Сохранить и продолжить'});if(choice==='cancel')return false;
@@ -290,10 +331,12 @@ export function createServiceOrders(ctx){
   $('orderResultNote').value=draft.values.note||'';$('orderResultDate').value=draft.values.date||actualDate();if($('orderResultBasis'))$('orderResultBasis').value=draft.values.basis||'';reportDirty=true;resultAttempt=draft.attempt||null;resultExpected=draft.revision;
   if(resultExpected!==current.revision){const error=$('orderResultError');error.textContent='Задание изменилось после создания черновика. Сохранение старой версии защищено от перезаписи. ';const reset=document.createElement('button');reset.type='button';reset.className='btn';reset.textContent='Загрузить текущий результат';reset.onclick=async()=>{if(!await (ctx.confirm?ctx.confirm('Загрузить текущий результат? Несохранённый черновик будет удалён.',{title:'Обновление результата',okText:'Загрузить',cancelText:'Оставить черновик',danger:true}):ctx.confirmLeave()))return;for(const row of rows){const item=items.find(i=>i.id===row.dataset.resultItem);row.querySelector('[data-result-qty]').value=item.done_qty??0;row.querySelector('[data-result-note]').value=item.result_note||'';}$('orderResultNote').value=current.result_note||'';$('orderResultDate').value=actualDate();if($('orderResultBasis'))$('orderResultBasis').value='';resultExpected=current.revision;resultAttempt=null;reportDirty=false;try{storage().removeItem(draftKey(current));}catch{/* Mounted fields remain current. */}error.textContent='';updateSaveState();};error.append(reset);}
  }
- async function openResult(id,origin=null){if(current?.id!==id||loadedUser!==ctx.userId()){await open(id,origin);if(current?.id!==id||loadedUser!==ctx.userId())return;}if(!reportAllowed(current)){ctx.notify('Результат сейчас доступен только для просмотра.','warn');return;}if(dirty){ctx.notify('Сначала сохрани состав задания.','warn');return;}if(resultDialog?.open)return resultDialog;
+ async function openResult(id,origin=null,trip=null){if(current?.id!==id||loadedUser!==ctx.userId()){await open(id,origin,{trip});if(current?.id!==id||loadedUser!==ctx.userId())return;}if(visitResults||visitError){showVisitResult(trip);return;}if(!reportAllowed(current)){ctx.notify('Результат сейчас доступен только для просмотра.','warn');return;}if(dirty){ctx.notify('Сначала сохрани состав задания.','warn');return;}if(resultDialog?.open)return resultDialog;
   resultDialog=openEntityPanel({title:'Зафиксировать результат',panel:$('orderExecution'),trigger:$('orderPane-scope').hidden?$('orderRecordResult')||$('orderMore'):$('orderPane-scope').querySelector('.workflow-work-result')||$('orderMore'),confirmDiscard});resultDialog?.classList.add('entity-result-dialog');if(resultDialog){resultDialog.querySelector('.entity-dialog-head h3').textContent='Результат: '+(current.title||'задание №'+current.number);$('orderResultLater').onclick=()=>resultDialog?.querySelector('.entity-dialog-head button').click();$('orderResultSubmitReview').onclick=async()=>{if($('orderResultSubmitReview').disabled)return;resultDialog.close();await transition(current,'review');};updateSaveState();}resultDialog?.addEventListener('close',()=>{if(reportDirty)storeResultDraft();resultDialog=null;},{once:true});return resultDialog;
  }
  function openReview(o){
+  const pendingTrip=visitResults?.trips.find(trip=>trip.linked&&trip.status!=='cancelled'&&trip.state==='submitted');
+  if(pendingTrip&&manager(o)){showVisitResult(pendingTrip.id);return;}
   if(o.id!==current?.id||o.status!=='review'||!manager(o))return;
   $('orderReviewPanel')?.remove();const panel=document.createElement('section');panel.id='orderReviewPanel';panel.className='order-review-workspace';
   const active=items.filter(i=>!isFinanceVoided(i)),trips=(o.trip_service_orders||[]).map(x=>x.trips).filter(t=>t&&!t.deleted_at),pending=trips.filter(t=>!['done','cancelled'].includes(t.status)),remainder=active.filter(i=>remainingQty(i)>0),blocker=orderTransitionBlocker(o,'completed');
@@ -336,7 +379,7 @@ export function createServiceOrders(ctx){
  if($('orderResults'))$('orderResults').innerHTML=items.filter(i=>i.id&&!isFinanceVoided(i)).map(i=>`<div data-result-item="${i.id}"><b>${i.kind==='material'?'Материал · ':''}${esc(i.title)}</b><div class="hint">Поручено ${num(i.planned_qty)} ${esc(i.unit)} · ранее ${num(i.done_qty)} · осталось ${num(remainingQty(i))}${Number(i.transferred_qty)>0?' · перенесено '+num(i.transferred_qty):''}</div><div class="row"><label class="order-result-qty">${i.kind==='material'?'Использовано всего':'Выполнено всего'}<input type="number" inputmode="decimal" min="0" max="${Number(i.planned_qty)-Number(i.transferred_qty||0)}" step="any" required data-result-qty value="${esc(i.done_qty??0)}" ${report?'':'disabled'}></label><label>Комментарий<input type="text" maxlength="1000" data-result-note value="${esc(i.result_note)}" ${report?'':'disabled'}></label></div></div>`).join('');
  if(current.id){const summary=document.createElement('section');summary.className='order-result-summary';summary.id='orderResultSummary';
  const active=items.filter(i=>!isFinanceVoided(i)),hasResult=active.some(i=>Number(i.done_qty)>0)||!!current.result_note;
- $('orderPlanFactRows').innerHTML=active.length?`<table class="workflow-related-table"><thead><tr><th scope="col">Позиция</th><th scope="col">План</th><th scope="col">Факт</th></tr></thead><tbody>${active.map(i=>`<tr><td>${esc(i.title)}</td><td>${num(i.planned_qty)} ${esc(i.unit||'ч')}</td><td>${num(i.done_qty)} ${esc(i.unit||'ч')}</td></tr>`).join('')}</tbody></table>`:'<p class="hint">Состав задания пока не определён.</p>';
+ $('orderPlanFactRows').innerHTML=active.length?`<table class="workflow-related-table"><thead><tr><th scope="col">Позиция</th><th scope="col">План</th><th scope="col">Факт</th>${visitResults?'<th scope="col">Принято, чел·ч</th>':''}</tr></thead><tbody>${active.map(i=>{const hours=visitResults?.accepted_hours?.[i.id];return `<tr><td>${esc(i.title)}</td><td>${num(i.planned_qty)} ${esc(i.unit||'ч')}</td><td>${num(i.done_qty)} ${esc(i.unit||'ч')}</td>${visitResults?'<td>'+(i.kind!=='material'&&hours!=null?num(hours):'—')+'</td>':''}</tr>`;}).join('')}</tbody></table>`:'<p class="hint">Состав задания пока не определён.</p>';
  summary.innerHTML='<h3>Сохранённый результат</h3>'+active.map(i=>`<div class="order-result-line"><strong>${esc(i.title)}</strong><div class="order-result-quantities"><div><span>План</span><b>${num(i.planned_qty)} ${esc(i.unit||'ч')}</b></div><div><span>Факт</span><b>${num(i.done_qty)} ${esc(i.unit||'ч')}</b></div><div ${remainingQty(i)>0?'data-remaining':''}><span>Остаток</span><b>${num(remainingQty(i))} ${esc(i.unit||'ч')}</b></div></div>${Number(i.transferred_qty)>0?`<p class="hint">Перенесено в другое задание: ${num(i.transferred_qty)} ${esc(i.unit||'ч')}</p>`:''}</div>`).join('')+(current.result_note?`<p>${esc(current.result_note)}</p>`:'');
  const next=nextOrderStates(current.status,manager(current)),review=document.createElement('div');review.className='order-result-review';
  const stateText=current.status==='review'?'Результат передан на проверку':current.status==='completed'?(current.closed_with_remainder_at?'Задание закрыто с остатком':'Задание завершено'):current.status==='cancelled'?'Задание отменено':hasResult?'Результат сохранён · ещё не передан на проверку':'Сохранённого результата пока нет';
