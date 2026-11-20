@@ -264,6 +264,10 @@ export function createServiceOrders(ctx){
      if(current?.id!==o.id||ctx.userId()!==user||dirty||!panel.isConnected)throw Error('Карточка или сеанс изменились. Обновите задание');
      return rpc('service_order_trip_result_write',payload);
     },
+    onPlanWrite:payload=>{
+     if(current?.id!==o.id||ctx.userId()!==user||dirty||reportDirty||!panel.isConnected)throw Error('Сохраните изменения задания или обновите карточку');
+     return rpc('service_order_work_plan_save',payload);
+    },
     onReturnReason:()=>ctx.reason('Причина возврата результата'),
     onTrip:id=>ctx.openTrip(id),onGPS:id=>ctx.openJournalTrip?ctx.openJournalTrip(id):ctx.openTrip(id),
     onReload:async(id,action)=>{

@@ -835,7 +835,7 @@ html[data-theme=light] .mleg-symbol { width:24px;border-radius:0;background:tran
  .view-settings .settings-savebar>.btn{flex:1}
 }
 
-html#dlight-ui[data-ui-system] .view-settings .settings-nav .son{display:flex!important;justify-content:flex-start!important;min-height:48px!important;padding:10px 16px!important;border:0!important;border-left:3px solid transparent!important;border-radius:8px!important;background:transparent!important;color:var(--ink-dim)!important;text-align:left!important;font:500 14px/21px var(--sans)!important}
+html#dlight-ui[data-ui-system] .view-settings .settings-nav .son{justify-content:flex-start!important;min-height:48px!important;padding:10px 16px!important;border:0!important;border-left:3px solid transparent!important;border-radius:8px!important;background:transparent!important;color:var(--ink-dim)!important;text-align:left!important;font:500 14px/21px var(--sans)!important}
 html#dlight-ui[data-ui-system] .view-settings .settings-nav .son.on{background:var(--panel-2)!important;border-left-color:var(--accent-line)!important;color:var(--ink)!important}
 html#dlight-ui[data-ui-system] .view-settings .settings-nav .son{gap:12px!important}
 html#dlight-ui[data-ui-system] .view-settings .settings-nav .son .journal-icon{width:20px;height:20px;flex:none}

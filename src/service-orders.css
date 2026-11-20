@@ -177,6 +177,10 @@ html#dlight-ui[data-ui-system] .view .order-trip-work-detail>td { padding:12px 1
 .order-trip-work-note { padding-top:28px; }
 .order-trip-work-note textarea,.order-trip-work-labor input,.order-trip-quantity input,.order-trip-materials :is(input,textarea) { width:100%; min-width:0; }
 .order-trip-work-labor [data-visit-reset] { margin-top:8px; max-width:100%; white-space:normal; }
+.order-trip-work-plan { max-width:100%; min-width:0; }
+.order-trip-work-plan>button { margin-top:8px; white-space:normal; }
+.order-trip-work-plan>[role=status] { margin-top:4px; }
+.order-trip-work-fields>.order-trip-work-plan { max-width:184px; margin-bottom:12px; }
 .order-trip-outcome { margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
 .order-trip-outcome-controls { display:flex; align-items:end; flex-wrap:wrap; gap:12px 24px; }
 #orderEditor .order-trip-complete {

@@ -50,6 +50,7 @@ beforeAll(async()=>{
   await db.exec(file('../supabase/migrations/20261009202442_entity_result_parent_purge_cascade.sql'));
   await db.exec('alter table trips add column workbench_revision integer not null default 0;alter table trip_stays add column crew_ids uuid[],add column crew_source text;');
   await db.exec(file('../supabase/migrations/20261120085354_order_trip_results.sql'));
+  await db.exec(file('../supabase/migrations/20261120134312_order_work_plan.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -69,6 +70,28 @@ beforeEach(async()=>{
   await q("insert into trip_comments(id,trip_id,body) values($1,$2,'Выезд начат')",[id(72),id(50)]);
 });
 afterEach(async()=>{await db.exec('rollback');});
+
+it('saves an audited planning norm with a fresh revision and preserves the quantity and finance snapshots',async()=>{
+  const save=(revision,hours,item=40)=>q('select public.service_order_work_plan_save($1,$2,$3,$4) result',
+    [id(30),id(item),revision,hours]).then(rows=>rows[0].result);
+  await rejected(()=>save(0,4.25),/менеджер задания/);
+  await as(6);
+  await rejected(()=>save(0,4.25,41),/не принадлежит/);
+  await rejected(()=>save(0,-1),/10 000/);
+  const previous=(await q('select planned_qty,done_qty,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where id=$1',[id(40)]))[0];
+  expect(await save(0,4.255)).toEqual({revision:1,hours:4.26});
+  expect(await save(1,4.26)).toEqual({revision:1,hours:4.26});
+  await rejected(()=>save(0,2),/изменено другим/);
+  const [item]=await q('select planned_qty,done_qty,financial_revenue_snapshot,financial_cost_snapshot,planned_labor_hours from service_order_items where id=$1',[id(40)]);
+  expect(item).toEqual({...previous,planned_labor_hours:'4.26'});
+  const [history]=await q('select actor_id, snapshot from service_order_history where order_id=$1',[id(30)]);
+  expect(history).toMatchObject({actor_id:id(6),snapshot:{work_item_id:id(40),planned_labor_hours:null}});
+  expect(await q('select id from service_order_history where order_id=$1',[id(30)])).toHaveLength(1);
+  await db.exec('reset role');
+  await q("update service_orders set status='cancelled' where id=$1",[id(30)]);
+  await as(6);
+  await rejected(()=>save(1,6),/закрытого задания/);
+});
 
 it('saves canonical quantities and an after-snapshot atomically without financial leakage',async()=>{
   const result=await submit();expect(result.revision).toBe(1);

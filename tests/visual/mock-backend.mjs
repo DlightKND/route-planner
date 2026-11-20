@@ -442,9 +442,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     revision:4,linked:true,presence:{confirmed:true,base:2,used:0,available:2},state:null,event:null,latest:null,versions:[]};
   if(visitJourney){
     ride.status='done';ride.workbench_revision=visit.revision;
+    visitWork.planned_labor_hours=null;
     if(visitJourney==='manager')Object.assign(visit,{state:'submitted',latest:visitPayload,submitted_revision:4,
       event:'00000000-0000-4000-8000-000000000091'});
-    audit.visitWrites=[];
+    audit.visitWrites=[];audit.workPlanWrites=[];
   }
   const plannerGroups=[
     {source_key:'road:'+trip+':0',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-first',date:'2026-10-05',start:7,end:9,offset:0}]},
@@ -601,6 +602,13 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
       }
       if(name==='service_order_trip_review_queue')return {data:visitJourney==='manager'&&visit.state==='submitted'?
         [{order_id:order,trip_id:trip,number:task.number,title:task.title,vehicle_label:visit.label,date_from:visit.date_from,at:stamp}]:[],error:null};
+      if(name==='service_order_work_plan_save'&&visitJourney){
+        if(role==='engineer'||args.p_order!==order||args.p_item!==visitWork.id||args.p_expected!==task.revision)return reject(name);
+        visitWork.planned_labor_hours=Math.round(args.p_hours*100)/100;
+        task.revision++;
+        audit.workPlanWrites.push(structuredClone(args));
+        return {data:{revision:task.revision,hours:visitWork.planned_labor_hours},error:null};
+      }
       if(name==='service_order_trip_result_write'&&visitJourney){
         if(args.p_order!==order||args.p_trip!==trip||args.p_expected_event!==visit.event||
           args.p_order_revision!==task.revision||args.p_trip_revision!==visit.revision)return reject(name);

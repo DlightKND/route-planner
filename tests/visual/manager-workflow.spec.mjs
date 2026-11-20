@@ -164,6 +164,7 @@ test('M10: the engineer resumes a trip draft, reviews it and sends it to the cur
  expect((await expand.boundingBox()).height).toBeGreaterThanOrEqual(44);
  await expand.click();
  await expect(expand).toHaveAttribute('aria-expanded','true');
+ await expect(panel.locator('[data-work-plan-save]')).toHaveCount(0);
  await expect(line.locator('[data-visit-field=hours]')).toHaveValue('2');
  await expect(line.locator('[data-visit-source]')).toHaveText('Предложено 2 чел·ч');
  await line.locator('[data-visit-field=hours]').fill('1,5');
@@ -200,6 +201,34 @@ test('M10: the engineer resumes a trip draft, reviews it and sends it to the cur
  expect(write).toMatchObject({p_action:'submitted',p_order:order,p_trip:trip,p_trip_revision:4});
  expect(write.p_result.items[0]).toMatchObject({qty:3,hours:2,note:'Осталась проверка'});
  expect(write.p_result.items[1]).toMatchObject({qty:1,hours:0});
+ await clean(page,errors);
+});
+
+test('M11: the curator saves a work norm without changing the trip report draft',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope/'+trip,tripResultJourney:'manager'});
+ const panel=page.locator('#orderTripResults');
+ await panel.locator('[data-visit-expand]').first().click();
+ const group=panel.locator('[data-work-plan]').first(),norm=group.getByRole('textbox',{name:'План, н-ч'});
+ const work=panel.locator('[data-visit-line]').first();
+ await expect(norm).toHaveValue('6');
+ await work.locator('[data-visit-field=qty]').fill('4');
+ await norm.fill('-1');
+ await group.getByRole('button',{name:'Сохранить план'}).click();
+ await expect(norm).toHaveAttribute('aria-invalid','true');
+ expect(await page.evaluate(()=>window.__visualQA.workPlanWrites)).toEqual([]);
+ await norm.fill('8,25');
+ await norm.press('Enter');
+ await expect(group.getByRole('status')).toHaveText('План сохранён');
+ await expect(panel.locator('.order-trip-work-row [data-label="План, н-ч"]').first()).toHaveText('8,25');
+ await expect(work.locator('[data-visit-field=hours]')).toHaveValue('2');
+ await expect(work.locator('[data-visit-field=qty]')).toHaveValue('4');
+ expect(await page.evaluate(()=>window.__visualQA.workPlanWrites)).toMatchObject([{p_order:order,p_expected:0,p_hours:8.25}]);
+ await panel.locator('[data-visit-review]').click();
+ await panel.locator('[data-visit-commit]').click();
+ await expect(panel).toContainText('Принято');
+ const [saved]=await page.evaluate(()=>window.__visualQA.visitWrites);
+ expect(saved.p_order_revision).toBe(1);
+ expect(saved.p_result.items[0]).toMatchObject({qty:4,hours:2});
  await clean(page,errors);
 });
 

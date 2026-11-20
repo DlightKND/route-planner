@@ -49,9 +49,11 @@ test('fills a trip created from its task without asking for an edit reason on th
   await open(page,info,'order/'+fixtureIDs.order);await page.locator('#orderTab-travel').click();
   await page.locator('#orderTripAdd').click();await expect(page.locator('.view-trip.active')).toBeVisible();
   await expect(page.locator('#tpChangeReasonGroup')).toBeHidden();await page.locator('#tpNotes').fill('Первое заполнение');
-  await page.locator('#tpSave').click();await expect(page.locator('#tpChangeReasonGroup')).toBeVisible();
+  await page.locator('#tpSave').click();await expect(page.locator('#tpTabOverview')).toHaveAttribute('aria-selected','true');
   const writes=await page.evaluate(()=>window.__visualQA.financeWrites);
   expect(writes.at(-1)).toMatchObject({name:'trip_plan_save_tasks',args:{p_reason:'Первоначальное заполнение нового выезда',p_plan:{notes:'Первое заполнение'}}});
+  await page.locator('#tripEditData').click();await expect(page.locator('#tpChangeReasonGroup')).toBeVisible();
+  await expect(page.locator('#tpNotes')).toHaveValue('Первое заполнение');
   await expect(page.locator('#tpSave')).toBeHidden();await page.locator('#tpNotes').fill('Изменение после первого сохранения');await page.locator('#tpSave').click();await expect(page.locator('#tripErr')).toContainText('причину');
   expect(await page.evaluate(()=>window.__visualQA.financeWrites.length)).toBe(writes.length);
 });
