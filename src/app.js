@@ -50,6 +50,7 @@ import {frameGpsResolutionPrompt,restoreGpsResolutionPrompt,framePresenceWorkspa
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
+import {readExtraPartCosts} from './planner-store.js';
 import { dashboardSummaryHTML } from './dashboard-summary.js';
 import { createNotifications, loadNotificationDecisions } from './notifications.js';
 import { installEngineerPickers } from './engineer-picker.js';
@@ -3626,7 +3627,8 @@ async function renderDashboard(){ const version=++dashboardRenderVersion,box=$('
     const scopedIds=trips.filter(t=>['done','finished','in_progress'].includes(t.status)&&t.date_from>=dashRanges.summary.from&&t.date_from<=dashRanges.summary.to&&dashTripInScope(t)).map(t=>t.id);
     let tracks=[],trackUnavailable=false;
     if(scopedIds.length)try{tracks=await dashboardRead('trip_tracks','trip_id,segments:data->segments',scopedIds);}catch(e){trackUnavailable=true;}
-    const metrics=dashboardMetrics({trips,orders:tasks,links:taskLinks,tracks,period:dashRanges.summary,engineerIds:[...dashEngineers],factHours:factHByTrip});
+    const extraPartCosts=await readExtraPartCosts(sb,scopedIds);
+    const metrics=dashboardMetrics({trips,orders:tasks,links:taskLinks,tracks,period:dashRanges.summary,engineerIds:[...dashEngineers],factHours:factHByTrip,extraPartCosts});
     if(version!==dashboardRenderVersion)return;
     const teamCount=dashEngineers.size;
     box.innerHTML='<div class="summary-controls"><h2>Результаты отдела</h2><div class="summary-view-switch" role="group" aria-label="Представление статистики"><button type="button" data-summary-view="charts">Диаграммы</button><button type="button" data-summary-view="tables">Таблицы</button></div><details class="summary-team"><summary>Команда · '+teamCount+' '+plural(teamCount,'инженер','инженера','инженеров')+'</summary>'+engineerScopeHtml()+'</details></div>'

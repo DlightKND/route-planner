@@ -1,5 +1,6 @@
 import {planningPeriod} from './core/planning-dates.js';
 import {journalIcon} from './journal-icons.js';
+import {openEntityPanel} from './entity-actions.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:6});
@@ -9,6 +10,7 @@ const stateLabel=trip=>({submitted:'На приёмке',accepted:'Принят�
  (trip.presence?.confirmed?'Посещения подтверждены':'Ожидает проверки GPS'));
 const tripLabel=trip=>[trip.label||'Выезд',planningPeriod(trip.date_from,trip.date_to)].filter(Boolean).join(' · ');
 const nonnegative=value=>/^\d+(?:[.,]\d+)?$/.test(String(value).trim())?Number(String(value).trim().replace(',','.')):NaN;
+const validPartQty=value=>Number.isFinite(value)&&value>=0&&value<1000000&&Number(value.toFixed(6))===value;
 const pastQty=(item,accepted)=>Number(item.done_qty||0)-Number(accepted?.items?.find(row=>row.id===item.id)?.qty||0);
 const maxQty=(item,accepted)=>Math.max(0,Number((Number(item.planned_qty)-Number(item.transferred_qty||0)-pastQty(item,accepted)).toPrecision(15)));
 const plannedHours=(item,catalog)=>{
@@ -58,13 +60,15 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   return {rows:items.map(item=>{
    const row=latest?.items?.find(row=>row.id===item.id);
    return {id:item.id,qty:row?.qty??0,hours:row?.hours??(trip.presence?.confirmed?proposed[item.id]:''),note:row?.note||'',manual:!!row};
-  }),reason:latest?.reason||'',correction:'',presenceRevision:trip.state==='submitted'?trip.submitted_revision:trip.revision};
+  }),extra_parts:latest?.extra_parts||[],reason:latest?.reason||'',correction:'',presenceRevision:trip.state==='submitted'?trip.submitted_revision:trip.revision};
  }
  function restore(){
   if(!selected){fields=null;return;}
   const draft=saved(selected);
   fields=draft?.fields||initialFields(selected);
   if(draft&&(items.length!==fields.rows.length||items.some(item=>!fields.rows.some(row=>row.id===item.id))))fields=initialFields(selected);
+  const extras=draft?.fields?.extra_parts;
+  fields.extra_parts=(Array.isArray(extras)?extras:fields.extra_parts||[]).filter(part=>workIds.has(part.work_id));
   editing=!!draft?.editing&&manager&&mayReport;
   operation=draft?.operation||null;
  }
@@ -86,7 +90,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   const workIds=new Set(rows.filter(row=>(row.kind??items.find(item=>item.id===row.id)?.kind)!=='material').map(row=>row.id));
   return rows.filter(row=>!workIds.has(parentOf(row))).map(row=>{
    const item=items.find(item=>item.id===row.id)||{};
-   const parts=rows.filter(part=>parentOf(part)===row.id&&Number(part.qty)>0).map(part=>{
+   const parts=rows.filter(part=>parentOf(part)===row.id&&Number(part.qty)>0).concat(
+    (result.extra_parts||[]).filter(part=>part.work_id===row.id&&Number(part.qty)>0)).map(part=>{
     const current=items.find(item=>item.id===part.id);
     return esc((part.title??current?.title)+' · '+fmt(part.qty)+' '+(part.unit??current?.unit??''));
    });
@@ -171,7 +176,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
  }
  const recordedPartIds=new Set(trips.flatMap(trip=>(lastVersion(trip)?.items||[]).map(part=>part.id)));
  const cumulativeMaterials={rows:material.filter(item=>!data||Number(item.done_qty)>0||recordedPartIds.has(item.id))
-  .map(item=>({id:item.id,qty:item.done_qty??0,note:item.result_note}))};
+  .map(item=>({id:item.id,qty:item.done_qty??0,note:item.result_note})),extra_parts:trips.flatMap(trip=>lastVersion(trip)?.extra_parts||[])};
  function materialTable(result,{work,editable=false,snapshot=false}={}){
   const source=result?.items||result?.rows||[];
   const partOwner=part=>workIds.has(part.parent_work_id)?part.parent_work_id:null;
@@ -179,14 +184,16 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
    ...material.find(item=>item.id===row.id),...row,parent_work_id:row.parent_work_id??null
   })):material;
   const shown=rows.filter(item=>partOwner(item)===(work?.id??null));
+  const extras=(result?.extra_parts||[]).filter(part=>partOwner({parent_work_id:part.work_id})===(work?.id??null));
+  const showAdd=editable&&work&&data?.extra_parts_supported;
   const canAssign=work&&canAssignParts&&!snapshot;
   const unassigned=canAssign?material.filter(item=>Object.hasOwn(item,'parent_work_id')&&!partOwner(item)&&!Number(item.done_qty)&&!Number(item.transferred_qty)):[];
   const showPicker=unassigned.length>0;
-  if(!shown.length&&!showPicker)return '';
+  if(!shown.length&&!extras.length&&!showPicker&&!showAdd)return '';
   const id=esc(work?.id??'unassigned'),title=work?'Запчасти':'Материалы задания';
   const picker=showPicker?`<div class="order-trip-part-picker"><label>Запчасть<select data-work-part-material><option value="">Выбрать из материалов задания</option>${unassigned.map(item=>`<option value="${esc(item.id)}">${esc(item.title)}</option>`).join('')}</select></label>${buttons('Привязать запчасть','data-work-part-attach')}</div>`:'';
-  return `<details class="order-trip-materials${work?' order-trip-parts':''}" data-work-parts="${id}" ${partsOpen.has(id)?'open':''}><summary>${title} · ${shown.length}${work?journalIcon('chevron'):''}</summary>
-   ${shown.length?`<table class="workflow-related-table" aria-label="${title}${work?' · '+esc(work.title):''}">${work?'<colgroup><col class="order-trip-part-name"><col class="order-trip-part-quantity"><col class="order-trip-part-quantity"><col></colgroup>':''}<thead><tr><th scope="col">${work?'Запчасть':'Материал'}</th><th scope="col">План</th><th scope="col">Факт</th><th scope="col">${work?'<span class="sr-only">Примечание и действия</span>':'Комментарий'}</th></tr></thead>
+  return `<details class="order-trip-materials${work?' order-trip-parts':''}" data-work-parts="${id}" ${partsOpen.has(id)?'open':''}><summary>${title} · ${shown.length+extras.length}${work?journalIcon('chevron'):''}</summary>
+   ${shown.length||extras.length?`<table class="workflow-related-table" aria-label="${title}${work?' · '+esc(work.title):''}">${work?'<colgroup><col class="order-trip-part-name"><col class="order-trip-part-quantity"><col class="order-trip-part-quantity"><col></colgroup>':''}<thead><tr><th scope="col">${work?'Запчасть':'Материал'}</th><th scope="col">План</th><th scope="col">Факт</th><th scope="col">${work?'<span class="sr-only">Примечание и действия</span>':'Комментарий'}</th></tr></thead>
    <tbody>${shown.map(item=>{
     const row=source.find(entry=>entry.id===item.id);
     const remove=canAssign&&!Number(item.done_qty)&&!Number(item.transferred_qty)?buttons('Отвязать','data-work-part-detach="'+esc(item.id)+'"','ghost'):'';
@@ -195,8 +202,38 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
     return `<tr ${editable?'data-visit-line="'+esc(item.id)+'"':''}><th scope="row">${esc(item.title)}<span class="hint">${esc(item.unit)}</span></th>
      <td>${fmt(item.planned_qty)}</td><td>${editable?`<input type="text" inputmode="decimal" data-visit-field="qty" aria-label="Использовано, ${esc(item.title)}" aria-describedby="trip-part-limit-${esc(item.id)}" value="${esc(row?.qty??0)}"><span id="trip-part-limit-${esc(item.id)}" class="${work?'sr-only':'hint'}">Доступно ${fmt(maxQty(item,lastVersion(selected)))}</span>`:row?fmt(row.qty):'—'}</td>
      <td>${work?actions:comment||'—'}</td></tr>`;
-   }).join('')}</tbody></table>`:''}
-   ${picker}${canAssign?'<p class="hint order-trip-part-status" role="status" hidden></p>':''}</details>`;
+   }).join('')}${extras.map(part=>extraPartRow(part,editable&&!!work)).join('')}</tbody></table>`:showAdd?'<p class="hint order-trip-part-status">Запчасти для этой работы не запланированы.</p>':''}
+   ${picker}${showAdd?`<div class="order-trip-part-picker">${buttons('Добавить запчасть','data-extra-part-add')}</div>`:''}${canAssign?'<p class="hint order-trip-part-status" role="status" hidden></p>':''}</details>`;
+ }
+ function extraPartRow(part,editable){
+  const title=esc(part.title),unit=esc(part.unit),id=esc(part.id);
+  return `<tr ${editable?'data-extra-part="'+id+'"':''}><th scope="row">${title}<span class="hint">${unit}</span></th><td>0</td>
+   <td>${editable?`<input type="text" inputmode="decimal" data-visit-field="qty" data-extra-part-qty aria-label="Факт использования: ${title}" value="${esc(part.qty)}">`:fmt(part.qty)}</td>
+   <td>${editable?`<details class="order-trip-part-actions"><summary aria-label="Действия с запчастью «${title}»">⋯</summary><div>${buttons('Изменить','data-extra-part-edit','ghost')}${buttons('Убрать','data-extra-part-remove','ghost')}</div></details>`:''}</td></tr>`;
+ }
+ function editExtraPart(group,trigger,part){
+  const doc=root.ownerDocument,workId=group.dataset.workParts,trip=selected,previous=fields;
+  const panel=doc.createElement('section');panel.hidden=true;panel.className='order-extra-part-form';
+  panel.innerHTML=`<label>Название<input name="title" maxlength="500" required value="${esc(part?.title)}"></label>
+   <label>Единица измерения<input name="unit" maxlength="40" required value="${esc(part?.unit??'шт.')}"></label>
+   <label>Использовано<input name="qty" type="text" inputmode="decimal" required value="${esc(part?.qty??1)}"></label>
+   <label>Цена за единицу, грн<input name="cost" type="text" inputmode="decimal" required value="${esc(part?.unit_cost??0)}"></label>`;
+  root.append(panel);
+  const focusPart=id=>root.querySelector('[data-extra-part="'+id+'"] input')?.focus();
+  const dialog=openEntityPanel({title:part?'Изменить запчасть':'Добавить запчасть',panel,trigger,dispose:true,saveLabel:part?'Сохранить':'Добавить',
+   saveHint:'',onSave:()=>{
+    if(!root.isConnected||selected!==trip||fields!==previous)throw Error('Откройте актуальный отчёт');
+    const value=name=>panel.querySelector('[name="'+name+'"]').value.trim();
+    const title=value('title'),unit=value('unit'),qty=nonnegative(value('qty')),cost=nonnegative(value('cost'));
+    if(!title||!unit)throw Error('Укажите название и единицу измерения');
+    if(!validPartQty(qty))throw Error('Укажите количество с точностью до шести знаков');
+    if(!Number.isFinite(cost)||cost>1000000||Number(cost.toFixed(2))!==cost)throw Error('Укажите цену от 0 до 1 000 000 грн с точностью до копеек');
+    if(!part&&fields.extra_parts.length>=100)throw Error('В отчёте может быть до 100 внеплановых запчастей');
+    const next={id:part?.id??doc.defaultView.crypto.randomUUID(),work_id:workId,title,unit,qty,unit_cost:cost};
+    if(part)fields.extra_parts[fields.extra_parts.indexOf(part)]=next;else fields.extra_parts.push(next);
+    partsOpen.add(workId);persist();return next.id;
+   },onSaved:id=>{render();focusPart(id);}});
+  dialog.classList.add('order-extra-part-dialog');
  }
  function readOnlyRows(result){
   return works.map(item=>{
@@ -290,6 +327,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
    if(!Number.isFinite(hours)||hours>10000||Math.abs(hours*100-Math.round(hours*100))>1e-7)return ['Укажите неотрицательные трудозатраты с точностью до сотых: '+item.title,line?.querySelector('[data-visit-field=hours]')];
    if(item.kind!=='material'&&quantity<max&&(quantity>0||hours>0)&&!row.note.trim())return ['Укажите, что осталось сделать: '+item.title,line?.querySelector('[data-visit-field=note]')];
   }
+  for(const part of fields.extra_parts)if(!validPartQty(nonnegative(part.qty)))return [
+   'Проверьте расход запчасти «'+part.title+'»',root.querySelector('[data-extra-part="'+part.id+'"] input')];
   if(Math.round(distributed()*100)!==Math.round(Number(selected.presence?.available||0)*100)&&!fields.reason.trim())return ['Укажите причину корректировки трудозатрат'];
   if(editing&&!fields.correction.trim())return ['Укажите причину исправления принятого результата'];
   return null;
@@ -301,6 +340,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   }
   const result={items:fields.rows.map(row=>({id:row.id,qty:nonnegative(row.qty),hours:row.hours===''?0:nonnegative(row.hours),note:row.note})),
    reason:fields.reason,correction:correction??fields.correction};
+  if(data?.extra_parts_supported&&action!=='returned')result.extra_parts=fields.extra_parts.map(part=>({...part,qty:nonnegative(part.qty)}));
   const signature=JSON.stringify([action,result]);
   if(operation?.signature!==signature)operation={signature,id:root.ownerDocument.defaultView.crypto.randomUUID()};
   const trip=selected;persist();
@@ -346,7 +386,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
     if(trip.state==='returned')content+='<p class="hint">Причина возврата · '+esc(trip.latest?.correction)+'</p>';
     content+=review?'<section class="order-trip-review"><header class="order-trip-result-head"><h3 tabindex="-1">Проверьте результат задания</h3>'+
       buttons('Вернуться к работам','data-visit-back')+'</header><p class="order-trip-review-hours">'+metric(distributed())+'</p><p class="hint">'+esc(tripLabel(trip))+'</p>'+
-      tableResult({items:fields.rows.map(row=>({...row,parent_work_id:items.find(item=>item.id===row.id)?.parent_work_id,qty:nonnegative(row.qty),hours:nonnegative(row.hours)}))})+
+      tableResult({items:fields.rows.map(row=>({...row,parent_work_id:items.find(item=>item.id===row.id)?.parent_work_id,qty:nonnegative(row.qty),hours:nonnegative(row.hours)})),extra_parts:fields.extra_parts})+
       (fields.reason?'<p>Причина корректировки · '+esc(fields.reason)+'</p>':'')+
       '</section><div class="order-trip-submit">'+buttons(manager?'Принять результат':'Передать на приёмку','data-visit-commit','amber')+'</div>'
      :(mismatch?'<p class="hint">Данные GPS изменились. Ручной ввод сохранён.</p>':'')+
@@ -385,6 +425,19 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
    const attach=group.querySelector('[data-work-part-attach]');
    if(attach)attach.onclick=()=>savePart(group,group.querySelector('select').value,work);
    group.querySelectorAll('[data-work-part-detach]').forEach(button=>{button.onclick=()=>savePart(group,button.dataset.workPartDetach,null);});
+   const add=group.querySelector('[data-extra-part-add]');
+   if(add)add.onclick=()=>editExtraPart(group,add);
+   group.querySelectorAll('[data-extra-part]').forEach(row=>{
+    const part=fields.extra_parts.find(value=>value.id===row.dataset.extraPart);
+    const qty=row.querySelector('[data-extra-part-qty]'),edit=row.querySelector('[data-extra-part-edit]');
+    qty.oninput=()=>{part.qty=qty.value;persist();};
+    edit.onclick=()=>editExtraPart(group,edit,part);
+    row.querySelector('[data-extra-part-remove]').onclick=()=>{
+     fields.extra_parts=fields.extra_parts.filter(value=>value!==part);
+     partsOpen.add(work);persist();render();
+     get('[data-work-parts="'+work+'"] [data-extra-part-add]')?.focus();
+    };
+   });
   });
   const wire=(selector,fn)=>{const button=get(selector);if(button)button.onclick=fn;};
   wire('[data-visit-trip]',()=>onTrip(selected.id));wire('[data-visit-gps]',()=>onGPS(selected.id));

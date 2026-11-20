@@ -67,7 +67,7 @@ export function plannerFilter(data,filter,actor){
 export const plannerHasTaskFilter=f=>!!(f.status||f.workMode||f.warranty&&f.warranty!=='any'||['durationMin','durationMax','profitMin','profitMax'].some(k=>f[k]!=null));
 export function plannerOrderFinance(order,source='plan'){
  const rows=(order.service_order_items||[]).filter(i=>!i.request_finance_void_event_id&&!i.legacy_snapshot?.request_finance_voided_at);if(!rows.length||source==='fact'&&order.status!=='completed')return null;
- let revenue=0,cost=0;
+ let revenue=0,cost=source==='fact'?Number(order.extra_part_cost||0):0;
  for(const i of rows){const qty=source==='fact'?i.done_qty:Math.max(0,Number(i.planned_qty||0)-Number(i.transferred_qty||0));if(qty==null||!Number.isFinite(+qty))return null;
   const r=i.kind==='material'?i.unit_price_snapshot:i.financial_revenue_snapshot,c=i.kind==='material'?i.unit_cost_snapshot:i.financial_cost_snapshot;
   if(r==null||c==null||!Number.isFinite(+r)||!Number.isFinite(+c)||i.kind!=='material'&&!(Number(i.planned_qty)>0))return null;

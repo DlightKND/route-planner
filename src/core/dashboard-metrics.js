@@ -73,7 +73,7 @@ export function roadPersonHours({trips=[],tracks=[],presence=[],period,engineerI
   return {daily,hours:daily.reduce((n,r)=>n+r.hours,0),known,unknown,complete:unknown===0};
 }
 
-export function dashboardMetrics({trips = [], orders = [], links = [], tracks = [], period, engineerIds = [], factHours = {}}) {
+export function dashboardMetrics({trips = [], orders = [], links = [], tracks = [], period, engineerIds = [], factHours = {}, extraPartCosts = []}) {
   const ids = new Set(engineerIds.map(String));
   const team = row => [row.lead_engineer, ...(row.engineer_ids || [])].some(id => ids.has(String(id)));
   const scoped = trips.filter(t => !t.deleted_at && t.status !== 'cancelled' && inPeriod(t.date_from, period) && team(t));
@@ -95,12 +95,17 @@ export function dashboardMetrics({trips = [], orders = [], links = [], tracks = 
   const motion = tracks.filter(t => completedIds.has(t.trip_id)).map(t => trackMotion(t.segments || t.data?.segments));
   const motionKm = motion.reduce((n, m) => n + m.km, 0), motionHours = motion.reduce((n, m) => n + m.hours, 0);
   const financial = completed.filter(t => t.econ_snapshot?.cost_basis === 'fact' && t.econ_snapshot?.presence_basis === 'person_hours_v1' && number(factHours[t.id]) != null && number(t.econ_snapshot?.cost_fact) != null && number(t.econ_snapshot?.profit_fact) != null);
+  const extraByTrip = new Map();
+  for (const row of extraPartCosts) extraByTrip.set(row.trip_id, (extraByTrip.get(row.trip_id) || 0) + (number(row.cost) ?? 0));
   const components = (row, fact) => {
     const e = row.econ_snapshot || {}, p = row.plan_econ_snapshot || e, rates = row.tariffs_snapshot?.costs;
     const base = fact ? e : p;
     const labor = fact || base.cost_basis === 'plan' ? number(base.cLabor) : rates && number(base.workH) != null ? base.workH * rates.hour : null;
     const road = fact || base.cost_basis === 'plan' ? sum([base.cKm, base.cDay, base.cNight], x => x) : rates ? sum([number(base.km) == null ? null : base.km * rates.km, number(base.days) == null ? null : base.days * rates.day, number(base.nights) == null ? null : base.nights * rates.night], x => x) : null;
-    return { revenue: number(base.revenue), work: number(base.rWork), road: sum([base.rTravel, base.rPerDiem], x => x), parts: number(base.rParts), labor, travelCost: road, partsCost: number(base.cParts), cost: number(fact ? e.cost_fact : e.cost_plan), profit: number(fact ? e.profit_fact : e.profit_plan) };
+    const extra = fact ? extraByTrip.get(row.id) || 0 : 0;
+    const partsCost = number(base.cParts), cost = number(fact ? e.cost_fact : e.cost_plan), profit = number(fact ? e.profit_fact : e.profit_plan);
+    return { revenue: number(base.revenue), work: number(base.rWork), road: sum([base.rTravel, base.rPerDiem], x => x), parts: number(base.rParts), labor, travelCost: road,
+      partsCost: partsCost == null ? null : partsCost + extra, cost: cost == null ? null : cost + extra, profit: profit == null ? null : profit - extra };
   };
   const totals = (rows, fact) => {
     const values = rows.map(t => components(t, fact));

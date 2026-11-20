@@ -613,8 +613,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
       if(name==='service_order_trip_results'){
         const linked=!!visitJourney&&args.p_order===order;
         const accepted=visit.versions.at(-1)?.result;
+        const extraPartCost=(accepted?.extra_parts||[]).reduce((sum,part)=>sum+part.qty*part.unit_cost,0);
         return {data:{has_links:linked,has_receipts:linked&&!!visit.event,trips:linked?[structuredClone(visit)]:[],
-          accepted_hours:linked&&accepted?Object.fromEntries(accepted.items.map(row=>[row.id,row.hours])):{}},error:null};
+          accepted_hours:linked&&accepted?Object.fromEntries(accepted.items.map(row=>[row.id,row.hours])):{},
+          ...(visitJourney==='extras'?{extra_parts_supported:true,extra_part_cost:role==='engineer'?0:extraPartCost}:{})},error:null};
       }
       if(name==='service_order_trip_review_queue')return {data:visitJourney==='manager'&&visit.state==='submitted'?
         [{order_id:order,trip_id:trip,number:task.number,title:task.title,vehicle_label:visit.label,date_from:visit.date_from,at:stamp}]:[],error:null};
@@ -647,6 +649,8 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
           for(const row of task.service_order_items)row.done_qty=latest.items.find(entry=>entry.id===row.id).qty;
           task.revision++;
           visit.versions.push({event:args.p_operation,result:latest,at:stamp,actor:manager});
+          if(visitJourney==='extras')tables.service_order_extra_part_costs=[{order_id:order,trip_id:trip,
+            cost:(latest.extra_parts||[]).reduce((sum,part)=>sum+part.qty*part.unit_cost,0)}];
         }
         Object.assign(visit,{latest,event:args.p_operation,state:args.p_action,submitted_revision:visit.revision});
         audit.visitWrites.push(structuredClone(args));

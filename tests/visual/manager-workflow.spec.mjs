@@ -294,6 +294,53 @@ test('M12: a manual result records parts under their work without a trip',async(
  await clean(page,errors);
 });
 
+test('M13: the curator adds an extra part to a draft and corrects the accepted cost',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope/'+trip,tripResultJourney:'extras'});
+ const panel=page.locator('#orderTripResults'),expand=panel.locator('[data-visit-expand]').first(),parts=panel.locator('.order-trip-parts');
+ const qty=parts.getByRole('textbox',{name:'Факт использования: Кольцо'});
+ await expand.click();
+ await panel.locator('.order-trip-complete').click();
+ await parts.locator(':scope > summary').click();
+ await parts.getByRole('button',{name:'Добавить запчасть'}).click();
+ const entry=page.getByRole('dialog',{name:'Добавить запчасть'});
+ await entry.getByLabel('Название').fill('Кольцо');
+ await entry.getByLabel('Использовано').fill('2');
+ await entry.getByLabel('Цена за единицу, грн').fill('12,75');
+ await shot(page,info,'trip-result-extra-part-entry');
+ await entry.getByRole('button',{name:'Добавить',exact:true}).click();
+ await expect(qty).toHaveValue('2');
+ await expect(panel.locator('[data-extra-part] td').first()).toHaveText('0');
+ await page.reload();
+ await expand.click();
+ await parts.locator(':scope > summary').click();
+ await expect(qty).toHaveValue('2');
+ await qty.fill('-2');
+ await panel.locator('[data-visit-review]').click();
+ await expect(panel.locator('[data-trip-result-error]')).toContainText('Проверьте расход запчасти «Кольцо»');
+ await qty.fill('2');
+ await panel.locator('[data-visit-review]').click();
+ await expect(panel.locator('.order-trip-review')).toContainText('Кольцо · 2');
+ await panel.locator('[data-visit-commit]').click();
+ await expect(panel).toContainText('Принято');
+ await page.getByRole('tab',{name:'План/факт'}).click();
+ await expect(page.locator('#orderPlanFactRows')).toContainText('25,5 ₴');
+ await page.getByRole('tab',{name:'Работы'}).click();
+ await panel.getByRole('button',{name:'Исправить результат'}).click();
+ await expand.click();
+ await parts.locator(':scope > summary').click();
+ await qty.fill('1');
+ await panel.getByLabel('Причина исправления').fill('Уточнили расход');
+ await panel.locator('[data-visit-review]').click();
+ await panel.locator('[data-visit-commit]').click();
+ await expect(panel).toContainText('Принято');
+ await page.getByRole('tab',{name:'План/факт'}).click();
+ await expect(page.locator('#orderPlanFactRows')).toContainText('12,75 ₴');
+ const writes=await page.evaluate(()=>window.__visualQA.visitWrites);
+ expect(writes.map(write=>write.p_result.extra_parts[0].qty)).toEqual([2,1]);
+ expect(writes[0].p_result.extra_parts[0]).toMatchObject({title:'Кольцо',unit:'шт.',unit_cost:12.75});
+ await clean(page,errors);
+});
+
 for(const stage of ['in_progress','paused'])test('M11: the curator saves the work norm and records a manual result without a trip · '+stage,async({page},info)=>{
  const errors=await boot(page,info,{stage,route:'order/'+order+'/scope',standaloneWorkPlan:true});
  const panel=page.locator('#orderTripResults');

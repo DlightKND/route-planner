@@ -52,6 +52,7 @@ beforeAll(async()=>{
   await db.exec(file('../supabase/migrations/20261120085354_order_trip_results.sql'));
   await db.exec(file('../supabase/migrations/20261120134312_order_work_plan.sql'));
   await db.exec(file('../supabase/migrations/20261120141912_order_work_parts.sql'));
+  await db.exec(file('../supabase/migrations/20261120145437_order_extra_parts.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -204,9 +205,9 @@ it('cascades result snapshots on authorized task cleanup without granting client
 });
 
 
-const visitResult=async({order=30,trip=50,expected=0,gps=0,prior=null,operation=100,action='submitted',items=[{id:id(40),qty:1,hours:2,note:'Осталась проверка'}],reason='',correction=''}={})=>(await q(
+const visitResult=async({order=30,trip=50,expected=0,gps=0,prior=null,operation=100,action='submitted',items=[{id:id(40),qty:1,hours:2,note:'Осталась проверка'}],reason='',correction='',extraParts}={})=>(await q(
   'select public.service_order_trip_result_write($1,$2,$3,$4,$5,$6,$7,$8) result',
-  [id(order),id(trip),expected,gps,prior?id(prior):null,id(operation),action,{items,reason,correction}]
+  [id(order),id(trip),expected,gps,prior?id(prior):null,id(operation),action,{items,reason,correction,...(extraParts===undefined?{}:{extra_parts:extraParts})}]
 ))[0].result;
 const readVisits=async order=>(await q('select public.service_order_trip_results($1) result',[id(order)]))[0].result;
 const readVisitQueue=async()=>(await q('select public.service_order_trip_review_queue() result'))[0].result;
@@ -215,6 +216,39 @@ const addConfirmedVisit=async n=>{
   await q("update trips set status='done' where id=$1",[id(n)]);
   await q("insert into trip_stays(trip_id,job_id,stay_from,stay_to,status,minutes_mgr,crew_ids,crew_source) values($1,$2,'2026-10-05 08:00Z','2026-10-05 09:00Z','approved',60,$3,'snapshot')",[id(n),id(10),[id(3),id(4)]]);
 };
+
+it('retains extra parts through submission, return, acceptance and correction, costing only the current accepted visit',async()=>{
+  await addConfirmedVisit(50);
+  const part={id:id(130),work_id:id(40),title:'Кольцо',unit:'шт.',qty:2,unit_cost:12.75};
+  const costRows=()=>q('select trip_id,cost from service_order_extra_part_costs where order_id=$1',[id(30)]);
+  await as(3);
+  await rejected(()=>visitResult({extraParts:[{...part,work_id:id(41)}]}),/отсутствует в задании/);
+  await rejected(()=>visitResult({extraParts:[part,part]}),/повторяется/);
+  await visitResult({extraParts:[part]});
+  expect((await readVisits(30)).trips[0].latest.extra_parts).toEqual([part]);
+  expect(await costRows()).toEqual([]);
+  await as(6);
+  expect(await costRows()).toEqual([]);
+  await visitResult({prior:100,operation:101,action:'returned',correction:'Уточните наименование'});
+  expect((await readVisits(30)).trips[0].latest.extra_parts).toEqual([part]);
+  const accepted={prior:101,operation:102,action:'accepted'};
+  const receipt=await visitResult(accepted);
+  expect(await visitResult({...accepted,prior:100,expected:9})).toEqual(receipt);
+  expect(await costRows()).toEqual([{trip_id:id(50),cost:'25.50'}]);
+  expect((await readVisits(30)).extra_part_cost).toBe(25.5);
+  expect((await read('order',30))[0].snapshot.extra_parts[0]).not.toHaveProperty('unit_cost');
+  await as(3);
+  expect(await costRows()).toEqual([]);
+  expect((await readVisits(30)).extra_part_cost).toBe(0);
+  await as(6);
+  await rejected(()=>visitResult({expected:1,prior:102,operation:103,action:'accepted',correction:'Корректировка',
+    extraParts:[{...part,unit_cost:-1}]}),/Проверьте название, количество и цену/);
+  expect((await readVisits(30)).trips[0].versions).toHaveLength(1);
+  expect(await costRows()).toEqual([{trip_id:id(50),cost:'25.50'}]);
+  await visitResult({expected:1,prior:102,operation:103,action:'accepted',correction:'Запчасть не использовалась',extraParts:[]});
+  expect(await costRows()).toEqual([{trip_id:id(50),cost:'0.00'}]);
+  expect((await readVisits(30)).trips[0].versions.map(version=>version.result.extra_parts)).toEqual([[part],[]]);
+});
 
 it('audits a part assignment and snapshots it with accepted quantities without changing prices',async()=>{
   await addConfirmedVisit(50);
