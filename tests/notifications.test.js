@@ -68,8 +68,8 @@ it('loads curator decisions from current rows, excluding resolved work, with bou
   data.service_orders[0].status='completed';data.trip_stays[0].status='approved';expect((await loadNotificationDecisions(db,'me')).items).toEqual([]);
 });
 it('opens a current decision without marking any historical notification read',async()=>{
-  const s=setup(async()=>({items:[{entity_kind:'order',entity_id:uuid,kind:'Проверка результата',title:'<img onerror=x>',body:'Проверить объём',action:'Проверить'}]}));
-  try{await s.controller.open();const link=s.win.document.querySelector('[data-decision-open]');expect(link).not.toBeNull();expect(s.win.document.querySelector('.notice-decisions img')).toBeNull();link.onclick({preventDefault:vi.fn()});expect(s.open).toHaveBeenCalledWith('#/order/'+uuid);expect(s.db.rpc).not.toHaveBeenCalled();}finally{s.controller.reset();await s.win.happyDOM.close();}
+  const s=setup(async()=>({items:[{entity_kind:'order',entity_id:uuid,kind:'Проверка результата',title:'<img onerror=x>',body:'Проверить объём',action:'Проверить'},{...sample('trip'),action:'Проверить присутствие'}]}));
+  try{await s.controller.open();const link=s.win.document.querySelector('[data-decision-open]');expect(link).not.toBeNull();expect(s.win.document.querySelector('.notice-decisions img')).toBeNull();link.onclick({preventDefault:vi.fn()});expect(s.open).toHaveBeenCalledWith('#/order/'+uuid+'/scope');const trip=s.win.document.querySelectorAll('[data-decision-open]')[1];trip.onclick({preventDefault:vi.fn()});expect(s.open).toHaveBeenCalledWith('#/trip/'+uuid+'/economy');expect(s.db.rpc).not.toHaveBeenCalled();}finally{s.controller.reset();await s.win.happyDOM.close();}
 });
 it('discards stale decision responses across account changes and exposes load failures',async()=>{
   let finish;const queue=vi.fn(uid=>uid==='me'?new Promise(r=>finish=r):Promise.reject(new Error('offline')));const s=setup(queue);

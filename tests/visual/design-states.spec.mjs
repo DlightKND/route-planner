@@ -134,7 +134,7 @@ test('design state: current decisions remain separate from incoming notification
  const errors=await start(page,info,'notifications',{decisionQueue:true});const queue=page.locator('.notice-decisions');
  await expect(queue.locator('.notice-decision-card')).toHaveCount(2);await expect(queue).toContainText('Проверка результата');await expect(queue).toContainText('Проверка присутствия');
  await expect(page.locator('.notice-incoming .notice-toolbar')).toBeVisible();await capture(page,info,'notifications-decisions',errors);
- await queue.getByRole('link',{name:'Проверить результат',exact:true}).click();await page.locator('#orderTab-scope').click();await expect(page.locator('[data-open-result-review]')).toBeVisible();expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
+ await queue.getByRole('link',{name:'Проверить результат',exact:true}).click();await expect(page.locator('[data-open-result-review]')).toBeVisible();await page.goBack();await queue.getByRole('link',{name:'Проверить присутствие',exact:true}).click();await expect(page.locator('#tpReviewPresence')).toBeVisible();expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
 });
 async function expandMapSheet(page){if(page.viewportSize().width<=760)await page.locator('#sideHandle').click();}
 test('design state: map work and directory have one scope navigation and working filters',async({page},info)=>{
