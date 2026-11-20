@@ -99,6 +99,8 @@ beforeAll(async()=>{
     create policy push_log_read on public.push_log for select using(coalesce(user_role(),'') in ('admin','logist') or user_id=auth.uid());`);
   await db.exec(readFileSync(new URL('../supabase/migrations/20261005133906_personal_notification_inbox.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20261120070904_request_work_remainders.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261120085354_order_trip_results.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261120134312_order_work_plan.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
