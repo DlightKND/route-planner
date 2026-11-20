@@ -6,6 +6,20 @@ alter table public.service_order_items
     check (planned_labor_hours is null or
       (kind = 'work' and planned_labor_hours between 0 and 10000));
 
+create function dlight_private.order_work_plan_clear_for_material() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  new.planned_labor_hours := null;
+  return new;
+end $$;
+
+revoke all on function dlight_private.order_work_plan_clear_for_material() from public, anon, authenticated;
+
+create trigger order_work_plan_clear_for_material
+before update of kind on public.service_order_items
+for each row when (new.kind = 'material' and old.kind is distinct from new.kind)
+execute function dlight_private.order_work_plan_clear_for_material();
+
 create function dlight_private.order_work_plan_save(
   p_order uuid, p_item uuid, p_expected integer, p_hours numeric
 ) returns jsonb

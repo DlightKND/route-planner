@@ -1130,6 +1130,24 @@ it('snapshots a material price when selected and preserves it across later catal
   await db.exec('rollback');
 });
 
+it('clears a saved work norm when the order editor converts the line to a material',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const [catalog]=await q("insert into stock_catalog(name,sku,unit,price,cost) values('Насос','P-7','шт',1200,800) returning id");
+    const data=JSON.stringify({title:'Замена насоса',work_mode:'onsite',engineer_ids:[],instructions:''});
+    const work={job_id:id(10),kind:'work',title:'Замена',unit:'ч',planned_qty:2};
+    const [order]=await q('select service_order_save_one(null,null,$1,$2,$3) id',[data,id(10),JSON.stringify([work])]);
+    const [item]=await q('select id from service_order_items where order_id=$1',[order.id]);
+    const [saved]=await q('select service_order_work_plan_save($1,$2,0,3.5) result',[order.id,item.id]);
+    const material={id:item.id,job_id:id(10),kind:'material',stock_catalog_id:catalog.id,planned_qty:2};
+    await q('select service_order_save_one($1,$2,$3,$4,$5)',[order.id,saved.result.revision,data,id(10),JSON.stringify([material])]);
+    const [after]=await q('select kind, planned_labor_hours, stock_catalog_id from service_order_items where id=$1',[item.id]);
+    expect(after).toEqual({kind:'material',planned_labor_hours:null,stock_catalog_id:catalog.id});
+  }finally{await db.exec('rollback');}
+});
+
 it('does not create duplicates when the legacy trip planner inserts a request after migration',async()=>{
   await db.exec('begin');
   await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
