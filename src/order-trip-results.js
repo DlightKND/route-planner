@@ -2,7 +2,7 @@ import {planningPeriod} from './core/planning-dates.js';
 import {journalIcon} from './journal-icons.js';
 import {openEntityPanel} from './entity-actions.js';
 import {orderPhotoDrafts,orderResultPhotoPath} from './order-photo-drafts.js';
-import {bindWorkPayment,paymentView,workPaymentCue,workPaymentHTML} from './payment-terms.js';
+import {bindInlinePayment,inlinePaymentHTML,paymentView,workPaymentCue} from './payment-terms.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:6});
@@ -481,8 +481,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
    title.querySelector('.payment-work-cue')?.remove();fields.querySelector('[data-work-payment]')?.remove();
    if(!view)return;
    title.insertAdjacentHTML('beforeend',workPaymentCue(view));
-   fields.insertAdjacentHTML('beforeend',workPaymentHTML(view));
-   bindWorkPayment(fields.lastElementChild,view,savePayment,()=>{
+   fields.insertAdjacentHTML('beforeend',inlinePaymentHTML(view));
+   bindInlinePayment(fields.lastElementChild,view,savePayment,()=>{
     if(!root.isConnected)return;
     paintWorkPayment(work);onPaymentChange?.();
     fields.querySelector('[data-payment-save]')?.focus({preventScroll:true});

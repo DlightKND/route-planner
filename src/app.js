@@ -52,6 +52,7 @@ import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
 import {readExtraPartCosts} from './planner-store.js';
 import {mountPaymentCard,readPaymentModel,savePaymentModel} from './payment-terms.js';
+import {mountRoadAccounting} from './journal-road-accounting.js';
 import './payment-terms.css';
 import { dashboardSummaryHTML } from './dashboard-summary.js';
 import { createNotifications, loadNotificationDecisions } from './notifications.js';
@@ -76,15 +77,20 @@ const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profil
  confirm:(message,options)=>confirmDialog(message,options),beforeOpen:async()=>await unassignedTracks.leave()&&await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});
 serviceOrders.init();
 const notifications=createNotifications({loadDecisions:uid=>loadNotificationDecisions(sb,uid),db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
+function journalRecordRoute(id,{stopId,pane,roadId,returnStopId}={}){
+ const tail=stopId?'/stop/'+stopId:pane==='route'&&roadId?'/route/section/'+encodeURIComponent(roadId):
+  pane&&pane!=='stops'?'/'+pane+(returnStopId?'/'+returnStopId:''):'';
+ return 'journal/trip/'+id+tail;
+}
 const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,period:()=>dashRanges.journal,vehicles:()=>vehicles,people:()=>profilesList,
- confirm:confirmDialog,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,onNavigate:state=>routeSet('journal/trip/'+state.tripId+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),
+ confirm:confirmDialog,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,onNavigate:state=>routeSet(journalRecordRoute(state.tripId,state)),
  jobs:async ids=>{if(!ids.length)return [];const {data,error}=await sb.from('jobs').select('id,clients(name),equipment(model)').in('id',ids);if(error)throw error;return data||[];},renderAllocations:renderTaskAllocationControls,
  readTrack:async(trip,stored)=>(await loadFactTrack(trip.id,trip,stored))?.measure||null,
  rebuild:async id=>{try{const measured=await recalculateFactTrack(id);if(!measured.ok)throw Error(measured.why||'Нет достоверного GPS');}finally{busyDone();}},
  save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {data:revision,error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:decisionReason(stay,note)});if(error)throw error;let nextRevision=revision;try{await loadFactHours(trip.id);if(trip.status==='done'){const updated=await refreshTripEcon(trip.id,revision);if(Number.isInteger(updated))nextRevision=updated;else notify('Решение сохранено; экономику нужно пересчитать.','warn');}}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}return nextRevision;}
 });
 const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
- onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state={})=>routeSet('journal/trip/'+id+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
+ onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state)=>routeSet(journalRecordRoute(id,state)),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
 
@@ -818,7 +824,7 @@ async function applyRoute(){
     const p=raw.split('/').filter(Boolean).map(x=>{ try{ return decodeURIComponent(x); }catch(e){ return x; } });
     if(!p.length){ const name='schedule', sub=null;
       await switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
-    if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:['stop','route'].includes(p[3])?p[4]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});else if(p[1]==='record'&&p[2])await unassignedTracks.openSource(p[2],{pane:['route','documents'].includes(p[3])?p[3]:'stops'});else await unassignedTracks.showList();return;}
+    if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:['stop','route'].includes(p[3])&&p[4]!=='section'?p[4]:null,roadId:p[3]==='route'&&p[4]==='section'?p[5]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});else if(p[1]==='record'&&p[2])await unassignedTracks.openSource(p[2],{pane:['route','documents'].includes(p[3])?p[3]:'stops'});else await unassignedTracks.showList();return;}
     if(p[0]==='order'&&p[1]){await serviceOrders.open(p[1],null,{pane:p[2],trip:p[3]});return;}
     if(p[0]==='job'&&p[1]){
       const j=await fetchJobFull(p[1]);
@@ -3891,15 +3897,21 @@ async function loadCardPayment(scope,id,anchor,currentId){
   try{
     const model=await readPaymentModel(sb,scope,id);
     if(!current())return;
-    mountPaymentCard({root:host,model,save:async(view,terms)=>{
+    const options={root:host,model,save:async(view,terms)=>{
       if(!current())throw Error('Откройте актуальную карточку');
       await savePaymentModel(sb,view,terms);
     },onOpen:row=>{
       if(!current())return;
       if(row.scope==='work')return serviceOrders.openWork(row.id,row.work);
       if(row.scope==='order')return serviceOrders.open(row.id,id);
+      if(row.scope==='road')return openJournalTrip(row.id,{pane:'route',roadId:row.roadId});
       return openTrip(row.id);
-    }});
+    }};
+    mountPaymentCard(options);
+    if(model)void sb.rpc('journal_road_exceptions',{p_scope:scope,p_id:id}).then(({data})=>{
+      if(!current()||!data?.length)return;
+      model.roads=data;mountPaymentCard(options);
+    }).catch(()=>{});
   }catch(error){if(current()){host.hidden=false;host.textContent=error.message||'Условия оплаты недоступны';}}
 }
 async function openJob(id,presetClient,presetEquip,{pane:requestedPane}={}){ if(!await leaveSettingsEditor())return;if(!await leaveJobEditor())return;if(!await leaveTripEditor())return;if(serviceOrders.isDirty()&&!await serviceOrders.leave())return; await ensureRefs(); jobEditId=id;
@@ -5777,7 +5789,13 @@ function renderTaskAllocationControls(root,jobId,orders,selected=[]){
 }
 async function renderTripCostReview(id){
   const box=$('tpTripAllocation');if(!box)return;
+  $('tpJournalRoadAccounting')?.remove();
   if(!id||!tripWorkbench){box.innerHTML='<p class="hint">Сохрани выезд и подтверди факт, чтобы распределить затраты.</p>';return;}
+  const roadBox=document.createElement('section'),user=session?.user?.id;
+  roadBox.id='tpJournalRoadAccounting';roadBox.className='card trip-wide road-accounting';box.before(roadBox);
+  void mountRoadAccounting(roadBox,{db:sb,trip:tripWorkbench.trip,currency:appSettings.currency||'грн',
+    current:()=>roadBox.isConnected&&id===tripEditId&&user===session?.user?.id,
+    onOpen:row=>openJournalTrip(id,{pane:'route',roadId:row.id})});
   box.innerHTML='<p class="hint">Сверяю выездные затраты…</p>';
   try{
     const t=tripWorkbench.trip;

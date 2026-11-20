@@ -236,6 +236,41 @@
 .journal-route-metrics>.btn{width:100%;min-height:var(--control-h);white-space:normal;margin-top:var(--sp-3)}
 .journal-route-issues{margin:var(--sp-5) 0}
 .journal-route-quality details>summary{min-height:var(--control-h);align-content:center;cursor:pointer;font-size:var(--fs-body);font-weight:600}
+.journal-road-sections{margin-block:var(--sp-5);min-width:0}
+.journal-road-sections:not([hidden]){container-type:inline-size}
+.journal-road-filters,.journal-road-sections>[data-road-count]{margin-block:var(--sp-3)}
+.journal-road-table,.journal-road-shares{width:100%;border-collapse:collapse}
+.journal-road-table th,.journal-road-table td,.journal-road-shares th,.journal-road-shares td{padding:var(--sp-3) var(--sp-2);border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:var(--fs-4)}
+.journal-road-table .hint,.journal-road-shares .hint{display:block;margin-top:var(--sp-1);font-weight:400}
+.journal-road-table .journal-road-km,.journal-road-shares :is(th,td):last-child{text-align:right;white-space:nowrap}
+.journal-road-select{display:block;background:none;border:0;padding:0;text-align:left;color:var(--ink);font:inherit;font-weight:600;cursor:pointer;overflow-wrap:anywhere}
+.journal-road-select:hover{text-decoration:underline}
+.journal-road-row.is-active>th,.journal-road-row:has([aria-pressed="true"])>th{box-shadow:inset 2px 0 var(--accent-line)}
+.journal-road-table .journal-road-expand{display:grid;place-items:center;min-width:44px;min-height:44px;padding:0}
+.journal-road-expand svg{width:18px;height:18px;transform:rotate(90deg)}
+.journal-road-expand[aria-expanded="true"] svg{transform:rotate(-90deg)}
+.journal-road-table .journal-road-request-cell{display:none}
+@container (min-width:420px){
+ .journal-road-table .journal-road-request-cell{display:table-cell}
+ .journal-road-table .journal-road-mobile-requests{display:none}
+}
+.journal-road-detail{padding:var(--sp-4) var(--sp-2);overflow-wrap:anywhere}
+.journal-road-detail-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:start;gap:var(--sp-3)}
+.journal-road-detail-head h3,.journal-road-editor h3{font-size:var(--fs-body);margin:0}
+.journal-road-buttons{display:flex;flex-wrap:wrap;gap:var(--sp-2)}
+.journal-road-buttons .btn{white-space:normal}
+.journal-road-editor-fields{display:grid;gap:var(--sp-3)}
+.journal-road-editor-fields label{margin:0}
+.journal-road-editor input[type=range]{width:100%}
+.journal-road-editor[data-road-split-editor]{padding:var(--sp-4);margin-block:var(--sp-3);border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+.road-accounting{min-width:0}
+.road-accounting-totals{display:flex;flex-wrap:wrap;gap:var(--sp-3) var(--sp-6);margin-block:var(--sp-4)}
+.road-accounting-totals strong{margin-inline-start:var(--sp-2)}
+.road-accounting-scroll{overflow:auto}
+.road-accounting .journal-road-shares :is(th,td){padding-inline:var(--sp-4)}
+@media(min-width:761px){
+ .journal-trip-route:has(.journal-road-sections:not([hidden])){grid-template-columns:minmax(0,1fr) minmax(360px,44%)}
+}
 .journal-route-issues button{display:grid;gap:var(--sp-2);width:100%;text-align:left;border:1px solid var(--line);border-radius:var(--r-sm);background:none;color:var(--ink);padding:var(--sp-4);margin-top:var(--sp-4);font-size:var(--fs-4)}
 .journal-route-issues button.is-selected{border-color:var(--ink)}
 .journal-map-legend{display:grid;gap:var(--sp-4);font-size:var(--fs-4);margin:var(--sp-4) 0}
@@ -364,6 +399,8 @@
  .journal-route-quality .journal-route-metrics dl>div{padding:var(--sp-2) 0;font-size:var(--fs-3)}
  .journal-route-metrics>.btn{margin-top:var(--sp-2);font-size:var(--fs-4)}
  .journal-route-issues,.journal-route-explainer,.journal-trip-route .journal-conflict{order:3;margin:0;padding:var(--sp-4) var(--sp-5)}
+ .journal-road-sections{order:3;padding-inline:var(--sp-5)}
+ .journal-trip-route:has([data-road-split-editor])>.journal-route-map{position:sticky;top:0;z-index:1}
  .journal-route-open>.journal-timeline-host{display:block}
  .journal-orphan-overview{padding:var(--sp-5)}
  .journal-result-total strong{font-size:var(--fs-8)}

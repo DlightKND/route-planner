@@ -57,6 +57,11 @@ beforeAll(async()=>{
   await db.exec(file('./fixtures/order-photo-storage.sql'));
   await db.exec(file('../supabase/migrations/20261120150932_order_result_photos.sql'));
   await db.exec(file('../supabase/migrations/20261120190426_entity_payment_terms.sql'));
+  await db.exec(`create table public.trip_tracks(trip_id uuid primary key references public.trips(id),data jsonb,updated_at timestamptz);
+     alter table public.trip_stays add column presence_evidence jsonb;
+     alter table public.service_order_items add column tariff_profile text,add column created_at timestamptz;
+     alter table public.settings add column tariffs jsonb,add column costs jsonb,add column tariff_profiles jsonb;`);
+  await db.exec(file('../supabase/migrations/20261120193258_journal_road_sections.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -76,6 +81,49 @@ beforeEach(async()=>{
   await q("insert into trip_comments(id,trip_id,body) values($1,$2,'Выезд начат')",[id(72),id(50)]);
 });
 afterEach(async()=>{await db.exec('rollback');});
+
+it('prices verified road intervals independently of stops, preserves shares on split and guards stale edits',async()=>{
+  const iso=hour=>'2026-10-05T'+hour+':00Z';
+  const segment=(kind,km,from,to,why)=>({kind,km,fromTs:iso(from),toTs:iso(to),why});
+  const segments=[segment('track',10,'08:00','09:00'),segment('road',20,'09:30','10:30'),
+    segment('line',99,'10:30','11:00'),segment('road',4,'11:00','11:00','возвращение на финиш')];
+  await db.exec('reset role');
+  await q('insert into trip_tracks values($1,$2,$3)',[id(50),{segments},iso('12:00')]);
+  await q("insert into trip_stays(id,trip_id,job_id,stay_from,stay_to,status) values($1,$2,$3,$4,$5,'approved')",
+    [id(85),id(50),id(10),iso('09:00'),iso('09:30')]);
+  const readRoad=()=>q('select public.journal_road_read($1) model',[id(50)]).then(rows=>rows[0].model);
+  const save=(model,section,action,value)=>q('select public.journal_road_save($1,$2,$3,$4,$5,$6::jsonb) model',
+    [id(50),section,model.revision,model.source,action,action==='split'?String(value)+'.000000':JSON.stringify(value)]).then(rows=>rows[0].model);
+  const first='start~'+id(85);
+  await as(7);await rejected(readRoad,/недоступен/);
+  await as(3);
+  const original=await readRoad();
+  expect(original).toMatchObject({editable:false,revision:0,sections:[
+    {id:first,km:10,measured_km:10,shares:{[id(10)]:10},returning:false},
+    {id:id(85)+'~finish',km:null,measured_km:24,shares:{},returning:true}]});
+  await rejected(()=>save(original,first,'terms',{payer:'service'}),/куратор/);
+  await as(6);
+  await rejected(()=>save(original,first,'shares',{[id(11)]:1}),/километры/);
+  await rejected(()=>save(original,first,'shares',{[id(10)]:10.01}),/больше длины/);
+  let latest=await save(original,first,'shares',{[id(10)]:6.03});
+  await rejected(()=>save(original,first,'terms',{payer:'service'}),/Маршрут изменился/);
+  latest=await save(latest,first,'terms',{payer:'service',warranty:'warranty'});
+  await rejected(()=>save(latest,first,'rates',{revenue:-1}),/тарифы/);
+  latest=await save(latest,first,'rates',{revenue:23.5,cost:10});
+  const cut=Date.parse(iso('08:30'))/1000;
+  latest=await save(latest,first,'split',cut);
+  expect(latest.sections.slice(0,2)).toMatchObject([
+    {id:first,km:5,shares:{[id(10)]:3.02},local:{payer:'service',warranty:'warranty'},rates:{revenue:23.5,cost:10}},
+    {id:first+'~'+cut,km:5,shares:{[id(10)]:3.01},local:{payer:'service',warranty:'warranty'},rates:{revenue:23.5,cost:10}}]);
+  const [exceptions]=await q("select public.journal_road_exceptions('job',$1) rows",[id(10)]);
+  expect(exceptions.rows[0].sections.map(row=>row.id)).toEqual([first,first+'~'+cut]);
+  await as(3);
+  expect(await readRoad()).toMatchObject({tariffs:null,sections:[{rates:null},{rates:null},{rates:null}]});
+  await db.exec('reset role');
+  await q("update trip_tracks set updated_at=$2 where trip_id=$1",[id(50),iso('12:10')]);
+  expect(await q('select action from dlight_private.journal_road_events order by revision')).toEqual(['shares','terms','rates','split'].map(action=>({action})));
+  await as(6);await rejected(()=>save(latest,first,'terms',{}),/Маршрут изменился/);
+});
 
 it('saves independent payment overrides and resets them with an audit trail',async()=>{
   const readTerms=(scope,parent)=>q('select public.entity_payment_terms_read($1,$2) model',[scope,id(parent)]).then(rows=>rows[0].model);

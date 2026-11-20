@@ -448,6 +448,18 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     works:task.service_order_items.filter(row=>row.kind==='work').map(row=>({id:row.id,title:row.title,local:savedTerms('work',order,row.id)}))});
   const paymentTrip=()=>({id:trip,title:ride.vehicle_label,local:savedTerms('trip',trip),jobs:[paymentRequest(),secondPaymentJob]});
   if(managerJourney?.paymentJourney)audit.paymentWrites=[];
+  const roadJourney=managerJourney?.roadJourney;
+  const roadSource=[ride.workbench_revision,stamp];
+  const roads=[
+    {id:'start~journal-stay-1',base_id:'start~journal-stay-1',title:'Начало записи → Демо · объект',start_at:'2026-10-05T05:12:00Z',end_at:'2026-10-05T05:28:00Z',
+      km:20,measured_km:20,request_id:job,returning:false,shares:{[job]:20},manual:false,local:{},rates:{}},
+    {id:'journal-stay-5~finish',base_id:'journal-stay-5~finish',title:'Возврат в депо',start_at:'2026-10-05T14:10:00Z',end_at:'2026-10-05T14:46:00Z',
+      km:null,measured_km:10,request_id:null,returning:true,shares:{},manual:false,local:{},rates:{}},
+  ];
+  let roadRevision=0;
+  const roadModel=()=>({scope:'trip',item:paymentTrip(),sections:roads,revision:roadRevision,source:roadSource,editable:role!=='engineer',tariffs:{
+    tariffs:{km:15},costs:{km:8},tariff_profiles:[{id:'standard',def_paid:true,road:{km_rate:20}},{id:'warranty',def_warranty:true,road:{km_rate:12}}]}});
+  if(roadJourney){ride.fact_km=35;audit.roadWrites=[];}
   const visitPayload={items:task.service_order_items.map(row=>({id:row.id,qty:row===visitWork?3:0,
     hours:row===visitWork?2:0,note:row===visitWork?'Осталась проверка':''})),hours:2,reason:'',correction:''};
   const visit={id:trip,date_from:ride.date_from,date_to:ride.date_to,label:'Сервисный автомобиль',status:'done',
@@ -635,6 +647,30 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(name==='journal_road_read'||name==='journal_road_exceptions'){
+        if(!roadJourney)return {data:null,error:{code:'PGRST202',message:'RPC unavailable'}};
+        const sections=roads.filter(row=>Object.keys(row.local).length);
+        return {data:structuredClone(name==='journal_road_read'?roadModel():sections.length?[{item:paymentTrip(),sections}]:[]),error:null};
+      }
+      if(name==='journal_road_save'&&roadJourney){
+        const row=roads.find(item=>item.id===args.p_id);
+        if(!row||args.p_revision!==roadRevision)return reject(name);
+        const value=structuredClone(args.p_value);
+        if(args.p_action==='terms')row.local=value;
+        if(args.p_action==='rates')row.rates=value;
+        if(args.p_action==='shares'){row.shares=value;row.manual=true;}
+        if(args.p_action==='split'){
+          const cut=new Date(value*1000).toISOString(),previousEnd=row.end_at;
+          const ratio=(Date.parse(cut)-Date.parse(row.start_at))/(Date.parse(previousEnd)-Date.parse(row.start_at));
+          const left=Math.round(row.km*ratio*100)/100,right=structuredClone(row);
+          right.id=row.base_id+'~'+value;right.start_at=cut;right.km=right.measured_km=row.km-left;
+          row.km=row.measured_km=left;row.end_at=cut;
+          for(const [id,km] of Object.entries(row.shares)){row.shares[id]=Math.round(km*ratio*100)/100;right.shares[id]=km-row.shares[id];}
+          roads.splice(roads.indexOf(row)+1,0,right);
+        }
+        audit.roadWrites.push(structuredClone(args));roadRevision++;
+        return {data:structuredClone(roadModel()),error:null};
+      }
       if(name==='entity_payment_terms_read'){
         if(!managerJourney?.paymentJourney)return {data:null,error:{code:'PGRST202',message:'RPC unavailable'}};
         const scope=args.p_scope,resolved={job:[job,paymentRequest],order:[order,paymentOrder],trip:[trip,paymentTrip]}[scope];

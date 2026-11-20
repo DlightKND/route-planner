@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 const job=fixtureIDs.job,order=fixtureIDs.order,trip=fixtureIDs.trip,other='00000000-0000-4000-8000-000000000003';
-async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false,paymentJourney=false}={}){
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan,paymentJourney}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
+async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false,paymentJourney=false,roadJourney=false}={}){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,unifiedJournalJourney:roadJourney,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan,paymentJourney,roadJourney}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
 }
 async function navigate(page,view,hash){await page.evaluate(hash=>{location.hash=hash;},hash);await expect(page.locator('.view-'+view)).toHaveClass(/active/);}
 async function reopenRequest(page){await navigate(page,'planner','/planner/jobs');await navigate(page,'job','/job/'+job);}
@@ -60,6 +60,54 @@ test('M15: payment fields inherit independently and open the work exception for 
  const writes=await page.evaluate(()=>window.__visualQA.paymentWrites);
  expect(writes.map(row=>[row.p_scope,row.p_terms])).toEqual([
   ['job',{warranty:'warranty',payer:'warranty-dept'}],['order',{payer:'service'}],['work',{warranty:'paid'}],['work',{}],['trip',{payer:'service'}]]);
+ await clean(page,errors);
+});
+
+test('M16: road shares, payment terms and an edited tariff survive a split and reopen from the trip card',async({page},info)=>{
+ const errors=await boot(page,info,{route:'journal/trip/'+trip+'/route',paymentJourney:true,roadJourney:true,stage:'in_progress'});
+ const roads=page.locator('.journal-road-sections');
+ await expect(roads.getByRole('table',{name:'Участки дороги'})).toBeVisible();
+ await expect(roads.locator('[data-road-row]').last()).toContainText('Нужно назначить плательщика');
+ await roads.locator('[data-road-filter=unassigned]').click();
+ await expect(roads.locator('[data-road-row]:visible')).toHaveCount(1);
+ await roads.locator('[data-road-filter=all]').click();
+ const row=roads.locator('[data-road-row]').first(),expand=row.locator('[data-road-expand]');
+ await expand.click();
+ const detail=roads.locator('.journal-road-detail:visible').first(),terms=detail.locator('[data-road-payment]');
+ await detail.getByRole('button',{name:'Распределить по заявкам'}).click();
+ const form=dialog(page),km=form.getByRole('textbox',{name:/Километры/}).first();
+ await km.fill('21');
+ await expect(form.locator('[data-road-balance]')).toContainText('Сверх длины');
+ await form.locator('[data-entity-save]').click();
+ await expect(form.getByRole('alert')).toContainText('больше длины');
+ await km.fill('12,5');await form.locator('[data-entity-save]').click();
+ await expect(detail).toContainText('12,5 из 20 км распределено');
+ await terms.locator('[data-payment-field=payer]').selectOption('service');
+ await terms.locator('[data-payment-save]').click();
+ await expect(terms).toContainText('Задано здесь');
+ await detail.getByRole('button',{name:'Разделить участок'}).click();
+ const split=detail.getByRole('form',{name:'Разделение участка'});
+ await expect(split.getByRole('slider')).toBeVisible();
+ await expect(page.locator('.journal-trip-route .journal-route-map path[stroke="#266fe0"]')).toBeVisible();
+ await split.getByRole('button',{name:'Разделить',exact:true}).click();
+ await expect(roads.locator('[data-road-row]')).toHaveCount(3);
+ await expect(detail).toContainText('6,25 из 10 км распределено');
+ await shot(page,info,'journal-road-payment');
+ await navigate(page,'trip','/trip/'+trip+'/economy');
+ const accounting=page.locator('#tpJournalRoadAccounting');
+ await expect(accounting).toBeVisible();
+ const charge=accounting.locator('tbody tr').first();
+ await expect(charge.locator('td').nth(1)).toHaveText('—');
+ await charge.locator('[data-road-rate]').click();
+ await dialog(page).locator('[data-rate=revenue]').fill('25');
+ await dialog(page).locator('[data-entity-save]').click();
+ await expect(charge.locator('td').nth(1)).toContainText('156,25');
+ await page.locator('#tpTabOverview').click();
+ const linked=page.locator('#payment-trip-card');
+ await linked.locator('details summary').click();
+ await linked.locator('[data-payment-exception]').first().click();
+ await expect(roads.locator('.journal-road-detail:visible').first()).toContainText('Задано здесь');
+ await expect.poll(()=>page.evaluate(()=>window.__visualQA.roadWrites.map(row=>row.p_action))).toEqual(['shares','terms','split','rates']);
  await clean(page,errors);
 });
 

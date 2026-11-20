@@ -6,6 +6,7 @@ import {mountPresenceReview} from './presence-review-workspace.js';
 import {validatePresence} from './core/trip-review.js';
 import {presenceRoadConflicts,reviewedStop,routeAmounts,kmText} from './core/gps-journal.js';
 import {mountJournalRoute,timelineHTML,wireJournalTimeline} from './journal-route.js';
+import {mountRoadSections} from './journal-road.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const when=v=>v?new Date(v).toLocaleString('ru-RU',{timeZone:'Europe/Kyiv',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Продолжается';
 const result=({data,error})=>{if(error)throw error;return data;};
@@ -31,8 +32,9 @@ export function createJournalTrips(ctx){
   const [trip,stays,links]=await Promise.all([ctx.db().from('trips').select('*').eq('id',id).is('deleted_at',null).maybeSingle().then(result),ctx.db().from('trip_stays').select('*').eq('trip_id',id).order('stay_from').then(result),ctx.db().from('trip_jobs').select('job_id').eq('trip_id',id).then(result)]);
   if(!trip)throw response.error;return {trip,stays,job_ids:(links||[]).map(l=>l.job_id),removed:[],history:[],reader:true};
  }
- async function mount(root,entry,{back,changed,stopId=null,jobId=null,pane:initialPane='stops'}={}){
-  destroy();const version=token,uid=ctx.userId(),id=entry.id;let routeMap,overviewMap,overviewObserver,review,timelineView,pane=initialPane,selected=stopId;
+ async function mount(root,entry,{back,changed,stopId=null,jobId=null,roadId=null,pane:initialPane='stops'}={}){
+  destroy();const version=token,uid=ctx.userId(),id=entry.id;
+  let routeMap,roadView,overviewMap,overviewObserver,review,timelineView,pane=initialPane,selected=stopId;
   root.dataset.journalTrip=id;root.classList.add('journal-trip-detail');root.innerHTML='<p role="status">Загружаем поездку и остановки…</p>';
   const current=()=>uid===ctx.userId()&&version===token&&root.isConnected;
   const [workbench,trackResponse,linksResponse]=await Promise.all([read(id),ctx.db().from('trip_tracks').select('data,km,updated_at').eq('trip_id',id).maybeSingle(),ctx.db().from('trip_service_orders').select('order_id,service_orders(id,number,title,job_id,status)').eq('trip_id',id)]);if(!current())return;
@@ -62,12 +64,22 @@ export function createJournalTrips(ctx){
   const documentsButton=root.querySelector('[data-overview-documents]');documentsButton.innerHTML=icon('file')+'<span>Данные GPS-записи</span>'+icon('chevron');
   const host=root.querySelector('.journal-trip-stops');host.innerHTML=presenceHTML(data,jobs,ctx.people(),{readonly:!editable,orders,workspace:true});wirePresenceRecovery(host);
   const message=root.querySelector('.journal-trip-message');
-  const notify=()=>ctx.onNavigate?.({tripId:id,pane,stopId:pane==='stops'?selected:null,...(pane==='route'&&selected?{returnStopId:selected}:{})});
+  const notify=()=>ctx.onNavigate?.({tripId:id,pane,stopId:pane==='stops'?selected:null,...(pane==='route'&&selected?{returnStopId:selected}:{}),...(pane==='route'&&roadId?{roadId}:{})});
   review=mountPresenceReview(host,data,{jobs,profiles:ctx.people(),readonly:!editable,leaflet:ctx.leaflet,makeBase:ctx.makeTrackBase,owner:uid,initialMode:'all',onJobChange:(row,job)=>ctx.renderAllocations(row,job,orders),track,onRoute:()=>switchPane('route'),onSelect:stayId=>{selected=stayId;updateSelection();notify();},onBack:()=>{selected=null;updateSelection();notify();},onPin:stay=>readerAction('pin',stay),onReaderAction:ctx.role()==='engineer'?readerAction:null});
   function updateSelection(){root.classList.toggle('journal-stop-open',!!selected);display.hidden=pane!=='stops'||!!selected;root.querySelector('.journal-trip-overview').hidden=pane!=='stops'||!!selected;documentsButton.hidden=pane!=='stops'||!!selected;(root.closest('.unified-gps-journal')||root).querySelectorAll('[data-journal-stop]').forEach(b=>b.classList.toggle('is-selected',b.dataset.journalStop===selected));const timeline=root.querySelector('.journal-timeline-host');if(pane==='stops'&&!selected)root.querySelector('.journal-overview-map').after(timeline);else root.querySelector('.journal-trip-head').after(timeline);routeMap?.select(selected);overviewMap?.select(selected);}
   let historyLoaded=!data.history_deferred,historyLoading=false;
   async function loadHistory(){if(historyLoaded||historyLoading)return;historyLoading=true;const box=root.querySelector('.journal-history');box.innerHTML='<p role="status">Загружаем историю изменений…</p>';try{const response=await ctx.db().rpc('trip_workbench_read',{p_trip:id});if(response.error)throw response.error;if(!current())return;box.innerHTML=historyHTML({...data,history:response.data.history||[]},ctx.people());historyLoaded=true;}catch(error){if(current()){box.innerHTML='<p class="err" role="alert">Не удалось загрузить историю: '+esc(error.message)+'</p><button class="btn ghost" data-history-retry>Повторить</button>';box.querySelector('button').onclick=loadHistory;}}finally{historyLoading=false;}}
-  function switchPane(next,updateUrl=true){if(!current())return;pane=next;root.dataset.journalSection=next;if(next==='documents')void loadHistory();root.classList.toggle('journal-route-open',next==='route');root.closest('.unified-gps-journal')?.classList.toggle('journal-map-expanded',next==='route');for(const key of ['stops','route','documents'])root.querySelector('.journal-trip-'+key).hidden=key!==next;root.querySelector('.journal-trip-overview').hidden=next!=='stops'||!!selected;root.querySelectorAll('[data-journal-pane]').forEach(b=>{b.classList.toggle('on',b.dataset.journalPane===(next==='route'?'stops':next));b.setAttribute('aria-pressed',String(b.dataset.journalPane===(next==='route'?'stops':next)));});root.querySelector('[data-ut-back]').textContent=next==='route'?'← '+(selected?'К остановке':'К поездке'):'← К журналу';if(next==='route'&&!routeMap)routeMap=mountJournalRoute(root.querySelector('.journal-trip-route'),{trip:data.trip,track,stays:data.stays,jobs,leaflet:ctx.leaflet?.(),makeBase:ctx.makeTrackBase,canEdit:editable,onRebuild:rebuild,selectedStopId:selected,onStop:stayId=>{selected=stayId;switchPane('stops',false);review?.select(stayId);}});updateSelection();if(updateUrl)notify();}
+  function mountRoute(){
+   const section=root.querySelector('.journal-trip-route');
+   routeMap=mountJournalRoute(section,{trip:data.trip,track,stays:data.stays,jobs,leaflet:ctx.leaflet?.(),makeBase:ctx.makeTrackBase,canEdit:editable,onRebuild:rebuild,selectedStopId:selected,onStop:stayId=>{selected=stayId;switchPane('stops',false);review?.select(stayId);}});
+   if(!trackResponse.data?.data?.segments?.length&&!roadId)return;
+   const roads=root.ownerDocument.createElement('section');roads.className='journal-road-sections';
+   section.querySelector('.journal-route-metrics').before(roads);
+   roadView=mountRoadSections(roads,{db:ctx.db,tripId:id,current,focus:routeMap.focusRoad,onSplitPoint:routeMap.markRoadCut});
+   if(roadId)roadView.open(roadId);
+   void roadView.load();
+  }
+  function switchPane(next,updateUrl=true){if(!current())return;pane=next;root.dataset.journalSection=next;if(next==='documents')void loadHistory();root.classList.toggle('journal-route-open',next==='route');root.closest('.unified-gps-journal')?.classList.toggle('journal-map-expanded',next==='route');for(const key of ['stops','route','documents'])root.querySelector('.journal-trip-'+key).hidden=key!==next;root.querySelector('.journal-trip-overview').hidden=next!=='stops'||!!selected;root.querySelectorAll('[data-journal-pane]').forEach(b=>{b.classList.toggle('on',b.dataset.journalPane===(next==='route'?'stops':next));b.setAttribute('aria-pressed',String(b.dataset.journalPane===(next==='route'?'stops':next)));});root.querySelector('[data-ut-back]').textContent=next==='route'?'← '+(selected?'К остановке':'К поездке'):'← К журналу';if(next==='route'&&!routeMap)mountRoute();updateSelection();if(updateUrl)notify();}
   root.querySelectorAll('[data-journal-pane]').forEach(b=>b.onclick=()=>switchPane(b.dataset.journalPane));root.querySelector('[data-overview-documents]').onclick=()=>switchPane('documents');root.querySelector('[data-ut-back]').onclick=()=>pane==='route'?switchPane('stops'):back?.();root.querySelector('[data-journal-open-trip]').onclick=()=>ctx.openTrip(id);
   root.querySelectorAll('[data-journal-stop]').forEach(b=>b.onclick=()=>{switchPane('stops',false);review?.select(b.dataset.journalStop);});
   root.querySelector('.journal-trip-overview').append(documentsButton);
@@ -89,7 +101,7 @@ export function createJournalTrips(ctx){
    // Advance only to the revision returned by our write, never a later revision
    // read in the background. Concurrent changes will still reject the next save.
    data.trip.workbench_revision=pending.revision;review?.markSaved(canonical);pendingSave=null;
-   historyLoaded=false;data.history_deferred=true;routeMap?.refreshPresence();overviewMap?.refreshPresence();refreshTimeline();updateSelection();
+   historyLoaded=false;data.history_deferred=true;routeMap?.refreshPresence();overviewMap?.refreshPresence();void roadView?.load();refreshTimeline();updateSelection();
    changed?.(id,{...canonical,__previousStatus:pending.previous,__review:reviewFor(data.stays,track)});
    root.querySelector('[data-journal-save-refresh]')?.remove();root.querySelector('[data-journal-save-error]')?.remove();message.classList.remove('is-error');message.textContent='Решение сохранено.';if(pane==='documents')void loadHistory();
   }
@@ -103,7 +115,7 @@ export function createJournalTrips(ctx){
   };
   if(trackResponse.error)message.textContent='Трек недоступен для этой роли. Доступные остановки можно просматривать.';
   paintConflicts();
-  view={navigate(state){if(state.jobId&&editable&&data.jobIds.includes(state.jobId)){const field=host.querySelector('[data-presence-id="'+state.stopId+'"] [data-presence=job_id]');if(field){field.value=state.jobId;field.dispatchEvent(new root.ownerDocument.defaultView.Event('change',{bubbles:true}));}}if(state.stopId){selected=state.stopId;review?.select(selected,true,false);}else{selected=null;review?.back(false);}switchPane(state.pane||'stops',false);updateSelection();},discard:()=>review?.discard(),isDirty:()=>review?.isDirty(),destroy(){delete root.dataset.journalSection;delete root.dataset.journalMapMode;overviewObserver?.disconnect();timelineView?.destroy();routeMap?.destroy();overviewMap?.destroy();review?.destroy();root.closest('.unified-gps-journal')?.querySelector('[data-journal-shared-timeline]')?.replaceChildren();root.closest('.unified-gps-journal')?.classList.remove('journal-map-expanded');root.classList.remove('journal-trip-detail','journal-stop-open','journal-route-open');}};
+  view={navigate(state){if(state.jobId&&editable&&data.jobIds.includes(state.jobId)){const field=host.querySelector('[data-presence-id="'+state.stopId+'"] [data-presence=job_id]');if(field){field.value=state.jobId;field.dispatchEvent(new root.ownerDocument.defaultView.Event('change',{bubbles:true}));}}if(state.stopId){selected=state.stopId;review?.select(selected,true,false);}else{selected=null;review?.back(false);}const previousRoad=roadView;switchPane(state.pane||'stops',false);if(state.roadId){roadView?.open(state.roadId);if(previousRoad)void previousRoad.load();}updateSelection();},discard:()=>review?.discard(),isDirty:()=>review?.isDirty(),destroy(){delete root.dataset.journalSection;delete root.dataset.journalMapMode;overviewObserver?.disconnect();timelineView?.destroy();routeMap?.destroy();overviewMap?.destroy();review?.destroy();root.closest('.unified-gps-journal')?.querySelector('[data-journal-shared-timeline]')?.replaceChildren();root.closest('.unified-gps-journal')?.classList.remove('journal-map-expanded');root.classList.remove('journal-trip-detail','journal-stop-open','journal-route-open');}};
   const timeline=root.querySelector('.journal-timeline-host');timelineView=wireJournalTimeline(timeline);
   if(selected)review?.select(selected,true,false);if(editable&&jobId&&data.jobIds.includes(jobId)){const row=host.querySelector('[data-presence-id="'+selected+'"]'),field=row?.querySelector('[data-presence=job_id]');if(field){field.value=jobId;field.dispatchEvent(new root.ownerDocument.defaultView.Event('change',{bubbles:true}));host.querySelector('[data-presence-kind=visit]')?.click();}}switchPane(pane,false);updateSelection();
  }
