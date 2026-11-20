@@ -32,7 +32,7 @@ for(const role of ['logist','engineer','admin'])test('production components cove
  expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
 test('production searchable crew picker keeps native selection and measured mini-pill',async({page},info)=>{
- const errors=await boot(page,info,'trip/'+fixtureIDs.trip);const trigger=page.locator('#tpEng + .engineer-picker');await trigger.click();const panel=page.locator('.engineer-options');await expect(panel).toBeVisible();
+ const errors=await boot(page,info,'trip/'+fixtureIDs.trip);await page.locator('#tpTabPlan').click();await page.locator('.workflow-trip-edit>summary').click();const trigger=page.locator('#tpEng + .engineer-picker');await trigger.click();const panel=page.locator('.engineer-options');await expect(panel).toBeVisible();
  await panel.getByRole('searchbox',{name:'Поиск инженеров'}).fill('zz-no-match');await expect(panel.locator('label:visible')).toHaveCount(0);await expect(panel).toContainText('Никого не найдено');await panel.getByRole('searchbox').fill('');await expect(panel.locator('label:visible').first()).toBeVisible();
  await auditApplicationDesign(page,panel);await panel.getByRole('button',{name:'Готово',exact:true}).click();await expect(trigger).toBeFocused();
  const count=trigger.locator('.engineer-picker-count');expect((await count.boundingBox()).height).toBe(22);expect(await count.innerText()).toBe(String(await page.locator('#tpEng').evaluate(el=>el.selectedOptions.length)));expect(errors).toEqual([]);

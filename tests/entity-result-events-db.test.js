@@ -48,6 +48,8 @@ beforeAll(async()=>{
   await db.exec(file('../supabase/migrations/20261009144527_entity_activity_results_pins.sql'));
   await db.exec(file('../supabase/migrations/20261009145440_entity_activity_pin_actor_indexes.sql'));
   await db.exec(file('../supabase/migrations/20261009202442_entity_result_parent_purge_cascade.sql'));
+  await db.exec('alter table trips add column workbench_revision integer not null default 0;alter table trip_stays add column crew_ids uuid[],add column crew_source text;');
+  await db.exec(file('../supabase/migrations/20261120085354_order_trip_results.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -175,4 +177,80 @@ it('cascades result snapshots on authorized task cleanup without granting client
   expect(await q('select id from service_order_result_events where order_id=$1',[id(30)])).toEqual([]);
   expect(await q('select id from service_order_comments where order_id=$1',[id(30)])).toEqual([]);
   expect(await q('select id from service_orders where id=$1',[id(31)])).toHaveLength(1);
+});
+
+
+const visitResult=async({order=30,trip=50,expected=0,gps=0,prior=null,operation=100,action='submitted',items=[{id:id(40),qty:1,hours:2,note:'Осталась проверка'}],reason='',correction=''}={})=>(await q(
+  'select public.service_order_trip_result_write($1,$2,$3,$4,$5,$6,$7,$8) result',
+  [id(order),id(trip),expected,gps,prior?id(prior):null,id(operation),action,{items,reason,correction}]
+))[0].result;
+const readVisits=async order=>(await q('select public.service_order_trip_results($1) result',[id(order)]))[0].result;
+const readVisitQueue=async()=>(await q('select public.service_order_trip_review_queue() result'))[0].result;
+const addConfirmedVisit=async n=>{
+  await db.exec('reset role');
+  await q("update trips set status='done' where id=$1",[id(n)]);
+  await q("insert into trip_stays(trip_id,job_id,stay_from,stay_to,status,minutes_mgr,crew_ids,crew_source) values($1,$2,'2026-10-05 08:00Z','2026-10-05 09:00Z','approved',60,$3,'snapshot')",[id(n),id(10),[id(3),id(4)]]);
+};
+
+it('submits by trip, accepts only by the curator, and combines accepted quantities with historical totals',async()=>{
+  await submit({qty:0.25});
+  await addConfirmedVisit(50);await as(3);
+  expect((await readVisits(30)).trips[0].presence).toEqual({confirmed:true,base:2,used:0,available:2});
+  expect(await visitResult({expected:1})).toEqual({event:id(100),revision:1});
+  expect(await readVisitQueue()).toEqual([]);
+  await rejected(()=>visitResult({expected:1,prior:100,operation:101,action:'accepted'}),/Принимает результат куратор/);
+  expect((await q('select done_qty from service_order_items where id=$1',[id(40)]))[0].done_qty).toBe('0.25');
+  await as(6);
+  expect(await readVisitQueue()).toMatchObject([{order_id:id(30),trip_id:id(50)}]);
+  await db.exec('reset role');
+  await rejected(()=>q("update service_orders set status='completed' where id=$1",[id(30)]),/Сначала рассмотрите результаты выездов/);
+  await as(6);
+  const accepted=await visitResult({expected:1,prior:100,operation:101,action:'accepted'});
+  expect(accepted.revision).toBe(2);
+  expect(await visitResult({expected:99,prior:100,operation:101,action:'accepted'})).toEqual(accepted);
+  const [trip]= (await readVisits(30)).trips;
+  expect(trip.state).toBe('accepted');expect(trip.versions).toHaveLength(1);
+  expect((await readVisits(30)).accepted_hours).toEqual({[id(40)]:2});
+  expect(await readVisitQueue()).toEqual([]);
+  expect((await q('select done_qty from service_order_items where id=$1',[id(40)]))[0].done_qty).toBe('1.25');
+  await rejected(()=>submit({revision:2,op:102,qty:0}),/ведутся по выездам/);
+  await rejected(()=>visitResult({expected:2,prior:101,operation:103,action:'accepted'}),/исправления принятой версии нужна причина/);
+  await visitResult({expected:2,prior:101,operation:104,action:'accepted',correction:'Уточнили акт',items:[{id:id(40),qty:0.75,hours:2,note:'Уточнён остаток'}]});
+  expect((await q('select done_qty from service_order_items where id=$1',[id(40)]))[0].done_qty).toBe('1.00');
+  expect((await readVisits(30)).trips[0].versions.map(v=>v.result.items[0].qty)).toEqual([1,0.75]);
+});
+
+it('checks GPS revision, returns a submission, and protects the shared pool from duplicate labor',async()=>{
+  await rejected(()=>visitResult(),/подтвердите рабочие посещения/);
+  await addConfirmedVisit(50);
+  await q("insert into service_orders(id,title,job_id,status,engineer_ids,lead_engineer,curator_id) values($1,'Соседнее задание',$2,'in_progress',$3,$4,$5)",[id(32),id(10),[id(3)],id(3),id(6)]);
+  await q('insert into service_order_jobs(order_id,job_id) values($1,$2)',[id(32),id(10)]);
+  await q("insert into service_order_items(id,order_id,job_id,title,planned_qty,unit) values($1,$2,$3,'Проверка',2,'ч')",[id(42),id(32),id(10)]);
+  await q('insert into trip_service_orders values($1,$2)',[id(50),id(32)]);
+  await q('update trips set workbench_revision=3 where id=$1',[id(50)]);
+  await as(3);
+  await rejected(()=>visitResult(),/Данные GPS изменились/);
+  await visitResult({gps:3});
+  await as(6);
+  await visitResult({gps:3,prior:100,operation:101,action:'returned',correction:'Приложите уточнение'});
+  expect((await readVisits(30)).trips[0].state).toBe('returned');
+  await visitResult({gps:3,prior:101,operation:102,action:'accepted'});
+  expect((await readVisits(32)).trips[0].presence.available).toBe(0);
+  const sibling={order:32,gps:3,operation:105,action:'accepted',items:[{id:id(42),qty:2,hours:2,note:''}]};
+  await rejected(()=>visitResult(sibling),/ручной корректировки/);
+  await visitResult({...sibling,reason:'Дополнительное время подтверждено отдельно'});
+  await as(7);await rejected(()=>readVisits(30),/Нет доступа/);
+});
+
+it('keeps two trip receipts distinct in history and subtracts earlier quantities from the remaining work',async()=>{
+  await addConfirmedVisit(50);
+  await q("insert into trips(id,status,engineer_ids,lead_engineer,owner_id,curator_id) values($1,'done',$2,$3,$4,$4)",[id(52),[id(3)],id(3),id(6)]);
+  await q('insert into trip_service_orders values($1,$2)',[id(52),id(30)]);
+  await addConfirmedVisit(52);await as(6);
+  await visitResult({action:'accepted'});
+  await rejected(()=>visitResult({trip:52,expected:1,operation:106,action:'accepted',items:[{id:id(40),qty:2,hours:2,note:''}]}),/превышает остаток/);
+  await visitResult({trip:52,expected:1,operation:106,action:'accepted'});
+  expect((await q('select done_qty from service_order_items where id=$1',[id(40)]))[0].done_qty).toBe('2');
+  expect((await read('trip',50)).map(e=>e.snapshot.trip_id)).toEqual([id(50)]);
+  expect((await read('trip',52)).map(e=>e.snapshot.trip_id)).toEqual([id(52)]);
 });

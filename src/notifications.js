@@ -19,18 +19,25 @@ export function notificationRowsHTML(rows) {
 // Current work awaiting this curator. The inbox is a history and cannot be used
 // as a source of pending decisions: reading an event does not resolve its record.
 export async function loadNotificationDecisions(db,uid) {
-  const [orders,trips]=await Promise.all([
+  const [orders,trips,tripResults]=await Promise.all([
     db.from('service_orders').select('id,number,title,status,curator_id').eq('curator_id',uid).eq('status','review').order('updated_at',{ascending:false}).limit(101),
     db.from('trips').select('id,vehicle_label,date_from,status,curator_id').eq('curator_id',uid).in('status',['finished','done']).is('deleted_at',null).order('date_from',{ascending:false}).limit(101),
+    db.rpc?.('service_order_trip_review_queue')??{data:[]},
   ]);
   if(orders.error)throw orders.error;if(trips.error)throw trips.error;
+  if(tripResults.error&&!['PGRST202','42883'].includes(tripResults.error.code))throw tripResults.error;
   const ownOrders=(orders.data||[]).filter(o=>o.curator_id===uid&&o.status==='review').slice(0,100);
   const ownTrips=(trips.data||[]).filter(t=>t.curator_id===uid&&['finished','done'].includes(t.status)).slice(0,100);
   const stays=ownTrips.length?await db.from('trip_stays').select('id,trip_id,status,stay_to').in('trip_id',ownTrips.map(t=>t.id)).eq('status','detected').not('stay_to','is',null).limit(1001):{data:[]};
   if(stays.error)throw stays.error;
-  const items=ownOrders.map(o=>({entity_kind:'order',entity_id:o.id,title:`Задание №${o.number} · ${o.title}`,kind:'Проверка результата',body:'Исполнитель передал результат на проверку. Откройте задание, чтобы проверить объём и остаток.',action:'Проверить результат'}));
+  const queue=Array.isArray(tripResults.data)?tripResults.data:[];
+  const waiting=new Set(queue.map(row=>row.order_id));
+  const items=ownOrders.filter(o=>!waiting.has(o.id)).map(o=>({entity_kind:'order',entity_id:o.id,title:`Задание №${o.number} · ${o.title}`,kind:'Проверка результата',body:'Исполнитель передал результат на проверку. Откройте задание, чтобы проверить объём и остаток.',action:'Проверить результат'}));
+  for(const result of queue.slice(0,100))items.push({entity_kind:'order',entity_id:result.order_id,trip_id:result.trip_id,
+    title:`Задание №${result.number} · ${result.title}`,kind:'Приёмка работ по выезду',
+    body:`${result.vehicle_label||'Выезд'} · ${result.date_from||'Без даты'}`,action:'Проверить результат выезда'});
   for(const t of ownTrips){const pending=(stays.data||[]).filter(s=>s.trip_id===t.id&&s.status==='detected'&&s.stay_to).length;if(pending)items.push({entity_kind:'trip',entity_id:t.id,title:t.vehicle_label||'Выезд',kind:'Проверка присутствия',body:`Дата выезда: ${t.date_from||'не указана'}. Записей GPS без решения: ${pending}.`,action:'Проверить присутствие'});}
-  return {items,truncated:(orders.data||[]).length>100||(trips.data||[]).length>100||(stays.data||[]).length>=1000};
+  return {items,truncated:(orders.data||[]).length>100||(trips.data||[]).length>100||queue.length>100||(stays.data||[]).length>=1000};
 }
 
 export function createNotifications({db,userId,host,badge,onPush,onOpen,onError,loadDecisions}) {
@@ -83,7 +90,11 @@ export function createNotifications({db,userId,host,badge,onPush,onOpen,onError,
     status.textContent='Проверяем текущие состояния…';list.innerHTML='';count.textContent='';retry.hidden=true;
     try{const result=await loadDecisions(uid);if(!valid())return;const items=(result.items||[]).filter(notificationRoute);
       count.textContent=String(items.length)+(result.truncated?'+':'');status.textContent=result.truncated?'Показана часть очереди. Остальные записи доступны в заданиях и выездах.':items.length?'':'Сейчас нет записей, ожидающих вашей проверки.';
-      list.innerHTML=items.map(row=>`<article class="notice-decision-card"><span class="notice-kind">${esc(row.kind)}</span><h3>${esc(row.title)}</h3><p>${esc(row.body)}</p><a class="btn ${row.entity_kind==='order'?'amber':''}" href="${esc(notificationRoute(row))}" data-decision-open>${esc(row.action)}</a></article>`).join('');
+      list.innerHTML=items.map(row=>{
+        const pane={order:'/scope',trip:'/economy'}[row.entity_kind]||'';
+        const visit=row.entity_kind==='order'&&/^[a-f\d-]{36}$/i.test(row.trip_id||'')?'/'+row.trip_id:'';
+        return `<article class="notice-decision-card"><span class="notice-kind">${esc(row.kind)}</span><h3>${esc(row.title)}</h3><p>${esc(row.body)}</p><a class="btn ${row.entity_kind==='order'?'amber':''}" href="${esc(notificationRoute(row)+pane+visit)}" data-decision-open>${esc(row.action)}</a></article>`;
+      }).join('');
       list.querySelectorAll('[data-decision-open]').forEach(a=>a.onclick=e=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;e.preventDefault();if(valid())onOpen(a.getAttribute('href'));});
     }catch{if(valid()){status.textContent='Не удалось проверить очередь решений.';retry.hidden=false;}}
   }

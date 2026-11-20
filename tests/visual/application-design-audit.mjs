@@ -29,7 +29,8 @@ export async function auditApplicationDesign(page,root=page.locator('body'),{sof
    if(s.fontSize!=='12px'||s.lineHeight!=='20px'||!s.fontFamily.includes('IBM Plex Sans'))errors.push({name,error:'passive indicator typography',font:s.fontSize,line:s.lineHeight});
    if(el.dataset.ui==='count'&&(r.width<24||r.height!==22))errors.push({name,error:'numeric pill geometry',width:r.width,height:r.height});
   }
-  const scopes='.view.active,dialog[open],.overlay.on,[popover]:popover-open';
+  // The route card has its own primary action beside the trip status card.
+  const scopes='.view.active,dialog[open],.overlay.on,[popover]:popover-open,.wb-route-card';
   for(const scope of [...(root.matches(scopes)?[root]:[]),...root.querySelectorAll(scopes)]){
    if(!visible(scope))continue;
    const primary=[...scope.querySelectorAll('[data-ui-variant=primary]')].filter(el=>visible(el)&&!el.matches(':disabled,[aria-disabled=true]')&&el.closest(scopes)===scope);

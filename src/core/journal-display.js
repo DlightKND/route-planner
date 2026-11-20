@@ -55,6 +55,34 @@ export function distanceText(value) {
   })} км`;
 }
 
+export function googleTripLinks(stops) {
+  const points = [];
+  for (const stop of stops) {
+    const lat = finiteValue(stop.lat), lng = finiteValue(stop.lng);
+    if (lat == null || lng == null || Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+    const coordinate = lat.toFixed(6) + ',' + lng.toFixed(6);
+    if (coordinate !== points.at(-1)?.coordinate) points.push({name:stop.name || 'Точка маршрута',coordinate});
+  }
+  if (points.length === 1) {
+    const url = new URL('https://www.google.com/maps/search/');
+    url.searchParams.set('api','1');
+    url.searchParams.set('query',points[0].coordinate);
+    return [{url:url.href,label:points[0].name}];
+  }
+  const links = [];
+  for (let start = 0; start + 1 < points.length; start += 4) {
+    const part = points.slice(start,start + 5), first = part[0], last = part.at(-1);
+    const url = new URL('https://www.google.com/maps/dir/');
+    url.searchParams.set('api','1');
+    url.searchParams.set('origin',first.coordinate);
+    url.searchParams.set('destination',last.coordinate);
+    url.searchParams.set('travelmode','driving');
+    if (part.length > 2) url.searchParams.set('waypoints',part.slice(1,-1).map(point=>point.coordinate).join('|'));
+    links.push({url:url.href,label:first.name + ' → ' + last.name});
+  }
+  return links;
+}
+
 export function dayKey(value) {
   const ms = timestamp(value);
   if (!Number.isFinite(ms)) return null;

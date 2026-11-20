@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false, remainderJourney = false } = {}) {
   if(managerJourney){financeJourney=true;entityAudit=true;}
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
@@ -172,6 +172,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     }
   }
   if(lateScheduleCut)ride.day_plan={start:{d:'2026-10-05',t:7},cuts:[{after:2,at:{d:'2026-10-05',t:18}}]};
+  if(managerJourney?.routeBuilder)ride.route_stops.push({type:'wp',name:'Промежуточная точка',lat:49.97,lng:36.24});
   task.trip_service_orders = [{ trip_id: trip, trips: ride }];
   if(runningSchedule){ride.status='in_progress';ride.started_at='2026-10-05T04:00:00Z';request.job_works[0].hours=24;ride.econ_snapshot.workH=ride.plan_econ_snapshot.workH=24;ride.day_plan={start:{d:'2026-10-05',t:7},cuts:[{after:9,at:{d:'2026-10-06',t:7}}]};}
   if(legacyCrewMissing){ride.lead_engineer=null;ride.engineer_ids=[];ride.status='done';}
@@ -215,7 +216,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     default_theme: { mode: theme },
     tariff_profiles: [],
     avoid_zones: [],
-    ors_proxy: "",
+    ors_proxy: managerJourney?.routeBuilder?'https://anqfbljgfimoaziztdxe.supabase.co/functions/v1/ors':'',
     stay_radius_m: 300,
     stay_min_minutes: 10,
   };
@@ -388,6 +389,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     request.service_orders=[task];
     audit.financeRows=structuredClone(task.service_order_items);
   }
+  if(managerJourney?.routeBuilder==='active'){
+    Object.assign(ride,{status:'in_progress',started_at:'2026-10-05T12:00:00Z'});
+    tables.vehicle_positions=[{trip_id:trip,vehicle_id:ride.vehicle_id,lat:49.98,lng:36.22,ts:'2026-10-05T16:58:00Z'}];
+  }
   if(presenceRecoveryJourney){
     const point=(km,min)=>({trip_id:trip,vehicle_id:ride.vehicle_id,lat:client.lat,lng:client.lng+(km-100)/(111.32*Math.cos(client.lat*Math.PI/180)),ts:new Date(Date.UTC(2026,9,5,7,min)).toISOString()});
     tables.vehicle_positions=[point(0,-1),point(1,0),...Array.from({length:181},(_,i)=>point(100,360+i))];
@@ -429,6 +434,18 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   }
   const managerState=()=>({request:{due_date:request.due_date,status:request.status,engineer_ids:[...(request.engineer_ids||[])]},order:{status:task.status,date_from:task.date_from,date_to:task.date_to,engineer_ids:[...task.engineer_ids],lead_engineer:task.lead_engineer,revision:task.revision,items:task.service_order_items.map(i=>({id:i.id,done_qty:i.done_qty,planned_qty:i.planned_qty}))},trip:{date_from:ride.date_from,date_to:ride.date_to,engineer_ids:[...ride.engineer_ids]}});
   if(managerJourney){for(const row of task.service_order_items)if(row.kind==='material'&&!row.stock_catalog_id)row.stock_catalog_id='stock-a';task.status=typeof managerJourney==='string'?managerJourney:managerJourney.stage||'assigned';audit.managerWrites=[];audit.managerState=managerState();}
+  const visitJourney=managerJourney?.tripResultJourney;
+  const visitWork=task.service_order_items.find(row=>row.kind==='work');
+  const visitPayload={items:task.service_order_items.map(row=>({id:row.id,qty:row===visitWork?3:0,
+    hours:row===visitWork?2:0,note:row===visitWork?'Осталась проверка':''})),hours:2,reason:'',correction:''};
+  const visit={id:trip,date_from:ride.date_from,date_to:ride.date_to,label:'Сервисный автомобиль',status:'done',
+    revision:4,linked:true,presence:{confirmed:true,base:2,used:0,available:2},state:null,event:null,latest:null,versions:[]};
+  if(visitJourney){
+    ride.status='done';ride.workbench_revision=visit.revision;
+    if(visitJourney==='manager')Object.assign(visit,{state:'submitted',latest:visitPayload,submitted_revision:4,
+      event:'00000000-0000-4000-8000-000000000091'});
+    audit.visitWrites=[];
+  }
   const plannerGroups=[
     {source_key:'road:'+trip+':0',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-first',date:'2026-10-05',start:7,end:9,offset:0}]},
     {source_key:'work:'+order+':'+trip,kind:'work',trip_id:trip,order_id:order,people:[engineer,other],parts:[{id:'work-first',date:'2026-10-05',start:9,end:15,offset:0}]},
@@ -466,7 +483,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
           if(table==='service_orders'&&_cols){
             // Canonical task columns, verified against production schema.
             // Embedded relationships have their own fields; do not treat them as task columns.
-            const columns=new Set('id,number,title,status,work_mode,date_from,date_to,lead_engineer,engineer_ids,instructions,result_note,revision,legacy_trip_id,legacy_snapshot,created_by,created_at,updated_at,job_id,seed_request_id,curator_id,owner_id'.split(','));
+            const columns=new Set('id,number,title,status,closed_with_remainder_at,work_mode,date_from,date_to,lead_engineer,engineer_ids,instructions,result_note,revision,legacy_trip_id,legacy_snapshot,created_by,created_at,updated_at,job_id,seed_request_id,curator_id,owner_id'.split(','));
             let depth=0,part='',parts=[];
             for(const char of _cols){if(char==='(')depth++;if(char===')')depth--;if(char===','&&!depth){parts.push(part);part='';}else part+=char;}parts.push(part);
             const missing=parts.filter(p=>!p.includes('(')).map(p=>p.trim().split(':').at(-1).split('->')[0]).find(p=>p!=='*'&&!columns.has(p));
@@ -576,6 +593,27 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(name==='service_order_trip_results'){
+        const linked=!!visitJourney&&args.p_order===order;
+        const accepted=visit.versions.at(-1)?.result;
+        return {data:{has_links:linked,has_receipts:linked&&!!visit.event,trips:linked?[structuredClone(visit)]:[],
+          accepted_hours:linked&&accepted?Object.fromEntries(accepted.items.map(row=>[row.id,row.hours])):{}},error:null};
+      }
+      if(name==='service_order_trip_review_queue')return {data:visitJourney==='manager'&&visit.state==='submitted'?
+        [{order_id:order,trip_id:trip,number:task.number,title:task.title,vehicle_label:visit.label,date_from:visit.date_from,at:stamp}]:[],error:null};
+      if(name==='service_order_trip_result_write'&&visitJourney){
+        if(args.p_order!==order||args.p_trip!==trip||args.p_expected_event!==visit.event||
+          args.p_order_revision!==task.revision||args.p_trip_revision!==visit.revision)return reject(name);
+        const latest={...structuredClone(args.p_result),hours:args.p_result.items.reduce((sum,row)=>sum+row.hours,0)};
+        if(args.p_action==='accepted'){
+          for(const row of task.service_order_items)row.done_qty=latest.items.find(entry=>entry.id===row.id).qty;
+          task.revision++;
+          visit.versions.push({event:args.p_operation,result:latest,at:stamp,actor:manager});
+        }
+        Object.assign(visit,{latest,event:args.p_operation,state:args.p_action,submitted_revision:visit.revision});
+        audit.visitWrites.push(structuredClone(args));
+        return {data:{revision:task.revision,event:visit.event},error:null};
+      }
       if(name==='planner_snapshot')return {data:{groups:structuredClone(plannerGroups.filter(g=>g.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to)||g.trip_id&&plannerGroups.some(h=>h.trip_id===g.trip_id&&h.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to))))},error:null};
       if(name==='planner_apply'&&canonicalPlanner){
         if(plannerReceipts.has(args.p_operation))return {data:structuredClone(plannerReceipts.get(args.p_operation)),error:null};
@@ -635,6 +673,30 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         comment.pinned_at=args.p_pinned?stamp:null;comment.pinned_by=args.p_pinned?session.user.id:null;
         audit.entityWrites.push({name,args:structuredClone(args)});
         return {data:{id:comment.id,pinned_at:comment.pinned_at,pinned_by:comment.pinned_by},error:null};
+      }
+      if(name==='service_order_request_remainders'){
+        const closed=remainderJourney?tables.service_orders.filter(row=>row.status==='completed'&&row.closed_with_remainder_at&&row.job_id===args.p_job):[];
+        return {data:closed.flatMap(row=>row.service_order_items.flatMap(item=>{
+          const qty=item.planned_qty-item.done_qty-(item.transferred_qty||0);
+          return qty>0?[{id:item.id,number:row.number,title:item.title,unit:item.unit,planned:String(item.planned_qty),qty:String(qty)}]:[];
+        })),error:null};
+      }
+      if(remainderJourney&&name==='service_order_close_with_remainder'){
+        if(role==='engineer'||args.p_order!==activeTask.id||args.p_expected!==activeTask.revision)return reject(name);
+        Object.assign(activeTask,{status:'completed',closed_with_remainder_at:stamp,revision:activeTask.revision+1});
+        audit.remainderWrites=[{name,args:structuredClone(args)}];
+        return {data:activeTask.revision,error:null};
+      }
+      if(remainderJourney&&name==='service_order_create_with_remainders'){
+        if(role==='engineer'||args.p_job!==job||!activeTask.closed_with_remainder_at)return reject(name);
+        const id=crypto.randomUUID(),rows=args.p_remainders.map(source=>{
+          const row=activeTask.service_order_items.find(item=>item.id===source.item_id);
+          row.transferred_qty=Number(source.qty);
+          return {...row,id:crypto.randomUUID(),order_id:id,source_item_id:row.id,planned_qty:Number(source.qty),done_qty:0,transferred_qty:0,from_request_remainder:true};
+        });
+        tables.service_orders.push({...task,...args.p_data,id,number:109,status:'draft',revision:0,seed_request_id:null,trip_service_orders:[],service_order_items:rows});
+        audit.remainderWrites.push({name,args:structuredClone(args)});
+        return {data:id,error:null};
       }
       if(managerJourney&&['service_order_organization_save','service_order_save_one','entity_responsibility_assign','service_order_deadline_propose','trip_reschedule_request'].includes(name)){
         const bad=message=>({data:null,error:{message,code:'QA_MANAGER_VALIDATION'}}),target=name==='entity_responsibility_assign'?(args.p_kind==='order'?tables.service_orders.find(o=>o.id===args.p_id):args.p_kind==='job'?request:ride):tables.service_orders.find(o=>o.id===(args.p_id||args.p_order));

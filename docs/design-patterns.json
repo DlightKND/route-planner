@@ -1307,6 +1307,7 @@
       ],
       "slider": "range-slider",
       "status": "feedback",
+      "switch": "boolean-switch",
       "tab": "entity-tabs",
       "tablist": "entity-tabs",
       "tabpanel": "entity-tabs"

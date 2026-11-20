@@ -11,8 +11,9 @@ concurrency:
   group: visual-qa-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  # The lockfile's Playwright browser bundle supports Ubuntu 24.04.
   production-design-system:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -38,7 +39,7 @@ jobs:
           path: test-results/
           retention-days: 7
   design-system-catalogue:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +59,7 @@ jobs:
           path: test-results/
           retention-days: 7
   design-system-complete:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +81,7 @@ jobs:
           path: test-results/
           retention-days: 7
   reference-alignment:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +101,7 @@ jobs:
           path: test-results/
           retention-days: 7
   manager-workflows:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -120,7 +121,7 @@ jobs:
           path: test-results/
           retention-days: 7
   review-workflows:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -140,7 +141,7 @@ jobs:
           path: test-results/
           retention-days: 7
   design-review:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -161,7 +162,7 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
   operations-smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -190,7 +191,7 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
   chromium:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Run every viewport and theme without one long job exhausting its time limit.
     strategy:
       fail-fast: false
@@ -218,7 +219,7 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
   canonical-planner:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -237,7 +238,7 @@ jobs:
           path: test-results/
           retention-days: 7
   approved-planner-reference:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

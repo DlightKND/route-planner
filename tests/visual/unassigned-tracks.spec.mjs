@@ -1,3 +1,4 @@
+import {openOrphanDocuments} from './journal-actions.mjs';
 import {revealDispatcherActions,clickDispatcherControl} from './dispatcher-controls.mjs';
 import {test,expect} from '@playwright/test';
 import {installMockBackend} from './mock-backend.mjs';
@@ -34,13 +35,13 @@ test('unassigned queue and GPS preview remain usable at each width',async({page}
  await clean(page);
 });
 test('chain draft collects client and engineer and can cancel without writes',async({page},info)=>{
- await open(page,info);if(page.viewportSize().width<=1100)await page.locator('[data-ut-details]').first().click();if(await page.locator('[data-orphan-documents]').isVisible())await page.locator('[data-orphan-documents]').click();await page.getByRole('button',{name:'Создать документы',exact:true}).click();
+ await open(page,info);await openOrphanDocuments(page);await page.getByRole('button',{name:'Создать документы',exact:true}).click();
  await expect(page.locator('#promptOverlay')).toBeVisible();await expect(page.locator('#promptOverlay')).toContainText('Клиент заявки');
  await expect(page.locator('#promptOverlay')).toContainText('Инженер');await page.keyboard.press('Escape');
  await expect(page.locator('#promptOverlay')).not.toBeVisible();await expect(page.getByRole('button',{name:'Создать документы',exact:true})).toBeFocused();await clean(page);
 });
 test('charge shows the cost basis and requires a separate amount confirmation',async({page},info)=>{
- await open(page,info);if(page.viewportSize().width<=1100)await page.locator('[data-ut-details]').first().click();if(await page.locator('[data-orphan-documents]').isVisible())await page.locator('[data-orphan-documents]').click();await page.getByRole('button',{name:'Записать списание инженеру',exact:true}).click();
+ await open(page,info);await openOrphanDocuments(page);await page.getByRole('button',{name:'Записать списание инженеру',exact:true}).click();
  await expect(page.locator('.gps-resolution-summary')).toContainText('12,5');await page.locator('[data-pf=engineer]').selectOption('00000000-0000-4000-8000-000000000002');
  await page.locator('[data-pf=reason]').fill('Подтверждённая личная поездка');await page.locator('#promptYes').click();
  await expect(page.locator('#confirmOverlay')).toBeVisible();await expect(page.locator('#confirmOverlay')).toContainText('1 500');
@@ -54,10 +55,10 @@ test('engineer sees own charge without manager resolution controls',async({page}
  await clean(page);
 });
 
-test('GPS journal is nested under trips, has standard card gaps and scrolls to the last record',async({page},info)=>{
+test('GPS journal is a dispatcher section, has standard card gaps and scrolls to the last record',async({page},info)=>{
  await open(page,info,'admin',14);
- await expect(page.locator('#plTrips')).toBeVisible();await expect(page.locator('#plTrips .subtab[data-sub=trips]')).toHaveAttribute('aria-pressed','true');
- await expect(page.locator('.subtab[data-sub=tracking]')).toHaveCount(0);
+ await expect(page.locator('#plTrips')).toBeVisible();await expect(page.locator('#plTrips .subtab[data-sub=tracking]')).toHaveAttribute('aria-pressed','true');
+ await expect(page.locator('#plTrips .subtab[data-sub=tracking]')).toBeVisible();
  await expect(page.locator('#tripBoard')).toBeHidden();await expect(page.locator('.unassigned-card')).toHaveCount(14);
  const gap=await page.locator('.unassigned-list').evaluate(el=>{const [a,b]=el.querySelectorAll('.unassigned-card');return b.getBoundingClientRect().top-a.getBoundingClientRect().bottom;});
  expect(gap).toBeGreaterThanOrEqual(12);
@@ -68,7 +69,7 @@ test('GPS journal is nested under trips, has standard card gaps and scrolls to t
  await scroll.evaluate(el=>el.scrollTop=0);
  await page.locator('[data-journal-exit]').click();await expect(page.locator('#tripBoard')).toBeVisible();await expect(page.locator('#plUnassigned')).toBeHidden();
  await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page).toHaveURL(/#\/journal$/);await expect(page.locator('#plUnassigned')).toBeVisible();
- await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('#plTrips .subtab[data-sub=trips]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.unassigned-card')).toHaveCount(14);
+ await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('#plTrips .subtab[data-sub=tracking]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.unassigned-card')).toHaveCount(14);
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-journal.png'});await clean(page);
 });
 

@@ -53,28 +53,74 @@ function framePane(view,headerNodes){
  head.append(inner);while(pane.firstChild)main.append(pane.firstChild);pane.append(head,main);view.classList.add('workspace-page');
 }
 
+function addOverviewState(panel, prefix, action){
+ const state=element(panel.ownerDocument,'section','workflow-overview-state');
+ state.setAttribute('aria-label','Текущее состояние');
+ state.innerHTML='<div><span>Текущая ситуация</span><h2></h2><p></p></div>';
+ state.id=prefix+'OverviewState';
+ if(action)state.append(action);
+ panel.prepend(state);
+ return state;
+}
+
+export function setOverviewState(root, title, detail){
+ if(!root)return;
+ root.querySelector('h2').textContent=title;
+ root.querySelector('p').textContent=detail;
+}
+
+function frameRecordActions(view){
+ const controls=view.querySelector('.entity-header-actions');
+ const crumb=view.querySelector('.crumbs');
+ if(controls)crumb.append(controls);
+ const back=crumb.querySelector('button.crumb');
+ back.classList.add('btn','workflow-back');
+ back.setAttribute('aria-label',back.textContent);
+ back.innerHTML=journalIcon('back');
+ crumb.querySelector('.crumb-sep').hidden=true;
+ view.classList.add('workflow-card');
+}
+
 export function installWorkspaceStructure(root=document){
  frameMapWorkspace(root);
  const job=root.querySelector('.view-job'),trip=root.querySelector('.view-trip');
  if(job){
   const estimate=root.getElementById('jobEstimatePane'),base=element(root,'section','card request-estimate-base'),heading=element(root,'header','workspace-section-head');
-  heading.innerHTML='<div><h2>Смета заявки</h2><p class="hint">Согласованный объём и плановая стоимость. Фактические результаты ведутся в заданиях.</p></div>';
+  heading.innerHTML='<h2>План/факт заявки</h2>';
   base.innerHTML='<h3>Базовая смета</h3>';const lines=element(root,'div','request-estimate-lines');for(const card of [...estimate.querySelectorAll(':scope>.card')])lines.append(card);base.append(lines,root.getElementById('jobHeadEcon'));
-  const related=element(root,'section','card request-estimate-assignments');related.innerHTML='<h3>Задания по заявке</h3><p class="hint">Состав, выполнение и дополнительные потребности — в рабочих заданиях.</p><button type="button" class="btn" data-estimate-tasks>К заданиям заявки →</button>';related.querySelector('button').onclick=()=>{root.getElementById('jobTabOverview').click();root.getElementById('jobOrders').scrollIntoView?.({block:'start'});};estimate.append(heading,base,related);
+  const cost=element(root,'section','workflow-request-cost');cost.id='jobTaskCosts';
+  estimate.append(heading,cost,base);
   const context=element(root,'section','card request-context');context.id='requestContext';context.hidden=true;
-  const grid=element(root,'div','request-workspace-grid');grid.append(context,root.getElementById('jobOrders'));root.getElementById('jobOverviewPane').append(grid);
+  const overview=root.getElementById('jobOverviewPane');
+  overview.append(context);
+  if(root.getElementById('jobPendingDecisions'))overview.append(root.getElementById('jobPendingDecisions'));
+  overview.append(root.getElementById('jobActivitySection'));
+  addOverviewState(overview,'job',root.getElementById('jobRecordResult')).hidden=true;
+  frameRecordActions(job);
   framePane(job,[job.querySelector('.crumbs'),job.querySelector('.trip-head'),job.querySelector('.request-toolbar')]);
   const form=job.querySelector('.job-ref');if(form)form.id='requestContextFields';
  }
  if(trip){
   const plan=trip.querySelector('#tpPlanPane .trip-grid'),sidebar=element(root,'aside','trip-planning-sidebar');
-  if(plan){sidebar.append(plan.querySelector('.wb-plan-card'),plan.querySelector('.wb-task-card'));plan.append(sidebar);}
-  const stops=trip.querySelector('.wb-route-details');if(stops)stops.open=true;
-  const routeTitle=trip.querySelector('.wb-route-card h3');if(routeTitle?.firstChild)routeTitle.firstChild.textContent='Маршрут и остановки ';
+  const overview=root.getElementById('tpOverviewPane'),route=plan?.querySelector('.wb-route-card');
+  if(plan){
+   const editor=element(root,'details','workflow-trip-edit');
+   editor.innerHTML='<summary>Параметры плана</summary>';
+   editor.append(plan.querySelector('.wb-plan-card'));
+   sidebar.append(plan.querySelector('.wb-task-card'),editor);plan.append(sidebar);
+  }
   const crewTitle=trip.querySelector('.wb-plan-card h3');if(crewTitle)crewTitle.textContent='Состав поездки';
   const responsibility=root.getElementById('tripResponsibilityMeta');if(responsibility){responsibility.className='workspace-responsibility-caption';trip.querySelector('.wb-plan-card').append(responsibility);}
-  const toolbar=trip.querySelector('.trip-toolbar');toolbar.before(root.getElementById('tpReviewSummary'));
-  framePane(trip,[trip.querySelector('.crumbs'),trip.querySelector('.trip-head')]);
+  const state=addOverviewState(overview,'trip',root.getElementById('tripRecordResult'));
+  const description=element(root,'section','workflow-trip-description');description.innerHTML='<h2>Описание выезда</h2><p id="tripOverviewDescription"></p>';
+  const grid=element(root,'div','workflow-trip-overview');
+  const details=element(root,'div','workflow-trip-details');details.append(description,root.getElementById('tripActivitySection'));
+  overview.prepend(grid);grid.append(route,state,details);
+  const toolbar=trip.querySelector('.trip-toolbar');
+  root.getElementById('tpEconomyPane').prepend(root.getElementById('tpReviewSummary'));
+  root.getElementById('tpPlanPane').prepend(root.getElementById('tripOrderParent'));
+  frameRecordActions(trip);
+  framePane(trip,[trip.querySelector('.crumbs'),trip.querySelector('.trip-head'),toolbar]);
  }
  for(const [id,title,description,prefix] of [
   ['plJobs','Заявки','Потребности клиентов и задания на исполнение','job'],
@@ -197,22 +243,22 @@ export function frameNotifications(host){
  inner.append(head);masthead.append(inner);while(host.firstChild)main.append(host.firstChild);host.append(masthead,main);host.closest('.view')?.classList.add('workspace-inbox');
 }
 
-export function presentRequestWorkspace({saved,editable,client,equipment,status,engineers,due,notes,phone,address,confirmDiscard,editContext,editDeadline},root=document){
+export function presentRequestWorkspace({saved,editable,client,equipment,status,notes,phone,contact,confirmDiscard,editContext},root=document){
  const context=root.getElementById('requestContext'),form=root.getElementById('requestContextFields');if(!context||!form)return;
  const view=context.closest('.view');view.classList.toggle('request-saved',saved);context.hidden=!saved;form.hidden=saved&&!form.closest('dialog[open]');
- const title=root.getElementById('jobTitle');let stage=view.querySelector('.request-workspace-stage');if(!stage&&title){stage=element(root,'span','design-status request-workspace-stage');title.parentElement.append(stage);}if(stage){stage.textContent=status||'';stage.hidden=!saved;}
+ const title=root.getElementById('jobTitle');let stage=view.querySelector('.request-workspace-stage');if(!stage&&title){stage=element(root,'span','design-status workflow-stage request-workspace-stage');title.after(stage);}if(stage){stage.textContent=status?status[0].toUpperCase()+status.slice(1):'';stage.hidden=!saved;}
  const actions=root.getElementById('jobActs');
  if(!context.querySelector('.request-context-data')){
-  context.innerHTML='<details class="request-reference"><summary>Контекст клиента</summary><div class="workspace-section-head"><button class="btn sm ghost" id="requestEditContext" type="button">Изменить заявку</button></div><dl class="request-context-data"></dl></details><div class="request-contact-actions"></div>';context.querySelector('details').open=(root.defaultView||context.ownerDocument.defaultView).innerWidth>760;
+  context.innerHTML='<h2>Суть обращения</h2><p class="request-description"></p><dl class="request-context-data"></dl><div class="request-contact-actions"></div>';
   context.querySelector('.request-contact-actions').append(actions);
-  const responsibility=root.getElementById('jobResponsibilityMeta');if(responsibility){responsibility.className='workspace-responsibility-caption';context.querySelector('.request-contact-actions').before(responsibility);}
+  const edit=element(root,'button','btn workflow-edit');edit.id='requestEditContext';edit.type='button';edit.innerHTML=journalIcon('edit')+'<span>Изменить</span>';edit.setAttribute('aria-label','Изменить данные');
+  view.querySelector('.entity-header-actions')?.prepend(edit);
+  if(!edit.isConnected)context.prepend(edit);
  }
- let planning=view.querySelector('.request-planning-summary');if(!planning){planning=element(root,'section','card request-planning-summary');context.before(planning);}planning.hidden=!saved;
- planning.innerHTML='<h3>Планирование заявки</h3><dl class="planning-summary-data"><div><dt>Срок заявки (SLA)</dt><dd>'+escape(due||'Не задан')+'</dd>'+(editable?'<button type="button" class="btn sm ghost" data-request-edit-deadline>Изменить срок</button>':'')+'</div><div><dt>Инженеры заявки</dt><dd>'+escape(engineers||'Не назначены')+'</dd>'+(editable?'<button type="button" class="btn sm ghost" data-request-assign>Назначить инженеров</button>':'')+'</div><div><dt>Стадия заявки</dt><dd>'+escape(status||'Не задана')+'</dd>'+(editable?'<button type="button" class="btn sm ghost" data-request-edit-context>Изменить заявку</button>':'')+'</div></dl>';
- planning.querySelector('[data-request-edit-deadline]')?.addEventListener('click',e=>editDeadline?.(e.currentTarget));planning.querySelector('[data-request-assign]')?.addEventListener('click',e=>editContext?.(e.currentTarget,'jbEng'));planning.querySelector('[data-request-edit-context]')?.addEventListener('click',e=>editContext?.(e.currentTarget));
- const rows=[['Заказчик',client],['Оборудование',equipment||'Без привязки'],['Потребность',notes||'Не указана'],['Адрес',address],['Контакт',phone],['Срок',due],['Стадия',status],['Инженеры',engineers]];
- context.querySelector('dl').innerHTML=rows.filter(([,value])=>value).map(([label,value])=>`<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join('');
- const edit=context.querySelector('#requestEditContext');edit.hidden=!editable;edit.onclick=()=>editContext?editContext(edit):openEntityPanel({title:'Изменить заявку',panel:form,trigger:edit,confirmDiscard});
+ context.querySelector('.request-description').textContent=notes||'Описание не указано.';
+ const rows=[['Клиент',client],['Техника',equipment||'Без привязки'],['Контакт',contact||'Не указан'],['Телефон',phone||'Не указан']];
+ context.querySelector('dl').innerHTML=rows.map(([label,value])=>`<div><dt>${label}</dt><dd>${escape(value)}</dd></div>`).join('');
+ const edit=root.getElementById('requestEditContext');edit.hidden=!saved||!editable;edit.onclick=()=>editContext?editContext(edit):openEntityPanel({title:'Изменить заявку',panel:form,trigger:edit,confirmDiscard});
 }
 
 export function positionOrderResult(root=document){
@@ -223,22 +269,61 @@ export function positionOrderResult(root=document){
 export function frameOrderWorkspace({record,editable,people},root=document){
  const editor=root.getElementById('orderEditor');if(!editor||editor.querySelector(':scope>.workspace-masthead'))return;
  const doc=editor.ownerDocument,head=element(doc,'header','workspace-masthead'),inner=element(doc,'div','workspace-header-inner'),main=element(doc,'main','workspace-main');
- const title=editor.querySelector('.trip-head h2');if(record.id&&title)title.textContent=record.title||'Задание';
- inner.append(editor.querySelector('.crumbs'),editor.querySelector('.trip-head'));head.append(inner);
- while(editor.firstChild)main.append(editor.firstChild);editor.append(head,main);editor.closest('.view')?.classList.add('workspace-page');
- const toolbar=editor.querySelector('.order-toolbar');
+ const title=editor.querySelector('.trip-head h2'),toolbar=editor.querySelector('.order-toolbar');
+ const controls=editor.querySelector('.entity-header-actions'),crumbs=editor.querySelector('.crumbs');
+ const back=root.getElementById('orderBack');
+ back.classList.add('btn','workflow-back');
+ back.setAttribute('aria-label',back.textContent);
+ back.innerHTML=journalIcon('back');
+ const breadcrumb=crumbs.querySelector(':scope>span');
+ breadcrumb.textContent='Диспетчер / Задания';
+ back.after(breadcrumb);
  if(record.id){
-  const briefing=element(doc,'section','order-briefing-layout'),aside=element(doc,'aside','card order-team-card');
+  title.textContent='Задание №'+record.number;
+  const subject=title.nextElementSibling;subject.className='workflow-subject';subject.textContent=record.title||'';
+  const status=editor.querySelector('.entity-head-meta .design-status');status.classList.add('workflow-stage');if(record.closed_with_remainder_at)status.textContent='Закрыто с остатком';title.after(status);
+  const button=element(doc,'button','btn workflow-edit');button.id='orderEditData';button.type='button';button.innerHTML=journalIcon('edit')+'<span>Изменить</span>';button.setAttribute('aria-label','Изменить данные');button.hidden=true;
+  controls.prepend(button);
+  const origin=root.getElementById('orderRequest');
+  if(origin)root.getElementById('orderBrief').append(origin);
+ }
+ crumbs.append(controls);
+ inner.append(crumbs,editor.querySelector('.trip-head'),toolbar);head.append(inner);
+ while(editor.firstChild)main.append(editor.firstChild);editor.append(head,main);editor.closest('.view')?.classList.add('workspace-page','workflow-card');
+ if(record.id){
+  const overview=root.getElementById('orderPane-overview');
+  const primary=controls.querySelector('#orderRecordResult,[data-order-next]');
+  if(primary){
+   primary.classList.add('workflow-overview-action');
+   if(primary.id==='orderRecordResult'){
+    const recordButton=element(doc,'button','btn amber workflow-work-result');
+    recordButton.type='button';recordButton.textContent=primary.textContent;
+    recordButton.onclick=()=>primary.click();
+    root.getElementById('orderPane-scope').prepend(recordButton);
+   }
+  }
+  const state=addOverviewState(overview,'order',primary);
+  const stage=editor.querySelector('.workflow-stage').textContent;
+  setOverviewState(state,stage,({
+   draft:'Проверьте состав работ и назначьте исполнителей.',
+   assigned:'Можно начать выполнение работ.',
+   in_progress:'Зафиксируйте объём, трудозатраты и использованные материалы.',
+   paused:'Работы можно возобновить после согласования.',
+   review:'Проверьте выполненные работы и остаток.',
+   completed:record.closed_with_remainder_at?'Выберите оставшиеся работы при создании следующего задания из заявки.':'Выполненные работы доступны в план/факте.',
+   cancelled:'Данные задания и история доступны для просмотра.'
+  })[record.status]||'Откройте работы, чтобы проверить состав задания.');
   const name=id=>people.find(p=>p.id===id)?.full_name||'Не назначен';
-  aside.innerHTML=`<div class="workspace-section-head"><h3>Команда и ответственность</h3></div><p class="workspace-lead-person">${escape(name(record.lead_engineer))}</p><p class="hint">Ответственный инженер</p><div class="workspace-team-list">${(record.engineer_ids||[]).filter(id=>id!==record.lead_engineer).map(id=>`<p>${escape(name(id))}</p>`).join('')}</div><dl class="workspace-responsibility"><div><dt>Куратор</dt><dd>${escape(name(record.curator_id))}</dd></div><div><dt>Владелец</dt><dd>${escape(name(record.owner_id))}</dd></div></dl>${editable?'<button type="button" class="btn sm ghost" data-edit-organization>Организация задания</button>':''}`;
   const brief=root.getElementById('orderBrief');brief.querySelector('.order-team-meta')?.remove();
-  const context=element(doc,'dl','order-brief-context');context.innerHTML=`<div><dt>Заказчик</dt><dd>${escape(record.jobs?.clients?.name||'Не указан')}</dd></div><div><dt>Оборудование</dt><dd>${escape(record.jobs?.equipment?.model||'Без привязки')}</dd></div>`;brief.querySelector('.order-brief-head').after(context);
-  const linked=(record.trip_service_orders||[]).find(x=>x.trips&&!x.trips.deleted_at);if(linked){const travel=element(doc,'button','btn sm');travel.type='button';travel.textContent='Открыть связанный выезд →';travel.onclick=()=>root.querySelector('#orderTrips [data-order-trip="'+linked.trips.id+'"]')?.click();brief.append(travel);}
-  briefing.append(brief,aside);toolbar.before(briefing);
+  brief.querySelector('.order-brief-head .hint')?.remove();
+  const context=element(doc,'dl','order-brief-context');context.innerHTML=`<div><dt>Клиент</dt><dd>${escape(record.jobs?.clients?.name||'Не указан')}</dd></div><div><dt>Техника</dt><dd>${escape(record.jobs?.equipment?.model||'Без привязки')}</dd></div><div><dt>Ответственный</dt><dd>${escape(name(record.lead_engineer))}</dd></div><div><dt>Куратор</dt><dd>${escape(name(record.curator_id))}</dd></div>`;brief.append(context);
   const organization=root.getElementById('orderOrganization');organization.hidden=true;root.getElementById('orderAuxiliary').append(organization);
-  if(editable){const details=element(doc,'details','workspace-organization-editor');details.innerHTML='<summary>Организация задания</summary>';organization.hidden=false;details.append(organization);aside.querySelector('[data-edit-organization]')?.replaceWith(details);}
   const composition=root.getElementById('orderComposition'),details=element(doc,'details','workspace-composition-editor');details.innerHTML=`<summary>${editable?'Плановые данные и изменение состава':'Плановые данные задания'}</summary>`;composition.before(details);details.append(composition);
-  // The brief stays in view when switching between scope, travel and evidence.
+  if(editable){
+   const fields=element(doc,'details','workspace-organization-editor');
+   fields.innerHTML='<summary>Организация задания</summary>';
+   organization.hidden=false;fields.append(organization);details.before(fields);
+  }
   const emptyGrid=editor.querySelector('.order-grid');if(emptyGrid&&!emptyGrid.children.length)emptyGrid.remove();
   positionOrderResult(root);
  }

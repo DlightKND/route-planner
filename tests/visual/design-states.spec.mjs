@@ -1,3 +1,4 @@
+import {openOrphanDocuments} from './journal-actions.mjs';
 import {test,expect} from '@playwright/test';
 import {clickDispatcherControl} from './dispatcher-controls.mjs';
 import {mkdirSync} from 'node:fs';
@@ -18,14 +19,14 @@ async function capture(page,info,name,errors){
  await page.screenshot({path:'test-results/design-states/'+info.project.name+'/'+name+'.png',animations:'disabled'});
 }
 test('design state: assignment timeline and explicit independent composer',async({page},info)=>{
- const errors=await start(page,info,'order/'+fixtureIDs.activeOrder);await page.locator('#orderTab-history').click();
+ const errors=await start(page,info,'order/'+fixtureIDs.activeOrder);await page.locator('#orderTab-overview').click();
  const activity=page.locator('#orderActivity');await expect(activity.locator('.activity-entry')).toHaveCount(7);
- await expect(activity.getByRole('heading',{name:'Лента и доказательства'})).toBeVisible();await expect(activity.locator('textarea')).toBeHidden();
+ await expect(activity.getByRole('heading',{name:'Комментарии и события'})).toBeVisible();await expect(activity.locator('textarea')).toBeHidden();
  await capture(page,info,'assignment-timeline',errors);
  await activity.locator('[data-activity-filter=result]').click();await expect(activity.locator('.is-result')).toHaveCount(1);await expect(activity.locator('.is-comment')).toHaveCount(0);
  await activity.locator('[data-activity-open-result]').click();await expect(page.locator('#orderPane-scope')).toBeVisible();
- await page.locator('#orderTab-history').click();await activity.locator('[data-activity-compose]').click();await activity.locator('textarea').fill('Черновик комментария');
- await page.locator('#orderTab-travel').click();await page.locator('#orderTab-history').click();await expect(activity.locator('textarea')).toHaveValue('Черновик комментария');
+ await page.locator('#orderTab-overview').click();await activity.locator('[data-activity-compose]').click();await activity.locator('textarea').fill('Черновик комментария');
+ await page.locator('#orderTab-travel').click();await page.locator('#orderTab-overview').click();await expect(activity.locator('textarea')).toHaveValue('Черновик комментария');
  expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
 });
 test('design state: assignment travel and crew-aware trip selection',async({page},info)=>{
@@ -44,7 +45,7 @@ test('design state: result draft remains distinct from saved data and review',as
  await capture(page,info,'result-editor-draft',errors);await dialog.locator('#orderResultLater').click();await page.locator('#confirmNo').click();await expect(dialog.locator('[data-result-qty]').first()).toHaveValue('3');
 });
 test('design state: curator review explains both remaining work and active travel',async({page},info)=>{
- const errors=await start(page,info,'order/'+fixtureIDs.activeOrder,{reviewOrder:true});await page.locator('[data-open-result-review]').click();
+ const errors=await start(page,info,'order/'+fixtureIDs.activeOrder,{reviewOrder:true});await page.locator('#orderTab-scope').click();await page.locator('[data-open-result-review]').click();
  const dialog=page.locator('dialog.entity-review-dialog');await expect(dialog).toBeVisible();await expect(dialog.locator('[data-review-accept]')).toBeDisabled();
  await expect(dialog.locator('.review-blockers')).toContainText('Выезд не завершён');await expect(dialog.locator('.review-blockers')).toContainText('количественный остаток');
  await capture(page,info,'result-review-blocked',errors);
@@ -105,14 +106,14 @@ test('design state: schedule ellipsis leaves room for the stop action',async({pa
  await capture(page,info,'summary-schedule-stop',errors);await group.locator('[data-gtools]').click();await expect(page.locator('.gpop-workspace')).toBeVisible();
 });
 test('design state: presence evidence and decision stay separate',async({page},info)=>{
- const errors=await start(page,info,'trip/'+fixtureIDs.trip);await page.locator('#tpReviewPresence').click();
+ const errors=await start(page,info,'trip/'+fixtureIDs.trip);await page.locator('#tpTabEconomy').click();await page.locator('#tpReviewPresence').click();
  const workspace=page.locator('.presence-review-workspace');await expect(workspace).toBeVisible();
  await expect(workspace.locator('.presence-review-sidebar')).toBeVisible();await expect(workspace.locator('.presence-review-detail')).toBeHidden();await capture(page,info,'presence-list',errors);await workspace.locator('[data-review-stop]').first().click();await expect(workspace.locator('.presence-review-detail')).toBeVisible();
  await capture(page,info,'presence-review',errors);
 });
 test('design state: GPS resolution separates the operation, parameters and saved facts',async({page},info)=>{
  const errors=await start(page,info,'planner/tracking',{role:'admin',unassignedJourney:true});
- if(page.viewportSize().width<=1100)await page.locator('[data-ut-details]').first().click();if(await page.locator('[data-orphan-documents]').isVisible())await page.locator('[data-orphan-documents]').click();await page.getByRole('button',{name:'Создать документы',exact:true}).click();const overlay=page.locator('#promptOverlay');
+ await openOrphanDocuments(page);await page.getByRole('button',{name:'Создать документы',exact:true}).click();const overlay=page.locator('#promptOverlay');
  await expect(overlay.locator('.gps-resolution-workspace')).toBeVisible();await expect(overlay.locator('[data-gps-choice]')).toHaveCount(3);
  await overlay.locator('[data-pf=title]').fill('Черновик названия');await expect(overlay.locator('#promptYes')).toBeInViewport();await expect(overlay.locator('#promptNo')).toBeInViewport();await capture(page,info,'gps-resolution',errors);
  await overlay.locator('[data-gps-choice=charge]').click();await expect(overlay.locator('[data-pf=km]')).toBeVisible();await expect(overlay.locator('.gps-resolution-summary')).toContainText('12,5');
@@ -122,7 +123,7 @@ test('design state: GPS resolution separates the operation, parameters and saved
 test('design state: request estimate keeps the agreed scope separate from execution',async({page},info)=>{
  const errors=await start(page,info,'job/'+fixtureIDs.job,{financeJourney:true});await page.locator('#jobTabEstimate').click();
  await expect(page.locator('.request-estimate-base')).toBeVisible();await expect(page.locator('#jbWorks')).toBeVisible();await expect(page.locator('#jbParts').locator('..')).toBeVisible();
- await capture(page,info,'request-estimate',errors);await page.locator('[data-estimate-tasks]').click();await expect(page.locator('#jobOverviewPane')).toBeVisible();
+ await capture(page,info,'request-estimate',errors);await page.locator('#jobTabTasks').click();await expect(page.locator('#jobOrders')).toBeVisible();
 });
 test('design state: new assignment keeps editable organization and scope together',async({page},info)=>{
  const errors=await start(page,info,'planner/orders');await page.locator('#orderAdd').click();
@@ -133,7 +134,7 @@ test('design state: current decisions remain separate from incoming notification
  const errors=await start(page,info,'notifications',{decisionQueue:true});const queue=page.locator('.notice-decisions');
  await expect(queue.locator('.notice-decision-card')).toHaveCount(2);await expect(queue).toContainText('Проверка результата');await expect(queue).toContainText('Проверка присутствия');
  await expect(page.locator('.notice-incoming .notice-toolbar')).toBeVisible();await capture(page,info,'notifications-decisions',errors);
- await queue.getByRole('link',{name:'Проверить результат',exact:true}).click();await expect(page.locator('[data-open-result-review]')).toBeVisible();expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
+ await queue.getByRole('link',{name:'Проверить результат',exact:true}).click();await expect(page.locator('[data-open-result-review]')).toBeVisible();await page.goBack();await queue.getByRole('link',{name:'Проверить присутствие',exact:true}).click();await expect(page.locator('#tpReviewPresence')).toBeVisible();expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
 });
 async function expandMapSheet(page){if(page.viewportSize().width<=760)await page.locator('#sideHandle').click();}
 test('design state: map work and directory have one scope navigation and working filters',async({page},info)=>{
@@ -222,24 +223,25 @@ test('layout: summary schedule and statistics scroll independently below a fixed
 test('polish: wide workspaces use the available width and the rail indicator sits at the edge',async({page},info)=>{
  test.skip(page.viewportSize().width<1440,'Wide desktop composition');await page.setViewportSize({width:1920,height:1000});
  const errors=await start(page,info,'planner/orders');
- const heading=await page.locator('#plOrders .workspace-heading-row').boundingBox();expect(heading.x).toBe(108);expect(heading.x+heading.width).toBe(1888);
+ const header=page.locator('#plOrders .workspace-dispatcher-head');await expect(header).toBeVisible();const heading=await header.evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {left:r.left+parseFloat(s.paddingLeft),right:r.right-parseFloat(s.paddingRight)};});expect(heading).toEqual({left:108,right:1888});
  const marker=await page.locator('.rail .nav-i.active').evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el,'::before');return {edge:r.left+parseFloat(s.left),width:parseFloat(s.width)};});expect(marker.edge).toBe(0);expect(marker.width).toBe(4);
  await capture(page,info,'wide-dispatcher',errors);
  for(const route of ['catalog','job/'+fixtureIDs.job,'order/'+fixtureIDs.activeOrder,'trip/'+fixtureIDs.trip]){
   await page.goto('/#/'+route);const main=page.locator('.view-'+route.split('/')[0]+'.active .workspace-main');await expect(main).toBeVisible();
   await expect.poll(async()=>{const r=await main.boundingBox();return r&&{x:r.x,width:r.width};}).toEqual({x:76,width:1844});
  }
- const card=page.locator('#jobOrders .order-child').first();await page.goto('/#/job/'+fixtureIDs.job);await expect(card).toBeVisible();
+ const card=page.locator('#jobOrders .order-child').first();await page.goto('/#/job/'+fixtureIDs.job+'/tasks');await expect(card).toBeVisible();
  expect(await card.evaluate(el=>[...['Top','Right','Bottom','Left']].map(side=>getComputedStyle(el)['border'+side+'Width']))).toEqual(['1px','1px','1px','1px']);
  await capture(page,info,'wide-request',errors);
 });
 
-test('polish: settings advanced panels have padding and scrolled navigation stays flat',async({page},info)=>{
- const errors=await start(page,info,'settings',{role:'admin'});const details=page.locator('.settings-advanced').first();
- await details.locator('summary').click();await expect(page.locator('#stTrkKmh')).toBeVisible();
- expect(await details.evaluate(el=>{const s=getComputedStyle(el);return [s.paddingTop,s.paddingRight,s.paddingBottom,s.paddingLeft];})).toEqual(['20px','20px','20px','20px']);
- const bounds=await details.boundingBox(),title=await details.locator('summary').boundingBox();expect(title.x-bounds.x).toBeGreaterThanOrEqual(20);
- await page.locator('.view-settings>.pane').evaluate(el=>el.scrollTop=500);
+test('polish: settings panels have padding and scrolled navigation stays flat',async({page},info)=>{
+ const errors=await start(page,info,'settings',{role:'admin'});await page.locator('#settingsNav [data-sec=gps]').click();const panel=page.locator('[data-settings-section=gps]');
+ await expect(page.locator('#stTrkKmh')).toBeVisible();
+ const padding=page.viewportSize().width<=900?16:24;
+ expect(await panel.evaluate(el=>{const s=getComputedStyle(el);return [s.paddingTop,s.paddingRight,s.paddingBottom,s.paddingLeft].map(parseFloat);})).toEqual(Array(4).fill(padding));
+ const bounds=await panel.boundingBox(),title=await panel.locator('h3').boundingBox();expect(title.x-bounds.x).toBeGreaterThanOrEqual(padding);
+ await page.locator('.view-settings .workspace-main').evaluate(el=>el.scrollTop=500);
  const shadows=await page.evaluate(()=>[...document.querySelectorAll('.view-settings *,.rail *')].flatMap(el=>['', '::before','::after'].map(p=>getComputedStyle(el,p).boxShadow)).filter(v=>v!=='none'));
  expect(shadows).toEqual([]);await capture(page,info,'settings-flat-padding',errors);
 });
@@ -296,6 +298,8 @@ test('map track: docked layer cards retain real visibility and the selected time
  if(inline){await expect(page.locator('#trackBlock .mleg')).toBeVisible();await expect(page.locator('[data-sb=track]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('#pointsBlock')).toBeHidden();const tops=await page.locator('#sideTabs button:visible').evaluateAll(nodes=>nodes.map(el=>el.getBoundingClientRect().top));expect(Math.max(...tops)-Math.min(...tops)).toBeLessThanOrEqual(1);}
  else{await expect(page.locator('#mapTrackDock .mleg')).toBeVisible();const card=await panel.boundingBox(),tools=await page.locator('.map-tools').boundingBox();expect(card.x+card.width).toBeCloseTo(tools.x+tools.width,0);expect(card.y).toBeGreaterThanOrEqual(tools.y+tools.height+8);}
  const gps=page.locator('.leaflet-overlay-pane path[stroke="#16a34a"],.leaflet-overlay-pane path[stroke="#a7f3d0"]');
+ const plan=page.locator('.leaflet-marker-pane .trip-plan-point');
+ await expect(plan).toHaveCount(2);await panel.locator('[data-fl=plan]').uncheck();await expect(plan).toHaveCount(0);await panel.locator('[data-fl=plan]').check();await expect(plan).toHaveCount(2);
  await expect(gps).toHaveCount(2);await expect(page.locator('.leaflet-overlay-pane path[stroke="#d87619"][stroke-dasharray="7 6"]')).toHaveCount(1);await expect(page.locator('.leaflet-overlay-pane path[stroke="#8b8e96"][stroke-dasharray="7 6"]')).toHaveCount(1);await panel.locator('[data-fl=track]').uncheck();await expect(gps).toHaveCount(0);await panel.locator('[data-fl=track]').check();await expect(gps).toHaveCount(2);
  const endDate=await panel.locator('#tfBDate').inputValue();await panel.locator('#tfBDate').fill(await panel.locator('#tfADate').inputValue());await panel.locator('#tfB').fill('09:00');await panel.locator('#tfB').blur();await expect(gps).toHaveCount(1);
  await panel.locator('#tfAll').click();await expect(panel.locator('#tfBDate')).toHaveValue(endDate);await expect(gps).toHaveCount(2);
@@ -316,5 +320,6 @@ test('map track: resizing and closing preserve controls, and clearing leaves a v
  await expect(panel.locator('[data-fl=line]')).not.toBeChecked();await expect(panel.locator('#tfA')).toHaveValue('07:00');
  await panel.locator('.mleg-clear').click();await expect(page.locator('#confirmOverlay')).toBeVisible();await page.locator('#confirmNo').click();await expect(panel).toBeVisible();await expect(panel.locator('[data-fl=line]')).not.toBeChecked();
  await panel.locator('.mleg-clear').click();await page.locator('#confirmYes').click();await expect(page.locator('.mleg')).toHaveCount(0);await expect(page.locator('[data-sb=track]')).toBeHidden();await expect(page.locator('#sideTabs button.on')).not.toHaveAttribute('data-sb','track');
+ await expect(page.locator('.leaflet-marker-pane .trip-plan-point')).toHaveCount(0);
  await capture(page,info,'map-track-cleared',errors);
 });

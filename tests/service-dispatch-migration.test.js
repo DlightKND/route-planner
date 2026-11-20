@@ -98,6 +98,7 @@ beforeAll(async()=>{
     grant select on public.push_log,public.profiles to authenticated;
     create policy push_log_read on public.push_log for select using(coalesce(user_role(),'') in ('admin','logist') or user_id=auth.uid());`);
   await db.exec(readFileSync(new URL('../supabase/migrations/20261005133906_personal_notification_inbox.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261120070904_request_work_remainders.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -1235,4 +1236,66 @@ it('keeps notification lists and read state personal, including administrator, w
     await expect(q('select * from notification_inbox')).rejects.toThrow(/permission denied/);await db.exec('rollback to savepoint anonymous');
     expect((await q("select has_function_privilege('anon','notification_set_read(text,boolean)','execute') allowed"))[0].allowed).toBe(false);
   }finally{await db.exec('rollback');}
+});
+
+
+it('keeps partially completed work available on the request until a new order takes it',async()=>{
+ await db.exec('begin');
+ try{
+  const uid=id(1),request=id(12),operation=id(9060);
+  await q("insert into profiles(id,role,active) values($1,'admin',true) on conflict(id) do update set role='admin',active=true",[uid]);
+  await q("select set_config('test.uid',$1,true)",[uid]);
+  const [{id:source}]=await q('select service_order_save_one(null,null,$1,$2,$3) id',[
+    {title:'Первое задание',work_mode:'depot'},request,[{job_id:request,title:'Замена',unit:'ч',planned_qty:0.3}]
+  ]);
+  await q("update service_orders set status='in_progress' where id=$1",[source]);
+  const [item]=await q('update service_order_items set done_qty=0.1 where order_id=$1 returning *',[source]);
+  await db.exec('set local role authenticated');
+  expect(await q("select service_order_close_with_remainder($1,0,'Принят первый этап') revision",[source])).toEqual([{revision:1}]);
+  expect(await q('select status,closed_with_remainder_at is not null closed from service_orders where id=$1',[source])).toEqual([{status:'completed',closed:true}]);
+  expect(await q('select transferred_qty from service_order_items where id=$1',[item.id])).toEqual([{transferred_qty:'0'}]);
+
+  expect(await q('select id,qty from service_order_request_remainders($1)',[request])).toEqual([{id:item.id,qty:'0.2'}]);
+  const create=(op=operation,job=request,qty='0.2')=>q('select service_order_create_with_remainders($1,$2,$3,$4,$5) id',[
+    job,{title:'Второе задание',work_mode:'depot'},[],[{item_id:item.id,qty}],op
+  ]);
+  const [{id:next}]=await create();
+  expect(await create()).toEqual([{id:next}]);
+  const [carried]=await q('select * from service_order_items where order_id=$1',[next]);
+  expect(carried).toMatchObject({source_item_id:item.id,planned_qty:'0.2',done_qty:'0',from_request_remainder:true});
+  expect(Number(carried.financial_cost_snapshot)).toBe(Number(item.financial_cost_snapshot)*2/3);
+  expect(await q('select done_qty,transferred_qty from service_order_items where id=$1',[item.id])).toEqual([{done_qty:'0.1',transferred_qty:'0.2'}]);
+
+  for(const [op,job,qty] of [[id(9061),request,'0.2'],[id(9062),id(13),'0.2'],[operation,request,2]]){
+   await db.exec('savepoint stale');
+   await expect(create(op,job,qty)).rejects.toThrow(/остаток изменился|уже использован/);
+   await db.exec('rollback to savepoint stale; release savepoint stale');
+  }
+  await q("select service_order_transition($1,0,'cancelled','Отменено назначение')",[next]);
+  expect(await q('select transferred_qty from service_order_items where id=$1',[item.id])).toEqual([{transferred_qty:'0.0'}]);
+  const [{id:replacement}]=await create(id(9063));
+  expect(replacement).not.toBe(next);
+ }finally{await db.exec('rollback');}
+});
+
+it('requires a real partial result and blocks closure while an active trip is linked',async()=>{
+ await db.exec('begin');
+ try{
+  const uid=id(1),request=id(11);
+  await q("insert into profiles(id,role,active) values($1,'admin',true) on conflict(id) do update set role='admin',active=true",[uid]);
+  await q("select set_config('test.uid',$1,true)",[uid]);
+  const [{id:source}]=await q('select service_order_save_one(null,null,$1,$2,$3) id',[
+    {title:'Незавершённый выезд',work_mode:'onsite'},request,[{job_id:request,title:'Осмотр',unit:'шт',planned_qty:2}]
+  ]);
+  await q("update service_orders set status='in_progress' where id=$1",[source]);
+  await db.exec('set local role authenticated; savepoint no_result');
+  await expect(q("select service_order_close_with_remainder($1,0,'Причина')",[source])).rejects.toThrow(/выполненная работа/);
+  await db.exec('rollback to savepoint no_result; reset role');
+  await q("update service_order_items set done_qty=1 where order_id=$1",[source]);
+  await q("insert into trip_service_orders(trip_id,order_id) values($1,$2)",[id(31),source]);
+  await db.exec('set local role authenticated; savepoint active_trip');
+  await expect(q("select service_order_close_with_remainder($1,0,'Причина')",[source])).rejects.toThrow(/связанные выезды/);
+  await db.exec('rollback to savepoint active_trip; set local role anon');
+  await expect(q("select service_order_close_with_remainder($1,0,'Причина')",[source])).rejects.toThrow(/permission denied/);
+ }finally{await db.exec('rollback');}
 });
