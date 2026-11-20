@@ -455,6 +455,8 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
       audit.workPartWrites=[];
     }
   }
+  const uploadedWorkPhotos=new Map();
+  if(visitJourney==='photos'){audit.workPhotoUploads=[];audit.workPhotoDownloads=[];audit.workPhotoAttempts=[];}
   if(standaloneWorkPlan){
     task.trip_service_orders=[];
     tables.trip_service_orders=tables.trip_service_orders.filter(link=>link.order_id!==task.id);
@@ -483,6 +485,19 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         data: { subscription: { unsubscribe() {} } },
       }),
     },
+    storage:{from(bucket){return {
+      async upload(path,blob){
+        if(visitJourney!=='photos'||bucket!=='order-result-photos')return reject('storage.upload');
+        if(uploadedWorkPhotos.has(path))return {error:{statusCode:'409',error:'Duplicate'}};
+        uploadedWorkPhotos.set(path,blob);audit.workPhotoUploads.push({path,size:blob.size,type:blob.type});
+        return {data:{path},error:null};
+      },
+      async download(path){
+        if(visitJourney!=='photos'||bucket!=='order-result-photos'||!uploadedWorkPhotos.has(path))return reject('storage.download');
+        audit.workPhotoDownloads.push(path);
+        return {data:uploadedWorkPhotos.get(path),error:null};
+      }
+    };}},
     from(table) {
       audit.reads.push(table);
       let rows = structuredClone(tables[table] || []), queryError = null,
@@ -616,7 +631,8 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         const extraPartCost=(accepted?.extra_parts||[]).reduce((sum,part)=>sum+part.qty*part.unit_cost,0);
         return {data:{has_links:linked,has_receipts:linked&&!!visit.event,trips:linked?[structuredClone(visit)]:[],
           accepted_hours:linked&&accepted?Object.fromEntries(accepted.items.map(row=>[row.id,row.hours])):{},
-          ...(visitJourney==='extras'?{extra_parts_supported:true,extra_part_cost:role==='engineer'?0:extraPartCost}:{})},error:null};
+          ...(visitJourney==='extras'?{extra_parts_supported:true,extra_part_cost:role==='engineer'?0:extraPartCost}:{}),
+          ...(visitJourney==='photos'?{photos_supported:true}:{})},error:null};
       }
       if(name==='service_order_trip_review_queue')return {data:visitJourney==='manager'&&visit.state==='submitted'?
         [{order_id:order,trip_id:trip,number:task.number,title:task.title,vehicle_label:visit.label,date_from:visit.date_from,at:stamp}]:[],error:null};
@@ -639,6 +655,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
       if(name==='service_order_trip_result_write'&&visitJourney){
         if(args.p_order!==order||args.p_trip!==trip||args.p_expected_event!==visit.event||
           args.p_order_revision!==task.revision||args.p_trip_revision!==visit.revision)return reject(name);
+        if(visitJourney==='photos'){
+          audit.workPhotoAttempts.push(args.p_operation);
+          if(audit.workPhotoAttempts.length===1)return {data:null,error:{message:'Временная ошибка сохранения'}};
+        }
         const latest={...structuredClone(args.p_result),hours:args.p_result.items.reduce((sum,row)=>sum+row.hours,0)};
         for(const entry of latest.items){
           const item=task.service_order_items.find(row=>row.id===entry.id);

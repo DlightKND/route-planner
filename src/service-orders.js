@@ -270,6 +270,18 @@ export function createServiceOrders(ctx){
    const user=loadedUser;
    visitPanel=mountOrderTripResults({root:panel,order:o,items:items.filter(item=>!isFinanceVoided(item)),catalog:workCatalog,
     data:visitResults,manualResult,user,manager:manager(o),mayReport:['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.engineer_ids?.includes(user)),requestedTrip,
+    preparePhoto:ctx.preparePhoto,
+    uploadPhoto:async(path,blob)=>{
+     if(current!==o||ctx.userId()!==user||!panel.isConnected)throw Error('Откройте актуальный отчёт');
+     const {error}=await api().storage.from('order-result-photos').upload(path,blob,{contentType:'image/jpeg',upsert:false});
+     if(error&&String(error.statusCode)!=='409'&&error.error!=='Duplicate')throw error;
+    },
+    downloadPhoto:async path=>{
+     if(current!==o||ctx.userId()!==user||!panel.isConnected)throw Error('Откройте актуальный отчёт');
+     const {data,error}=await api().storage.from('order-result-photos').download(path);
+     if(error)throw error;
+     return data;
+    },
     onWrite:payload=>{
      if(current?.id!==o.id||ctx.userId()!==user||dirty||!panel.isConnected)throw Error('Карточка или сеанс изменились. Обновите задание');
      return rpc('service_order_trip_result_write',payload);

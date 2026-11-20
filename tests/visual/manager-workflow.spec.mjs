@@ -341,6 +341,64 @@ test('M13: the curator adds an extra part to a draft and corrects the accepted c
  await clean(page,errors);
 });
 
+test('M14: a work photo survives reload and stays available from its accepted version',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope/'+trip,tripResultJourney:'photos'});
+ const panel=page.locator('#orderTripResults'),expand=panel.locator('[data-visit-expand]').first();
+ const photoName='Результат.jpg',otherName='Лишнее.jpg';
+ const photo=()=>panel.getByRole('button',{name:photoName,exact:true});
+ await expand.click();
+ await panel.locator('.order-trip-complete').click();
+ const pixels=await page.evaluate(()=>{
+  const canvas=document.createElement('canvas');canvas.width=4;canvas.height=4;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#ffcc00';ctx.fillRect(0,0,4,4);
+  return canvas.toDataURL('image/png').split(',')[1];
+ });
+ await panel.getByLabel('Фото результата').setInputFiles([photoName,otherName].map(name=>({name,mimeType:'image/png',buffer:Buffer.from(pixels,'base64')})));
+ await expect(photo()).toBeVisible();
+ await panel.getByRole('button',{name:'Убрать фото «'+otherName+'»'}).click();
+ await expect(panel.getByRole('button',{name:otherName,exact:true})).toHaveCount(0);
+ expect(await page.evaluate(()=>window.__visualQA.workPhotoUploads)).toEqual([]);
+ await page.reload();
+ await expand.click();
+ await expect(photo()).toBeVisible();
+ await photo().click();
+ const viewer=page.getByRole('dialog',{name:photoName});
+ await expect.poll(()=>viewer.getByRole('img').evaluate(img=>img.naturalWidth)).toBe(4);
+ await viewer.getByRole('button',{name:'Закрыть'}).click();
+ await panel.locator('[data-visit-review]').click();
+ await expect(photo()).toBeVisible();
+ await panel.locator('[data-visit-commit]').click();
+ await expect(panel.locator('[data-trip-result-error]')).toContainText('Временная ошибка сохранения');
+ await panel.locator('[data-visit-commit]').click();
+ await expect(panel).toContainText('Принято');
+ await expand.click();
+ await photo().click();
+ await expect.poll(()=>viewer.getByRole('img').evaluate(img=>img.naturalWidth)).toBe(4);
+ await shot(page,info,'accepted-work-photo');
+ await viewer.getByRole('button',{name:'Закрыть'}).click();
+ const result=await page.evaluate(()=>({writes:window.__visualQA.visitWrites,uploads:window.__visualQA.workPhotoUploads,downloads:window.__visualQA.workPhotoDownloads,attempts:window.__visualQA.workPhotoAttempts}));
+ const [metadata]=result.writes[0].p_result.photos;
+ expect(result.writes[0].p_result.photos).toHaveLength(1);
+ expect(metadata).toMatchObject({name:photoName});
+ const path=[order,trip,metadata.work_id,metadata.id+'.jpg'].join('/');
+ expect(result.uploads).toMatchObject([{path,type:'image/jpeg'}]);
+ expect(result.downloads).toEqual([path]);
+ expect(result.attempts).toEqual([result.writes[0].p_operation,result.writes[0].p_operation]);
+ await panel.getByRole('button',{name:'Исправить результат'}).click();
+ if(await expand.getAttribute('aria-expanded')!=='true')await expand.click();
+ await panel.getByRole('button',{name:'Убрать фото «'+photoName+'»'}).click();
+ await panel.getByLabel('Причина исправления').fill('Убрано лишнее фото из новой версии');
+ await panel.locator('[data-visit-review]').click();
+ await panel.locator('[data-visit-commit]').click();
+ await expect(panel).toContainText('Версии результата · 2');
+ const history=panel.locator('.order-trip-versions');await history.locator(':scope > summary').click();
+ await history.getByText('Версия 1 · 2 чел·ч',{exact:true}).click();
+ await history.getByRole('button',{name:photoName,exact:true}).click();
+ await expect.poll(()=>viewer.getByRole('img').evaluate(img=>img.naturalWidth)).toBe(4);
+ await viewer.getByRole('button',{name:'Закрыть'}).click();
+ await clean(page,errors);
+});
+
 for(const stage of ['in_progress','paused'])test('M11: the curator saves the work norm and records a manual result without a trip · '+stage,async({page},info)=>{
  const errors=await boot(page,info,{stage,route:'order/'+order+'/scope',standaloneWorkPlan:true});
  const panel=page.locator('#orderTripResults');

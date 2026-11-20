@@ -53,6 +53,8 @@ beforeAll(async()=>{
   await db.exec(file('../supabase/migrations/20261120134312_order_work_plan.sql'));
   await db.exec(file('../supabase/migrations/20261120141912_order_work_parts.sql'));
   await db.exec(file('../supabase/migrations/20261120145437_order_extra_parts.sql'));
+  await db.exec(file('./fixtures/order-photo-storage.sql'));
+  await db.exec(file('../supabase/migrations/20261120150932_order_result_photos.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -205,9 +207,10 @@ it('cascades result snapshots on authorized task cleanup without granting client
 });
 
 
-const visitResult=async({order=30,trip=50,expected=0,gps=0,prior=null,operation=100,action='submitted',items=[{id:id(40),qty:1,hours:2,note:'Осталась проверка'}],reason='',correction='',extraParts}={})=>(await q(
+const visitResult=async({order=30,trip=50,expected=0,gps=0,prior=null,operation=100,action='submitted',items=[{id:id(40),qty:1,hours:2,note:'Осталась проверка'}],reason='',correction='',extraParts,photos}={})=>(await q(
   'select public.service_order_trip_result_write($1,$2,$3,$4,$5,$6,$7,$8) result',
-  [id(order),id(trip),expected,gps,prior?id(prior):null,id(operation),action,{items,reason,correction,...(extraParts===undefined?{}:{extra_parts:extraParts})}]
+  [id(order),id(trip),expected,gps,prior?id(prior):null,id(operation),action,{items,reason,correction,
+    ...(extraParts===undefined?{}:{extra_parts:extraParts}),...(photos===undefined?{}:{photos})}]
 ))[0].result;
 const readVisits=async order=>(await q('select public.service_order_trip_results($1) result',[id(order)]))[0].result;
 const readVisitQueue=async()=>(await q('select public.service_order_trip_review_queue() result'))[0].result;
@@ -216,6 +219,42 @@ const addConfirmedVisit=async n=>{
   await q("update trips set status='done' where id=$1",[id(n)]);
   await q("insert into trip_stays(trip_id,job_id,stay_from,stay_to,status,minutes_mgr,crew_ids,crew_source) values($1,$2,'2026-10-05 08:00Z','2026-10-05 09:00Z','approved',60,$3,'snapshot')",[id(n),id(10),[id(3),id(4)]]);
 };
+
+it('shares work photos only after submission and preserves them in earlier accepted versions',async()=>{
+  await addConfirmedVisit(50);
+  const photo={id:id(132),work_id:id(40),name:'Результат.jpg'};
+  const path=[id(30),id(50),id(40),photo.id+'.jpg'].join('/');
+  const visible=()=>q("select name from storage.objects where bucket_id='order-result-photos'");
+  const upload=(name,owner)=>q("insert into storage.objects(name,bucket_id,owner_id) values($1,'order-result-photos',$2)",[name,id(owner)]);
+  await as(7);
+  await rejected(()=>upload(path,7),/row-level security/);
+  await as(3);
+  await rejected(()=>upload(path.replace(id(40),id(41)),3),/row-level security/);
+  await rejected(()=>visitResult({photos:[photo]}),/не загружена/);
+  await upload(path,3);
+  expect(await visible()).toEqual([{name:path}]);
+  await as(4);
+  expect(await visible()).toEqual([]);
+  await rejected(()=>visitResult({photos:[photo]}),/не загружена или недоступна/);
+  await as(3);
+  await visitResult({photos:[photo]});
+  await as(4);
+  expect(await visible()).toEqual([{name:path}]);
+  await as(7);
+  expect(await visible()).toEqual([]);
+  await as(6);
+  const accepted={prior:100,operation:101,action:'accepted',photos:[photo]};
+  expect(await visitResult(accepted)).toEqual(await visitResult({...accepted,expected:99}));
+  await visitResult({expected:1,prior:101,operation:102,action:'accepted',correction:'Уточнён отчёт',photos:[]});
+  expect((await readVisits(30)).trips[0].versions.map(version=>version.result.photos)).toEqual([[photo],[]]);
+  await db.exec('reset role');
+  await rejected(()=>q('delete from storage.objects where name=$1',[path]),/foreign key constraint/);
+  const abandoned=path.replace(photo.id,id(133));
+  await q("insert into storage.objects(name,bucket_id,owner_id,created_at) values($1,'order-result-photos',$2,now()-interval '8 days')",[abandoned,id(3)]);
+  await q("update storage.objects set created_at=now()-interval '8 days' where name=$1",[path]);
+  await db.exec('set local role service_role');
+  expect(await q('select public.order_result_photo_orphans() path')).toEqual([{path:abandoned}]);
+});
 
 it('retains extra parts through submission, return, acceptance and correction, costing only the current accepted visit',async()=>{
   await addConfirmedVisit(50);

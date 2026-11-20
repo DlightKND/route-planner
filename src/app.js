@@ -68,7 +68,7 @@ import './planner-workspace.css';
 import './planner-approved.css';
 import './planner-integration.css';
 
-const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
+const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,preparePhoto:shrinkImage,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,openJournalTrip,canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
  tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
  confirm:(message,options)=>confirmDialog(message,options),beforeOpen:async()=>await unassignedTracks.leave()&&await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});

@@ -211,6 +211,13 @@ html#dlight-ui[data-ui-system] .view .order-trip-work-detail>td { padding:12px 1
 .order-trip-quantity { width:min(100%,180px); }
 .order-trip-quantity .hint,.order-trip-materials table .hint { display:block; margin-top:4px; }
 .order-trip-outcome-controls>p { min-height:44px; align-content:center; }
+.order-work-photos { display:grid; gap:4px; max-width:100%; margin-top:12px; }
+.order-work-photos label { display:grid; gap:4px; min-width:0; }
+.order-work-photos input { width:100%; min-width:0; }
+.order-work-photo { display:flex; align-items:center; gap:4px; min-width:0; }
+.order-work-photo [data-photo-id] { min-width:0; white-space:normal; overflow-wrap:anywhere; text-align:left; }
+.order-work-photo [data-photo-remove] { flex:none; min-width:44px; }
+.order-work-photo-view img { display:block; max-width:100%; max-height:65dvh; margin:auto; object-fit:contain; }
 .order-trip-related-visits>div { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; }
 .order-trip-related-visits>div+div { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
 .order-trip-related-visits p { flex-basis:100%; white-space:pre-wrap; overflow-wrap:anywhere; }

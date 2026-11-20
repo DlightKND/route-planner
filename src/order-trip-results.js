@@ -1,6 +1,7 @@
 import {planningPeriod} from './core/planning-dates.js';
 import {journalIcon} from './journal-icons.js';
 import {openEntityPanel} from './entity-actions.js';
+import {orderPhotoDrafts,orderResultPhotoPath} from './order-photo-drafts.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:6});
@@ -33,7 +34,7 @@ export function proposedTripHours(items,accepted,budget,catalog){
  return hours;
 }
 
-export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onWrite,onPlanWrite,onPartWrite,onReturnReason,onGPS,onTrip,onReload}){
+export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onWrite,onPlanWrite,onPartWrite,onReturnReason,onGPS,onTrip,onReload,preparePhoto,uploadPhoto,downloadPhoto}){
  const trips=data?.trips||[],works=items.filter(item=>item.kind!=='material'),material=items.filter(item=>item.kind==='material');
  const workIds=new Set(works.map(item=>item.id));
  let selected=trips.find(trip=>trip.id===requestedTrip)||(trips.length===1?trips[0]:null);
@@ -42,8 +43,11 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
  const expanded=new Set();
  const partsOpen=new Set();
  const canAssignParts=manager&&onPartWrite&&!['completed','cancelled'].includes(order.status);
+ const win=root.ownerDocument.defaultView,photoDrafts=orderPhotoDrafts(win.indexedDB);
+ const photosSupported=data?.photos_supported&&preparePhoto&&uploadPhoto&&downloadPhoto;
  const buttons=(title,attribute,kind='')=>'<button type="button" class="btn '+kind+'" '+attribute+'>'+title+'</button>';
  const key=trip=>'dlight:order-trip-result:'+user+':'+order.id+':'+trip.id;
+ const photoKey=(tripId,photo)=>[user,order.id,tripId,photo.id].join(':');
  function saved(trip){
   try{
    const draft=JSON.parse(root.ownerDocument.defaultView.sessionStorage.getItem(key(trip)));
@@ -60,7 +64,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   return {rows:items.map(item=>{
    const row=latest?.items?.find(row=>row.id===item.id);
    return {id:item.id,qty:row?.qty??0,hours:row?.hours??(trip.presence?.confirmed?proposed[item.id]:''),note:row?.note||'',manual:!!row};
-  }),extra_parts:latest?.extra_parts||[],reason:latest?.reason||'',correction:'',presenceRevision:trip.state==='submitted'?trip.submitted_revision:trip.revision};
+  }),extra_parts:latest?.extra_parts||[],photos:latest?.photos||[],reason:latest?.reason||'',correction:'',presenceRevision:trip.state==='submitted'?trip.submitted_revision:trip.revision};
  }
  function restore(){
   if(!selected){fields=null;return;}
@@ -69,6 +73,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   if(draft&&(items.length!==fields.rows.length||items.some(item=>!fields.rows.some(row=>row.id===item.id))))fields=initialFields(selected);
   const extras=draft?.fields?.extra_parts;
   fields.extra_parts=(Array.isArray(extras)?extras:fields.extra_parts||[]).filter(part=>workIds.has(part.work_id));
+  const photos=draft?.fields?.photos;
+  fields.photos=(Array.isArray(photos)?photos:fields.photos||[]).filter(photo=>workIds.has(photo.work_id));
   editing=!!draft?.editing&&manager&&mayReport;
   operation=draft?.operation||null;
  }
@@ -96,7 +102,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
     return esc((part.title??current?.title)+' · '+fmt(part.qty)+' '+(part.unit??current?.unit??''));
    });
    return '<tr><th scope="row">'+esc(row.title??item.title)+'</th><td>'+esc(fmt(row.qty)+' '+(row.unit??item.unit??''))+'</td>'
-    +'<td>'+esc((row.kind??item.kind)==='material'?'—':fmt(row.hours))+'</td><td>'+ (parts.join('<br>')||'—')+'</td><td>'+esc(row.note||'—')+'</td></tr>';
+    +'<td>'+esc((row.kind??item.kind)==='material'?'—':fmt(row.hours))+'</td><td>'+ (parts.join('<br>')||'—')+'</td><td>'+esc(row.note||'—')
+    +photoDetails(result.photos,selected.id,row.id)+'</td></tr>';
   }).join('');
  }
  function tableResult(result){
@@ -145,7 +152,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
     `<div>${buttons(esc(tripLabel(trip)),'data-trip-receipt="'+esc(trip.id)+'"','ghost')}
      <span class="hint">${esc(stateLabel(trip))}</span><span>${row?fmt(row.hours)+' чел·ч':'—'}</span><p>${esc(row?.note||'—')}</p></div>`).join('')}</div>`:'';
    const manualOutcome=data?'':`<section class="order-trip-outcome"><h4>Результат работы</h4><p>Выполнено ${fmt(item.done_qty)} ${esc(item.unit)}</p>${note?`<p class="order-trip-work-note">${esc(note)}</p>`:''}</section>`;
-   const details=`<div class="order-trip-work-fields">${planEditor(item)}${related}${manualOutcome}${materialTable(cumulativeMaterials,{work:item})}</div>`;
+   const photos=trips.map(trip=>photoDetails(lastVersion(trip)?.photos,trip.id,item.id)).join('');
+   const details=`<div class="order-trip-work-fields">${planEditor(item)}${related}${manualOutcome}${photos}${materialTable(cumulativeMaterials,{work:item})}</div>`;
    return workRow(item,data?.accepted_hours?.[item.id],note,details,maxQty(item,null)===0);
   }).join('');
   const accepted=Object.values(data?.accepted_hours||{});
@@ -170,7 +178,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
       <span>Частично</span><span class="order-trip-complete-track" aria-hidden="true"></span><span>Завершена</span></label>
      <label class="order-trip-quantity" data-visit-partial ${complete?'hidden':''}>Выполнено, ${esc(item.unit)}<input type="text" inputmode="decimal" data-visit-field="qty" value="${esc(value.qty)}"><span class="hint">Доступно ${fmt(max)} ${esc(item.unit)}</span></label>
      <p data-visit-completed ${complete?'':'hidden'}>Выполнено <strong>${fmt(max)}</strong> ${esc(item.unit)}</p>
-    </div></section></div>${materialTable(fields,{work:item,editable:true})}</div>`;
+    </div>${photoDetails(fields.photos,selected.id,item.id,true)}</section></div>${materialTable(fields,{work:item,editable:true})}</div>`;
    return workRow(item,value.hours,value.note,details,complete);
   }).join('');
  }
@@ -242,9 +250,52 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
     <section><h4>Трудозатраты</h4><div class="order-trip-work-labor">${planEditor(item)}
     <div><span class="hint">Факт, чел·ч</span><p>${value?fmt(value.hours):'—'}</p></div></div></section>
     <div class="order-trip-work-note"><span class="hint">Комментарий</span><p>${esc(value?.note||'—')}</p></div></div>
-    <section class="order-trip-outcome"><h4>Результат работы</h4><p>${value?'Выполнено '+fmt(value.qty)+' '+esc(item.unit):'Результат пока не внесён.'}</p></section>${materialTable(result,{work:item,snapshot:!!result.items})}</div>`;
+    <section class="order-trip-outcome"><h4>Результат работы</h4><p>${value?'Выполнено '+fmt(value.qty)+' '+esc(item.unit):'Результат пока не внесён.'}</p>${photoDetails(result.photos,selected.id,item.id)}</section>${materialTable(result,{work:item,snapshot:!!result.items})}</div>`;
    return workRow(item,value?.hours,value?.note,details);
   }).join('');
+ }
+ function photoDetails(photos,tripId,workId,editable=false){
+  const rows=(photos||[]).filter(photo=>photo.work_id===workId);
+  const chooser=editable&&photosSupported;
+  if(!rows.length&&!chooser)return '';
+  return `<div class="order-work-photos" data-photo-work="${esc(workId)}" data-photo-trip="${esc(tripId)}">
+   ${chooser?'<label>Фото результата<input type="file" accept="image/*" multiple data-photo-input></label>':'<p class="hint">Фото результата</p>'}
+   ${rows.map(photo=>`<div class="order-work-photo">${buttons(esc(photo.name),'data-photo-id="'+esc(photo.id)+'"','ghost')}${chooser?`<button type="button" class="btn ghost" data-photo-remove="${esc(photo.id)}" aria-label="Убрать фото «${esc(photo.name)}»">×</button>`:''}</div>`).join('')}
+   </div>`;
+ }
+ async function capturePhotos(group,input){
+  if(busy||!input.files.length)return;
+  const trip=selected,files=[...input.files],workId=group.dataset.photoWork;
+  if(fields.photos.length+files.length>100){input.value='';error('В отчёте может быть до 100 фотографий',input);return;}
+  const unlock=lockControls();
+  try{
+   const entries=[];
+   for(const file of files){
+    const photo={id:win.crypto.randomUUID(),work_id:workId,name:[...file.name.trim()].slice(0,160).join('')||'Фото результата.jpg'};
+    entries.push({photo,blob:await preparePhoto(file)});
+   }
+   await photoDrafts.put(entries.map(({photo,blob})=>[photoKey(trip.id,photo),blob]));
+   fields.photos.push(...entries.map(entry=>entry.photo));persist();render();
+   root.querySelector('[data-photo-work="'+workId+'"] [data-photo-input]')?.focus();
+  }catch(cause){input.value='';error(cause.message||'Не удалось подготовить фотографии',input);}
+  finally{unlock();}
+ }
+ async function viewPhoto(group,button){
+  if(busy||!downloadPhoto)return;
+  const tripId=group.dataset.photoTrip,workId=group.dataset.photoWork,id=button.dataset.photoId;
+  const photo={id,work_id:workId,name:button.textContent};
+  const unlock=lockControls();
+  try{
+   const draft=await photoDrafts.get(photoKey(tripId,photo)).catch(()=>null);
+   const blob=draft||await downloadPhoto(orderResultPhotoPath(order.id,tripId,photo));
+   if(!button.isConnected)return;
+   const url=win.URL.createObjectURL(blob),panel=root.ownerDocument.createElement('section');
+   panel.hidden=true;panel.className='order-work-photo-view';
+   panel.innerHTML=`<img src="${esc(url)}" alt="${esc(photo.name)}">`;root.append(panel);
+   const dialog=openEntityPanel({title:photo.name,panel,trigger:button,dispose:true});
+   dialog.addEventListener('close',()=>win.URL.revokeObjectURL(url),{once:true});
+  }catch(cause){if(button.isConnected)error(cause.message||'Не удалось открыть фото',button);}
+  finally{unlock();}
  }
  function setExpanded(toggle,open){
   const row=root.ownerDocument.getElementById(toggle.getAttribute('aria-controls'));
@@ -341,14 +392,24 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   const result={items:fields.rows.map(row=>({id:row.id,qty:nonnegative(row.qty),hours:row.hours===''?0:nonnegative(row.hours),note:row.note})),
    reason:fields.reason,correction:correction??fields.correction};
   if(data?.extra_parts_supported&&action!=='returned')result.extra_parts=fields.extra_parts.map(part=>({...part,qty:nonnegative(part.qty)}));
+  if(photosSupported&&action!=='returned')result.photos=fields.photos;
   const signature=JSON.stringify([action,result]);
   if(operation?.signature!==signature)operation={signature,id:root.ownerDocument.defaultView.crypto.randomUUID()};
   const trip=selected;persist();
   const unlock=lockControls();
   try{
+   const staged=[];
+   const registered=new Set([...(trip.latest?.photos||[]),...(trip.versions||[]).flatMap(version=>version.result?.photos||[])].map(photo=>photo.id));
+   for(const photo of result.photos||[]){
+    if(registered.has(photo.id))continue;
+    const draftId=photoKey(trip.id,photo),blob=await photoDrafts.get(draftId);
+    if(!blob)throw Error('Файл «'+photo.name+'» отсутствует в черновике. Добавьте его заново');
+    await uploadPhoto(orderResultPhotoPath(order.id,trip.id,photo),blob);staged.push(draftId);
+   }
    await onWrite({p_order:order.id,p_trip:trip.id,p_order_revision:order.revision,p_trip_revision:trip.revision,
     p_expected_event:trip.event??null,p_operation:operation.id,p_action:action,p_result:result});
    try{root.ownerDocument.defaultView.sessionStorage.removeItem(key(trip));}catch{/* Server state is already current. */}
+   if(staged.length)await photoDrafts.remove(staged).catch(()=>{});
    await onReload(trip.id,action);
   }catch(cause){error(cause.message||'Не удалось сохранить результат');}
   finally{unlock();}
@@ -386,7 +447,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
     if(trip.state==='returned')content+='<p class="hint">Причина возврата · '+esc(trip.latest?.correction)+'</p>';
     content+=review?'<section class="order-trip-review"><header class="order-trip-result-head"><h3 tabindex="-1">Проверьте результат задания</h3>'+
       buttons('Вернуться к работам','data-visit-back')+'</header><p class="order-trip-review-hours">'+metric(distributed())+'</p><p class="hint">'+esc(tripLabel(trip))+'</p>'+
-      tableResult({items:fields.rows.map(row=>({...row,parent_work_id:items.find(item=>item.id===row.id)?.parent_work_id,qty:nonnegative(row.qty),hours:nonnegative(row.hours)})),extra_parts:fields.extra_parts})+
+      tableResult({items:fields.rows.map(row=>({...row,parent_work_id:items.find(item=>item.id===row.id)?.parent_work_id,qty:nonnegative(row.qty),hours:nonnegative(row.hours)})),extra_parts:fields.extra_parts,photos:fields.photos})+
       (fields.reason?'<p>Причина корректировки · '+esc(fields.reason)+'</p>':'')+
       '</section><div class="order-trip-submit">'+buttons(manager?'Принять результат':'Передать на приёмку','data-visit-commit','amber')+'</div>'
      :(mismatch?'<p class="hint">Данные GPS изменились. Ручной ввод сохранён.</p>':'')+
@@ -414,6 +475,22 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   if(picker)picker.onchange=e=>switchTrip(e.target.value);
   root.querySelectorAll('[data-trip-receipt]').forEach(button=>{button.onclick=()=>switchTrip(button.dataset.tripReceipt);});
   root.querySelectorAll('[data-visit-expand]').forEach(button=>{button.onclick=()=>setExpanded(button,button.getAttribute('aria-expanded')!=='true');});
+  root.querySelectorAll('[data-photo-work]').forEach(group=>{
+   const input=group.querySelector('[data-photo-input]');
+   if(input)input.onchange=()=>capturePhotos(group,input);
+   group.querySelectorAll('[data-photo-id]').forEach(button=>{button.onclick=()=>viewPhoto(group,button);});
+   group.querySelectorAll('[data-photo-remove]').forEach(button=>{button.onclick=async()=>{
+    if(busy)return;
+    const photo=fields.photos.find(value=>value.id===button.dataset.photoRemove),unlock=lockControls();
+    try{
+     if(!photo)return;
+     await photoDrafts.remove([photoKey(selected.id,photo)]);
+     fields.photos=fields.photos.filter(value=>value!==photo);persist();render();
+     get('[data-photo-work="'+group.dataset.photoWork+'"] [data-photo-input]')?.focus();
+    }catch(cause){error(cause.message||'Не удалось убрать фото',button);}
+    finally{unlock();}
+   };});
+  });
   root.querySelectorAll('[data-work-plan]').forEach(group=>{
    const submit=()=>savePlan(group,works.find(item=>item.id===group.dataset.workPlan));
    group.querySelector('[data-work-plan-save]').onclick=submit;
