@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {dayKey,intervalText,timelineDays,durationText,distanceText,decisionLabel,zeroPresenceSignature,clusterScreenPoints,personHours} from '../src/core/journal-display.js';
+import {dayKey,intervalText,timelineDays,durationText,distanceText,googleTripLinks,decisionLabel,zeroPresenceSignature,clusterScreenPoints,personHours} from '../src/core/journal-display.js';
 it('keeps unknown values separate from a known zero and rounds only display values',()=>{
  expect(durationText(null)).toBe('Нет данных');expect(durationText('')).toBe('Нет данных');expect(durationText(0)).toBe('0 мин');expect(durationText(107.65)).toBe('1 ч 48 мин');expect(distanceText(861.38)).toBe('861,4 км');expect(distanceText(null)).toBe('Нет данных');expect(personHours(null,['e'])).toBeNull();expect(personHours(0,['e'])).toBe(0);expect(personHours(210,['e','e','f'])).toBe(7);expect(personHours(210,['e'],false)).toBeNull();
 });
@@ -14,4 +14,18 @@ it('separates draft intent, saved zero and missing accepted time',()=>{
 });
 it('clusters nearby unequal coordinates in screen space, retaining every member',()=>{
  const points=[{id:'a',x:0,y:0},{id:'b',x:30,y:0},{id:'c',x:100,y:0}];const groups=clusterScreenPoints(points);expect(groups.map(g=>g.map(p=>p.id))).toEqual([['a','b'],['c']]);expect(clusterScreenPoints(points.map(p=>({...p,x:p.x*3})))).toHaveLength(3);expect(clusterScreenPoints([])).toEqual([]);
+});
+
+
+it('opens one valid point or splits an ordered route into overlapping Google Maps parts',()=>{
+ const stops=Array.from({length:7},(_,i)=>({name:'Точка '+i,lat:49+i/100,lng:36+i/100}));
+ const parts=googleTripLinks([{lat:null,lng:36},stops[0],...stops]);
+ expect(parts.map(({label})=>label)).toEqual(['Точка 0 → Точка 4','Точка 4 → Точка 6']);
+ const [first,last]=parts.map(({url})=>new URL(url).searchParams);
+ expect(first.get('waypoints').split('|')).toHaveLength(3);
+ expect(last.get('origin')).toBe(first.get('destination'));
+ expect(last.get('destination')).toBe('49.060000,36.060000');
+ const [single]=googleTripLinks([stops[0]]);
+ expect(new URL(single.url).searchParams.get('query')).toBe('49.000000,36.000000');
+ expect(googleTripLinks([{lat:999,lng:36}])).toEqual([]);
 });

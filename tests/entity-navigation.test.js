@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 import {Window} from 'happy-dom';
 import {it,expect,vi} from 'vitest';
 const source=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
-const code=source.slice(source.indexOf('let tripLeaveFlight=null;'),source.indexOf('async function switchTab(name, sub){'));
+const code=source.slice(source.indexOf('let tripLeaveFlight=null;'),source.indexOf('async function switchTab('));
 function navigation(win,{dirty=true,confirm=false}={}){
  const orders={currentId:()=> 'task-1',open:vi.fn()},openJob=vi.fn(),openTrip=vi.fn(),switchTab=vi.fn();
  win.confirm=vi.fn(()=>confirm);

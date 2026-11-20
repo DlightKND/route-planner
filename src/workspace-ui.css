@@ -96,8 +96,6 @@ html:root { --workspace-width:none; }
 .trip-planning-sidebar { min-width:0;display:grid;gap:20px; }
 .trip-planning-sidebar .trip-wide { grid-column:auto; }
 .workspace-page .wb-route-card { grid-column:1;grid-row:1; }
-.workspace-page .wb-route-card .emap { height:300px; }
-.workspace-page #tpRouteStops { max-height:none!important; }
 .workspace-page .wb-route-details { margin:0;border-top:1px solid var(--line);padding-top:12px; }
 .workspace-page .wb-route-details>summary { color:var(--ink);font-weight:500; }
 .workspace-responsibility-caption { margin-top:20px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-dim);line-height:1.6; }
@@ -262,7 +260,6 @@ html:root { --workspace-width:none; }
  .workspace-page .trip-review-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
  .workspace-page button.trip-review-item { min-height:112px;padding:12px; }
  .workspace-page .trip-review-item>strong { font-size:14px; }
- .workspace-page .wb-route-card .emap { height:240px; }
  .view-planner :is(#plJobs,#plOrders,#plTrips) { --workspace-gutter:16px;padding-top:16px;padding-bottom:calc(24px + var(--rail-h)); }
  .workspace-dispatcher-head { margin-top:-16px;padding-top:20px; }
  .workspace-heading-row { gap:12px;align-items:flex-start; }
@@ -1133,18 +1130,52 @@ html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{con
  .workflow-metadata dd { min-width:0;font-size:13px;line-height:20px; }
 }
 
-.workflow-card .eleg .workflow-gps-line { background:#3c7954; }
-.workflow-card .eleg .workflow-road-line { background:repeating-linear-gradient(to right,#d87619 0 5px,transparent 5px 9px); }
-.workflow-card .eleg .workflow-gap-line { background:repeating-linear-gradient(to right,#8b8e96 0 5px,transparent 5px 9px); }
-.workflow-route-marker.leaflet-tooltip {
- padding:0;
- border:0;
+.view-trip.workflow-card .workflow-trip-overview>.wb-route-card { min-width:0; padding:0!important; }
+.workflow-trip-details .activity-page-head { flex-wrap:wrap; gap:12px; }
+.workflow-route-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 16px; padding:16px 24px 24px; }
+.workflow-route-head h2 { margin:0; font:600 18px/24px var(--sans); }
+.workflow-route-head .hint { margin:0; }
+.workflow-trip-overview #tpMapWrap { margin:0 16px 16px; }
+.workflow-trip-overview #tpMap { height:320px; }
+.workflow-route-controls { position:absolute; display:grid; gap:8px; top:12px; right:12px; z-index:450; }
+.workflow-route-controls>.btn { width:44px; height:44px; padding:0; background:var(--panel); }
+.workflow-route-caption { position:absolute; bottom:24px; left:12px; max-width:calc(100% - 84px); z-index:450; margin:0; padding:8px 12px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-sm); }
+.workflow-trip-overview .wb-route-actions:not([hidden]) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0 16px 16px; }
+.workflow-trip-overview .wb-route-actions>.btn { min-width:0; padding-inline:8px; white-space:normal; text-align:center; }
+.workflow-route-empty { margin:0; padding:0 16px 16px; }
+.workflow-route-points { border-top:1px solid var(--line); }
+.workflow-route-points h3 { margin:0; padding:12px 16px; font-size:15px; }
+.workflow-route-scroll { max-height:264px; overflow:auto; overscroll-behavior-y:contain; scrollbar-gutter:stable; }
+.workflow-route-scroll thead th { position:sticky; top:0; z-index:1; background:var(--raised); }
+.workflow-route-points .entity-table { width:100%; }
+.workflow-route-points .entity-table th:last-child:not(:first-child),
+.workflow-route-points .entity-table td:last-child:not(:first-child) { text-align:end; }
+.workflow-route-point { display:flex; align-items:center; gap:10px; width:100%; min-height:40px; padding:0; border:0; color:var(--ink); background:none; text-align:start; overflow-wrap:anywhere; cursor:pointer; }
+.workflow-route-point>span { display:grid; flex:none; place-items:center; width:26px; height:26px; border:1px solid var(--line); border-radius:50%; background:var(--raised); font-size:13px; }
+.workflow-route-point[aria-pressed=true]>span { color:var(--on-accent); background:var(--accent); border-color:var(--accent-line); }
+.workflow-route-points .is-active td { background:var(--raised); }
+.workflow-route-google-parts { display:grid; gap:8px; padding-inline-start:24px; }
+.workflow-route-google-parts a { max-width:100%; text-align:start; white-space:normal; }
+#rRebuildRemaining:not([hidden]) { margin-top:8px; }
+@media(max-width:760px) {
+ .workflow-route-head { flex-wrap:wrap; padding:12px; }
+ .workflow-trip-overview #tpMapWrap { margin:0 12px 12px; }
+ .workflow-trip-overview #tpMap { height:264px; }
+ .workflow-route-controls>.btn { width:48px; height:48px; }
+ .workflow-trip-overview .wb-route-actions:not([hidden]) { margin:0 12px 12px; }
+ .workflow-route-point { min-height:44px; }
+ .workflow-route-points h3,.workflow-route-empty { padding-inline:12px; }
+}
+.workflow-route-marker {
+ display:grid;
+ place-items:center;
+ border:1px solid #302b25;
+ border-radius:50%;
  color:#302b25;
- background:transparent;
- box-shadow:none;
+ background:#fff;
  font-weight:600;
 }
-
+.workflow-route-marker.is-active { color:var(--on-accent); background:var(--accent); border-color:var(--accent-line); }
 .workflow-card #orderBrief #orderRequest { margin-top:12px; }
 .workflow-card .workflow-work-result { margin-bottom:12px; }
 @media(max-width:760px){

@@ -109,8 +109,6 @@ export function installWorkspaceStructure(root=document){
    editor.append(plan.querySelector('.wb-plan-card'));
    sidebar.append(plan.querySelector('.wb-task-card'),editor);plan.append(sidebar);
   }
-  const stops=trip.querySelector('.wb-route-details');if(stops)stops.open=true;
-  const routeTitle=trip.querySelector('.wb-route-card h3');if(routeTitle?.firstChild)routeTitle.firstChild.textContent='Маршрут и остановки ';
   const crewTitle=trip.querySelector('.wb-plan-card h3');if(crewTitle)crewTitle.textContent='Состав поездки';
   const responsibility=root.getElementById('tripResponsibilityMeta');if(responsibility){responsibility.className='workspace-responsibility-caption';trip.querySelector('.wb-plan-card').append(responsibility);}
   const state=addOverviewState(overview,'trip',root.getElementById('tripRecordResult'));

@@ -2409,6 +2409,7 @@
              одинаково важным. Редкое (объезды, оптимизация, коридор)
              ушло под раскрытие. -->
         <h3 class="route-panel-title">План маршрута</h3>
+        <p class="hint" id="rTripRouteContext" hidden></p>
         <div id="rStops" style="margin-top: var(--sp-3)"><p class="hint">Добавьте минимум две точки — по адресу, на карте или из карточки клиента.</p></div>
 
         <div class="row route-address" style="margin-top: var(--sp-3)">
@@ -2420,6 +2421,7 @@
         <div id="rWpRes"></div>
 
         <div class="row route-primary" style="margin-top:var(--gap-block)"><button class="btn amber grow" id="rBuild">Построить</button><button class="btn grow" id="rSaveTrip">Сохранить выезд</button></div>
+        <button type="button" class="btn ghost" id="rRebuildRemaining" hidden>Рассчитать оставшийся маршрут</button>
         <div class="hint" id="rStatus" role="status"></div>
         <div id="rVariants" style="margin-top: var(--sp-3)"></div>
 
@@ -2658,28 +2660,35 @@
 
 
       </div>
-      <div class="card wb-route-card"><h3 class="cardhead">Маршрут <span class="cnt" id="tpRouteKm">—</span><span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Построение маршрута, старт и депо, буфер и изохрона — в планировщике на вкладке «Карта».</span></span></h3>
-        <!-- В макете карта тут была, и не для красоты: список остановок
-             не показывает ни формы круга, ни того, что точка стоит в стороне
-             от него. Пунктир — план, сплошная — где машина прошла на самом деле. -->
-        <div id="tpMapWrap" style="display:none;margin-bottom: var(--sp-3)">
-          <div id="tpMap" class="emap"></div>
-          <div class="eleg"><span><i class="edash"></i>План</span><span><i class="workflow-gps-line"></i>GPS</span><span><i class="workflow-road-line"></i>Достройка</span><span><i class="workflow-gap-line"></i>Разрыв</span></div>
+      <section class="card wb-route-card" aria-labelledby="tpRouteTitle">
+        <header class="workflow-route-head">
+          <div><h2 id="tpRouteTitle">Маршрут выезда</h2><p class="hint" id="tpRouteStatus" hidden></p></div>
+          <button type="button" class="btn" id="tpStayMap" hidden>Открыть GPS-запись</button>
+        </header>
+        <div id="tpMapWrap" hidden>
+          <div id="tpMap" class="emap" aria-label="Карта маршрута выезда"></div>
+          <div class="workflow-route-controls" role="group" aria-label="Управление картой">
+            <button type="button" class="btn" id="tpMapExpand" aria-label="Развернуть карту">⛶</button>
+            <button type="button" class="btn" id="tpMapZoomIn" aria-label="Увеличить карту">+</button>
+            <button type="button" class="btn" id="tpMapZoomOut" aria-label="Уменьшить карту">−</button>
+            <button type="button" class="btn" id="tpMapFit" aria-label="Показать весь маршрут">⌖</button>
+          </div>
+          <p class="workflow-route-caption" aria-live="polite" id="tpMapCaption" hidden></p>
         </div>
-        <details class="wb-route-details"><summary>Точки маршрута</summary><div id="tpRouteStops" style="max-height:180px;overflow:auto"></div></details>
-        <div class="hint" id="tpRouteStatus" style="margin-top: var(--sp-3)"></div>
-        <div class="wb-route-actions">
-          <button class="btn sm amber" id="tpStayMap" style="display:none">Открыть GPS-запись</button>
-          <button type="button" class="btn sm" id="tpViewMap">Просмотреть на карте</button>
-          <details class="wb-route-more"><summary class="btn sm">Ещё ▾</summary><div class="wb-route-menu">
-            <button class="btn sm" id="tpEditMap">Редактировать маршрут на карте</button>
-            <button class="btn sm" id="tpRebuildRemaining">Рассчитать оставшийся маршрут</button>
-            <div id="tpKmAction"></div>
-          </div></details>
+        <div class="wb-route-actions" role="group" aria-label="Действия с маршрутом" hidden>
+          <button type="button" class="btn amber" id="tpViewMap">Просмотреть на карте</button>
+          <button type="button" class="btn" id="tpGoogleMap">Открыть в Google Maps</button>
         </div>
-
+        <p class="hint workflow-route-empty" id="tpRouteEmpty">Маршрут появится, когда к выезду будет привязано задание или GPS-запись.</p>
+        <section class="workflow-route-points" id="tpRoutePoints" hidden>
+          <h3 id="tpRoutePointsTitle">Точки маршрута</h3>
+          <div class="workflow-route-scroll" role="region" aria-labelledby="tpRoutePointsTitle" tabindex="0">
+            <table class="entity-table" aria-label="Точки маршрута"><thead><tr><th scope="col">Точка</th><th scope="col" id="tpRoutePointTime" hidden>Время</th></tr></thead><tbody id="tpRouteStops"></tbody></table>
+          </div>
+        </section>
+        <div id="tpKmAction" hidden></div>
         <div class="hint" id="tpRemainingInfo"></div>
-      </div>
+      </section>
       <div class="card wb-task-card trip-wide"><h3>Задания выезда <span class="cnt" id="tpJobsCnt">0</span></h3>
         <label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);color:var(--ink-dim);margin: var(--sp-1) 0 var(--sp-3)"><input type="checkbox" id="tpJobsRoute" checked style="width:auto">показывать только заявки по точкам маршрута</label>
         <!-- Два разных переключателя на строке, и оба раньше были без подписи.

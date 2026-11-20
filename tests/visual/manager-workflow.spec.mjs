@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 const job=fixtureIDs.job,order=fixtureIDs.order,trip=fixtureIDs.trip,other='00000000-0000-4000-8000-000000000003';
-async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false}={}){
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,managerJourney:{stage,failAssignment}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
+async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false}={}){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,managerJourney:{stage,failAssignment,routeBuilder}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
 }
 async function navigate(page,view,hash){await page.evaluate(hash=>{location.hash=hash;},hash);await expect(page.locator('.view-'+view)).toHaveClass(/active/);}
 async function reopenRequest(page){await navigate(page,'planner','/planner/jobs');await navigate(page,'job','/job/'+job);}
@@ -77,5 +77,74 @@ test('M8: closing a partial task offers its remaining work when the request gets
  expect(writes.map(write=>write.name)).toEqual(['service_order_close_with_remainder','service_order_create_with_remainders']);
  expect(writes[1].args.p_remainders).toHaveLength(1);
  expect(writes[1].args.p_items).toEqual([]);
+ await clean(page,errors);
+});
+
+
+async function mockTripRouting(page){
+ await page.route('**/functions/v1/ors',route=>{
+  const {body}=route.request().postDataJSON();
+  return route.fulfill({contentType:'application/json',body:JSON.stringify({features:[{properties:{summary:{distance:128000,duration:7200}},geometry:{type:'LineString',coordinates:body.coordinates}}]})});
+ });
+}
+
+test('M9: trip overview reads the route and the main map saves changes to the same trip',async({page},info)=>{
+ const errors=await boot(page,info,{route:'trip/'+trip,routeBuilder:true});
+ await mockTripRouting(page);
+ const points=page.locator('#tpRouteStops [data-route-point]');
+ await expect(points).toHaveCount(3);
+ await expect(page.getByRole('heading',{name:'Маршрут выезда'})).toBeVisible();
+ await expect(page.locator('#tpRoutePointTime')).toBeHidden();
+ await points.nth(1).click();await expect(points.nth(1)).toHaveAttribute('aria-pressed','true');
+ await expect(page.locator('#tpRouteStops [data-up],#tpRouteStops [data-wprm]')).toHaveCount(0);
+ await shot(page,info,'trip-route-overview');
+ await page.locator('#tpViewMap').click();
+ await expect(page).toHaveURL(/\/map$/);
+ await expect(page.locator('#routeBlock')).toBeHidden();
+ await page.goBack();
+ await expect(page.locator('#tpViewMap')).toBeVisible();
+ await page.locator('#tripMore').click();
+ await page.getByRole('button',{name:'Редактировать маршрут на карте',exact:true}).click();
+ await expect(page).toHaveURL(/\/map\/edit$/);
+ await expect(page.locator('#rTripRouteContext')).toBeVisible();
+ await expect(page.locator('#rStops .route-pt')).toHaveCount(3);
+ await page.locator('#rStops [data-rup="1"]').click();
+ await expect(page.locator('#rSaveTrip')).toBeDisabled();
+ await page.locator('#rBuild').click();
+ await expect(page.locator('#rSaveTrip')).toBeEnabled();
+ await page.locator('#rSaveTrip').click();
+ await page.locator('#promptNo').click();
+ expect(await page.evaluate(()=>window.__visualQA.financeWrites)).toEqual([]);
+ await page.locator('#rSaveTrip').click();
+ await page.locator('[data-pf=reason]').fill('Согласован объезд');
+ await page.locator('#promptYes').click();
+ await expect(page.locator('.view-trip.active')).toBeVisible();
+ const [save]=await page.evaluate(()=>window.__visualQA.financeWrites.filter(write=>write.name==='trip_plan_save_tasks'));
+ expect(save.args).toMatchObject({p_trip:trip,p_expected:0,p_order_ids:[order,fixtureIDs.activeOrder],p_reason:'Согласован объезд'});
+ expect(save.args.p_plan.route_stops.map(point=>point.type)).toEqual(['start','wp','job']);
+ expect(save.args.p_plan.route_stops[2].job_id).toBe(job);
+ await clean(page,errors);
+});
+
+
+test('M9: remaining travel is calculated from current GPS without changing confirmed travel',async({page},info)=>{
+ const errors=await boot(page,info,{route:'trip/'+trip,routeBuilder:'active'});
+ await mockTripRouting(page);
+ await expect(page.locator('#tpRoutePointTime')).toBeVisible();
+ await expect(page.locator('.view-trip.active #rRebuildRemaining')).toHaveCount(0);
+ await page.locator('#tripMore').click();
+ await page.getByRole('button',{name:'Редактировать маршрут на карте',exact:true}).click();
+ await expect(page.locator('#rRebuildRemaining')).toBeVisible();
+ await page.locator('#rRebuildRemaining').click();
+ await expect(page.locator('#rStatus')).toContainText('Осталось');
+ expect(await page.evaluate(()=>window.__visualQA.financeWrites)).toEqual([]);
+ await page.locator('#rSaveTrip').click();
+ await page.locator('[data-pf=reason]').fill('Обновили расчёт от автомобиля');
+ await page.locator('#promptYes').click();
+ await expect(page.locator('.view-trip.active')).toBeVisible();
+ const [save]=await page.evaluate(()=>window.__visualQA.financeWrites.filter(write=>write.name==='trip_plan_save_tasks'));
+ expect(save.args.p_plan.remaining_route).toMatchObject({position_ts:'2026-10-05T16:58:00Z',stops:[{type:'start',lat:49.98,lng:36.22},{type:'wp',name:'Промежуточная точка'}]});
+ expect(save.args.p_plan).not.toHaveProperty('fact_km');
+ expect(save.args.p_plan.route_stops.map(point=>point.type)).toEqual(['start','job','wp']);
  await clean(page,errors);
 });

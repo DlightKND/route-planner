@@ -172,6 +172,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     }
   }
   if(lateScheduleCut)ride.day_plan={start:{d:'2026-10-05',t:7},cuts:[{after:2,at:{d:'2026-10-05',t:18}}]};
+  if(managerJourney?.routeBuilder)ride.route_stops.push({type:'wp',name:'Промежуточная точка',lat:49.97,lng:36.24});
   task.trip_service_orders = [{ trip_id: trip, trips: ride }];
   if(runningSchedule){ride.status='in_progress';ride.started_at='2026-10-05T04:00:00Z';request.job_works[0].hours=24;ride.econ_snapshot.workH=ride.plan_econ_snapshot.workH=24;ride.day_plan={start:{d:'2026-10-05',t:7},cuts:[{after:9,at:{d:'2026-10-06',t:7}}]};}
   if(legacyCrewMissing){ride.lead_engineer=null;ride.engineer_ids=[];ride.status='done';}
@@ -215,7 +216,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     default_theme: { mode: theme },
     tariff_profiles: [],
     avoid_zones: [],
-    ors_proxy: "",
+    ors_proxy: managerJourney?.routeBuilder?'https://anqfbljgfimoaziztdxe.supabase.co/functions/v1/ors':'',
     stay_radius_m: 300,
     stay_min_minutes: 10,
   };
@@ -387,6 +388,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     ];
     request.service_orders=[task];
     audit.financeRows=structuredClone(task.service_order_items);
+  }
+  if(managerJourney?.routeBuilder==='active'){
+    Object.assign(ride,{status:'in_progress',started_at:'2026-10-05T12:00:00Z'});
+    tables.vehicle_positions=[{trip_id:trip,vehicle_id:ride.vehicle_id,lat:49.98,lng:36.22,ts:'2026-10-05T16:58:00Z'}];
   }
   if(presenceRecoveryJourney){
     const point=(km,min)=>({trip_id:trip,vehicle_id:ride.vehicle_id,lat:client.lat,lng:client.lng+(km-100)/(111.32*Math.cos(client.lat*Math.PI/180)),ts:new Date(Date.UTC(2026,9,5,7,min)).toISOString()});
