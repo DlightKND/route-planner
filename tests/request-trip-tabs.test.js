@@ -12,7 +12,7 @@ afterEach(async()=>{await Promise.all(windows.splice(0).map(win=>win.happyDOM.cl
 function setup({writable=true}={}){
   const win=new Window();windows.push(win);win.document.body.innerHTML=html;
   const context=vm.createContext({document:win.document,window:win,createEntityTabs,setOverviewState,requestAnimationFrame:()=>{},
-    $:id=>win.document.getElementById(id),canWriteJob:()=>writable,
+    $:id=>win.document.getElementById(id),canWriteJob:()=>writable,jobFinance:null,tripFinance:null,
     mountEntityActions:vi.fn(),openEntityPanel:vi.fn(),confirmDialog:vi.fn(async()=>true)});
   const prepareStart=app.indexOf('function prepareEntityPages()'),prepareEnd=app.indexOf('async function openActivityPhoto(',prepareStart);
   vm.runInContext(app.slice(prepareStart,prepareEnd),context);
