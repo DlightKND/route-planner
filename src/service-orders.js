@@ -1,5 +1,6 @@
 import {mountOrderTripResults} from './order-trip-results.js';
 import {mountPaymentCard,readPaymentModel,savePaymentModel} from './payment-terms.js';
+import {mountEntityFinance} from './scoped-finance.js';
 import {setButtonBusy} from './ui/button-state.js';
 import {resolveEntityDraft} from './entity-draft-resolution.js';
 import {planningDate,planningPeriod,planningWarnings} from './core/planning-dates.js';
@@ -224,7 +225,16 @@ export function createServiceOrders(ctx){
  if(o.id){const auxiliary=document.createElement('div');auxiliary.id='orderAuxiliary';auxiliary.className='order-auxiliary';auxiliary.hidden=true;[$('orderExecution'),$('orderDeadlinePanel'),$('orderResponsibility')].forEach(node=>auxiliary.append(node));editor.append(auxiliary);}
  const identity=o.id||'new';
  const initial=({works:'scope',trips:'travel',history:'overview'})[requestedPane]||requestedPane||(identity===tabEntity?tabValue:o.id?'overview':'scope');
- tabEntity=identity;entityTabs=createEntityTabs(editor,{initial,onChange:value=>{tabValue=value;}});tabValue=entityTabs.value;
+ let finance=null;
+ if(o.id&&manager(o)){
+  const host=document.createElement('section'),user=loadedUser;
+  host.className='scoped-finance';$('orderPane-plan-fact').prepend(host);
+  finance=mountEntityFinance(host,{db:api,scope:'order',id:o.id,
+   current:()=>current===o&&host.isConnected&&user===ctx.userId(),
+   onTrip:async row=>{if(await leave())ctx.openTrip(row.id,{pane:'economy'});}});
+ }
+ tabEntity=identity;entityTabs=createEntityTabs(editor,{initial,onChange:value=>{tabValue=value;if(value==='plan-fact')void finance?.load();}});tabValue=entityTabs.value;
+ if(tabValue==='plan-fact')void finance?.load();
  if(!edit)$('orderOrganization').hidden=true;
  renderJobsAndItems(edit,report);$('orderBack').onclick=async()=>{if(!await leave())return;ctx.showBoard();};if($('orderRequest'))$('orderRequest').onclick=async()=>{if(await leave())ctx.openJob(o.job_id);};
  $('orderEditor').querySelectorAll('input,textarea,select').forEach(el=>{if(!el.closest('#orderDeadlinePanel,#orderResponsibility,#orderExecution'))el.addEventListener('input',mark);});$('orderEditor').querySelectorAll('select').forEach(el=>{if(!el.closest('#orderDeadlinePanel,#orderResponsibility,#orderExecution'))el.addEventListener('change',mark);});

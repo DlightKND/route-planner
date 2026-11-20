@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 const job=fixtureIDs.job,order=fixtureIDs.order,trip=fixtureIDs.trip,other='00000000-0000-4000-8000-000000000003';
-async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false,paymentJourney=false,roadJourney=false}={}){
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,unifiedJournalJourney:roadJourney,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan,paymentJourney,roadJourney}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
+async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false,paymentJourney=false,roadJourney=false,scopedFinanceJourney=false}={}){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,unifiedJournalJourney:roadJourney,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan,paymentJourney,roadJourney,scopedFinanceJourney}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
 }
 async function navigate(page,view,hash){await page.evaluate(hash=>{location.hash=hash;},hash);await expect(page.locator('.view-'+view)).toHaveClass(/active/);}
 async function reopenRequest(page){await navigate(page,'planner','/planner/jobs');await navigate(page,'job','/job/'+job);}
@@ -109,6 +109,50 @@ test('M16: road shares, payment terms and an edited tariff survive a split and r
  await linked.locator('[data-payment-exception]').first().click();
  await expect(roads.locator('.journal-road-detail:visible').first()).toContainText('Задано здесь');
  await expect.poll(()=>page.evaluate(()=>window.__visualQA.roadWrites.map(row=>row.p_action))).toEqual(['shares','terms','split','rates']);
+ await clean(page,errors);
+});
+
+test('M17: accepted road and work feed the three financial views and total adjustments stay in their card',async({page},info)=>{
+ const errors=await boot(page,info,{route:'order/'+order+'/plan-fact',scopedFinanceJourney:true,roadJourney:true,stage:'in_progress'});
+ const finance=page.locator('.view.active .scoped-finance'),fact=finance.locator('.scoped-finance-money').nth(1);
+ const totals=(revenue,cost)=>expect(fact.locator('dd')).toHaveText([revenue,cost]);
+ await totals('950 грн','635 грн');
+ await finance.getByRole('button',{name:'Таблицы',exact:true}).click();
+ await expect(finance.getByRole('table',{name:'Экономика · план и факт'})).toBeVisible();
+ await finance.locator('[data-finance-section=breakdown] summary').click();
+ await expect(finance.getByRole('row',{name:/Приход от пробега/})).toContainText('400 грн');
+ await finance.locator('[data-finance-section=rates] summary').click();
+ await finance.locator('[data-finance-rate]').first().click();
+ const editor=finance.locator('.scoped-finance-editor');
+ await editor.locator('[data-rate-mode=fact][data-rate-metric=revenue]').fill('600');
+ await editor.locator('[data-rate-mode=fact][data-rate-metric=cost]').fill('70');
+ await editor.locator('[data-finance-save]').click();
+ await totals(/1\s050 грн/,'395 грн');
+ await shot(page,info,'task-finance-rates');
+ await navigate(page,'trip','/trip/'+trip+'/economy');
+ await totals(/1\s050 грн/,'395 грн');
+ await finance.locator('[data-finance-section=totals] summary').click();
+ await finance.getByRole('button',{name:'Изменить итог · Приход · Факт'}).click();
+ await editor.locator('[data-finance-value]').fill('1600');
+ await expect(editor.locator('[data-finance-delta]')).toHaveText('+550');
+ await editor.locator('[data-finance-save]').click();
+ await expect(editor.getByRole('alert')).toContainText('Укажите причину');
+ await editor.locator('[data-finance-reason]').fill('Согласовано с заказчиком');
+ await editor.locator('[data-finance-save]').click();
+ await totals(/1\s600 грн/,'395 грн');
+ await expect(fact).toContainText('Итог скорректирован');
+ await shot(page,info,'trip-finance-correction');
+ await navigate(page,'job','/job/'+job+'/plan-fact');
+ await totals(/1\s050 грн/,'395 грн');
+ await navigate(page,'trip','/trip/'+trip+'/economy');
+ await totals(/1\s600 грн/,'395 грн');
+ await finance.locator('[data-finance-section=totals] summary').click();
+ await finance.getByRole('button',{name:'Изменить итог · Приход · Факт'}).click();
+ await editor.getByRole('button',{name:'Вернуть расчёт'}).click();
+ await totals(/1\s050 грн/,'395 грн');
+ const writes=await page.evaluate(()=>window.__visualQA.scopedFinanceWrites);
+ expect(writes.map(row=>[row.p_scope,row.p_value])).toEqual([
+  ['work',{fact:{revenue:600,cost:70}}],['trip',{value:1600,reason:'Согласовано с заказчиком'}],['trip',{}]]);
  await clean(page,errors);
 });
 

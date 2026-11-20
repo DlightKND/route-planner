@@ -31,22 +31,25 @@ function ratesFor(model,row,request){
  return {revenue:real(override.revenue)??baseRevenue,cost:real(override.cost)??baseCost,payer:paymentLabel(view,'payer',payer)};
 }
 
-export function calculateRoadAccounting(model,fact){
+export function calculateRoadAccounting(model,fact,scope=null){
+ if(scope&&(scope.lower==null||scope.upper==null))return {rows:[],measured:null,outside:0,unmeasured:true,total:null,revenue:null,cost:null};
+ const portion=km=>scope?round(km*Number(scope.upper))-round(km*Number(scope.lower)):Number(km);
  let unmeasured=false;
  const rows=model.sections.map(row=>{
-  const charges=Object.entries(row.shares).map(([request,km])=>({km:Number(km),...ratesFor(model,row,request)}));
+  const charges=Object.entries(row.shares).filter(([request])=>!scope||request===scope.request_id)
+   .map(([request,km])=>({km:portion(km),...ratesFor(model,row,request)})).filter(part=>part.km>0);
   const assigned=round(charges.reduce((total,part)=>total+part.km,0));
   const pending=row.km==null?null:Math.max(0,round(row.km-assigned));
   const defaults=ratesFor(model,row);
   const revenue=row.km==null?null:sum(charges.map(part=>product(part.km,part.revenue)));
-  const cost=round(row.measured_km-assigned)>0?product(round(row.measured_km-assigned),defaults.cost):0;
+  const cost=!scope&&round(row.measured_km-assigned)>0?product(round(row.measured_km-assigned),defaults.cost):0;
   const combinedCost=sum([cost,...charges.map(part=>product(part.km,part.cost))]);
   unmeasured ||= row.km==null;
   const revenueRates=[...new Set((charges.length?charges:[defaults]).map(part=>part.revenue))];
   return {...row,assigned,pending,computed:{revenue,cost:combinedCost},defaults:{...defaults,revenue:revenueRates.length===1?revenueRates[0]:null}};
  });
- const measured=round(rows.reduce((total,row)=>total+Number(row.measured_km),0));
- const outside=fact==null?0:Math.max(0,round(Number(fact)-measured));
+ const measured=round(rows.reduce((total,row)=>total+Number(scope?row.assigned:row.measured_km),0));
+ const outside=scope||fact==null?0:Math.max(0,round(Number(fact)-measured));
  return {rows,measured,outside,unmeasured,total:round(measured+outside),
   revenue:sum(rows.map(row=>row.computed.revenue)),
   cost:sum([...rows.map(row=>row.computed.cost),outside>0?product(outside,real(model.tariffs.costs?.km)):0])};

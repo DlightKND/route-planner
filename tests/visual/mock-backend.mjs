@@ -460,6 +460,21 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   const roadModel=()=>({scope:'trip',item:paymentTrip(),sections:roads,revision:roadRevision,source:roadSource,editable:role!=='engineer',tariffs:{
     tariffs:{km:15},costs:{km:8},tariff_profiles:[{id:'standard',def_paid:true,road:{km_rate:20}},{id:'warranty',def_warranty:true,road:{km_rate:12}}]}});
   if(roadJourney){ride.fact_km=35;audit.roadWrites=[];}
+  const scopedFinanceJourney=managerJourney?.scopedFinanceJourney;
+  const financeAdjustments=new Map();
+  const financeLocal=(scope,id,subject)=>financeAdjustments.get(termsKey(scope,id,subject))||{};
+  const scopedFinance=(scope,id)=>({scope,id,editable:true,currency:'грн',pricing:{profiles:[],tariffs:{}},
+    lines:[
+      {id:visitWork.id,order_id:order,number:task.number,title:visitWork.title,kind:'work',
+       plan_qty:2,fact_qty:1,accepted_qty:1,fact_hours:3,snapshot_qty:2,plan_hours:5,base_revenue:500,base_cost:150,hour_cost:150,
+       billable:true,hourly:true,terms:{},rates:financeLocal('work',order,visitWork.id),editable:true},
+      {id:visitPart.id,order_id:order,number:task.number,title:visitPart.title,kind:'material',
+       plan_qty:2,fact_qty:1,base_revenue:50,base_cost:10,editable:false}
+    ],extra_parts_cost:15,
+    trips:[{id:trip,title:ride.vehicle_label,whole:scope==='trip',request_id:job,lower:0,upper:1,
+      plan_km:20,plan_revenue:400,plan_cost:160,fact_km:20,approved_cost:160,road:{...roadModel(),sections:[roads[0]]}}],
+    corrections:Object.fromEntries(['plan:revenue','plan:cost','fact:revenue','fact:cost'].map(key=>[key,financeLocal(scope,id,key)]).filter(([,value])=>Object.keys(value).length))});
+  if(scopedFinanceJourney)audit.scopedFinanceWrites=[];
   const visitPayload={items:task.service_order_items.map(row=>({id:row.id,qty:row===visitWork?3:0,
     hours:row===visitWork?2:0,note:row===visitWork?'Осталась проверка':''})),hours:2,reason:'',correction:''};
   const visit={id:trip,date_from:ride.date_from,date_to:ride.date_to,label:'Сервисный автомобиль',status:'done',
@@ -647,6 +662,16 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(name==='entity_finance_read'){
+        if(!scopedFinanceJourney)return {data:null,error:{code:'PGRST202',message:'RPC unavailable'}};
+        return {data:role==='engineer'?null:structuredClone(scopedFinance(args.p_scope,args.p_id)),error:null};
+      }
+      if(name==='entity_finance_adjust'&&scopedFinanceJourney){
+        const {p_scope:scope,p_id:id,p_subject:subject,p_previous:previous,p_value:value}=args;
+        if(role==='engineer'||JSON.stringify(financeLocal(scope,id,subject))!==JSON.stringify(previous))return reject(name);
+        financeAdjustments.set(termsKey(scope,id,subject),structuredClone(value));audit.scopedFinanceWrites.push(structuredClone(args));
+        return {data:structuredClone(value),error:null};
+      }
       if(name==='journal_road_read'||name==='journal_road_exceptions'){
         if(!roadJourney)return {data:null,error:{code:'PGRST202',message:'RPC unavailable'}};
         const sections=roads.filter(row=>Object.keys(row.local).length);

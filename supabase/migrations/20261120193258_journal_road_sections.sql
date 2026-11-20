@@ -66,7 +66,7 @@ language sql stable set search_path='' as $$
     from extent where start_at is not null
     union all
     select id::text,greatest(a,e.start_at),least(b,e.end_at),name,request,coalesce(technical,false),false
-    from observed cross join extent e where a<b and a<e.end_at and b>e.start_at
+    from observed cross join extent e where a<b and a<=e.end_at and b>e.start_at
     union all
     select 'finish',end_at,end_at,case when depot then 'Депо' else 'Конец записи' end,null,false,coalesce(depot,false)
     from extent where end_at is not null
