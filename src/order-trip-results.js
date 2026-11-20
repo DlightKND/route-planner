@@ -185,14 +185,16 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   if(!shown.length&&!showPicker)return '';
   const id=esc(work?.id??'unassigned'),title=work?'Запчасти':'Материалы задания';
   const picker=showPicker?`<div class="order-trip-part-picker"><label>Запчасть<select data-work-part-material><option value="">Выбрать из материалов задания</option>${unassigned.map(item=>`<option value="${esc(item.id)}">${esc(item.title)}</option>`).join('')}</select></label>${buttons('Привязать запчасть','data-work-part-attach')}</div>`:'';
-  return `<details class="order-trip-materials" data-work-parts="${id}" ${partsOpen.has(id)?'open':''}><summary>${title} · ${shown.length}</summary>
-   ${shown.length?`<table class="workflow-related-table" aria-label="${title}${work?' · '+esc(work.title):''}"><thead><tr><th scope="col">${work?'Запчасть':'Материал'}</th><th scope="col">План</th><th scope="col">Факт</th><th scope="col">${work?'<span class="sr-only">Примечание и действия</span>':'Комментарий'}</th></tr></thead>
+  return `<details class="order-trip-materials${work?' order-trip-parts':''}" data-work-parts="${id}" ${partsOpen.has(id)?'open':''}><summary>${title} · ${shown.length}${work?journalIcon('chevron'):''}</summary>
+   ${shown.length?`<table class="workflow-related-table" aria-label="${title}${work?' · '+esc(work.title):''}">${work?'<colgroup><col class="order-trip-part-name"><col class="order-trip-part-quantity"><col class="order-trip-part-quantity"><col></colgroup>':''}<thead><tr><th scope="col">${work?'Запчасть':'Материал'}</th><th scope="col">План</th><th scope="col">Факт</th><th scope="col">${work?'<span class="sr-only">Примечание и действия</span>':'Комментарий'}</th></tr></thead>
    <tbody>${shown.map(item=>{
     const row=source.find(entry=>entry.id===item.id);
     const remove=canAssign&&!Number(item.done_qty)&&!Number(item.transferred_qty)?buttons('Отвязать','data-work-part-detach="'+esc(item.id)+'"','ghost'):'';
+    const comment=editable?`<textarea rows="2" maxlength="4000" data-visit-field="note" aria-label="Комментарий, ${esc(item.title)}">${esc(row?.note)}</textarea>`:esc(row?.note);
+    const actions=work&&(comment||remove)?`<details class="order-trip-part-actions"><summary aria-label="Действия с запчастью «${esc(item.title)}»">⋯</summary><div>${comment}${remove}</div></details>`:'';
     return `<tr ${editable?'data-visit-line="'+esc(item.id)+'"':''}><th scope="row">${esc(item.title)}<span class="hint">${esc(item.unit)}</span></th>
-     <td>${fmt(item.planned_qty)}</td><td>${editable?`<input type="text" inputmode="decimal" data-visit-field="qty" aria-label="Использовано, ${esc(item.title)}" value="${esc(row?.qty??0)}"><span class="hint">Доступно ${fmt(maxQty(item,lastVersion(selected)))}</span>`:row?fmt(row.qty):'—'}</td>
-     <td>${editable?`<textarea rows="2" maxlength="4000" data-visit-field="note" aria-label="Комментарий, ${esc(item.title)}">${esc(row?.note)}</textarea>`:esc(row?.note||(work?'':'—'))}${remove}</td></tr>`;
+     <td>${fmt(item.planned_qty)}</td><td>${editable?`<input type="text" inputmode="decimal" data-visit-field="qty" aria-label="Использовано, ${esc(item.title)}" aria-describedby="trip-part-limit-${esc(item.id)}" value="${esc(row?.qty??0)}"><span id="trip-part-limit-${esc(item.id)}" class="${work?'sr-only':'hint'}">Доступно ${fmt(maxQty(item,lastVersion(selected)))}</span>`:row?fmt(row.qty):'—'}</td>
+     <td>${work?actions:comment||'—'}</td></tr>`;
    }).join('')}</tbody></table>`:''}
    ${picker}${canAssign?'<p class="hint order-trip-part-status" role="status" hidden></p>':''}</details>`;
  }
