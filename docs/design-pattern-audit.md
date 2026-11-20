@@ -28,7 +28,7 @@
 | icon-button | Кнопка с иконкой и доступным именем | Описан | Есть | P1 | [src/journal-route.js:60](../src/journal-route.js#L60) | [Контракт](design-system.md#button--iconbutton--link) |
 | navigation-link | Ссылка, переход и browser back | Описан | Есть | P1 | [src/app.js:796](../src/app.js#L796) | [Контракт](design-system.md#button--iconbutton--link) |
 | status-badge | Неинтерактивный статус | Описан | Есть | P1 | [src/presence-decision.js:18](../src/presence-decision.js#L18) | [Контракт](design-system.md#badge--filterchip--selectionchip) |
-| count-badge | Вложенный счётчик: смысл / 0 / неизвестно | Описан | Есть | P1 | [src/unified-journal.css:437](../src/unified-journal.css#L437) | [Контракт](design-system.md#countbadge-вложенная-мини-пилюля-из-журнала) |
+| count-badge | Вложенный счётчик: смысл / 0 / неизвестно | Описан | Есть | P1 | [src/unified-journal.css:450](../src/unified-journal.css#L450) | [Контракт](design-system.md#countbadge-вложенная-мини-пилюля-из-журнала) |
 | filter-chip | Фильтры: один или несколько, сброс | Описан | Есть | P1 | [src/unassigned-tracks.js:46](../src/unassigned-tracks.js#L46) | [Контракт](design-system.md#badge--filterchip--selectionchip) |
 | view-segment | Сегментированный выбор представления | Описан | Есть | P1 | [src/app.js:3642](../src/app.js#L3642) | [Контракт](design-system.md#segmentedcontrol-переключатели-со-сводки) |
 | decision-radio | Radio / взаимоисключающий выбор в черновике | Описан | Есть | P1 | [src/app.js:6224](../src/app.js#L6224) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
@@ -135,4 +135,4 @@
 
 Связь type/role с ID классифицирует сигнал, а не автоматически распознаёт смысл каждого его вхождения.
 
-Хеш проверенных production-исходников: `da830d1a30acac9252eb66b7b1889e2e4fd33dc032ff7204a9f6e61e6f22539c`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
+Хеш проверенных production-исходников: `3b24982b8bb83c20abeb1e89ee775fb1c24712731ea11d20b76acdd0fe831da1`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.

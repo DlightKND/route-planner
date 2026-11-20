@@ -254,15 +254,27 @@
  .journal-road-table .journal-road-request-cell{display:table-cell}
  .journal-road-table .journal-road-mobile-requests{display:none}
 }
-.journal-road-detail{padding:var(--sp-4) var(--sp-2);overflow-wrap:anywhere}
-.journal-road-detail-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:start;gap:var(--sp-3)}
+.journal-road-detail{display:grid;gap:12px;min-width:0;padding:12px;overflow-wrap:anywhere;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm)}
+.journal-road-detail-head{display:grid;gap:8px}
 .journal-road-detail-head h3,.journal-road-editor h3{font-size:var(--fs-body);margin:0}
-.journal-road-buttons{display:flex;flex-wrap:wrap;gap:var(--sp-2)}
+.journal-road-buttons{display:flex;flex-wrap:wrap;gap:8px}
 .journal-road-buttons .btn{white-space:normal}
+.journal-road-detail .hint{margin:2px 0 0}
+.journal-road-share-card{overflow:hidden;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+.journal-road-share-card thead{background:var(--panel-2)}
+.journal-road-share-card :is(th,td){padding:10px 12px;vertical-align:middle}
+.journal-road-share-card tbody th{font-size:var(--fs-body);font-weight:400}
+.journal-road-share-card tbody tr:last-child>:is(th,td){border-bottom:0}
+.journal-road-detail [data-road-payment]{margin:0;padding:12px 16px}
+.journal-road-detail .payment-inline-head{justify-content:flex-start;align-items:baseline;gap:4px 12px;margin-bottom:8px}
+.journal-road-detail .payment-term-fields{margin:0;gap:12px 20px}
+.journal-road-detail .payment-term-fields label{margin:0}
+.journal-road-detail .payment-inline-actions{justify-content:flex-end;margin-top:12px}
 .journal-road-editor-fields{display:grid;gap:var(--sp-3)}
 .journal-road-editor-fields label{margin:0}
 .journal-road-editor input[type=range]{width:100%}
-.journal-road-editor[data-road-split-editor]{padding:var(--sp-4);margin-block:var(--sp-3);border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+.journal-road-editor[data-road-split-editor]{position:absolute;z-index:720;inset:12px auto auto 12px;width:min(284px,calc(100% - 84px));display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+.journal-road-editor[data-road-split-editor] :is(p,label){margin:0}
 .road-accounting{min-width:0}
 .road-accounting-totals{display:flex;flex-wrap:wrap;gap:var(--sp-3) var(--sp-6);margin-block:var(--sp-4)}
 .road-accounting-totals strong{margin-inline-start:var(--sp-2)}
@@ -400,7 +412,8 @@
  .journal-route-metrics>.btn{margin-top:var(--sp-2);font-size:var(--fs-4)}
  .journal-route-issues,.journal-route-explainer,.journal-trip-route .journal-conflict{order:3;margin:0;padding:var(--sp-4) var(--sp-5)}
  .journal-road-sections{order:3;padding-inline:var(--sp-5)}
- .journal-trip-route:has([data-road-split-editor])>.journal-route-map{position:sticky;top:0;z-index:1}
+ .journal-road-detail,.journal-road-detail [data-road-payment]{padding:10px}
+ .journal-road-detail .payment-term-fields{gap:8px 12px}
  .journal-route-open>.journal-timeline-host{display:block}
  .journal-orphan-overview{padding:var(--sp-5)}
  .journal-result-total strong{font-size:var(--fs-8)}

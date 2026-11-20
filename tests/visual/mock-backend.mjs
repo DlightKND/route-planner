@@ -652,6 +652,11 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         const sections=roads.filter(row=>Object.keys(row.local).length);
         return {data:structuredClone(name==='journal_road_read'?roadModel():sections.length?[{item:paymentTrip(),sections}]:[]),error:null};
       }
+      if(name==='journal_road_split_preview'&&roadJourney){
+        const row=roads.find(item=>item.id===args.p_id);
+        const left=Math.round(row.km*(args.p_at*1000-Date.parse(row.start_at))/(Date.parse(row.end_at)-Date.parse(row.start_at))*100)/100;
+        return {data:{left,right:row.km-left},error:null};
+      }
       if(name==='journal_road_save'&&roadJourney){
         const row=roads.find(item=>item.id===args.p_id);
         if(!row||args.p_revision!==roadRevision)return reject(name);

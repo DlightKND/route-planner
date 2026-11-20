@@ -86,9 +86,10 @@ test('M16: road shares, payment terms and an edited tariff survive a split and r
  await terms.locator('[data-payment-save]').click();
  await expect(terms).toContainText('Задано здесь');
  await detail.getByRole('button',{name:'Разделить участок'}).click();
- const split=detail.getByRole('form',{name:'Разделение участка'});
+ const split=page.locator('.journal-route-map').getByRole('form',{name:'Разделение участка'});
  await expect(split.getByRole('slider')).toBeVisible();
  await expect(page.locator('.journal-trip-route .journal-route-map path[stroke="#266fe0"]')).toBeVisible();
+ await expect(split.locator('[data-road-split-summary]')).toContainText(/10 км.*\/.*10 км/);
  await split.getByRole('button',{name:'Разделить',exact:true}).click();
  await expect(roads.locator('[data-road-row]')).toHaveCount(3);
  await expect(detail).toContainText('6,25 из 10 км распределено');

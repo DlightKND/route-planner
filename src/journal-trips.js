@@ -75,7 +75,8 @@ export function createJournalTrips(ctx){
    if(!trackResponse.data?.data?.segments?.length&&!roadId)return;
    const roads=root.ownerDocument.createElement('section');roads.className='journal-road-sections';
    section.querySelector('.journal-route-metrics').before(roads);
-   roadView=mountRoadSections(roads,{db:ctx.db,tripId:id,current,focus:routeMap.focusRoad,onSplitPoint:routeMap.markRoadCut});
+   roadView=mountRoadSections(roads,{db:ctx.db,tripId:id,current,focus:routeMap.focusRoad,onSplitPoint:routeMap.markRoadCut,
+    splitHost:section.querySelector('.journal-route-map')});
    if(roadId)roadView.open(roadId);
    void roadView.load();
   }

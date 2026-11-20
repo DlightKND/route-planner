@@ -29,12 +29,13 @@ export async function saveRoadModel(db,model,id,action,value){
  return data;
 }
 
-export function mountRoadSections(root,{db,tripId,focus,current,onSplitPoint}){
+export function mountRoadSections(root,{db,tripId,focus,current,onSplitPoint,splitHost}){
  let model=null,pendingId=null,selected=null,loading=0,busy=false,filter='all';
  const expanded=new Set();
  const jobs=()=>model.item.jobs||[];
  const byId=id=>model?.sections.find(row=>row.id===id);
  const title=id=>jobs().find(job=>job.id===id)?.title||'Заявка';
+ const clearSplit=()=>{splitHost.querySelector('[data-road-split-editor]')?.remove();onSplitPoint?.(null);};
  root.hidden=true;
 
  function select(id,{reveal=false}={}){
@@ -78,7 +79,7 @@ export function mountRoadSections(root,{db,tripId,focus,current,onSplitPoint}){
  }
 
  function render(search=root.querySelector('[data-road-search]')?.value||''){
-  onSplitPoint?.(null);
+  clearSplit();
   const rows=model.sections;
   const body=rows.map((row,index)=>{
    const id=esc(row.id),open=expanded.has(row.id),shares=Object.keys(row.shares);
@@ -88,10 +89,10 @@ export function mountRoadSections(root,{db,tripId,focus,current,onSplitPoint}){
    const terms=roadPaymentView(model,row);
    const basis=row.manual?'Распределено вручную':row.returning?(shares.length?'Автоматически · возврат по заявкам рейса':'Ожидает распределения возврата'):
     row.request_id?'Автоматически · дорога до объекта «'+title(row.request_id)+'»':row.km==null?'':'Уточните заявку пункта назначения';
-   const sharesTable=shares.length?`<table class="journal-road-shares" aria-label="Километры по заявкам"><thead><tr><th>Заявка</th><th>Км</th></tr></thead><tbody>${shares.map(job=>{
+   const sharesTable=shares.length?`<div class="journal-road-share-card"><table class="journal-road-shares" aria-label="Километры по заявкам"><thead><tr><th>Заявка</th><th>Км</th></tr></thead><tbody>${shares.map(job=>{
     const view=roadPaymentView(model,row,job);
     return `<tr><th scope="row">${esc(title(job))}${row.returning?`<span class="hint">Плательщик · ${esc(paymentLabel(view,'payer',view.effective.payer))}</span>`:''}</th><td>${number.format(row.shares[job])}</td></tr>`;
-   }).join('')}</tbody></table>`:'';
+   }).join('')}</tbody></table></div>`:'';
    const {min,max}=splitLimits(row);
    return `<tr class="journal-road-row" data-road-row="${id}" data-unassigned="${pending>0||!shares.length&&!row.request_id}">
     <th scope="row"><button type="button" class="journal-road-select" data-road-select="${id}" aria-pressed="${selected===row.id}">${esc(row.title)}</button>
@@ -103,7 +104,7 @@ export function mountRoadSections(root,{db,tripId,focus,current,onSplitPoint}){
    </tr><tr id="route-road-${index}" ${open?'':'hidden'}><td colspan="4"><div class="journal-road-detail">
     <div class="journal-road-detail-head"><div><h3>Распределение по заявкам</h3><p class="hint">${row.km==null?'Пробег участка неизвестен.':number.format(assigned(row)/100)+' из '+distanceText(row.km)+' распределено'}</p></div>
      <div class="journal-road-buttons">${model.editable&&row.km!=null&&jobs().length?`<button type="button" class="btn" data-road-allocate="${id}">Распределить по заявкам</button>`:''}
-     ${model.editable&&min<=max?`<button type="button" class="btn ghost" data-road-split="${id}">Разделить участок</button>`:''}</div></div>
+     ${model.editable&&min<=max?`<button type="button" class="btn" data-road-split="${id}">Разделить участок</button>`:''}</div></div>
     ${basis?`<p class="hint">${esc(basis)}</p>`:''}${sharesTable}${inlinePaymentHTML(terms)}
    </div></td></tr>`;
   }).join('');
@@ -178,32 +179,45 @@ export function mountRoadSections(root,{db,tripId,focus,current,onSplitPoint}){
  function split(trigger,row){
   const {min,max}=splitLimits(row);
   if(min>max)return;
-  root.querySelector('[data-road-split-editor]')?.remove();
+  clearSplit();
   select(row.id);
   const panel=root.ownerDocument.createElement('form');
   panel.dataset.roadSplitEditor='';panel.className='journal-road-editor';
   panel.setAttribute('aria-label','Разделение участка');
   panel.innerHTML=`<h3>Разделить участок</h3><p class="hint">Выберите точку на линии или на шкале времени.</p>
    <label>Точка разделения <output></output><input type="range" min="${min}" max="${max}" value="${Math.round((min+max)/2)}"></label>
-   <p class="hint" data-road-split-summary></p><p class="err" role="alert" hidden></p>
+   <p class="hint" data-road-split-summary role="status"></p><p class="err" role="alert" hidden></p>
    <div class="journal-road-buttons"><button type="button" class="btn ghost">Отмена</button><button type="submit" class="btn amber">Разделить</button></div>`;
   const slider=panel.querySelector('input'),time=panel.querySelector('output'),summary=panel.querySelector('[data-road-split-summary]');
+  let timer,request=0;
   const update=()=>{
-   const at=Number(slider.value)*60000;
+   const at=Number(slider.value)*60000,version=++request;
    time.textContent=clock.format(at);
+   slider.setAttribute('aria-valuetext',time.textContent);
    summary.textContent=intervalText(row.start_at,at)+' · '+intervalText(at,row.end_at);
    onSplitPoint?.(row,at,next=>{slider.value=String(Math.round(next/60000));update();});
+   clearTimeout(timer);
+   timer=setTimeout(async()=>{
+    if(!current()||!panel.isConnected)return;
+    try{
+     const {data,error}=await db().rpc('journal_road_split_preview',{p_trip:tripId,p_id:row.id,p_revision:model.revision,p_source:model.source,p_at:at/1000});
+     if(error||!data||version!==request||!current()||!panel.isConnected)return;
+     const label=(from,to,km)=>intervalText(from,to)+' · '+(km==null?'пробег неизвестен':distanceText(km));
+     summary.textContent=label(row.start_at,at,data.left)+' / '+label(at,row.end_at,data.right);
+    }catch{/* The selected time stays available while the preview is unreachable. */}
+   },160);
   };
   const [cancel,submit]=panel.querySelectorAll('button'),errorBox=panel.querySelector('[role=alert]');
-  cancel.onclick=()=>{onSplitPoint?.(null);panel.remove();trigger.focus();};
+  cancel.onclick=()=>{clearTimeout(timer);clearSplit();trigger.focus();};
   panel.onsubmit=async event=>{
    event.preventDefault();cancel.disabled=submit.disabled=slider.disabled=true;errorBox.hidden=true;
    try{if(await save(row,'split',Number(slider.value)*60)){render();select(row.id,{reveal:true});}}
    catch(error){errorBox.textContent=error.message;errorBox.hidden=false;}
    finally{cancel.disabled=submit.disabled=slider.disabled=false;}
   };
-  trigger.closest('.journal-road-detail-head').after(panel);
-  slider.oninput=update;update();slider.focus({preventScroll:true});panel.scrollIntoView({block:'nearest'});
+  for(const type of ['pointerdown','mousedown','dblclick','wheel'])panel.addEventListener(type,event=>event.stopPropagation());
+  splitHost.append(panel);
+  slider.oninput=update;update();slider.focus({preventScroll:true});splitHost.scrollIntoView({block:'nearest'});
  }
  return {load,open(id){pendingId=id;if(byId(id)){select(id,{reveal:true});pendingId=null;}}};
 }

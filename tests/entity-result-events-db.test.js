@@ -62,6 +62,7 @@ beforeAll(async()=>{
      alter table public.service_order_items add column tariff_profile text,add column created_at timestamptz;
      alter table public.settings add column tariffs jsonb,add column costs jsonb,add column tariff_profiles jsonb;`);
   await db.exec(file('../supabase/migrations/20261120193258_journal_road_sections.sql'));
+  await db.exec(file('../supabase/migrations/20261120195251_journal_road_split_preview.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -111,6 +112,11 @@ it('prices verified road intervals independently of stops, preserves shares on s
   await rejected(()=>save(latest,first,'rates',{revenue:-1}),/тарифы/);
   latest=await save(latest,first,'rates',{revenue:23.5,cost:10});
   const cut=Date.parse(iso('08:30'))/1000;
+  const preview=async(model,section,at)=>q('select public.journal_road_split_preview($1,$2,$3,$4,$5) quote',
+    [id(50),section,model.revision,model.source,at]).then(rows=>rows[0].quote);
+  expect(await preview(latest,first,cut)).toEqual({left:5,right:5});
+  expect(await preview(latest,id(85)+'~finish',Date.parse(iso('10:00'))/1000)).toEqual({left:10,right:null});
+  await rejected(()=>preview(original,first,cut),/Маршрут изменился/);
   latest=await save(latest,first,'split',cut);
   expect(latest.sections.slice(0,2)).toMatchObject([
     {id:first,km:5,shares:{[id(10)]:3.02},local:{payer:'service',warranty:'warranty'},rates:{revenue:23.5,cost:10}},
