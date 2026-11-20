@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false, remainderJourney = false } = {}) {
   if(managerJourney){financeJourney=true;entityAudit=true;}
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
@@ -466,7 +466,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
           if(table==='service_orders'&&_cols){
             // Canonical task columns, verified against production schema.
             // Embedded relationships have their own fields; do not treat them as task columns.
-            const columns=new Set('id,number,title,status,work_mode,date_from,date_to,lead_engineer,engineer_ids,instructions,result_note,revision,legacy_trip_id,legacy_snapshot,created_by,created_at,updated_at,job_id,seed_request_id,curator_id,owner_id'.split(','));
+            const columns=new Set('id,number,title,status,closed_with_remainder_at,work_mode,date_from,date_to,lead_engineer,engineer_ids,instructions,result_note,revision,legacy_trip_id,legacy_snapshot,created_by,created_at,updated_at,job_id,seed_request_id,curator_id,owner_id'.split(','));
             let depth=0,part='',parts=[];
             for(const char of _cols){if(char==='(')depth++;if(char===')')depth--;if(char===','&&!depth){parts.push(part);part='';}else part+=char;}parts.push(part);
             const missing=parts.filter(p=>!p.includes('(')).map(p=>p.trim().split(':').at(-1).split('->')[0]).find(p=>p!=='*'&&!columns.has(p));
@@ -635,6 +635,30 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         comment.pinned_at=args.p_pinned?stamp:null;comment.pinned_by=args.p_pinned?session.user.id:null;
         audit.entityWrites.push({name,args:structuredClone(args)});
         return {data:{id:comment.id,pinned_at:comment.pinned_at,pinned_by:comment.pinned_by},error:null};
+      }
+      if(name==='service_order_request_remainders'){
+        const closed=remainderJourney?tables.service_orders.filter(row=>row.status==='completed'&&row.closed_with_remainder_at&&row.job_id===args.p_job):[];
+        return {data:closed.flatMap(row=>row.service_order_items.flatMap(item=>{
+          const qty=item.planned_qty-item.done_qty-(item.transferred_qty||0);
+          return qty>0?[{id:item.id,number:row.number,title:item.title,unit:item.unit,planned:String(item.planned_qty),qty:String(qty)}]:[];
+        })),error:null};
+      }
+      if(remainderJourney&&name==='service_order_close_with_remainder'){
+        if(role==='engineer'||args.p_order!==activeTask.id||args.p_expected!==activeTask.revision)return reject(name);
+        Object.assign(activeTask,{status:'completed',closed_with_remainder_at:stamp,revision:activeTask.revision+1});
+        audit.remainderWrites=[{name,args:structuredClone(args)}];
+        return {data:activeTask.revision,error:null};
+      }
+      if(remainderJourney&&name==='service_order_create_with_remainders'){
+        if(role==='engineer'||args.p_job!==job||!activeTask.closed_with_remainder_at)return reject(name);
+        const id=crypto.randomUUID(),rows=args.p_remainders.map(source=>{
+          const row=activeTask.service_order_items.find(item=>item.id===source.item_id);
+          row.transferred_qty=Number(source.qty);
+          return {...row,id:crypto.randomUUID(),order_id:id,source_item_id:row.id,planned_qty:Number(source.qty),done_qty:0,transferred_qty:0,from_request_remainder:true};
+        });
+        tables.service_orders.push({...task,...args.p_data,id,number:109,status:'draft',revision:0,seed_request_id:null,trip_service_orders:[],service_order_items:rows});
+        audit.remainderWrites.push({name,args:structuredClone(args)});
+        return {data:id,error:null};
       }
       if(managerJourney&&['service_order_organization_save','service_order_save_one','entity_responsibility_assign','service_order_deadline_propose','trip_reschedule_request'].includes(name)){
         const bad=message=>({data:null,error:{message,code:'QA_MANAGER_VALIDATION'}}),target=name==='entity_responsibility_assign'?(args.p_kind==='order'?tables.service_orders.find(o=>o.id===args.p_id):args.p_kind==='job'?request:ride):tables.service_orders.find(o=>o.id===(args.p_id||args.p_order));

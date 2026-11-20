@@ -283,7 +283,7 @@ export function frameOrderWorkspace({record,editable,people},root=document){
  if(record.id){
   title.textContent='Задание №'+record.number;
   const subject=title.nextElementSibling;subject.className='workflow-subject';subject.textContent=record.title||'';
-  const status=editor.querySelector('.entity-head-meta .design-status');status.classList.add('workflow-stage');title.after(status);
+  const status=editor.querySelector('.entity-head-meta .design-status');status.classList.add('workflow-stage');if(record.closed_with_remainder_at)status.textContent='Закрыто с остатком';title.after(status);
   const button=element(doc,'button','btn workflow-edit');button.id='orderEditData';button.type='button';button.innerHTML=journalIcon('edit')+'<span>Изменить</span>';button.setAttribute('aria-label','Изменить данные');button.hidden=true;
   controls.prepend(button);
   const origin=root.getElementById('orderRequest');
@@ -312,7 +312,7 @@ export function frameOrderWorkspace({record,editable,people},root=document){
    in_progress:'Зафиксируйте объём, трудозатраты и использованные материалы.',
    paused:'Работы можно возобновить после согласования.',
    review:'Проверьте выполненные работы и остаток.',
-   completed:'Выполненные работы доступны в план/факте.',
+   completed:record.closed_with_remainder_at?'Выберите оставшиеся работы при создании следующего задания из заявки.':'Выполненные работы доступны в план/факте.',
    cancelled:'Данные задания и история доступны для просмотра.'
   })[record.status]||'Откройте работы, чтобы проверить состав задания.');
   const name=id=>people.find(p=>p.id===id)?.full_name||'Не назначен';

@@ -3958,17 +3958,19 @@ async function openJob(id,presetClient,presetEquip,{pane:requestedPane}={}){ if(
   configureEntityActions('job',j);
   setOverviewState($('jobOverviewState'),ST[j?.status]||'Заявка', 'Загружаем связанные задания.');
   if(id){
-    serviceOrders.requestPanel(id).then(tasks=>{
+    serviceOrders.requestPanel(id).then(result=>{
       if(jobEditId!==id)return;
       const button=$('jobRecordResult'),finished=['done','cancelled'].includes($('jbStatus').value);
       const create=!!$('jobOrders').querySelector('[data-order-new]');
+      const {tasks,remaining}=result||{};
+      const shouldCreate=create&&(!tasks?.length||remaining);
       const completed=tasks?.length&&tasks.every(task=>['completed','cancelled'].includes(task.status));
-      const title=finished?'Заявка '+ST[$('jbStatus').value]:tasks?.length?completed?'Работы завершены':'Можно продолжить работы':tasks?'Нужно подготовить задания':'Задания временно недоступны';
-      const detail=finished||completed?'Результаты доступны в план/факте.':create&&!tasks?.length?'Опишите работы и назначьте исполнителей.':'Откройте задания, чтобы отчитаться о работах или проверить результат.';
+      const title=finished?'Заявка '+ST[$('jbStatus').value]:remaining?'Есть остаток работ':tasks?.length?completed?'Работы завершены':'Можно продолжить работы':tasks?'Нужно подготовить задания':'Задания временно недоступны';
+      const detail=finished?'Результаты доступны в план/факте.':remaining?'Выберите остаток при создании следующего задания.':completed?'Результаты доступны в план/факте.':shouldCreate?'Опишите работы и назначьте исполнителей.':'Откройте задания, чтобы отчитаться о работах или проверить результат.';
       setOverviewState($('jobOverviewState'),title,detail);
       button.hidden=finished;
-      button.textContent=create&&!tasks?.length?'Создать задание':completed?'Посмотреть результат':'Открыть задания';
-      button.onclick=()=>{if(create&&!tasks?.length)$('jobOrders').querySelector('[data-order-new]')?.click();else requestTabs.select(completed?'estimate':'tasks');};
+      button.textContent=shouldCreate?'Создать задание':completed?'Посмотреть результат':'Открыть задания';
+      button.onclick=()=>{if(shouldCreate)$('jobOrders').querySelector('[data-order-new]')?.click();else requestTabs.select(completed?'estimate':'tasks');};
     });
   }else serviceOrders.requestPanel(null);
   const pane=document.querySelector('.view-job .pane'); if(pane) pane.scrollTop=0; }

@@ -47,3 +47,35 @@ test('M4: a failed handoff reports the separately saved plan and keeps the lates
 test('M7: request tasks show their period and a new task shows the independent request SLA',async({page},info)=>{
  const errors=await boot(page,info);await page.locator('#jobTabTasks').click();await expect(page.locator('.order-child-period').first()).toContainText('05.10.2026');await page.locator('#jobOrders [data-order-new]').click();await expect(page.locator('.view-order')).toHaveClass(/active/);await expect(page.locator('.order-planning-summary')).toContainText('09.10.2026');await page.locator('#orderTo').fill('2026-10-14');await expect(page.locator('.order-planning-summary .planning-warnings')).toContainText('позже срока');expect(await page.evaluate(()=>window.__visualQA.managerWrites)).toEqual([]);await shot(page,info,'new-task-sla');await clean(page,errors);
 });
+
+test('M8: closing a partial task offers its remaining work when the request gets a new task',async({page},info)=>{
+ const errors=[];
+ page.on('pageerror',error=>errors.push(error.message));
+ await page.route('**/*',route=>new URL(route.request().url()).origin==='http://127.0.0.1:4173'?route.continue():route.abort());
+ await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,remainderJourney:true});
+ await page.goto('/#/order/'+fixtureIDs.activeOrder);
+ if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
+ await page.locator('#orderMore').click();
+ await page.getByRole('button',{name:'Закрыть с остатком',exact:true}).filter({visible:true}).click();
+ await page.locator('#promptFields textarea').fill('Принят выполненный объём');
+ await page.locator('#promptYes').click();
+ await expect(page.locator('#orderOverviewState h2')).toHaveText('Закрыто с остатком');
+ expect(await page.evaluate(()=>window.__visualQA.remainderWrites.length)).toBe(1);
+
+ await page.locator('#orderRequest').click();
+ await expect(page.locator('#jobOverviewState h2')).toHaveText('Есть остаток работ');
+ await page.locator('#jobRecordResult').click();
+ const candidates=page.locator('#orderRequestRemainders [data-remainder-item]');
+ await expect(candidates).toHaveCount(2);
+ await expect(candidates.first()).not.toBeChecked();
+ await candidates.first().check();
+ await page.locator('#orderTitle').fill('Второй этап');
+ await shot(page,info,'request-remainder');
+ await page.locator('#orderSave').click();
+ await expect(page.locator('.view-order.active .workflow-subject')).toHaveText('Второй этап');
+ const writes=await page.evaluate(()=>window.__visualQA.remainderWrites);
+ expect(writes.map(write=>write.name)).toEqual(['service_order_close_with_remainder','service_order_create_with_remainders']);
+ expect(writes[1].args.p_remainders).toHaveLength(1);
+ expect(writes[1].args.p_items).toEqual([]);
+ await clean(page,errors);
+});

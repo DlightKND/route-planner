@@ -13,7 +13,7 @@ let win,doc,ui,ctx,rpcCalls,order,stock,works,taskProfiles,selectCalls,settingsC
 const person='00000000-0000-4000-8000-000000000003',job='00000000-0000-4000-8000-000000000010';
 beforeEach(()=>{win=new Window();doc=win.document;stock=[];works=[];taskProfiles=[];tripChoices=[];selectCalls=[];settingsCalls=0;vi.stubGlobal('window',win);vi.stubGlobal('document',doc);doc.body.innerHTML='<input id="orderSearch"><select id="orderEngineer"></select><input id="orderClosed"><input id="orderHistorical" type="checkbox"><div id="orderHistoricalNote"></div><select id="orderViewMode"><option value="kanban">Канбан</option><option value="list">Список</option></select><button id="orderScopeClear"></button><button id="orderAdd"></button><div id="orderStatusChips"></div><div id="orderList"></div><div id="orderScope"></div><div id="orderScopeText"></div><div id="orderEditor"></div>';
  order={id:'order1',number:1,title:'Ремонт',status:'in_progress',work_mode:'onsite',job_id:job,seed_request_id:job,jobs:{clients:{name:'Клиент'}},engineer_ids:[person],lead_engineer:person,revision:2,service_order_items:[{id:'item1',job_id:job,title:'Насосы',unit:'шт',planned_qty:2,done_qty:0,transferred_qty:0}],trip_service_orders:[]};rpcCalls=[];
- const db={from:table=>{const data=table==='trips'?structuredClone(tripChoices):table==='jobs'?[{id:job,clients:{name:'Клиент'},at_depot:false}]:table==='service_orders'?[structuredClone(order)]:table==='stock_catalog'?structuredClone(stock):table==='work_catalog'?structuredClone(works):table==='settings'?[{tariff_profiles:structuredClone(taskProfiles)}]:[];const b={select:query=>{if(table==='service_orders')selectCalls.push(query);return b;},is:()=>b,order:()=>b,eq:()=>b,not:()=>b,limit:()=>b,single:()=>{if(table==='settings'){settingsCalls++;if(!ctx.canWrite())return Promise.resolve({data:null,error:{message:'Cannot coerce the result to a single JSON object'}});}return Promise.resolve({data:data[0],error:null});},then:(resolve,reject)=>Promise.resolve({data,error:null}).then(resolve,reject)};return b;},rpc:async(fn,args)=>{if(fn==='entity_activity_results')return {data:[],error:null};rpcCalls.push({fn,args});return {data:fn==='service_order_save_one'?'order1':3,error:null};}};
+ const db={from:table=>{const data=table==='trips'?structuredClone(tripChoices):table==='jobs'?[{id:job,clients:{name:'Клиент'},at_depot:false}]:table==='service_orders'?[structuredClone(order)]:table==='stock_catalog'?structuredClone(stock):table==='work_catalog'?structuredClone(works):table==='settings'?[{tariff_profiles:structuredClone(taskProfiles)}]:[];const b={select:query=>{if(table==='service_orders')selectCalls.push(query);return b;},is:()=>b,order:()=>b,eq:()=>b,not:()=>b,limit:()=>b,single:()=>{if(table==='settings'){settingsCalls++;if(!ctx.canWrite())return Promise.resolve({data:null,error:{message:'Cannot coerce the result to a single JSON object'}});}return Promise.resolve({data:data[0],error:null});},then:(resolve,reject)=>Promise.resolve({data,error:null}).then(resolve,reject)};return b;},rpc:async(fn,args)=>{if(fn==='entity_activity_results'||fn==='service_order_request_remainders')return {data:[],error:null};rpcCalls.push({fn,args});return {data:fn==='service_order_save_one'?'order1':3,error:null};}};
  ctx={db:()=>db,canWrite:()=>true,role:()=>ctx.canWrite()?'admin':'engineer',userId:()=>person,profiles:()=>[{id:person,full_name:'Анна',role:'engineer',active:true}],ensureRefs:async()=>{},isPhone:()=>false,wireDrag:vi.fn(),notify:vi.fn(),showBoard:vi.fn(),showOrder:vi.fn(),openJob:vi.fn(),openTrip:vi.fn(),tripStatus:s=>s,confirmLeave:()=>false,reason:async()=>null};ui=createServiceOrders(ctx);ui.init();});
 afterEach(async()=>{await win.happyDOM.close();vi.unstubAllGlobals();});
 it('explains stage prerequisites before calling the server and prevents closing over an active shared trip',async()=>{
@@ -283,3 +283,49 @@ it('uses contextual resume and review-return labels and exposes active task acti
 it('stops handoff if the saved plan cannot be reloaded instead of assigning with a stale revision',async()=>{planningWrites();order.status='assigned';order.date_from='2026-10-01';order.date_to='2026-10-06';await ui.open(order.id);let saved=false;const db=ctx.db(),from=db.from,rpc=db.rpc;db.from=table=>{const q=from(table);if(table==='service_orders'&&saved)q.single=async()=>({data:null,error:{message:'Сеть недоступна'}});return q;};db.rpc=async(fn,args)=>{const r=await rpc(fn,args);if(fn==='service_order_save_one')saved=true;return r;};doc.querySelector('#orderTo').value='2026-10-09';doc.querySelector('#orderTo').dispatchEvent(new win.Event('input',{bubbles:true}));const form=doc.querySelector('#orderResponsibility form');form.elements.reason.value='Передача следующему куратору';const submit=form.onsubmit({preventDefault(){}});await vi.waitFor(()=>expect(doc.querySelector('[data-draft-choice=save]')).not.toBeNull());doc.querySelector('[data-draft-choice=save]').click();await submit;expect(rpcCalls.filter(c=>c.fn==='service_order_save_one')).toHaveLength(1);expect(rpcCalls.filter(c=>c.fn==='entity_responsibility_assign')).toHaveLength(0);expect(doc.getElementById('orderError').textContent).toContain('План задания сохранён');expect(order.date_to).toBe('2026-10-09');});
 
 it('retains a partial handoff error in the refreshed task as well as in the dialog',async()=>{planningWrites();order.status='assigned';order.date_from='2026-10-01';order.date_to='2026-10-06';await ui.open(order.id);const db=ctx.db(),rpc=db.rpc;db.rpc=async(fn,args)=>fn==='entity_responsibility_assign'?{data:null,error:{message:'Передача отклонена'}}:rpc(fn,args);doc.querySelector('#orderTo').value='2026-10-09';doc.querySelector('#orderTo').dispatchEvent(new win.Event('input',{bubbles:true}));const form=doc.querySelector('#orderResponsibility form');form.elements.reason.value='Передача следующему куратору';const submit=form.onsubmit({preventDefault(){}});await vi.waitFor(()=>expect(doc.querySelector('[data-draft-choice=save]')).not.toBeNull());doc.querySelector('[data-draft-choice=save]').click();await submit;expect(doc.getElementById('orderError').textContent).toContain('Изменения задания сохранены');expect(doc.getElementById('orderError').textContent).toContain('Передача отклонена');expect(order.date_to).toBe('2026-10-09');expect(order.revision).toBe(3);});
+
+it('closes partially performed work and leaves the remainder with the request',async()=>{
+ order.service_order_items[0].done_qty=1;
+ ctx.reason=vi.fn(async()=> 'Принята выполненная часть');
+ const original=ctx.db().rpc;
+ ctx.db().rpc=async(fn,args)=>{
+  if(fn==='service_order_close_with_remainder'){
+   rpcCalls.push({fn,args});order.status='completed';order.closed_with_remainder_at='2026-11-20T07:00:00Z';order.revision++;
+   return {data:order.revision,error:null};
+  }
+  return original(fn,args);
+ };
+ await ui.open('order1',job);
+ expect(doc.getElementById('orderCarry').disabled).toBe(false);
+ await doc.getElementById('orderCarry').onclick();
+ expect(rpcCalls).toEqual([{fn:'service_order_close_with_remainder',args:{p_order:'order1',p_expected:2,p_reason:'Принята выполненная часть'}}]);
+ expect(ui.currentId()).toBe('order1');
+ expect(doc.getElementById('orderResultSummary').textContent).toContain('Задание закрыто с остатком');
+});
+
+it('saves the chosen request remainder as an exact quantity with a retry identifier',async()=>{
+ const original=ctx.db().rpc;
+ ctx.db().rpc=async(fn,args)=>{
+  if(fn==='service_order_request_remainders')return {data:[
+   {id:'source1',number:20,title:'Замена',unit:'ч',planned:'0.3',qty:'0.2'},
+   {id:'source2',number:20,title:'Проверка',unit:'шт',planned:'2',qty:'1'}
+  ],error:null};
+  if(fn==='service_order_create_with_remainders'){
+   rpcCalls.push({fn,args});
+   return {data:'order1',error:null};
+  }
+  return original(fn,args);
+ };
+ await ui.open(null,job);
+ expect(doc.getElementById('orderRequestRemainders').textContent).toContain('Остаток работ по заявке');
+ const [first,second]=doc.querySelectorAll('[data-remainder-item]');
+ expect(first.checked||second.checked).toBe(false);
+ first.click();doc.getElementById('orderTitle').value='Следующий этап';
+ await doc.getElementById('orderSave').onclick();
+ expect(rpcCalls).toHaveLength(1);
+ expect(rpcCalls[0]).toMatchObject({fn:'service_order_create_with_remainders',args:{
+  p_job:job,p_items:[],p_data:{title:'Следующий этап'},
+  p_remainders:[{item_id:'source1',qty:'0.2'}],
+  p_operation_id:expect.stringMatching(/^[0-9a-f-]{36}$/i)
+ }});
+});
