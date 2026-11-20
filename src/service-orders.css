@@ -218,6 +218,12 @@ html#dlight-ui[data-ui-system] .view .order-trip-work-detail>td { padding:12px 1
 .order-trip-materials>summary,.order-trip-versions summary { cursor:pointer; }
 .order-trip-materials table { table-layout:fixed; }
 .order-trip-materials :is(th,td) { overflow-wrap:anywhere; }
+.order-trip-work-fields .order-trip-materials { margin-top:16px; }
+.order-trip-part-picker { display:flex; align-items:end; flex-wrap:wrap; gap:8px 12px; padding:8px 16px 12px; }
+.order-trip-part-picker label { flex:1 1 220px; min-width:0; }
+.order-trip-part-picker select { width:100%; min-width:0; }
+.order-trip-part-status { padding:0 16px 12px; }
+.order-manual-parts>[data-result-item] { padding:8px 16px 12px; }
 .order-trip-review { display:grid; gap:12px; padding:24px; }
 .order-trip-review-hours { font-size:20px; font-weight:500; }
 .order-trip-versions details { margin-top:8px; }

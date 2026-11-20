@@ -232,6 +232,66 @@ test('M11: the curator saves a work norm without changing the trip report draft'
  await clean(page,errors);
 });
 
+test('M12: planned parts stay with the work from draft through acceptance',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope/'+trip,tripResultJourney:'parts'});
+ const panel=page.locator('#orderTripResults');
+ const expand=panel.locator('[data-visit-expand]').first();
+ const group=panel.locator('[data-work-parts]').filter({has:page.locator('[data-work-part-attach]')});
+ const work=panel.locator('[data-visit-line]').first();
+ await expand.click();
+ await work.locator('.order-trip-complete').click();
+ await group.locator('summary').click();
+ const part=await group.locator('select option').nth(1).evaluate(option=>({id:option.value,name:option.textContent}));
+ await group.locator('select').selectOption(part.id);
+ await group.getByRole('button',{name:'Привязать запчасть'}).click();
+ const parts=panel.locator('.order-trip-work-fields .order-trip-materials');
+ await expect(parts.locator('summary')).toHaveText('Запчасти · 1');
+ await expect(panel.locator('[data-work-parts=unassigned] [data-visit-line="'+part.id+'"]')).toHaveCount(0);
+ await expect(work.getByRole('switch')).toBeChecked();
+ const [assignment]=await page.evaluate(()=>window.__visualQA.workPartWrites);
+ expect(assignment).toMatchObject({p_part:part.id,p_expected:0});
+ await parts.getByRole('textbox',{name:'Использовано, '+part.name}).fill('1');
+ await page.reload();
+ await expand.click();
+ await parts.locator('summary').click();
+ await expect(parts.getByRole('textbox',{name:'Использовано, '+part.name})).toHaveValue('1');
+ await shot(page,info,'trip-result-nested-parts');
+ await panel.locator('[data-visit-review]').click();
+ const reviewed=panel.locator('.order-trip-review tbody tr').filter({hasText:part.name});
+ await expect(reviewed).toHaveCount(1);
+ await expect(reviewed.locator('th')).not.toHaveText(part.name);
+ await expect(reviewed).toContainText(part.name+' · 1');
+ await panel.locator('[data-visit-commit]').click();
+ await expect(panel).toContainText('Принято');
+ await expand.click();
+ await parts.locator('summary').click();
+ await expect(parts.getByRole('row').last()).toContainText(part.name);
+ const [accepted]=await page.evaluate(()=>window.__visualQA.visitWrites);
+ expect(accepted).toMatchObject({p_order_revision:1,p_action:'accepted'});
+ expect(accepted.p_result.items.find(item=>item.id===part.id)).toMatchObject({qty:1,hours:0});
+ await clean(page,errors);
+});
+
+test('M12: a manual result records parts under their work without a trip',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope',standaloneWorkPlan:'parts'});
+ const panel=page.locator('#orderTripResults');
+ await panel.getByRole('button',{name:'Зафиксировать результат'}).click();
+ const parts=dialog(page).locator('.order-manual-parts');
+ await expect(parts.locator('[data-result-qty]')).toBeHidden();
+ await parts.locator('summary').click();
+ const partId=await parts.locator('[data-result-item]').getAttribute('data-result-item');
+ await parts.getByRole('spinbutton',{name:'Использовано всего'}).fill('1');
+ await dialog(page).locator('#orderResultSave').click();
+ await expect(dialog(page)).toHaveCount(0);
+ const [write]=await page.evaluate(()=>window.__visualQA.entityWrites);
+ expect(write.args.p_items).toContainEqual({id:partId,done_qty:1,result_note:''});
+ await panel.locator('[data-visit-expand]').first().click();
+ const result=panel.locator('.order-trip-work-fields .order-trip-materials');
+ await result.locator('summary').click();
+ await expect(result.locator('tbody tr td').nth(1)).toHaveText('1');
+ await clean(page,errors);
+});
+
 for(const stage of ['in_progress','paused'])test('M11: the curator saves the work norm and records a manual result without a trip · '+stage,async({page},info)=>{
  const errors=await boot(page,info,{stage,route:'order/'+order+'/scope',standaloneWorkPlan:true});
  const panel=page.locator('#orderTripResults');

@@ -437,6 +437,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   const visitJourney=managerJourney?.tripResultJourney;
   const standaloneWorkPlan=managerJourney?.standaloneWorkPlan;
   const visitWork=task.service_order_items.find(row=>row.kind==='work');
+  const visitPart=task.service_order_items.find(row=>row.kind==='material');
   const visitPayload={items:task.service_order_items.map(row=>({id:row.id,qty:row===visitWork?3:0,
     hours:row===visitWork?2:0,note:row===visitWork?'Осталась проверка':''})),hours:2,reason:'',correction:''};
   const visit={id:trip,date_from:ride.date_from,date_to:ride.date_to,label:'Сервисный автомобиль',status:'done',
@@ -447,11 +448,18 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     if(visitJourney==='manager')Object.assign(visit,{state:'submitted',latest:visitPayload,submitted_revision:4,
       event:'00000000-0000-4000-8000-000000000091'});
     audit.visitWrites=[];audit.workPlanWrites=[];
+    if(visitJourney==='parts'){
+      const assignment=JSON.parse(sessionStorage.getItem('qa:work-part-assignment')||'null');
+      visitPart.parent_work_id=assignment?.work??null;
+      if(assignment)task.revision=assignment.revision;
+      audit.workPartWrites=[];
+    }
   }
   if(standaloneWorkPlan){
     task.trip_service_orders=[];
     tables.trip_service_orders=tables.trip_service_orders.filter(link=>link.order_id!==task.id);
     visitWork.planned_labor_hours=null;
+    if(standaloneWorkPlan==='parts')visitPart.parent_work_id=visitWork.id;
     audit.workPlanWrites=[];
     audit.entityWrites=[];
   }
@@ -617,10 +625,24 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         audit.workPlanWrites.push(structuredClone(args));
         return {data:{revision:task.revision,hours:visitWork.planned_labor_hours},error:null};
       }
+      if(name==='service_order_work_part_save'&&visitJourney==='parts'){
+        if(role==='engineer'||args.p_order!==order||args.p_part!==visitPart.id||args.p_expected!==task.revision||
+          args.p_work!==null&&args.p_work!==visitWork.id||visitPart.done_qty>0)return reject(name);
+        visitPart.parent_work_id=args.p_work;
+        task.revision++;
+        sessionStorage.setItem('qa:work-part-assignment',JSON.stringify({work:args.p_work,revision:task.revision}));
+        audit.workPartWrites.push(structuredClone(args));
+        return {data:task.revision,error:null};
+      }
       if(name==='service_order_trip_result_write'&&visitJourney){
         if(args.p_order!==order||args.p_trip!==trip||args.p_expected_event!==visit.event||
           args.p_order_revision!==task.revision||args.p_trip_revision!==visit.revision)return reject(name);
         const latest={...structuredClone(args.p_result),hours:args.p_result.items.reduce((sum,row)=>sum+row.hours,0)};
+        for(const entry of latest.items){
+          const item=task.service_order_items.find(row=>row.id===entry.id);
+          Object.assign(entry,{kind:item.kind,title:item.title,unit:item.unit,planned_qty:item.planned_qty});
+          if(item.kind==='material')entry.parent_work_id=item.parent_work_id??null;
+        }
         if(args.p_action==='accepted'){
           for(const row of task.service_order_items)row.done_qty=latest.items.find(entry=>entry.id===row.id).qty;
           task.revision++;

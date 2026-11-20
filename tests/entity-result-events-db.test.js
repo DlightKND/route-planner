@@ -51,6 +51,7 @@ beforeAll(async()=>{
   await db.exec('alter table trips add column workbench_revision integer not null default 0;alter table trip_stays add column crew_ids uuid[],add column crew_source text;');
   await db.exec(file('../supabase/migrations/20261120085354_order_trip_results.sql'));
   await db.exec(file('../supabase/migrations/20261120134312_order_work_plan.sql'));
+  await db.exec(file('../supabase/migrations/20261120141912_order_work_parts.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -214,6 +215,27 @@ const addConfirmedVisit=async n=>{
   await q("update trips set status='done' where id=$1",[id(n)]);
   await q("insert into trip_stays(trip_id,job_id,stay_from,stay_to,status,minutes_mgr,crew_ids,crew_source) values($1,$2,'2026-10-05 08:00Z','2026-10-05 09:00Z','approved',60,$3,'snapshot')",[id(n),id(10),[id(3),id(4)]]);
 };
+
+it('audits a part assignment and snapshots it with accepted quantities without changing prices',async()=>{
+  await addConfirmedVisit(50);
+  await q("insert into service_order_items(id,order_id,job_id,title,planned_qty,unit,kind,unit_price_snapshot,unit_cost_snapshot) values($1,$2,$3,'Подшипник',3,'шт','material',24,20)",[id(43),id(30),id(10)]);
+  const attach=(work,revision)=>q('select public.service_order_work_part_save($1,$2,$3,$4) revision',
+    [id(30),id(43),work===null?null:id(work),revision]).then(rows=>rows[0].revision);
+  await as(3);await rejected(()=>attach(40,0),/куратор задания/);
+  await as(6);await rejected(()=>attach(41,0),/Работа не принадлежит заданию/);
+  expect(await attach(40,0)).toBe(1);
+  expect(await attach(40,1)).toBe(1);
+  await rejected(()=>attach(null,0),/Задание изменено/);
+  const items=[{id:id(40),qty:2,hours:2,note:''},{id:id(43),qty:2,hours:0,note:''}];
+  await as(3);await visitResult({expected:1,items});
+  expect((await readVisits(30)).trips[0].latest.items[1]).toMatchObject({parent_work_id:id(40),qty:2,planned_qty:3});
+  await as(6);await visitResult({expected:1,prior:100,operation:101,action:'accepted',items});
+  expect((await readVisits(30)).trips[0].versions[0].result.items[1]).toMatchObject({parent_work_id:id(40),qty:2,planned_qty:3});
+  expect((await read('order',30))[0].snapshot.items[1]).toMatchObject({parent_work_id:id(40),qty:2});
+  const [part]=await q('select done_qty,unit_price_snapshot,unit_cost_snapshot from service_order_items where id=$1',[id(43)]);
+  expect(part).toEqual({done_qty:'2',unit_price_snapshot:'24',unit_cost_snapshot:'20'});
+  await rejected(()=>attach(null,2),/Запчасть уже использована/);
+});
 
 it('submits by trip, accepts only by the curator, and combines accepted quantities with historical totals',async()=>{
   await submit({qty:0.25});
