@@ -221,9 +221,9 @@ html#dlight-ui[data-ui-system] .view .order-trip-work-detail>td { padding:12px 1
 .order-trip-work-fields .order-trip-materials { margin-top:16px; }
 .order-trip-parts>summary,.order-trip-part-actions>summary { list-style:none; cursor:pointer; }
 .order-trip-parts>summary::-webkit-details-marker,.order-trip-part-actions>summary::-webkit-details-marker { display:none; }
-.order-trip-parts>summary { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:44px; padding-inline:16px 40px; border-radius:var(--r-md); background:var(--raised); }
-.order-trip-parts>summary svg { width:12px; height:12px; color:var(--ink-dim); }
-.order-trip-parts[open]>summary svg { transform:rotate(180deg); }
+html#dlight-ui[data-ui-system] .view .order-trip-parts>summary { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:44px; padding-inline:16px 40px; border-radius:var(--r-md); background:var(--raised); }
+.order-trip-parts>summary svg { width:12px; height:12px; color:var(--ink-dim); transform:rotate(90deg); }
+.order-trip-parts[open]>summary svg { transform:rotate(-90deg); }
 .order-trip-part-name { width:calc(34cqw - 34px); }
 .order-trip-part-quantity { width:112px; }
 html#dlight-ui[data-ui-system] .view .order-trip-parts table :is(th,td) { padding:10px 16px; }
@@ -281,12 +281,15 @@ html#dlight-ui[data-ui-system] .view .order-trip-parts :is(th,td):is(:nth-child(
  .order-trip-materials td:nth-child(2)::before,.order-trip-materials td:nth-child(3)::before { display:block; color:var(--ink-dim); font-size:12px; }
  .order-trip-materials td:nth-child(2)::before { content:'План'; }
  .order-trip-materials td:nth-child(3)::before { content:'Факт'; }
- .order-trip-parts>summary { min-height:48px; }
+ html#dlight-ui[data-ui-system] .view .order-trip-parts>summary { min-height:48px; }
  .order-trip-parts colgroup,.order-trip-parts thead :is(th:first-child,th:last-child) { display:none; }
  .order-trip-parts thead { display:block; position:static; clip-path:none; width:auto; height:auto; overflow:visible; }
  .order-trip-parts :is(thead,tbody) tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 12px; padding:8px 16px; }
  html#dlight-ui[data-ui-system] .view .order-trip-parts table :is(th,td),
  html#dlight-ui[data-ui-system] .view .order-trip-parts :is(th,td):is(:nth-child(2),:nth-child(3)) { padding:0; text-align:left; }
+ html#dlight-ui[data-ui-system] .view .order-trip-parts thead th { border-bottom:0; }
+ .order-trip-parts :is(thead,tbody) tr { border-top:0; border-bottom:1px solid var(--line); }
+ .order-trip-parts tbody tr:last-child { border-bottom:0; }
  .order-trip-parts td:nth-child(2)::before,.order-trip-parts td:nth-child(3)::before { content:none; }
  .order-trip-parts tbody th { grid-row:1; }
  html#dlight-ui[data-ui-system] .view .order-trip-parts tr:has(.order-trip-part-actions) th { padding-inline-end:44px; }
