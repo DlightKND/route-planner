@@ -7049,8 +7049,10 @@ function factApplyVis(){
     if(on&&!map.hasLayer(factG[k])) map.addLayer(factG[k]);
     if(!on&&map.hasLayer(factG[k])) map.removeLayer(factG[k]);
   });
-  if(factVis.plan&&!map.hasLayer(routeLayer)) map.addLayer(routeLayer);
-  if(!factVis.plan&&map.hasLayer(routeLayer)) map.removeLayer(routeLayer);
+  for(const layer of [routeLayer,tripLayer]){
+    if(factVis.plan&&!map.hasLayer(layer)) map.addLayer(layer);
+    if(!factVis.plan&&map.hasLayer(layer)) map.removeLayer(layer);
+  }
 }
 // Трек рисуется НЕ сырым. Приёмник ошибается тремя разными способами, и
 // сплошная линия по всем точкам подряд врёт по-разному в каждом случае:
@@ -7126,6 +7128,7 @@ function dropIcon(){ return L.divIcon({className:'',iconSize:[14,14],iconAnchor:
 // Крестик убирает с карты всё сразу.
 let factLegendEl=null, factPanelMedia=null, factDesktopOpen=false;
 let factLast=null;
+let mapTripPlan=null;
 
 const trackPanelIcon='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>';
 function trackPanelInline(){ return window.innerWidth<=960; }
@@ -7181,12 +7184,15 @@ function mountMapPanel(){
 function mapPanelRows(){
   const R=[];
   if(stayBindMap) R.push({key:'stay',icon:stopSvg(13),name:'Привязка стоянок',val:stayBindMap.stays.length,sub:stayBindMap.selected?'Выбрана стоянка · нажмите точку заявки':'Нажмите стоянку, затем точку заявки'});
-  const stops=routeStopsAll().length;
-  if(stops||(rRoute&&rRoute.km>0)){
+  const viewedPlan=tripLayer.getLayers().length>0?mapTripPlan:null;
+  const draftShown=routeLayer.getLayers().length>0;
+  const stops=viewedPlan?viewedPlan.stops:draftShown?routeStopsAll().length:0;
+  const plan=viewedPlan||(draftShown?rRoute:null);
+  if(viewedPlan||stops||plan?.km>0){
     R.push({key:'plan',style:'border-top:3px dashed var(--ink-faint)',name:'Плановый маршрут',val:stops+' '+plural(stops,'точка','точки','точек'),
-      sub:(rRoute&&rRoute.km>0)
-        ? (rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч')
-        : 'Маршрут не построен'});
+      sub:plan?.km>0
+        ? (plan.km.toFixed(1)+' км · '+plan.driveH.toFixed(1)+' ч')
+        : (viewedPlan?'Сохранённый маршрут':'Маршрут не построен')});
   }
   const d=factLast;
   if(d){
@@ -7310,11 +7316,13 @@ function hideMapPanel(){
 // точки планового маршрута это работа, и молча их стирать нельзя: спросим,
 // и только если они есть.
 async function clearMapAll(){
-  const hasRoute=routeStopsAll().length>0;
-  if(hasRoute && !await confirmDialog('Убрать с карты факт и плановый маршрут? Точки маршрута будут очищены.',
+  const viewedPlan=tripLayer.getLayers().length>0;
+  const hasDraft=routeLayer.getLayers().length>0&&routeStopsAll().length>0;
+  if((viewedPlan||hasDraft) && !await confirmDialog('Убрать с карты факт и плановый маршрут?'+(hasDraft?' Точки маршрута будут очищены.':''),
       {okText:'Убрать всё',cancelText:'Отмена'})) return;
+  tripLayer.clearLayers();mapTripPlan=null;
   stayBindMap=null;factClear();
-  if(hasRoute && $('rClear')){plannerTripId=null;plannerRouteTrip=null;$('rClear').click();plannerRouteDirty=false;}
+  if(hasDraft && $('rClear')){plannerTripId=null;plannerRouteTrip=null;$('rClear').click();plannerRouteDirty=false;}
   renderMapPanel();
   showToast('Карта очищена');
 }
@@ -7328,13 +7336,15 @@ function showFactLegend(m){ if(m) factLast=m; renderMapPanel(); }
 function drawTripPlan(t){
   tripLayer.clearLayers();
   const stops=(t&&t.route_stops)||[];
+  const snapshot=t?.plan_econ_snapshot||t?.econ_snapshot;
+  mapTripPlan={stops:stops.length,km:Number(snapshot?.km)||0,driveH:Number(snapshot?.driveH)||0};
   drawRouteLine(tripLayer, t&&t.route_geometry);
   const pts=[];
   stops.forEach((x,i)=>{
     if(x.lat==null||x.lng==null) return;
     pts.push([x.lat,x.lng]);
     const popup=tripStopPopup(x,i);
-    L.marker([x.lat,x.lng],{icon:L.divIcon({className:'',
+    L.marker([x.lat,x.lng],{icon:L.divIcon({className:'trip-plan-point',
       html:'<div class="cbub" style="background:var(--accent);color:var(--on-accent);'
         +'text-shadow:none;border:2px solid '+ringColor()+'">'+(i+1)+'</div>',
       iconSize:[24,24],iconAnchor:[12,12]})})
@@ -7342,6 +7352,7 @@ function drawTripPlan(t){
   });
   if(!pts.length&&t&&t.route_geometry&&t.route_geometry.coordinates)
     t.route_geometry.coordinates.forEach(c=>pts.push([c[1],c[0]]));
+  factApplyVis();
   if(pts.length) map.fitBounds(pts,fitPadL(fitPad(60)));
   return pts.length>0;
 }

@@ -298,6 +298,8 @@ test('map track: docked layer cards retain real visibility and the selected time
  if(inline){await expect(page.locator('#trackBlock .mleg')).toBeVisible();await expect(page.locator('[data-sb=track]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('#pointsBlock')).toBeHidden();const tops=await page.locator('#sideTabs button:visible').evaluateAll(nodes=>nodes.map(el=>el.getBoundingClientRect().top));expect(Math.max(...tops)-Math.min(...tops)).toBeLessThanOrEqual(1);}
  else{await expect(page.locator('#mapTrackDock .mleg')).toBeVisible();const card=await panel.boundingBox(),tools=await page.locator('.map-tools').boundingBox();expect(card.x+card.width).toBeCloseTo(tools.x+tools.width,0);expect(card.y).toBeGreaterThanOrEqual(tools.y+tools.height+8);}
  const gps=page.locator('.leaflet-overlay-pane path[stroke="#16a34a"],.leaflet-overlay-pane path[stroke="#a7f3d0"]');
+ const plan=page.locator('.leaflet-marker-pane .trip-plan-point');
+ await expect(plan).toHaveCount(2);await panel.locator('[data-fl=plan]').uncheck();await expect(plan).toHaveCount(0);await panel.locator('[data-fl=plan]').check();await expect(plan).toHaveCount(2);
  await expect(gps).toHaveCount(2);await expect(page.locator('.leaflet-overlay-pane path[stroke="#d87619"][stroke-dasharray="7 6"]')).toHaveCount(1);await expect(page.locator('.leaflet-overlay-pane path[stroke="#8b8e96"][stroke-dasharray="7 6"]')).toHaveCount(1);await panel.locator('[data-fl=track]').uncheck();await expect(gps).toHaveCount(0);await panel.locator('[data-fl=track]').check();await expect(gps).toHaveCount(2);
  const endDate=await panel.locator('#tfBDate').inputValue();await panel.locator('#tfBDate').fill(await panel.locator('#tfADate').inputValue());await panel.locator('#tfB').fill('09:00');await panel.locator('#tfB').blur();await expect(gps).toHaveCount(1);
  await panel.locator('#tfAll').click();await expect(panel.locator('#tfBDate')).toHaveValue(endDate);await expect(gps).toHaveCount(2);
@@ -318,5 +320,6 @@ test('map track: resizing and closing preserve controls, and clearing leaves a v
  await expect(panel.locator('[data-fl=line]')).not.toBeChecked();await expect(panel.locator('#tfA')).toHaveValue('07:00');
  await panel.locator('.mleg-clear').click();await expect(page.locator('#confirmOverlay')).toBeVisible();await page.locator('#confirmNo').click();await expect(panel).toBeVisible();await expect(panel.locator('[data-fl=line]')).not.toBeChecked();
  await panel.locator('.mleg-clear').click();await page.locator('#confirmYes').click();await expect(page.locator('.mleg')).toHaveCount(0);await expect(page.locator('[data-sb=track]')).toBeHidden();await expect(page.locator('#sideTabs button.on')).not.toHaveAttribute('data-sb','track');
+ await expect(page.locator('.leaflet-marker-pane .trip-plan-point')).toHaveCount(0);
  await capture(page,info,'map-track-cleared',errors);
 });
