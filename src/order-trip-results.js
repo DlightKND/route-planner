@@ -31,8 +31,8 @@ export function proposedTripHours(items,accepted,budget,catalog){
  return hours;
 }
 
-export function mountOrderTripResults({root,order,items,catalog,data,user,manager,mayReport,requestedTrip,onWrite,onPlanWrite,onReturnReason,onGPS,onTrip,onReload}){
- const trips=data.trips||[],works=items.filter(item=>item.kind!=='material'),material=items.filter(item=>item.kind==='material');
+export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onWrite,onPlanWrite,onReturnReason,onGPS,onTrip,onReload}){
+ const trips=data?.trips||[],works=items.filter(item=>item.kind!=='material'),material=items.filter(item=>item.kind==='material');
  let selected=trips.find(trip=>trip.id===requestedTrip)||(trips.length===1?trips[0]:null);
  let editing=false,review=false,busy=false,fields=null,operation=null;
  const entries=new Map(catalog.map(item=>[item.id,item]));
@@ -125,13 +125,15 @@ export function mountOrderTripResults({root,order,items,catalog,data,user,manage
  function cumulative(actions){
   const rows=works.map(item=>{
    const visits=trips.map(trip=>({trip,row:lastVersion(trip)?.items?.find(entry=>entry.id===item.id)}));
-   const latest=visits.findLast(({row})=>row?.note)?.row;
-   const details=`<div class="order-trip-work-fields">${planEditor(item)}<div class="order-trip-related-visits">${visits.map(({trip,row})=>
+   const note=data?visits.findLast(({row})=>row?.note)?.row?.note:item.result_note;
+   const related=visits.length?`<div class="order-trip-related-visits">${visits.map(({trip,row})=>
     `<div>${buttons(esc(tripLabel(trip)),'data-trip-receipt="'+esc(trip.id)+'"','ghost')}
-     <span class="hint">${esc(stateLabel(trip))}</span><span>${row?fmt(row.hours)+' чел·ч':'—'}</span><p>${esc(row?.note||'—')}</p></div>`).join('')}</div></div>`;
-   return workRow(item,data.accepted_hours?.[item.id],latest?.note,details,maxQty(item,null)===0);
+     <span class="hint">${esc(stateLabel(trip))}</span><span>${row?fmt(row.hours)+' чел·ч':'—'}</span><p>${esc(row?.note||'—')}</p></div>`).join('')}</div>`:'';
+   const manualOutcome=data?'':`<section class="order-trip-outcome"><h4>Результат работы</h4><p>Выполнено ${fmt(item.done_qty)} ${esc(item.unit)}</p>${note?`<p class="order-trip-work-note">${esc(note)}</p>`:''}</section>`;
+   const details=`<div class="order-trip-work-fields">${planEditor(item)}${related}${manualOutcome}</div>`;
+   return workRow(item,data?.accepted_hours?.[item.id],note,details,maxQty(item,null)===0);
   }).join('');
-  const accepted=Object.values(data.accepted_hours||{});
+  const accepted=Object.values(data?.accepted_hours||{});
   return workTable(rows,accepted.length?accepted.reduce((sum,hours)=>sum+Number(hours),0):null,actions);
  }
  function editorRows(proposal){
@@ -274,7 +276,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,user,manage
   const picker='<select class="order-trip-picker" data-visit-select aria-label="Результат по выезду"><option value="">Все выезды</option>'+trips.map(t=>
    '<option value="'+esc(t.id)+'" '+(t===trip?'selected':'')+'>'+esc(tripLabel(t))+'</option>').join('')+'</select>';
   const tripControl=trip?buttons('Открыть выезд','data-visit-trip','ghost'):'';
-  const selection=picker+tripControl;
+  const selection=data?picker+tripControl:'';
   const confirmed=trips.filter(t=>t.presence?.confirmed&&t.linked&&t.status!=='cancelled');
   const available=trip?(trip.presence?.confirmed?Number(trip.presence.available):null):
    (confirmed.length?confirmed.reduce((sum,t)=>sum+Number(t.presence.available),0):null);
@@ -289,6 +291,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,user,manage
   const proposal=trip&&!readOnly?proposedTripHours(items,accepted,available,entries):null;
   if(!trip){
    content=cumulative(selection)+materialTable({items:material.flatMap(item=>{
+    if(!data)return [{id:item.id,qty:item.done_qty??0,note:item.result_note}];
     const contributions=recorded.filter(row=>row.id===item.id);
     return contributions.length?[{id:item.id,qty:contributions.reduce((sum,row)=>sum+Number(row.qty),0)}]:[];
    })});
@@ -322,6 +325,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,user,manage
     (v.result.correction?'<p>'+esc(v.result.correction)+'</p>':'')+tableResult(v.result)+'</details>').join('')+'</details>';
   }
   root.innerHTML=context+'<p data-trip-result-error role="alert" tabindex="-1" hidden></p>'+content;
+  if(!data&&manualResult)root.querySelector('.order-trip-result-head').append(manualResult);
   updateMetrics();
   bind(proposal);
  }

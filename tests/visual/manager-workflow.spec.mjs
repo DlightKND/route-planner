@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 const job=fixtureIDs.job,order=fixtureIDs.order,trip=fixtureIDs.trip,other='00000000-0000-4000-8000-000000000003';
-async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false}={}){
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
+async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false}={}){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
 }
 async function navigate(page,view,hash){await page.evaluate(hash=>{location.hash=hash;},hash);await expect(page.locator('.view-'+view)).toHaveClass(/active/);}
 async function reopenRequest(page){await navigate(page,'planner','/planner/jobs');await navigate(page,'job','/job/'+job);}
@@ -229,6 +229,30 @@ test('M11: the curator saves a work norm without changing the trip report draft'
  const [saved]=await page.evaluate(()=>window.__visualQA.visitWrites);
  expect(saved.p_order_revision).toBe(1);
  expect(saved.p_result.items[0]).toMatchObject({qty:4,hours:2});
+ await clean(page,errors);
+});
+
+for(const stage of ['in_progress','paused'])test('M11: the curator saves the work norm and records a manual result without a trip · '+stage,async({page},info)=>{
+ const errors=await boot(page,info,{stage,route:'order/'+order+'/scope',standaloneWorkPlan:true});
+ const panel=page.locator('#orderTripResults');
+ await expect(panel.locator('[data-visit-select]')).toHaveCount(0);
+ await panel.locator('[data-visit-expand]').first().click();
+ const group=panel.locator('[data-work-plan]').first();
+ await group.getByRole('textbox',{name:'План, н-ч'}).fill('7,5');
+ await group.getByRole('button',{name:'Сохранить план'}).click();
+ await expect(group.getByRole('status')).toHaveText('План сохранён');
+ await panel.getByRole('button',{name:'Зафиксировать результат'}).click();
+ const row=dialog(page).locator('[data-result-item]').first();
+ await row.locator('[data-result-qty]').fill('3');
+ await row.locator('[data-result-note]').fill('Осталась проверка');
+ await dialog(page).locator('#orderResultSave').click();
+ await expect(dialog(page)).toHaveCount(0);
+ const writes=await page.evaluate(()=>window.__visualQA.entityWrites);
+ expect(writes).toMatchObject([{name:'service_order_record_result',args:{p_id:order,p_expected:1}}]);
+ await expect(panel.locator('[data-visit-note]').first()).toHaveText('Осталась проверка');
+ await panel.locator('[data-visit-expand]').first().click();
+ await expect(group.getByRole('textbox',{name:'План, н-ч'})).toHaveValue('7,5');
+ await shot(page,info,'work-plan-without-trip-'+stage);
  await clean(page,errors);
 });
 

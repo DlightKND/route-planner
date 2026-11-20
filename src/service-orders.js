@@ -250,23 +250,35 @@ export function createServiceOrders(ctx){
    ...(selectedJob?[{label:'Открыть заявку и смету',onSelect:async()=>{if(await leave()){if(ctx.openJobEstimate)ctx.openJobEstimate(selectedJob);else ctx.openJob(selectedJob);}}}]:[])
   ]});restoreResultDraft();
  }updateSaveState();frameOrderWorkspace({record:o,editable:edit,people:ctx.profiles()});renderPlanning(o);
- if(visitResults||visitError){
-  const panel=document.createElement('section');panel.id='orderTripResults';panel.className=visitResults?'order-trip-results':'card order-trip-results';
+ const standaloneWorks=o.id&&
+  items.some(item=>item.kind==='work'&&!isFinanceVoided(item)&&Object.hasOwn(item,'planned_labor_hours'));
+ if(visitResults||visitError||standaloneWorks){
+  const panel=document.createElement('section');panel.id='orderTripResults';panel.className=visitError?'card order-trip-results':'order-trip-results';
   $('orderPane-scope').prepend(panel);
-  if(visitResults){
-   editor.querySelector('.workflow-work-result')?.remove();
-   if(!edit)$('orderComposition').hidden=true;
-   $('orderPane-plan-fact').append($('orderResultSummary'));
+  if(!visitError){
+   let manualResult=editor.querySelector('.workflow-work-result');
+   if(visitResults){
+    manualResult?.remove();
+    if(!edit)$('orderComposition').hidden=true;
+    $('orderPane-plan-fact').append($('orderResultSummary'));
+   }else if(report&&!manualResult){
+    manualResult=document.createElement('button');
+    manualResult.type='button';manualResult.className='btn amber workflow-work-result';
+    manualResult.textContent='Зафиксировать результат';
+    manualResult.onclick=()=>openResult(o.id);
+   }
    const user=loadedUser;
    visitPanel=mountOrderTripResults({root:panel,order:o,items:items.filter(item=>!isFinanceVoided(item)),catalog:workCatalog,
-    data:visitResults,user,manager:manager(o),mayReport:['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.engineer_ids?.includes(user)),requestedTrip,
+    data:visitResults,manualResult,user,manager:manager(o),mayReport:['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.engineer_ids?.includes(user)),requestedTrip,
     onWrite:payload=>{
      if(current?.id!==o.id||ctx.userId()!==user||dirty||!panel.isConnected)throw Error('Карточка или сеанс изменились. Обновите задание');
      return rpc('service_order_trip_result_write',payload);
     },
-    onPlanWrite:payload=>{
+    onPlanWrite:async payload=>{
      if(current?.id!==o.id||ctx.userId()!==user||dirty||reportDirty||!panel.isConnected)throw Error('Сохраните изменения задания или обновите карточку');
-     return rpc('service_order_work_plan_save',payload);
+     const saved=await rpc('service_order_work_plan_save',payload);
+     if(current===o&&!reportDirty)resultExpected=saved.revision;
+     return saved;
     },
     onReturnReason:()=>ctx.reason('Причина возврата результата'),
     onTrip:id=>ctx.openTrip(id),onGPS:id=>ctx.openJournalTrip?ctx.openJournalTrip(id):ctx.openTrip(id),
@@ -275,7 +287,7 @@ export function createServiceOrders(ctx){
      if(!await open(o.id,scope,{pane:'scope',trip:id}))throw Error('Результат сохранён. Обновите карточку');
      ctx.notify({accepted:'Результат принят',submitted:'Результат передан на приёмку',returned:'Результат возвращён на доработку'}[action]);
     }});
-   const pending=visitResults.trips.some(trip=>trip.linked&&trip.status!=='cancelled'&&trip.state==='submitted');
+   const pending=visitResults?.trips.some(trip=>trip.linked&&trip.status!=='cancelled'&&trip.state==='submitted');
    if(pending)editor.querySelectorAll('[data-summary-carry],[data-order-next=completed]').forEach(button=>{button.disabled=true;});
   }else{
    panel.innerHTML='<p class="err" role="alert">'+esc(visitError)+'</p><button type="button" class="btn">Обновить результаты</button>';

@@ -435,6 +435,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   const managerState=()=>({request:{due_date:request.due_date,status:request.status,engineer_ids:[...(request.engineer_ids||[])]},order:{status:task.status,date_from:task.date_from,date_to:task.date_to,engineer_ids:[...task.engineer_ids],lead_engineer:task.lead_engineer,revision:task.revision,items:task.service_order_items.map(i=>({id:i.id,done_qty:i.done_qty,planned_qty:i.planned_qty}))},trip:{date_from:ride.date_from,date_to:ride.date_to,engineer_ids:[...ride.engineer_ids]}});
   if(managerJourney){for(const row of task.service_order_items)if(row.kind==='material'&&!row.stock_catalog_id)row.stock_catalog_id='stock-a';task.status=typeof managerJourney==='string'?managerJourney:managerJourney.stage||'assigned';audit.managerWrites=[];audit.managerState=managerState();}
   const visitJourney=managerJourney?.tripResultJourney;
+  const standaloneWorkPlan=managerJourney?.standaloneWorkPlan;
   const visitWork=task.service_order_items.find(row=>row.kind==='work');
   const visitPayload={items:task.service_order_items.map(row=>({id:row.id,qty:row===visitWork?3:0,
     hours:row===visitWork?2:0,note:row===visitWork?'Осталась проверка':''})),hours:2,reason:'',correction:''};
@@ -446,6 +447,13 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     if(visitJourney==='manager')Object.assign(visit,{state:'submitted',latest:visitPayload,submitted_revision:4,
       event:'00000000-0000-4000-8000-000000000091'});
     audit.visitWrites=[];audit.workPlanWrites=[];
+  }
+  if(standaloneWorkPlan){
+    task.trip_service_orders=[];
+    tables.trip_service_orders=tables.trip_service_orders.filter(link=>link.order_id!==task.id);
+    visitWork.planned_labor_hours=null;
+    audit.workPlanWrites=[];
+    audit.entityWrites=[];
   }
   const plannerGroups=[
     {source_key:'road:'+trip+':0',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-first',date:'2026-10-05',start:7,end:9,offset:0}]},
@@ -602,7 +610,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
       }
       if(name==='service_order_trip_review_queue')return {data:visitJourney==='manager'&&visit.state==='submitted'?
         [{order_id:order,trip_id:trip,number:task.number,title:task.title,vehicle_label:visit.label,date_from:visit.date_from,at:stamp}]:[],error:null};
-      if(name==='service_order_work_plan_save'&&visitJourney){
+      if(name==='service_order_work_plan_save'&&(visitJourney||standaloneWorkPlan)){
         if(role==='engineer'||args.p_order!==order||args.p_item!==visitWork.id||args.p_expected!==task.revision)return reject(name);
         visitWork.planned_labor_hours=Math.round(args.p_hours*100)/100;
         task.revision++;
@@ -658,7 +666,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         });
         return {data:structuredClone(results),error:null};
       }
-      if(entityJourney&&name==='service_order_record_result'){
+      if((entityJourney||standaloneWorkPlan)&&name==='service_order_record_result'){
         const target=tables.service_orders.find(o=>o.id===args.p_id),bad=message=>({data:null,error:{message,code:'QA_ENTITY_VALIDATION'}});
         if(!target||role==='engineer'&&!target.engineer_ids.includes(session.user.id))return bad('Задание недоступно');
         const signature=JSON.stringify({actor:session.user.id,order:args.p_id,items:args.p_items,note:args.p_note,date:args.p_actual_date,basis:args.p_basis??null});
