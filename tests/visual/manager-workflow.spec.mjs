@@ -234,6 +234,10 @@ test('M7: related record tables keep search, work details and trip actions in th
  const trips=page.locator('#jobLinkedTrips').getByRole('table',{name:'Выезды',exact:true});
  await expect(trips.locator('thead th').nth(2)).toHaveText('Часы по посещениям');
  await expect(page.locator('#jobLinkedTrips').getByRole('searchbox',{name:'Найти выезд'})).toBeVisible();
+ await trips.getByRole('button',{name:/Раскрыть выезд/}).first().click();
+ const status=trips.locator('.related-task-reference .related-status').first();
+ await expect(status).toHaveText('В работе');
+ expect(await status.evaluate(node=>{const text=node.ownerDocument.createRange();text.selectNodeContents(node);return text.getClientRects().length;})).toBe(1);
  await shot(page,info,'request-trip-table');
  await navigate(page,'trip','/trip/'+trip+'/plan');
  await expect(page.locator('#tpLinkedOrders').getByRole('table',{name:'Задания выезда',exact:true})).toBeVisible();
