@@ -114,7 +114,7 @@ export function createServiceOrders(ctx){
     const works=work.filter(item=>item.kind!=='material').length;
     return {id:task.id,label:'задание №'+task.number,search:[task.number,task.title,...crew].join(' '),works,
      cells:[`${taskButton(task,origin)}<small>№${esc(task.number)} · работ ${works}</small>`,
-      esc(crew.join(', ')||'Команда не назначена'),`<span class="order-child-period">${esc(planningPeriod(task.date_from,task.date_to))}</span>${task.jobs?.due_date?`<small>SLA ${esc(planningDate(task.jobs.due_date))}</small>`:}`,
+      esc(crew.join(', ')||'Команда не назначена'),`<span class="order-child-period">${esc(planningPeriod(task.date_from,task.date_to))}</span>${task.jobs?.due_date?`<small>SLA ${esc(planningDate(task.jobs.due_date))}</small>`:''}`,
       `<span class="related-status">${esc(ORDER_STATUS[task.status]||task.status)}</span>${historicalClosedDraft(task)?`<small aria-label="${esc(historicalClosedNote)}">${esc(historicalClosedNote)}</small>`:''}`],
      actions:reportAllowed(task)?`<button type="button" class="btn ghost" data-related-order-result="${esc(task.id)}">Внести выполненные работы</button>`:'',
      detail:`<div data-related-work-details="${esc(task.id)}">${relatedWorkPreview(work,{tripScoped:!!trip,open:taskButton(task,origin,'Открыть работы','data-related-order-works')})}</div>`};
