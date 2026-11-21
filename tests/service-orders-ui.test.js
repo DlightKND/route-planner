@@ -66,6 +66,50 @@ it('filters the request task table and keeps work details attached to the matchi
  search.value='Анна';search.oninput();
  expect(row.hidden).toBe(false);expect(detail.hidden).toBe(false);
  expect(root.querySelector('tfoot').textContent).toContain('Итого по фильтру · 1');
+ await ui.requestPanel(job);
+ expect(root.querySelector('[data-related-search]').value).toBe('Анна');
+ expect(root.querySelector('[data-related-row]').nextElementSibling.hidden).toBe(false);
+});
+it('reopens the same task result from its trip and returns to that trip tab',async()=>{
+ await ui.open('order1');
+ const trip={name:'trip',id:'trip1',pane:'plan',resultRequest:job};
+ ctx.cardOrigin=vi.fn(()=>trip);ctx.returnToCard=vi.fn();ctx.showOrder.mockClear();
+ await ui.openResult('order1',job,trip.id);
+ expect(ctx.showOrder).toHaveBeenCalledOnce();
+ const back=doc.getElementById('orderBack');
+ expect(back.getAttribute('aria-label')).toBe('Назад к выезду');
+ await back.onclick();
+ expect(ctx.returnToCard).toHaveBeenCalledWith(trip);
+});
+it('keeps an unfinished trip result actionable when another task already has accepted work',async()=>{
+ doc.body.insertAdjacentHTML('beforeend','<section id="jobOrders"></section><div id="jobLinkedTrips"></div><div id="jobTaskCosts"></div>');
+ const trip={id:'shared-trip',status:'finished',vehicle_label:'Сервисный автомобиль'};
+ order.trip_service_orders=[{trip_id:trip.id,trips:trip}];
+ const pending={...order,id:'order2',number:2,title:'Ещё не принятые работы'};
+ const db=ctx.db(),baseFrom=db.from,baseRpc=db.rpc;
+ db.from=table=>{
+  if(table!=='service_orders')return baseFrom(table);
+  const query={select:()=>query,order:()=>query,then:resolve=>Promise.resolve({data:[order,pending]}).then(resolve)};
+  return query;
+ };
+ const accepted=new Set([order.id]);
+ db.rpc=(fn,args)=>fn==='service_order_trip_results'?Promise.resolve({data:{trips:[{
+  id:trip.id,presence:{confirmed:true,base:2},versions:accepted.has(args.p_order)?[{result:{items:[]}}]:[]
+ }]}}):baseRpc(fn,args);
+ const {pendingGPS}=await ui.requestPanel(job);
+ expect(await pendingGPS).toBe(false);
+ const root=doc.getElementById('jobLinkedTrips');
+ expect(root.querySelector('[data-related-review] span').textContent).toBe('0');
+ expect(root.querySelector('[data-related-row]').textContent).toContain('Посещения подтверждены');
+ const action=root.querySelector('[data-related-trip-result]');
+ expect(action.textContent).toBe('Внести выполненные работы');
+ expect(action.dataset.relatedReportOrder).toBe(pending.id);
+ accepted.add(pending.id);
+ await (await ui.requestPanel(job)).pendingGPS;
+ const view=root.querySelector('[data-related-trip-result]');
+ expect(view.textContent).toBe('Посмотреть результат');
+ await view.onclick();
+ expect(ctx.openTrip).toHaveBeenCalledWith(trip.id,{pane:'economy'});
 });
 it('does not open a task or load its data when the trip leave guard is declined',async()=>{
  await ui.open('order1');ctx.beforeOpen=vi.fn(()=>false);ctx.ensureRefs=vi.fn();

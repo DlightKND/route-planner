@@ -107,6 +107,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('./fixtures/order-photo-storage.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20261120150932_order_result_photos.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20261120190426_entity_payment_terms.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261121121939_preserve_request_remainder_work_details.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -1323,5 +1324,39 @@ it('requires a real partial result and blocks closure while an active trip is li
   await expect(q("select service_order_close_with_remainder($1,0,'Причина')",[source])).rejects.toThrow(/связанные выезды/);
   await db.exec('rollback to savepoint active_trip; set local role anon');
   await expect(q("select service_order_close_with_remainder($1,0,'Причина')",[source])).rejects.toThrow(/permission denied/);
+ }finally{await db.exec('rollback');}
+});
+
+it('carries the remaining work norm, payment terms and available parts under the new work',async()=>{
+ await db.exec('begin');
+ try{
+  const uid=id(1),request=id(12);
+  await q("insert into profiles(id,role,active) values($1,'admin',true) on conflict(id) do update set role='admin',active=true",[uid]);
+  await q("select set_config('test.uid',$1,true)",[uid]);
+  const [{id:source}]=await q('select service_order_save_one(null,null,$1,$2,$3) id',[
+   {title:'Первый этап',work_mode:'depot'},request,[{job_id:request,title:'Замена',unit:'шт',planned_qty:2}]
+  ]);
+  await q("update service_orders set status='in_progress' where id=$1",[source]);
+  const [{id:work}]=await q('update service_order_items set done_qty=1,planned_labor_hours=4 where order_id=$1 returning id',[source]);
+  const [{id:stock}]=await q("insert into stock_catalog(name,sku,unit,price,cost) values('Уплотнение','S-1','шт',50,25) returning id");
+  const [{id:part}]=await q(`insert into service_order_items(order_id,job_id,kind,title,unit,planned_qty,done_qty,parent_work_id,
+    stock_catalog_id,sku_snapshot,unit_price_snapshot,unit_cost_snapshot)
+    values($1,$2,'material','Уплотнение','шт',4,3,$3,$4,'S-1',50,25) returning id`,[source,request,work,stock]);
+  await q(`insert into dlight_private.payment_terms(scope,owner_id,subject,terms)
+    values('work',$1,$2,'{"warranty":"warranty","payer":"service"}'::jsonb)`,[source,work]);
+  await db.exec('set local role authenticated');
+  await q("select service_order_close_with_remainder($1,0,'Принят первый этап')",[source]);
+  expect(await q('select id,qty from service_order_request_remainders($1)',[request])).toEqual([{id:work,qty:'1'}]);
+  const args=[request,{title:'Второй этап',work_mode:'depot'},[],[{item_id:work,qty:'1'}],id(9064)];
+  const create=()=>q('select service_order_create_with_remainders($1,$2,$3,$4,$5) id',args);
+  const [{id:target}]=await create();
+  expect(await create()).toEqual([{id:target}]);
+  const rows=await q('select id,kind,source_item_id,planned_qty::float8,planned_labor_hours::float8,parent_work_id from service_order_items where order_id=$1',[target]);
+  const carriedWork=rows.find(row=>row.kind==='work');
+  expect(carriedWork).toMatchObject({source_item_id:work,planned_qty:1,planned_labor_hours:2});
+  expect(rows.find(row=>row.kind==='material')).toMatchObject({source_item_id:part,planned_qty:1,parent_work_id:carriedWork.id});
+  expect(await q('select id from service_order_request_remainders($1)',[request])).toEqual([]);
+  await db.exec('reset role');
+  expect(await q("select dlight_private.payment_local('work',$1,$2) terms",[target,carriedWork.id])).toEqual([{terms:{warranty:'warranty',payer:'service'}}]);
  }finally{await db.exec('rollback');}
 });
