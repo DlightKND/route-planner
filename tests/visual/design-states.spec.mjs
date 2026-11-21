@@ -33,6 +33,8 @@ test('design state: assignment travel and crew-aware trip selection',async({page
  const errors=await start(page,info,'order/'+fixtureIDs.activeOrder,{designTripChoices:true});await page.locator('#orderTab-travel').click();
  const trips=page.locator('#orderTrips').getByRole('table',{name:'Выезды'});
  await expect(trips).toBeVisible();
+ const tableCard=await page.locator('#orderTrips .related-records').boundingBox(),pane=await page.locator('#orderPane-travel').boundingBox();
+ expect(Math.abs(pane.width-tableCard.width-17)).toBeLessThanOrEqual(1);
  await expect(trips.getByRole('columnheader',{name:'Часы по посещениям'})).toBeAttached();
  await trips.getByRole('button',{name:/Раскрыть выезд/}).click();
  await expect(trips.getByRole('heading',{name:'Задания выезда'})).toBeVisible();

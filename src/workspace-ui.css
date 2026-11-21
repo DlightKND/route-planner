@@ -336,11 +336,7 @@ body:has(.vg-dragging) #undoToast { visibility:hidden; }
 }
 
 /* Each assignment section owns a distinct workspace. */
-.view-order #orderPane-travel { display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;align-items:start; }
-#orderTrips .order-child { padding:20px;margin-top:12px;display:grid;gap:10px;width:100%;text-align:left;border:1px solid var(--line);border-radius:10px; }
-.order-trip-identity { display:flex;justify-content:space-between;align-items:start;gap:16px; }
-.order-trip-identity b { font:500 16px/1.4 var(--sans); }
-.order-trip-open { padding-top:12px;border-top:1px solid var(--line);font-size:12px;font-weight:500; }
+.view-order #orderPane-travel { min-width:0; }
 .order-result-review>[data-open-result-review] { margin-bottom:16px; }
 .result-saved-state { margin-bottom:28px;padding:20px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2); }
 .result-saved-state[data-state=draft] { border-left:3px solid var(--accent); }
@@ -371,7 +367,6 @@ body:has(.vg-dragging) #undoToast { visibility:hidden; }
 .review-blocker>.btn { flex:none;align-self:start; }
 .review-ready { padding:16px;background:var(--success-bg);border-radius:8px;font-size:14px; }
 @media(max-width:1100px) {
- .view-order #orderPane-travel { grid-template-columns:minmax(0,1fr); }
 }
 @media(max-width:760px) {
  .entity-result-dialog .result-final-fields { grid-template-columns:minmax(0,1fr); }
