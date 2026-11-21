@@ -119,6 +119,10 @@ test('M17: accepted road and work feed the three financial views and total adjus
  const totals=(revenue,cost)=>expect(fact.locator('dd')).toHaveText([revenue,cost]);
  await totals('950 грн','635 грн');
  await expect(finance.getByRole('table',{name:'Вклад по выездам',exact:true})).toBeVisible();
+ const mileage=finance.getByRole('table',{name:'Пробег по выездам',exact:true});
+ await mileage.getByRole('button',{name:/Пробег выезда/}).click();
+ await expect(mileage.getByRole('table',{name:'Детали пробега'})).toBeVisible();
+ await expect(mileage.getByRole('button',{name:'Журнал GPS'})).toBeVisible();
  await expect(finance.getByRole('columnheader',{name:'Состояние'})).toBeAttached();
  await finance.getByRole('button',{name:'Таблицы',exact:true}).click();
  await expect(finance.getByRole('table',{name:'Экономика · план и факт'})).toBeVisible();
@@ -209,6 +213,33 @@ test('M4: a failed handoff reports the separately saved plan and keeps the lates
 
 test('M7: request tasks show their period and a new task shows the independent request SLA',async({page},info)=>{
  const errors=await boot(page,info);await page.locator('#jobTabTasks').click();await expect(page.locator('.order-child-period').first()).toContainText('05.10.2026');await page.locator('#jobOrders [data-order-new]').click();await expect(page.locator('.view-order')).toHaveClass(/active/);await expect(page.locator('.order-planning-summary')).toContainText('09.10.2026');await page.locator('#orderTo').fill('2026-10-14');await expect(page.locator('.order-planning-summary .planning-warnings')).toContainText('позже срока');expect(await page.evaluate(()=>window.__visualQA.managerWrites)).toEqual([]);await shot(page,info,'new-task-sla');await clean(page,errors);
+});
+
+test('M7: related record tables keep search, work details and trip actions in their card',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',tripResultJourney:'manager'});
+ await page.locator('#jobTabTasks').click();
+ const taskTable=page.locator('#jobOrders').getByRole('table',{name:'Задания',exact:true});
+ await expect(taskTable.locator('thead th').first()).toHaveText('Задание');
+ const disclosure=taskTable.getByRole('button',{name:/Раскрыть задание №/}).first();
+ await disclosure.click();
+ await expect(taskTable.getByRole('heading',{name:'Работы задания'})).toBeVisible();
+ const search=page.locator('#jobOrders').getByRole('searchbox',{name:'Найти задание'});
+ await search.fill('Нет такого задания');
+ await expect(disclosure).toBeHidden();
+ await expect(page.locator('#jobOrders [data-related-empty]')).toBeVisible();
+ await search.fill('');
+ await expect(taskTable.getByRole('heading',{name:'Работы задания'})).toBeVisible();
+ await shot(page,info,'request-task-table');
+ await page.locator('#jobTabTrips').click();
+ const trips=page.locator('#jobLinkedTrips').getByRole('table',{name:'Выезды',exact:true});
+ await expect(trips.locator('thead th').nth(2)).toHaveText('Часы по посещениям');
+ await expect(page.locator('#jobLinkedTrips').getByRole('searchbox',{name:'Найти выезд'})).toBeVisible();
+ await shot(page,info,'request-trip-table');
+ await navigate(page,'trip','/trip/'+trip+'/plan');
+ await expect(page.locator('#tpLinkedOrders').getByRole('table',{name:'Задания выезда',exact:true})).toBeVisible();
+ await expect(page.locator('#tpTaskPicker')).not.toHaveAttribute('open');
+ await shot(page,info,'trip-task-table');
+ await clean(page,errors);
 });
 
 test('M8: closing a partial task offers its remaining work when the request gets a new task',async({page},info)=>{
