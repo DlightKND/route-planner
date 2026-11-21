@@ -117,8 +117,8 @@ async function readFinance(db,scope,id){
 }
 const decimal=value=>/^\d{1,12}(?:[,.]\d{1,2})?$/.test(value.trim())?Number(value.trim().replace(',','.')):null;
 
-export function mountEntityFinance(root,{db,scope,id,current,onTrip}){
- let model,request=0,view=null,saving=false;
+export function mountEntityFinance(root,{db,scope,id,current,onTrip,onOrder,onReport}){
+ let model,request=0,view=null,saving=false,searchText='',attentionOnly=false;
  const disclosures=new Set();
  root.hidden=true;
  async function load(){
@@ -159,16 +159,14 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip}){
   const sections=data.mileage.flatMap((trip,index)=>trip.sections.map(section=>({trip,index,section})));
   const scale=Math.max(1,...data.summary.flatMap(([,plan,fact])=>[Math.abs(plan||0),Math.abs(fact||0)]));
   root.innerHTML=`<div class="scoped-finance-head" aria-label="Плановые и фактические суммы">
-   ${Object.entries(data.modes).map(([key,value])=>`<section class="card scoped-finance-money"><header><h3>${modeTitles[key]}</h3>
-     ${value.corrected?'<span class="hint payment-term-exception">Итог скорректирован</span>':value.partial?'<span class="hint payment-term-exception">Данные неполные</span>':''}</header>
+   ${Object.entries(data.modes).map(([key,value])=>`<section class="scoped-finance-money"><header><h3>${modeTitles[key]}</h3>
+     ${value.corrected?'<span class="scoped-finance-status">Итог скорректирован</span>':value.partial?'<span class="scoped-finance-status">Данные неполные</span>':''}</header>
      <dl>${Object.keys(metricTitles).map(metric=>`<div><dt>${metricTitles[metric]}</dt><dd><strong>${value[metric]==null?'—':format.format(value[metric])}</strong>${value[metric]==null?'':' <span>'+esc(model.currency)+'</span>'}</dd></div>`).join('')}</dl></section>`).join('')}
    </div>
    <div class="scoped-finance-layout"><div class="scoped-finance-work-column" ${data.works.length||data.mileage.length?'':'hidden'}>
     ${data.works.length?workTable(data.works):''}
-    ${data.mileage.length?disclosure('mileage','Пробег по выездам',`<div class="scoped-finance-scroll"><table aria-label="Пробег по выездам">
-      <thead><tr><th>Выезд</th><th>План</th><th>Факт</th></tr></thead><tbody>${data.mileage.map((row,index)=>`<tr>
-      <th scope="row"><button type="button" class="btn ghost" data-finance-trip="${index}">${esc(row.title||row.date||'Выезд')}</button></th>
-      <td>${distanceText(row.plan_km)}</td><td>${distanceText(row.actual)}</td></tr>`).join('')}</tbody></table></div>`):''}
+    ${scope==='order'&&data.mileage.length?tripContributions(data.works,data.mileage):''}
+    ${data.mileage.length?mileageTable(data.mileage):''}
    </div>
    <section class="card scoped-finance-details"><header><h3>Экономика</h3><div class="seg" role="group" aria-label="Представление экономики">
     ${[['charts','Диаграммы'],['tables','Таблицы']].map(([key,title])=>`<button type="button" data-finance-mode="${key}" aria-pressed="${view===key}">${title}</button>`).join('')}</div></header>
@@ -204,55 +202,119 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip}){
   };});
   root.querySelectorAll('[data-finance-trip]').forEach(button=>{button.onclick=()=>onTrip?.(data.mileage[Number(button.dataset.financeTrip)]);});
   root.querySelectorAll('[data-finance-source]').forEach(button=>{button.onclick=()=>onTrip?.({id:button.dataset.financeSource});});
+  root.querySelectorAll('[data-finance-order]').forEach(button=>{button.onclick=()=>onOrder?.(button.dataset.financeOrder);});
+  root.querySelectorAll('[data-finance-report]').forEach(button=>{button.onclick=()=>onReport?.(button.dataset.financeReport);});
   root.querySelectorAll('[data-finance-rate]').forEach(button=>{button.onclick=()=>editRates(data.works[Number(button.dataset.financeRate)],button);});
   root.querySelectorAll('[data-finance-road-rate]').forEach(button=>{button.onclick=()=>editRoadRate(sections[Number(button.dataset.financeRoadRate)],button);});
   root.querySelectorAll('[data-finance-total]').forEach(button=>{button.onclick=()=>editTotal(button.dataset.financeTotal,data,button);});
   wireWorkTable();
  }
+ const units=value=>value==null?'—':format.format(value);
+ function tripContributions(works,trips){
+  return `<section class="scoped-finance-work"><header><h3>Вклад по выездам</h3></header>
+   <div class="scoped-finance-scroll"><table aria-label="Вклад по выездам"><thead><tr><th>Выезд</th><th>Принято, чел·ч</th><th>Результат</th></tr></thead>
+    <tbody>${trips.map(trip=>{
+     const accepted=knownSum(works.flatMap(work=>(work.sources||[]).filter(source=>source.trip===trip.id).map(source=>amount(source.hours))));
+     return `<tr><th scope="row">${esc(trip.title||trip.date||'Выезд')}</th><td>${units(accepted)}</td>
+      <td><button class="btn ghost" type="button" data-finance-report="${esc(trip.id)}">${accepted==null?'Открыть работы':'Смотреть результат'}</button></td></tr>`;
+    }).join('')}</tbody></table></div></section>`;
+ }
+ function mileageTable(trips){
+  const trip=scope==='trip'?trips[0]:null;
+  const sections=trip?.sections.filter(section=>section.mode==='fact')||[];
+  if(trip&&!sections.length)sections.push(...trip.sections.filter(section=>section.mode==='plan'));
+  const bySection=sections.length>0,title=bySection?'Пробег по участкам':'Пробег по выездам';
+  const rows=bySection?sections.map(section=>`<tr><th scope="row">${esc(section.title)}</th>
+   <td>${section.mode==='plan'?units(section.km):'—'}</td><td>${section.mode==='fact'?units(section.km):'—'}</td></tr>`):
+   trips.map((row,index)=>`<tr><th scope="row"><button type="button" class="btn ghost" data-finance-trip="${index}">${esc(row.title||row.date||'Выезд')}</button></th>
+    <td>${units(row.plan_km)}</td><td>${units(row.actual)}</td></tr>`);
+  return disclosure('mileage',title,`<div class="scoped-finance-scroll"><table aria-label="${title}">
+   <thead><tr><th>${bySection?'Участок':'Выезд'}</th><th>План, км</th><th>Факт, км</th></tr></thead>
+   <tbody>${rows.join('')}</tbody><tfoot><tr><th scope="row">${trip?'Всего по выезду':'Итого'}</th>
+    <td>${units(knownSum(trips.map(row=>amount(row.plan_km))))}</td><td>${units(knownSum(trips.map(row=>amount(row.actual))))}</td></tr></tfoot>
+   </table></div>`);
+ }
  function workTable(rows){
-  const units=value=>value==null?'—':format.format(value);
-  const flagged=rows.filter(row=>Number(row.pending_count)>0||Number(row.fact_hours)>Number(row.plan_hours)).length;
-  return `<section class="card scoped-finance-work">
-   <header><h3>Трудозатраты по работам</h3><label><span class="sr-only">Найти работу</span><input type="search" data-finance-work-search placeholder="Работа или задание"></label>
-    <button type="button" class="btn" aria-pressed="false" data-finance-work-alert>Внимание · ${flagged}</button></header>
+  const grouped=scope!=='order',groups=new Map();
+  for(const row of rows){
+   const key=grouped?row.order_id:row.id;
+   if(!groups.has(key))groups.set(key,[]);
+   groups.get(key).push(row);
+  }
+  const attention=row=>Number(row.pending_count)>0||Number(row.fact_hours)>Number(row.plan_hours);
+  const planHours=row=>row.plan_in_scope===false?null:amount(row.plan_hours);
+  const accepted=row=>`${units(row.fact_qty)} из ${units(row.snapshot_qty)} ${esc(row.unit||'')}`;
+  const flagged=[...groups.values()].filter(works=>works.some(attention)).length;
+  return `<section class="scoped-finance-work">
+   <header><h3>Трудозатраты по работам</h3><label><span class="sr-only">Найти работу</span><input type="search" data-finance-work-search value="${esc(searchText)}" placeholder="Работа, задание или заявка"></label>
+    <button type="button" class="btn" aria-pressed="${attentionOnly}" data-finance-work-alert>Внимание <span class="scoped-finance-work-cue">${flagged}</span></button></header>
    <p class="hint" data-finance-work-count role="status"></p>
    <div class="scoped-finance-scroll"><table aria-label="Трудозатраты по работам">
-    <thead><tr><th>Работа</th><th>План, н-ч</th><th>Факт, чел·ч</th><th>Принято</th></tr></thead><tbody>
-    ${rows.map(row=>{
-     const excess=Number(row.fact_hours)>Number(row.plan_hours);
-     const alert=excess||Number(row.pending_count)>0;
-     return `<tr data-finance-work-row data-attention="${alert}" data-search="${esc((row.title+' '+row.number).toLocaleLowerCase('ru'))}"
-      data-plan="${row.plan_in_scope===false?'':row.plan_hours??''}" data-fact="${row.fact_hours??''}"><th scope="row">
-      ${esc(row.title)}<small class="hint">Задание №${esc(row.number)}</small>
-      ${excess?`<small class="hint payment-term-exception">Перерасход +${units(round(row.fact_hours-row.plan_hours))}</small>`:''}
-      ${Number(row.pending_count)>0?'<small class="hint payment-term-exception">На приёмке</small>':''}
-      ${row.sources?.length?`<details class="scoped-finance-sources"><summary>Источники результата</summary>${row.sources.map(source=>
-       `<small class="hint">${esc(String(source.at||'').slice(0,10))} · ${units(source.hours)} чел·ч · ${units(source.qty)} ${esc(row.unit||'')}
-        <button type="button" class="btn ghost" data-finance-source="${esc(source.trip)}">Открыть выезд</button></small>`).join('')}</details>`:''}</th>
-      <td>${row.plan_in_scope===false?'—':units(row.plan_hours)}</td><td>${units(row.fact_hours)}</td>
-      <td>${units(row.fact_qty)} из ${units(row.snapshot_qty)} ${esc(row.unit||'')}</td></tr>`;
+    <thead><tr><th scope="col">${grouped?'Задание':'Работа'}</th><th scope="col">План, н-ч</th><th scope="col">Факт, чел·ч</th>
+     ${grouped?'':'<th scope="col">Принятый объём</th><th scope="col">Состояние</th>'}<th scope="col"><span class="sr-only">Источники</span></th></tr></thead><tbody>
+    ${[...groups].map(([key,works])=>{
+     const [row]=works,plan=knownSum(works.map(planHours)),fact=knownSum(works.map(work=>amount(work.fact_hours)));
+     const complete=work=>Number(work.fact_qty)>=Number(work.snapshot_qty);
+     const excess=Number(row.fact_hours)>Number(row.plan_hours),pending=Number(row.pending_count)>0;
+     const status=excess?'Перерасход +'+units(round(row.fact_hours-row.plan_hours)):
+      pending?'На приёмке':complete(row)?'Выполнена':row.fact_hours==null?'Ожидает факта':'В работе';
+     const number='Задание №'+esc(row.number),detailId='finance-work-'+esc(scope)+'-'+esc(key);
+     const search=[row.number,row.order_title,...works.map(work=>work.title)].join(' ').toLocaleLowerCase('ru');
+     const summary=grouped?esc(row.order_title||number):esc(row.title),open=disclosures.has(detailId);
+     const details=grouped?`<header class="scoped-finance-work-detail-head"><h4>Работы задания №${esc(row.number)}</h4>
+       <button type="button" class="btn ghost" data-finance-order="${esc(row.order_id)}">Открыть работы</button></header>
+       <table aria-label="Работы задания №${esc(row.number)}"><thead><tr><th>Работа</th><th>План, н-ч</th><th>Факт, чел·ч</th><th>Принято</th></tr></thead>
+        <tbody>${works.map(work=>`<tr><th scope="row">${esc(work.title)}</th><td>${units(planHours(work))}</td>
+         <td>${units(work.fact_hours)}</td><td>${accepted(work)}</td></tr>`).join('')}</tbody></table>`:
+      `<h4>Источники результата</h4>${row.sources?.length?row.sources.map(source=>
+       `<p class="hint">${esc(String(source.at||'').slice(0,10))} · ${units(source.hours)} чел·ч · ${units(source.qty)} ${esc(row.unit||'')}
+        <button type="button" class="btn ghost" data-finance-source="${esc(source.trip)}">Открыть выезд</button></p>`).join(''):
+       '<p class="hint">Принятых результатов пока нет.</p>'}`;
+     return `<tr data-finance-work-row data-attention="${works.some(attention)}" data-search="${esc(search)}" data-plan="${plan??''}" data-fact="${fact??''}">
+      <th scope="row">${summary}<small class="hint">${number}${grouped?' · Выполнено '+works.filter(complete).length+' из '+works.length:''}</small></th>
+      <td data-caption="План, н-ч">${units(plan)}</td><td data-caption="Факт, чел·ч">${units(fact)}</td>
+      ${grouped?'':`<td data-caption="Принятый объём">${accepted(row)}</td><td data-caption="Состояние"><span class="${excess||pending?'scoped-finance-work-cue':''}">${status}</span></td>`}
+      <td><button type="button" class="btn ghost" data-finance-work-toggle aria-expanded="${open}" aria-controls="${detailId}"
+       aria-label="${grouped?'Работы задания №'+esc(row.number):'Источники работы «'+esc(row.title)+'»'}"><span aria-hidden="true">⌄</span></button></td></tr>
+      <tr class="scoped-finance-work-detail" id="${detailId}" ${open?'':'hidden'}><td colspan="${grouped?4:6}">${details}</td></tr>`;
     }).join('')}
-    </tbody><tfoot><tr><th scope="row" data-finance-work-total>Итого</th><td data-finance-work-plan></td><td data-finance-work-fact></td><td></td></tr></tfoot>
+    </tbody><tfoot><tr><th scope="row" data-finance-work-total>Итого</th><td data-finance-work-plan></td><td data-finance-work-fact></td><td colspan="${grouped?1:3}"></td></tr></tfoot>
    </table></div><p class="hint" data-finance-work-empty hidden>Работ по этому фильтру нет.</p></section>`;
  }
  function wireWorkTable(){
   const input=root.querySelector('[data-finance-work-search]');if(!input)return;
   const alert=root.querySelector('[data-finance-work-alert]'),rows=[...root.querySelectorAll('[data-finance-work-row]')];
-  const count=root.querySelector('[data-finance-work-count]'),footer=root.querySelector('.scoped-finance-work tfoot');
+  const count=root.querySelector('[data-finance-work-count]'),footer=input.closest('.scoped-finance-work').querySelector('tfoot');
+  const table=footer.closest('table');
+  table.classList.toggle('scoped-finance-by-work',scope==='order');
   const total=(shown,key)=>knownSum(shown.map(row=>amount(row.dataset[key])));
   function filter(){
-   const query=input.value.trim().toLocaleLowerCase('ru'),attention=alert.getAttribute('aria-pressed')==='true';
-   for(const row of rows)row.hidden=!row.dataset.search.includes(query)||attention&&row.dataset.attention!=='true';
+   searchText=input.value;
+   attentionOnly=alert.getAttribute('aria-pressed')==='true';
+   const query=searchText.trim().toLocaleLowerCase('ru');
+   for(const row of rows){
+    row.hidden=!row.dataset.search.includes(query)||attentionOnly&&row.dataset.attention!=='true';
+    const detail=row.nextElementSibling;
+    detail.hidden=row.hidden||!disclosures.has(detail.id);
+   }
    const shown=rows.filter(row=>!row.hidden);
    count.textContent='Показано '+shown.length+' из '+rows.length;
    root.querySelector('[data-finance-work-empty]').hidden=shown.length>0;footer.hidden=!shown.length;
-   footer.querySelector('[data-finance-work-total]').textContent=query||attention?'Итого по фильтру':'Итого';
+   footer.querySelector('[data-finance-work-total]').textContent=query||attentionOnly?'Итого по фильтру':'Итого';
    for(const key of ['plan','fact']){
     const sum=total(shown,key);footer.querySelector('[data-finance-work-'+key+']').textContent=sum==null?'—':format.format(sum);
    }
   }
   input.oninput=filter;
   alert.onclick=()=>{alert.setAttribute('aria-pressed',String(alert.getAttribute('aria-pressed')!=='true'));filter();};
+  for(const button of table.querySelectorAll('[data-finance-work-toggle]')){
+   button.onclick=()=>{
+    const key=button.getAttribute('aria-controls'),open=disclosures.has(key);
+    if(open)disclosures.delete(key);else disclosures.add(key);
+    button.setAttribute('aria-expanded',String(!open));
+    filter();
+   };
+  }
   filter();
  }
  function panelEditor(title,html,trigger,submit,reset,resetLabel,saveLabel){
@@ -340,17 +402,22 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip}){
  function editTotal(key,data,trigger){
   const [mode,metric]=key.split(':'),base=data.calculated[mode][metric],previous=model.corrections[key]||{};
   const panel=panelEditor('Корректировка · '+metricTitles[metric]+' · '+modeTitles[mode],`<div class="scoped-finance-delta">
-    <div><span class="hint">Расчёт</span><strong>${esc(cash(base))}</strong></div>
+    <div><span class="hint">Расчёт, ${esc(model.currency)}</span><strong>${base==null?'—':format.format(base)}</strong></div>
     <label>Согласовано, ${esc(model.currency)}<input data-finance-value type="text" inputmode="decimal" value="${financeValue(previous.value??base)}"></label>
-    <div><span class="hint">Разница</span><strong data-finance-delta>${difference(base,previous.value??base)}</strong></div>
-   </div><label>Причина<textarea rows="2" maxlength="1000" data-finance-reason>${esc(previous.reason||'')}</textarea></label>`,
+    <div><span class="hint">Разница, ${esc(model.currency)}</span><strong data-finance-delta>${difference(base,previous.value??base)}</strong></div>
+   </div><label>Причина<textarea rows="2" maxlength="1000" data-finance-reason>${esc(previous.reason||'')}</textarea></label>
+   <p class="hint scoped-finance-correction-note">Корректировка применяется к итогу этой карточки.</p>`,
    trigger,panel=>{
     const value=decimal(panel.querySelector('[data-finance-value]').value),reason=panel.querySelector('[data-finance-reason]').value.trim();
     if(value==null)throw Error('Введите согласованную сумму');
     if(!reason)throw Error('Укажите причину корректировки');
     return save(scope,key,previous,{value,reason});
    },previous.value!=null?()=>save(scope,key,previous,{}):null,'Вернуть расчёт','Сохранить');
-  if(panel){const input=panel.querySelector('[data-finance-value]');input.oninput=()=>{panel.querySelector('[data-finance-delta]').textContent=difference(base,decimal(input.value));};}
+  if(panel){
+   panel.classList.add('scoped-finance-total-editor');
+   const input=panel.querySelector('[data-finance-value]');
+   input.oninput=()=>{panel.querySelector('[data-finance-delta]').textContent=difference(base,decimal(input.value));};
+  }
  }
  return {load};
 }

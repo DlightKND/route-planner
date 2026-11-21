@@ -465,7 +465,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   const financeLocal=(scope,id,subject)=>financeAdjustments.get(termsKey(scope,id,subject))||{};
   const scopedFinance=(scope,id)=>({scope,id,editable:true,currency:'грн',pricing:{profiles:[],tariffs:{}},
     lines:[
-      {id:visitWork.id,order_id:order,number:task.number,title:visitWork.title,kind:'work',
+      {id:visitWork.id,order_id:order,number:task.number,order_title:task.title,title:visitWork.title,kind:'work',
        plan_qty:2,fact_qty:1,accepted_qty:1,fact_hours:3,snapshot_qty:2,plan_hours:5,base_revenue:500,base_cost:150,hour_cost:150,
        billable:true,hourly:true,terms:{},rates:financeLocal('work',order,visitWork.id),editable:true},
       {id:visitPart.id,order_id:order,number:task.number,title:visitPart.title,kind:'material',

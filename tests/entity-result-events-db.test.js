@@ -71,6 +71,7 @@ beforeAll(async()=>{
     create table public.trip_cost_allocations(run_id uuid,cost_type text,service_order_id uuid,quantity numeric,amount numeric);`);
   await db.exec(file('../supabase/migrations/20261120200145_scoped_finance_workspace.sql'));
   await db.exec(file('../supabase/migrations/20261120202510_planned_road_tariffs.sql'));
+  await db.exec(file('../supabase/migrations/20261121051500_finance_work_group_names.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -109,7 +110,7 @@ it('projects accepted work, road and approved allocation across cards with audit
   await visitResult({extraParts:[{id:id(133),work_id:id(40),title:'Винт',unit:'шт',qty:2,unit_cost:12.75}]});
   await as(6);
   const submitted=await readFinance('trip',50);
-  expect(submitted.lines[0]).toMatchObject({fact_qty:0,fact_hours:null});
+  expect(submitted.lines[0]).toMatchObject({order_title:'Диагностика',fact_qty:0,fact_hours:null});
   expect(submitted.extra_parts_cost).toBe(0);
   await visitResult({prior:100,operation:101,action:'accepted',extraParts:[{id:id(133),work_id:id(40),title:'Винт',unit:'шт',qty:2,unit_cost:12.75}]});
   for(const [scope,entity] of [['job',10],['order',30],['trip',50]]){

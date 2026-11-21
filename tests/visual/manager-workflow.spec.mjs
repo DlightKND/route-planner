@@ -118,6 +118,8 @@ test('M17: accepted road and work feed the three financial views and total adjus
  const plan=finance.locator('.scoped-finance-money').first();
  const totals=(revenue,cost)=>expect(fact.locator('dd')).toHaveText([revenue,cost]);
  await totals('950 грн','635 грн');
+ await expect(finance.getByRole('table',{name:'Вклад по выездам',exact:true})).toBeVisible();
+ await expect(finance.getByRole('columnheader',{name:'Состояние'})).toBeAttached();
  await finance.getByRole('button',{name:'Таблицы',exact:true}).click();
  await expect(finance.getByRole('table',{name:'Экономика · план и факт'})).toBeVisible();
  await finance.locator('[data-finance-section=breakdown] summary').click();
@@ -139,6 +141,14 @@ test('M17: accepted road and work feed the three financial views and total adjus
  await totals(/1\s050 грн/,'395 грн');
  await navigate(page,'trip','/trip/'+trip+'/economy');
  await totals(/1\s050 грн/,'395 грн');
+ const group=finance.getByRole('table',{name:'Трудозатраты по работам',exact:true});
+ await expect(group.getByRole('columnheader',{name:'Задание',exact:true})).toBeVisible();
+ await group.getByRole('button',{name:/Работы задания №/}).click();
+ await expect(finance.getByRole('table',{name:/Работы задания №/})).toBeVisible();
+ await finance.getByRole('searchbox',{name:'Найти работу'}).fill('Нет такой работы');
+ await expect(finance.getByRole('table',{name:/Работы задания №/})).toBeHidden();
+ await finance.getByRole('searchbox',{name:'Найти работу'}).fill('');
+ await expect(finance.getByRole('table',{name:/Работы задания №/})).toBeVisible();
  await finance.locator('[data-finance-section=totals] summary').click();
  await finance.getByRole('button',{name:'Изменить итог · Приход · Факт'}).click();
  await editor.locator('[data-finance-value]').fill('1600');

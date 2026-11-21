@@ -231,7 +231,8 @@ export function createServiceOrders(ctx){
   host.className='scoped-finance';$('orderPane-plan-fact').prepend(host);
   finance=mountEntityFinance(host,{db:api,scope:'order',id:o.id,
    current:()=>current===o&&host.isConnected&&user===ctx.userId(),
-   onTrip:async row=>{if(await leave())ctx.openTrip(row.id,{pane:'economy'});}});
+   onTrip:async row=>{if(await leave())ctx.openTrip(row.id,{pane:'economy'});},
+   onReport:trip=>open(o.id,scope,{pane:'scope',trip})});
  }
  tabEntity=identity;entityTabs=createEntityTabs(editor,{initial,onChange:value=>{tabValue=value;if(value==='plan-fact')void finance?.load();}});tabValue=entityTabs.value;
  if(tabValue==='plan-fact')void finance?.load();

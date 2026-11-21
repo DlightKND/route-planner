@@ -3923,7 +3923,8 @@ function mountCardFinance(scope,id,pane,currentId){
   host.id=hostId;host.className='scoped-finance';pane.prepend(host);
   return mountEntityFinance(host,{db:()=>sb,scope,id,
     current:()=>host.isConnected&&id===currentId()&&user===session?.user?.id,
-    onTrip:row=>scope==='trip'?openJournalTrip(row.id,{pane:'route'}):openTrip(row.id,{pane:'economy'})});
+    onTrip:row=>scope==='trip'?openJournalTrip(row.id,{pane:'route'}):openTrip(row.id,{pane:'economy'}),
+    onOrder:orderId=>serviceOrders.open(orderId,null,{pane:'scope',trip:scope==='trip'?id:undefined})});
 }
 async function openJob(id,presetClient,presetEquip,{pane:requestedPane}={}){ if(!await leaveSettingsEditor())return;if(!await leaveJobEditor())return;if(!await leaveTripEditor())return;if(serviceOrders.isDirty()&&!await serviceOrders.leave())return; await ensureRefs(); jobEditId=id;
   let j=null,pendingEdit=false;
