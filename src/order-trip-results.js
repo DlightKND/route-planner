@@ -594,7 +594,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   });
  }
  restore();render();
- return {select:switchTrip,setPaymentModel(model){paymentModel=model;paintWorkPayment();},showWork(id){
+ return {select:switchTrip,currentTrip:()=>selected?.id,setPaymentModel(model){paymentModel=model;paintWorkPayment();},showWork(id){
   const button=[...root.querySelectorAll('[data-visit-expand]')].find(toggle=>toggle.dataset.visitExpand===id);
   if(!button)return;setExpanded(button,true);button.scrollIntoView({block:'nearest'});button.focus({preventScroll:true});
  }};

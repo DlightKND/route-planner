@@ -33,14 +33,34 @@ export function mountPresenceReview(root,data,{jobs=[],profiles=[],readonly=fals
  }
  table.remove();root.querySelector('.wb-metrics')?.remove();root.querySelector('[data-presence-message]')?.remove();
  const design=installPresenceControls(root,data,{readonly,profiles,jobs,onRoute});
+ const list=workspace.querySelector('.presence-review-list');
+ const sidebar=list.parentElement;
+ const listHeader=sidebar.querySelector('header');
+ const trip=root.closest('.journal-trip-detail');
+ let firstStops=[];
+ function reserveVisibleStops(){
+  const last=firstStops.at(-1);
+  const box=list.getBoundingClientRect();
+  if(!box.width)return;
+  const height=last?last.getBoundingClientRect().bottom-box.top+list.scrollTop:0;
+  const minimum=Math.ceil(height+(box.top-sidebar.getBoundingClientRect().top));
+  trip?.style.setProperty('--journal-stops-min',`${minimum}px`);
+ }
+ const SizeObserver=doc.defaultView.ResizeObserver;
+ const sizeObserver=SizeObserver?new SizeObserver(reserveVisibleStops):null;
+ sizeObserver?.observe(listHeader);
  const title=s=>stopTitle(s,jobs,data.stays.indexOf(s));
  const visible=()=>data.stays.filter(s=>(mode==='all'||(mode==='done')===reviewed(s))&&(!gaps||presenceBounds(s)?.extra>0)&&(!search||[title(s),s.address,s.job_id].join(' ').toLocaleLowerCase().includes(search)));
  function paintList(){
-  const list=workspace.querySelector('.presence-review-list'),scroll=list.scrollTop;let lastDay=null;
+  const scroll=list.scrollTop;let lastDay=null;
   list.innerHTML=visible().map(s=>{const index=data.stays.indexOf(s),place=stopPlace(s,jobs,index),extent=evidenceExtent(s),day=dayKey(extent.from),heading=day!==lastDay?'<h3 class="journal-stop-day">'+esc(dayText(extent.from))+'</h3>':'';lastDay=day;
    const interval=intervalText(extent.from,extent.to),short=dayKey(extent.from)===dayKey(extent.to)?interval.split(', ').at(-1):interval,known=place.title!=='Остановка '+(index+1),state=s.status==='approved'?'Подтверждено':s.status==='rejected'?(stopKind(s)==='road'?'Остановка в пути':'Не учитывать'):'Не подтверждено';
    return heading+'<button type="button" class="presence-stop '+(s.id===active?'is-selected':'')+'" data-review-stop="'+esc(s.id)+'" aria-label="'+esc('Остановка '+(index+1)+' · '+place.fullTitle+' · '+place.location+' · '+interval+' · '+stopState(s))+'" aria-pressed="'+(s.id===active)+'"><span class="journal-stop-number">'+(index+1)+'</span><span class="journal-stop-copy"><span class="journal-stop-top"><span>'+esc(short)+'</span><small class="journal-stop-state '+(s.status==='approved'?'confirmed':s.status==='rejected'?'is-neutral':'')+'">'+icon(s.status==='approved'?'check':'clock')+state+'</small></span>'+(known?'<strong>'+esc(place.title)+'</strong>':'')+'<span class="journal-stop-location">'+esc(place.location)+'</span></span>'+icon('chevron')+'</button>';
   }).join('')||'<p class="hint">Остановки не найдены. Измените фильтры.</p>';list.scrollTop=scroll;
+  firstStops.forEach(stop=>sizeObserver?.unobserve(stop));
+  firstStops=[...list.querySelectorAll('[data-review-stop]')].slice(0,3);
+  firstStops.forEach(stop=>sizeObserver?.observe(stop));
+  reserveVisibleStops();
   list.querySelectorAll('[data-review-stop]').forEach(b=>b.onclick=()=>select(b.dataset.reviewStop));workspace.querySelectorAll('[data-review-mode]').forEach(b=>{b.classList.toggle('on',mode===b.dataset.reviewMode);b.setAttribute('aria-pressed',String(mode===b.dataset.reviewMode));});
  }
 
@@ -77,6 +97,6 @@ export function mountPresenceReview(root,data,{jobs=[],profiles=[],readonly=fals
  workspace.querySelectorAll('[data-review-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.reviewMode;paintList();const s=visible()[0];if(s)select(s.id,false,false);else{active=null;delete root.dataset.reviewActive;workspace.querySelector('.presence-kind').hidden=true;workspace.querySelector('footer').hidden=true;workspace.querySelector('.presence-review-map').replaceChildren();rows.forEach(r=>r.hidden=true);}});
  paintList();const first=visible()[0];if(first)select(first.id,false,false);
  function markSaved(saved){const id=saved?.id||active,source=data.stays.find(s=>s.id===id);dirty.delete(id);store.remove(source);if(!saved)return;Object.assign(source,saved);const row=rows.get(id);row.dataset.stopKind=source.status==='approved'?'visit':'later';const status=row.querySelector('[data-presence="status"]');if(status)status.value=source.status==='approved'?'approved':source.status==='rejected'?'rejected':'';comments.set(id,decisionComment(source.note));workspace.querySelector('.presence-review-sidebar header span').textContent='Подтверждено '+data.stays.filter(reviewed).length+' из '+data.stays.length;paintList();if(active===id){editing=false;zeroAck=null;workspace.querySelector('.journal-review-note').value=comments.get(id);paintResult();workspace.querySelector('.presence-review-scroll').scrollTop=0;}}
- const destroy=()=>{stopMenu.destroy();filterPanel.destroy();design.destroy();maps.forEach(m=>m.destroy());root.removeEventListener('input',update);root.removeEventListener('change',update);root.removeEventListener('focusin',revealFocus);root.removeEventListener('pointerdown',startPointer,true);doc.defaultView.removeEventListener('pointerup',endPointer,true);doc.defaultView.removeEventListener('pointercancel',endPointer,true);};mounted.set(root,destroy);
+ const destroy=()=>{sizeObserver?.disconnect();trip?.style.removeProperty('--journal-stops-min');stopMenu.destroy();filterPanel.destroy();design.destroy();maps.forEach(m=>m.destroy());root.removeEventListener('input',update);root.removeEventListener('change',update);root.removeEventListener('focusin',revealFocus);root.removeEventListener('pointerdown',startPointer,true);doc.defaultView.removeEventListener('pointerup',endPointer,true);doc.defaultView.removeEventListener('pointercancel',endPointer,true);};mounted.set(root,destroy);
  return {select,back,allowsSave(candidate){const key=zeroPresenceSignature(candidate);return key==null||zeroAck===key;},isDirty:()=>dirty.size>0,markSaved,discard(){for(const s of data.stays)if(dirty.has(s.id))store.remove(s);dirty.clear();},destroy};
 }

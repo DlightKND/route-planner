@@ -62,6 +62,7 @@ export function createServiceOrders(ctx){
  let remainderGeneration=0,remainderLoading=false,remainderRows=[],remainderAttempt=null;
  let visitResults=null,visitError='',visitPanel=null;
  let entityTabs=null,tabEntity=null,tabValue=null,resultDialog=null,reportDirty=false,resultAttempt=null,resultExpected=null,loadedUser=null;
+ let backCard=null;
  const actualDate=()=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Kyiv',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}`;};
  const reportAllowed=o=>!!o?.id&&(manager(o)&&historicalClosedDraft(o)||['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.status!=='review'&&o.engineer_ids?.includes(ctx.userId())));
  const draftKey=o=>`dlight:result-draft:${ctx.userId()}:${o.id}`;
@@ -90,7 +91,7 @@ export function createServiceOrders(ctx){
    remainderRows=Array.isArray(rows)?rows:[];
    box.hidden=!remainderRows.length;
    box.innerHTML=remainderRows.length?`<fieldset class="request-work-remainders"><legend>Остаток работ по заявке</legend>
-    <p class="hint">Выберите работы, которые нужно добавить в новое задание.</p>
+    <p class="hint">Выберите работы для нового задания. Норма труда и доступные запчасти переносятся пропорционально остатку.</p>
     ${remainderRows.map(row=>`<label><input type="checkbox" data-remainder-item data-qty="${esc(row.qty)}" value="${esc(row.id)}" ${checked.get(row.id)===String(row.qty)?'checked':''}>
      <span><strong>${esc(row.title)} · осталось ${remainderNumber(row.qty)} из ${remainderNumber(row.planned)} ${esc(row.unit)}</strong>
      <small>Из задания №${esc(row.number)}</small></span></label>`).join('')}</fieldset>`:'';
@@ -122,18 +123,15 @@ export function createServiceOrders(ctx){
    })});
  }
  function renderTaskTable(root,tasks,origin='',trip=null,requestLabel=''){
-  const search=root.querySelector('[data-related-search]')?.value||'';
-  root.innerHTML=taskTable(tasks,origin,trip,requestLabel);root.querySelector('[data-related-search]').value=search;
-  wireRelatedTable(root);wireChildren(root);
+  root.innerHTML=taskTable(tasks,origin,trip,requestLabel);
+  wireRelatedTable(root,`${ctx.userId()}:${trip||origin}`);wireChildren(root);
   const bindWorks=node=>node.querySelector('[data-related-order-works]').onclick=()=>{
    const id=node.dataset.relatedWorkDetails;
    return open(id,origin,{pane:'scope',trip});
   };
   root.querySelectorAll('[data-related-work-details]').forEach(bindWorks);
   root.querySelectorAll('[data-related-order-result]').forEach(button=>button.onclick=()=>openResult(button.dataset.relatedOrderResult,origin,trip));
-  root.addEventListener('click',async event=>{
-   const control=event.target.closest('[data-related-toggle]');
-   if(!control||control.getAttribute('aria-expanded')!=='true')return;
+  const loadDetails=async control=>{
    const detail=control.closest('tr').nextElementSibling.querySelector('[data-related-work-details]');
    const task=tasks.find(row=>row.id===detail?.dataset.relatedWorkDetails);
    if(!task||task.work_mode!=='onsite'||detail.dataset.loaded)return;
@@ -147,7 +145,12 @@ export function createServiceOrders(ctx){
     detail.innerHTML=relatedWorkPreview(items,{open:taskButton(task,origin,'Открыть работы','data-related-order-works'),accepted:accepted||undefined,tripScoped:!!trip});
     detail.dataset.loaded='yes';bindWorks(detail);
    }catch{delete detail.dataset.loaded;}
+  };
+  root.addEventListener('click',event=>{
+   const control=event.target.closest('[data-related-toggle][aria-expanded=true]');
+   if(control)void loadDetails(control);
   },{signal:relatedListener(root)});
+  root.querySelectorAll('[data-related-toggle][aria-expanded=true]').forEach(loadDetails);
  }
  const relatedListeners=new WeakMap();
  function relatedListener(root){
@@ -162,19 +165,31 @@ export function createServiceOrders(ctx){
   const rows=relatedTripRows(trips,{people:name,status:ctx.tripStatus,visits,open:(trip,label)=>`<button type="button" class="btn ghost related-record-link" data-order-trip="${esc(trip.id)}">${esc(label)}</button>`,
    openGPS:trip=>ctx.openJournalTrip?`<button type="button" class="btn ghost related-record-link" data-related-gps="${esc(trip.id)}">Журнал GPS</button>`:'—',
    linkedTasks:id=>linked(id).map(task=>`<div class="related-task-reference">${taskButton(task,origin)}<span class="related-status">${esc(ORDER_STATUS[task.status]||task.status)}</span></div>`).join(''),
-   report:(trip,visit)=>['done','finished'].includes(trip.status)&&linked(trip.id).some(reportAllowed)||visit?.versions?.length?
-    `<button class="btn ghost" type="button" data-related-trip-result="${esc(trip.id)}" data-related-report-order="${esc(visit?.versions?.length?visit.orderId:'')}">${visit?.versions?.length?'Посмотреть результат':'Внести выполненные работы'}</button>`:''});
+   report:trip=>{
+    const linkedTasks=linked(trip.id),results=visits.get(trip.id)?.results;
+    const accepted=task=>results?.get(task.id)?.versions?.length>0;
+    const pending=['done','finished'].includes(trip.status)?linkedTasks.filter(task=>reportAllowed(task)&&!accepted(task)):[];
+    const canReport=pending.length>0;
+    const canView=linkedTasks.some(accepted);
+    if(!canReport&&!canView)return '';
+    return `<button class="btn ghost" type="button" data-related-trip-result="${esc(trip.id)}"${canReport&&pending.length===1?` data-related-report-order="${esc(pending[0].id)}"`:''}${canReport?'':' data-related-view-result'}>${canReport?'Внести выполненные работы':'Посмотреть результат'}</button>`;
+   }});
   return relatedTable({idPrefix:order?'task-linked-trip':'request-linked-trip',title:'Выезды',searchLabel:'Найти выезд',placeholder:'Номер, техника или инженер',
    columns:['Выезд','Техника / команда','Часы по посещениям','Состояние'],rows,actions,review:true,totalHours:true,
    empty:order?.work_mode&&order.work_mode!=='onsite'?'Для этого задания поездка не требуется.':'Связанных выездов пока нет.'});
  }
  function wireTravel(root,tasks,{origin='',order=null}={}){
-  wireRelatedTable(root);
+  wireRelatedTable(root,`${ctx.userId()}:${order?.id||origin}`);
   wireChildren(root);
   root.querySelectorAll('[data-order-trip]').forEach(button=>button.onclick=async()=>{if(!order||await leave())ctx.openTrip(button.dataset.orderTrip);});
   root.querySelectorAll('[data-related-gps]').forEach(button=>button.onclick=async()=>{if(!order||await leave())ctx.openJournalTrip?.(button.dataset.relatedGps);});
-  root.querySelectorAll('[data-related-trip-result]').forEach(button=>button.onclick=()=>{
-   const target=order?.id||button.dataset.relatedReportOrder,trip=button.dataset.relatedTripResult;
+  root.querySelectorAll('[data-related-trip-result]').forEach(button=>button.onclick=async()=>{
+   const trip=button.dataset.relatedTripResult;
+   if(button.hasAttribute('data-related-view-result')){
+    if(!order||await leave())return ctx.openTrip(trip,{pane:'economy'});
+    return;
+   }
+   const target=order?.id||button.dataset.relatedReportOrder;
    return target?open(target,origin,{pane:'scope',trip}):ctx.recordTripResult?.(trip,origin);
   });
   const plan=root.querySelector('[data-related-plan]');
@@ -217,14 +232,14 @@ export function createServiceOrders(ctx){
     if(!stillCurrent())return;
     const visits=new Map();
     for(const result of visitRows)if(result.status==='fulfilled')for(const visit of result.value.visits){
-     const previous=visits.get(visit.id);
-     const presence=visit.presence?.confirmed?{confirmed:true,base:visit.presence.base}:previous?.presence;
-     if(!previous||visit.versions?.length&&!previous.versions?.length)
-      visits.set(visit.id,{...visit,orderId:result.value.orderId,presence});
-     else previous.presence=presence;
+     const entry=visits.get(visit.id)||{label:visit.label,results:new Map()};
+     entry.results.set(result.value.orderId,visit);
+     if(visit.presence?.confirmed)entry.presence={confirmed:true,base:visit.presence.base};
+     visits.set(visit.id,entry);
     }
     tripsBox.innerHTML=travelTable(trips,tasks,{origin:id,visits});
     wireTravel(tripsBox,tasks,{origin:id});
+    return trips.some(trip=>trip.status==='finished'&&!visits.get(trip.id)?.presence?.confirmed);
    }catch(e){if(stillCurrent())tripsBox.textContent='Не удалось загрузить выезды: '+e.message;}
   };
   const renderCosts=async()=>{
@@ -236,14 +251,14 @@ export function createServiceOrders(ctx){
     costBox.insertAdjacentHTML('beforeend',`<div class="order-trip-cost-summary"><b>Выездные затраты заданий · ${num(totals.distance+totals.labor)} ₴</b><span>${num(totals.km)} км · ${num(totals.distance)} ₴</span><span>${num(totals.hours)} чел.-ч · ${num(totals.labor)} ₴</span></div>`);
    }catch(e){if(stillCurrent())costBox.insertAdjacentHTML('beforeend','<p class="hint">Сводка выездных затрат временно недоступна: '+esc(e.message)+'</p>');}
   };
-  void renderTrips();
+  const pendingGPS=renderTrips();
   void renderCosts();
   let remaining=false;
   if(manager()&&tasks.some(task=>task.closed_with_remainder_at)){
    try{remaining=(await rpc('service_order_request_remainders',{p_job:id}))?.length>0;}
    catch(error){if(stillCurrent())box.insertAdjacentHTML('beforeend','<p class="hint">Остаток временно недоступен. Повторите проверку при создании задания.</p>');}
   }
-  return {tasks,remaining};
+  return {tasks,remaining,pendingGPS};
  }
  function progress(o){const list=o.service_order_items||[];const imported=list.filter(i=>i.legacy_job_work_id||i.legacy_job_part_id).length;const base=list.length?orderProgress(list):'Состав работ не уточнён';return imported?`${base} · ${imported} исторических строк${list.some(i=>Number(i.done_qty||0)>0)?'':', факт не переносился'}`:base;}
  function card(o){const rows=(o.service_order_items||[]).filter(i=>!isFinanceVoided(i)),planned=rows.length,done=rows.filter(i=>Number(i.done_qty||0)>=Number(i.planned_qty||0)).length,blocker=o.status==='draft'?orderTransitionBlocker(o,'assigned'):'';
@@ -267,7 +282,9 @@ export function createServiceOrders(ctx){
  if(!onBoard&&(dirty||reportDirty)){ctx.notify('Сначала сохрани изменения задания.','warn');return;}
  let reason='';const intervention=o.owner_id===ctx.userId()&&o.curator_id!==ctx.userId();if(['paused','cancelled'].includes(status)||intervention){reason=await ctx.reason(intervention?'Причина вмешательства владельца':'Причина '+(status==='paused'?'приостановки':'отмены'));if(reason===null){if(onBoard)await board();return;}if(intervention&&reason.trim().length<5){ctx.notify('Укажи причину вмешательства не короче пяти символов.','warn');if(onBoard)await board();return;}}
  try{await rpc('service_order_transition',{p_id:o.id,p_expected:o.revision,p_status:status,p_reason:reason});ctx.notify('Задание: '+ORDER_STATUS[status]);if(onBoard)await board();else await open(o.id,scope);}catch(e){fail(e);if(onBoard)await board();}}
- async function open(id,origin=null,{pane:requestedPane,trip:requestedTrip}={}){if(ctx.beforeOpen&&!await ctx.beforeOpen())return false;if(loadedUser!==ctx.userId()){dirty=false;reportDirty=false;}if((dirty||reportDirty)&&!await leave())return false;scope=origin||null;await ctx.ensureRefs();
+ async function open(id,origin=null,{pane:requestedPane,trip:requestedTrip,returning=false}={}){if(ctx.beforeOpen&&!await ctx.beforeOpen())return false;if(loadedUser!==ctx.userId()){dirty=false;reportDirty=false;backCard=null;}if((dirty||reportDirty)&&!await leave())return false;scope=origin||null;await ctx.ensureRefs();
+ const source=ctx.cardOrigin?.();
+ if(!returning&&source?.name!=='order')backCard=source?.id&&['job','trip'].includes(source.name)?source:null;
  try{const jr=await api().from('jobs').select('id,notes,at_depot,due_date,clients(name)').is('deleted_at',null).order('created_at',{ascending:false});if(jr.error)throw jr.error;allJobs=jr.data||[];try{await loadStock();}catch(e){stockError=e.message;}try{await loadWorkCatalog();}catch(e){ctx.notify('Каталог работ временно недоступен: '+e.message,'warn');}
  if(id){const {data,error}=await api().from('service_orders').select('*,jobs!service_orders_job_id_fkey(status,due_date,clients(name),equipment(model)),service_order_items(*),trip_service_orders(trip_id,trips(id,date_from,date_to,status,vehicle_label,engineer_ids,deleted_at))').eq('id',id).single();if(error)throw error;current=data;}else current={id:null,status:'draft',title:'',job_id:scope||null,work_mode:allJobs.find(j=>j.id===scope)?.at_depot?'depot':'onsite',engineer_ids:[],service_order_items:[],trip_service_orders:[]};
  visitResults=null;visitError='';visitPanel=null;
@@ -283,7 +300,7 @@ export function createServiceOrders(ctx){
  }catch(e){fail(e);return false;}}
  function field(label,html){return `<label>${label}${html}</label>`;}
  function render(requestedPane,requestedTrip){document.querySelectorAll('dialog.entity-panel-dialog').forEach(d=>{if(d.querySelector('#orderResponsibility,#orderDeadlinePanel,#orderExecution,#orderTripPicker,#orderReviewPanel'))d.close();});if(entityTabs){tabValue=entityTabs.value;entityTabs.destroy();entityTabs=null;}const o=current,base=!!o.seed_request_id&&o.seed_request_id===o.job_id,edit=manager(o)&&['draft','assigned'].includes(o.status),historicalResult=manager(o)&&historicalClosedDraft(o),report=reportAllowed(o),primary=nextOrderStates(o.status,manager(o)).find(s=>s===({draft:'assigned',assigned:'in_progress',paused:'in_progress',review:'completed'}[o.status]));
- $('orderEditor').innerHTML=`<div class="crumbs"><button class="crumb" id="orderBack">${scope?'Заявка → задания':'Диспетчер → задания'}</button>${o.job_id?`<button class="crumb" id="orderRequest">Исходная заявка</button>`:''}<span>› ${o.id?'Задание №'+o.number:'Новое задание'}</span></div>
+ $('orderEditor').innerHTML=`<div class="crumbs"><button class="crumb" id="orderBack">${backCard?.name==='trip'?'Назад к выезду':backCard?.name==='job'?'Назад к заявке':scope?'Заявка → задания':'Диспетчер → задания'}</button>${o.job_id?`<button class="crumb" id="orderRequest">Исходная заявка</button>`:''}<span>› ${o.id?'Задание №'+o.number:'Новое задание'}</span></div>
  <div class="trip-head"><div><h2>${o.id?'Задание №'+o.number:'Новое сервисное задание'}${o.title?' · '+esc(o.title):''}</h2><div class="hint">${esc(jobName(o.job_id))}${o.jobs?.equipment?.model?' · '+esc(o.jobs.equipment.model):''}</div><div class="entity-head-meta"><span class="design-status" data-state="${o.status}">${ORDER_STATUS[o.status]}</span><span>${esc(modes[o.work_mode])}</span>${o.id?`<span>${esc(humanDate(o.date_from)||'Без периода')}${o.date_to?' — '+esc(humanDate(o.date_to)):''}</span>${o.owner_id&&o.owner_id!==o.curator_id?`<span>Владелец: ${esc(name(o.owner_id))}</span>`:''}`:''}</div></div><div class="acts entity-header-actions">${o.id?`${report&&(!primary||o.status==='in_progress'||historicalResult)?'<button class="btn amber" id="orderRecordResult">Зафиксировать результат</button>':primary?`<button class="btn amber" data-order-next="${primary}" title="${esc(orderTransitionBlocker(o,primary))}">${orderActionLabel(o.status,primary)}</button>`:''}<button id="orderMore" type="button" class="btn" aria-label="Другие действия">⋯</button>`:''}</div></div>
  ${o.id?`<p class="hint" role="status">${[...new Set(nextOrderStates(o.status,manager(o)).map(s=>orderTransitionBlocker(o,s)).filter(Boolean))].map(esc).join(' ')}</p>`:''}
  <div class="entity-toolbar order-toolbar"><nav class="entity-tabs" role="tablist" aria-label="Разделы задания">${(o.id?[['overview','Обзор'],['scope','Работы'],['travel','Выезды'],['plan-fact','План/факт']]:[['scope','Работы']]).map(([key,label])=>`<button type="button" id="orderTab-${key}" role="tab" aria-label="${key==='travel'?'Выезды':label}" data-entity-tab="${key}" aria-controls="orderPane-${key}">${label}</button>`).join('')}</nav><div class="order-savebar"><span id="orderSaveState" role="status">Сохранено</span>${edit?'<button class="btn'+(o.id?'':' amber')+'" id="orderSave">'+(o.id?'Сохранить задание':'Создать задание')+'</button>':''}</div><p class="err" id="orderError" role="alert"></p></div>
@@ -304,7 +321,7 @@ export function createServiceOrders(ctx){
  <p id="orderDeadlineError" class="err" role="alert"></p><div id="orderDeadlineRequests" class="order-items"><p class="hint">Загружаю предложения…</p></div></section>`:''}
  ${o.id?`<section id="orderExecution"><p class="hint">Внеси суммарный результат. Присутствие на объекте учитывается в выезде отдельно.</p>${field('Дата выполнения','<input id="orderResultDate" type="date" required value="'+actualDate()+'">')}<div id="orderResults" class="order-items"></div>${field('Итог и замечания','<textarea id="orderResultNote" maxlength="4000" '+(report?'':'disabled')+'>'+esc(o.result_note||'')+'</textarea>')}${historicalResult?field('Основание исторического факта (обязательно)','<textarea id="orderResultBasis" maxlength="1000" placeholder="По акту, журналу работ или другому подтверждению"></textarea>'):''}<p class="err" id="orderResultError" role="alert"></p>${report?'<div class="entity-dialog-foot"><span id="orderResultDraftState" class="hint" role="status"></span><button type="button" class="btn ghost" id="orderResultLater">Продолжить позже</button><button type="button" class="btn amber" id="orderResultSave">Сохранить результат</button><button type="button" class="btn" id="orderResultSubmitReview">Передать на проверку</button></div>':''}${manager(o)&&['in_progress','paused','review'].includes(o.status)?'<button class="btn sm" id="orderCarry" hidden>Закрыть с остатком</button>':''}</section>
  <section id="orderTravel"><div id="orderTrips">${travelTable((o.trip_service_orders||[]).map(link=>link.trips).filter(trip=>trip&&!trip.deleted_at),[o],
- {origin:scope||'',order:o,visits:new Map((visitResults?.trips||[]).map(visit=>[visit.id,visit]))})}</div>${manager(o)&&o.work_mode==='onsite'&&!['completed','cancelled','review'].includes(o.status)?'<div class="order-line-adds"><button class="btn amber" id="orderTripAdd">Запланировать выезд</button><button class="btn" id="orderTripExisting" hidden>Добавить в существующий выезд</button></div><div id="orderTripPicker" hidden></div>':''}</section>
+ {origin:scope||'',order:o,visits:new Map((visitResults?.trips||[]).map(visit=>[visit.id,{...visit,results:new Map([[o.id,visit]])}]))})}</div>${manager(o)&&o.work_mode==='onsite'&&!['completed','cancelled','review'].includes(o.status)?'<div class="order-line-adds"><button class="btn amber" id="orderTripAdd">Запланировать выезд</button><button class="btn" id="orderTripExisting" hidden>Добавить в существующий выезд</button></div><div id="orderTripPicker" hidden></div>':''}</section>
  <section class="card" id="orderPlanFact"><h3>План/факт задания</h3><div id="orderPlanFactRows"></div></section><section class="card order-trip-cost-card"><h3>Распределённые затраты выездов ${infoHint('Сумма показывает только долю этого задания. Нераспределённые части остаются в отчёте выезда.', 'О разделе «Распределённые затраты выездов»')}</h3><div id="orderTripCostAllocation"><p class="hint">Загружаю подтверждённые доли затрат…</p></div></section><section class="entity-activity" id="orderHistory"><div id="orderActivity"></div></section>`:''}`;
  const editor=$('orderEditor'),grid=$('orderOrganization').parentElement;
  const panes=o.id?{overview:[$('orderApprovalBanner'),$('orderBrief'),$('orderHistory')],scope:[grid],travel:[$('orderTravel')],'plan-fact':[$('orderPlanFact'),editor.querySelector('.order-trip-cost-card')]}:{scope:[grid]};
@@ -329,7 +346,7 @@ export function createServiceOrders(ctx){
  tabEntity=identity;entityTabs=createEntityTabs(editor,{initial,onChange:value=>{tabValue=value;if(value==='plan-fact')void finance?.load();}});tabValue=entityTabs.value;
  if(tabValue==='plan-fact')void finance?.load();
  if(!edit)$('orderOrganization').hidden=true;
- renderJobsAndItems(edit,report);$('orderBack').onclick=async()=>{if(!await leave())return;ctx.showBoard();};if($('orderRequest'))$('orderRequest').onclick=async()=>{if(await leave())ctx.openJob(o.job_id);};
+ renderJobsAndItems(edit,report);$('orderBack').onclick=async()=>{if(!await leave())return;return backCard?ctx.returnToCard(backCard):ctx.showBoard();};if($('orderRequest'))$('orderRequest').onclick=async()=>{if(await leave())ctx.openJob(o.job_id);};
  $('orderEditor').querySelectorAll('input,textarea,select').forEach(el=>{if(!el.closest('#orderDeadlinePanel,#orderResponsibility,#orderExecution'))el.addEventListener('input',mark);});$('orderEditor').querySelectorAll('select').forEach(el=>{if(!el.closest('#orderDeadlinePanel,#orderResponsibility,#orderExecution'))el.addEventListener('change',mark);});
  $('orderCrew').onchange=()=>{const crew=[...$('orderCrew').options].filter(o=>o.selected).map(o=>o.value),prev=$('orderLead').value;$('orderLead').innerHTML='<option value="">Выбрать</option>'+crew.map(id=>`<option value="${id}" ${id===prev?'selected':''}>${esc(name(id))}</option>`).join('');mark();};
  if($('orderSave'))$('orderSave').onclick=save;if($('orderResultSave'))$('orderResultSave').onclick=saveResult;if($('orderRecordResult'))$('orderRecordResult').onclick=()=>openResult(o.id);
@@ -495,7 +512,7 @@ export function createServiceOrders(ctx){
   $('orderResultNote').value=draft.values.note||'';$('orderResultDate').value=draft.values.date||actualDate();if($('orderResultBasis'))$('orderResultBasis').value=draft.values.basis||'';reportDirty=true;resultAttempt=draft.attempt||null;resultExpected=draft.revision;
   if(resultExpected!==current.revision){const error=$('orderResultError');error.textContent='Задание изменилось после создания черновика. Сохранение старой версии защищено от перезаписи. ';const reset=document.createElement('button');reset.type='button';reset.className='btn';reset.textContent='Загрузить текущий результат';reset.onclick=async()=>{if(!await (ctx.confirm?ctx.confirm('Загрузить текущий результат? Несохранённый черновик будет удалён.',{title:'Обновление результата',okText:'Загрузить',cancelText:'Оставить черновик',danger:true}):ctx.confirmLeave()))return;for(const row of rows){const item=items.find(i=>i.id===row.dataset.resultItem);row.querySelector('[data-result-qty]').value=item.done_qty??0;row.querySelector('[data-result-note]').value=item.result_note||'';}$('orderResultNote').value=current.result_note||'';$('orderResultDate').value=actualDate();if($('orderResultBasis'))$('orderResultBasis').value='';resultExpected=current.revision;resultAttempt=null;reportDirty=false;try{storage().removeItem(draftKey(current));}catch{/* Mounted fields remain current. */}error.textContent='';updateSaveState();};error.append(reset);}
  }
- async function openResult(id,origin=null,trip=null){if(current?.id!==id||loadedUser!==ctx.userId()){await open(id,origin,{trip});if(current?.id!==id||loadedUser!==ctx.userId())return;}if(visitResults||visitError){showVisitResult(trip);return;}if(!reportAllowed(current)){ctx.notify('Результат сейчас доступен только для просмотра.','warn');return;}if(dirty){ctx.notify('Сначала сохрани состав задания.','warn');return;}if(resultDialog?.open)return resultDialog;
+ async function openResult(id,origin=null,trip=null){const source=ctx.cardOrigin?.();if(current?.id!==id||loadedUser!==ctx.userId()||source&&source.name!=='order'){if(!await open(id,origin,{trip}))return;}if(visitResults||visitError){showVisitResult(trip);return;}if(!reportAllowed(current)){ctx.notify('Результат сейчас доступен только для просмотра.','warn');return;}if(dirty){ctx.notify('Сначала сохрани состав задания.','warn');return;}if(resultDialog?.open)return resultDialog;
   resultDialog=openEntityPanel({title:'Зафиксировать результат',panel:$('orderExecution'),trigger:$('orderPane-scope').hidden?$('orderRecordResult')||$('orderMore'):$('orderPane-scope').querySelector('.workflow-work-result')||$('orderMore'),confirmDiscard});resultDialog?.classList.add('entity-result-dialog');if(resultDialog){resultDialog.querySelector('.entity-dialog-head h3').textContent='Результат: '+(current.title||'задание №'+current.number);$('orderResultLater').onclick=()=>resultDialog?.querySelector('.entity-dialog-head button').click();$('orderResultSubmitReview').onclick=async()=>{if($('orderResultSubmitReview').disabled)return;resultDialog.close();await transition(current,'review');};updateSaveState();}resultDialog?.addEventListener('close',()=>{if(reportDirty)storeResultDraft();resultDialog=null;},{once:true});return resultDialog;
  }
  function openReview(o){
@@ -611,5 +628,6 @@ export function createServiceOrders(ctx){
  function leave(){if(!dirty&&!reportDirty)return Promise.resolve(true);if(leaveFlight)return leaveFlight;leaveFlight=(async()=>{if(!await ctx.confirmLeave())return false;if(reportDirty)storeResultDraft();dirty=false;reportDirty=false;return true;})().finally(()=>{leaveFlight=null;});return leaveFlight;}
  async function tripParent(t){const el=$('tripOrderParent');if(!el)return;el.innerHTML='';if(!t?.id)return;try{const {data,error}=await api().from('trip_service_orders').select('order_id,service_orders(id,number,title,job_id)').eq('trip_id',t.id);if(error)throw error;const linked=(data||[]).map(x=>x.service_orders).filter(o=>o?.job_id);if(!linked.length){el.innerHTML='<span class="hint">Задания пока не связаны</span>';return;}el.innerHTML='<span class="hint">Задания выезда:</span> '+linked.map(o=>`<button type="button" class="crumb" data-trip-order="${o.id}">№${o.number} · ${esc(o.title)}</button>`).join('');el.querySelectorAll('[data-trip-order]').forEach(b=>b.onclick=()=>open(b.dataset.tripOrder,null));}catch(e){el.innerHTML='<span class="hint">Не удалось загрузить задания выезда: '+esc(e.message)+'</span>';}}
  function init(){ if($('orderViewMode'))$('orderViewMode').onchange=e=>{viewMode=e.target.value;return board();};if($('orderHistorical'))$('orderHistorical').onchange=e=>{showHistorical=e.target.checked;return board();};$('orderSearch').oninput=e=>{query=e.target.value.trim().toLowerCase();board();};$('orderEngineer').onchange=e=>{crewFilter=e.target.value;board();};$('orderClosed').onchange=e=>{showClosed=e.target.checked;visibleStates.completed=showClosed;visibleStates.cancelled=showClosed;return board();};$('orderScopeClear').onclick=()=>{scope=null;board();};$('orderAdd').onclick=()=>open(null,scope);}
- return {init,board,open,openWork,openResult,eligibleOrdersForRequest,attachJobs,requestPanel,renderTaskTable,tripParent,leave,isDirty:()=>dirty||reportDirty,currentId:()=>current?.id,loaded:()=>loaded};
+ return {init,board,open,openWork,openResult,eligibleOrdersForRequest,attachJobs,requestPanel,renderTaskTable,tripParent,leave,isDirty:()=>dirty||reportDirty,currentId:()=>current?.id,
+  cardLocation:()=>({id:current?.id,scope,pane:entityTabs?.value,trip:visitPanel?.currentTrip()}),loaded:()=>loaded};
 }

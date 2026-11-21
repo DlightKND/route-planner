@@ -17,3 +17,21 @@ test('reference zero-minute hypothesis requires an explicit choice without accep
 test('reference long-trip calendar and map clusters retain every stop',async({page},info)=>{
  const errors=await boot(page,info,'long');await page.locator('[data-ut-details="trip:'+fixtureIDs.trip+'"]').click();await showJournalOverview(page,'map');const timeline=page.locator('.journal-timeline-disclosure');if(!await timeline.evaluate(e=>e.open))await timeline.locator('summary').first().click();expect(await page.locator('.journal-time-days>span').count()).toBeGreaterThanOrEqual(4);expect(await page.locator('.journal-stop-day').count()).toBeGreaterThanOrEqual(4);await shot(page,info,'08-calendar');await openJournalPane(page,'route');await expect(page.locator('.journal-trip-route .journal-map-stop.grouped')).toBeVisible();await page.locator('.journal-trip-route .journal-map-stop.grouped').click();await expect(page.locator('.journal-map-stop-choices button')).toHaveCount(29);await shot(page,info,'09-cluster');await page.locator('.journal-map-stop-choices [data-map-stop=long-stay-28]').click();await expect(page.locator('.journal-trip-stops')).toHaveAttribute('data-review-active','long-stay-28');expect(errors).toEqual([]);
 });
+
+test('a short desktop viewport leaves three complete stops in the overview list',async({page},info)=>{
+ test.skip(page.viewportSize().width<=760,'Desktop overview shows the list and map together');
+ await page.setViewportSize({...page.viewportSize(),height:440});
+ await boot(page,info,'long');
+ await page.locator('[data-ut-details="trip:'+fixtureIDs.trip+'"]').click();
+ const list=page.locator('.presence-review-list');
+ await expect(list.locator('[data-review-stop]')).toHaveCount(29);
+ await expect.poll(()=>list.evaluate(el=>{
+  const edge=el.getBoundingClientRect();
+  return [...el.querySelectorAll('[data-review-stop]')].filter(stop=>{
+   const row=stop.getBoundingClientRect();
+   return row.top>=edge.top-1&&row.bottom<=edge.bottom+1;
+  }).length;
+ })).toBeGreaterThanOrEqual(3);
+ expect(await list.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+ await expect(page.locator('.journal-overview-map')).toBeVisible();
+});

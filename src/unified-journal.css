@@ -802,7 +802,8 @@
  .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open) {
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
-  grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-rows:auto minmax(var(--journal-stops-min,0px),1fr) auto;
+  overflow:auto;
  }
  .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-head {
   grid-column:1/-1;

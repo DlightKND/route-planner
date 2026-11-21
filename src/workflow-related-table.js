@@ -6,6 +6,7 @@ const format=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2});
 const quantity=value=>value==null?'—':format.format(Number(value));
 const plural=new Intl.PluralRules('ru');
 const counted=(count,one,few,many)=>count+' '+({one,few,many}[plural.select(count)]||many);
+const tableState=new WeakMap();
 
 export function relatedTable({idPrefix,title,searchLabel,placeholder,columns,rows,actions='',filter='',review=false,totalHours=false,empty}){
  return `<section class="related-records" aria-label="${title}">
@@ -28,12 +29,19 @@ export function relatedTable({idPrefix,title,searchLabel,placeholder,columns,row
   </table></div><p class="hint related-empty" data-related-empty hidden>${rows.length?'Ничего не найдено. Измените поиск.':empty}</p></section>`;
 }
 
-export function wireRelatedTable(node){
+export function wireRelatedTable(node,key){
  const root=node.querySelector('.related-records');
  if(!root)return;
  const input=root.querySelector('[data-related-search]'),review=root.querySelector('[data-related-review]');
  const rows=[...root.querySelectorAll('[data-related-row]')];
+ const previous=tableState.get(node);
+ const state=previous&&previous.key===key?previous:{key,search:'',review:false,expanded:new Set()};
+ tableState.set(node,state);
+ input.value=state.search;
+ review?.setAttribute('aria-pressed',String(state.review));
  function filter(){
+  state.search=input.value;
+  state.review=review?.getAttribute('aria-pressed')==='true';
   const search=input.value.trim().toLocaleLowerCase('ru'),reviewOnly=review?.getAttribute('aria-pressed')==='true';
   for(const row of rows){
    row.hidden=!row.dataset.search.includes(search)||reviewOnly&&row.dataset.review!=='true';
@@ -57,12 +65,18 @@ export function wireRelatedTable(node){
  if(review)review.onclick=()=>{
   review.setAttribute('aria-pressed',String(review.getAttribute('aria-pressed')!=='true'));filter();
  };
- for(const toggle of root.querySelectorAll('[data-related-toggle]'))toggle.onclick=()=>{
-  const open=toggle.getAttribute('aria-expanded')==='true';
-  toggle.setAttribute('aria-expanded',String(!open));
-  toggle.setAttribute('aria-label',(open?'Раскрыть ':'Свернуть ')+toggle.dataset.relatedToggle);
-  filter();
- };
+ for(const toggle of root.querySelectorAll('[data-related-toggle]')){
+  const id=toggle.getAttribute('aria-controls');
+  const apply=open=>{
+   toggle.setAttribute('aria-expanded',String(open));
+   toggle.setAttribute('aria-label',(open?'Свернуть ':'Раскрыть ')+toggle.dataset.relatedToggle);
+  };
+  apply(state.expanded.has(id));
+  toggle.onclick=()=>{
+   if(state.expanded.has(id))state.expanded.delete(id);else state.expanded.add(id);
+   apply(state.expanded.has(id));filter();
+  };
+ }
  filter();
 }
 
@@ -86,13 +100,13 @@ export function relatedWorkPreview(items,{open,accepted,tripScoped=false}){
 export function relatedTripRows(trips,{people,status,visits,linkedTasks,open,openGPS,report}){
  return trips.map(trip=>{
   const visit=visits.get(trip.id),period=planningPeriod(trip.date_from,trip.date_to),crew=(trip.engineer_ids||[]).map(people);
-  const vehicle=trip.vehicle_label||visit?.label||'Автомобиль не выбран',review=trip.status==='finished';
+  const vehicle=trip.vehicle_label||visit?.label||'Автомобиль не выбран',review=trip.status==='finished'&&!visit?.presence?.confirmed;
   const tasks=linkedTasks(trip.id),hours=visit?.presence?.confirmed?visit.presence.base:null;
   return {id:trip.id,label:'выезд · '+vehicle,search:[trip.number,vehicle,period,...crew].join(' '),review,hours,
    cells:[`${open(trip,trip.number?'Выезд №'+trip.number:'Выезд')}<small>${esc(period)}</small>`,
     `<strong>${esc(vehicle)}</strong><small>${esc(crew.join(', ')||'Команда не назначена')}</small>`,
     `${hours==null?'—':quantity(hours)+' чел·ч'}${visit?.presence?.confirmed&&visit.presence.available!=null?`<small>Доступно заданию ${quantity(visit.presence.available)} чел·ч</small>`:''}`,
-    `<span class="related-status${review?' is-review':''}">${esc(review?'На проверке':status(trip.status))}</span>`],
+    `<span class="related-status${review?' is-review':''}">${esc(trip.status==='finished'&&visit?.presence?.confirmed?'Посещения подтверждены':status(trip.status))}</span>`],
    actions:report(trip,visit),
    detail:`<dl class="related-trip-facts"><div><dt>Команда</dt><dd>${esc(crew.join(' · ')||'Не назначена')}</dd></div>
     <div><dt>Журнал GPS</dt><dd>${openGPS(trip)}</dd></div></dl><div class="related-work-head"><h4>Задания выезда</h4>${open(trip,'Открыть выезд')}</div>
