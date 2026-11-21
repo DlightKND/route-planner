@@ -125,8 +125,7 @@ export function installWorkspaceStructure(root=document){
   const allocation=element(root,'details','workflow-finance-tool');allocation.id='tpCostReview';
   allocation.innerHTML='<summary>Распределение затрат по заданиям</summary>';
   allocation.append(root.getElementById('tpTripAllocation'));economy.append(allocation);
-  overview.append(root.getElementById('tpReviewSummary'));
-  overview.append(root.getElementById('tpPresence').closest('.card'));
+  economy.prepend(root.getElementById('tpReviewSummary'));
   root.getElementById('tpPlanPane').prepend(root.getElementById('tpLinkedOrders'));
   root.getElementById('tpPlanPane').prepend(root.getElementById('tripOrderParent'));
   frameRecordActions(trip);

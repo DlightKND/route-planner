@@ -3919,6 +3919,8 @@ async function loadCardPayment(scope,id,anchor,currentId){
 }
 function mountCardFinance(scope,id,pane,currentId){
   const hostId=scope+'ScopedFinance';$(hostId)?.remove();
+  const tripReview=scope==='trip'?[$('tpReviewSummary'),$('tpPresence')?.closest('.card')]:[];
+  if(pane&&tripReview.length)pane.prepend(...tripReview.filter(Boolean));
   if(!id||!pane)return null;
   const host=document.createElement('section'),user=session?.user?.id;
   const allocation=scope==='trip'?$('tpCostReview'):null;
@@ -3930,6 +3932,7 @@ function mountCardFinance(scope,id,pane,currentId){
       const detail=scope==='trip'?$('tpContractEconomy'):$('jobBaseEstimate');
       if(detail&&!detail.contains(document.activeElement))detail.open=false;
       if(allocation&&!allocation.hasAttribute('data-requested')&&!allocation.contains(document.activeElement))allocation.open=false;
+      if(tripReview.length)$('tripTechnicalDetails')?.append(...tripReview.filter(Boolean));
     },
     onAllocate:async row=>{
       if(scope==='job')await openTrip(row.id,{pane:'economy'});
@@ -5888,7 +5891,7 @@ function renderTripReviewSummary(){
  if(state)setOverviewState($('tripOverviewState'),...state);
  const states=[['Выезд',ST_TRIP[t.status]||t.status,t.status==='done'?'confirmed':'neutral','plan','tpReviewPlan','Открыть план'],['Присутствие',presence,pending?'pending':approved?'confirmed':'neutral','presence','tpReviewPresence','Открыть присутствие'],['Распределение затрат',tripCostReviewState,tripCostReviewState==='подтверждены'?'confirmed':'pending','economy','tpReviewCosts',canWriteTrip()?'Сверить затраты':'Открыть затраты'],['Выполнение заданий',tasks.length?'Принято '+accepted+' из '+tasks.length+' заданий':'Задания не добавлены',tasks.length&&accepted===tasks.length?'confirmed':'neutral','plan','tpReviewTasks','Открыть задания']];
  box.innerHTML='<h3 class="trip-review-heading">Проверка выезда</h3><div class="trip-review-grid">'+states.map(([label,value,state,pane,id,action])=>'<button type="button" class="trip-review-item" id="'+id+'" data-review-state="'+state+'" data-review-pane="'+pane+'"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong><small>'+esc(action)+' →</small></button>').join('')+'</div>';
- box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{if(button.id==='tpReviewPresence'){openJournalTrip(t.id);return;}setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewCosts'){const detail=$('tpCostReview');if(detail){detail.dataset.requested='';detail.open=true;}$('tpTripAllocation').scrollIntoView({block:'start'});}if(button.id==='tpReviewTasks')$('tpLinkedOrders')?.scrollIntoView({block:'start'});});
+ box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{button.closest('dialog[open]')?.close();if(button.id==='tpReviewPresence'){openJournalTrip(t.id);return;}setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewCosts'){const detail=$('tpCostReview');if(detail){detail.dataset.requested='';detail.open=true;}$('tpTripAllocation').scrollIntoView({block:'start'});}if(button.id==='tpReviewTasks')$('tpLinkedOrders')?.scrollIntoView({block:'start'});});
 }
 function listLoadError(box,error,retry){box.className='';box.innerHTML='<p class="err" role="alert">Не удалось загрузить данные: '+esc(error.message)+'</p><button type="button" class="btn sm" data-list-retry>Повторить загрузку</button>';box.querySelector('[data-list-retry]').onclick=retry;}
 async function loadWorkbench(id){

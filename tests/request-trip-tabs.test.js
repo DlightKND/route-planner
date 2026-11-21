@@ -82,7 +82,7 @@ it('opens the canonical journal from the trip review CTA without changing trip f
   get('tpTabEconomy').click();get('tpTabPlan').click();
   expect(notes.value).toBe('Изменённый план');expect(get('tpOvCost').value).toBe('725');expect(get('tpOvCost').disabled).toBe(true);
   expect(context.tripPlanDirty).toBe(true);expect(context.tripPresenceDirty).toBe(true);expect(changes).not.toHaveBeenCalled();
-  expect(get('tpFactBox').closest('[data-trip-pane]').dataset.tripPane).toBe('overview');
+  expect(get('tpFactBox').closest('[data-trip-pane]').dataset.tripPane).toBe('economy');
 });
 it('keeps trip saving and errors in the common toolbar and preserves failed-load blocking',async()=>{
   const {get,context}=setup();
