@@ -1,6 +1,7 @@
 import {beforeAll,afterAll,beforeEach,afterEach,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
+import {calculateEntityFinance} from '../src/scoped-finance.js';
 
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const file=p=>readFileSync(new URL(p,import.meta.url),'utf8');
@@ -22,7 +23,8 @@ beforeAll(async()=>{
     alter table trip_revision_history enable row level security;grant select on trip_revision_history to authenticated;`);
   await db.exec(file('../supabase/migrations/20260922190447_service_orders.sql'));
   await db.exec(`alter table service_orders add column job_id uuid references jobs(id),add column seed_request_id uuid references jobs(id),add column owner_id uuid,add column curator_id uuid;
-    alter table service_order_items add column kind text default 'work',add column legacy_snapshot jsonb not null default '{}',add column request_finance_void_event_id bigint,add column financial_revenue_snapshot numeric,add column financial_cost_snapshot numeric,add column unit_price_snapshot numeric,add column unit_cost_snapshot numeric;
+    alter table service_order_items add column kind text default 'work',add column billable boolean not null default true,
+      add column legacy_snapshot jsonb not null default '{}',add column request_finance_void_event_id bigint,add column financial_revenue_snapshot numeric,add column financial_cost_snapshot numeric,add column unit_price_snapshot numeric,add column unit_cost_snapshot numeric;
     create table trip_service_orders(trip_id uuid references trips(id),order_id uuid references service_orders(id),primary key(trip_id,order_id));
     alter table trip_service_orders enable row level security;grant select on trip_service_orders to authenticated;
     grant select on jobs,trips,profiles to authenticated;
@@ -50,6 +52,26 @@ beforeAll(async()=>{
   await db.exec(file('../supabase/migrations/20261009202442_entity_result_parent_purge_cascade.sql'));
   await db.exec('alter table trips add column workbench_revision integer not null default 0;alter table trip_stays add column crew_ids uuid[],add column crew_source text;');
   await db.exec(file('../supabase/migrations/20261120085354_order_trip_results.sql'));
+  await db.exec(file('../supabase/migrations/20261120134312_order_work_plan.sql'));
+  await db.exec(file('../supabase/migrations/20261120141912_order_work_parts.sql'));
+  await db.exec(file('../supabase/migrations/20261120145437_order_extra_parts.sql'));
+  await db.exec(file('./fixtures/order-photo-storage.sql'));
+  await db.exec(file('../supabase/migrations/20261120150932_order_result_photos.sql'));
+  await db.exec(file('../supabase/migrations/20261120190426_entity_payment_terms.sql'));
+  await db.exec(`create table public.trip_tracks(trip_id uuid primary key references public.trips(id),data jsonb,updated_at timestamptz);
+     alter table public.trip_stays add column presence_evidence jsonb;
+     alter table public.service_order_items add column tariff_profile text,add column created_at timestamptz;
+     alter table public.settings add column tariffs jsonb,add column costs jsonb,add column tariff_profiles jsonb;`);
+  await db.exec(file('../supabase/migrations/20261120193258_journal_road_sections.sql'));
+  await db.exec(file('../supabase/migrations/20261120195251_journal_road_split_preview.sql'));
+  await db.exec(`alter table public.settings add column currency text;
+    alter table public.trips add column plan_econ_snapshot jsonb;
+    create table public.trip_cost_allocation_runs(id uuid primary key,trip_id uuid,current boolean,source_revision int,
+      source_track_updated_at timestamptz,fact_km numeric);
+    create table public.trip_cost_allocations(run_id uuid,cost_type text,service_order_id uuid,quantity numeric,amount numeric);`);
+  await db.exec(file('../supabase/migrations/20261120200145_scoped_finance_workspace.sql'));
+  await db.exec(file('../supabase/migrations/20261120202510_planned_road_tariffs.sql'));
+  await db.exec(file('../supabase/migrations/20261121051500_finance_work_group_names.sql'));
 },30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -69,6 +91,216 @@ beforeEach(async()=>{
   await q("insert into trip_comments(id,trip_id,body) values($1,$2,'Выезд начат')",[id(72),id(50)]);
 });
 afterEach(async()=>{await db.exec('rollback');});
+
+it('projects accepted work, road and approved allocation across cards with audited independent corrections',async()=>{
+  const readFinance=(scope,entity)=>q('select public.entity_finance_read($1,$2) model',[scope,id(entity)]).then(rows=>rows[0].model);
+  const adjust=(scope,entity,subject,prior,value)=>q('select public.entity_finance_adjust($1,$2,$3,$4,$5) saved',
+    [scope,id(entity),subject,prior,value]).then(rows=>rows[0].saved);
+  expect(await readFinance('order',30)).toBeNull();
+  await rejected(()=>adjust('order',30,'fact:revenue',{},{value:1,reason:'Отказ'}),/куратор/);
+  await addConfirmedVisit(50);
+  await db.exec('reset role');
+  const trackAt='2026-10-05T12:00:00Z';
+  await q("update trips set fact_km=20,econ_snapshot=$2,tariffs_snapshot=$3 where id=$1",
+    [id(50),{km:21,rTravel:420,cKm:160},{tariffs:{km:20},costs:{km:8},tariff_profiles:[]}]);
+  await q('insert into trip_tracks values($1,$2,$3)',[id(50),{segments:[{kind:'track',km:20,fromTs:'2026-10-05T07:00:00Z',toTs:'2026-10-05T08:00:00Z'}]},trackAt]);
+  await q("insert into trip_cost_allocation_runs values($1,$2,true,0,$3,20)",[id(124),id(50),trackAt]);
+  await q("insert into trip_cost_allocations values($1,'distance',$2,20,160)",[id(124),id(30)]);
+  await as(3);
+  await visitResult({extraParts:[{id:id(133),work_id:id(40),title:'Винт',unit:'шт',qty:2,unit_cost:12.75}]});
+  await as(6);
+  const submitted=await readFinance('trip',50);
+  expect(submitted.lines[0]).toMatchObject({order_title:'Диагностика',fact_qty:0,fact_hours:null});
+  expect(submitted.extra_parts_cost).toBe(0);
+  await visitResult({prior:100,operation:101,action:'accepted',extraParts:[{id:id(133),work_id:id(40),title:'Винт',unit:'шт',qty:2,unit_cost:12.75}]});
+  for(const [scope,entity] of [['job',10],['order',30],['trip',50]]){
+    const model=await readFinance(scope,entity),sum=calculateEntityFinance(model);
+    expect(model.extra_parts_cost).toBe(25.5);
+    expect(sum.breakdown.filter(row=>['Приход от пробега','Расход на выезды'].includes(row[0])))
+      .toEqual([['Приход от пробега',420,400],['Расход на выезды',168,160]]);
+    expect(sum.modes.fact).toMatchObject({revenue:1650,cost:1419.5});
+  }
+  const rates={plan:{revenue:100},fact:{revenue:200,cost:30}};
+  await rejected(()=>adjust('work',30,id(40),{},{fact:{cost:-1}}),/тарифы/);
+  await rejected(()=>adjust('work',30,id(41),{},rates),/не принадлежит/);
+  expect(await adjust('work',30,id(40),{},rates)).toEqual(rates);
+  await rejected(()=>adjust('work',30,id(40),{},rates),/изменились/);
+  expect(calculateEntityFinance(await readFinance('trip',50)).modes.fact).toMatchObject({revenue:600,cost:245.5});
+  await rejected(()=>adjust('trip',50,'fact:revenue',{},{value:910,reason:' '}),/причину/);
+  const override={value:910,reason:'Утверждённая смета'};
+  expect(await adjust('trip',50,'fact:revenue',{},override)).toEqual(override);
+  const revised=calculateEntityFinance(await readFinance('trip',50));
+  expect(revised.modes.fact.revenue).toBe(910);expect(revised.calculated.fact.revenue).toBe(600);
+  expect(calculateEntityFinance(await readFinance('job',10)).modes.fact.revenue).toBe(600);
+  expect(await adjust('trip',50,'fact:revenue',override,{})).toEqual({});
+  expect(calculateEntityFinance(await readFinance('trip',50)).modes.fact.revenue).toBe(600);
+  await db.exec('reset role');
+  expect(await q('select scope,subject,actor_id from dlight_private.finance_adjustment_events order by id')).toHaveLength(3);
+  expect(await q('select financial_revenue_snapshot,financial_cost_snapshot from service_order_items where id=$1',[id(40)]))
+    .toEqual([{financial_revenue_snapshot:'2500',financial_cost_snapshot:'1234'}]);
+});
+
+it('keeps planned leg rates separate from GPS rates and rejects a leg removed from the saved route',async()=>{
+  const finance=(scope,parent)=>q('select public.entity_finance_read($1,$2) model',[scope,id(parent)]).then(rows=>rows[0].model);
+  const save=(subject,previous,value)=>q("select public.entity_finance_adjust('road_plan',$1,$2,$3,$4) saved",
+    [id(50),subject,previous,value]).then(rows=>rows[0].saved);
+  const stops=[{name:'База',lat:50,lng:30},{name:'Объект',lat:50.1,lng:30.1}];
+  const a='50.00000,30.00000',b='50.10000,30.10000';
+  const first={a,b,km:8},second={a:b,b:a,km:12};
+  const plan={km:20,rTravel:400,legs:[first,second]};
+  await db.exec('reset role');
+  await q('update trips set plan_econ_snapshot=$2,route_stops=$3::jsonb,tariffs_snapshot=$4 where id=$1',
+    [id(50),plan,JSON.stringify(stops),{costs:{km:8}}]);
+  await as(6);
+  const legs=(await finance('trip',50)).trips[0].plan_legs;
+  expect(legs.map(leg=>[leg.title,leg.km])).toEqual([['База → Объект',8],['Объект → База',12]]);
+  const subject=legs[0].id,override={revenue:25,cost:6};
+  await rejected(()=>save(subject,{},{revenue:-1}),/плановые тарифы/);
+  expect(await save(subject,{},override)).toEqual(override);
+  await rejected(()=>save(subject,{},override),/изменились/);
+  for(const [scope,parent] of [['trip',50],['job',10],['order',30]]){
+    const road=calculateEntityFinance(await finance(scope,parent)).mileage[0];
+    expect(road.computed).toEqual({plan:{revenue:440,cost:144},fact:{revenue:null,cost:null}});
+  }
+  await as(3);
+  await rejected(()=>save(subject,override,{}),/куратор/);
+  await as(6);
+  expect(await save(subject,override,{})).toEqual({});
+  await db.exec('reset role');
+  await q('update trips set plan_econ_snapshot=$2 where id=$1',[id(50),{km:12,rTravel:240,legs:[second]}]);
+  await as(6);
+  await rejected(()=>save(subject,{},override),/маршрута изменился/);
+  await db.exec('reset role');
+  expect(await q("select previous,new_value from dlight_private.finance_adjustment_events where scope='road_plan' order by id"))
+    .toEqual([{previous:{},new_value:override},{previous:override,new_value:{}}]);
+});
+
+it('prices verified road intervals independently of stops, preserves shares on split and guards stale edits',async()=>{
+  const iso=hour=>'2026-10-05T'+hour+':00Z';
+  const segment=(kind,km,from,to,why)=>({kind,km,fromTs:iso(from),toTs:iso(to),why});
+  const segments=[segment('track',10,'08:00','09:00'),segment('road',20,'09:30','10:30'),
+    segment('line',99,'10:30','11:00'),segment('road',4,'11:00','11:00','возвращение на финиш')];
+  await db.exec('reset role');
+  await q('insert into trip_tracks values($1,$2,$3)',[id(50),{segments},iso('12:00')]);
+  await q("insert into trip_stays(id,trip_id,job_id,stay_from,stay_to,status) values($1,$2,$3,$4,$5,'approved')",
+    [id(85),id(50),id(10),iso('09:00'),iso('09:30')]);
+  const readRoad=()=>q('select public.journal_road_read($1) model',[id(50)]).then(rows=>rows[0].model);
+  const save=(model,section,action,value)=>q('select public.journal_road_save($1,$2,$3,$4,$5,$6::jsonb) model',
+    [id(50),section,model.revision,model.source,action,action==='split'?String(value)+'.000000':JSON.stringify(value)]).then(rows=>rows[0].model);
+  const first='start~'+id(85);
+  await as(7);await rejected(readRoad,/недоступен/);
+  await as(3);
+  const original=await readRoad();
+  expect(original).toMatchObject({editable:false,revision:0,sections:[
+    {id:first,km:10,measured_km:10,shares:{[id(10)]:10},returning:false},
+    {id:id(85)+'~finish',km:null,measured_km:24,shares:{},returning:true}]});
+  await rejected(()=>save(original,first,'terms',{payer:'service'}),/куратор/);
+  await as(6);
+  await rejected(()=>save(original,first,'shares',{[id(11)]:1}),/километры/);
+  await rejected(()=>save(original,first,'shares',{[id(10)]:10.01}),/больше длины/);
+  let latest=await save(original,first,'shares',{[id(10)]:6.03});
+  await rejected(()=>save(original,first,'terms',{payer:'service'}),/Маршрут изменился/);
+  latest=await save(latest,first,'terms',{payer:'service',warranty:'warranty'});
+  await rejected(()=>save(latest,first,'rates',{revenue:-1}),/тарифы/);
+  latest=await save(latest,first,'rates',{revenue:23.5,cost:10});
+  const cut=Date.parse(iso('08:30'))/1000;
+  const preview=async(model,section,at)=>q('select public.journal_road_split_preview($1,$2,$3,$4,$5) quote',
+    [id(50),section,model.revision,model.source,at]).then(rows=>rows[0].quote);
+  expect(await preview(latest,first,cut)).toEqual({left:5,right:5});
+  expect(await preview(latest,id(85)+'~finish',Date.parse(iso('10:00'))/1000)).toEqual({left:10,right:null});
+  await rejected(()=>preview(original,first,cut),/Маршрут изменился/);
+  latest=await save(latest,first,'split',cut);
+  expect(latest.sections.slice(0,2)).toMatchObject([
+    {id:first,km:5,shares:{[id(10)]:3.02},local:{payer:'service',warranty:'warranty'},rates:{revenue:23.5,cost:10}},
+    {id:first+'~'+cut,km:5,shares:{[id(10)]:3.01},local:{payer:'service',warranty:'warranty'},rates:{revenue:23.5,cost:10}}]);
+  const [exceptions]=await q("select public.journal_road_exceptions('job',$1) rows",[id(10)]);
+  expect(exceptions.rows[0].sections.map(row=>row.id)).toEqual([first,first+'~'+cut]);
+  await as(3);
+  expect(await readRoad()).toMatchObject({tariffs:null,sections:[{rates:null},{rates:null},{rates:null}]});
+  await db.exec('reset role');
+  await q("update trip_tracks set updated_at=$2 where trip_id=$1",[id(50),iso('12:10')]);
+  expect(await q('select action from dlight_private.journal_road_events order by revision')).toEqual(['shares','terms','rates','split'].map(action=>({action})));
+  await as(6);await rejected(()=>save(latest,first,'terms',{}),/Маршрут изменился/);
+});
+
+it('keeps a carried request plan intact and divides a shared road only by verified task shares',async()=>{
+  const read=(scope,parent)=>q('select public.entity_finance_read($1,$2) model',[scope,id(parent)]).then(rows=>rows[0].model);
+  await addConfirmedVisit(50);
+  await db.exec('reset role');
+  await q("insert into service_orders(id,job_id,title,status,owner_id,curator_id) values($1,$2,'Остаток','in_progress',$3,$3)",[id(32),id(10),id(6)]);
+  await q('insert into service_order_jobs(order_id,job_id) values($1,$2)',[id(32),id(10)]);
+  await q('insert into trip_service_orders values($1,$2)',[id(50),id(32)]);
+  await q('update service_order_items set done_qty=1,transferred_qty=1 where id=$1',[id(40)]);
+  await q("insert into service_order_items(id,order_id,job_id,source_item_id,title,planned_qty,done_qty,unit,financial_revenue_snapshot,financial_cost_snapshot) values($1,$2,$3,$4,'Осмотр · остаток',1,1,'ч',1250,617)",
+    [id(42),id(32),id(10),id(40)]);
+  const trackAt='2026-10-05T12:00:00Z';
+  await q("update trips set fact_km=20,econ_snapshot=$2,tariffs_snapshot=$3 where id=$1",
+    [id(50),{km:21,rTravel:420,cKm:160},{tariffs:{km:20},costs:{km:8},tariff_profiles:[]}]);
+  await q('insert into trip_tracks values($1,$2,$3)',[id(50),{segments:[{kind:'track',km:20,fromTs:'2026-10-05T07:00:00Z',toTs:'2026-10-05T08:00:00Z'}]},trackAt]);
+  await as(6);
+  const check=async(scope,parent)=>calculateEntityFinance(await read(scope,parent)).breakdown.find(row=>row[0]==='Приход от пробега');
+  expect(await check('order',30)).toEqual(['Приход от пробега',null,null]);
+  const request=await read('job',10);
+  expect(request.lines).toEqual(expect.arrayContaining([
+    expect.objectContaining({id:id(40),root_id:id(40),plan_qty:2,fact_qty:1}),expect.objectContaining({id:id(42),root_id:id(40),plan_qty:0,fact_qty:1})]));
+  expect(calculateEntityFinance(request).modes.fact.partial).toBe(false);
+  await db.exec('reset role');
+  await q("insert into trip_cost_allocation_runs values($1,$2,true,0,$3,20)",[id(124),id(50),trackAt]);
+  await q("insert into trip_cost_allocations values($1,'distance',$2,6,48),($1,'distance',$3,14,112)",[id(124),id(30),id(32)]);
+  await as(6);
+  expect(await check('job',10)).toEqual(['Приход от пробега',420,400]);
+  expect(await check('order',30)).toEqual(['Приход от пробега',null,120]);
+  expect(await check('order',32)).toEqual(['Приход от пробега',null,280]);
+});
+
+it('saves independent payment overrides and resets them with an audit trail',async()=>{
+  const readTerms=(scope,parent)=>q('select public.entity_payment_terms_read($1,$2) model',[scope,id(parent)]).then(rows=>rows[0].model);
+  const save=(scope,parent,previous,terms,subject='')=>q('select public.entity_payment_terms_save($1,$2,$3,$4,$5) terms',
+    [scope,id(parent),subject,previous,terms]).then(rows=>rows[0].terms);
+  expect(await readTerms('order',30)).toMatchObject({editable:false,item:{job:{id:id(10)},local:{},works:[{id:id(40),local:{}}]}});
+  await rejected(()=>readTerms('order',31),/недоступны/);
+  await rejected(()=>save('work',30,{},{warranty:'warranty'},id(40)),/куратор/);
+  await rejected(()=>q('select * from dlight_private.payment_terms'),/permission denied/);
+  await as(6);
+  const jobTerms={warranty:'warranty',payer:'warranty-dept'};
+  expect(await save('job',10,{},jobTerms)).toEqual(jobTerms);
+  await rejected(()=>save('job',10,{},jobTerms),/Обновите карточку/);
+  await rejected(()=>save('work',30,{},{warranty:'warranty'},id(41)),/не принадлежит/);
+  await rejected(()=>save('trip',50,{},{payer:'client:'+id(11)}),/связанных заявок/);
+  await rejected(()=>save('order',30,{},{cost:9}),/Проверьте условия/);
+  const workTerms={payer:'service'};
+  expect(await save('work',30,{},workTerms,id(40))).toEqual(workTerms);
+  expect(await readTerms('job',10)).toMatchObject({editable:true,item:{local:jobTerms},orders:[{local:{},works:[{local:workTerms}]}],
+    trips:[{id:id(50),local:{},jobs:[{local:jobTerms}]}]});
+  expect(await save('work',30,workTerms,{},id(40))).toEqual({});
+  await db.exec('reset role');
+  const history=await q('select scope,actor_id,current_terms from dlight_private.payment_term_changes order by id');
+  expect(history).toEqual([['job',jobTerms],['work',workTerms],['work',{}]].map(([scope,current_terms])=>({scope,actor_id:id(6),current_terms})));
+  expect(await q('select financial_revenue_snapshot,financial_cost_snapshot from service_order_items where id=$1',[id(40)]))
+    .toEqual([{financial_revenue_snapshot:'2500',financial_cost_snapshot:'1234'}]);
+});
+
+it('saves an audited planning norm with a fresh revision and preserves the quantity and finance snapshots',async()=>{
+  const save=(revision,hours,item=40)=>q('select public.service_order_work_plan_save($1,$2,$3,$4) result',
+    [id(30),id(item),revision,hours]).then(rows=>rows[0].result);
+  await rejected(()=>save(0,4.25),/менеджер задания/);
+  await as(6);
+  await rejected(()=>save(0,4.25,41),/не принадлежит/);
+  await rejected(()=>save(0,-1),/10 000/);
+  const previous=(await q('select planned_qty,done_qty,financial_revenue_snapshot,financial_cost_snapshot from service_order_items where id=$1',[id(40)]))[0];
+  expect(await save(0,4.255)).toEqual({revision:1,hours:4.26});
+  expect(await save(1,4.26)).toEqual({revision:1,hours:4.26});
+  await rejected(()=>save(0,2),/изменено другим/);
+  const [item]=await q('select planned_qty,done_qty,financial_revenue_snapshot,financial_cost_snapshot,planned_labor_hours from service_order_items where id=$1',[id(40)]);
+  expect(item).toEqual({...previous,planned_labor_hours:'4.26'});
+  const [history]=await q('select actor_id, snapshot from service_order_history where order_id=$1',[id(30)]);
+  expect(history).toMatchObject({actor_id:id(6),snapshot:{work_item_id:id(40),planned_labor_hours:null}});
+  expect(await q('select id from service_order_history where order_id=$1',[id(30)])).toHaveLength(1);
+  await db.exec('reset role');
+  await q("update service_orders set status='cancelled' where id=$1",[id(30)]);
+  await as(6);
+  await rejected(()=>save(1,6),/закрытого задания/);
+});
 
 it('saves canonical quantities and an after-snapshot atomically without financial leakage',async()=>{
   const result=await submit();expect(result.revision).toBe(1);
@@ -180,9 +412,10 @@ it('cascades result snapshots on authorized task cleanup without granting client
 });
 
 
-const visitResult=async({order=30,trip=50,expected=0,gps=0,prior=null,operation=100,action='submitted',items=[{id:id(40),qty:1,hours:2,note:'Осталась проверка'}],reason='',correction=''}={})=>(await q(
+const visitResult=async({order=30,trip=50,expected=0,gps=0,prior=null,operation=100,action='submitted',items=[{id:id(40),qty:1,hours:2,note:'Осталась проверка'}],reason='',correction='',extraParts,photos}={})=>(await q(
   'select public.service_order_trip_result_write($1,$2,$3,$4,$5,$6,$7,$8) result',
-  [id(order),id(trip),expected,gps,prior?id(prior):null,id(operation),action,{items,reason,correction}]
+  [id(order),id(trip),expected,gps,prior?id(prior):null,id(operation),action,{items,reason,correction,
+    ...(extraParts===undefined?{}:{extra_parts:extraParts}),...(photos===undefined?{}:{photos})}]
 ))[0].result;
 const readVisits=async order=>(await q('select public.service_order_trip_results($1) result',[id(order)]))[0].result;
 const readVisitQueue=async()=>(await q('select public.service_order_trip_review_queue() result'))[0].result;
@@ -191,6 +424,96 @@ const addConfirmedVisit=async n=>{
   await q("update trips set status='done' where id=$1",[id(n)]);
   await q("insert into trip_stays(trip_id,job_id,stay_from,stay_to,status,minutes_mgr,crew_ids,crew_source) values($1,$2,'2026-10-05 08:00Z','2026-10-05 09:00Z','approved',60,$3,'snapshot')",[id(n),id(10),[id(3),id(4)]]);
 };
+
+it('shares work photos only after submission and preserves them in earlier accepted versions',async()=>{
+  await addConfirmedVisit(50);
+  const photo={id:id(132),work_id:id(40),name:'Результат.jpg'};
+  const path=[id(30),id(50),id(40),photo.id+'.jpg'].join('/');
+  const visible=()=>q("select name from storage.objects where bucket_id='order-result-photos'");
+  const upload=(name,owner)=>q("insert into storage.objects(name,bucket_id,owner_id) values($1,'order-result-photos',$2)",[name,id(owner)]);
+  await as(7);
+  await rejected(()=>upload(path,7),/row-level security/);
+  await as(3);
+  await rejected(()=>upload(path.replace(id(40),id(41)),3),/row-level security/);
+  await rejected(()=>visitResult({photos:[photo]}),/не загружена/);
+  await upload(path,3);
+  expect(await visible()).toEqual([{name:path}]);
+  await as(4);
+  expect(await visible()).toEqual([]);
+  await rejected(()=>visitResult({photos:[photo]}),/не загружена или недоступна/);
+  await as(3);
+  await visitResult({photos:[photo]});
+  await as(4);
+  expect(await visible()).toEqual([{name:path}]);
+  await as(7);
+  expect(await visible()).toEqual([]);
+  await as(6);
+  const accepted={prior:100,operation:101,action:'accepted',photos:[photo]};
+  expect(await visitResult(accepted)).toEqual(await visitResult({...accepted,expected:99}));
+  await visitResult({expected:1,prior:101,operation:102,action:'accepted',correction:'Уточнён отчёт',photos:[]});
+  expect((await readVisits(30)).trips[0].versions.map(version=>version.result.photos)).toEqual([[photo],[]]);
+  await db.exec('reset role');
+  await rejected(()=>q('delete from storage.objects where name=$1',[path]),/foreign key constraint/);
+  const abandoned=path.replace(photo.id,id(133));
+  await q("insert into storage.objects(name,bucket_id,owner_id,created_at) values($1,'order-result-photos',$2,now()-interval '8 days')",[abandoned,id(3)]);
+  await q("update storage.objects set created_at=now()-interval '8 days' where name=$1",[path]);
+  await db.exec('set local role service_role');
+  expect(await q('select public.order_result_photo_orphans() path')).toEqual([{path:abandoned}]);
+});
+
+it('retains extra parts through submission, return, acceptance and correction, costing only the current accepted visit',async()=>{
+  await addConfirmedVisit(50);
+  const part={id:id(130),work_id:id(40),title:'Кольцо',unit:'шт.',qty:2,unit_cost:12.75};
+  const costRows=()=>q('select trip_id,cost from service_order_extra_part_costs where order_id=$1',[id(30)]);
+  await as(3);
+  await rejected(()=>visitResult({extraParts:[{...part,work_id:id(41)}]}),/отсутствует в задании/);
+  await rejected(()=>visitResult({extraParts:[part,part]}),/повторяется/);
+  await visitResult({extraParts:[part]});
+  expect((await readVisits(30)).trips[0].latest.extra_parts).toEqual([part]);
+  expect(await costRows()).toEqual([]);
+  await as(6);
+  expect(await costRows()).toEqual([]);
+  await visitResult({prior:100,operation:101,action:'returned',correction:'Уточните наименование'});
+  expect((await readVisits(30)).trips[0].latest.extra_parts).toEqual([part]);
+  const accepted={prior:101,operation:102,action:'accepted'};
+  const receipt=await visitResult(accepted);
+  expect(await visitResult({...accepted,prior:100,expected:9})).toEqual(receipt);
+  expect(await costRows()).toEqual([{trip_id:id(50),cost:'25.50'}]);
+  expect((await readVisits(30)).extra_part_cost).toBe(25.5);
+  expect((await read('order',30))[0].snapshot.extra_parts[0]).not.toHaveProperty('unit_cost');
+  await as(3);
+  expect(await costRows()).toEqual([]);
+  expect((await readVisits(30)).extra_part_cost).toBe(0);
+  await as(6);
+  await rejected(()=>visitResult({expected:1,prior:102,operation:103,action:'accepted',correction:'Корректировка',
+    extraParts:[{...part,unit_cost:-1}]}),/Проверьте название, количество и цену/);
+  expect((await readVisits(30)).trips[0].versions).toHaveLength(1);
+  expect(await costRows()).toEqual([{trip_id:id(50),cost:'25.50'}]);
+  await visitResult({expected:1,prior:102,operation:103,action:'accepted',correction:'Запчасть не использовалась',extraParts:[]});
+  expect(await costRows()).toEqual([{trip_id:id(50),cost:'0.00'}]);
+  expect((await readVisits(30)).trips[0].versions.map(version=>version.result.extra_parts)).toEqual([[part],[]]);
+});
+
+it('audits a part assignment and snapshots it with accepted quantities without changing prices',async()=>{
+  await addConfirmedVisit(50);
+  await q("insert into service_order_items(id,order_id,job_id,title,planned_qty,unit,kind,unit_price_snapshot,unit_cost_snapshot) values($1,$2,$3,'Подшипник',3,'шт','material',24,20)",[id(43),id(30),id(10)]);
+  const attach=(work,revision)=>q('select public.service_order_work_part_save($1,$2,$3,$4) revision',
+    [id(30),id(43),work===null?null:id(work),revision]).then(rows=>rows[0].revision);
+  await as(3);await rejected(()=>attach(40,0),/куратор задания/);
+  await as(6);await rejected(()=>attach(41,0),/Работа не принадлежит заданию/);
+  expect(await attach(40,0)).toBe(1);
+  expect(await attach(40,1)).toBe(1);
+  await rejected(()=>attach(null,0),/Задание изменено/);
+  const items=[{id:id(40),qty:2,hours:2,note:''},{id:id(43),qty:2,hours:0,note:''}];
+  await as(3);await visitResult({expected:1,items});
+  expect((await readVisits(30)).trips[0].latest.items[1]).toMatchObject({parent_work_id:id(40),qty:2,planned_qty:3});
+  await as(6);await visitResult({expected:1,prior:100,operation:101,action:'accepted',items});
+  expect((await readVisits(30)).trips[0].versions[0].result.items[1]).toMatchObject({parent_work_id:id(40),qty:2,planned_qty:3});
+  expect((await read('order',30))[0].snapshot.items[1]).toMatchObject({parent_work_id:id(40),qty:2});
+  const [part]=await q('select done_qty,unit_price_snapshot,unit_cost_snapshot from service_order_items where id=$1',[id(43)]);
+  expect(part).toEqual({done_qty:'2',unit_price_snapshot:'24',unit_cost_snapshot:'20'});
+  await rejected(()=>attach(null,2),/Запчасть уже использована/);
+});
 
 it('submits by trip, accepts only by the curator, and combines accepted quantities with historical totals',async()=>{
   await submit({qty:0.25});

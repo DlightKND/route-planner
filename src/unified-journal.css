@@ -236,6 +236,53 @@
 .journal-route-metrics>.btn{width:100%;min-height:var(--control-h);white-space:normal;margin-top:var(--sp-3)}
 .journal-route-issues{margin:var(--sp-5) 0}
 .journal-route-quality details>summary{min-height:var(--control-h);align-content:center;cursor:pointer;font-size:var(--fs-body);font-weight:600}
+.journal-road-sections{margin-block:var(--sp-5);min-width:0}
+.journal-road-sections:not([hidden]){container-type:inline-size}
+.journal-road-filters,.journal-road-sections>[data-road-count]{margin-block:var(--sp-3)}
+.journal-road-table,.journal-road-shares{width:100%;border-collapse:collapse}
+.journal-road-table th,.journal-road-table td,.journal-road-shares th,.journal-road-shares td{padding:var(--sp-3) var(--sp-2);border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:var(--fs-4)}
+.journal-road-table .hint,.journal-road-shares .hint{display:block;margin-top:var(--sp-1);font-weight:400}
+.journal-road-table .journal-road-km,.journal-road-shares :is(th,td):last-child{text-align:right;white-space:nowrap}
+.journal-road-select{display:block;background:none;border:0;padding:0;text-align:left;color:var(--ink);font:inherit;font-weight:600;cursor:pointer;overflow-wrap:anywhere}
+.journal-road-select:hover{text-decoration:underline}
+.journal-road-row.is-active>th,.journal-road-row:has([aria-pressed="true"])>th{box-shadow:inset 2px 0 var(--accent-line)}
+.journal-road-table .journal-road-expand{display:grid;place-items:center;min-width:44px;min-height:44px;padding:0}
+.journal-road-expand svg{width:18px;height:18px;transform:rotate(90deg)}
+.journal-road-expand[aria-expanded="true"] svg{transform:rotate(-90deg)}
+.journal-road-table .journal-road-request-cell{display:none}
+@container (min-width:420px){
+ .journal-road-table .journal-road-request-cell{display:table-cell}
+ .journal-road-table .journal-road-mobile-requests{display:none}
+}
+.journal-road-detail{display:grid;gap:12px;min-width:0;padding:12px;overflow-wrap:anywhere;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm)}
+.journal-road-detail-head{display:grid;gap:8px}
+.journal-road-detail-head h3,.journal-road-editor h3{font-size:var(--fs-body);margin:0}
+.journal-road-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.journal-road-buttons .btn{white-space:normal}
+.journal-road-detail .hint{margin:2px 0 0}
+.journal-road-share-card{overflow:hidden;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+.journal-road-share-card thead{background:var(--panel-2)}
+.journal-road-share-card :is(th,td){padding:10px 12px;vertical-align:middle}
+.journal-road-share-card tbody th{font-size:var(--fs-body);font-weight:400}
+.journal-road-share-card tbody tr:last-child>:is(th,td){border-bottom:0}
+.journal-road-detail [data-road-payment]{margin:0;padding:12px 16px}
+.journal-road-detail .payment-inline-head{justify-content:flex-start;align-items:baseline;gap:4px 12px;margin-bottom:8px}
+.journal-road-detail .payment-term-fields{margin:0;gap:12px 20px}
+.journal-road-detail .payment-term-fields label{margin:0}
+.journal-road-detail .payment-inline-actions{justify-content:flex-end;margin-top:12px}
+.journal-road-editor-fields{display:grid;gap:var(--sp-3)}
+.journal-road-editor-fields label{margin:0}
+.journal-road-editor input[type=range]{width:100%}
+.journal-road-editor[data-road-split-editor]{position:absolute;z-index:720;inset:12px auto auto 12px;width:min(284px,calc(100% - 84px));display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+.journal-road-editor[data-road-split-editor] :is(p,label){margin:0}
+.road-accounting{min-width:0}
+.road-accounting-totals{display:flex;flex-wrap:wrap;gap:var(--sp-3) var(--sp-6);margin-block:var(--sp-4)}
+.road-accounting-totals strong{margin-inline-start:var(--sp-2)}
+.road-accounting-scroll{overflow:auto}
+.road-accounting .journal-road-shares :is(th,td){padding-inline:var(--sp-4)}
+@media(min-width:761px){
+ .journal-trip-route:has(.journal-road-sections:not([hidden])){grid-template-columns:minmax(0,1fr) minmax(360px,44%)}
+}
 .journal-route-issues button{display:grid;gap:var(--sp-2);width:100%;text-align:left;border:1px solid var(--line);border-radius:var(--r-sm);background:none;color:var(--ink);padding:var(--sp-4);margin-top:var(--sp-4);font-size:var(--fs-4)}
 .journal-route-issues button.is-selected{border-color:var(--ink)}
 .journal-map-legend{display:grid;gap:var(--sp-4);font-size:var(--fs-4);margin:var(--sp-4) 0}
@@ -364,6 +411,9 @@
  .journal-route-quality .journal-route-metrics dl>div{padding:var(--sp-2) 0;font-size:var(--fs-3)}
  .journal-route-metrics>.btn{margin-top:var(--sp-2);font-size:var(--fs-4)}
  .journal-route-issues,.journal-route-explainer,.journal-trip-route .journal-conflict{order:3;margin:0;padding:var(--sp-4) var(--sp-5)}
+ .journal-road-sections{order:3;padding-inline:var(--sp-5)}
+ .journal-road-detail,.journal-road-detail [data-road-payment]{padding:10px}
+ .journal-road-detail .payment-term-fields{gap:8px 12px}
  .journal-route-open>.journal-timeline-host{display:block}
  .journal-orphan-overview{padding:var(--sp-5)}
  .journal-result-total strong{font-size:var(--fs-8)}

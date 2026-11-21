@@ -16,9 +16,17 @@ test('approved planner: actual reference CSS in graph, statistics and filters',a
  // v13 has a null-selection JS typo on mobile; guard it only in the test page.
  // The fixture bytes, all markup and every CSS declaration remain original.
  await reference.route('**/approved-reference',r=>r.fulfill({contentType:'text/html',body:approved.replace('same&&state.planFactSelected.person','same&&state.planFactSelected?.person')}));await reference.goto('/approved-reference');await reference.locator('[data-demo-role]').selectOption('manager');if(info.project.metadata.theme==='light')await reference.locator('.preview-tools [data-action=theme]').click();await reference.evaluate(()=>document.fonts.ready);
- // Reference and production use the same content-width breakpoint.
- 
- for(const selector of ['.top','.app-period','.period-selector']){const expected=await appearance(reference,'#dlight-prototype '+selector),actual=await appearance(page,'#canonicalPlannerHost '+selector);expect(actual,selector+' uses approved geometry, palette and typography').toEqual(expected);}
+ for(const selector of ['.top','.app-period','.period-selector']){
+  const expected=await appearance(reference,'#dlight-prototype '+selector);
+  // The approved desktop rail in 7b3717d moves the shell insets to its two rows.
+  if(!mobile&&selector==='.top')Object.assign(expected,{paddingTop:'0px',paddingRight:'0px',paddingBottom:'0px',paddingLeft:'0px'});
+  expect(await appearance(page,'#canonicalPlannerHost '+selector),selector+' uses approved geometry, palette and typography').toEqual(expected);
+ }
+ if(!mobile){
+  const inset=page.viewportSize().width<=1100?'16px':'32px';
+  await expect(page.locator('.pw-title-row')).toHaveCSS('padding','0px '+inset);
+  await expect(page.locator('.pw-toolbar')).toHaveCSS('padding','10px '+inset);
+ }
  // Crew hours use the audited 64px header with legible help text.
  await expect(page.locator('.pw-crew-head')).toHaveCSS('height','64px');await expect(page.locator('.calendar-person-window').first()).toHaveCSS('font-size',mobile?'13px':'12px');
  const widths=await page.locator('.pw-calendar').evaluate(e=>({available:e.clientWidth,columns:[...e.querySelectorAll('.pw-crew')].reduce((n,p)=>n+p.getBoundingClientRect().width,0)+Number.parseFloat(getComputedStyle(e).getPropertyValue('--gutter'))}));if(!mobile)expect(widths.columns).toBeCloseTo(widths.available,0);

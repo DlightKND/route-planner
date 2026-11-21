@@ -1,0 +1,19 @@
+.entity-payment-terms,.payment-inline { min-width:0; }
+.payment-inline { margin-top:16px; padding:16px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--panel); }
+.payment-inline-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 16px; }
+.payment-inline-head :is(h3,h4) { margin:0; }
+.payment-term-values,.payment-term-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; margin:12px 0; }
+.payment-term-values dt { font-size:13px; color:var(--ink-dim); }
+.payment-term-values dd { margin:4px 0 0; overflow-wrap:anywhere; }
+.payment-term-fields label { display:grid; gap:4px; min-width:0; }
+.payment-term-fields select { width:100%; min-width:0; }
+.payment-inline-actions,.payment-exceptions { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+.payment-exceptions { margin-top:12px; }
+.payment-exceptions summary { cursor:pointer; }
+.payment-work-cue { display:block; margin-top:4px; font-weight:400; }
+.payment-term-exception { color:var(--accent-line); }
+.payment-card-editor .payment-term-fields { margin:0; }
+@media(max-width:520px){
+ .payment-term-fields { grid-template-columns:minmax(0,1fr); }
+ .payment-inline { padding:12px; }
+}

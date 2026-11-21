@@ -50,6 +50,12 @@ import {frameGpsResolutionPrompt,restoreGpsResolutionPrompt,framePresenceWorkspa
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
+import {readExtraPartCosts} from './planner-store.js';
+import {mountPaymentCard,readPaymentModel,savePaymentModel} from './payment-terms.js';
+import {mountRoadAccounting} from './journal-road-accounting.js';
+import {mountEntityFinance} from './scoped-finance.js';
+import './scoped-finance.css';
+import './payment-terms.css';
 import { dashboardSummaryHTML } from './dashboard-summary.js';
 import { createNotifications, loadNotificationDecisions } from './notifications.js';
 import { installEngineerPickers } from './engineer-picker.js';
@@ -67,21 +73,26 @@ import './planner-workspace.css';
 import './planner-approved.css';
 import './planner-integration.css';
 
-const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,
+const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,preparePhoto:shrinkImage,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,openJournalTrip,canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
  tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
  confirm:(message,options)=>confirmDialog(message,options),beforeOpen:async()=>await unassignedTracks.leave()&&await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});
 serviceOrders.init();
 const notifications=createNotifications({loadDecisions:uid=>loadNotificationDecisions(sb,uid),db:()=>sb,userId:()=>session?.user?.id,host:()=>$('noticeHost'),badge:()=>$('noticeBadge'),onPush:()=>openPush(),onOpen:route=>{if(route)location.hash=route;},onError:message=>notify(message,'err')});
+function journalRecordRoute(id,{stopId,pane,roadId,returnStopId}={}){
+ const tail=stopId?'/stop/'+stopId:pane==='route'&&roadId?'/route/section/'+encodeURIComponent(roadId):
+  pane&&pane!=='stops'?'/'+pane+(returnStopId?'/'+returnStopId:''):'';
+ return 'journal/trip/'+id+tail;
+}
 const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,period:()=>dashRanges.journal,vehicles:()=>vehicles,people:()=>profilesList,
- confirm:confirmDialog,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,onNavigate:state=>routeSet('journal/trip/'+state.tripId+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),
+ confirm:confirmDialog,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,onNavigate:state=>routeSet(journalRecordRoute(state.tripId,state)),
  jobs:async ids=>{if(!ids.length)return [];const {data,error}=await sb.from('jobs').select('id,clients(name),equipment(model)').in('id',ids);if(error)throw error;return data||[];},renderAllocations:renderTaskAllocationControls,
  readTrack:async(trip,stored)=>(await loadFactTrack(trip.id,trip,stored))?.measure||null,
  rebuild:async id=>{try{const measured=await recalculateFactTrack(id);if(!measured.ok)throw Error(measured.why||'Нет достоверного GPS');}finally{busyDone();}},
  save:async(trip,stay,note)=>{if(!canWriteTrip(trip))throw Error('Нет права изменять этот выезд');validatePresence([stay]);validateTaskAllocationShares([stay]);const {data:revision,error}=await sb.rpc('trip_presence_save_tasks',{p_trip:trip.id,p_expected:trip.workbench_revision,p_stays:[taskAllocationPayload(stay)],p_reason:decisionReason(stay,note)});if(error)throw error;let nextRevision=revision;try{await loadFactHours(trip.id);if(trip.status==='done'){const updated=await refreshTripEcon(trip.id,revision);if(Number.isInteger(updated))nextRevision=updated;else notify('Решение сохранено; экономику нужно пересчитать.','warn');}}catch(e){notify('Решение сохранено; обновить сводку не удалось: '+e.message,'warn');}return nextRevision;}
 });
 const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,clients:()=>clients,
- onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state={})=>routeSet('journal/trip/'+id+(state.stopId?'/stop/'+state.stopId:state.pane&&state.pane!=='stops'?'/'+state.pane+(state.returnStopId?'/'+state.returnStopId:''):'')),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
+ onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state)=>routeSet(journalRecordRoute(id,state)),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
 
@@ -815,7 +826,7 @@ async function applyRoute(){
     const p=raw.split('/').filter(Boolean).map(x=>{ try{ return decodeURIComponent(x); }catch(e){ return x; } });
     if(!p.length){ const name='schedule', sub=null;
       await switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
-    if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:['stop','route'].includes(p[3])?p[4]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});else if(p[1]==='record'&&p[2])await unassignedTracks.openSource(p[2],{pane:['route','documents'].includes(p[3])?p[3]:'stops'});else await unassignedTracks.showList();return;}
+    if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:['stop','route'].includes(p[3])&&p[4]!=='section'?p[4]:null,roadId:p[3]==='route'&&p[4]==='section'?p[5]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});else if(p[1]==='record'&&p[2])await unassignedTracks.openSource(p[2],{pane:['route','documents'].includes(p[3])?p[3]:'stops'});else await unassignedTracks.showList();return;}
     if(p[0]==='order'&&p[1]){await serviceOrders.open(p[1],null,{pane:p[2],trip:p[3]});return;}
     if(p[0]==='job'&&p[1]){
       const j=await fetchJobFull(p[1]);
@@ -3626,7 +3637,8 @@ async function renderDashboard(){ const version=++dashboardRenderVersion,box=$('
     const scopedIds=trips.filter(t=>['done','finished','in_progress'].includes(t.status)&&t.date_from>=dashRanges.summary.from&&t.date_from<=dashRanges.summary.to&&dashTripInScope(t)).map(t=>t.id);
     let tracks=[],trackUnavailable=false;
     if(scopedIds.length)try{tracks=await dashboardRead('trip_tracks','trip_id,segments:data->segments',scopedIds);}catch(e){trackUnavailable=true;}
-    const metrics=dashboardMetrics({trips,orders:tasks,links:taskLinks,tracks,period:dashRanges.summary,engineerIds:[...dashEngineers],factHours:factHByTrip});
+    const extraPartCosts=await readExtraPartCosts(sb,scopedIds);
+    const metrics=dashboardMetrics({trips,orders:tasks,links:taskLinks,tracks,period:dashRanges.summary,engineerIds:[...dashEngineers],factHours:factHByTrip,extraPartCosts});
     if(version!==dashboardRenderVersion)return;
     const teamCount=dashEngineers.size;
     box.innerHTML='<div class="summary-controls"><h2>Результаты отдела</h2><div class="summary-view-switch" role="group" aria-label="Представление статистики"><button type="button" data-summary-view="charts">Диаграммы</button><button type="button" data-summary-view="tables">Таблицы</button></div><details class="summary-team"><summary>Команда · '+teamCount+' '+plural(teamCount,'инженер','инженера','инженеров')+'</summary>'+engineerScopeHtml()+'</details></div>'
@@ -3862,11 +3874,11 @@ function configureEntityActions(kind,record){
   }
  }
 }
-let currentJobAuthority=false,jobDelegatedOwner=false,jobSavedStatus=null,jobInterventionReason='',jobReasonTarget=null;
+let currentJobAuthority=false,jobDelegatedOwner=false,jobSavedStatus=null,jobInterventionReason='',jobReasonTarget=null,jobFinance=null;
 function canWriteJob(j=null){return canWrite()||!!(j?j.id&&[j.owner_id,j.curator_id].includes(session?.user?.id):currentJobAuthority);}
 const requestTabs=createEntityTabs(document.querySelector('.view-job'),{
   tabSelector:'[data-request-tab]',panelSelector:'[data-request-pane]',tabKey:'requestTab',panelKey:'requestPane',initial:'overview',
-  onChange:updateRequestReadPane
+  onChange:name=>{updateRequestReadPane();if(name==='estimate')void jobFinance?.load();}
 });
 function updateRequestReadPane(){
   const read=$('jobRefRead');if(read)read.hidden=canWriteJob()||requestTabs.value!=='overview';
@@ -3877,6 +3889,42 @@ function configureRequestTabs(saved,requestedPane){
   $('jobUnsavedPanelsNotice').hidden=saved;
   requestTabs.select(({execution:'tasks',history:'overview','plan-fact':'estimate'})[requestedPane]||requestedPane||'overview');
   updateRequestReadPane();
+}
+async function loadCardPayment(scope,id,anchor,currentId){
+  const hostId='payment-'+scope+'-card';$(hostId)?.remove();
+  if(!id||!anchor)return;
+  const host=document.createElement('section'),user=session?.user?.id;
+  host.id=hostId;host.className='card entity-payment-terms';host.hidden=true;anchor.after(host);
+  const current=()=>host.isConnected&&id===currentId()&&user===session?.user?.id;
+  try{
+    const model=await readPaymentModel(sb,scope,id);
+    if(!current())return;
+    const options={root:host,model,save:async(view,terms)=>{
+      if(!current())throw Error('Откройте актуальную карточку');
+      await savePaymentModel(sb,view,terms);
+    },onOpen:row=>{
+      if(!current())return;
+      if(row.scope==='work')return serviceOrders.openWork(row.id,row.work);
+      if(row.scope==='order')return serviceOrders.open(row.id,id);
+      if(row.scope==='road')return openJournalTrip(row.id,{pane:'route',roadId:row.roadId});
+      return openTrip(row.id);
+    }};
+    mountPaymentCard(options);
+    if(model)void sb.rpc('journal_road_exceptions',{p_scope:scope,p_id:id}).then(({data})=>{
+      if(!current()||!data?.length)return;
+      model.roads=data;mountPaymentCard(options);
+    }).catch(()=>{});
+  }catch(error){if(current()){host.hidden=false;host.textContent=error.message||'Условия оплаты недоступны';}}
+}
+function mountCardFinance(scope,id,pane,currentId){
+  const hostId=scope+'ScopedFinance';$(hostId)?.remove();
+  if(!id||!pane)return null;
+  const host=document.createElement('section'),user=session?.user?.id;
+  host.id=hostId;host.className='scoped-finance';pane.prepend(host);
+  return mountEntityFinance(host,{db:()=>sb,scope,id,
+    current:()=>host.isConnected&&id===currentId()&&user===session?.user?.id,
+    onTrip:row=>scope==='trip'?openJournalTrip(row.id,{pane:'route'}):openTrip(row.id,{pane:'economy'}),
+    onOrder:orderId=>serviceOrders.open(orderId,null,{pane:'scope',trip:scope==='trip'?id:undefined})});
 }
 async function openJob(id,presetClient,presetEquip,{pane:requestedPane}={}){ if(!await leaveSettingsEditor())return;if(!await leaveJobEditor())return;if(!await leaveTripEditor())return;if(serviceOrders.isDirty()&&!await serviceOrders.leave())return; await ensureRefs(); jobEditId=id;
   let j=null,pendingEdit=false;
@@ -3954,7 +4002,11 @@ async function openJob(id,presetClient,presetEquip,{pane:requestedPane}={}){ if(
   switchTab('job');
   $('jobActivitySection').hidden=!id;
   $('jobResponsibilitySection').hidden=true;
+  jobFinance=mountCardFinance('job',canWriteJob(j)?id:null,$('jobEstimatePane'),()=>jobEditId);
+  const previousRequestPane=requestTabs.value;
   configureRequestTabs(!!id,requestedPane);
+  if(requestTabs.value==='estimate'&&previousRequestPane==='estimate')void jobFinance?.load();
+  void loadCardPayment('job',id,$('jobOverviewState'),()=>jobEditId);
   if(id) mountEntityActivity({root:$('jobActivity'),db:sb,entity:'job',id,userId:()=>session?.user?.id,people:()=>profilesList,canPin:()=>canWriteJob(),onOpenPhoto:openActivityPhoto});
   if(id&&j)mountEntityResponsibility({root:$('jobResponsibilitySection'),db:sb,kind:'job',id,record:j,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,showHistory:false,beforeAssign:async()=>{const saved=!!(jobEditorDirty||jobSaveT||jobSaveFlight||Object.keys(partT).length);if(!await leaveJobEditor())return false;if((await qAll()).some(x=>x.payload?.jobId===id)){notify('Сначала дождитесь отправки изменений заявки на сервер.','warn');return false;}return {saved};},onChange:data=>canWrite()||[data.owner_id,data.curator_id].includes(session?.user?.id)?openJob(id):switchTab('planner','jobs'),onError:e=>notify(e.message,'err')});
   configureEntityActions('job',j);
@@ -5676,7 +5728,7 @@ $('jobSave').onclick=async ()=>{
     // Кнопки внизу и выбор файла к полям заявки отношения не имеют:
     // от них не должно случаться сохранение (а в офлайне — ещё и лишняя
     // запись в очереди).
-    if(e.target.closest('#jobFoot')||e.target.closest('.job-photos')) return;
+    if(e.target.closest('#jobFoot,.job-photos,.scoped-finance')) return;
     queueJobSave(); jobFootUpdate(); })); })();
 async function delJob(id){ if(!await confirmDialog('Переместить заявку в корзину? Она удалится автоматически через 7 дней.',{danger:true,okText:'В корзину'})) return; const {error}=await sb.from('jobs').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify(error.message,'err'); return; } await renderJobs(); await refreshStats();
   undoToast('Заявка перемещена в корзину', async ()=>{ const {error:e2}=await sb.rpc('trash_restore',{p_kind:'jobs',p_id:id}); if(e2){ notify(e2.message,'err'); return; } await renderJobs(); showToast('Восстановлено'); }); }
@@ -5691,13 +5743,14 @@ const SERVICE_ORDER_STATUS={draft:'черновик',assigned:'назначен�
 let tripRoute={km:0,driveH:0,geometry:null,legs:[]}, tripRouteStops=[], tripStart=null, tripOverrides={revenue:'',cost:'',road:{}};
 let tripCostReviewState='не проверены';
 let tripNewPlanId=null;
-let tripWorkbench=null, tripPlanDirty=false, tripPresenceDirty=false, tripRemainingRoute=null, presenceMaps=null;
+let tripWorkbench=null, tripPlanDirty=false, tripPresenceDirty=false, tripRemainingRoute=null, presenceMaps=null,tripFinance=null;
 const tripTabs=createEntityTabs(document.querySelector('.view-trip'),{
   tabSelector:'[data-trip-tab]',panelSelector:'[data-trip-pane]',tabKey:'tripTab',panelKey:'tripPane',initial:'overview',
   onChange:name=>{
     const scroll=document.querySelector('.view-trip .workspace-main');
     if(scroll)scroll.scrollTop=0;
     if(name==='overview')requestAnimationFrame(()=>window._miniMaps?.tpMap?.invalidateSize());
+    if(name==='economy')void tripFinance?.load();
   }
 });
 function setTripPane(name){tripTabs.select(({history:'overview',presence:'overview',tasks:'plan','plan-fact':'economy'})[name]||name);}
@@ -5708,9 +5761,10 @@ function openTripPlanFields(){
  editor.scrollIntoView?.({block:'nearest'});
 }
 function syncTripSave(){if($('tpSave'))$('tpSave').hidden=!canWriteTrip()||!!tripEditId&&tripNewPlanId!==tripEditId&&!tripPlanDirty&&!tripPresenceDirty;}
-document.querySelector('.view-trip').addEventListener('input',e=>{if(e.target.closest('#tpPlanPane,#tpEconomyPane'))tripPlanDirty=true;if(e.target.closest('[data-presence-id]'))tripPresenceDirty=true;syncTripSave();});
+document.querySelector('.view-trip').addEventListener('input',e=>{if(e.target.closest('.scoped-finance'))return;if(e.target.closest('#tpPlanPane,#tpEconomyPane'))tripPlanDirty=true;if(e.target.closest('[data-presence-id]'))tripPresenceDirty=true;syncTripSave();});
 document.querySelector('.view-trip').addEventListener('change',()=>syncTripSave());
 document.querySelector('.view-trip')?.addEventListener('change',e=>{
+  if(e.target.closest('.scoped-finance'))return;
   if(e.target.closest('[data-presence-id]'))tripPresenceDirty=true;
   else if(e.target.closest('#tpPlanPane')||e.target.closest('#tpEconomyPane')){tripPlanDirty=true;}
 });
@@ -5752,7 +5806,13 @@ function renderTaskAllocationControls(root,jobId,orders,selected=[]){
 }
 async function renderTripCostReview(id){
   const box=$('tpTripAllocation');if(!box)return;
+  $('tpJournalRoadAccounting')?.remove();
   if(!id||!tripWorkbench){box.innerHTML='<p class="hint">Сохрани выезд и подтверди факт, чтобы распределить затраты.</p>';return;}
+  const roadBox=document.createElement('section'),user=session?.user?.id;
+  roadBox.id='tpJournalRoadAccounting';roadBox.className='card trip-wide road-accounting';box.before(roadBox);
+  void mountRoadAccounting(roadBox,{db:sb,trip:tripWorkbench.trip,currency:appSettings.currency||'грн',
+    current:()=>roadBox.isConnected&&id===tripEditId&&user===session?.user?.id,
+    onOpen:row=>openJournalTrip(id,{pane:'route',roadId:row.id})});
   box.innerHTML='<p class="hint">Сверяю выездные затраты…</p>';
   try{
     const t=tripWorkbench.trip;
@@ -6089,7 +6149,10 @@ async function openTrip(id,{includeOrderId=null,newPlan=false,pane:requestedPane
   $('tpChangeReason').value=''; tripPlanDirty=false; tripRemainingRoute=t?.remaining_route||null;
   document.querySelector('.workflow-trip-edit').open=!id||newPlan;
   $('tpTabOverview').hidden=!id;
+  tripFinance=mountCardFinance('trip',ro?null:id,$('tpEconomyPane'),()=>tripEditId);
+  const previousTripPane=tripTabs.value;
   setTripPane(requestedPane||(!id||newPlan||includeOrderId?'plan':'overview'));
+  if(tripTabs.value==='economy'&&previousTripPane==='economy')void tripFinance?.load();
   await loadWorkbench(id); if(id)mountEntityActivity({root:$('tripActivity'),db:sb,entity:'trip',id,userId:()=>session?.user?.id,people:()=>profilesList,canPin:()=>canWriteTrip(t)}); if(id&&t)mountEntityResponsibility({root:$('tripResponsibilitySection'),db:sb,kind:'trip',id,record:t,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,showHistory:false,beforeAssign:()=>settleTripDraft(id),onChange:data=>canWrite()||[data.owner_id,data.curator_id].includes(session?.user?.id)?openTrip(id):switchTab('planner','trips'),onError:e=>notify(e.message,'err')}); await serviceOrders.tripParent(t);syncTripSave();
   let edit=$('tripEditData');
   if(!edit){
@@ -6098,7 +6161,7 @@ async function openTrip(id,{includeOrderId=null,newPlan=false,pane:requestedPane
   }
   edit.hidden=!id||ro;
   if(includeOrderId){const order=tripOrdersAll.find(o=>o.id===includeOrderId);if(!t||!canWriteTrip(t)||!['planned','assigned'].includes(t.status)||!order||['completed','cancelled','review'].includes(order.status)){notify('Задание нельзя добавить в этот план выезда.','warn');}else if(curTripOrders.has(includeOrderId)){notify('Задание уже включено в выезд.');}else{curTripOrders.add(includeOrderId);syncTripJobsFromOrders();syncRouteStops();resetTripRoute();renderRouteStops();renderTripJobs();tripPlanDirty=true;notify('Задание добавлено в план. Проверь команду и маршрут, затем сохрани выезд.');}}
-  renderTripReviewSummary();const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
+  renderTripReviewSummary();void loadCardPayment('trip',id,$('tripOverviewState'),()=>tripEditId);const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
 // Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
 // было собирать глазами из четырёх мест модалки.
 // Факт-пробег в карточке выезда: число, откуда оно взято, что было с треком

@@ -98,7 +98,15 @@ beforeAll(async()=>{
     grant select on public.push_log,public.profiles to authenticated;
     create policy push_log_read on public.push_log for select using(coalesce(user_role(),'') in ('admin','logist') or user_id=auth.uid());`);
   await db.exec(readFileSync(new URL('../supabase/migrations/20261005133906_personal_notification_inbox.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261009144527_entity_activity_results_pins.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20261120070904_request_work_remainders.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261120085354_order_trip_results.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261120134312_order_work_plan.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261120141912_order_work_parts.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261120145437_order_extra_parts.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('./fixtures/order-photo-storage.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261120150932_order_result_photos.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261120190426_entity_payment_terms.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -1126,6 +1134,24 @@ it('snapshots a material price when selected and preserves it across later catal
   const [saved]=await q('select title,sku_snapshot,unit_price_snapshot,unit_cost_snapshot from service_order_items where id=$1',[first.id]);
   expect(saved).toEqual({title:'Насос',sku_snapshot:'P-7',unit_price_snapshot:'1200.00',unit_cost_snapshot:'800.00'});
   await db.exec('rollback');
+});
+
+it('clears a saved work norm when the order editor converts the line to a material',async()=>{
+  await db.exec('begin');
+  try{
+    await q("insert into profiles(id,role,active) values($1,'logist',true)",[id(1)]);
+    await q("select set_config('test.uid',$1,true)",[id(1)]);
+    const [catalog]=await q("insert into stock_catalog(name,sku,unit,price,cost) values('Насос','P-7','шт',1200,800) returning id");
+    const data=JSON.stringify({title:'Замена насоса',work_mode:'onsite',engineer_ids:[],instructions:''});
+    const work={job_id:id(10),kind:'work',title:'Замена',unit:'ч',planned_qty:2};
+    const [order]=await q('select service_order_save_one(null,null,$1,$2,$3) id',[data,id(10),JSON.stringify([work])]);
+    const [item]=await q('select id from service_order_items where order_id=$1',[order.id]);
+    const [saved]=await q('select service_order_work_plan_save($1,$2,0,3.5) result',[order.id,item.id]);
+    const material={id:item.id,job_id:id(10),kind:'material',stock_catalog_id:catalog.id,planned_qty:2};
+    await q('select service_order_save_one($1,$2,$3,$4,$5)',[order.id,saved.result.revision,data,id(10),JSON.stringify([material])]);
+    const [after]=await q('select kind, planned_labor_hours, stock_catalog_id from service_order_items where id=$1',[item.id]);
+    expect(after).toEqual({kind:'material',planned_labor_hours:null,stock_catalog_id:catalog.id});
+  }finally{await db.exec('rollback');}
 });
 
 it('does not create duplicates when the legacy trip planner inserts a request after migration',async()=>{

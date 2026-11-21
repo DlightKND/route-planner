@@ -6,8 +6,13 @@ export const plannerNetworkError=error=>error?.name==='TypeError'||/failed to fe
 export async function readPlannerRows(db,table,columns,{tripIds=null,order='id'}={}){
  if(tripIds?.length===0)return [];
  const batches=tripIds?Array.from({length:Math.ceil(tripIds.length/100)},(_,i)=>tripIds.slice(i*100,i*100+100)):[null],rows=[];
- for(const batch of batches)for(let start=0;;start+=1000){let query=db.from(table).select(columns).order(order);if(batch)query=query.in('trip_id',batch);const {data,error}=await query.range(start,start+999);if(error)throw error;rows.push(...data||[]);if(!data||data.length<1000)break;}
+ const orderColumns=Array.isArray(order)?order:[order];
+ for(const batch of batches)for(let start=0;;start+=1000){let query=db.from(table).select(columns);for(const column of orderColumns)query=query.order(column);if(batch)query=query.in('trip_id',batch);const {data,error}=await query.range(start,start+999);if(error)throw error;rows.push(...data||[]);if(!data||data.length<1000)break;}
  return rows;
+}
+export async function readExtraPartCosts(db,tripIds=null){
+ try{return await readPlannerRows(db,'service_order_extra_part_costs','order_id,trip_id,cost',{tripIds,order:['order_id','trip_id']});}
+ catch(error){if(['42P01','PGRST205'].includes(error?.code))return [];throw error;}
 }
 function settingsForPlanner(settings,days){
  // A booking outside the calendar never silently creates ordinary working hours.
@@ -30,12 +35,13 @@ export function createPlannerStore(ctx){
   try{
    await ctx.ensureRefs?.();
    const itemColumns='id,kind,title,unit,planned_qty,done_qty,transferred_qty,billable,request_finance_void_event_id,finance_voided_at:legacy_snapshot->>request_finance_voided_at'+(manager?',financial_revenue_snapshot,financial_cost_snapshot,unit_price_snapshot,unit_cost_snapshot':'');
-   const [orders,requests,trips,days,plan]=await Promise.all([
+   const [orders,requests,trips,days,plan,extraPartCosts]=await Promise.all([
     readPlannerRows(db(),'service_orders','id,number,title,status,work_mode,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,revision,job_id,seed_request_id,created_by,created_at,result_note,instructions,service_order_items('+itemColumns+')'),
     readPlannerRows(db(),'jobs','id,status,due_date,owner_id,curator_id,clients(name),equipment(model)'),
     readPlannerRows(db(),'trips','id,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,status,vehicle_id,vehicle_label,vehicles(name,plate),started_at,finished_at,fact_km,workbench_revision,day_plan,deleted_at'+(manager?',econ_snapshot,plan_econ_snapshot,tariffs_snapshot':'')),
     readPlannerRows(db(),'staff_day','engineer,date,start_h,end_h,tol_h,proposed_end_h,proposed_by,proposed_at',{order:'date'}),
-    rpc('planner_snapshot',{p_from:period.from,p_to:period.to})
+    rpc('planner_snapshot',{p_from:period.from,p_to:period.to}),
+    manager?readExtraPartCosts(db()):[]
    ]);
    const live=trips.filter(t=>!t.deleted_at),tripIds=live.filter(t=>t.date_from<=period.to&&(t.date_to||t.date_from)>=period.from||t.started_at&&plannerLocalTime(t.started_at).date<=period.to&&(!t.finished_at||plannerLocalTime(t.finished_at).date>=period.from)).map(t=>t.id);
    const reads=await Promise.allSettled([
@@ -45,8 +51,13 @@ export function createPlannerStore(ctx){
    ]);
    if(reads[0].status==='rejected')throw reads[0].reason;
    const notices=[];if(reads[1].status==='rejected')notices.push('Не удалось загрузить стоянки. Факт присутствия временно недоступен.');if(reads[2].status==='rejected')notices.push('Не удалось загрузить GPS. Измеренная дорога временно недоступна.');
-   for(const order of orders)for(const item of order.service_order_items||[])if(item.finance_voided_at)item.legacy_snapshot={request_finance_voided_at:item.finance_voided_at};
-   const groups=plan?.groups||[],profiles=clone(ctx.profiles?.()||[]),source=normalizePlannerData({orders,requests,trips:live,groups,orderPlanHours:plan?.order_plan_hours||{},links:reads[0].value,stays:reads[1].status==='fulfilled'?reads[1].value:[],tracks:reads[2].status==='fulfilled'?reads[2].value:[],profiles,settings:settingsForPlanner(ctx.settings?.()||{},days),notices,period:{...period}});
+   const extraByOrder=new Map();
+   for(const row of extraPartCosts)extraByOrder.set(row.order_id,(extraByOrder.get(row.order_id)||0)+Number(row.cost));
+   for(const order of orders){
+    if(extraByOrder.has(order.id))order.extra_part_cost=extraByOrder.get(order.id);
+    for(const item of order.service_order_items||[])if(item.finance_voided_at)item.legacy_snapshot={request_finance_voided_at:item.finance_voided_at};
+   }
+   const groups=plan?.groups||[],profiles=clone(ctx.profiles?.()||[]),source=normalizePlannerData({orders,requests,trips:live,groups,extraPartCosts,orderPlanHours:plan?.order_plan_hours||{},links:reads[0].value,stays:reads[1].status==='fulfilled'?reads[1].value:[],tracks:reads[2].status==='fulfilled'?reads[2].value:[],profiles,settings:settingsForPlanner(ctx.settings?.()||{},days),notices,period:{...period}});
    if(ticket!==version||identity!==key())return data;
    data=overlayPending(source);state={status:'ready',offline:false,error:'',savedAt:Date.now()};try{cache();}catch{state.error='Данные загружены. Сохранить копию для работы без связи не удалось.';}emit();return data;
   }catch(error){if(ticket!==version||identity!==key())return data;

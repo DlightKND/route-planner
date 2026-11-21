@@ -435,16 +435,75 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   const managerState=()=>({request:{due_date:request.due_date,status:request.status,engineer_ids:[...(request.engineer_ids||[])]},order:{status:task.status,date_from:task.date_from,date_to:task.date_to,engineer_ids:[...task.engineer_ids],lead_engineer:task.lead_engineer,revision:task.revision,items:task.service_order_items.map(i=>({id:i.id,done_qty:i.done_qty,planned_qty:i.planned_qty}))},trip:{date_from:ride.date_from,date_to:ride.date_to,engineer_ids:[...ride.engineer_ids]}});
   if(managerJourney){for(const row of task.service_order_items)if(row.kind==='material'&&!row.stock_catalog_id)row.stock_catalog_id='stock-a';task.status=typeof managerJourney==='string'?managerJourney:managerJourney.stage||'assigned';audit.managerWrites=[];audit.managerState=managerState();}
   const visitJourney=managerJourney?.tripResultJourney;
+  const standaloneWorkPlan=managerJourney?.standaloneWorkPlan;
   const visitWork=task.service_order_items.find(row=>row.kind==='work');
+  const visitPart=task.service_order_items.find(row=>row.kind==='material');
+  const paymentTerms=new Map();
+  const termsKey=(scope,id,subject='')=>[scope,id,subject].join('/');
+  const savedTerms=(scope,id,subject)=>paymentTerms.get(termsKey(scope,id,subject))||{};
+  const paymentJob={id:job,title:client.name};
+  const secondPaymentJob={id:'10000000-0000-4000-8000-000000000099',title:'Демо · второй заказчик',local:{}};
+  const paymentRequest=()=>({...paymentJob,local:savedTerms('job',job)});
+  const paymentOrder=()=>({id:order,number:task.number,title:task.title,job:paymentRequest(),local:savedTerms('order',order),
+    works:task.service_order_items.filter(row=>row.kind==='work').map(row=>({id:row.id,title:row.title,local:savedTerms('work',order,row.id)}))});
+  const paymentTrip=()=>({id:trip,title:ride.vehicle_label,local:savedTerms('trip',trip),jobs:[paymentRequest(),secondPaymentJob]});
+  if(managerJourney?.paymentJourney)audit.paymentWrites=[];
+  const roadJourney=managerJourney?.roadJourney;
+  const roadSource=[ride.workbench_revision,stamp];
+  const roads=[
+    {id:'start~journal-stay-1',base_id:'start~journal-stay-1',title:'Начало записи → Демо · объект',start_at:'2026-10-05T05:12:00Z',end_at:'2026-10-05T05:28:00Z',
+      km:20,measured_km:20,request_id:job,returning:false,shares:{[job]:20},manual:false,local:{},rates:{}},
+    {id:'journal-stay-5~finish',base_id:'journal-stay-5~finish',title:'Возврат в депо',start_at:'2026-10-05T14:10:00Z',end_at:'2026-10-05T14:46:00Z',
+      km:null,measured_km:10,request_id:null,returning:true,shares:{},manual:false,local:{},rates:{}},
+  ];
+  let roadRevision=0;
+  const roadModel=()=>({scope:'trip',item:paymentTrip(),sections:roads,revision:roadRevision,source:roadSource,editable:role!=='engineer',tariffs:{
+    tariffs:{km:15},costs:{km:8},tariff_profiles:[{id:'standard',def_paid:true,road:{km_rate:20}},{id:'warranty',def_warranty:true,road:{km_rate:12}}]}});
+  if(roadJourney){ride.fact_km=35;audit.roadWrites=[];}
+  const scopedFinanceJourney=managerJourney?.scopedFinanceJourney;
+  const financeAdjustments=new Map();
+  const financeLocal=(scope,id,subject)=>financeAdjustments.get(termsKey(scope,id,subject))||{};
+  const scopedFinance=(scope,id)=>({scope,id,editable:true,currency:'грн',pricing:{profiles:[],tariffs:{}},
+    lines:[
+      {id:visitWork.id,order_id:order,number:task.number,order_title:task.title,title:visitWork.title,kind:'work',
+       plan_qty:2,fact_qty:1,accepted_qty:1,fact_hours:3,snapshot_qty:2,plan_hours:5,base_revenue:500,base_cost:150,hour_cost:150,
+       billable:true,hourly:true,terms:{},rates:financeLocal('work',order,visitWork.id),editable:true},
+      {id:visitPart.id,order_id:order,number:task.number,title:visitPart.title,kind:'material',
+       plan_qty:2,fact_qty:1,base_revenue:50,base_cost:10,editable:false}
+    ],extra_parts_cost:15,
+    trips:[{id:trip,title:ride.vehicle_label,whole:scope==='trip',request_id:job,lower:0,upper:1,
+      plan_km:20,plan_revenue:400,plan_cost:160,plan_editable:true,
+      plan_legs:[{id:'base-to-site',title:'База → Объект',km:8,rates:financeLocal('road_plan',trip,'base-to-site')},
+        {id:'site-to-base',title:'Объект → База',km:12,rates:financeLocal('road_plan',trip,'site-to-base')}],
+      fact_km:20,approved_cost:160,road:{...roadModel(),sections:[roads[0]]}}],
+    corrections:Object.fromEntries(['plan:revenue','plan:cost','fact:revenue','fact:cost'].map(key=>[key,financeLocal(scope,id,key)]).filter(([,value])=>Object.keys(value).length))});
+  if(scopedFinanceJourney)audit.scopedFinanceWrites=[];
   const visitPayload={items:task.service_order_items.map(row=>({id:row.id,qty:row===visitWork?3:0,
     hours:row===visitWork?2:0,note:row===visitWork?'Осталась проверка':''})),hours:2,reason:'',correction:''};
   const visit={id:trip,date_from:ride.date_from,date_to:ride.date_to,label:'Сервисный автомобиль',status:'done',
     revision:4,linked:true,presence:{confirmed:true,base:2,used:0,available:2},state:null,event:null,latest:null,versions:[]};
   if(visitJourney){
     ride.status='done';ride.workbench_revision=visit.revision;
+    visitWork.planned_labor_hours=null;
     if(visitJourney==='manager')Object.assign(visit,{state:'submitted',latest:visitPayload,submitted_revision:4,
       event:'00000000-0000-4000-8000-000000000091'});
-    audit.visitWrites=[];
+    audit.visitWrites=[];audit.workPlanWrites=[];
+    if(visitJourney==='parts'){
+      const assignment=JSON.parse(sessionStorage.getItem('qa:work-part-assignment')||'null');
+      visitPart.parent_work_id=assignment?.work??null;
+      if(assignment)task.revision=assignment.revision;
+      audit.workPartWrites=[];
+    }
+  }
+  const uploadedWorkPhotos=new Map();
+  if(visitJourney==='photos'){audit.workPhotoUploads=[];audit.workPhotoDownloads=[];audit.workPhotoAttempts=[];}
+  if(standaloneWorkPlan){
+    task.trip_service_orders=[];
+    tables.trip_service_orders=tables.trip_service_orders.filter(link=>link.order_id!==task.id);
+    visitWork.planned_labor_hours=null;
+    if(standaloneWorkPlan==='parts')visitPart.parent_work_id=visitWork.id;
+    audit.workPlanWrites=[];
+    audit.entityWrites=[];
   }
   const plannerGroups=[
     {source_key:'road:'+trip+':0',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-first',date:'2026-10-05',start:7,end:9,offset:0}]},
@@ -466,6 +525,19 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         data: { subscription: { unsubscribe() {} } },
       }),
     },
+    storage:{from(bucket){return {
+      async upload(path,blob){
+        if(visitJourney!=='photos'||bucket!=='order-result-photos')return reject('storage.upload');
+        if(uploadedWorkPhotos.has(path))return {error:{statusCode:'409',error:'Duplicate'}};
+        uploadedWorkPhotos.set(path,blob);audit.workPhotoUploads.push({path,size:blob.size,type:blob.type});
+        return {data:{path},error:null};
+      },
+      async download(path){
+        if(visitJourney!=='photos'||bucket!=='order-result-photos'||!uploadedWorkPhotos.has(path))return reject('storage.download');
+        audit.workPhotoDownloads.push(path);
+        return {data:uploadedWorkPhotos.get(path),error:null};
+      }
+    };}},
     from(table) {
       audit.reads.push(table);
       let rows = structuredClone(tables[table] || []), queryError = null,
@@ -593,22 +665,105 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(name==='entity_finance_read'){
+        if(!scopedFinanceJourney)return {data:null,error:{code:'PGRST202',message:'RPC unavailable'}};
+        return {data:role==='engineer'?null:structuredClone(scopedFinance(args.p_scope,args.p_id)),error:null};
+      }
+      if(name==='entity_finance_adjust'&&scopedFinanceJourney){
+        const {p_scope:scope,p_id:id,p_subject:subject,p_previous:previous,p_value:value}=args;
+        if(role==='engineer'||JSON.stringify(financeLocal(scope,id,subject))!==JSON.stringify(previous))return reject(name);
+        financeAdjustments.set(termsKey(scope,id,subject),structuredClone(value));audit.scopedFinanceWrites.push(structuredClone(args));
+        return {data:structuredClone(value),error:null};
+      }
+      if(name==='journal_road_read'||name==='journal_road_exceptions'){
+        if(!roadJourney)return {data:null,error:{code:'PGRST202',message:'RPC unavailable'}};
+        const sections=roads.filter(row=>Object.keys(row.local).length);
+        return {data:structuredClone(name==='journal_road_read'?roadModel():sections.length?[{item:paymentTrip(),sections}]:[]),error:null};
+      }
+      if(name==='journal_road_split_preview'&&roadJourney){
+        const row=roads.find(item=>item.id===args.p_id);
+        const left=Math.round(row.km*(args.p_at*1000-Date.parse(row.start_at))/(Date.parse(row.end_at)-Date.parse(row.start_at))*100)/100;
+        return {data:{left,right:row.km-left},error:null};
+      }
+      if(name==='journal_road_save'&&roadJourney){
+        const row=roads.find(item=>item.id===args.p_id);
+        if(!row||args.p_revision!==roadRevision)return reject(name);
+        const value=structuredClone(args.p_value);
+        if(args.p_action==='terms')row.local=value;
+        if(args.p_action==='rates')row.rates=value;
+        if(args.p_action==='shares'){row.shares=value;row.manual=true;}
+        if(args.p_action==='split'){
+          const cut=new Date(value*1000).toISOString(),previousEnd=row.end_at;
+          const ratio=(Date.parse(cut)-Date.parse(row.start_at))/(Date.parse(previousEnd)-Date.parse(row.start_at));
+          const left=Math.round(row.km*ratio*100)/100,right=structuredClone(row);
+          right.id=row.base_id+'~'+value;right.start_at=cut;right.km=right.measured_km=row.km-left;
+          row.km=row.measured_km=left;row.end_at=cut;
+          for(const [id,km] of Object.entries(row.shares)){row.shares[id]=Math.round(km*ratio*100)/100;right.shares[id]=km-row.shares[id];}
+          roads.splice(roads.indexOf(row)+1,0,right);
+        }
+        audit.roadWrites.push(structuredClone(args));roadRevision++;
+        return {data:structuredClone(roadModel()),error:null};
+      }
+      if(name==='entity_payment_terms_read'){
+        if(!managerJourney?.paymentJourney)return {data:null,error:{code:'PGRST202',message:'RPC unavailable'}};
+        const scope=args.p_scope,resolved={job:[job,paymentRequest],order:[order,paymentOrder],trip:[trip,paymentTrip]}[scope];
+        if(!resolved||resolved[0]!==args.p_id)return {data:null,error:{code:'42501',message:'Условия оплаты недоступны'}};
+        return {data:structuredClone({scope,item:resolved[1](),editable:role!=='engineer',
+          ...(scope==='job'?{orders:[paymentOrder()],trips:[paymentTrip()]}:{})}),error:null};
+      }
+      if(name==='entity_payment_terms_save'&&managerJourney?.paymentJourney){
+        const {p_scope:scope,p_id:id,p_subject:subject,p_previous:previous,p_terms:terms}=args;
+        if(role==='engineer'||JSON.stringify(savedTerms(scope,id,subject))!==JSON.stringify(previous))return reject(name);
+        paymentTerms.set(termsKey(scope,id,subject),structuredClone(terms));
+        audit.paymentWrites.push(structuredClone(args));
+        return {data:structuredClone(terms),error:null};
+      }
       if(name==='service_order_trip_results'){
         const linked=!!visitJourney&&args.p_order===order;
         const accepted=visit.versions.at(-1)?.result;
+        const extraPartCost=(accepted?.extra_parts||[]).reduce((sum,part)=>sum+part.qty*part.unit_cost,0);
         return {data:{has_links:linked,has_receipts:linked&&!!visit.event,trips:linked?[structuredClone(visit)]:[],
-          accepted_hours:linked&&accepted?Object.fromEntries(accepted.items.map(row=>[row.id,row.hours])):{}},error:null};
+          accepted_hours:linked&&accepted?Object.fromEntries(accepted.items.map(row=>[row.id,row.hours])):{},
+          ...(visitJourney==='extras'?{extra_parts_supported:true,extra_part_cost:role==='engineer'?0:extraPartCost}:{}),
+          ...(visitJourney==='photos'?{photos_supported:true}:{})},error:null};
       }
       if(name==='service_order_trip_review_queue')return {data:visitJourney==='manager'&&visit.state==='submitted'?
         [{order_id:order,trip_id:trip,number:task.number,title:task.title,vehicle_label:visit.label,date_from:visit.date_from,at:stamp}]:[],error:null};
+      if(name==='service_order_work_plan_save'&&(visitJourney||standaloneWorkPlan)){
+        if(role==='engineer'||args.p_order!==order||args.p_item!==visitWork.id||args.p_expected!==task.revision)return reject(name);
+        visitWork.planned_labor_hours=Math.round(args.p_hours*100)/100;
+        task.revision++;
+        audit.workPlanWrites.push(structuredClone(args));
+        return {data:{revision:task.revision,hours:visitWork.planned_labor_hours},error:null};
+      }
+      if(name==='service_order_work_part_save'&&visitJourney==='parts'){
+        if(role==='engineer'||args.p_order!==order||args.p_part!==visitPart.id||args.p_expected!==task.revision||
+          args.p_work!==null&&args.p_work!==visitWork.id||visitPart.done_qty>0)return reject(name);
+        visitPart.parent_work_id=args.p_work;
+        task.revision++;
+        sessionStorage.setItem('qa:work-part-assignment',JSON.stringify({work:args.p_work,revision:task.revision}));
+        audit.workPartWrites.push(structuredClone(args));
+        return {data:task.revision,error:null};
+      }
       if(name==='service_order_trip_result_write'&&visitJourney){
         if(args.p_order!==order||args.p_trip!==trip||args.p_expected_event!==visit.event||
           args.p_order_revision!==task.revision||args.p_trip_revision!==visit.revision)return reject(name);
+        if(visitJourney==='photos'){
+          audit.workPhotoAttempts.push(args.p_operation);
+          if(audit.workPhotoAttempts.length===1)return {data:null,error:{message:'Временная ошибка сохранения'}};
+        }
         const latest={...structuredClone(args.p_result),hours:args.p_result.items.reduce((sum,row)=>sum+row.hours,0)};
+        for(const entry of latest.items){
+          const item=task.service_order_items.find(row=>row.id===entry.id);
+          Object.assign(entry,{kind:item.kind,title:item.title,unit:item.unit,planned_qty:item.planned_qty});
+          if(item.kind==='material')entry.parent_work_id=item.parent_work_id??null;
+        }
         if(args.p_action==='accepted'){
           for(const row of task.service_order_items)row.done_qty=latest.items.find(entry=>entry.id===row.id).qty;
           task.revision++;
           visit.versions.push({event:args.p_operation,result:latest,at:stamp,actor:manager});
+          if(visitJourney==='extras')tables.service_order_extra_part_costs=[{order_id:order,trip_id:trip,
+            cost:(latest.extra_parts||[]).reduce((sum,part)=>sum+part.qty*part.unit_cost,0)}];
         }
         Object.assign(visit,{latest,event:args.p_operation,state:args.p_action,submitted_revision:visit.revision});
         audit.visitWrites.push(structuredClone(args));
@@ -650,7 +805,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         });
         return {data:structuredClone(results),error:null};
       }
-      if(entityJourney&&name==='service_order_record_result'){
+      if((entityJourney||standaloneWorkPlan)&&name==='service_order_record_result'){
         const target=tables.service_orders.find(o=>o.id===args.p_id),bad=message=>({data:null,error:{message,code:'QA_ENTITY_VALIDATION'}});
         if(!target||role==='engineer'&&!target.engineer_ids.includes(session.user.id))return bad('Задание недоступно');
         const signature=JSON.stringify({actor:session.user.id,order:args.p_id,items:args.p_items,note:args.p_note,date:args.p_actual_date,basis:args.p_basis??null});

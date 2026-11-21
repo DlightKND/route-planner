@@ -1,4 +1,4 @@
-import {plannerPixels,plannerHitClusters,plannerPlanHitsHTML,plannerFactHitsHTML} from './planner-view.js';
+import {plannerPixels,plannerTickHours,plannerHitClusters,plannerPlanHitsHTML,plannerFactHitsHTML} from './planner-view.js';
 import {plannerClock} from './core/planner-workspace.js';
 
 const models=new WeakMap(),density=h=>h<32?'short':h<65?'compact':h<100?'medium':'roomy';
@@ -22,8 +22,8 @@ export function resizePlannerTimeline(root,state){
   const {day,frame,body,axis,lanes}=item,px=plannerPixels(state,frame),height=frame.span*px;
   if(Number(day.dataset.scale)===px)continue;
   day.dataset.scale=String(px);body.style.height=height+'px';body.style.setProperty('--pw-hour',px+'px');body.style.setProperty('--hour',px+'px');body.style.setProperty('--pw-grid-offset',-(frame.start%1)*px+'px');
-  if(!frame.closed){const step=[1,2,4,6,12,24].find(h=>h*px>=24)||24,hours=new Set([frame.start]);if(height>=24)hours.add(frame.end);for(let h=Math.ceil(frame.start/step)*step;h<frame.end;h+=step)if((h-frame.start)*px>=24&&(frame.end-h)*px>=24)hours.add(h);if(index<model.days.length-1&&frame.end===24)hours.delete(24);const key=[...hours].join(',');
-   if(item.tickHours!==key){const old=all(axis,'.pw-tick');if(old.map(n=>n.dataset.hour).join(',')!==key)axis.innerHTML=[...hours].map(h=>`<span data-hour="${h}" class="pw-tick tick${h===frame.start?' first':''}${h===frame.end?' last':''}">${plannerClock(h)}</span>`).join('');item.ticks=all(axis,'.pw-tick');item.tickHours=key;}item.ticks.forEach(node=>position(node,(Number(node.dataset.hour)-frame.start)*px));
+  if(!frame.closed){const hours=plannerTickHours(frame,px,index===model.days.length-1),key=hours.join(',');
+   if(item.tickHours!==key){const old=all(axis,'.pw-tick');if(old.map(n=>n.dataset.hour).join(',')!==key)axis.innerHTML=hours.map(h=>`<span data-hour="${h}" class="pw-tick tick${h===frame.start?' first':''}${h===frame.end?' last':''}">${plannerClock(h)}</span>`).join('');item.ticks=all(axis,'.pw-tick');item.tickHours=key;}item.ticks.forEach(node=>position(node,(Number(node.dataset.hour)-frame.start)*px));
   }
   for(const lane of lanes){
    lane.zones.forEach(({node,offset,span})=>position(node,offset*px,span==null?null:span*px));

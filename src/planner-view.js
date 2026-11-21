@@ -31,6 +31,18 @@ export const plannerIcon=name=>`<span class="di">${iconPaths[name]?`<svg viewBox
 export const plannerFilterCount=state=>[state.status,state.workMode,state.warranty!=='any',state.durationMin!=null||state.durationMax!=null,state.profitMin!=null||state.profitMax!=null].filter(Boolean).length;
 export const plannerPending=data=>data.orders.filter(o=>o.status==='review').length+data.trips.filter(t=>t.status==='finished').length;
 export const plannerPixels=(state,frame)=>frame.closed?72/frame.span:state.zoom==null?state.scale:Math.max(105,((state.calendarHeight||600)-88)/(Math.pow(84,state.zoom/100)/3))/(frame.scaleSpan??frame.span);
+
+export function plannerTickHours(frame,pixelsPerHour,lastDay){
+ const hours=[frame.start];
+ const step=[1,2,4,6,12,24].find(hours=>hours*pixelsPerHour>=24)||24;
+ // The first and last labels extend into the day rather than centering on their ticks.
+ const edgeGap=30;
+ for(let hour=Math.ceil(frame.start/step)*step;hour<frame.end;hour+=step){
+  if((hour-frame.start)*pixelsPerHour>=edgeGap&&(frame.end-hour)*pixelsPerHour>=edgeGap)hours.push(hour);
+ }
+ if(frame.span*pixelsPerHour>=24&&(lastDay||frame.end!==24))hours.push(frame.end);
+ return hours;
+}
 export const plannerScaleLabel=state=>state.viewDays>=14?'Недели':state.viewDays>=7?'1 неделя':state.viewDays<1?`${Math.max(2,Math.round(state.viewDays*24))} ч`:`${Math.round(state.viewDays||1)} ${Math.round(state.viewDays||1)===1?'день':Math.round(state.viewDays||1)<5?'дня':'дней'}`;
 const modes={onsite:'На объектах',depot:'В депо',remote:'Удалённо'};
 const status=order=>`<span class="pw-status-badge" data-state="${plannerEscape(order?.status)}">${plannerEscape(ORDER_STATUS[order?.status]||'План')}</span>`;
@@ -107,7 +119,7 @@ export function plannerTimelineHTML(data,state,actor,rows,facts){
  if(state.viewDays>=7)return html+weekTimeline(data,state,actor,people,rows,facts);
 
  for(let date=state.from,guard=0;date<=state.to&&guard++<367;date=plannerDate(date,1)){
-  const frame=plannerDayFrame(date,data,actor,state.showFact?facts:[],{hideOffHours:state.hideOffHours,people:people.map(p=>p.id)}),px=plannerPixels(state,frame),height=frame.span*px,hours=new Set([frame.start]),step=[1,2,4,6,12,24].find(h=>h*px>=24)||24;if(height>=24)hours.add(frame.end);for(let h=Math.ceil(frame.start/step)*step;h<frame.end;h+=step)if((h-frame.start)*px>=24&&(frame.end-h)*px>=24)hours.add(h);if(date!==state.to&&frame.end===24)hours.delete(24);
+  const frame=plannerDayFrame(date,data,actor,state.showFact?facts:[],{hideOffHours:state.hideOffHours,people:people.map(p=>p.id)}),px=plannerPixels(state,frame),height=frame.span*px,hours=plannerTickHours(frame,px,date===state.to);
   const customWindow=people.some(p=>{const row=data.settings.staffDay?.[p.id+'|'+date];const w=dayWindow(p.id,date,data.settings);return (row?.start_h!=null||row?.end_h!=null)&&!!w||!w&&(rows.some(r=>r.person===p.id&&r.date===date)||state.showFact&&facts.some(f=>f.date===date&&f.people.includes(p.id))); }),dayFacts=facts.filter(f=>f.date===date),dateLabel=new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',weekday:'short',timeZone:'UTC'}).format(new Date(date+'T12:00:00Z'));
   html+=`<section class="pw-day calendar-day" data-date="${date}" data-start="${frame.start}" data-end="${frame.end}" data-scale="${px}" data-scale-span="${frame.scaleSpan??frame.span}" data-closed="${frame.closed}" data-custom-window="${customWindow}"><div class="pw-day-date calendar-date-overlay">${dayDisclosure(date,plannerEscape(dateLabel),state,people)}</div><div class="pw-day-window-row" id="pw-day-settings-${date}" ${state.dayControlsDate===date?'':'hidden'}><div class="pw-window-gutter"></div>${people.map(p=>workDayControl(p.id,date,data,actor)).join('')}</div><div class="pw-day-body day-body" style="height:${height}px;--pw-hour:${px}px;--hour:${px}px;--pw-grid-offset:${-(frame.start%1)*px}px"><div class="pw-time-axis time-lane">${frame.closed?'<span class="pw-closed-day">Выходной</span>':[...hours].map(h=>`<span data-hour="${h}" class="pw-tick tick${h===frame.start?' first':''}${h===frame.end?' last':''}" style="top:${(h-frame.start)*px}px">${plannerClock(h)}</span>`).join('')}</div>${people.map(p=>{const work=rows.filter(r=>r.date===date&&r.person===p.id),hasFacts=state.showFact&&dayFacts.some(f=>f.people.includes(p.id));return `<div class="pw-lane person-lane${hasFacts?' pw-has-fact':''}" data-person="${p.id}">${plannerDayZonesHTML(p.id,date,frame,px,data,actor)}<div class="pw-plan-area pf-edge-plan-layer">${plannerOverlapRows(work).map(r=>planCard(r,frame,px,data,state)).join('')}${state.mobile?plannerPlanHitsHTML(work,frame,px):''}</div>${factsHTML(dayFacts,p.id,frame,px,state)}</div>`;}).join('')}</div></section>`;
  }

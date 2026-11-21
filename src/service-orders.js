@@ -1,4 +1,6 @@
 import {mountOrderTripResults} from './order-trip-results.js';
+import {mountPaymentCard,readPaymentModel,savePaymentModel} from './payment-terms.js';
+import {mountEntityFinance} from './scoped-finance.js';
 import {setButtonBusy} from './ui/button-state.js';
 import {resolveEntityDraft} from './entity-draft-resolution.js';
 import {planningDate,planningPeriod,planningWarnings} from './core/planning-dates.js';
@@ -223,7 +225,17 @@ export function createServiceOrders(ctx){
  if(o.id){const auxiliary=document.createElement('div');auxiliary.id='orderAuxiliary';auxiliary.className='order-auxiliary';auxiliary.hidden=true;[$('orderExecution'),$('orderDeadlinePanel'),$('orderResponsibility')].forEach(node=>auxiliary.append(node));editor.append(auxiliary);}
  const identity=o.id||'new';
  const initial=({works:'scope',trips:'travel',history:'overview'})[requestedPane]||requestedPane||(identity===tabEntity?tabValue:o.id?'overview':'scope');
- tabEntity=identity;entityTabs=createEntityTabs(editor,{initial,onChange:value=>{tabValue=value;}});tabValue=entityTabs.value;
+ let finance=null;
+ if(o.id&&manager(o)){
+  const host=document.createElement('section'),user=loadedUser;
+  host.className='scoped-finance';$('orderPane-plan-fact').prepend(host);
+  finance=mountEntityFinance(host,{db:api,scope:'order',id:o.id,
+   current:()=>current===o&&host.isConnected&&user===ctx.userId(),
+   onTrip:async row=>{if(await leave())ctx.openTrip(row.id,{pane:'economy'});},
+   onReport:trip=>open(o.id,scope,{pane:'scope',trip})});
+ }
+ tabEntity=identity;entityTabs=createEntityTabs(editor,{initial,onChange:value=>{tabValue=value;if(value==='plan-fact')void finance?.load();}});tabValue=entityTabs.value;
+ if(tabValue==='plan-fact')void finance?.load();
  if(!edit)$('orderOrganization').hidden=true;
  renderJobsAndItems(edit,report);$('orderBack').onclick=async()=>{if(!await leave())return;ctx.showBoard();};if($('orderRequest'))$('orderRequest').onclick=async()=>{if(await leave())ctx.openJob(o.job_id);};
  $('orderEditor').querySelectorAll('input,textarea,select').forEach(el=>{if(!el.closest('#orderDeadlinePanel,#orderResponsibility,#orderExecution'))el.addEventListener('input',mark);});$('orderEditor').querySelectorAll('select').forEach(el=>{if(!el.closest('#orderDeadlinePanel,#orderResponsibility,#orderExecution'))el.addEventListener('change',mark);});
@@ -250,19 +262,74 @@ export function createServiceOrders(ctx){
    ...(selectedJob?[{label:'Открыть заявку и смету',onSelect:async()=>{if(await leave()){if(ctx.openJobEstimate)ctx.openJobEstimate(selectedJob);else ctx.openJob(selectedJob);}}}]:[])
   ]});restoreResultDraft();
  }updateSaveState();frameOrderWorkspace({record:o,editable:edit,people:ctx.profiles()});renderPlanning(o);
- if(visitResults||visitError){
-  const panel=document.createElement('section');panel.id='orderTripResults';panel.className=visitResults?'order-trip-results':'card order-trip-results';
+ const paymentHost=o.id?document.createElement('section'):null;
+ const paymentUser=loadedUser;
+ let paymentModel=null;
+ const paymentCurrent=()=>current===o&&ctx.userId()===paymentUser&&paymentHost?.isConnected;
+ const savePayment=async(view,terms)=>{
+  if(!paymentCurrent())throw Error('Откройте актуальное задание');
+  await savePaymentModel(api(),view,terms);
+ };
+ const paintPayment=()=>mountPaymentCard({root:paymentHost,model:paymentModel,save:savePayment,
+  onOpen:row=>showWork(row.work),onChange:()=>{if(paymentCurrent())visitPanel?.setPaymentModel(paymentModel);}});
+ if(paymentHost){
+  paymentHost.className='card entity-payment-terms';paymentHost.hidden=true;$('orderOverviewState').after(paymentHost);
+  void readPaymentModel(api(),'order',o.id).then(model=>{
+   if(!paymentCurrent()||!model)return;
+   paymentModel=model;paintPayment();visitPanel?.setPaymentModel(model);
+  }).catch(error=>{
+   if(!paymentCurrent())return;
+   paymentHost.hidden=false;paymentHost.innerHTML=`<p class="err" role="alert">${esc(error.message||'Условия оплаты недоступны')}</p>`;
+  });
+ }
+ const standaloneWorks=o.id&&
+  items.some(item=>item.kind==='work'&&!isFinanceVoided(item)&&Object.hasOwn(item,'planned_labor_hours'));
+ if(visitResults||visitError||standaloneWorks){
+  const panel=document.createElement('section');panel.id='orderTripResults';panel.className=visitError?'card order-trip-results':'order-trip-results';
   $('orderPane-scope').prepend(panel);
-  if(visitResults){
-   editor.querySelector('.workflow-work-result')?.remove();
-   if(!edit)$('orderComposition').hidden=true;
-   $('orderPane-plan-fact').append($('orderResultSummary'));
+  if(!visitError){
+   let manualResult=editor.querySelector('.workflow-work-result');
+   if(visitResults){
+    manualResult?.remove();
+    if(!edit)$('orderComposition').hidden=true;
+    $('orderPane-plan-fact').append($('orderResultSummary'));
+   }else if(report&&!manualResult){
+    manualResult=document.createElement('button');
+    manualResult.type='button';manualResult.className='btn amber workflow-work-result';
+    manualResult.textContent='Зафиксировать результат';
+    manualResult.onclick=()=>openResult(o.id);
+   }
    const user=loadedUser;
    visitPanel=mountOrderTripResults({root:panel,order:o,items:items.filter(item=>!isFinanceVoided(item)),catalog:workCatalog,
-    data:visitResults,user,manager:manager(o),mayReport:['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.engineer_ids?.includes(user)),requestedTrip,
+    data:visitResults,manualResult,user,manager:manager(o),mayReport:['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.engineer_ids?.includes(user)),requestedTrip,
+    savePayment,onPaymentChange:paintPayment,
+    preparePhoto:ctx.preparePhoto,
+    uploadPhoto:async(path,blob)=>{
+     if(current!==o||ctx.userId()!==user||!panel.isConnected)throw Error('Откройте актуальный отчёт');
+     const {error}=await api().storage.from('order-result-photos').upload(path,blob,{contentType:'image/jpeg',upsert:false});
+     if(error&&String(error.statusCode)!=='409'&&error.error!=='Duplicate')throw error;
+    },
+    downloadPhoto:async path=>{
+     if(current!==o||ctx.userId()!==user||!panel.isConnected)throw Error('Откройте актуальный отчёт');
+     const {data,error}=await api().storage.from('order-result-photos').download(path);
+     if(error)throw error;
+     return data;
+    },
     onWrite:payload=>{
      if(current?.id!==o.id||ctx.userId()!==user||dirty||!panel.isConnected)throw Error('Карточка или сеанс изменились. Обновите задание');
      return rpc('service_order_trip_result_write',payload);
+    },
+    onPlanWrite:async payload=>{
+     if(current?.id!==o.id||ctx.userId()!==user||dirty||reportDirty||!panel.isConnected)throw Error('Сохраните изменения задания или обновите карточку');
+     const saved=await rpc('service_order_work_plan_save',payload);
+     if(current===o&&!reportDirty)resultExpected=saved.revision;
+     return saved;
+    },
+    onPartWrite:async payload=>{
+     if(current!==o||ctx.userId()!==user||dirty||reportDirty||!panel.isConnected)throw Error('Сохраните изменения задания или обновите карточку');
+     const revision=await rpc('service_order_work_part_save',payload);
+     if(current===o&&!reportDirty)resultExpected=revision;
+     return revision;
     },
     onReturnReason:()=>ctx.reason('Причина возврата результата'),
     onTrip:id=>ctx.openTrip(id),onGPS:id=>ctx.openJournalTrip?ctx.openJournalTrip(id):ctx.openTrip(id),
@@ -271,7 +338,7 @@ export function createServiceOrders(ctx){
      if(!await open(o.id,scope,{pane:'scope',trip:id}))throw Error('Результат сохранён. Обновите карточку');
      ctx.notify({accepted:'Результат принят',submitted:'Результат передан на приёмку',returned:'Результат возвращён на доработку'}[action]);
     }});
-   const pending=visitResults.trips.some(trip=>trip.linked&&trip.status!=='cancelled'&&trip.state==='submitted');
+   const pending=visitResults?.trips.some(trip=>trip.linked&&trip.status!=='cancelled'&&trip.state==='submitted');
    if(pending)editor.querySelectorAll('[data-summary-carry],[data-order-next=completed]').forEach(button=>{button.disabled=true;});
   }else{
    panel.innerHTML='<p class="err" role="alert">'+esc(visitError)+'</p><button type="button" class="btn">Обновить результаты</button>';
@@ -284,6 +351,10 @@ export function createServiceOrders(ctx){
   if(trip)visitPanel?.select(trip);
   $('orderTripResults')?.scrollIntoView({block:'nearest'});
  }
+ function showWork(id){
+  entityTabs?.select('scope');visitPanel?.showWork(id);
+ }
+ async function openWork(id,work){if(await open(id,null,{pane:'scope'}))showWork(work);}
  async function settleDraft(title='Перед изменением плана'){
   const id=current?.id,planChanged=dirty,resultChanged=reportDirty;if(!dirty&&!reportDirty)return {record:current};
   const choice=await resolveEntityDraft({title,message:reportDirty?'Сохранить план перед действием? Введённый результат останется в черновике этого браузера для отдельной проверки.':'Сохранить текущие изменения задания перед действием?',saveLabel:'Сохранить и продолжить'});if(choice==='cancel')return false;
@@ -376,11 +447,21 @@ export function createServiceOrders(ctx){
  function renderJobsAndItems(edit,report){const base=!!current?.seed_request_id&&current.seed_request_id===current.job_id;$('orderJobs').innerHTML=selectedJob?`<div class="order-job-row"><button class="btn sm ghost" data-job-link="${selectedJob}" data-job-estimate>Смета заявки ↗</button>${base?'<span class="hint">Согласованный состав</span>':''}</div>`:'<p class="hint">Сначала выбери заявку.</p>';
  $('orderItems').innerHTML=items.map((i,n)=>{const kind=i.kind||'work',selected=stockCatalog.find(c=>c.id===i.stock_catalog_id),catalogOptions=stockCatalog.filter(c=>c.active&&c.id!==i.stock_catalog_id).map(c=>`<option value="${c.id}">${esc(c.name)}${c.sku?' · '+esc(c.sku):''}</option>`).join(''),savedLabel=i.title+(i.sku_snapshot?' · '+i.sku_snapshot:'')+(selected&&!selected.active?' · архив':''),requestFinance=i.legacy_snapshot?.request_finance_generation===1,financeVoided=isFinanceVoided(i),legacy=!!(i.legacy_job_work_id||i.legacy_job_part_id||i.from_request_remainder)||requestFinance||financeVoided,missingWorkSnapshot=i.financial_revenue_snapshot==null||i.financial_cost_snapshot==null||!Number.isFinite(Number(i.financial_revenue_snapshot))||!Number.isFinite(Number(i.financial_cost_snapshot))||Number(i.planned_qty)<=0;return `<fieldset class="order-item-row ${kind==='material'?'is-material':''}" data-order-item="${n}" ${edit&&!legacy&&!base?'':'disabled'}>${!edit||legacy||base?`<div class="order-item-read"><b>${kind==='material'?'Материал · ':''}${esc(i.title)}</b><span>${num(i.planned_qty)} ${esc(i.unit||'ч')}${financeVoided?' · аннулирована':''}</span>${manager(current)?`<small class="hint">${kind==='work'?(missingWorkSnapshot?'Нет финансового снимка':`Выручка плана ${num(i.financial_revenue_snapshot)} ₴ · себестоимость ${num(i.financial_cost_snapshot)} ₴`):`Продажа ${num(i.unit_price_snapshot)} ₴/ед. · себестоимость ${num(i.unit_cost_snapshot)} ₴/ед.`}</small>`:''}</div>`:''}<div class="order-item-fields" ${!edit||legacy||base?'hidden':''}><div class="order-item-top"><select data-i-kind aria-label="Тип строки задания" ${i.done_qty||i.transferred_qty||i.source_item_id||legacy?'disabled':''}><option value="work" ${kind==='work'?'selected':''}>Работа</option><option value="material" ${kind==='material'?'selected':''}>Материал</option></select>${kind==='material'?`<select data-i-stock aria-label="Материал из склада"><option value="">Выбрать материал</option>${i.stock_catalog_id?`<option value="${i.stock_catalog_id}" selected>${esc(savedLabel)}</option>`:''}${catalogOptions}</select>`:`<input type="text" data-i-title aria-label="Работа" placeholder="Название работы" maxlength="500" value="${esc(i.title)}">`}<label class="order-item-qty">Объём<input type="number" data-i-qty min="0.001" step="any" value="${esc(i.planned_qty)}"></label>${edit&&!legacy&&!base&&!i.done_qty&&!i.transferred_qty&&!i.source_item_id?`<button type="button" class="btn sm ghost" data-item-remove="${n}" aria-label="Убрать строку">×</button>`:''}</div>${financeVoided?`<div class="hint">Аннулирована в заявке: ${esc(i.legacy_snapshot?.request_finance_void_reason||'')}</div>`:requestFinance?'<div class="hint">Финансовая строка редактируется в заявке.</div>':i.from_request_remainder?'<div class="hint">Из остатка по заявке</div>':legacy?'<div class="hint">Историческая строка из заявки: состав и финансы будут доступны для изменения через аудированную корректировку заявки.</div>':''}${kind==='work'?`<label>Работа из каталога<select data-i-work><option value="">Своя работа</option>${workCatalog.map(c=>`<option value="${c.id}" ${i.work_catalog_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>${i.work_catalog_id?`<div class="hint">${workCatalog.find(c=>c.id===i.work_catalog_id)?.warranty_eligible?'Допускает гарантийное обслуживание':'Не отмечена как гарантийная работа'}</div>`:''}<label class="order-item-unit">Единица<input type="text" data-i-unit maxlength="40" value="${esc(i.unit||'ч')}"></label><label class="order-work-billable"><input type="checkbox" data-i-billable ${i.billable===false?'':'checked'}> Оплачиваемая работа</label>${i.billable===false?`<label>Причина гарантийной работы<input data-i-billable-reason maxlength="500" value="${esc(i.billable_reason||'')}"></label>`:''}<label>Профиль тарифа<select data-i-profile><option value="">По умолчанию заявки/системы</option>${tariffProfiles.map(p=>`<option value="${esc(p.id)}" ${i.tariff_profile===p.id?'selected':''}>${esc(p.name)} · ${num(i.billable===false?p.work_warr?.rate:p.work_paid?.rate||p.work_depot?.rate||0)} ₴/ч</option>`).join('')}</select></label>${missingWorkSnapshot?'<small class="hint">Нет финансового снимка: суммы этой работы не включены в сводку.</small>':`<div class="order-item-snapshot">План ${num(i.financial_revenue_snapshot)} ₴ · себестоимость ${num(i.financial_cost_snapshot)} ₴</div>`}`:`<div class="order-item-snapshot">${i.sku_snapshot?'Артикул '+esc(i.sku_snapshot)+' · ':''}${num(i.unit_price_snapshot)} ₴/ед. · себестоимость ${num(i.unit_cost_snapshot)} ₴/ед. · ${esc(i.unit||'шт')}</div>`}</div></fieldset>`;}).join('')||'<p class="hint">Состав задания пока не определён.</p>';
  renderMaterialTotals();
- if($('orderResults'))$('orderResults').innerHTML=items.filter(i=>i.id&&!isFinanceVoided(i)).map(i=>`<div data-result-item="${i.id}"><b>${i.kind==='material'?'Материал · ':''}${esc(i.title)}</b><div class="hint">Поручено ${num(i.planned_qty)} ${esc(i.unit)} · ранее ${num(i.done_qty)} · осталось ${num(remainingQty(i))}${Number(i.transferred_qty)>0?' · перенесено '+num(i.transferred_qty):''}</div><div class="row"><label class="order-result-qty">${i.kind==='material'?'Использовано всего':'Выполнено всего'}<input type="number" inputmode="decimal" min="0" max="${Number(i.planned_qty)-Number(i.transferred_qty||0)}" step="any" required data-result-qty value="${esc(i.done_qty??0)}" ${report?'':'disabled'}></label><label>Комментарий<input type="text" maxlength="1000" data-result-note value="${esc(i.result_note)}" ${report?'':'disabled'}></label></div></div>`).join('');
+ if($('orderResults')){
+  const active=items.filter(item=>item.id&&!isFinanceVoided(item));
+  const workIds=new Set(active.filter(item=>item.kind==='work').map(item=>item.id));
+  const renderResult=item=>`<div data-result-item="${esc(item.id)}"><b>${item.kind==='material'?'Материал · ':''}${esc(item.title)}</b><div class="hint">Поручено ${num(item.planned_qty)} ${esc(item.unit)} · ранее ${num(item.done_qty)} · осталось ${num(remainingQty(item))}${Number(item.transferred_qty)>0?' · перенесено '+num(item.transferred_qty):''}</div><div class="row"><label class="order-result-qty">${item.kind==='material'?'Использовано всего':'Выполнено всего'}<input type="number" inputmode="decimal" min="0" max="${Number(item.planned_qty)-Number(item.transferred_qty||0)}" step="any" required data-result-qty value="${esc(item.done_qty??0)}" ${report?'':'disabled'}></label><label>Комментарий<input type="text" maxlength="1000" data-result-note value="${esc(item.result_note)}" ${report?'':'disabled'}></label></div></div>`;
+  $('orderResults').innerHTML=active.filter(item=>!workIds.has(item.parent_work_id)).map(item=>{
+   const parts=active.filter(part=>part.parent_work_id===item.id);
+   return renderResult(item)+(parts.length?`<details class="order-trip-materials order-manual-parts"><summary>Запчасти · ${parts.length}</summary>${parts.map(renderResult).join('')}</details>`:'');
+  }).join('');
+ }
  if(current.id){const summary=document.createElement('section');summary.className='order-result-summary';summary.id='orderResultSummary';
  const active=items.filter(i=>!isFinanceVoided(i)),hasResult=active.some(i=>Number(i.done_qty)>0)||!!current.result_note;
  $('orderPlanFactRows').innerHTML=active.length?`<table class="workflow-related-table"><thead><tr><th scope="col">Позиция</th><th scope="col">План</th><th scope="col">Факт</th>${visitResults?'<th scope="col">Принято, чел·ч</th>':''}</tr></thead><tbody>${active.map(i=>{const hours=visitResults?.accepted_hours?.[i.id];return `<tr><td>${esc(i.title)}</td><td>${num(i.planned_qty)} ${esc(i.unit||'ч')}</td><td>${num(i.done_qty)} ${esc(i.unit||'ч')}</td>${visitResults?'<td>'+(i.kind!=='material'&&hours!=null?num(hours):'—')+'</td>':''}</tr>`;}).join('')}</tbody></table>`:'<p class="hint">Состав задания пока не определён.</p>';
  summary.innerHTML='<h3>Сохранённый результат</h3>'+active.map(i=>`<div class="order-result-line"><strong>${esc(i.title)}</strong><div class="order-result-quantities"><div><span>План</span><b>${num(i.planned_qty)} ${esc(i.unit||'ч')}</b></div><div><span>Факт</span><b>${num(i.done_qty)} ${esc(i.unit||'ч')}</b></div><div ${remainingQty(i)>0?'data-remaining':''}><span>Остаток</span><b>${num(remainingQty(i))} ${esc(i.unit||'ч')}</b></div></div>${Number(i.transferred_qty)>0?`<p class="hint">Перенесено в другое задание: ${num(i.transferred_qty)} ${esc(i.unit||'ч')}</p>`:''}</div>`).join('')+(current.result_note?`<p>${esc(current.result_note)}</p>`:'');
+ const extraPartCost=Number(visitResults?.extra_part_cost||0);
+ if(manager(current)&&extraPartCost>0)$('orderPlanFactRows').insertAdjacentHTML('beforeend',`<p>Внеплановые запчасти · факт <strong>${num(extraPartCost)} ₴</strong></p>`);
  const next=nextOrderStates(current.status,manager(current)),review=document.createElement('div');review.className='order-result-review';
  const stateText=current.status==='review'?'Результат передан на проверку':current.status==='completed'?(current.closed_with_remainder_at?'Задание закрыто с остатком':'Задание завершено'):current.status==='cancelled'?'Задание отменено':hasResult?'Результат сохранён · ещё не передан на проверку':'Сохранённого результата пока нет';
  review.innerHTML=`${current.status==='review'&&manager(current)?'<button type="button" class="btn" data-open-result-review>Открыть проверку результата</button>':''}<p>${stateText}</p>${current.status==='review'?`<p class="hint">Куратор: ${esc(current.curator_id?name(current.curator_id):'не назначен')}. Перед принятием проверьте остаток и связанные выезды.</p>`:''}<div class="order-line-adds">${next.includes('review')?'<button type="button" class="btn" data-order-next="review">Передать на проверку</button>':''}${current.status==='review'&&next.includes('in_progress')?'<button type="button" class="btn" data-order-next="in_progress">Вернуть в работу</button>':''}${manager(current)&&['in_progress','paused','review'].includes(current.status)&&active.some(i=>remainingQty(i)>0)?'<button type="button" class="btn" data-summary-carry>Закрыть с остатком</button>':''}${(current.trip_service_orders||[]).some(x=>x.trips&&!x.trips.deleted_at&&!['done','cancelled'].includes(x.trips.status))?'<button type="button" class="btn ghost" data-summary-travel>Проверить связанные выезды</button>':''}</div>`;
@@ -398,7 +479,12 @@ export function createServiceOrders(ctx){
  $('orderItems').querySelectorAll('[data-i-work]').forEach(el=>el.addEventListener('change',()=>{readPlanItems();const i=items[+el.closest('[data-order-item]').dataset.orderItem],c=workCatalog.find(x=>x.id===el.value);i.work_catalog_id=c?.id||null;if(c){i.title=c.name;i.unit='ч';if(Number(c.norm_hours)>0)i.planned_qty=Number(c.norm_hours);}mark();renderJobsAndItems(edit,report);}));
  $('orderItems').querySelectorAll('[data-i-billable]').forEach(el=>el.addEventListener('change',()=>{readPlanItems();const i=items[+el.closest('[data-order-item]').dataset.orderItem];i.billable=el.checked;if(!el.checked&&!(i.billable_reason||'').trim())i.billable_reason='Гарантийный ремонт';mark();renderJobsAndItems(edit,report);}));
  $('orderEditor').querySelectorAll('#orderItems input,#orderItems select').forEach(el=>{el.oninput=()=>{mark();if(el.matches('[data-i-qty]')){readPlanItems();renderMaterialTotals();}};el.onchange=mark;});$('orderExecution')?.querySelectorAll('input,textarea').forEach(el=>{el.oninput=markReport;el.onchange=markReport;});}
- function renderMaterialTotals(){const box=$('orderMaterialTotals');if(!box)return;box.hidden=!manager(current);if(box.hidden)return;const m=materialTotals(items,current?.status),w=workTotals(items,current?.status);const hasMaterials=items.some(i=>i.kind==='material'),hasWorks=items.some(i=>i.kind!=='material');box.innerHTML=!hasMaterials&&!hasWorks?'':`${hasWorks?`<div><span>Работы · план</span><b>${num(w.planRevenue)} ₴ · себестоимость ${num(w.planCost)} ₴</b></div><div><span>Работы · факт</span><b>${num(w.factRevenue)} ₴ · себестоимость ${num(w.factCost)} ₴</b></div>${w.unpriced?`<small class="hint">Без финансового снимка: ${w.unpriced} ${w.unpriced===1?'работа':'работы'} — суммы не включены.</small>`:''}`:''}${hasMaterials?`<div><span>Материалы · план</span><b>${num(m.planRevenue)} ₴ · себестоимость ${num(m.planCost)} ₴</b></div><div><span>Использовано · факт</span><b>${num(m.factRevenue)} ₴ · себестоимость ${num(m.factCost)} ₴</b></div>`:''}`;}
+ function renderMaterialTotals(){
+  const box=$('orderMaterialTotals');if(!box)return;box.hidden=!manager(current);if(box.hidden)return;
+  const m=materialTotals(items,current?.status),w=workTotals(items,current?.status),extraPartCost=Number(visitResults?.extra_part_cost||0);
+  const hasMaterials=items.some(i=>i.kind==='material')||extraPartCost>0,hasWorks=items.some(i=>i.kind!=='material');
+  box.innerHTML=`${hasWorks?`<div><span>Работы · план</span><b>${num(w.planRevenue)} ₴ · себестоимость ${num(w.planCost)} ₴</b></div><div><span>Работы · факт</span><b>${num(w.factRevenue)} ₴ · себестоимость ${num(w.factCost)} ₴</b></div>${w.unpriced?`<small class="hint">Без финансового снимка: ${w.unpriced} ${w.unpriced===1?'работа':'работы'} — суммы не включены.</small>`:''}`:''}${hasMaterials?`<div><span>Материалы · план</span><b>${num(m.planRevenue)} ₴ · себестоимость ${num(m.planCost)} ₴</b></div><div><span>Использовано · факт</span><b>${num(m.factRevenue)} ₴ · себестоимость ${num(m.factCost+extraPartCost)} ₴</b></div>`:''}`;
+ }
  async function perform(fn){const box=$('orderDeadlinePanel')?.closest('dialog')?$('orderDeadlineError'):$('orderError');box.textContent='';let validationError=null;const buttons=[...$('orderEditor').querySelectorAll('button'),...($('orderDeadlinePanel')?.closest('dialog')?.querySelectorAll('button')||[])].map(b=>({button:b,disabled:b.disabled}));buttons.forEach(({button})=>button.disabled=true);try{await fn();return true;}catch(e){validationError=e;box.textContent=e.message||String(e);box.scrollIntoView?.({block:'center'});return false;}finally{buttons.forEach(({button,disabled})=>{if(button.isConnected)button.disabled=disabled;});if(validationError?.orderPane)entityTabs?.select(validationError.orderPane);if(validationError?.orderField){const field=$(validationError.orderField);for(let parent=field?.parentElement;parent;parent=parent.parentElement){if(parent.tagName==='DETAILS')parent.open=true;}field?.focus();}}}
  function formError(message,pane,field){const e=new Error(message);e.orderPane=pane;e.orderField=field;return e;}
  async function save(){return await perform(async()=>{readPlanItems();if(!selectedJob)throw formError('Выбери одну заявку','scope','orderJobPick');if(!$('orderTitle').value.trim())throw formError('Укажи название задания','scope','orderTitle');if(items.some(i=>i.kind==='material'&&!i.stock_catalog_id&&!i.from_request_remainder))throw formError('Для каждой строки материала выбери позицию из справочника','scope');const data={title:$('orderTitle').value,work_mode:$('orderMode').value,date_from:$('orderFrom').value,date_to:$('orderTo').value,engineer_ids:[...$('orderCrew').options].filter(o=>o.selected).map(o=>o.value),lead_engineer:$('orderLead').value||null,instructions:$('orderInstructions').value};
@@ -422,7 +508,7 @@ export function createServiceOrders(ctx){
   if(loadedUser!==ctx.userId())throw Error('Сеанс изменился. Открой задание заново');if(!reportAllowed(current))throw Error('Ввод результата сейчас недоступен');if(dirty)throw Error('Сначала сохрани состав задания');const historical=manager(current)&&historicalClosedDraft(current),values=resultValues(),basis=values.basis.trim();
   if(historical&&basis.length<5){$('orderResultBasis')?.focus();throw Error('Укажи основание исторического факта не короче 5 символов');}
   const date=values.date;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date){$('orderResultDate')?.focus();throw Error('Укажи корректную дату выполнения');}
-  for(const row of $('orderResults').querySelectorAll('[data-result-item]')){const input=row.querySelector('[data-result-qty]'),value=Number(input.value);if(input.value.trim()===''||!Number.isFinite(value)||value<0||value>Number(input.max)){input.focus();throw Error('Укажи выполненный объём от 0 до оставшегося порученного объёма');}}
+  for(const row of $('orderResults').querySelectorAll('[data-result-item]')){const input=row.querySelector('[data-result-qty]'),value=Number(input.value);if(input.value.trim()===''||!Number.isFinite(value)||value<0||value>Number(input.max)){const details=input.closest('details');if(details)details.open=true;input.focus();throw Error('Укажи выполненный объём от 0 до оставшегося порученного объёма');}}
   const payload={p_id:current.id,p_expected:resultExpected??current.revision,p_items:values.items.map(i=>({...i,done_qty:Number(i.done_qty)})),p_note:values.note,p_actual_date:date,p_basis:historical?basis:null},signature=JSON.stringify(payload);
   if(resultAttempt?.signature!==signature)resultAttempt={signature,operationId:window.crypto.randomUUID()};storeResultDraft();await rpc('service_order_record_result',{...payload,p_operation_id:resultAttempt.operationId});
   try{storage().removeItem(savedKey);}catch{/* The form still closes after a successful server save. */}if(current?.id!==savedId||ctx.userId()!==savedUser){ctx.notify('Результат зафиксирован');return;}reportDirty=false;resultAttempt=null;resultDialog?.close();resultDialog=null;await open(savedId,savedScope);ctx.notify('Результат зафиксирован');
@@ -432,5 +518,5 @@ export function createServiceOrders(ctx){
  function leave(){if(!dirty&&!reportDirty)return Promise.resolve(true);if(leaveFlight)return leaveFlight;leaveFlight=(async()=>{if(!await ctx.confirmLeave())return false;if(reportDirty)storeResultDraft();dirty=false;reportDirty=false;return true;})().finally(()=>{leaveFlight=null;});return leaveFlight;}
  async function tripParent(t){const el=$('tripOrderParent');if(!el)return;el.innerHTML='';if(!t?.id)return;try{const {data,error}=await api().from('trip_service_orders').select('order_id,service_orders(id,number,title,job_id)').eq('trip_id',t.id);if(error)throw error;const linked=(data||[]).map(x=>x.service_orders).filter(o=>o?.job_id);if(!linked.length){el.innerHTML='<span class="hint">Задания пока не связаны</span>';return;}el.innerHTML='<span class="hint">Задания выезда:</span> '+linked.map(o=>`<button type="button" class="crumb" data-trip-order="${o.id}">№${o.number} · ${esc(o.title)}</button>`).join('');el.querySelectorAll('[data-trip-order]').forEach(b=>b.onclick=()=>open(b.dataset.tripOrder,null));}catch(e){el.innerHTML='<span class="hint">Не удалось загрузить задания выезда: '+esc(e.message)+'</span>';}}
  function init(){ if($('orderViewMode'))$('orderViewMode').onchange=e=>{viewMode=e.target.value;return board();};if($('orderHistorical'))$('orderHistorical').onchange=e=>{showHistorical=e.target.checked;return board();};$('orderSearch').oninput=e=>{query=e.target.value.trim().toLowerCase();board();};$('orderEngineer').onchange=e=>{crewFilter=e.target.value;board();};$('orderClosed').onchange=e=>{showClosed=e.target.checked;visibleStates.completed=showClosed;visibleStates.cancelled=showClosed;return board();};$('orderScopeClear').onclick=()=>{scope=null;board();};$('orderAdd').onclick=()=>open(null,scope);}
- return {init,board,open,openResult,eligibleOrdersForRequest,attachJobs,requestPanel,tripParent,leave,isDirty:()=>dirty||reportDirty,currentId:()=>current?.id,loaded:()=>loaded};
+ return {init,board,open,openWork,openResult,eligibleOrdersForRequest,attachJobs,requestPanel,tripParent,leave,isDirty:()=>dirty||reportDirty,currentId:()=>current?.id,loaded:()=>loaded};
 }

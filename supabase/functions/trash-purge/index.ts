@@ -28,5 +28,14 @@ Deno.serve(async (req) => {
   }
   const { data, error } = await supabase.rpc('trash_purge_due');
   if (error) return json({ error: error.message, filesRemoved: paths.length }, 500);
-  return json({ ...data, filesRemoved: paths.length, cutoff });
+  const { data: orphanPhotos, error: orphanError } = await supabase.rpc('order_result_photo_orphans');
+  if (orphanError && orphanError.code !== 'PGRST202') {
+    return json({ ...data, filesRemoved: paths.length, error: orphanError.message }, 500);
+  }
+  const orphanPaths: string[] = orphanPhotos ?? [];
+  for (let i = 0; i < orphanPaths.length; i += 100) {
+    const { error: removeError } = await supabase.storage.from('order-result-photos').remove(orphanPaths.slice(i, i + 100));
+    if (removeError) return json({ ...data, filesRemoved: paths.length, workPhotosRemoved: i, error: removeError.message }, 500);
+  }
+  return json({ ...data, filesRemoved: paths.length, workPhotosRemoved: orphanPaths.length, cutoff });
 });
