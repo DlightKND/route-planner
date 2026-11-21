@@ -485,6 +485,15 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   if(visitJourney){
     ride.status='done';ride.workbench_revision=visit.revision;
     visitWork.planned_labor_hours=null;
+    if(visitJourney==='multiple'){
+      activeTask.trip_service_orders=[{trip_id:trip,trips:ride}];
+      const otherRequest={...request,id:secondPaymentJob.id,clients:{...client,name:secondPaymentJob.title}};
+      const otherTask={...task,id:'20000000-0000-4000-8000-000000000099',number:199,title:'Работы по другой заявке',job_id:otherRequest.id,
+        seed_request_id:null,service_order_jobs:[],service_order_items:[]};
+      tables.jobs.push(otherRequest);
+      tables.service_orders.push(otherTask);
+      for(const linked of [activeTask,otherTask])tables.trip_service_orders.push({trip_id:trip,order_id:linked.id,service_orders:linked,trips:ride});
+    }
     if(visitJourney==='manager')Object.assign(visit,{state:'submitted',latest:visitPayload,submitted_revision:4,
       event:'00000000-0000-4000-8000-000000000091'});
     audit.visitWrites=[];audit.workPlanWrites=[];
