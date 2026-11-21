@@ -61,7 +61,8 @@ html#dlight-ui[data-ui-system] .view .scoped-finance-details.card{padding:16px!i
 .scoped-finance-delta{display:grid;grid-template-columns:minmax(0,1fr) minmax(112px,1.4fr) minmax(0,1fr);align-items:center;gap:8px 12px;margin-bottom:12px}
 .scoped-finance-delta>div{display:grid;gap:2px}
 .scoped-finance-delta strong{overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
-.scoped-finance-delta .hint,.scoped-finance-editor .scoped-finance-correction-note{font-size:13px;line-height:20px}
+html#dlight-ui[data-ui-system] .scoped-finance-editor :is(.scoped-finance-delta .hint,.scoped-finance-correction-note){font-size:13px!important;line-height:20px!important}
+.scoped-finance-editor .scoped-finance-delta .hint{margin:0}
 .scoped-finance-editor .scoped-finance-correction-note{margin:8px 0}
 @media(max-width:760px){
  .scoped-finance-head{gap:8px}
