@@ -31,8 +31,15 @@ test('design state: assignment timeline and explicit independent composer',async
 });
 test('design state: assignment travel and crew-aware trip selection',async({page},info)=>{
  const errors=await start(page,info,'order/'+fixtureIDs.activeOrder,{designTripChoices:true});await page.locator('#orderTab-travel').click();
- await expect(page.locator('.order-travel-head')).toBeVisible();await expect(page.locator('#orderTrips .order-trip-identity')).toBeVisible();
- await capture(page,info,'assignment-travel',errors);await page.locator('#orderTripExisting').click();
+ const trips=page.locator('#orderTrips').getByRole('table',{name:'Выезды'});
+ await expect(trips).toBeVisible();
+ const tableCard=await page.locator('#orderTrips .related-records').boundingBox(),pane=await page.locator('#orderPane-travel').boundingBox();
+ expect(Math.abs(pane.width-tableCard.width-17)).toBeLessThanOrEqual(1);
+ await expect(trips.getByRole('columnheader',{name:'Часы по посещениям'})).toBeAttached();
+ await trips.getByRole('button',{name:/Раскрыть выезд/}).click();
+ await expect(trips.getByRole('heading',{name:'Задания выезда'})).toBeVisible();
+ await capture(page,info,'assignment-travel',errors);await page.locator('#orderMore').click();
+ await page.getByRole('button',{name:'Добавить в существующий выезд',exact:true}).filter({visible:true}).click();
  const dialog=page.locator('dialog.entity-trip-picker-dialog');await expect(dialog).toBeVisible();await expect(dialog.locator('.trip-choice-card')).toHaveCount(2);
  await capture(page,info,'trip-selection',errors);await dialog.locator('[data-trip-choice-crew]').check();await expect(dialog.locator('.trip-choice-card')).toHaveCount(1);
  expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
@@ -230,7 +237,7 @@ test('polish: wide workspaces use the available width and the rail indicator sit
   await page.goto('/#/'+route);const main=page.locator('.view-'+route.split('/')[0]+'.active .workspace-main');await expect(main).toBeVisible();
   await expect.poll(async()=>{const r=await main.boundingBox();return r&&{x:r.x,width:r.width};}).toEqual({x:76,width:1844});
  }
- const card=page.locator('#jobOrders .order-child').first();await page.goto('/#/job/'+fixtureIDs.job+'/tasks');await expect(card).toBeVisible();
+ const card=page.locator('#jobOrders .related-records');await page.goto('/#/job/'+fixtureIDs.job+'/tasks');await expect(card).toBeVisible();
  expect(await card.evaluate(el=>[...['Top','Right','Bottom','Left']].map(side=>getComputedStyle(el)['border'+side+'Width']))).toEqual(['1px','1px','1px','1px']);
  await capture(page,info,'wide-request',errors);
 });

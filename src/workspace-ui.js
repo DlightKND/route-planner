@@ -85,9 +85,10 @@ export function installWorkspaceStructure(root=document){
  frameMapWorkspace(root);
  const job=root.querySelector('.view-job'),trip=root.querySelector('.view-trip');
  if(job){
-  const estimate=root.getElementById('jobEstimatePane'),base=element(root,'section','card request-estimate-base'),heading=element(root,'header','workspace-section-head');
+  const estimate=root.getElementById('jobEstimatePane'),base=element(root,'details','request-estimate-base workflow-finance-tool'),heading=element(root,'header','workspace-section-head');
   heading.innerHTML='<h2>План/факт заявки</h2>';
-  base.innerHTML='<h3>Базовая смета</h3>';const lines=element(root,'div','request-estimate-lines');for(const card of [...estimate.querySelectorAll(':scope>.card')])lines.append(card);base.append(lines,root.getElementById('jobHeadEcon'));
+  base.id='jobBaseEstimate';base.open=true;
+  base.innerHTML='<summary>Смета заявки</summary>';const lines=element(root,'div','request-estimate-lines');for(const card of [...estimate.querySelectorAll(':scope>.card')])lines.append(card);base.append(lines,root.getElementById('jobHeadEcon'));
   const cost=element(root,'section','workflow-request-cost');cost.id='jobTaskCosts';
   estimate.append(heading,cost,base);
   const context=element(root,'section','card request-context');context.id='requestContext';context.hidden=true;
@@ -117,7 +118,15 @@ export function installWorkspaceStructure(root=document){
   const details=element(root,'div','workflow-trip-details');details.append(description,root.getElementById('tripActivitySection'));
   overview.prepend(grid);grid.append(route,state,details);
   const toolbar=trip.querySelector('.trip-toolbar');
-  root.getElementById('tpEconomyPane').prepend(root.getElementById('tpReviewSummary'));
+  const economy=root.getElementById('tpEconomyPane'),legacy=element(root,'details','workflow-finance-tool');
+  legacy.id='tpContractEconomy';legacy.open=true;legacy.innerHTML='<summary>Договорная смета и ручные суммы</summary>';
+  const oldEconomy=root.getElementById('tpEconBody').closest('.card'),oldSummary=root.getElementById('tripHeadEcon');
+  economy.append(legacy);legacy.append(oldSummary,oldEconomy);
+  const allocation=element(root,'details','workflow-finance-tool');allocation.id='tpCostReview';
+  allocation.innerHTML='<summary>Распределение затрат по заданиям</summary>';
+  allocation.append(root.getElementById('tpTripAllocation'));economy.append(allocation);
+  economy.prepend(root.getElementById('tpReviewSummary'));
+  root.getElementById('tpPlanPane').prepend(root.getElementById('tpLinkedOrders'));
   root.getElementById('tpPlanPane').prepend(root.getElementById('tripOrderParent'));
   frameRecordActions(trip);
   framePane(trip,[trip.querySelector('.crumbs'),trip.querySelector('.trip-head'),toolbar]);
@@ -327,7 +336,10 @@ export function frameOrderWorkspace({record,editable,people},root=document){
   const emptyGrid=editor.querySelector('.order-grid');if(emptyGrid&&!emptyGrid.children.length)emptyGrid.remove();
   positionOrderResult(root);
  }
- const travel=root.getElementById('orderPane-travel');if(travel){const intro=element(doc,'header','order-travel-head');intro.innerHTML='<div><h2>Выезды и распределение</h2><p class="hint">Маршрут, команда и подтверждённые доли затрат этого задания.</p></div>';const actions=root.getElementById('orderTravel')?.querySelector('.order-line-adds');if(actions)intro.append(actions);travel.prepend(intro);}
+ const travel=root.getElementById('orderTravel');if(travel){
+  const actions=travel.querySelector('.order-line-adds'),target=travel.querySelector('.related-header-actions');
+  if(actions&&target)target.append(actions);
+ }
  const execution=root.getElementById('orderExecution'),results=root.getElementById('orderResults');if(execution&&results){const state=element(doc,'section','result-saved-state');state.id='orderResultSavedState';execution.firstElementChild?.replaceWith(state);const title=element(doc,'h3','result-section-title');title.textContent='Выполненные позиции';results.before(title);const fields=element(doc,'div','result-final-fields'),date=root.getElementById('orderResultDate')?.closest('label'),note=root.getElementById('orderResultNote')?.closest('label');if(date)fields.append(date);if(note)fields.append(note);results.after(fields);}
  const savebar=editor.querySelector('.order-savebar');if(savebar){const state=root.getElementById('orderSaveState'),save=root.getElementById('orderSave');if(state)inner.querySelector('.entity-head-meta').append(state);if(save)inner.querySelector('.entity-header-actions').append(save);savebar.remove();}
 }

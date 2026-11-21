@@ -49,10 +49,23 @@ it('keeps the request filter when opening a task from its filtered board',async(
  await doc.querySelector('[data-order-open]').onclick({stopPropagation(){}});
  expect(doc.getElementById('orderBack').getAttribute('aria-label')).toBe('Заявка → задания');
 });
-it('shows task children immediately inside a request while keeping kanban children collapsed',async()=>{
+it('filters the request task table and keeps work details attached to the matching row',async()=>{
  doc.body.insertAdjacentHTML('beforeend','<section id="jobOrders"></section><div id="jobLinkedTrips"></div><div id="jobTaskCosts"></div>');
- await ui.requestPanel(job);expect(doc.querySelector('#jobOrders details').open).toBe(true);
- expect(doc.querySelector('#jobOrders [data-order-new]').textContent).toContain('Создать задание');
+ order.service_order_items[0].planned_labor_hours=3;
+ await ui.requestPanel(job);
+ const root=doc.getElementById('jobOrders'),row=root.querySelector('[data-related-row]'),detail=row.nextElementSibling;
+ expect(root.querySelector('table').getAttribute('aria-label')).toBe('Задания');
+ expect(root.querySelector('[data-order-new]').textContent).toBe('Создать задание');
+ expect(detail.hidden).toBe(true);
+ row.querySelector('[data-related-toggle]').click();
+ expect(detail.hidden).toBe(false);
+ expect(detail.textContent).toContain('Насосы');
+ const search=root.querySelector('[data-related-search]');
+ search.value='Другая команда';search.oninput();
+ expect(row.hidden).toBe(true);expect(detail.hidden).toBe(true);
+ search.value='Анна';search.oninput();
+ expect(row.hidden).toBe(false);expect(detail.hidden).toBe(false);
+ expect(root.querySelector('tfoot').textContent).toContain('Итого по фильтру · 1');
 });
 it('does not open a task or load its data when the trip leave guard is declined',async()=>{
  await ui.open('order1');ctx.beforeOpen=vi.fn(()=>false);ctx.ensureRefs=vi.fn();

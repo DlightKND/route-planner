@@ -1,6 +1,7 @@
 import {calculateRoadAccounting} from './journal-road-accounting.js';
 import {saveRoadModel} from './journal-road.js';
 import {distanceText} from './core/journal-display.js';
+import {journalIcon} from './journal-icons.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const format=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2});
@@ -117,9 +118,9 @@ async function readFinance(db,scope,id){
 }
 const decimal=value=>/^\d{1,12}(?:[,.]\d{1,2})?$/.test(value.trim())?Number(value.trim().replace(',','.')):null;
 
-export function mountEntityFinance(root,{db,scope,id,current,onTrip,onOrder,onReport}){
+export function mountEntityFinance(root,{db,scope,id,current,onTrip,onGPS,onOrder,onReport,onReady,onAllocate}){
  let model,request=0,view=null,saving=false,searchText='',attentionOnly=false;
- const disclosures=new Set();
+ const disclosures=new Set(['labor','mileage']);
  root.hidden=true;
  async function load(){
   if(root.querySelector('[data-finance-editor-row]'))return;
@@ -127,7 +128,9 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onOrder,onRe
   try{
    const result=await readFinance(db(),scope,id);
    if(!current()||version!==request||!result)return;
-   model=result;root.hidden=false;render();
+   const initial=!model;
+   model=result;root.hidden=false;root.dataset.financeReady='';render();
+   if(initial)onReady?.();
   }catch(error){
    if(!current()||version!==request)return;
    root.hidden=false;root.innerHTML='<p class="err" role="alert">'+esc(error.message||'Экономика недоступна')+'</p><button class="btn ghost" type="button">Обновить расчёт</button>';
@@ -150,8 +153,10 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onOrder,onRe
    return true;
   }finally{saving=false;}
  }
- const table=(rows,name)=>`<div class="scoped-finance-scroll"><table aria-label="${name}"><thead><tr><th>Показатель</th><th>План</th><th>Факт</th><th>Δ</th></tr></thead><tbody>
-   ${rows.map(([label,plan,fact])=>`<tr><th scope="row">${label}</th><td>${esc(cash(plan))}</td><td>${esc(cash(fact))}</td><td>${difference(plan,fact)}</td></tr>`).join('')}</tbody></table></div>`;
+ const moneyRow=([label,plan,fact])=>`<tr><th scope="row">${label}</th><td>${esc(cash(plan))}</td><td>${esc(cash(fact))}</td><td>${difference(plan,fact)}</td></tr>`;
+ const table=(rows,name)=>`<div class="scoped-finance-scroll"><table aria-label="${name}"><thead><tr><th scope="col">Показатель</th><th scope="col">План</th><th scope="col">Факт</th><th scope="col">Δ</th></tr></thead>
+   <tbody>${rows.filter(row=>row[0]!=='Результат').map(moneyRow).join('')}</tbody>
+   ${rows.some(row=>row[0]==='Результат')?`<tfoot>${moneyRow(rows.find(row=>row[0]==='Результат'))}</tfoot>`:''}</table></div>`;
  const disclosure=(key,title,html)=>`<details data-finance-section="${key}" ${disclosures.has(key)?'open':''}><summary>${title}</summary>${html}</details>`;
  function render(){
   view??=root.ownerDocument.defaultView.matchMedia('(max-width:760px)').matches?'tables':'charts';
@@ -194,6 +199,7 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onOrder,onRe
       ${override?`<small class="hint payment-term-exception">Вручную · ${esc(override.reason)}</small>`:''}</div>
       ${model.editable?`<button type="button" class="btn" data-finance-total="${key}" aria-label="Изменить итог · ${title} · ${heading}">Изменить</button>`:''}</div>`;
     })).join(''))}
+    ${onAllocate&&data.mileage.length?allocationActions(data.mileage):''}
    </section></div>`;
   root.querySelectorAll('details[data-finance-section]').forEach(node=>{node.ontoggle=()=>node.open?disclosures.add(node.dataset.financeSection):disclosures.delete(node.dataset.financeSection);});
   root.querySelectorAll('[data-finance-mode]').forEach(button=>{button.onclick=()=>{view=button.dataset.financeMode;
@@ -201,23 +207,34 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onOrder,onRe
    root.querySelectorAll('[data-finance-view]').forEach(el=>{el.hidden=el.dataset.financeView!==view;});
   };});
   root.querySelectorAll('[data-finance-trip]').forEach(button=>{button.onclick=()=>onTrip?.(data.mileage[Number(button.dataset.financeTrip)]);});
+  root.querySelectorAll('[data-finance-gps]').forEach(button=>{button.onclick=()=>onGPS?.(button.dataset.financeGps);});
+  root.querySelectorAll('[data-finance-mileage-toggle]').forEach(button=>{button.onclick=()=>{
+   const key=button.getAttribute('aria-controls'),detail=root.ownerDocument.getElementById(key);
+   const open=detail.hidden;detail.hidden=!open;button.setAttribute('aria-expanded',String(open));
+   if(open)disclosures.add(key);else disclosures.delete(key);
+  };});
   root.querySelectorAll('[data-finance-source]').forEach(button=>{button.onclick=()=>onTrip?.({id:button.dataset.financeSource});});
   root.querySelectorAll('[data-finance-order]').forEach(button=>{button.onclick=()=>onOrder?.(button.dataset.financeOrder);});
   root.querySelectorAll('[data-finance-report]').forEach(button=>{button.onclick=()=>onReport?.(button.dataset.financeReport);});
+  root.querySelectorAll('[data-finance-allocate]').forEach(button=>{button.onclick=()=>onAllocate?.(data.mileage[Number(button.dataset.financeAllocate)]);});
   root.querySelectorAll('[data-finance-rate]').forEach(button=>{button.onclick=()=>editRates(data.works[Number(button.dataset.financeRate)],button);});
   root.querySelectorAll('[data-finance-road-rate]').forEach(button=>{button.onclick=()=>editRoadRate(sections[Number(button.dataset.financeRoadRate)],button);});
   root.querySelectorAll('[data-finance-total]').forEach(button=>{button.onclick=()=>editTotal(button.dataset.financeTotal,data,button);});
   wireWorkTable();
  }
  const units=value=>value==null?'—':format.format(value);
+ function allocationActions(trips){
+  const button=(index,label)=>`<button type="button" class="btn" data-finance-allocate="${index}">${esc(label)}</button>`;
+  return trips.length===1?`<div class="scoped-finance-allocation">${button(0,'Распределить расходы')}</div>`:
+   disclosure('allocation','Распределить расходы',`<div class="scoped-finance-allocation">${trips.map((trip,i)=>button(i,trip.title||trip.date||'Выезд')).join('')}</div>`);
+ }
  function tripContributions(works,trips){
+  const byTrip=trips.map(trip=>knownSum(works.flatMap(work=>(work.sources||[]).filter(source=>source.trip===trip.id).map(source=>amount(source.hours)))));
   return `<section class="scoped-finance-work"><header><h3>Вклад по выездам</h3></header>
    <div class="scoped-finance-scroll"><table aria-label="Вклад по выездам"><thead><tr><th>Выезд</th><th>Принято, чел·ч</th><th>Результат</th></tr></thead>
-    <tbody>${trips.map(trip=>{
-     const accepted=knownSum(works.flatMap(work=>(work.sources||[]).filter(source=>source.trip===trip.id).map(source=>amount(source.hours))));
-     return `<tr><th scope="row">${esc(trip.title||trip.date||'Выезд')}</th><td>${units(accepted)}</td>
-      <td><button class="btn ghost" type="button" data-finance-report="${esc(trip.id)}">${accepted==null?'Открыть работы':'Смотреть результат'}</button></td></tr>`;
-    }).join('')}</tbody></table></div></section>`;
+    <tbody>${trips.map((trip,i)=>`<tr><th scope="row"><button type="button" class="btn ghost" data-finance-trip="${i}">${esc(trip.title||trip.date||'Выезд')}</button></th><td>${units(byTrip[i])}</td>
+     <td><button class="btn ghost" type="button" data-finance-report="${esc(trip.id)}">${byTrip[i]==null?'Открыть работы':'Смотреть результат'}</button></td></tr>`).join('')}</tbody>
+    <tfoot><tr><th scope="row">Итого</th><td>${units(knownSum(byTrip))}</td><td></td></tr></tfoot></table></div></section>`;
  }
  function mileageTable(trips){
   const trip=scope==='trip'?trips[0]:null;
@@ -226,12 +243,23 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onOrder,onRe
   const bySection=sections.length>0,title=bySection?'Пробег по участкам':'Пробег по выездам';
   const rows=bySection?sections.map(section=>`<tr><th scope="row">${esc(section.title)}</th>
    <td>${section.mode==='plan'?units(section.km):'—'}</td><td>${section.mode==='fact'?units(section.km):'—'}</td></tr>`):
-   trips.map((row,index)=>`<tr><th scope="row"><button type="button" class="btn ghost" data-finance-trip="${index}">${esc(row.title||row.date||'Выезд')}</button></th>
-    <td>${units(row.plan_km)}</td><td>${units(row.actual)}</td></tr>`);
+   trips.map((row,index)=>{
+    const title=esc(row.title||row.date||'Выезд'),key='finance-mileage-'+scope+'-'+id+'-'+row.id,expanded=disclosures.has(key);
+    return `<tr><th scope="row"><button type="button" class="btn ghost" data-finance-trip="${index}">${title}</button></th>
+     <td>${units(row.plan_km)}</td><td>${units(row.actual)}</td><td><button type="button" class="btn ghost" data-finance-mileage-toggle
+     aria-controls="${esc(key)}" aria-expanded="${expanded}" aria-label="Пробег выезда · ${title}">${journalIcon('chevron')}</button></td></tr>
+     <tr class="scoped-finance-work-detail" id="${esc(key)}" ${expanded?'':'hidden'}><td colspan="4">
+     <header class="scoped-finance-work-detail-head"><h4>Пробег выезда</h4>
+     ${onGPS?`<button type="button" class="btn ghost" data-finance-gps="${esc(row.id)}">Журнал GPS</button>`:''}</header>
+     <table aria-label="Детали пробега"><thead><tr><th scope="col">Показатель</th><th scope="col">План, км</th><th scope="col">Факт, км</th></tr></thead>
+      <tbody><tr><th scope="row">Пробег всего</th><td>${units(row.plan_km)}</td><td>${units(row.fact_km??(row.whole||row.plan_km!=null?row.actual:null))}</td></tr>
+      ${row.whole?'':`<tr><th scope="row">${scope==='job'?'Пробег по заявке':'Пробег по заданию'}</th><td>${units(row.plan_km)}</td><td>${units(row.actual)}</td></tr>`}</tbody>
+     </table></td></tr>`;
+   });
   return disclosure('mileage',title,`<div class="scoped-finance-scroll"><table aria-label="${title}">
-   <thead><tr><th>${bySection?'Участок':'Выезд'}</th><th>План, км</th><th>Факт, км</th></tr></thead>
+   <thead><tr><th scope="col">${bySection?'Участок':'Выезд'}</th><th scope="col">План, км</th><th scope="col">Факт, км</th>${bySection?'':'<th scope="col"><span class="sr-only">Детали</span></th>'}</tr></thead>
    <tbody>${rows.join('')}</tbody><tfoot><tr><th scope="row">${trip?'Всего по выезду':'Итого'}</th>
-    <td>${units(knownSum(trips.map(row=>amount(row.plan_km))))}</td><td>${units(knownSum(trips.map(row=>amount(row.actual))))}</td></tr></tfoot>
+    <td>${units(knownSum(trips.map(row=>amount(row.plan_km))))}</td><td>${units(knownSum(trips.map(row=>amount(row.actual))))}</td>${bySection?'':'<td></td>'}</tr></tfoot>
    </table></div>`);
  }
  function workTable(rows){
@@ -245,8 +273,8 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onOrder,onRe
   const planHours=row=>row.plan_in_scope===false?null:amount(row.plan_hours);
   const accepted=row=>`${units(row.fact_qty)} из ${units(row.snapshot_qty)} ${esc(row.unit||'')}`;
   const flagged=[...groups.values()].filter(works=>works.some(attention)).length;
-  return `<section class="scoped-finance-work">
-   <header><h3>Трудозатраты по работам</h3><label><span class="sr-only">Найти работу</span><input type="search" data-finance-work-search value="${esc(searchText)}" placeholder="Работа, задание или заявка"></label>
+  return `<details class="scoped-finance-work" data-finance-section="labor" ${disclosures.has('labor')?'open':''}><summary>Трудозатраты по работам</summary>
+   <header><label><span class="sr-only">Найти работу</span><input type="search" data-finance-work-search value="${esc(searchText)}" placeholder="Работа, задание или заявка"></label>
     <button type="button" class="btn" aria-pressed="${attentionOnly}" data-finance-work-alert>Внимание <span class="scoped-finance-work-cue">${flagged}</span></button></header>
    <p class="hint" data-finance-work-count role="status"></p>
    <div class="scoped-finance-scroll"><table aria-label="Трудозатраты по работам">
@@ -266,9 +294,12 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onOrder,onRe
        <table aria-label="Работы задания №${esc(row.number)}"><thead><tr><th>Работа</th><th>План, н-ч</th><th>Факт, чел·ч</th><th>Принято</th></tr></thead>
         <tbody>${works.map(work=>`<tr><th scope="row">${esc(work.title)}</th><td>${units(planHours(work))}</td>
          <td>${units(work.fact_hours)}</td><td>${accepted(work)}</td></tr>`).join('')}</tbody></table>`:
-      `<h4>Источники результата</h4>${row.sources?.length?row.sources.map(source=>
-       `<p class="hint">${esc(String(source.at||'').slice(0,10))} · ${units(source.hours)} чел·ч · ${units(source.qty)} ${esc(row.unit||'')}
-        <button type="button" class="btn ghost" data-finance-source="${esc(source.trip)}">Открыть выезд</button></p>`).join(''):
+      `<h4>Источники результата</h4>${row.sources?.length?
+       `<table aria-label="Источники результата"><thead><tr><th scope="col">Выезд</th><th scope="col">Факт, чел·ч</th><th scope="col">Принято</th></tr></thead>
+       <tbody>${row.sources.map(source=>
+       `<tr><th scope="row"><button type="button" class="btn ghost" data-finance-source="${esc(source.trip)}">Открыть выезд</button><small class="hint">${esc(String(source.at||'').slice(0,10))}</small></th>
+        <td>${units(source.hours)}</td><td>${units(source.qty)} ${esc(row.unit||'')}</td></tr>`).join('')}</tbody>
+       <tfoot><tr><th scope="row">Итого</th><td>${units(row.fact_hours)}</td><td></td></tr></tfoot></table>`:
        '<p class="hint">Принятых результатов пока нет.</p>'}`;
      return `<tr data-finance-work-row data-attention="${works.some(attention)}" data-search="${esc(search)}" data-plan="${plan??''}" data-fact="${fact??''}">
       <th scope="row">${summary}<small class="hint">${number}${grouped?' · Выполнено '+works.filter(complete).length+' из '+works.length:''}</small></th>
@@ -279,12 +310,12 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onOrder,onRe
       <tr class="scoped-finance-work-detail" id="${detailId}" ${open?'':'hidden'}><td colspan="${grouped?4:6}">${details}</td></tr>`;
     }).join('')}
     </tbody><tfoot><tr><th scope="row" data-finance-work-total>Итого</th><td data-finance-work-plan></td><td data-finance-work-fact></td><td colspan="${grouped?1:3}"></td></tr></tfoot>
-   </table></div><p class="hint" data-finance-work-empty hidden>Работ по этому фильтру нет.</p></section>`;
+   </table></div><p class="hint" data-finance-work-empty hidden>Работ по этому фильтру нет.</p></details>`;
  }
  function wireWorkTable(){
   const input=root.querySelector('[data-finance-work-search]');if(!input)return;
   const alert=root.querySelector('[data-finance-work-alert]'),rows=[...root.querySelectorAll('[data-finance-work-row]')];
-  const count=root.querySelector('[data-finance-work-count]'),footer=input.closest('.scoped-finance-work').querySelector('tfoot');
+  const count=root.querySelector('[data-finance-work-count]'),footer=input.closest('.scoped-finance-work').querySelector('.scoped-finance-scroll>table>tfoot');
   const table=footer.closest('table');
   table.classList.toggle('scoped-finance-by-work',scope==='order');
   const total=(shown,key)=>knownSum(shown.map(row=>amount(row.dataset[key])));

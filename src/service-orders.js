@@ -6,6 +6,7 @@ import {resolveEntityDraft} from './entity-draft-resolution.js';
 import {planningDate,planningPeriod,planningWarnings} from './core/planning-dates.js';
 import { infoHint } from './info-hints.js';
 import {frameOrderWorkspace,positionOrderResult} from './workspace-ui.js';
+import {relatedTable,relatedTripRows,relatedWorkPreview,wireRelatedTable} from './workflow-related-table.js';
 // Service assignments are independent from requests and travel lifecycle.
 import { mountEntityActivity } from './entity-activity.js';
 import { mountEntityResponsibility } from './entity-responsibility.js';
@@ -71,7 +72,7 @@ export function createServiceOrders(ctx){
  const jobName=id=>allJobs.find(j=>j.id===id)?.clients?.name||current?.jobs?.clients?.name||'Заявка';
  const fail=e=>ctx.notify(e.message||String(e),'err');
  async function rpc(fn,args){const {data,error}=await api().rpc(fn,args);if(error)throw error;return data;}
- async function load(){const {data,error}=await api().from('service_orders').select('id,number,title,status,closed_with_remainder_at,work_mode,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,revision,created_by,legacy_trip_id,job_id,seed_request_id,jobs!service_orders_job_id_fkey(status,clients(name)),service_order_items(*),trip_service_orders(trip_id,trips(id,date_from,date_to,status,vehicle_label,deleted_at))').order('created_at',{ascending:false});if(error)throw error;orders=data||[];loaded=true;return orders;}
+ async function load(){const {data,error}=await api().from('service_orders').select('id,number,title,status,closed_with_remainder_at,work_mode,date_from,date_to,lead_engineer,engineer_ids,owner_id,curator_id,revision,created_by,legacy_trip_id,job_id,seed_request_id,jobs!service_orders_job_id_fkey(status,clients(name),due_date),service_order_items(*),trip_service_orders(trip_id,trips(id,date_from,date_to,status,vehicle_label,engineer_ids,deleted_at))').order('created_at',{ascending:false});if(error)throw error;orders=data||[];loaded=true;return orders;}
  async function loadStock(){if(stockLoaded)return;if(stockError)throw Error(stockError);const {data,error}=await api().from('stock_catalog').select('id,name,sku,unit,price,cost,active,current_since').order('name');if(error){stockError=error.message;throw error;}stockCatalog=data||[];stockLoaded=true;}
  async function loadWorkCatalog(){if(workCatalog.length)return;const works=await api().from('work_catalog').select('id,name,norm_hours,warranty_eligible,applicable_kinds').order('name');if(works.error)throw works.error;workCatalog=works.data||[];if(!manager())return;const settings=await api().from('settings').select('tariff_profiles').eq('id',true).single();if(settings.error)throw settings.error;tariffProfiles=settings.data?.tariff_profiles||[];}
  function belongs(o,jid){return o.job_id===jid;}
@@ -103,6 +104,81 @@ export function createServiceOrders(ctx){
  function childHtml(jobId,expanded=false){const rows=orders.filter(o=>belongs(o,jobId));return `<details class="order-children" ${expanded?'open':''}><summary>Задания · ${rows.length}</summary>${rows.map(o=>`<button type="button" class="order-child" data-order-open="${o.id}" data-order-origin="${jobId}"><span class="workspace-record-id">ЗАДАНИЕ №${o.number}</span><strong>${esc(o.title)}</strong><span class="order-child-period">${esc(planningPeriod(o.date_from,o.date_to))}</span><span>${esc(ORDER_STATUS[o.status])} · выездов ${visibleTripCount(o)}${historicalClosedDraft(o)?' · старая заявка закрыта, факт не перенесён':''}</span><span class="workspace-task-footer"><span>${esc((o.engineer_ids||[]).map(name).join(', ')||'Команда не назначена')}</span><b>Открыть →</b></span></button>`).join('')}${manager()?`<button class="btn sm" type="button" data-order-new="${jobId}">+ Создать задание</button>`:''}<button type="button" class="btn sm ghost" data-order-scope="${jobId}">Канбан заданий заявки</button></details>`;}
  function wireChildren(root){root.querySelectorAll('[data-order-open]').forEach(b=>b.onclick=e=>{e.stopPropagation();open(b.dataset.orderOpen,b.dataset.orderOrigin);});root.querySelectorAll('[data-order-new]').forEach(b=>b.onclick=e=>{e.stopPropagation();open(null,b.dataset.orderNew);});root.querySelectorAll('[data-order-scope]').forEach(b=>b.onclick=e=>{e.stopPropagation();scope=b.dataset.orderScope;ctx.showBoard();});root.querySelectorAll('.order-children').forEach(d=>d.addEventListener('dragstart',e=>{e.preventDefault();e.stopPropagation();}));}
  async function attachJobs(root){try{await load();root.querySelectorAll('.kcard[data-kid]').forEach(card=>{card.querySelector('.order-children')?.remove();card.insertAdjacentHTML('beforeend',childHtml(card.dataset.kid));});wireChildren(root);}catch(e){ctx.notify('Не удалось загрузить задания: '+e.message,'err');}}
+ const taskButton=(task,origin,label=task.title,action='data-order-open')=>`<button type="button" class="btn ghost related-record-link" ${action}="${esc(task.id)}" data-order-origin="${esc(origin)}">${esc(label)}</button>`;
+ function taskTable(tasks,origin,trip=null){
+  const actions=trip?'':(manager()? `<button class="btn amber" type="button" data-order-new="${esc(origin)}">Создать задание</button>`:'')+
+    `<button type="button" data-order-scope="${esc(origin)}" hidden>Канбан заданий заявки</button>`;
+  return relatedTable({idPrefix:trip?'trip-linked-task':'request-linked-task',title:trip?'Задания выезда':'Задания',searchLabel:'Найти задание',placeholder:'Номер, название или исполнитель',
+   columns:['Задание','Исполнители','Сроки','Состояние'],actions,empty:'Заданий пока нет.',rows:tasks.map(task=>{
+    const work=(task.service_order_items||[]).filter(item=>!isFinanceVoided(item)),crew=(task.engineer_ids||[]).map(name);
+    const works=work.filter(item=>item.kind!=='material').length;
+    return {id:task.id,label:'задание №'+task.number,search:[task.number,task.title,...crew].join(' '),works,
+     cells:[`${taskButton(task,origin)}<small>№${esc(task.number)} · работ ${works}</small>`,
+      esc(crew.join(', ')||'Команда не назначена'),`<span class="order-child-period">${esc(planningPeriod(task.date_from,task.date_to))}</span>${task.jobs?.due_date?`<small>SLA ${esc(planningDate(task.jobs.due_date))}</small>`:''}`,
+      `<span class="related-status">${esc(ORDER_STATUS[task.status]||task.status)}</span>${historicalClosedDraft(task)?`<small aria-label="${esc(historicalClosedNote)}">${esc(historicalClosedNote)}</small>`:''}`],
+     actions:reportAllowed(task)?`<button type="button" class="btn ghost" data-related-order-result="${esc(task.id)}">Внести выполненные работы</button>`:'',
+     detail:`<div data-related-work-details="${esc(task.id)}">${relatedWorkPreview(work,{tripScoped:!!trip,open:taskButton(task,origin,'Открыть работы','data-related-order-works')})}</div>`};
+   })});
+ }
+ function renderTaskTable(root,tasks,origin='',trip=null){
+  const search=root.querySelector('[data-related-search]')?.value||'';
+  root.innerHTML=taskTable(tasks,origin,trip);root.querySelector('[data-related-search]').value=search;
+  wireRelatedTable(root);wireChildren(root);
+  const bindWorks=node=>node.querySelector('[data-related-order-works]').onclick=()=>{
+   const id=node.dataset.relatedWorkDetails;
+   return open(id,origin,{pane:'scope',trip});
+  };
+  root.querySelectorAll('[data-related-work-details]').forEach(bindWorks);
+  root.querySelectorAll('[data-related-order-result]').forEach(button=>button.onclick=()=>openResult(button.dataset.relatedOrderResult,origin,trip));
+  root.addEventListener('click',async event=>{
+   const control=event.target.closest('[data-related-toggle]');
+   if(!control||control.getAttribute('aria-expanded')!=='true')return;
+   const detail=control.closest('tr').nextElementSibling.querySelector('[data-related-work-details]');
+   const task=tasks.find(row=>row.id===detail?.dataset.relatedWorkDetails);
+   if(!task||task.work_mode!=='onsite'||detail.dataset.loaded)return;
+   detail.dataset.loaded='pending';
+   try{
+    const result=await rpc('service_order_trip_results',{p_order:task.id});
+    if(!detail.isConnected)return;
+    const accepted=trip?(result?.trips||[]).find(row=>row.id===trip)?.versions?.at(-1)?.result?.items:
+     Object.entries(result?.accepted_hours||{}).map(([id,hours])=>({id,hours}));
+    const items=(task.service_order_items||[]).filter(item=>!isFinanceVoided(item));
+    detail.innerHTML=relatedWorkPreview(items,{open:taskButton(task,origin,'Открыть работы','data-related-order-works'),accepted:accepted||undefined,tripScoped:!!trip});
+    detail.dataset.loaded='yes';bindWorks(detail);
+   }catch{delete detail.dataset.loaded;}
+  },{signal:relatedListener(root)});
+ }
+ const relatedListeners=new WeakMap();
+ function relatedListener(root){
+  relatedListeners.get(root)?.abort();
+  const controller=new root.ownerDocument.defaultView.AbortController();relatedListeners.set(root,controller);
+  return controller.signal;
+ }
+ function travelTable(trips,tasks,{origin='',order=null,visits=new Map()}={}){
+  const linked=id=>tasks.filter(task=>(task.trip_service_orders||[]).some(link=>(link.trip_id||link.trips?.id)===id));
+  const canPlan=task=>task.work_mode==='onsite'&&!['completed','cancelled','review'].includes(task.status);
+  const actions=order?'':manager()&&tasks.some(canPlan)?'<button type="button" class="btn amber" data-related-plan>Запланировать выезд</button>':'';
+  const rows=relatedTripRows(trips,{people:name,status:ctx.tripStatus,visits,open:(trip,label)=>`<button type="button" class="btn ghost related-record-link" data-order-trip="${esc(trip.id)}">${esc(label)}</button>`,
+   openGPS:trip=>ctx.openJournalTrip?`<button type="button" class="btn ghost related-record-link" data-related-gps="${esc(trip.id)}">Журнал GPS</button>`:'—',
+   linkedTasks:id=>linked(id).map(task=>`<div class="related-task-reference">${taskButton(task,origin)}<span class="related-status">${esc(ORDER_STATUS[task.status]||task.status)}</span></div>`).join(''),
+   report:(trip,visit)=>['done','finished'].includes(trip.status)&&linked(trip.id).some(reportAllowed)||visit?.versions?.length?
+    `<button class="btn ghost" type="button" data-related-trip-result="${esc(trip.id)}" data-related-report-order="${esc(visit?.versions?.length?visit.orderId:'')}">${visit?.versions?.length?'Посмотреть результат':'Внести выполненные работы'}</button>`:''});
+  return relatedTable({idPrefix:order?'task-linked-trip':'request-linked-trip',title:'Выезды',searchLabel:'Найти выезд',placeholder:'Номер, техника или инженер',
+   columns:['Выезд','Техника / команда','Часы по посещениям','Состояние'],rows,actions,review:true,totalHours:true,
+   empty:order?.work_mode&&order.work_mode!=='onsite'?'Для этого задания поездка не требуется.':'Связанных выездов пока нет.'});
+ }
+ function wireTravel(root,tasks,{origin='',order=null}={}){
+  wireRelatedTable(root);
+  wireChildren(root);
+  root.querySelectorAll('[data-order-trip]').forEach(button=>button.onclick=async()=>{if(!order||await leave())ctx.openTrip(button.dataset.orderTrip);});
+  root.querySelectorAll('[data-related-gps]').forEach(button=>button.onclick=async()=>{if(!order||await leave())ctx.openJournalTrip?.(button.dataset.relatedGps);});
+  root.querySelectorAll('[data-related-trip-result]').forEach(button=>button.onclick=()=>{
+   const target=order?.id||button.dataset.relatedReportOrder,trip=button.dataset.relatedTripResult;
+   return target?open(target,origin,{pane:'scope',trip}):ctx.recordTripResult?.(trip,origin);
+  });
+  const plan=root.querySelector('[data-related-plan]');
+  if(plan)plan.onclick=()=>ctx.openTrip(null,{plannedOrderIds:tasks.filter(task=>task.work_mode==='onsite'&&!['completed','cancelled','review'].includes(task.status)).map(task=>task.id)});
+ }
  let requestPanelGeneration=0;
  async function requestPanel(id){
   const generation=++requestPanelGeneration,box=$('jobOrders'),tripsBox=$('jobLinkedTrips'),costBox=$('jobTaskCosts');
@@ -117,9 +193,7 @@ export function createServiceOrders(ctx){
   try{
    tasks=(await load()).filter(o=>belongs(o,id));
    if(!stillCurrent())return;
-   box.innerHTML=childHtml(id,true);
-   if(!tasks.length)box.querySelector('summary').insertAdjacentHTML('afterend','<p class="hint">Заданий пока нет.</p>');
-   wireChildren(box);box.querySelectorAll('[data-order-scope]').forEach(b=>b.hidden=true);
+   renderTaskTable(box,tasks,id);
   }catch(e){
    if(stillCurrent()){box.textContent='Не удалось загрузить задания: '+e.message;tripsBox.textContent='Не удалось загрузить связанные выезды.';}
    return;
@@ -132,13 +206,24 @@ export function createServiceOrders(ctx){
   const canonical=tasks.flatMap(task=>(task.trip_service_orders||[]).map(link=>link.trips));
   const renderTrips=async()=>{
    try{
-    const {data,error}=await api().from('trip_jobs').select('trips(id,date_from,date_to,status,vehicle_label,deleted_at)').eq('job_id',id);
+    const {data,error}=await api().from('trip_jobs').select('trips(id,date_from,date_to,status,vehicle_label,engineer_ids,deleted_at)').eq('job_id',id);
     if(error)throw error;
     if(!stillCurrent())return;
     const distinct=new Map([...canonical,...(data||[]).map(link=>link.trips)].filter(trip=>trip?.id&&!trip.deleted_at).map(trip=>[trip.id,trip]));
     const trips=[...distinct.values()].sort((a,b)=>(b.date_from||'').localeCompare(a.date_from||''));
-    tripsBox.innerHTML=trips.length?`<table class="workflow-related-table"><thead><tr><th scope="col">Выезд</th><th scope="col">Период</th><th scope="col">Статус</th></tr></thead><tbody>${trips.map(trip=>`<tr><td><button type="button" class="btn ghost" data-workflow-trip="${esc(trip.id)}">${esc(trip.vehicle_label||'Открыть выезд')}</button></td><td>${esc(planningPeriod(trip.date_from,trip.date_to))}</td><td>${esc(ctx.tripStatus(trip.status))}</td></tr>`).join('')}</tbody></table>`:'<p class="hint">Связанных выездов пока нет.</p>';
-    tripsBox.querySelectorAll('[data-workflow-trip]').forEach(button=>button.onclick=()=>ctx.openTrip(button.dataset.workflowTrip));
+    const visitRows=trips.length?await Promise.allSettled(tasks.filter(task=>task.trip_service_orders?.length)
+     .map(async task=>({orderId:task.id,visits:(await rpc('service_order_trip_results',{p_order:task.id}))?.trips||[]}))):[];
+    if(!stillCurrent())return;
+    const visits=new Map();
+    for(const result of visitRows)if(result.status==='fulfilled')for(const visit of result.value.visits){
+     const previous=visits.get(visit.id);
+     const presence=visit.presence?.confirmed?{confirmed:true,base:visit.presence.base}:previous?.presence;
+     if(!previous||visit.versions?.length&&!previous.versions?.length)
+      visits.set(visit.id,{...visit,orderId:result.value.orderId,presence});
+     else previous.presence=presence;
+    }
+    tripsBox.innerHTML=travelTable(trips,tasks,{origin:id,visits});
+    wireTravel(tripsBox,tasks,{origin:id});
    }catch(e){if(stillCurrent())tripsBox.textContent='Не удалось загрузить выезды: '+e.message;}
   };
   const renderCosts=async()=>{
@@ -217,7 +302,8 @@ export function createServiceOrders(ctx){
  ${!manager(o)&&o.engineer_ids?.includes(ctx.userId())&&['assigned','in_progress','paused','review'].includes(o.status)?'<div class="row"><label>Предложить новый срок<input id="orderDeadlineDate" type="date" value="'+esc(o.date_to||'')+'"></label><label>Причина<input id="orderDeadlineReason" type="text" maxlength="1000" placeholder="Почему нужен новый срок"></label><button class="btn sm" id="orderDeadlineSend">Отправить куратору</button></div>':''}
  <p id="orderDeadlineError" class="err" role="alert"></p><div id="orderDeadlineRequests" class="order-items"><p class="hint">Загружаю предложения…</p></div></section>`:''}
  ${o.id?`<section id="orderExecution"><p class="hint">Внеси суммарный результат. Присутствие на объекте учитывается в выезде отдельно.</p>${field('Дата выполнения','<input id="orderResultDate" type="date" required value="'+actualDate()+'">')}<div id="orderResults" class="order-items"></div>${field('Итог и замечания','<textarea id="orderResultNote" maxlength="4000" '+(report?'':'disabled')+'>'+esc(o.result_note||'')+'</textarea>')}${historicalResult?field('Основание исторического факта (обязательно)','<textarea id="orderResultBasis" maxlength="1000" placeholder="По акту, журналу работ или другому подтверждению"></textarea>'):''}<p class="err" id="orderResultError" role="alert"></p>${report?'<div class="entity-dialog-foot"><span id="orderResultDraftState" class="hint" role="status"></span><button type="button" class="btn ghost" id="orderResultLater">Продолжить позже</button><button type="button" class="btn amber" id="orderResultSave">Сохранить результат</button><button type="button" class="btn" id="orderResultSubmitReview">Передать на проверку</button></div>':''}${manager(o)&&['in_progress','paused','review'].includes(o.status)?'<button class="btn sm" id="orderCarry" hidden>Закрыть с остатком</button>':''}</section>
- <section class="card" id="orderTravel"><h3>Выезды задания</h3><div id="orderTrips">${(o.trip_service_orders||[]).filter(x=>!x.trips?.deleted_at).map(x=>x.trips).filter(Boolean).map(t=>`<button class="order-child" data-order-trip="${t.id}"><span class="order-trip-identity"><b>${esc(t.vehicle_label||'Автомобиль не выбран')}</b><span>${esc(ctx.tripStatus(t.status))}</span></span><span>${esc(humanDate(t.date_from)||'Дата не задана')}${t.date_to?' — '+esc(humanDate(t.date_to)):''}</span><span>${esc((t.engineer_ids||[]).map(name).join(', ')||'Команда не назначена')}</span><span class="order-trip-open">Открыть выезд →</span></button>`).join('')||'<p class="hint">Выездов нет'+(o.work_mode!=='onsite'?' — для этого задания поездка не требуется':'')+'.</p>'}</div>${manager(o)&&o.work_mode==='onsite'&&!['completed','cancelled','review'].includes(o.status)?'<div class="order-line-adds"><button class="btn sm" id="orderTripAdd">Создать новый выезд</button><button class="btn sm" id="orderTripExisting">Добавить в существующий выезд</button></div><div id="orderTripPicker" hidden></div>':''}</section>
+ <section id="orderTravel"><div id="orderTrips">${travelTable((o.trip_service_orders||[]).map(link=>link.trips).filter(trip=>trip&&!trip.deleted_at),[o],
+ {origin:scope||'',order:o,visits:new Map((visitResults?.trips||[]).map(visit=>[visit.id,visit]))})}</div>${manager(o)&&o.work_mode==='onsite'&&!['completed','cancelled','review'].includes(o.status)?'<div class="order-line-adds"><button class="btn amber" id="orderTripAdd">Запланировать выезд</button><button class="btn" id="orderTripExisting" hidden>Добавить в существующий выезд</button></div><div id="orderTripPicker" hidden></div>':''}</section>
  <section class="card" id="orderPlanFact"><h3>План/факт задания</h3><div id="orderPlanFactRows"></div></section><section class="card order-trip-cost-card"><h3>Распределённые затраты выездов ${infoHint('Сумма показывает только долю этого задания. Нераспределённые части остаются в отчёте выезда.', 'О разделе «Распределённые затраты выездов»')}</h3><div id="orderTripCostAllocation"><p class="hint">Загружаю подтверждённые доли затрат…</p></div></section><section class="entity-activity" id="orderHistory"><div id="orderActivity"></div></section>`:''}`;
  const editor=$('orderEditor'),grid=$('orderOrganization').parentElement;
  const panes=o.id?{overview:[$('orderApprovalBanner'),$('orderBrief'),$('orderHistory')],scope:[grid],travel:[$('orderTravel')],'plan-fact':[$('orderPlanFact'),editor.querySelector('.order-trip-cost-card')]}:{scope:[grid]};
@@ -227,11 +313,16 @@ export function createServiceOrders(ctx){
  const initial=({works:'scope',trips:'travel',history:'overview'})[requestedPane]||requestedPane||(identity===tabEntity?tabValue:o.id?'overview':'scope');
  let finance=null;
  if(o.id&&manager(o)){
-  const host=document.createElement('section'),user=loadedUser;
-  host.className='scoped-finance';$('orderPane-plan-fact').prepend(host);
+  const host=document.createElement('section'),legacy=document.createElement('details'),pane=$('orderPane-plan-fact'),user=loadedUser;
+  legacy.id='orderLegacyFinance';legacy.className='workflow-finance-tool';legacy.open=true;
+  legacy.innerHTML='<summary>Принятые объёмы и подтверждённые затраты</summary>';
+  legacy.append(...pane.children);pane.append(legacy);
+  host.className='scoped-finance';pane.prepend(host);
   finance=mountEntityFinance(host,{db:api,scope:'order',id:o.id,
    current:()=>current===o&&host.isConnected&&user===ctx.userId(),
+   onReady:()=>{legacy.open=false;},
    onTrip:async row=>{if(await leave())ctx.openTrip(row.id,{pane:'economy'});},
+   onGPS:async trip=>{if(await leave())ctx.openJournalTrip?.(trip,{pane:'route'});},
    onReport:trip=>open(o.id,scope,{pane:'scope',trip})});
  }
  tabEntity=identity;entityTabs=createEntityTabs(editor,{initial,onChange:value=>{tabValue=value;if(value==='plan-fact')void finance?.load();}});tabValue=entityTabs.value;
@@ -245,7 +336,7 @@ export function createServiceOrders(ctx){
  if($('orderItemAdd'))$('orderItemAdd').onclick=()=>{readPlanItems();if(!selectedJob){ctx.notify('Сначала выбери заявку','warn');return;}items.push({job_id:selectedJob,kind:'work',title:'',unit:'ч',planned_qty:1,done_qty:0,transferred_qty:0,billable:true,billable_reason:'',tariff_profile:null,work_catalog_id:null});mark();renderJobsAndItems(edit,report);};
  if($('orderMaterialAdd'))$('orderMaterialAdd').onclick=()=>{readPlanItems();if(!selectedJob){ctx.notify('Сначала выбери заявку','warn');return;}if(!stockLoaded){ctx.notify(stockError||'Справочник материалов пока недоступен','warn');return;}items.push({job_id:selectedJob,kind:'material',stock_catalog_id:null,title:'',unit:'шт',planned_qty:1,done_qty:0,transferred_qty:0});mark();renderJobsAndItems(edit,report);};
  $('orderEditor').querySelectorAll('[data-order-next]').forEach(b=>b.onclick=()=>transition(o,b.dataset.orderNext));
- $('orderEditor').querySelectorAll('[data-order-trip]').forEach(b=>b.onclick=async()=>{if(await leave())ctx.openTrip(b.dataset.orderTrip);});
+ if(o.id)wireTravel($('orderTrips'),[o],{origin:scope||'',order:o});
  if($('orderCarry'))$('orderCarry').onclick=()=>perform(async()=>{if(dirty||reportDirty)throw Error('Сначала сохрани результат');if(!canCloseWithRemainder(o))throw Error('Проверьте выполненные работы и связанные выезды');const reason=await ctx.reason('Причина закрытия задания с остатком');if(reason===null)return;await rpc('service_order_close_with_remainder',{p_order:o.id,p_expected:o.revision,p_reason:reason});if(await open(o.id,scope,{pane:'overview'}))ctx.notify('Задание закрыто. Остаток доступен в заявке.');});
  if($('orderTripExisting'))$('orderTripExisting').onclick=()=>chooseExistingTrip(o);
  if($('orderTripAdd'))$('orderTripAdd').onclick=()=>perform(async()=>{if(dirty||reportDirty)throw Error('Сначала сохрани задание');const id=await rpc('service_order_trip',{p_id:o.id,p_expected:o.revision});await ctx.openTrip(id,{newPlan:true});});
@@ -257,6 +348,7 @@ export function createServiceOrders(ctx){
    {label:manager(o)?'Изменить срок':'Предложить срок',hidden:!['draft','assigned','in_progress','paused','review'].includes(o.status),onSelect:trigger=>manager(o)?openOrganization('dates',trigger):openEntityPanel({title:'Предложить срок',panel:$('orderDeadlinePanel'),trigger,confirmDiscard:()=>ctx.confirmLeave()})},
    {label:'Предложения по сроку',onSelect:trigger=>openEntityPanel({title:'Предложения по сроку',panel:$('orderDeadlinePanel'),trigger,confirmDiscard:()=>ctx.confirmLeave()})},
    {label:'Ответственность',onSelect:trigger=>openEntityPanel({title:'Ответственность',panel:$('orderResponsibility'),trigger,confirmDiscard:()=>ctx.confirmLeave()})},
+   ...($('orderTripExisting')?[{label:'Добавить в существующий выезд',onSelect:trigger=>chooseExistingTrip(o,trigger),disabled:dirty||reportDirty}]:[]),
    ...($('orderCarry')?[{label:'Закрыть с остатком',onSelect:()=>$('orderCarry').onclick(),disabled:dirty||reportDirty||!canCloseWithRemainder(o)}]:[]),
    ...(manager(o)&&selectedJob?[{label:'Дополнительное задание',onSelect:()=>open(null,selectedJob),disabled:dirty||reportDirty}]:[]),
    ...(selectedJob?[{label:'Открыть заявку и смету',onSelect:async()=>{if(await leave()){if(ctx.openJobEstimate)ctx.openJobEstimate(selectedJob);else ctx.openJob(selectedJob);}}}]:[])
@@ -292,7 +384,7 @@ export function createServiceOrders(ctx){
    if(visitResults){
     manualResult?.remove();
     if(!edit)$('orderComposition').hidden=true;
-    $('orderPane-plan-fact').append($('orderResultSummary'));
+    ($('orderLegacyFinance')||$('orderPane-plan-fact')).append($('orderResultSummary'));
    }else if(report&&!manualResult){
     manualResult=document.createElement('button');
     manualResult.type='button';manualResult.className='btn amber workflow-work-result';
@@ -420,9 +512,9 @@ export function createServiceOrders(ctx){
   dialog.querySelector('[data-review-accept]').onclick=()=>{if(blocker||dirty||reportDirty)return;dialog.close();void transition(o,'completed');};
  }
  async function eligibleOrdersForRequest(id){await load();return orders.filter(o=>(id==null||o.job_id===id)&&reportAllowed(o));}
- async function chooseExistingTrip(o){
+ async function chooseExistingTrip(o,trigger=$('orderMore')){
  const box=$('orderTripPicker');if(dirty||reportDirty){ctx.notify('Сначала сохрани задание.','warn');return;}
- let picker=box.closest('dialog');if(!picker){box.hidden=true;picker=openEntityPanel({title:'Выбор поездки',panel:box,trigger:$('orderTripExisting')});picker.classList.add('entity-trip-picker-dialog');}
+ let picker=box.closest('dialog');if(!picker){box.hidden=true;picker=openEntityPanel({title:'Выбор поездки',panel:box,trigger});picker.classList.add('entity-trip-picker-dialog');}
  box.innerHTML='<p class="hint">Загружаю доступные планы выездов…</p>';
  try{
   const {data,error}=await api().from('trips').select('id,date_from,date_to,vehicle_label,engineer_ids,owner_id,curator_id,status,trip_service_orders(service_orders(number,title,jobs!service_orders_job_id_fkey(clients(name))))').is('deleted_at',null).order('date_from');if(error)throw error;if(current?.id!==o.id||!box.isConnected||!picker.open)return;
@@ -518,5 +610,5 @@ export function createServiceOrders(ctx){
  function leave(){if(!dirty&&!reportDirty)return Promise.resolve(true);if(leaveFlight)return leaveFlight;leaveFlight=(async()=>{if(!await ctx.confirmLeave())return false;if(reportDirty)storeResultDraft();dirty=false;reportDirty=false;return true;})().finally(()=>{leaveFlight=null;});return leaveFlight;}
  async function tripParent(t){const el=$('tripOrderParent');if(!el)return;el.innerHTML='';if(!t?.id)return;try{const {data,error}=await api().from('trip_service_orders').select('order_id,service_orders(id,number,title,job_id)').eq('trip_id',t.id);if(error)throw error;const linked=(data||[]).map(x=>x.service_orders).filter(o=>o?.job_id);if(!linked.length){el.innerHTML='<span class="hint">Задания пока не связаны</span>';return;}el.innerHTML='<span class="hint">Задания выезда:</span> '+linked.map(o=>`<button type="button" class="crumb" data-trip-order="${o.id}">№${o.number} · ${esc(o.title)}</button>`).join('');el.querySelectorAll('[data-trip-order]').forEach(b=>b.onclick=()=>open(b.dataset.tripOrder,null));}catch(e){el.innerHTML='<span class="hint">Не удалось загрузить задания выезда: '+esc(e.message)+'</span>';}}
  function init(){ if($('orderViewMode'))$('orderViewMode').onchange=e=>{viewMode=e.target.value;return board();};if($('orderHistorical'))$('orderHistorical').onchange=e=>{showHistorical=e.target.checked;return board();};$('orderSearch').oninput=e=>{query=e.target.value.trim().toLowerCase();board();};$('orderEngineer').onchange=e=>{crewFilter=e.target.value;board();};$('orderClosed').onchange=e=>{showClosed=e.target.checked;visibleStates.completed=showClosed;visibleStates.cancelled=showClosed;return board();};$('orderScopeClear').onclick=()=>{scope=null;board();};$('orderAdd').onclick=()=>open(null,scope);}
- return {init,board,open,openWork,openResult,eligibleOrdersForRequest,attachJobs,requestPanel,tripParent,leave,isDirty:()=>dirty||reportDirty,currentId:()=>current?.id,loaded:()=>loaded};
+ return {init,board,open,openWork,openResult,eligibleOrdersForRequest,attachJobs,requestPanel,renderTaskTable,tripParent,leave,isDirty:()=>dirty||reportDirty,currentId:()=>current?.id,loaded:()=>loaded};
 }
