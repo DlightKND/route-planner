@@ -12,20 +12,20 @@ export function relatedTable({idPrefix,title,searchLabel,placeholder,columns,row
   <header class="related-table-head"><div><h3>${title}</h3><div class="related-header-actions">${actions}</div></div>
    <div><label><span class="sr-only">${searchLabel}</span><input type="search" data-related-search placeholder="${placeholder}"></label>
     <p class="hint" data-related-count role="status"></p></div>
-   ${review?`<button class="btn ghost related-review-filter" type="button" aria-pressed="false" data-related-review>На проверке
+   ${review?`<button class="chip related-review-filter" type="button" aria-pressed="false" data-related-review>На проверке
     <span>${rows.filter(row=>row.review).length}</span></button>`:''}</header>
-  <table class="related-record-table" aria-label="${title}"><colgroup><col><col><col><col><col class="related-commands-col"></colgroup>
-   <thead><tr>${columns.map(column=>`<th scope="col">${column}</th>`).join('')}<th scope="col"><span class="sr-only">Действия и раскрытие</span></th></tr></thead>
+  <div class="related-table-scroll"><table class="related-record-table" aria-label="${title}"><colgroup><col><col class="related-people-col"><col class="related-detail-col"><col class="related-status-col"><col class="related-commands-col"></colgroup>
+   <thead><tr>${columns.map(column=>`<th scope="col" title="${column}">${column}</th>`).join('')}<th scope="col"><span class="sr-only">Действия и раскрытие</span></th></tr></thead>
    <tbody>${rows.map(row=>{
     const key=idPrefix+'-'+row.id;
     return `<tr data-related-row data-search="${esc(row.search.toLocaleLowerCase('ru'))}" data-review="${Boolean(row.review)}" data-hours="${row.hours??''}" data-works="${row.works??''}">
      <th scope="row">${row.cells[0]}</th>${row.cells.slice(1).map((cell,i)=>`<td data-label="${columns[i+1]}">${cell}</td>`).join('')}
-     <td class="related-row-actions"><div>${row.actions||''}<button type="button" class="btn ghost related-disclose" aria-expanded="false"
+     <td class="related-row-actions"><div>${row.actions?`<div class="related-action-buttons">${row.actions}</div>`:''}<button type="button" class="btn ghost related-disclose" aria-expanded="false"
       aria-controls="${esc(key)}" aria-label="Раскрыть ${esc(row.label)}" data-related-toggle="${esc(row.label)}">${journalIcon('chevron')}</button></div></td></tr>
     <tr class="related-detail" id="${esc(key)}" hidden><td colspan="5">${row.detail}</td></tr>`;
    }).join('')}</tbody><tfoot><tr><th scope="row" data-related-total>Итого</th><td></td>
     <td>${totalHours?'<span data-related-hours></span>':''}</td><td></td><td></td></tr></tfoot>
-  </table><p class="hint related-empty" data-related-empty hidden>${rows.length?'Ничего не найдено. Измените поиск.':empty}</p></section>`;
+  </table></div><p class="hint related-empty" data-related-empty hidden>${rows.length?'Ничего не найдено. Измените поиск.':empty}</p></section>`;
 }
 
 export function wireRelatedTable(node){
@@ -88,8 +88,8 @@ export function relatedTripRows(trips,{people,status,visits,linkedTasks,open,ope
   const visit=visits.get(trip.id),period=planningPeriod(trip.date_from,trip.date_to),crew=(trip.engineer_ids||[]).map(people);
   const vehicle=trip.vehicle_label||visit?.label||'Автомобиль не выбран',review=trip.status==='finished';
   const tasks=linkedTasks(trip.id),hours=visit?.presence?.confirmed?visit.presence.base:null;
-  return {id:trip.id,label:'выезд · '+vehicle,search:[vehicle,period,...crew].join(' '),review,hours,
-   cells:[`${open(trip,vehicle)}<small>${esc(period)}</small>`,
+  return {id:trip.id,label:'выезд · '+vehicle,search:[trip.number,vehicle,period,...crew].join(' '),review,hours,
+   cells:[`${open(trip,trip.number?'Выезд №'+trip.number:'Выезд')}<small>${esc(period)}</small>`,
     `<strong>${esc(vehicle)}</strong><small>${esc(crew.join(', ')||'Команда не назначена')}</small>`,
     `${hours==null?'—':quantity(hours)+' чел·ч'}${visit?.presence?.confirmed&&visit.presence.available!=null?`<small>Доступно заданию ${quantity(visit.presence.available)} чел·ч</small>`:''}`,
     `<span class="related-status${review?' is-review':''}">${esc(review?'На проверке':status(trip.status))}</span>`],

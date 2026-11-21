@@ -36,7 +36,8 @@ test('design state: assignment travel and crew-aware trip selection',async({page
  await expect(trips.getByRole('columnheader',{name:'Часы по посещениям'})).toBeAttached();
  await trips.getByRole('button',{name:/Раскрыть выезд/}).click();
  await expect(trips.getByRole('heading',{name:'Задания выезда'})).toBeVisible();
- await capture(page,info,'assignment-travel',errors);await page.locator('#orderTripExisting').click();
+ await capture(page,info,'assignment-travel',errors);await page.locator('#orderMore').click();
+ await page.getByRole('button',{name:'Добавить в существующий выезд',exact:true}).filter({visible:true}).click();
  const dialog=page.locator('dialog.entity-trip-picker-dialog');await expect(dialog).toBeVisible();await expect(dialog.locator('.trip-choice-card')).toHaveCount(2);
  await capture(page,info,'trip-selection',errors);await dialog.locator('[data-trip-choice-crew]').check();await expect(dialog.locator('.trip-choice-card')).toHaveCount(1);
  expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
