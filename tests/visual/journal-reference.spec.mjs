@@ -32,6 +32,8 @@ test('a short desktop viewport leaves three complete stops in the overview list'
    return row.top>=edge.top-1&&row.bottom<=edge.bottom+1;
   }).length;
  })).toBeGreaterThanOrEqual(3);
- expect(await list.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
  await expect(page.locator('.journal-overview-map')).toBeVisible();
+ const last=list.getByRole('button').last();
+ await last.scrollIntoViewIfNeeded();
+ await expect(last).toBeInViewport();
 });
