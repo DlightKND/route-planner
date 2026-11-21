@@ -7,13 +7,13 @@ const quantity=value=>value==null?'—':format.format(Number(value));
 const plural=new Intl.PluralRules('ru');
 const counted=(count,one,few,many)=>count+' '+({one,few,many}[plural.select(count)]||many);
 
-export function relatedTable({idPrefix,title,searchLabel,placeholder,columns,rows,actions='',review=false,totalHours=false,empty}){
+export function relatedTable({idPrefix,title,searchLabel,placeholder,columns,rows,actions='',filter='',review=false,totalHours=false,empty}){
  return `<section class="related-records" aria-label="${title}">
   <header class="related-table-head"><div><h3>${title}</h3><div class="related-header-actions">${actions}</div></div>
    <div><label><span class="sr-only">${searchLabel}</span><input type="search" data-related-search placeholder="${placeholder}"></label>
     <p class="hint" data-related-count role="status"></p></div>
    ${review?`<button class="chip related-review-filter" type="button" aria-pressed="false" data-related-review>На проверке
-    <span>${rows.filter(row=>row.review).length}</span></button>`:''}</header>
+    <span>${rows.filter(row=>row.review).length}</span></button>`:filter}</header>
   <div class="related-table-scroll"><table class="related-record-table" aria-label="${title}"><colgroup><col><col class="related-people-col"><col class="related-detail-col"><col class="related-status-col"><col class="related-commands-col"></colgroup>
    <thead><tr>${columns.map(column=>`<th scope="col" title="${column}">${column}</th>`).join('')}<th scope="col"><span class="sr-only">Действия и раскрытие</span></th></tr></thead>
    <tbody>${rows.map(row=>{

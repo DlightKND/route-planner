@@ -105,11 +105,12 @@ export function createServiceOrders(ctx){
  function wireChildren(root){root.querySelectorAll('[data-order-open]').forEach(b=>b.onclick=e=>{e.stopPropagation();open(b.dataset.orderOpen,b.dataset.orderOrigin);});root.querySelectorAll('[data-order-new]').forEach(b=>b.onclick=e=>{e.stopPropagation();open(null,b.dataset.orderNew);});root.querySelectorAll('[data-order-scope]').forEach(b=>b.onclick=e=>{e.stopPropagation();scope=b.dataset.orderScope;ctx.showBoard();});root.querySelectorAll('.order-children').forEach(d=>d.addEventListener('dragstart',e=>{e.preventDefault();e.stopPropagation();}));}
  async function attachJobs(root){try{await load();root.querySelectorAll('.kcard[data-kid]').forEach(card=>{card.querySelector('.order-children')?.remove();card.insertAdjacentHTML('beforeend',childHtml(card.dataset.kid));});wireChildren(root);}catch(e){ctx.notify('Не удалось загрузить задания: '+e.message,'err');}}
  const taskButton=(task,origin,label=task.title,action='data-order-open')=>`<button type="button" class="btn ghost related-record-link" ${action}="${esc(task.id)}" data-order-origin="${esc(origin)}">${esc(label)}</button>`;
- function taskTable(tasks,origin,trip=null){
+ function taskTable(tasks,origin,trip,requestLabel){
   const actions=trip?'':(manager()? `<button class="btn amber" type="button" data-order-new="${esc(origin)}">Создать задание</button>`:'')+
     `<button type="button" data-order-scope="${esc(origin)}" hidden>Канбан заданий заявки</button>`;
   return relatedTable({idPrefix:trip?'trip-linked-task':'request-linked-task',title:trip?'Задания выезда':'Задания',searchLabel:'Найти задание',placeholder:'Номер, название или исполнитель',
-   columns:['Задание','Исполнители','Сроки','Состояние'],actions,empty:'Заданий пока нет.',rows:tasks.map(task=>{
+   columns:['Задание','Исполнители','Сроки','Состояние'],actions,empty:'Заданий пока нет.',
+   filter:requestLabel?`<button type="button" class="chip related-review-filter" data-related-clear-request aria-label="Снять фильтр по заявке">${esc(requestLabel)} ×</button>`:'',rows:tasks.map(task=>{
     const work=(task.service_order_items||[]).filter(item=>!isFinanceVoided(item)),crew=(task.engineer_ids||[]).map(name);
     const works=work.filter(item=>item.kind!=='material').length;
     return {id:task.id,label:'задание №'+task.number,search:[task.number,task.title,...crew].join(' '),works,
@@ -120,9 +121,9 @@ export function createServiceOrders(ctx){
      detail:`<div data-related-work-details="${esc(task.id)}">${relatedWorkPreview(work,{tripScoped:!!trip,open:taskButton(task,origin,'Открыть работы','data-related-order-works')})}</div>`};
    })});
  }
- function renderTaskTable(root,tasks,origin='',trip=null){
+ function renderTaskTable(root,tasks,origin='',trip=null,requestLabel=''){
   const search=root.querySelector('[data-related-search]')?.value||'';
-  root.innerHTML=taskTable(tasks,origin,trip);root.querySelector('[data-related-search]').value=search;
+  root.innerHTML=taskTable(tasks,origin,trip,requestLabel);root.querySelector('[data-related-search]').value=search;
   wireRelatedTable(root);wireChildren(root);
   const bindWorks=node=>node.querySelector('[data-related-order-works]').onclick=()=>{
    const id=node.dataset.relatedWorkDetails;

@@ -242,6 +242,24 @@ test('M7: related record tables keep search, work details and trip actions in th
  await clean(page,errors);
 });
 
+test('M7: choosing a result among several linked tasks opens the trip table filtered by request',async({page},info)=>{
+ const errors=await boot(page,info,{route:'job/'+job+'/trips',stage:'in_progress',tripResultJourney:'multiple'});
+ await page.locator('#jobLinkedTrips').getByRole('button',{name:'Внести выполненные работы'}).click();
+ const list=page.locator('#tpLinkedOrders'),records=list.locator('[data-related-row]');
+ await expect(page.locator('#tpTabPlan')).toHaveAttribute('aria-selected','true');
+ await expect(list.getByRole('table',{name:'Задания выезда'})).toBeVisible();
+ await expect(records).toHaveCount(2);
+ await expect(records.filter({hasText:'Работы по другой заявке'})).toHaveCount(0);
+ await list.getByRole('button',{name:'Снять фильтр по заявке'}).click();
+ await expect(records).toHaveCount(3);
+ await expect(records.filter({hasText:'Работы по другой заявке'})).toBeVisible();
+ await expect(list.getByRole('searchbox')).toBeFocused();
+ await records.first().getByRole('button',{name:'Внести выполненные работы'}).click();
+ await expect(page.locator('.view-order')).toHaveClass(/active/);
+ await expect(page.locator('#orderTab-scope')).toHaveAttribute('aria-selected','true');
+ await clean(page,errors);
+});
+
 test('M8: closing a partial task offers its remaining work when the request gets a new task',async({page},info)=>{
  const errors=[];
  page.on('pageerror',error=>errors.push(error.message));

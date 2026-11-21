@@ -3813,6 +3813,7 @@ async function recordEntityResult(kind,id,job=null){
  try{
   const rows=(await eligibleEntityResults(kind,id)).filter(order=>!job||order.job_id===job);if(!rows.length){notify('Нет заданий, для которых сейчас можно зафиксировать результат. Начни работу в задании.','warn');return;}
   if(rows.length===1){await serviceOrders.openResult(rows[0].id,kind==='job'?id:job,kind==='trip'?id:null);return;}
+  if(kind==='trip'){await openTrip(id,{pane:'plan',resultRequest:job});return;}
   const dialog=document.createElement('dialog');dialog.className='entity-panel-dialog';dialog.setAttribute('aria-label','Выбери задание');dialog.innerHTML='<div class="entity-dialog-head"><h3>Результат какого задания?</h3><form method="dialog"><button class="btn" aria-label="Закрыть">×</button></form></div><div class="entity-dialog-body entity-menu-list">'+rows.map((r,i)=>`<button class="entity-menu-item" type="button" data-result-order="${i}">№${r.number} · ${esc(r.title)}</button>`).join('')+'</div>';
   dialog.querySelectorAll('[data-result-order]').forEach(b=>b.onclick=()=>{dialog.close();serviceOrders.openResult(rows[Number(b.dataset.resultOrder)].id,kind==='job'?id:job,kind==='trip'?id:null);});document.body.append(dialog);protectNativeForm(dialog,{trigger:document.activeElement,confirmDiscard:async()=>true});dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
  }catch(e){notify(e.message||'Не удалось загрузить задания.','err');}
@@ -5754,6 +5755,7 @@ async function delJob(id){ if(!await confirmDialog('Переместить за�
 
 // ---------- trips ----------
 let trips=[], tripJobsAll=[], tripOrdersAll=[], curTripJobs=new Set(), curTripOrders=new Set(), tripEditId=null, tripRouteKeys=new Set();
+let tripResultRequest=null;
 // Заявки открытого на карте выезда. Держим отдельно от редактора выезда:
 // карта доступна инженеру, у которого список tripJobsAll намеренно не грузится.
 let tripMapJobs=[];
@@ -6129,12 +6131,14 @@ $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) o
 if($('tripEngFilter')) $('tripEngFilter').onchange=renderTrips;
 function canWriteTrip(t=getTrip(tripEditId)){return canWrite()||!!(t?.id&&[t.owner_id,t.curator_id].includes(session?.user?.id));}
 let tripBack={name:'planner',sub:'trips',id:null};
-async function openTrip(id,{includeOrderId=null,plannedOrderIds=[],newPlan=false,pane:requestedPane}={}){ if(!await leaveSettingsEditor())return;if(!await leaveJobEditor())return;if(!await leaveTripEditor())return;if(serviceOrders.isDirty()&&!await serviceOrders.leave())return;
+async function openTrip(id,{includeOrderId=null,plannedOrderIds=[],newPlan=false,pane:requestedPane,resultRequest=null}={}){ if(!await leaveSettingsEditor())return;if(!await leaveJobEditor())return;if(!await leaveTripEditor())return;if(serviceOrders.isDirty()&&!await serviceOrders.leave())return;
   const origin=cardOrigin();if(origin.name!=='trip')tripBack=origin; await ensureRefs(); await loadTripJobs(); await loadTripOrders();
   // econCompute считает дорогу по плательщикам через turf, когда готовых
   // километров в выезде нет. Без turf он молча уйдёт в плоскую ветку и
   // покажет другую цифру — поэтому ждём здесь, до первого tripCalc().
-  await ensureTurf().catch(()=>{}); tripEditId=id;
+  await ensureTurf().catch(()=>{});
+  if(id!==tripEditId||resultRequest!==tripResultRequest)$('tpLinkedOrders').replaceChildren();
+  tripEditId=id;tripResultRequest=resultRequest;
   if(id){ const {data,error}=await sb.from('trips').select('*').eq('id',id).single(); if(error){notify(error.message,'err');return;} const i=trips.findIndex(x=>x.id===id);if(i<0)trips.push(data);else trips[i]=data; }
   const t=id?getTrip(id):null; tripNewPlanId=newPlan&&t?.status==='planned'&&!t.started_at?id:null; tripMainJobId=(t&&t.main_job_id)||null;
   if(t&&canWriteTrip(t)&&!canWrite()){
@@ -6254,9 +6258,18 @@ function tripPeriod(df,dt){
 }
 function jobKey(j){ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); if(lat==null) return null; return (+lat).toFixed(5)+','+(+lng).toFixed(5); }
 let tripMainJobId=null;   // основная заявка выезда (для маржинального километража)
+function renderTripLinkedOrders(){
+  const box=$('tpLinkedOrders');box.hidden=!tripEditId;
+  if(!tripEditId)return;
+  const request=tripJobsAll.find(job=>job.id===tripResultRequest);
+  const requestLabel=tripResultRequest?(request?.clients?.name?'Заявка · '+request.clients.name:'Заявка'):'';
+  const orders=tripOrdersAll.filter(order=>curTripOrders.has(order.id)&&(!tripResultRequest||order.job_id===tripResultRequest));
+  serviceOrders.renderTaskTable(box,orders,tripResultRequest||'',tripEditId,requestLabel);
+  const clear=box.querySelector('[data-related-clear-request]');
+  if(clear)clear.onclick=()=>{tripResultRequest=null;renderTripLinkedOrders();box.querySelector('[data-related-search]').focus();};
+}
 function renderTripJobs(){ const box=$('tpJobs');
-  $('tpLinkedOrders').hidden=!tripEditId;
-  if(tripEditId)serviceOrders.renderTaskTable($('tpLinkedOrders'),tripOrdersAll.filter(order=>curTripOrders.has(order.id)),'',tripEditId);
+  renderTripLinkedOrders();
   const routeOnly=$('tpJobsRoute')?$('tpJobsRoute').checked:false; const useFilter=routeOnly&&tripRouteKeys.size>0;
   let list=tripJobsAll; if(useFilter) list=tripJobsAll.filter(j=>curTripJobs.has(j.id)||tripRouteKeys.has(jobKey(j)));
   const jobsInView=new Set(list.map(j=>j.id));
