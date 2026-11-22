@@ -5841,7 +5841,7 @@ document.querySelector('.view-trip')?.addEventListener('change',e=>{
   if(e.target.closest('[data-presence-id]'))tripPresenceDirty=true;
   else if(e.target.closest('#tpPlanPane')||e.target.closest('#tpEconomyPane')){tripPlanDirty=true;}
 });
-window.addEventListener('beforeunload',e=>{if(tripPlanDirty||tripPresenceDirty||serviceOrders.isDirty()||journalTrips.isDirty()){e.preventDefault();e.returnValue='';}});
+window.addEventListener('beforeunload',e=>{if(tripPlanDirty||tripPresenceDirty||serviceOrders.isDirty()||journalTrips.isDirty()||unassignedTracks.isDirty()){e.preventDefault();e.returnValue='';}});
 document.querySelector('#tpPresence')?.addEventListener('click',e=>{
   const location=e.target.closest('[data-presence-map-open]');
   if(location){e.preventDefault();openPresenceLocation(location.dataset.presenceMapOpen);return;}

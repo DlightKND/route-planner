@@ -3,7 +3,7 @@ import {revealDispatcherActions,clickDispatcherControl} from './dispatcher-contr
 import {test,expect} from '@playwright/test';
 import {installMockBackend} from './mock-backend.mjs';
 const errors=[];
-async function open(page,info,role='admin',unassignedCount=1){
+async function open(page,info,role='admin',unassignedCount=1,unassignedJourney=true){
  errors.length=0;page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',r=>{
   const url=new URL(r.request().url());
@@ -11,7 +11,7 @@ async function open(page,info,role='admin',unassignedCount=1){
   if(url.hostname.endsWith('tile.openstreetmap.org')||url.hostname==='api.maptiler.com')return r.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e5e2d6"/><path d="M20 0 L60 90 35 256 M190 0 L155 110 230 256" fill="none" stroke="#aad2dd" stroke-width="18"/><path d="M0 80 L256 175 M85 0 L175 256" stroke="#fff" stroke-width="8"/><path d="M0 80 L256 175 M85 0 L175 256" stroke="#d2bd83" stroke-width="2"/><text x="10" y="30" font-family="sans-serif" font-size="12" fill="#555">Подложка QA</text></svg>'});
   return url.origin==='http://127.0.0.1:4173'?r.continue():r.abort();
  });
- await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,unassignedJourney:true,unassignedCount,preserveRanges:true});
+ await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,unassignedJourney,unassignedCount,preserveRanges:true});
  await page.goto('/#/planner/tracking');await expect(page.locator('#unassignedHost [data-ut-card]').first()).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
 }
@@ -51,6 +51,28 @@ test('creates the GPS trip draft without collecting new request details or writi
  await expect(page.locator('#tpTaskPicker')).toBeVisible();
  await page.locator('#tripCancel').click();
  await expect(page.locator('.journal-orphan-overview')).toBeVisible();
+ await clean(page);
+});
+test('restores unlinked stop choices and carries the decision into the linked visit review',async({page},info)=>{
+ await open(page,info,'admin',1,'stop-draft');await openOrphanOverview(page);
+ const stops=page.locator('.journal-link-required'),choice=stops.getByLabel('Решение'),note=stops.getByLabel('Комментарий');
+ await choice.selectOption('include');await note.fill('Объект сверили с инженером');
+ await expect(stops.locator('[data-source-total]')).toHaveText('Выбрано: 1 · 12 мин');
+ await stops.getByRole('button',{name:'Сохранить выбор'}).click();
+ await expect(stops.getByRole('status')).toContainText('Выбор сохранён');
+ await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
+ await expect(choice).toHaveValue('include');await expect(note).toHaveValue('Объект сверили с инженером');
+ await page.getByRole('button',{name:'Связать с выездом',exact:true}).click();
+ await page.locator('[data-pf=trip]').selectOption({index:1});
+ await page.locator('[data-pf=reason]').fill('Поездку проверили');
+ await page.locator('#promptYes').click();
+ const transferred=page.locator('.journal-source-choices');
+ await expect(transferred).toContainText('Объект сверили с инженером');
+ await transferred.getByRole('button',{name:'Проверить стоянку'}).click();
+ await expect(page.locator('.journal-review-note')).toHaveValue('Объект сверили с инженером');
+ await expect(page.locator('[data-presence-kind=visit]')).toHaveAttribute('aria-pressed','true');
+ expect(await page.evaluate(()=>window.__visualQA.reads.some(name=>name==='rpc:trip_presence_save_tasks'))).toBe(false);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);
  await clean(page);
 });
 test('charge shows the cost basis and requires a separate amount confirmation',async({page},info)=>{

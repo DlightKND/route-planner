@@ -29,6 +29,7 @@ beforeAll(async()=>{
  update public.trips set workbench_revision=workbench_revision+1 where id=$1 and workbench_revision=$2 returning workbench_revision into rev;
  return rev; end $$;`);
  await db.exec(readFileSync(new URL('../supabase/migrations/20261122152709_workflow_gps_record_operations.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261122210819_gps_record_stop_drafts.sql',import.meta.url),'utf8'));
 
 },30000);
 beforeEach(async()=>{
@@ -123,6 +124,49 @@ it('keeps GPS-record comments separate and carries them into the linked record',
  const [{id:trip}]=await q('select gps_record_create_trip($1,$2,$3,$4,$5,$6,$7) id',
   [track,source.revision,source.points,id(62),{vehicle_id:id(10),status:'planned'},[id(61)],'Проверена GPS-запись']);
  expect(await q('select track_id,trip_id,body from gps_record_comments where trip_id=$1',[trip])).toEqual([{track_id:track,trip_id:trip,body:'Проверить остановку'}]);
+});
+
+it('validates an observed stop, versions the choice and preserves it separately across linking',async()=>{
+ const track=id(115),trip=id(50),from='2026-10-03T09:00:00Z',to='2026-10-03T09:12:00Z';
+ const stop={stay_from:from,stay_to:to,decision:'include',note:'Стоянка у заказчика'};
+ await q("insert into unassigned_tracks(id,vehicle_id,started_at,last_ts,ended_at,state) values($1,$2,$3,$4,$4,'review')",[track,id(10),from,to]);
+ await q("insert into vehicle_telemetry_archive(vehicle_id,ts,lat,lng,status) select $1,$2::timestamptz+i*interval '4 minutes',50,30,'idle' from generate_series(0,3) i",[id(10),from]);
+ const source=await quote(track);
+ const save=(rows=[stop],revision=0,count=source.points)=>q(
+  'select gps_record_stop_draft_save($1,$2,$3,$4,$5) version',[track,source.revision,count,revision,JSON.stringify(rows)]
+ );
+ await db.exec('set role authenticated');
+ await expect(save([stop],0,source.points-1)).rejects.toThrow('GPS изменился');
+ await expect(save([{...stop,stay_to:'2026-10-03T09:13:00Z'}])).rejects.toThrow('не совпадает');
+ expect(await save()).toEqual([{version:1}]);
+ await expect(save([{...stop,note:'Вторая вкладка'}])).rejects.toThrow('уже изменён');
+ expect(await save([{...stop,decision:'exclude'}],1)).toEqual([{version:2}]);
+ await q("select set_config('test.uid',$1,true)",[id(2)]);
+ expect(await q('select * from gps_record_stop_drafts')).toEqual([]);
+ await expect(save([stop],2)).rejects.toThrow('готовит диспетчер');
+ expect(await q("select has_function_privilege('anon','gps_record_stop_draft_save(uuid,integer,integer,integer,jsonb)','EXECUTE') allowed")).toEqual([{allowed:false}]);
+ await q("select set_config('test.uid',$1,true)",[id(1)]);
+ await db.exec('reset role');
+ await q("insert into trips(id,vehicle_id,status,owner_id,curator_id) values($1,$2,'planned',$3,$3)",[trip,id(10),id(1)]);
+ await q('select unassigned_track_resolve($1,$2,$3,$4)',[track,source.revision,'link',{trip,points:source.points,km:source.km,reason:'Проверена запись'}]);
+ expect(await q('select trip_id,source_current,stops from gps_record_stop_drafts where track_id=$1',[track]))
+  .toMatchObject([{trip_id:trip,source_current:true,stops:[{decision:'exclude',note:stop.note,lat:50,lng:30}]}]);
+ expect(await q('select * from trip_stays where trip_id=$1',[trip])).toEqual([]);
+ await expect(save([stop],2)).rejects.toThrow('непривязанной');
+});
+
+it('retains but marks the saved choice stale if additional GPS arrives before linking',async()=>{
+ const track=id(116),trip=id(50),from='2026-10-03T10:00:00Z',to='2026-10-03T10:12:00Z';
+ await q("insert into unassigned_tracks(id,vehicle_id,started_at,last_ts,ended_at,state) values($1,$2,$3,$4,$4,'review')",[track,id(10),from,to]);
+ await q("insert into vehicle_telemetry_archive(vehicle_id,ts,lat,lng,status) select $1,$2::timestamptz+i*interval '4 minutes',50,30,'idle' from generate_series(0,3) i",[id(10),from]);
+ const [saved]=await q('select gps_record_stop_draft_save($1,0,4,0,$2) version',[track,JSON.stringify([{stay_from:from,stay_to:to,decision:'include'}])]);
+ expect(saved.version).toBe(1);
+ await q("insert into vehicle_telemetry_archive(vehicle_id,ts,lat,lng,status) values($1,'2026-10-03T10:06:00Z',50,30,'moving')",[id(10)]);
+ const source=await quote(track);
+ await expect(q('select gps_record_stop_draft_save($1,0,5,1,$2)',[track,JSON.stringify([{stay_from:from,stay_to:to,decision:'include'}])])).rejects.toThrow('не совпадает');
+ await q("insert into trips(id,vehicle_id,status,owner_id,curator_id) values($1,$2,'planned',$3,$3)",[trip,id(10),id(1)]);
+ await q('select unassigned_track_resolve($1,$2,$3,$4)',[track,source.revision,'link',{trip,points:source.points,km:source.km,reason:'Уточнена GPS-запись'}]);
+ expect(await q('select trip_id,source_current from gps_record_stop_drafts where track_id=$1',[track])).toEqual([{trip_id:trip,source_current:false}]);
 });
 
 

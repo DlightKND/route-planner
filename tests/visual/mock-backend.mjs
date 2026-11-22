@@ -382,6 +382,12 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   if(unassignedJourney&&unassignedCount>1)tables.unassigned_tracks=Array.from({length:unassignedCount},(_,i)=>({...tables.unassigned_tracks[0],started_at:new Date(Date.UTC(2026,9,4+i,7)).toISOString(),last_ts:new Date(Date.UTC(2026,9,4+i,9)).toISOString(),ended_at:new Date(Date.UTC(2026,9,4+i,9)).toISOString(),id:i?`40000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`:unassignedID}));
   tables.vehicle_telemetry_archive=unassignedJourney?[{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:00:00Z',lat:49.99,lng:36.23},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:01:00Z',lat:50.01,lng:36.25},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T09:00:00Z',lat:49.99,lng:36.23}]:[];
   tables.unassigned_track_events=[];
+  const sourceStopJourney=unassignedJourney==='stop-draft';
+  const sourceStopPoints=sourceStopJourney?['07:00','07:04','07:08','07:12'].map(time=>({
+    vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T'+time+':00Z',status:'idle',lat:client.lat,lng:client.lng
+  })):null;
+  tables.gps_record_stop_drafts=sourceStopJourney?JSON.parse(localStorage.getItem('qa:source-stop-drafts')||'[]'):[];
+  if(sourceStopJourney)tables.vehicle_telemetry_archive=sourceStopPoints;
   if(financeJourney){
     task.service_order_items=[
       {...item,id:'50000000-0000-4000-8000-000000000001',legacy_job_work_id:'60000000-0000-4000-8000-000000000001',approved_at:stamp,financial_revenue_snapshot:7500,financial_cost_snapshot:4500,created_at:stamp,legacy_snapshot:{title:'Историческая работа'}},
@@ -921,9 +927,29 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
       if(name==='notification_mark_all_read'){
         let count=0;tables.notification_inbox.forEach(n=>{if(n.recipient_id===session.user.id&&!n.read_at&&n.created_at<=args.p_before){n.read_at=stamp;count++;}});return {data:count,error:null};
       }
+      if(sourceStopJourney&&name==='gps_record_stop_draft_save'){
+        const [existing]=tables.gps_record_stop_drafts;
+        if(args.p_expected!==(existing?.revision||0))return {data:null,error:{message:'Выбор стоянок уже изменён'}};
+        const row={track_id:args.p_track,source_revision:args.p_source_revision,source_points:args.p_source_points,
+          revision:args.p_expected+1,stops:args.p_stops.map(stop=>({...stop,lat:client.lat,lng:client.lng}))};
+        tables.gps_record_stop_drafts=[row];
+        localStorage.setItem('qa:source-stop-drafts',JSON.stringify([row]));
+        return {data:row.revision,error:null};
+      }
+      if(sourceStopJourney&&name==='unassigned_track_resolve'&&args.p_action==='link'&&args.p_data.trip===trip){
+        const [source]=tables.unassigned_tracks;
+        Object.assign(source,{state:'linked',trip_id:trip});
+        Object.assign(ride,{status:'finished',started_at:source.started_at,finished_at:source.ended_at});
+        const [draft]=tables.gps_record_stop_drafts;
+        if(draft)Object.assign(draft,{trip_id:trip,source_current:true});
+        const [first]=sourceStopPoints,last=sourceStopPoints.at(-1);
+        stays.push({id:'source-linked-stay',trip_id:trip,job_id:job,status:'detected',lat:first.lat,lng:first.lng,
+          stay_from:first.ts,stay_to:last.ts,minutes_raw:12,crew_ids:[engineer],crew_source:'snapshot'});
+        return {data:{trip_id:trip},error:null};
+      }
       const reads = {
         unassigned_track_points:(tables.vehicle_telemetry_archive||[]).map(p=>({...p,part:1})),
-        unassigned_track_quote:{track_id:unassignedID,revision:0,km:120,points:3,gaps:1,rejected:0,rate:12.5,cost:1500},
+        unassigned_track_quote:{track_id:unassignedID,revision:0,km:120,points:sourceStopPoints?.length||3,gaps:1,rejected:0,rate:12.5,cost:1500},
         legacy_personal_schedule_read:legacyCrewMissing&&role==='engineer'&&(args.p_trips||[]).includes(trip)?[{id:trip,status:'done',date_from:ride.date_from,date_to:ride.date_to,day_plan:ride.day_plan,engineer_ids:[],lead_engineer:null,schedule_only:true,route_stops:ride.route_stops.map(s=>({type:s.type,lat:s.lat,lng:s.lng})),econ_snapshot:{driveH:ride.econ_snapshot.driveH,legs:[]}}]:[],
         account_org_read: {job_title:role==='engineer'?'Выездной инженер':'Руководитель сервиса',manager:role==='engineer'?{...people[0],job_title:'Руководитель сервиса'}:null,reports:role==='engineer'?[]:people.slice(1).map(p=>({...p,job_title:'Сервисный инженер'}))},
         entity_people: people,

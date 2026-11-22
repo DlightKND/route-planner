@@ -141,6 +141,18 @@ export function mountPresenceReview(root,data,{jobs=[],profiles=[],readonly=fals
  workspace.querySelectorAll('[data-review-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.reviewMode;paintList();const s=visible()[0];if(s)select(s.id,false,false);else{active=null;delete root.dataset.reviewActive;workspace.querySelector('.presence-kind').hidden=true;workspace.querySelector('.presence-review-save').hidden=true;workspace.querySelector('.presence-review-map').replaceChildren();rows.forEach(r=>r.hidden=true);}});
  paintList();const first=visible()[0];if(first)select(first.id,false,false);
  function markSaved(saved){const id=saved?.id||active,source=data.stays.find(s=>s.id===id);dirty.delete(id);store.remove(source);if(!saved)return;Object.assign(source,saved);const row=rows.get(id);row.dataset.stopKind=source.status==='approved'?'visit':'later';const status=row.querySelector('[data-presence="status"]');if(status)status.value=source.status==='approved'?'approved':source.status==='rejected'?'rejected':'';comments.set(id,decisionComment(source.note));workspace.querySelector('.presence-review-sidebar header span').textContent='Подтверждено '+data.stays.filter(reviewed).length+' из '+data.stays.length;paintList();if(active===id){editing=false;zeroAck=null;workspace.querySelector('.journal-review-note').value=comments.get(id);paintResult();workspace.querySelector('.presence-review-scroll').scrollTop=0;}}
+ function openSourceDecision(id,decision){
+  const stay=data.stays.find(item=>item.id===id);
+  if(!stay)return;
+  if(!readonly&&['detected','engineer_ok'].includes(stay.status)&&!store.read(stay)&&!dirty.has(id)){
+   const row=rows.get(id),include=decision.decision==='include';
+   row.dataset.stopKind=include?'visit':'excluded';
+   row.querySelector('[data-presence="status"]').value=include?'approved':'rejected';
+   comments.set(id,decision.note||'');
+   dirty.add(id);capture();
+  }
+  select(id);
+ }
  const destroy=()=>{sizeObserver?.disconnect();trip?.style.removeProperty('--journal-stops-min');stopMenu.destroy();filterPanel.destroy();design.destroy();maps.forEach(m=>m.destroy());root.removeEventListener('input',update);root.removeEventListener('change',update);root.removeEventListener('focusin',revealFocus);root.removeEventListener('pointerdown',startPointer,true);doc.defaultView.removeEventListener('pointerup',endPointer,true);doc.defaultView.removeEventListener('pointercancel',endPointer,true);};mounted.set(root,destroy);
- return {select,back,allowsSave(candidate){const key=zeroPresenceSignature(candidate);return key==null||zeroAck===key;},isDirty:()=>dirty.size>0||chosen.size>0,clearSaved(ids){for(const id of ids){chosen.delete(id);dirty.delete(id);store.remove(data.stays.find(stay=>stay.id===id));}},markSaved,discard(){chosen.clear();for(const s of data.stays)if(dirty.has(s.id))store.remove(s);dirty.clear();},destroy};
+ return {select,back,openSourceDecision,allowsSave(candidate){const key=zeroPresenceSignature(candidate);return key==null||zeroAck===key;},isDirty:()=>dirty.size>0||chosen.size>0,clearSaved(ids){for(const id of ids){chosen.delete(id);dirty.delete(id);store.remove(data.stays.find(stay=>stay.id===id));}},markSaved,discard(){chosen.clear();for(const s of data.stays)if(dirty.has(s.id))store.remove(s);dirty.clear();},destroy};
 }

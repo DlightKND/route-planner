@@ -8,6 +8,7 @@ import {validatePresence} from './core/trip-review.js';
 import {presenceRoadConflicts,reviewedStop,routeAmounts,kmText} from './core/gps-journal.js';
 import {mountJournalRoute,timelineHTML,wireJournalTimeline} from './journal-route.js';
 import {mountRoadSections} from './journal-road.js';
+import {mountLinkedStopDrafts} from './journal-source-stops.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const when=v=>v?new Date(v).toLocaleString('ru-RU',{timeZone:'Europe/Kyiv',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Продолжается';
 const result=({data,error})=>{if(error)throw error;return data;};
@@ -138,6 +139,15 @@ export function createJournalTrips(ctx){
   }
   const notify=()=>ctx.onNavigate?.({tripId:id,pane,stopId:pane==='stops'?selected:null,...(pane==='route'&&selected?{returnStopId:selected}:{}),...(pane==='route'&&roadId?{roadId}:{})});
   review=mountPresenceReview(host,data,{jobs,profiles:ctx.people(),readonly:!editable,leaflet:ctx.leaflet,makeBase:ctx.makeTrackBase,owner:uid,initialMode:'all',onJobChange:(row,job)=>ctx.renderAllocations(row,job,orders),track,onRoute:()=>switchPane('route'),onSelect:stayId=>{selected=stayId;updateSelection();notify();},onBack:()=>{selected=null;updateSelection();notify();},onConfirmVisits:editable?confirmVisits:null,onPin:stay=>readerAction('pin',stay),onReaderAction:ctx.role()==='engineer'?readerAction:null});
+  if(['admin','logist'].includes(ctx.role())){
+   const prelinked=root.ownerDocument.createElement('section');actions.prepend(prelinked);
+   void (async()=>{
+    try{
+     const drafts=result(await ctx.db().from('gps_record_stop_drafts').select('stops,source_current').eq('trip_id',id))||[];
+     if(current())mountLinkedStopDrafts(prelinked,drafts,data.stays,(stayId,decision)=>review?.openSourceDecision(stayId,decision));
+    }catch(error){if(current())prelinked.textContent='Выбор до привязки недоступен: '+error.message;}
+   })();
+  }
   async function confirmVisits(stays){
    if(!current()||saving||pendingSave||!stays.length)return;
    saving=true;host.inert=true;
