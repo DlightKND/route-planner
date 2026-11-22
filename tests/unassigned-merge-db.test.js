@@ -28,8 +28,8 @@ beforeAll(async()=>{
  where trip_id=$1 and id=($3->0->>'id')::uuid;
  update public.trips set workbench_revision=workbench_revision+1 where id=$1 and workbench_revision=$2 returning workbench_revision into rev;
  return rev; end $$;`);
- await db.exec(readFileSync(new URL('../supabase/migrations/20261122152709_workflow_gps_record_operations.sql',import.meta.url),'utf8'));
- await db.exec(readFileSync(new URL('../supabase/migrations/20261122210819_gps_record_stop_drafts.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261122153845_workflow_gps_record_operations.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261122211452_gps_record_stop_drafts.sql',import.meta.url),'utf8'));
 
 },30000);
 beforeEach(async()=>{
