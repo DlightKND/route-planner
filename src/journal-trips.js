@@ -65,6 +65,44 @@ export function createJournalTrips(ctx){
   const documentsButton=root.querySelector('[data-overview-documents]');documentsButton.innerHTML=icon('file')+'<span>Данные GPS-записи</span>'+icon('chevron');
   const host=root.querySelector('.journal-trip-stops');host.innerHTML=presenceHTML(data,jobs,ctx.people(),{readonly:!editable,orders,workspace:true});wirePresenceRecovery(host);
   const message=root.querySelector('.journal-trip-message');
+  const actions=root.ownerDocument.createElement('section');actions.className='journal-gps-actions';
+  root.querySelector('.journal-gps-activity').before(actions);
+  const noWorkDone=['finished','done'].includes(data.trip.status);
+  if(noWorkDone&&ctx.prompt){
+   const noWork=root.ownerDocument.createElement('section');noWork.className='journal-no-work';
+   actions.append(noWork);
+   void (async()=>{
+    try{
+     const response=await ctx.db().from('trip_gps_no_work').select('reason,trip_revision')
+      .eq('trip_id',id).eq('trip_revision',data.trip.workbench_revision).maybeSingle();
+     if(!current())return;
+     if(response.error)throw response.error;
+     const recorded=response.data;
+     if(recorded)noWork.innerHTML='<p><strong>Работы не выполнялись</strong> · 0 чел·ч</p><p>'+esc(recorded.reason)+'</p>';
+     if(!editable||(!recorded&&data.stays.some(stay=>stay.status==='approved')))return;
+     const button=root.ownerDocument.createElement('button');button.type='button';button.className='btn ghost';
+     button.textContent=recorded?'Отменить отметку':'Подтвердить, что работы не выполнялись';
+     noWork.append(button);
+     button.onclick=async()=>{
+      if(saving||pendingSave||review?.isDirty()){
+       message.textContent='Сначала сохраните или снимите выбранные решения по посещениям.';return;
+      }
+      button.disabled=true;
+      try{
+       const answer=await ctx.prompt(button.textContent,
+        [{key:'reason',label:'Основание',type:'textarea',required:true}],{okText:'Подтвердить'});
+       if(!answer||!current())return;
+       const result=await ctx.db().rpc('trip_gps_no_work_save',{
+        p_trip:id,p_expected:data.trip.workbench_revision,p_reason:answer.reason,p_confirmed:!recorded
+       });
+       if(result.error)throw result.error;
+       if(current())await remount(recorded?'Отметка снята.':'Отсутствие работ подтверждено.');
+      }catch(error){if(current())message.textContent=error.message;}
+      finally{if(button.isConnected)button.disabled=false;}
+     };
+    }catch(error){if(current())noWork.textContent='Отметка о работах недоступна: '+error.message;}
+   })();
+  }
   const candidateJobs=jobs.filter(job=>data.jobIds.includes(job.id));
   if(editable&&ctx.prompt&&candidateJobs.length&&['in_progress','finished','done'].includes(data.trip.status)){
    const manual=root.ownerDocument.createElement('button');manual.type='button';manual.className='btn ghost';
@@ -96,7 +134,7 @@ export function createJournalTrips(ctx){
     }catch(error){if(current())message.textContent=error.message;}
     finally{if(manual.isConnected)manual.disabled=false;}
    };
-   root.querySelector('.journal-trip-overview').append(manual);
+   actions.append(manual);
   }
   const notify=()=>ctx.onNavigate?.({tripId:id,pane,stopId:pane==='stops'?selected:null,...(pane==='route'&&selected?{returnStopId:selected}:{}),...(pane==='route'&&roadId?{roadId}:{})});
   review=mountPresenceReview(host,data,{jobs,profiles:ctx.people(),readonly:!editable,leaflet:ctx.leaflet,makeBase:ctx.makeTrackBase,owner:uid,initialMode:'all',onJobChange:(row,job)=>ctx.renderAllocations(row,job,orders),track,onRoute:()=>switchPane('route'),onSelect:stayId=>{selected=stayId;updateSelection();notify();},onBack:()=>{selected=null;updateSelection();notify();},onConfirmVisits:editable?confirmVisits:null,onPin:stay=>readerAction('pin',stay),onReaderAction:ctx.role()==='engineer'?readerAction:null});
@@ -114,7 +152,7 @@ export function createJournalTrips(ctx){
     await remount('Подтверждено посещений: '+stays.length+'.');
    }finally{saving=false;host.inert=false;}
   }
-  function updateSelection(){discussion.hidden=pane!=='stops'||!!selected;root.classList.toggle('journal-stop-open',!!selected);display.hidden=pane!=='stops'||!!selected;root.querySelector('.journal-trip-overview').hidden=pane!=='stops'||!!selected;documentsButton.hidden=pane!=='stops'||!!selected;(root.closest('.unified-gps-journal')||root).querySelectorAll('[data-journal-stop]').forEach(b=>b.classList.toggle('is-selected',b.dataset.journalStop===selected));const timeline=root.querySelector('.journal-timeline-host');if(pane==='stops'&&!selected)root.querySelector('.journal-overview-map').after(timeline);else root.querySelector('.journal-trip-head').after(timeline);routeMap?.select(selected);overviewMap?.select(selected);}
+  function updateSelection(){actions.hidden=pane!=='stops'||!!selected;discussion.hidden=actions.hidden;root.classList.toggle('journal-stop-open',!!selected);display.hidden=pane!=='stops'||!!selected;root.querySelector('.journal-trip-overview').hidden=pane!=='stops'||!!selected;documentsButton.hidden=pane!=='stops'||!!selected;(root.closest('.unified-gps-journal')||root).querySelectorAll('[data-journal-stop]').forEach(b=>b.classList.toggle('is-selected',b.dataset.journalStop===selected));const timeline=root.querySelector('.journal-timeline-host');if(pane==='stops'&&!selected)root.querySelector('.journal-overview-map').after(timeline);else root.querySelector('.journal-trip-head').after(timeline);routeMap?.select(selected);overviewMap?.select(selected);}
   const discussion=root.querySelector('.journal-gps-activity');
   const activity=mountEntityActivity({root:discussion,db:ctx.db(),entity:'gpsTrip',id,userId:ctx.userId,people:ctx.people});
   let historyLoaded=!data.history_deferred,historyLoading=false;

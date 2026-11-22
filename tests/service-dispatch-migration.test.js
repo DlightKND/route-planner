@@ -108,6 +108,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync(new URL('../supabase/migrations/20261120150932_order_result_photos.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20261120190426_entity_payment_terms.sql',import.meta.url),'utf8'));
   await db.exec(readFileSync(new URL('../supabase/migrations/20261121121939_preserve_request_remainder_work_details.sql',import.meta.url),'utf8'));
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261122154256_workflow_gps_no_work.sql',import.meta.url),'utf8'));
   expect((await q("select has_function_privilege('anon','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') anon_exec,has_function_privilege('authenticated','public.job_request_save_canonical(uuid,jsonb,jsonb,jsonb)','execute') auth_exec,has_table_privilege('authenticated','public.service_order_items','insert') table_insert"))[0]).toEqual({anon_exec:false,auth_exec:true,table_insert:false});
 },30000);
 
@@ -1358,5 +1359,30 @@ it('carries the remaining work norm, payment terms and available parts under the
   expect(await q('select id from service_order_request_remainders($1)',[request])).toEqual([]);
   await db.exec('reset role');
   expect(await q("select dlight_private.payment_local('work',$1,$2) terms",[target,carriedWork.id])).toEqual([{terms:{warranty:'warranty',payer:'service'}}]);
+ }finally{await db.exec('rollback');}
+});
+
+
+it('records and removes explicit no-work without altering GPS evidence or creating a visit',async()=>{
+ await db.exec('begin');
+ try{
+  await q("insert into profiles(id,role,active) values($1,'admin',true)",[id(725)]);
+  await q("select set_config('test.uid',$1,true)",[id(725)]);
+  const [trip]=await q("insert into trips(status) values('finished') returning id,workbench_revision");
+  const revision=async()=>(await q('select workbench_revision from trips where id=$1',[trip.id]))[0].workbench_revision;
+  const mark=(expected,confirmed)=>q('select trip_gps_no_work_save($1,$2,$3,$4) revision',
+   [trip.id,expected,'Сверено по журналу поездки',confirmed]);
+  const expected=await revision();
+  const [{revision:saved}]=await mark(expected,true);
+  expect(saved).toBeGreaterThan(expected);
+  expect(await q('select reason from trip_gps_no_work where trip_id=$1',[trip.id])).toEqual([{reason:'Сверено по журналу поездки'}]);
+  expect(await q('select id from trip_stays where trip_id=$1',[trip.id])).toEqual([]);
+  expect((await q('select dlight_private.order_trip_presence($1,$2,$3) presence',[trip.id,id(10),id(726)]))[0].presence)
+   .toMatchObject({no_work:true,available:0});
+  await db.exec('savepoint stale_no_work');
+  await expect(mark(expected,false)).rejects.toThrow('Выезд изменился');
+  await db.exec('rollback to savepoint stale_no_work');
+  await mark(saved,false);
+  expect(await q('select reason from trip_gps_no_work where trip_id=$1',[trip.id])).toEqual([]);
  }finally{await db.exec('rollback');}
 });

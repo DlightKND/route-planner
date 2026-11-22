@@ -1,4 +1,4 @@
-import {openOrphanDocuments} from './journal-actions.mjs';
+import {openOrphanOverview} from './journal-actions.mjs';
 import {test,expect} from '@playwright/test';
 import {clickDispatcherControl} from './dispatcher-controls.mjs';
 import {mkdirSync} from 'node:fs';
@@ -120,11 +120,11 @@ test('design state: presence evidence and decision stay separate',async({page},i
 });
 test('design state: GPS resolution separates the operation, parameters and saved facts',async({page},info)=>{
  const errors=await start(page,info,'planner/tracking',{role:'admin',unassignedJourney:true});
- await openOrphanDocuments(page);await page.getByRole('button',{name:'Создать документы',exact:true}).click();const overlay=page.locator('#promptOverlay');
+ await openOrphanOverview(page);await page.getByRole('button',{name:'Создать выезд',exact:true}).click();const overlay=page.locator('#promptOverlay');
  await expect(overlay.locator('.gps-resolution-workspace')).toBeVisible();await expect(overlay.locator('[data-gps-choice]')).toHaveCount(3);
- await overlay.locator('[data-pf=title]').fill('Черновик названия');await expect(overlay.locator('#promptYes')).toBeInViewport();await expect(overlay.locator('#promptNo')).toBeInViewport();await capture(page,info,'gps-resolution',errors);
+ await overlay.locator('[data-pf=reason]').fill('Основание создания выезда');await expect(overlay.locator('#promptYes')).toBeInViewport();await expect(overlay.locator('#promptNo')).toBeInViewport();await capture(page,info,'gps-resolution',errors);
  await overlay.locator('[data-gps-choice=charge]').click();await expect(overlay.locator('[data-pf=km]')).toBeVisible();await expect(overlay.locator('.gps-resolution-summary')).toContainText('12,5');
- await overlay.locator('[data-gps-choice=chain]').click();await expect(overlay.locator('[data-pf=title]')).toHaveValue('Черновик названия');
+ await overlay.locator('[data-gps-choice=create]').click();await expect(overlay.locator('[data-pf=reason]')).toHaveValue('Основание создания выезда');
  await overlay.locator('#promptNo').click();if(await page.locator('#confirmOverlay').isVisible())await page.locator('#confirmYes').click();await expect(overlay).toBeHidden();expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
 test('design state: request estimate keeps the agreed scope separate from execution',async({page},info)=>{

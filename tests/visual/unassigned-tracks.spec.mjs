@@ -1,4 +1,4 @@
-import {openOrphanDocuments} from './journal-actions.mjs';
+import {openOrphanOverview} from './journal-actions.mjs';
 import {revealDispatcherActions,clickDispatcherControl} from './dispatcher-controls.mjs';
 import {test,expect} from '@playwright/test';
 import {installMockBackend} from './mock-backend.mjs';
@@ -12,12 +12,18 @@ async function open(page,info,role='admin',unassignedCount=1){
   return url.origin==='http://127.0.0.1:4173'?r.continue():r.abort();
  });
  await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,unassignedJourney:true,unassignedCount,preserveRanges:true});
- await page.goto('/#/planner/tracking');await expect(page.locator('#unassignedHost .unassigned-card').first()).toBeVisible();
+ await page.goto('/#/planner/tracking');await expect(page.locator('#unassignedHost [data-ut-card]').first()).toBeVisible();
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
 }
 async function clean(page){expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);}
-test('unassigned queue and GPS preview remain usable at each width',async({page},info)=>{
- await open(page,info);await page.locator('[data-ut-details]').first().click();
+test('GPS register and GPS preview remain usable at each width',async({page},info)=>{
+ await open(page,info);
+ await expect(page.getByRole('table',{name:'GPS-записи'})).toBeVisible();
+ await expect(page.locator('.gps-journal-detail')).toBeHidden();
+ const openButton=page.locator('[data-ut-details]').first(),button=await openButton.boundingBox();
+ expect(button.x).toBeGreaterThanOrEqual(0);expect(button.x+button.width).toBeLessThanOrEqual(page.viewportSize().width);expect(button.height).toBeGreaterThanOrEqual(36);
+ await openButton.click();
+ await expect(page.getByRole('table',{name:'GPS-записи'})).toBeHidden();
  await expect(page.locator('.gps-journal-detail .unassigned-map')).toBeVisible();
  await expect(page.locator('.gps-journal-detail .unassigned-map .leaflet-tile-loaded').first()).toBeVisible();
  expect(await page.locator('.gps-journal-detail .unassigned-map .leaflet-tile-loaded').first().evaluate(img=>img.naturalWidth)).toBe(256);
@@ -29,47 +35,53 @@ test('unassigned queue and GPS preview remain usable at each width',async({page}
  const overflow=await page.locator('#unassignedHost').evaluate(el=>el.scrollWidth-el.clientWidth);expect(overflow).toBeLessThanOrEqual(1);
  await expect(page.locator('[data-ut-more]')).not.toBeVisible();
  for(const tab of await page.locator('#plUnassigned .subtab').all())expect(await tab.evaluate(el=>getComputedStyle(el).whiteSpace)).toBe('nowrap');
- const buttons=await page.locator('.unassigned-card button:visible').evaluateAll(xs=>xs.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,right:r.right,w:r.width,h:r.height,text:el.textContent};}));
- for(const b of buttons){expect(b.x).toBeGreaterThanOrEqual(0);expect(b.right).toBeLessThanOrEqual(page.viewportSize().width);expect(b.h).toBeGreaterThanOrEqual(36);}
  await page.screenshot({path:'test-results/unassigned-screenshots/'+info.project.name+'.png',fullPage:true});
  await clean(page);
 });
-test('chain draft collects client and engineer and can cancel without writes',async({page},info)=>{
- await open(page,info);await openOrphanDocuments(page);await page.getByRole('button',{name:'Создать документы',exact:true}).click();
- await expect(page.locator('#promptOverlay')).toBeVisible();await expect(page.locator('#promptOverlay')).toContainText('Клиент заявки');
- await expect(page.locator('#promptOverlay')).toContainText('Инженер');await page.keyboard.press('Escape');
- await expect(page.locator('#promptOverlay')).not.toBeVisible();await expect(page.getByRole('button',{name:'Создать документы',exact:true})).toBeFocused();await clean(page);
+test('creates the GPS trip draft without collecting new request details or writing data',async({page},info)=>{
+ await open(page,info);await openOrphanOverview(page);
+ await page.getByRole('button',{name:'Создать выезд',exact:true}).click();
+ const overlay=page.locator('#promptOverlay');
+ await expect(overlay).toBeVisible();
+ await expect(overlay.locator('[data-pf=client],[data-pf=title]')).toHaveCount(0);
+ await overlay.locator('[data-pf=reason]').fill('Выезд по проверенной GPS-записи');
+ await overlay.locator('#promptYes').click();
+ await expect(page.locator('.view-trip.active')).toBeVisible();
+ await expect(page.locator('#tpVeh')).toBeDisabled();
+ await expect(page.locator('#tpTaskPicker')).toBeVisible();
+ await page.locator('#tripCancel').click();
+ await expect(page.locator('.journal-orphan-overview')).toBeVisible();
+ await clean(page);
 });
 test('charge shows the cost basis and requires a separate amount confirmation',async({page},info)=>{
- await open(page,info);await openOrphanDocuments(page);await page.getByRole('button',{name:'Записать списание инженеру',exact:true}).click();
+ await open(page,info);await openOrphanOverview(page);await page.getByRole('button',{name:'Записать списание инженеру',exact:true}).click();
  await expect(page.locator('.gps-resolution-summary')).toContainText('12,5');await page.locator('[data-pf=engineer]').selectOption('00000000-0000-4000-8000-000000000002');
  await page.locator('[data-pf=reason]').fill('Подтверждённая личная поездка');await page.locator('#promptYes').click();
  await expect(page.locator('#confirmOverlay')).toBeVisible();await expect(page.locator('#confirmOverlay')).toContainText('1 500');
- await page.locator('#confirmNo').click();if(page.viewportSize().width<=1100){await page.locator('[data-ut-back]').click();await expect(page.locator('.journal-orphan-overview')).toBeVisible();await page.locator('[data-ut-back]').click();}await expect(page.locator('.unassigned-card')).toBeVisible();await clean(page);
+ await page.locator('#confirmNo').click();await page.locator('[data-ut-back]').click();await expect(page.locator('[data-ut-card]')).toBeVisible();await clean(page);
 });
 test('engineer sees own charge without manager resolution controls',async({page},info)=>{
- await open(page,info,'engineer');await expect(page.locator('.unassigned-card')).toContainText('Списание инженеру');
- await expect(page.getByRole('button',{name:'Создать документы',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Посмотреть трек'})).toHaveCount(0);
+ await open(page,info,'engineer');await expect(page.locator('[data-ut-card]')).toContainText('Списание инженеру');
+ await expect(page.getByRole('button',{name:'Создать выезд',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Посмотреть трек'})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Отменить списание'})).toHaveCount(0);
  await page.locator('[data-journal-exit]').click();await expect(page.locator('#tripAdd')).toBeHidden();await expect(page.locator('#tripTrash')).toBeHidden();
  await clean(page);
 });
 
-test('GPS journal is a dispatcher section, has standard card gaps and scrolls to the last record',async({page},info)=>{
+test('GPS journal is a dispatcher section, uses the full register and scrolls to the last record',async({page},info)=>{
  await open(page,info,'admin',14);
  await expect(page.locator('#plTrips')).toBeVisible();await expect(page.locator('#plTrips .subtab[data-sub=tracking]')).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('#plTrips .subtab[data-sub=tracking]')).toBeVisible();
- await expect(page.locator('#tripBoard')).toBeHidden();await expect(page.locator('.unassigned-card')).toHaveCount(14);
- const gap=await page.locator('.unassigned-list').evaluate(el=>{const [a,b]=el.querySelectorAll('.unassigned-card');return b.getBoundingClientRect().top-a.getBoundingClientRect().bottom;});
- expect(gap).toBeGreaterThanOrEqual(12);
- // The dispatcher page now owns scrolling in every viewport.
+ await expect(page.locator('#tripBoard')).toBeHidden();await expect(page.locator('[data-ut-card]')).toHaveCount(14);
+ await expect(page.getByRole('table',{name:'GPS-записи'})).toBeVisible();
+ await expect(page.locator('.gps-journal-detail')).toBeHidden();
  const scroll=page.locator('.gps-journal-sidebar');
  expect(await scroll.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
- await scroll.evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('.unassigned-card').last()).toBeInViewport();
+ await scroll.evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('[data-ut-card]').last()).toBeInViewport();
  await scroll.evaluate(el=>el.scrollTop=0);
  await page.locator('[data-journal-exit]').click();await expect(page.locator('#tripBoard')).toBeVisible();await expect(page.locator('#plUnassigned')).toBeHidden();
  await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page).toHaveURL(/#\/journal$/);await expect(page.locator('#plUnassigned')).toBeVisible();
- await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('#plTrips .subtab[data-sub=tracking]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.unassigned-card')).toHaveCount(14);
+ await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('#plTrips .subtab[data-sub=tracking]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('[data-ut-card]')).toHaveCount(14);
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-journal.png'});await clean(page);
 });
 
@@ -95,7 +107,7 @@ test('trips actions keep aligned slots and a reachable journal switch',async({pa
  await revealDispatcherActions(page);
  for(const selector of ['.trip-list-actions .planner-filter-menu>summary','[data-trip-section=tracking]','#tripTrash']){const box=await page.locator(selector).boundingBox();expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width);expect(box.height).toBeGreaterThanOrEqual(36);}
  await clickDispatcherControl(page,'.trip-list-actions .planner-filter-menu>summary');await expect(page.locator('#tripLayout')).toBeVisible();await page.keyboard.press('Escape');
- await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page.locator('.unassigned-card')).toBeVisible();await expect(page.locator('#tripAdd')).toBeHidden();
+ await clickDispatcherControl(page,'[data-trip-section=tracking]');await expect(page.locator('[data-ut-card]')).toBeVisible();await expect(page.locator('#tripAdd')).toBeHidden();
  await page.locator('[data-journal-exit]').click();await clickDispatcherControl(page,'#tripTrash');await expect(page.locator('#trashOverlay')).toBeVisible();await page.locator('#trashClose').click();
  await expect(page.locator('#tripAdd')).toBeVisible();
  await page.screenshot({path:'test-results/gps-map-header/'+info.project.name+'-trips.png'});await clean(page);
@@ -107,11 +119,11 @@ test('journal period filters on the server, navigates months and persists after 
  const pick=async(from,to)=>{await dates.click();await expect(page.locator('#promptOverlay')).toBeVisible();await page.locator('[data-pf=from]').fill(from);await page.locator('[data-pf=to]').fill(to);await page.locator('#promptYes').click();await expect(page.locator('#promptOverlay')).toBeHidden();};
  const toolbar=await page.locator('.journal-page-head').boundingBox(),actions=await page.locator('.journal-actions>summary').boundingBox();expect(actions.x).toBeGreaterThanOrEqual(toolbar.x);expect(actions.x+actions.width).toBeLessThanOrEqual(toolbar.x+toolbar.width+1);
  await page.locator('.journal-actions>summary').click();await page.locator('[data-ut-choose]').click();await page.locator('[data-ut-select]').first().check();await expect(page.locator('.unassigned-merge')).toBeVisible();
- await pick('2026-10-05','2026-10-05');await expect(page.locator('.unassigned-card')).toHaveCount(1);await expect(page.locator('.unassigned-merge')).toHaveCount(0);await expect(page.locator('.unassigned-card .unassigned-period')).toContainText('5 окт');
- await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(dates).toContainText('05.10 — 05.10.2026');await expect(page.locator('.unassigned-card')).toHaveCount(1);
- await page.locator('.journal-filters>summary').click();await page.locator('[data-ut-mode=archive]').click();await expect(page.locator('.unassigned-card')).toHaveCount(0);await expect(dates).toContainText('05.10 — 05.10.2026');
- await page.locator('[data-ut-mode=pending]').click();await expect(page.locator('.unassigned-card')).toHaveCount(1);await pick('2026-10-01','2026-10-31');await expect(page.locator('.unassigned-card')).toHaveCount(3);
- await page.locator('#tripJournalPeriod [data-summary-shift="-1"]').click();await expect(dates).toContainText('01.09 — 30.09.2026');await expect(page.locator('.unassigned-card')).toHaveCount(0);
- await page.locator('#tripJournalPeriod [data-summary-shift="1"]').click();await expect(dates).toContainText('01.10 — 31.10.2026');await expect(page.locator('.unassigned-card')).toHaveCount(3);
+ await pick('2026-10-05','2026-10-05');await expect(page.locator('[data-ut-card]')).toHaveCount(1);await expect(page.locator('.unassigned-merge')).toHaveCount(0);await expect(page.locator('[data-ut-card] [data-label="Период"]')).toContainText('5 окт');
+ await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(dates).toContainText('05.10 — 05.10.2026');await expect(page.locator('[data-ut-card]')).toHaveCount(1);
+ await page.locator('.journal-filters>summary').click();await page.locator('[data-ut-mode=archive]').click();await expect(page.locator('[data-ut-card]')).toHaveCount(0);await expect(dates).toContainText('05.10 — 05.10.2026');
+ await page.locator('[data-ut-mode=pending]').click();await expect(page.locator('[data-ut-card]')).toHaveCount(1);await pick('2026-10-01','2026-10-31');await expect(page.locator('[data-ut-card]')).toHaveCount(3);
+ await page.locator('#tripJournalPeriod [data-summary-shift="-1"]').click();await expect(dates).toContainText('01.09 — 30.09.2026');await expect(page.locator('[data-ut-card]')).toHaveCount(0);
+ await page.locator('#tripJournalPeriod [data-summary-shift="1"]').click();await expect(dates).toContainText('01.10 — 31.10.2026');await expect(page.locator('[data-ut-card]')).toHaveCount(3);
  expect(await page.locator('.view-planner .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:'test-results/journal-period/'+info.project.name+'.png'});await clean(page);
 });

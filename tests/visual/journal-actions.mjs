@@ -3,9 +3,9 @@ export async function showJournalOverview(page,mode){
  if(page.viewportSize().width<=760)await page.locator('[data-journal-overview-mode="'+mode+'"]').click();
 }
 
-export async function openOrphanDocuments(page){
- if(page.viewportSize().width<=1100)await page.locator('[data-ut-details]').first().click();
- await page.locator('[data-orphan-pane=documents]').click();
+export async function openOrphanOverview(page){
+ await page.locator('[data-ut-details]').first().click();
+ await page.locator('.journal-orphan-overview').waitFor();
 }
 
 export async function openJournalPane(page,pane){

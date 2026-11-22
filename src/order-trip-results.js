@@ -419,7 +419,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   finally{unlock();}
  }
  function render(){
-  const trip=selected,accepted=trip&&lastVersion(trip),readOnly=trip&&(!trip.linked||trip.status==='cancelled'||!mayReport||
+  const trip=selected,accepted=trip&&lastVersion(trip),readOnly=trip&&(!trip.linked||trip.status==='cancelled'||trip.presence?.no_work||!mayReport||
    !!accepted&&!editing||trip.state==='submitted'&&!manager);
   const picker='<select class="order-trip-picker" data-visit-select aria-label="Результат по выезду"><option value="">Все выезды</option>'+trips.map(t=>
    '<option value="'+esc(t.id)+'" '+(t===trip?'selected':'')+'>'+esc(tripLabel(t))+'</option>').join('')+'</select>';
@@ -434,7 +434,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   const context=`<div class="order-trip-context"><dl class="order-trip-metrics">
    <div><dt>На распределении</dt><dd>${metric(available)}</dd></div>
    <div><dt>Распределено</dt><dd ${trip&&!readOnly?'data-trip-distributed':''}>${metric(distributedHours)}</dd></div></dl>
-   ${trip&&!trip.presence?.confirmed?buttons('Сверить данные GPS','data-visit-gps'):''}</div>`;
+   ${trip?.presence?.no_work?'<p class="hint">По GPS-записи подтверждено отсутствие работ.</p>':trip&&!trip.presence?.confirmed?buttons('Сверить данные GPS','data-visit-gps'):''}</div>`;
   let content='';
   const proposal=trip&&!readOnly?proposedTripHours(items,accepted,available,entries):null;
   if(!trip){

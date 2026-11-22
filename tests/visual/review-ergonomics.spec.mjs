@@ -38,17 +38,17 @@ for(const role of ['logist','engineer'])test(role+' uses the canonical stop scre
 
 test('GPS list detail and resolution form preserve context on mobile and desktop',async({page},info)=>{
   const errors=await open(page,info,'planner/tracking',{unassignedJourney:true,unassignedCount:14,preserveRanges:true}),mobile=page.viewportSize().width<=1100;
-  await expect(page.locator('.unassigned-card')).toHaveCount(14);await shot(page,info,'gps-list');
+  await expect(page.locator('[data-ut-card]')).toHaveCount(14);await shot(page,info,'gps-list');
   const last=page.locator('[data-ut-details]').last();await last.scrollIntoViewIfNeeded();await last.click();
   if(mobile){await expect(page.locator('[data-ut-back]')).toBeInViewport();if(page.viewportSize().width<=760)await expect(page.locator('#tripJournalPeriod')).toBeHidden();}
   await expect(page.locator('.journal-orphan-overview .leaflet-container')).toBeVisible();await expect(page.locator('.journal-orphan-overview .leaflet-tile-loaded').first()).toBeVisible();await shot(page,info,'gps-detail');
-  await page.locator('[data-orphan-pane=documents]').click();await page.getByRole('button',{name:'Создать документы',exact:true}).click();
-  await expect(page.locator('#promptOverlay [data-pf=client]')).toBeInViewport();
+  await page.getByRole('button',{name:'Создать выезд',exact:true}).click();
+  await expect(page.locator('#promptOverlay [data-pf=reason]')).toBeInViewport();
   await expect(page.locator('#promptOverlay #promptYes')).toBeInViewport();await shot(page,info,'gps-resolution-start');
-  await page.locator('[data-pf=title]').fill('Черновик визуальной проверки');
+  await page.locator('[data-pf=reason]').fill('Черновик визуальной проверки');
   await page.locator('[data-gps-choice=charge]').click();await expect(page.locator('[data-pf=km]')).toBeVisible();await shot(page,info,'gps-charge');
-  await page.locator('[data-gps-choice=chain]').click();await expect(page.locator('[data-pf=title]')).toHaveValue('Черновик визуальной проверки');
+  await page.locator('[data-gps-choice=create]').click();await expect(page.locator('[data-pf=reason]')).toHaveValue('Черновик визуальной проверки');
   await page.locator('#promptNo').click();if(await page.locator('#confirmOverlay').isVisible())await page.locator('#confirmYes').click();
-  if(mobile){await page.locator('[data-ut-back]').click();await expect(page.locator('.journal-orphan-overview')).toBeVisible();await page.locator('[data-ut-back]').click();await expect(last).toBeInViewport();await expect(last).toBeFocused();}
+  await page.locator('[data-ut-back]').click();await expect(last).toBeInViewport();await expect(last).toBeFocused();
   await shot(page,info,'gps-return-to-list');await clean(page,errors);
 });

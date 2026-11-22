@@ -11,7 +11,7 @@ async function boot(page,info,route='journal'){
 }
 async function shot(page,info,name){const dir='test-results/journal-header/'+info.project.name;mkdirSync(dir,{recursive:true});await page.screenshot({path:dir+'/'+name+'.png',animations:'disabled'});}
 test('journal header uses the shared dates, spaced pills and unclipped native panels',async({page},info)=>{
- const errors=await boot(page,info);await expect(page.locator('.unassigned-card')).toHaveCount(3);
+ const errors=await boot(page,info);await expect(page.locator('[data-ut-card]')).toHaveCount(3);
  await expect(page.locator('#tripJournalPeriod .summary-period-range')).toBeVisible();await expect(page.locator('#tripJournalPeriod .journal-periodbar')).toHaveCount(0);
  const gap=await page.evaluate(()=>{const head=document.querySelector('.journal-page-head').getBoundingClientRect(),pill=document.querySelector('.unassigned-filter>button').getBoundingClientRect();return pill.top-head.bottom;});expect(gap).toBeGreaterThanOrEqual(15);
  await shot(page,info,'01-queue');
@@ -31,7 +31,7 @@ test('journal header enters its full layout before a delayed data response',asyn
  let initial;
  try{await expect(page.locator('.view-planner')).toHaveClass(/journal-open/);await expect(page.locator('.journal-page-head')).toBeVisible();await expect(page.locator('#plTrips>.workspace-dispatcher-head')).toBeHidden();initial=await page.locator('#unassignedHost').boundingBox();await shot(page,info,'04-pending-shell');}
  finally{await page.evaluate(()=>window.__releaseJournalRead?.());}
- await expect(page.locator('.unassigned-card')).toHaveCount(3);const loaded=await page.locator('#unassignedHost').boundingBox();expect(loaded).toEqual(initial);await shot(page,info,'05-loaded-shell');expect(errors).toEqual([]);
+ await expect(page.locator('[data-ut-card]')).toHaveCount(3);const loaded=await page.locator('#unassignedHost').boundingBox();expect(loaded).toEqual(initial);await shot(page,info,'05-loaded-shell');expect(errors).toEqual([]);
 });
 
 test('journal header stop filters fit long labels and back arrows stay visible at every level',async({page},info)=>{

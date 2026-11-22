@@ -912,3 +912,13 @@
  grid-column:1/-1;
  padding-inline:var(--journal-gutter);
 }
+
+.journal-gps-actions {
+ grid-column:1/-1;
+ display:flex;
+ flex-wrap:wrap;
+ gap:var(--sp-4);
+ align-items:flex-start;
+ padding-inline:var(--journal-gutter);
+}
+.journal-gps-actions:empty,.journal-no-work:empty { display:none; }
