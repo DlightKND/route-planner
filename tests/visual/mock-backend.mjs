@@ -899,7 +899,15 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         tables.trip_jobs.push({trip_id:created.id,job_id:job,jobs:request});return {data:created.id,error:null};
       }
       if(financeJourney&&name==='trip_plan_save_tasks'){
-        const target=tables.trips.find(t=>t.id===args.p_trip);if(!target)return reject('missing trip');
+        const target=args.p_trip?tables.trips.find(t=>t.id===args.p_trip):{...ride,id:crypto.randomUUID(),workbench_revision:0,started_at:null,finished_at:null,fact_km:null};
+        if(!target)return reject('missing trip');
+        if(!args.p_trip){
+          tables.trips.push(target);
+          for(const orderId of args.p_order_ids){
+            const linkedOrder=tables.service_orders.find(row=>row.id===orderId);
+            tables.trip_service_orders.push({trip_id:target.id,order_id:orderId,service_orders:linkedOrder,trips:target});
+          }
+        }
         Object.assign(target,structuredClone(args.p_plan));target.workbench_revision++;
         audit.financeWrites.push(structuredClone({name,args}));if(managerJourney)audit.managerState=managerState();return {data:target.id,error:null};
       }

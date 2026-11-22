@@ -1,7 +1,7 @@
 import {setButtonBusy} from './ui/button-state.js';
 import {mountEntityActions} from './entity-actions.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const CONFIG={job:{comments:'job_comments',owner:'job_id',history:'job_history'},order:{comments:'service_order_comments',owner:'order_id',history:'service_order_history'},trip:{comments:'trip_comments',owner:'trip_id',history:'trip_revision_history'}};
+const CONFIG={gpsTrip:{comments:'gps_record_comments',owner:'trip_id'},gpsTrack:{comments:'gps_record_comments',owner:'track_id'},job:{comments:'job_comments',owner:'job_id',history:'job_history'},order:{comments:'service_order_comments',owner:'order_id',history:'service_order_history'},trip:{comments:'trip_comments',owner:'trip_id',history:'trip_revision_history'}};
 const time=v=>v?new Date(v).toLocaleString('ru-RU',{dateStyle:'short',timeStyle:'short'}):'—';
 const date=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?v.slice(8)+'.'+v.slice(5,7)+'.'+v.slice(0,4):'—';
 const actor=(id,people)=>id?(people.find(p=>p.id===id)?.full_name||'Сотрудник'):'Система';
@@ -9,6 +9,10 @@ const drafts=new Map(),mounted=new WeakMap(),labels={comment:'Комментар
 const read=async q=>{const r=await q;if(r.error)throw r.error;return r.data||[];};
 export async function loadEntityActivityRows(db,entity,id){
  const c=CONFIG[entity];if(!c)throw new Error('Неизвестный тип карточки');
+ if(entity==='gpsTrip'||entity==='gpsTrack'){
+  const comments=await read(db.from(c.comments).select('id,author_id,created_at,body').eq(c.owner,id).order('created_at',{ascending:false}).limit(100));
+  return comments.map(row=>({...row,type:'comment',key:'gps:'+row.id,actor_id:row.author_id,at:row.created_at}));
+ }
  const query=()=>db.from(c.comments).select('id,author_id,created_at,body,pinned_at,pinned_by').eq(c.owner,id),pinned=query();
  const [comments,pins,history,legacy,transfers,interventions,results,photos,decisions]=await Promise.all([
   read(query().order('created_at',{ascending:false}).limit(100)),
@@ -54,7 +58,7 @@ export function mountEntityActivity({root,db,entity,id,userId,people=()=>[],canP
  root.innerHTML=`<header class="activity-page-head"><div><h2>Комментарии и события</h2></div><button type="button" class="btn" data-activity-compose>Добавить комментарий</button></header><div class="activity-controls"><div class="activity-filters" aria-label="Фильтр ленты">${[['all','Все события'],['result','Результаты'],['comment','Комментарии'],['photo','Файлы'],['event','Изменения'],['decision','Согласования']].map(([k,label])=>`<button type="button" class="btn ghost" data-activity-filter="${k}" aria-pressed="${k==='all'}">${label}<span data-activity-count="${k}"></span></button>`).join('')}</div>${onRecordResult?'<button type="button" class="btn" data-activity-result>Зафиксировать результат</button>':''}</div><details class="activity-pins" hidden><summary></summary><div></div></details><details class="activity-compose-disclosure"><summary>Комментарий к записи</summary><form class="entity-activity-form activity-composer"><label>Комментарий<textarea name="body" maxlength="4000" rows="2" required placeholder="Добавить комментарий"></textarea></label><div class="activity-composer-actions"><button class="btn" type="submit">Отправить</button><span class="hint" role="status"></span></div></form></details><div class="entity-activity-feed" aria-live="polite"><p class="hint">Загружаю ленту…</p></div>`;
  const form=root.querySelector('form'),input=form.elements.body,status=form.querySelector('[role=status]'),feed=root.querySelector('.entity-activity-feed'),pins=root.querySelector('.activity-pins');
  try{input.value=drafts.get(key)||window.sessionStorage.getItem(key)||'';}catch{input.value=drafts.get(key)||'';}
- const composer=root.querySelector('.activity-compose-disclosure');composer.open=!!input.value;root.querySelector('[data-activity-compose]').onclick=()=>{composer.open=true;input.focus();};
+ const composer=root.querySelector('.activity-compose-disclosure');root.querySelector('.activity-controls').before(composer);composer.open=true;root.querySelector('[data-activity-compose]').onclick=()=>{composer.open=true;input.focus();};
  const remember=()=>{drafts.set(key,input.value);try{if(input.value)window.sessionStorage.setItem(key,input.value);else window.sessionStorage.removeItem(key);}catch{/* memory draft still survives remount */}};input.addEventListener('input',remember);
  const paint=()=>{
   if(!alive)return;const pinned=rows.filter(r=>r.type==='comment'&&r.pinned_at);pins.hidden=!pinned.length;pins.querySelector('summary').textContent='Закреплено · '+pinned.length;pins.querySelector('div').innerHTML=pinned.map(r=>renderEntry(r,people(),{canPin:canPin()})).join('');

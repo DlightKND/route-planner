@@ -45,13 +45,16 @@ test('keeps an incomplete material local, then saves its correction alongside un
   expect(state.financeWrites.at(-1).args.p_parts[0]).toMatchObject({name:'Исправленная запчасть',qty:3});
   expect(state.blockedWrites).toEqual([]);
 });
-test('fills a trip created from its task without asking for an edit reason on the first save',async({page},info)=>{
+test('opens a draft from its task and creates the trip only on the first save',async({page},info)=>{
   await open(page,info,'order/'+fixtureIDs.order);await page.locator('#orderTab-travel').click();
   await page.locator('#orderTripAdd').click();await expect(page.locator('.view-trip.active')).toBeVisible();
-  await expect(page.locator('#tpChangeReasonGroup')).toBeHidden();await page.locator('#tpNotes').fill('Первое заполнение');
+  await expect(page.locator('#tpChangeReasonGroup')).toBeHidden();
+  expect(await page.evaluate(()=>window.__visualQA.reads)).not.toContain('rpc:service_order_trip');
+  expect(await page.evaluate(()=>window.__visualQA.financeWrites)).toEqual([]);
+  await page.locator('#tpNotes').fill('Первое заполнение');
   await page.locator('#tpSave').click();await expect(page.locator('#tpTabOverview')).toHaveAttribute('aria-selected','true');
   const writes=await page.evaluate(()=>window.__visualQA.financeWrites);
-  expect(writes.at(-1)).toMatchObject({name:'trip_plan_save_tasks',args:{p_reason:'Первоначальное заполнение нового выезда',p_plan:{notes:'Первое заполнение'}}});
+  expect(writes.at(-1)).toMatchObject({name:'trip_plan_save_tasks',args:{p_trip:null,p_order_ids:[fixtureIDs.order],p_reason:'Создание выезда',p_plan:{notes:'Первое заполнение'}}});
   await page.locator('#tripEditData').click();await expect(page.locator('#tpChangeReasonGroup')).toBeVisible();
   await expect(page.locator('#tpNotes')).toHaveValue('Первое заполнение');
   await expect(page.locator('#tpSave')).toBeHidden();await page.locator('#tpNotes').fill('Изменение после первого сохранения');await page.locator('#tpSave').click();await expect(page.locator('#tripErr')).toContainText('причину');

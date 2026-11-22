@@ -1,3 +1,4 @@
+import {mountEntityActivity} from './entity-activity.js';
 import {journalIcon as icon} from './journal-icons.js';
 import {intervalText} from './core/journal-display.js';
 import {calendarPeriodBounds} from './core/calendar-period.js';
@@ -44,7 +45,7 @@ export function createJournalTrips(ctx){
   const byStay=new Map();for(const allocation of allocations){if(!byStay.has(allocation.stay_id))byStay.set(allocation.stay_id,[]);byStay.get(allocation.stay_id).push({order_id:allocation.service_order_id,share:Number(allocation.share)});}
   const orders=(linksResponse.data||[]).map(l=>l.service_orders).filter(Boolean),data={...workbench,jobIds:workbench.job_ids||[],removed:workbench.removed||[],history:workbench.history||[],stays:(workbench.stays||[]).map(s=>({...s,task_allocations:byStay.get(s.id)||[]}))};
   const editable=!workbench.reader&&ctx.canEdit(data.trip),amounts=routeAmounts(track),vehicle=ctx.vehicles().find(v=>v.id===data.trip.vehicle_id),name=vehicle?.plate||vehicle?.name||vehicle?.model||'Поездка';
-  root.innerHTML='<header class="journal-trip-head"><button type="button" class="btn ghost gps-back" data-ut-back>← К журналу</button><div><h2>'+esc(name)+'</h2><p>'+intervalText(data.trip.started_at,data.trip.finished_at)+'</p></div><div class="journal-trip-tabs seg" role="group" aria-label="Разделы GPS-записи"><button type="button" data-journal-pane="stops">Обзор</button><button type="button" data-journal-pane="documents">Данные</button></div></header><div class="journal-timeline-host">'+timelineHTML(data.trip,track,data.stays)+'</div><section class="journal-trip-overview"><div class="journal-overview-map"></div><div class="journal-mileage"><span>GPS <b>'+kmText(amounts.gps)+'</b></span><span>Восстановлено <b>'+kmText(amounts.restored)+'</b></span><span>Всего <b>'+kmText(amounts.total)+'</b></span></div><button type="button" class="btn ghost" data-overview-documents>Оформление · связано с выездом →</button></section><section class="journal-trip-stops"></section><section class="journal-trip-route" hidden></section><section class="journal-trip-documents" hidden><h2>Данные GPS-записи</h2><p>Связана с выездом. Привязка не подтверждает посещения и выполнение заданий.</p><button class="btn" data-journal-open-trip>Открыть карточку выезда</button><div class="journal-history">'+(data.history_deferred?'':historyHTML(data,ctx.people()))+'</div></section><p class="journal-trip-message" role="status"></p>';
+  root.innerHTML='<header class="journal-trip-head"><button type="button" class="btn ghost gps-back" data-ut-back>← К журналу</button><div><h2>GPS-запись №'+esc(String(entry.recordNumber||id).slice(0,8))+'</h2><p>'+esc(name)+' · '+intervalText(data.trip.started_at,data.trip.finished_at)+'</p></div><div class="journal-trip-tabs seg" role="group" aria-label="Разделы GPS-записи"><button type="button" data-journal-pane="stops">Обзор</button><button type="button" data-journal-pane="documents">Данные</button></div></header><div class="journal-timeline-host">'+timelineHTML(data.trip,track,data.stays)+'</div><section class="journal-trip-overview"><div class="journal-overview-map"></div><div class="journal-mileage"><span>GPS <b>'+kmText(amounts.gps)+'</b></span><span>Восстановлено <b>'+kmText(amounts.restored)+'</b></span><span>Всего <b>'+kmText(amounts.total)+'</b></span></div><button type="button" class="btn ghost" data-overview-documents>Оформление · связано с выездом →</button></section><section class="journal-trip-stops"></section><section class="journal-trip-route" hidden></section><section class="entity-activity journal-gps-activity"></section><section class="journal-trip-documents" hidden><h2>Данные GPS-записи</h2><p>Связана с выездом. Привязка не подтверждает посещения и выполнение заданий.</p><button class="btn" data-journal-open-trip>Открыть карточку выезда</button><div class="journal-history">'+(data.history_deferred?'':historyHTML(data,ctx.people()))+'</div></section><p class="journal-trip-message" role="status"></p>';
   const tripHead=root.querySelector('.journal-trip-head');
   const overviewBox=root.querySelector('.journal-overview-map');
   const display=root.ownerDocument.createElement('div');display.className='journal-overview-modes';display.setAttribute('role','group');display.setAttribute('aria-label','Вид обзора');
@@ -64,9 +65,58 @@ export function createJournalTrips(ctx){
   const documentsButton=root.querySelector('[data-overview-documents]');documentsButton.innerHTML=icon('file')+'<span>Данные GPS-записи</span>'+icon('chevron');
   const host=root.querySelector('.journal-trip-stops');host.innerHTML=presenceHTML(data,jobs,ctx.people(),{readonly:!editable,orders,workspace:true});wirePresenceRecovery(host);
   const message=root.querySelector('.journal-trip-message');
+  const candidateJobs=jobs.filter(job=>data.jobIds.includes(job.id));
+  if(editable&&ctx.prompt&&candidateJobs.length&&['in_progress','finished','done'].includes(data.trip.status)){
+   const manual=root.ownerDocument.createElement('button');manual.type='button';manual.className='btn ghost';
+   manual.textContent='Добавить посещение без GPS';
+   const engineers=ctx.people().filter(person=>person.role==='engineer'&&person.active!==false);
+   let draft={},operation=null;
+   manual.onclick=async()=>{
+    if(saving||pendingSave||review?.isDirty()){
+     message.textContent='Сначала сохраните выбранные решения по остановкам.';return;
+    }
+    manual.disabled=true;
+    try{
+     const values=await ctx.prompt('Посещение без GPS · время по Киеву',[
+      {key:'job',label:'Заявка и объект',type:'select',required:true,value:draft.job,options:[{value:'',label:'Выберите заявку'},...candidateJobs.map(job=>({value:job.id,label:job.clients?.name||'Заявка №'+job.id.slice(0,8)}))]},
+      {key:'from',label:'Начало',type:'datetime-local',required:true,value:draft.from},
+      {key:'to',label:'Окончание',type:'datetime-local',required:true,value:draft.to},
+      {key:'crew',label:'Присутствовавшие инженеры',type:'select',multiple:true,required:true,value:draft.crew||data.trip.engineer_ids||[],options:engineers.map(person=>({value:person.id,label:person.full_name||'Инженер'}))},
+      {key:'reason',label:'Основание ручного учёта',type:'textarea',required:true,value:draft.reason}
+     ],{okText:'Подтвердить посещение'});
+     if(!values||!current())return;
+     if(JSON.stringify(values)!==JSON.stringify(draft)){draft=values;operation=crypto.randomUUID();}
+     const answer=await ctx.db().rpc('gps_record_manual_visit',{
+      p_trip:id,p_expected:data.trip.workbench_revision,p_operation:operation,p_job:values.job,
+      p_from:values.from,p_to:values.to,p_crew:values.crew,p_reason:values.reason
+     });
+     if(answer.error)throw answer.error;
+     await ctx.afterManualVisit?.(data.trip,answer.data);
+     if(current())await remount('Ручное посещение подтверждено.');
+    }catch(error){if(current())message.textContent=error.message;}
+    finally{if(manual.isConnected)manual.disabled=false;}
+   };
+   root.querySelector('.journal-trip-overview').append(manual);
+  }
   const notify=()=>ctx.onNavigate?.({tripId:id,pane,stopId:pane==='stops'?selected:null,...(pane==='route'&&selected?{returnStopId:selected}:{}),...(pane==='route'&&roadId?{roadId}:{})});
-  review=mountPresenceReview(host,data,{jobs,profiles:ctx.people(),readonly:!editable,leaflet:ctx.leaflet,makeBase:ctx.makeTrackBase,owner:uid,initialMode:'all',onJobChange:(row,job)=>ctx.renderAllocations(row,job,orders),track,onRoute:()=>switchPane('route'),onSelect:stayId=>{selected=stayId;updateSelection();notify();},onBack:()=>{selected=null;updateSelection();notify();},onPin:stay=>readerAction('pin',stay),onReaderAction:ctx.role()==='engineer'?readerAction:null});
-  function updateSelection(){root.classList.toggle('journal-stop-open',!!selected);display.hidden=pane!=='stops'||!!selected;root.querySelector('.journal-trip-overview').hidden=pane!=='stops'||!!selected;documentsButton.hidden=pane!=='stops'||!!selected;(root.closest('.unified-gps-journal')||root).querySelectorAll('[data-journal-stop]').forEach(b=>b.classList.toggle('is-selected',b.dataset.journalStop===selected));const timeline=root.querySelector('.journal-timeline-host');if(pane==='stops'&&!selected)root.querySelector('.journal-overview-map').after(timeline);else root.querySelector('.journal-trip-head').after(timeline);routeMap?.select(selected);overviewMap?.select(selected);}
+  review=mountPresenceReview(host,data,{jobs,profiles:ctx.people(),readonly:!editable,leaflet:ctx.leaflet,makeBase:ctx.makeTrackBase,owner:uid,initialMode:'all',onJobChange:(row,job)=>ctx.renderAllocations(row,job,orders),track,onRoute:()=>switchPane('route'),onSelect:stayId=>{selected=stayId;updateSelection();notify();},onBack:()=>{selected=null;updateSelection();notify();},onConfirmVisits:editable?confirmVisits:null,onPin:stay=>readerAction('pin',stay),onReaderAction:ctx.role()==='engineer'?readerAction:null});
+  async function confirmVisits(stays){
+   if(!current()||saving||pendingSave||!stays.length)return;
+   saving=true;host.inert=true;
+   try{
+    const revision=await ctx.save(data.trip,stays,'Посещение подтверждено · Пакетная сверка GPS');
+    if(!current())return;
+    review.clearSaved(stays.map(stay=>stay.id));
+    const savedIds=new Set(stays.map(stay=>stay.id));
+    const nextStays=data.stays.map(stay=>savedIds.has(stay.id)?{...stay,status:'approved'}:stay);
+    changed?.(id,{__review:reviewFor(nextStays,track,{gaps:entry.review?.gaps,missingTrack:entry.review?.missingTrack})});
+    data.trip.workbench_revision=revision;
+    await remount('Подтверждено посещений: '+stays.length+'.');
+   }finally{saving=false;host.inert=false;}
+  }
+  function updateSelection(){discussion.hidden=pane!=='stops'||!!selected;root.classList.toggle('journal-stop-open',!!selected);display.hidden=pane!=='stops'||!!selected;root.querySelector('.journal-trip-overview').hidden=pane!=='stops'||!!selected;documentsButton.hidden=pane!=='stops'||!!selected;(root.closest('.unified-gps-journal')||root).querySelectorAll('[data-journal-stop]').forEach(b=>b.classList.toggle('is-selected',b.dataset.journalStop===selected));const timeline=root.querySelector('.journal-timeline-host');if(pane==='stops'&&!selected)root.querySelector('.journal-overview-map').after(timeline);else root.querySelector('.journal-trip-head').after(timeline);routeMap?.select(selected);overviewMap?.select(selected);}
+  const discussion=root.querySelector('.journal-gps-activity');
+  const activity=mountEntityActivity({root:discussion,db:ctx.db(),entity:'gpsTrip',id,userId:ctx.userId,people:ctx.people});
   let historyLoaded=!data.history_deferred,historyLoading=false;
   async function loadHistory(){if(historyLoaded||historyLoading)return;historyLoading=true;const box=root.querySelector('.journal-history');box.innerHTML='<p role="status">Загружаем историю изменений…</p>';try{const response=await ctx.db().rpc('trip_workbench_read',{p_trip:id});if(response.error)throw response.error;if(!current())return;box.innerHTML=historyHTML({...data,history:response.data.history||[]},ctx.people());historyLoaded=true;}catch(error){if(current()){box.innerHTML='<p class="err" role="alert">Не удалось загрузить историю: '+esc(error.message)+'</p><button class="btn ghost" data-history-retry>Повторить</button>';box.querySelector('button').onclick=loadHistory;}}finally{historyLoading=false;}}
   function mountRoute(){
@@ -116,7 +166,7 @@ export function createJournalTrips(ctx){
   };
   if(trackResponse.error)message.textContent='Трек недоступен для этой роли. Доступные остановки можно просматривать.';
   paintConflicts();
-  view={navigate(state){if(state.jobId&&editable&&data.jobIds.includes(state.jobId)){const field=host.querySelector('[data-presence-id="'+state.stopId+'"] [data-presence=job_id]');if(field){field.value=state.jobId;field.dispatchEvent(new root.ownerDocument.defaultView.Event('change',{bubbles:true}));}}if(state.stopId){selected=state.stopId;review?.select(selected,true,false);}else{selected=null;review?.back(false);}const previousRoad=roadView;switchPane(state.pane||'stops',false);if(state.roadId){roadView?.open(state.roadId);if(previousRoad)void previousRoad.load();}updateSelection();},discard:()=>review?.discard(),isDirty:()=>review?.isDirty(),destroy(){delete root.dataset.journalSection;delete root.dataset.journalMapMode;overviewObserver?.disconnect();timelineView?.destroy();routeMap?.destroy();overviewMap?.destroy();review?.destroy();root.closest('.unified-gps-journal')?.querySelector('[data-journal-shared-timeline]')?.replaceChildren();root.closest('.unified-gps-journal')?.classList.remove('journal-map-expanded');root.classList.remove('journal-trip-detail','journal-stop-open','journal-route-open');}};
+  view={navigate(state){if(state.jobId&&editable&&data.jobIds.includes(state.jobId)){const field=host.querySelector('[data-presence-id="'+state.stopId+'"] [data-presence=job_id]');if(field){field.value=state.jobId;field.dispatchEvent(new root.ownerDocument.defaultView.Event('change',{bubbles:true}));}}if(state.stopId){selected=state.stopId;review?.select(selected,true,false);}else{selected=null;review?.back(false);}const previousRoad=roadView;switchPane(state.pane||'stops',false);if(state.roadId){roadView?.open(state.roadId);if(previousRoad)void previousRoad.load();}updateSelection();},discard:()=>review?.discard(),isDirty:()=>review?.isDirty(),destroy(){activity?.destroy();delete root.dataset.journalSection;delete root.dataset.journalMapMode;overviewObserver?.disconnect();timelineView?.destroy();routeMap?.destroy();overviewMap?.destroy();review?.destroy();root.closest('.unified-gps-journal')?.querySelector('[data-journal-shared-timeline]')?.replaceChildren();root.closest('.unified-gps-journal')?.classList.remove('journal-map-expanded');root.classList.remove('journal-trip-detail','journal-stop-open','journal-route-open');}};
   const timeline=root.querySelector('.journal-timeline-host');timelineView=wireJournalTimeline(timeline);
   if(selected)review?.select(selected,true,false);if(editable&&jobId&&data.jobIds.includes(jobId)){const row=host.querySelector('[data-presence-id="'+selected+'"]'),field=row?.querySelector('[data-presence=job_id]');if(field){field.value=jobId;field.dispatchEvent(new root.ownerDocument.defaultView.Event('change',{bubbles:true}));host.querySelector('[data-presence-kind=visit]')?.click();}}switchPane(pane,false);updateSelection();
  }

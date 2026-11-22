@@ -23,7 +23,7 @@ it('keeps actual GPS fields and drafts while framing and unframing the shared pr
  try{
   doc.body.innerHTML='<div id="promptOverlay"><div class="modal"><div id="promptFields"><input data-pf="title" value="Черновик"><select data-pf="engineer"><option>Анна</option></select></div></div></div>';
   const overlay=doc.getElementById('promptOverlay'),input=overlay.querySelector('input'),switchAction=vi.fn();
-  frameGpsResolutionPrompt(overlay,{action:'chain',vehicle:'<script>car</script>',period:'16 октября',km:'120',points:10,gaps:1,canCharge:true},switchAction);
+  frameGpsResolutionPrompt(overlay,{action:'create',vehicle:'<script>car</script>',period:'16 октября',km:'120',points:10,gaps:1,canCharge:true},switchAction);
   expect(overlay.querySelector('input')).toBe(input);expect(input.value).toBe('Черновик');expect(overlay.querySelector('script')).toBeNull();
   overlay.querySelector('[data-gps-choice=link]').click();expect(switchAction).toHaveBeenCalledWith('link');
   restoreGpsResolutionPrompt(overlay);expect(overlay.querySelector('.gps-resolution-workspace')).toBeNull();expect(overlay.querySelector('input')).toBe(input);

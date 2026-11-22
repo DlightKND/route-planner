@@ -114,10 +114,11 @@ export function createServiceOrders(ctx){
    filter:requestLabel?`<button type="button" class="chip related-review-filter" data-related-clear-request aria-label="Снять фильтр по заявке">${esc(requestLabel)} ×</button>`:'',rows:tasks.map(task=>{
     const work=(task.service_order_items||[]).filter(item=>!isFinanceVoided(item)),crew=(task.engineer_ids||[]).map(name);
     const works=work.filter(item=>item.kind!=='material').length;
+    const tripContext=trip?'<small data-related-trip-context="'+esc(task.id)+'">Загружаем присутствие и результат…</small>':'';
     return {id:task.id,label:'задание №'+task.number,search:[task.number,task.title,...crew].join(' '),works,
      cells:[`${taskButton(task,origin)}<small>№${esc(task.number)} · работ ${works}</small>`,
       esc(crew.join(', ')||'Команда не назначена'),`<span class="order-child-period">${esc(planningPeriod(task.date_from,task.date_to))}</span>${task.jobs?.due_date?`<small>SLA ${esc(planningDate(task.jobs.due_date))}</small>`:''}`,
-      `<span class="related-status">${esc(ORDER_STATUS[task.status]||task.status)}</span>${historicalClosedDraft(task)?`<small aria-label="${esc(historicalClosedNote)}">${esc(historicalClosedNote)}</small>`:''}`],
+      `<span class="related-status">${esc(ORDER_STATUS[task.status]||task.status)}</span>${historicalClosedDraft(task)?`<small aria-label="${esc(historicalClosedNote)}">${esc(historicalClosedNote)}</small>`:''}${tripContext}`],
      actions:reportAllowed(task)?`<button type="button" class="btn ghost" data-related-order-result="${esc(task.id)}">Внести выполненные работы</button>`:'',
      detail:`<div data-related-work-details="${esc(task.id)}">${relatedWorkPreview(work,{tripScoped:!!trip,open:taskButton(task,origin,'Открыть работы','data-related-order-works')})}</div>`};
    })});
@@ -125,6 +126,24 @@ export function createServiceOrders(ctx){
  function renderTaskTable(root,tasks,origin='',trip=null,requestLabel=''){
   root.innerHTML=taskTable(tasks,origin,trip,requestLabel);
   wireRelatedTable(root,`${ctx.userId()}:${trip||origin}`);wireChildren(root);
+  const results=new Map();
+  const resultFor=id=>{
+   if(!results.has(id))results.set(id,rpc('service_order_trip_results',{p_order:id}));
+   return results.get(id);
+  };
+  for(const status of root.querySelectorAll('[data-related-trip-context]')){
+   resultFor(status.dataset.relatedTripContext).then(result=>{
+    if(!status.isConnected)return;
+    const visit=result?.trips?.find(row=>row.id===trip),available=visit?.presence?.available,accepted=visit?.versions?.at(-1)?.result;
+    const presence=visit?.presence?.confirmed
+     ?available==null?'Посещения подтверждены':'Доступно '+num(available)+' чел·ч'
+     :visit?'Данные GPS на проверке':'Присутствие не зафиксировано';
+    const fact=accepted?'Принято '+num(accepted.hours)+' чел·ч':visit?.state==='submitted'?'Отчёт на приёмке':'Результат не принят';
+    status.textContent=presence+' · '+fact;
+    const action=status.closest('tr').querySelector('[data-related-order-result]');
+    if(accepted&&action)action.textContent='Посмотреть результат';
+   }).catch(()=>{if(status.isConnected)status.textContent='Сведения о выезде недоступны';});
+  }
   const bindWorks=node=>node.querySelector('[data-related-order-works]').onclick=()=>{
    const id=node.dataset.relatedWorkDetails;
    return open(id,origin,{pane:'scope',trip});
@@ -137,7 +156,7 @@ export function createServiceOrders(ctx){
    if(!task||task.work_mode!=='onsite'||detail.dataset.loaded)return;
    detail.dataset.loaded='pending';
    try{
-    const result=await rpc('service_order_trip_results',{p_order:task.id});
+    const result=await resultFor(task.id);
     if(!detail.isConnected)return;
     const accepted=trip?(result?.trips||[]).find(row=>row.id===trip)?.versions?.at(-1)?.result?.items:
      Object.entries(result?.accepted_hours||{}).map(([id,hours])=>({id,hours}));
@@ -343,7 +362,7 @@ export function createServiceOrders(ctx){
    onGPS:async trip=>{if(await leave())ctx.openJournalTrip?.(trip,{pane:'route'});},
    onReport:trip=>open(o.id,scope,{pane:'scope',trip})});
  }
- tabEntity=identity;entityTabs=createEntityTabs(editor,{initial,onChange:value=>{tabValue=value;if(value==='plan-fact')void finance?.load();}});tabValue=entityTabs.value;
+ tabEntity=identity;entityTabs=createEntityTabs(editor,{initial,scrollOnChange:false,onChange:value=>{tabValue=value;if(value==='plan-fact')void finance?.load();ctx.onOrderViewChange?.();}});tabValue=entityTabs.value;
  if(tabValue==='plan-fact')void finance?.load();
  if(!edit)$('orderOrganization').hidden=true;
  renderJobsAndItems(edit,report);$('orderBack').onclick=async()=>{if(!await leave())return;return backCard?ctx.returnToCard(backCard):ctx.showBoard();};if($('orderRequest'))$('orderRequest').onclick=async()=>{if(await leave())ctx.openJob(o.job_id);};
@@ -357,7 +376,7 @@ export function createServiceOrders(ctx){
  if(o.id)wireTravel($('orderTrips'),[o],{origin:scope||'',order:o});
  if($('orderCarry'))$('orderCarry').onclick=()=>perform(async()=>{if(dirty||reportDirty)throw Error('Сначала сохрани результат');if(!canCloseWithRemainder(o))throw Error('Проверьте выполненные работы и связанные выезды');const reason=await ctx.reason('Причина закрытия задания с остатком');if(reason===null)return;await rpc('service_order_close_with_remainder',{p_order:o.id,p_expected:o.revision,p_reason:reason});if(await open(o.id,scope,{pane:'overview'}))ctx.notify('Задание закрыто. Остаток доступен в заявке.');});
  if($('orderTripExisting'))$('orderTripExisting').onclick=()=>chooseExistingTrip(o);
- if($('orderTripAdd'))$('orderTripAdd').onclick=()=>perform(async()=>{if(dirty||reportDirty)throw Error('Сначала сохрани задание');const id=await rpc('service_order_trip',{p_id:o.id,p_expected:o.revision});await ctx.openTrip(id,{newPlan:true});});
+ if($('orderTripAdd'))$('orderTripAdd').onclick=()=>perform(async()=>{if(dirty||reportDirty)throw Error('Сначала сохрани задание');await ctx.openTrip(null,{plannedOrderIds:[o.id],seedOrder:o});});
  if(o.id){mountEntityActivity({root:$('orderActivity'),db:api(),entity:'order',id:o.id,userId:ctx.userId,people:ctx.profiles,canPin:()=>manager(o),onOpenResult:entry=>{if(entry?.snapshot?.trip_id&&visitResults){showVisitResult(entry.snapshot.trip_id);return;}if(o.status==='review'&&manager(o))openReview(o);else{entityTabs.select('scope');$('orderResultSummary')?.scrollIntoView?.({block:'start'});}}});mountEntityResponsibility({root:$('orderResponsibility'),showHistory:false,db:api(),kind:'order',id:o.id,record:o,people:ctx.profiles,userId:ctx.userId,role:ctx.role,beforeAssign:()=>settleDraft('Перед передачей ответственности'),onChange:async data=>{if(ctx.canWrite()||[data.owner_id,data.curator_id].includes(ctx.userId())){if(!await open(o.id,scope)){ctx.notify('Ответственность передана. Откройте задание заново для загрузки актуальной версии.','warn');ctx.showBoard();}}else ctx.showBoard();},onError:e=>{if($('orderError'))$('orderError').textContent=e.message;fail(e);}});tripCosts(o.id);deadlineRequests(o.id);
   if($('orderDeadlineSend'))$('orderDeadlineSend').onclick=()=>perform(async()=>{if(dirty||reportDirty)throw Error('Сначала сохрани изменения задания');const date=$('orderDeadlineDate').value,reason=$('orderDeadlineReason').value.trim();if(!date||reason.length<5)throw Error('Укажи новый срок и причину не короче пяти символов');await rpc('service_order_deadline_propose',{p_order:o.id,p_date_to:date,p_reason:reason});await deadlineRequests(o.id);$('orderDeadlineReason').value='';ctx.notify('Предложение отправлено куратору');});
   mountEntityActions({trigger:$('orderMore'),items:()=>[
@@ -411,7 +430,7 @@ export function createServiceOrders(ctx){
    }
    const user=loadedUser;
    visitPanel=mountOrderTripResults({root:panel,order:o,items:items.filter(item=>!isFinanceVoided(item)),catalog:workCatalog,
-    data:visitResults,manualResult,user,manager:manager(o),mayReport:['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.engineer_ids?.includes(user)),requestedTrip,
+    data:visitResults,manualResult,user,manager:manager(o),mayReport:['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.engineer_ids?.includes(user)),requestedTrip,onSelectTrip:()=>ctx.onOrderViewChange?.(),
     savePayment,onPaymentChange:paintPayment,
     preparePhoto:ctx.preparePhoto,
     uploadPhoto:async(path,blob)=>{
@@ -629,5 +648,9 @@ export function createServiceOrders(ctx){
  async function tripParent(t){const el=$('tripOrderParent');if(!el)return;el.innerHTML='';if(!t?.id)return;try{const {data,error}=await api().from('trip_service_orders').select('order_id,service_orders(id,number,title,job_id)').eq('trip_id',t.id);if(error)throw error;const linked=(data||[]).map(x=>x.service_orders).filter(o=>o?.job_id);if(!linked.length){el.innerHTML='<span class="hint">Задания пока не связаны</span>';return;}el.innerHTML='<span class="hint">Задания выезда:</span> '+linked.map(o=>`<button type="button" class="crumb" data-trip-order="${o.id}">№${o.number} · ${esc(o.title)}</button>`).join('');el.querySelectorAll('[data-trip-order]').forEach(b=>b.onclick=()=>open(b.dataset.tripOrder,null));}catch(e){el.innerHTML='<span class="hint">Не удалось загрузить задания выезда: '+esc(e.message)+'</span>';}}
  function init(){ if($('orderViewMode'))$('orderViewMode').onchange=e=>{viewMode=e.target.value;return board();};if($('orderHistorical'))$('orderHistorical').onchange=e=>{showHistorical=e.target.checked;return board();};$('orderSearch').oninput=e=>{query=e.target.value.trim().toLowerCase();board();};$('orderEngineer').onchange=e=>{crewFilter=e.target.value;board();};$('orderClosed').onchange=e=>{showClosed=e.target.checked;visibleStates.completed=showClosed;visibleStates.cancelled=showClosed;return board();};$('orderScopeClear').onclick=()=>{scope=null;board();};$('orderAdd').onclick=()=>open(null,scope);}
  return {init,board,open,openWork,openResult,eligibleOrdersForRequest,attachJobs,requestPanel,renderTaskTable,tripParent,leave,isDirty:()=>dirty||reportDirty,currentId:()=>current?.id,
+  selectPane(pane='overview',trip){
+   entityTabs?.select(({works:'scope',trips:'travel',history:'overview'})[pane]||pane);
+   if(['scope','works'].includes(pane)&&trip)visitPanel?.select(trip);
+  },
   cardLocation:()=>({id:current?.id,scope,pane:entityTabs?.value,trip:visitPanel?.currentTrip()}),loaded:()=>loaded};
 }

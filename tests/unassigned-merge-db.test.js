@@ -10,6 +10,26 @@ beforeAll(async()=>{
  db=new PGlite();await db.exec(readFileSync(new URL('./fixtures/unassigned-tracking-base.sql',import.meta.url),'utf8'));
  await db.exec('alter table trip_tracks add column km numeric; alter table trip_tracks add column data jsonb; alter table trip_tracks add column updated_at timestamptz');
  for(const file of ['20261006070024_unassigned_tracking_journal.sql','20261008172441_unassigned_track_merge.sql'])await db.exec(readFileSync(new URL('../supabase/migrations/'+file,import.meta.url),'utf8'));
+ // The focused fixture already uses the real GPS resolver. Only the separate
+ // plan-write subsystem is stubbed here to observe its transaction boundary.
+ await db.exec(`create function public.trip_plan_save_tasks(uuid,integer,jsonb,uuid[],text,jsonb) returns uuid language plpgsql as $$
+ declare tid uuid; begin
+ insert into public.trips(vehicle_id,status,owner_id,curator_id) values (($3->>'vehicle_id')::uuid,'planned',auth.uid(),auth.uid()) returning id into tid;
+ insert into public.trip_service_orders(trip_id,order_id,ordinal) select tid,x,0 from unnest($4)x;
+ return tid; end $$;`);
+
+ await db.exec(`alter table public.trips add column workbench_revision integer not null default 0;
+ alter table public.trip_stays add column id uuid primary key, add column job_id uuid, add column vehicle_id uuid,
+ add column stay_from timestamptz, add column stay_to timestamptz, add column crew_ids uuid[], add column crew_source text,
+ add column mgr_by uuid, add column note text, add column minutes_mgr numeric, add column status text;
+ create function public.trip_presence_save(uuid,integer,jsonb,text) returns integer language plpgsql as $$
+ declare rev integer; begin
+ update public.trip_stays set mgr_by=auth.uid(),note=$4,status=$3->0->>'status',minutes_mgr=($3->0->>'minutes_mgr')::numeric
+ where trip_id=$1 and id=($3->0->>'id')::uuid;
+ update public.trips set workbench_revision=workbench_revision+1 where id=$1 and workbench_revision=$2 returning workbench_revision into rev;
+ return rev; end $$;`);
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261122152709_workflow_gps_record_operations.sql',import.meta.url),'utf8'));
+
 },30000);
 beforeEach(async()=>{
  await db.exec('begin');await q("insert into profiles values($1,'admin',true),($2,'engineer',true)",[id(1),id(2)]);await q("select set_config('test.uid',$1,true)",[id(1)]);
@@ -78,4 +98,44 @@ it('preserves single-track linking through the same scoped GPS source',async()=>
  const track=id(100),total=await quote(track);await q("insert into trips(id,vehicle_id,status,owner_id,curator_id)values($1,$2,'planned',$3,$3)",[id(50),id(10),id(1)]);
  await q('select unassigned_track_resolve($1,$2,$3,$4)',[track,total.revision,'link',{trip:id(50),points:total.points,km:total.km,reason:'Обычный одиночный трек'}]);
  expect((await q('select count(*)::integer n from vehicle_positions where trip_id=$1',[id(50)]))[0].n).toBe(2);expect(await q('select * from trip_tracks')).toHaveLength(0);
+});
+
+
+it('creates and binds one trip atomically, retries by operation ID and never creates a request',async()=>{
+ const track=id(100),source=await quote(track),operation=id(60),order=id(61);
+ const invoke=(points,action=operation)=>q('select gps_record_create_trip($1,$2,$3,$4,$5,$6,$7) id',
+  [track,source.revision,points,action,{vehicle_id:id(10),status:'planned'},[order],'Проверена GPS-запись']);
+ await expect(invoke(source.points+1)).rejects.toThrow('GPS изменился');
+ expect(await q('select id from trips')).toEqual([]);
+ const [{id:trip}]=await invoke(source.points);
+ expect(await invoke(source.points)).toEqual([{id:trip}]);
+ await expect(invoke(source.points,id(62))).rejects.toThrow('GPS-запись изменилась');
+ expect(await q('select order_id from trip_service_orders where trip_id=$1',[trip])).toEqual([{order_id:order}]);
+ expect(await q('select id from jobs')).toEqual([]);
+ expect(await q('select id from service_orders')).toEqual([]);
+});
+
+it('keeps GPS-record comments separate and carries them into the linked record',async()=>{
+ const track=id(100),source=await quote(track);
+ await db.exec('set role authenticated');
+ await q('insert into gps_record_comments(track_id,author_id,body) values($1,$2,$3)',[track,id(1),'Проверить остановку']);
+ await expect(q('insert into gps_record_comments(track_id,author_id,body) values($1,$2,$3)',[track,id(2),'Чужой автор'])).rejects.toThrow('row-level security');
+ const [{id:trip}]=await q('select gps_record_create_trip($1,$2,$3,$4,$5,$6,$7) id',
+  [track,source.revision,source.points,id(62),{vehicle_id:id(10),status:'planned'},[id(61)],'Проверена GPS-запись']);
+ expect(await q('select track_id,trip_id,body from gps_record_comments where trip_id=$1',[trip])).toEqual([{track_id:track,trip_id:trip,body:'Проверить остановку'}]);
+});
+
+
+it('records an explicit manual visit in Kyiv time without manufacturing GPS time',async()=>{
+ const trip=id(50),job=id(51),operation=id(62);
+ await q("insert into trips(id,status,vehicle_id,started_at,finished_at) values($1,'finished',$2,'2026-10-03T07:00Z','2026-10-03T12:00Z')",[trip,id(10)]);
+ await q('insert into trip_jobs values($1,$2,0)',[trip,job]);
+ const visit=(from,to)=>q('select gps_record_manual_visit($1,0,$2,$3,$4,$5,$6,$7) revision',
+  [trip,operation,job,from,to,[id(2)],'Согласованный журнал работ']);
+ await expect(visit('2026-10-03T08:00','2026-10-03T08:30')).rejects.toThrow('внутри выезда');
+ expect(await q('select id from trip_stays')).toEqual([]);
+ expect(await visit('2026-10-03T10:00','2026-10-03T10:30')).toEqual([{revision:1}]);
+ expect(await visit('2026-10-03T10:00','2026-10-03T10:30')).toEqual([{revision:1}]);
+ expect(await q('select manual_origin,status,minutes_mgr from trip_stays where id=$1',[operation])).toEqual([{manual_origin:true,status:'approved',minutes_mgr:'30.0000000000000000'}]);
+ expect(await q('select * from vehicle_positions')).toEqual([]);
 });

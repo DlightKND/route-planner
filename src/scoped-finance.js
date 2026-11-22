@@ -238,10 +238,10 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onGPS,onOrde
  }
  function mileageTable(trips){
   const trip=scope==='trip'?trips[0]:null;
-  const sections=trip?.sections.filter(section=>section.mode==='fact')||[];
-  if(trip&&!sections.length)sections.push(...trip.sections.filter(section=>section.mode==='plan'));
+  const sections=trip?.sections||[];
   const bySection=sections.length>0,title=bySection?'Пробег по участкам':'Пробег по выездам';
-  const rows=bySection?sections.map(section=>`<tr><th scope="row">${esc(section.title)}</th>
+  const rows=bySection?sections.map(section=>`<tr><th scope="row">${esc(section.title)}
+   <span class="hint"> · ${section.mode==='plan'?'План':'Факт'}</span></th>
    <td>${section.mode==='plan'?units(section.km):'—'}</td><td>${section.mode==='fact'?units(section.km):'—'}</td></tr>`):
    trips.map((row,index)=>{
     const title=esc(row.title||row.date||'Выезд'),key='finance-mileage-'+scope+'-'+id+'-'+row.id,expanded=disclosures.has(key);
@@ -256,7 +256,7 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onGPS,onOrde
       ${row.whole?'':`<tr><th scope="row">${scope==='job'?'Пробег по заявке':'Пробег по заданию'}</th><td>${units(row.plan_km)}</td><td>${units(row.actual)}</td></tr>`}</tbody>
      </table></td></tr>`;
    });
-  return disclosure('mileage',title,`<div class="scoped-finance-scroll"><table aria-label="${title}">
+  return disclosure('mileage',title,`${bySection&&onGPS?`<button type="button" class="btn ghost" data-finance-gps="${esc(trip.id)}">Журнал GPS</button>`:''}<div class="scoped-finance-scroll"><table aria-label="${title}">
    <thead><tr><th scope="col">${bySection?'Участок':'Выезд'}</th><th scope="col">План, км</th><th scope="col">Факт, км</th>${bySection?'':'<th scope="col"><span class="sr-only">Детали</span></th>'}</tr></thead>
    <tbody>${rows.join('')}</tbody><tfoot><tr><th scope="row">${trip?'Всего по выезду':'Итого'}</th>
     <td>${units(knownSum(trips.map(row=>amount(row.plan_km))))}</td><td>${units(knownSum(trips.map(row=>amount(row.actual))))}</td>${bySection?'':'<td></td>'}</tr></tfoot>

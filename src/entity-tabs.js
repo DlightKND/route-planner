@@ -8,7 +8,7 @@ export function createEntityTabs(root, {
   let value = null;
   const tabs = () => [...root.querySelectorAll(tabSelector)];
   const enabled = () => tabs().filter(tab => !tab.disabled && !tab.hidden);
-  const select = (name, {focus = false} = {}) => {
+  const select = (name, {focus = false, notify = true} = {}) => {
     const available = enabled();
     const chosen = available.find(tab => tab.dataset[tabKey] === name) || available[0];
     if (!chosen) return false;
@@ -37,7 +37,7 @@ export function createEntityTabs(root, {
         root.style.setProperty('--entity-toolbar-inset', inset + 'px');
         scroller.scrollTop = Math.max(0, scroller.scrollTop + panel.getBoundingClientRect().top - scroller.getBoundingClientRect().top - height - gap);
       }
-      onChange?.(value, {previous});
+      if (notify) onChange?.(value, {previous});
     }
     return true;
   };

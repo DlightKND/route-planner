@@ -35,6 +35,7 @@ export function presenceHTML(data, jobs, profiles, {editor = false, orders = [],
   const candidateJobs = [...jobs.filter(j => data.jobIds.includes(j.id)).map(j=>({id:j.id,name:jobName(j.id)})),
     ...data.removed.map(j=>({id:j.job_id,name:jobName(j.job_id)+' · исключена из плана'}))];
   const evidenceLabel = stay => {
+    if(stay.manual_origin)return '<div class="hint">Ручное посещение без GPS</div>';
     const bounds=presenceBounds(stay);return bounds?`<div class="presence-gps-note">По GPS: <b>${n(bounds.gps)} мин</b> · неизменяемая часть</div>${bounds.extra?`<div class="hint">Предложено после потери навигации: ${n(bounds.extra)} мин</div>`:''}`:`<div class="hint">GPS: ${n(stay.minutes_raw)} мин</div>`;
   };
   const recoveryControls = stay => {

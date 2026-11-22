@@ -102,8 +102,9 @@ export function relatedTripRows(trips,{people,status,visits,linkedTasks,open,ope
   const visit=visits.get(trip.id),period=planningPeriod(trip.date_from,trip.date_to),crew=(trip.engineer_ids||[]).map(people);
   const vehicle=trip.vehicle_label||visit?.label||'Автомобиль не выбран',review=trip.status==='finished'&&!visit?.presence?.confirmed;
   const tasks=linkedTasks(trip.id),hours=visit?.presence?.confirmed?visit.presence.base:null;
-  return {id:trip.id,label:'выезд · '+vehicle,search:[trip.number,vehicle,period,...crew].join(' '),review,hours,
-   cells:[`${open(trip,trip.number?'Выезд №'+trip.number:'Выезд')}<small>${esc(period)}</small>`,
+  const reference=trip.number||String(trip.id).slice(0,8);
+  return {id:trip.id,label:'выезд · '+vehicle,search:[reference,vehicle,period,...crew].join(' '),review,hours,
+   cells:[`${open(trip,'Выезд №'+reference)}<small>${esc(period)}</small>`,
     `<strong>${esc(vehicle)}</strong><small>${esc(crew.join(', ')||'Команда не назначена')}</small>`,
     `${hours==null?'—':quantity(hours)+' чел·ч'}${visit?.presence?.confirmed&&visit.presence.available!=null?`<small>Доступно заданию ${quantity(visit.presence.available)} чел·ч</small>`:''}`,
     `<span class="related-status${review?' is-review':''}">${esc(trip.status==='finished'&&visit?.presence?.confirmed?'Посещения подтверждены':status(trip.status))}</span>`],

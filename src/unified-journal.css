@@ -856,3 +856,59 @@
   height:clamp(190px,43vh,420px);
  }
 }
+
+/* The register and an open GPS record are separate views on every viewport. */
+.view #unassignedHost.unified-gps-journal {
+ grid-template-columns:minmax(0,1fr);
+}
+.view #unassignedHost.unified-gps-journal > .gps-journal-sidebar,
+.view #unassignedHost.unified-gps-journal > .gps-journal-detail {
+ grid-area:2 / 1;
+ border:0;
+}
+.view #unassignedHost.unified-gps-journal:not(.gps-show-detail) > .gps-journal-detail,
+.view #unassignedHost.unified-gps-journal.gps-show-detail > .gps-journal-sidebar {
+ display:none;
+}
+.view #unassignedHost.unified-gps-journal.gps-show-detail > .journal-page-head {
+ display:none;
+}
+.view #unassignedHost.unified-gps-journal.gps-show-detail > .gps-journal-detail {
+ grid-row:1 / -1;
+}
+.unified-gps-journal .gps-back { display:inline-flex; }
+.unified-gps-journal .journal-search { max-width:460px; margin-bottom:var(--sp-4); }
+.view .unified-gps-journal .unassigned-filter.seg {
+ flex-wrap:wrap;
+ justify-content:flex-start;
+}
+.view .unified-gps-journal .unassigned-filter.seg > button { flex:0 0 auto; }
+.unified-gps-journal .unassigned-list { padding:0; overflow:auto; }
+.journal-register { border-collapse:collapse; width:100%; text-align:left; }
+.journal-register th,.journal-register td { padding:var(--sp-4); border-bottom:1px solid var(--line); }
+.journal-register thead { background:var(--panel-raised,var(--panel)); }
+.journal-register tr:last-child td,.journal-register tr:last-child th { border-bottom:0; }
+.journal-register td:last-child { text-align:right; }
+.journal-register small { display:block; color:var(--ink-dim); }
+.journal-merge-choice { display:flex; gap:var(--sp-2); align-items:center; justify-content:flex-end; }
+@media (max-width:600px) {
+ .journal-register,.journal-register tbody { display:block; }
+ .journal-register thead { position:absolute; clip-path:inset(50%); overflow:hidden; width:1px; height:1px; }
+ .journal-register tr { display:grid; padding:var(--sp-3) var(--sp-4); border-bottom:1px solid var(--line); }
+ .journal-register tr > :is(th,td) { display:block; border:0; padding:var(--sp-2) 0; }
+ .journal-register td[data-label]::before { content:attr(data-label); display:block; color:var(--ink-dim); font-size:var(--fs-caption); }
+ .journal-register td:last-child { text-align:left; }
+ .journal-merge-choice { justify-content:flex-start; }
+}
+
+.presence-stop-entry { display:flex; gap:var(--sp-2); align-items:center; }
+.presence-stop-entry > .presence-stop { flex:1; min-width:0; }
+.presence-stop-entry > input[type=checkbox] { flex:none; margin:0 var(--sp-1); }
+.presence-batch { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--sp-3); padding:var(--sp-3); border-top:1px solid var(--line); }
+
+.journal-gps-activity { margin-block:var(--sp-5); }
+.journal-orphan-overview > .gps-resolution-entry { margin-block:var(--sp-4); }
+.journal-trip-detail > .journal-gps-activity {
+ grid-column:1/-1;
+ padding-inline:var(--journal-gutter);
+}

@@ -35,11 +35,11 @@ export function proposedTripHours(items,accepted,budget,catalog){
  return hours;
 }
 
-export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onWrite,onPlanWrite,onPartWrite,onReturnReason,onGPS,onTrip,onReload,preparePhoto,uploadPhoto,downloadPhoto,savePayment,onPaymentChange}){
+export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onSelectTrip,onWrite,onPlanWrite,onPartWrite,onReturnReason,onGPS,onTrip,onReload,preparePhoto,uploadPhoto,downloadPhoto,savePayment,onPaymentChange}){
  let paymentModel=null;
  const trips=data?.trips||[],works=items.filter(item=>item.kind!=='material'),material=items.filter(item=>item.kind==='material');
  const workIds=new Set(works.map(item=>item.id));
- let selected=trips.find(trip=>trip.id===requestedTrip)||(trips.length===1?trips[0]:null);
+ let selected=requestedTrip==='all'?null:trips.find(trip=>trip.id===requestedTrip)||(trips.length===1?trips[0]:null);
  let editing=false,review=false,busy=false,fields=null,operation=null;
  const entries=new Map(catalog.map(item=>[item.id,item]));
  const expanded=new Set();
@@ -81,10 +81,12 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   operation=draft?.operation||null;
  }
  function switchTrip(id){
+  const next=trips.find(trip=>trip.id===id)||null;
+  if(next===selected)return;
   persist();
-  selected=trips.find(trip=>trip.id===id)||null;
+  selected=next;
   expanded.clear();partsOpen.clear();
-  editing=false;review=false;operation=null;restore();render();
+  editing=false;review=false;operation=null;restore();render();onSelectTrip?.();
  }
  function distributed(){return fields?.rows.reduce((sum,row)=>sum+(nonnegative(row.hours)||0),0)||0;}
  function updateMetrics(){
