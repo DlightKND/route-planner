@@ -21,3 +21,25 @@ it('requires a context-bound explicit zero choice without changing the saved sou
 it('renders saved zero honestly and exposes the existing editor only after edit',()=>{
  const {root,data}=setup();const zero={...data.stays[1],minutes_mgr:0};data.stays[1]=zero;root.innerHTML=presenceHTML(data,[{id:'job',clients:{name:'Объект'}}],[{id:'engineer',role:'engineer',full_name:'Анна'}],{workspace:true});mountPresenceReview(root,data,{jobs:[{id:'job',clients:{name:'Объект'}}],profiles:[{id:'engineer',full_name:'Анна'}],initialMode:'done'});expect(root.querySelector('.journal-result-badge').textContent).toContain('время не принято');expect(root.querySelector('.journal-result-total').textContent).toContain('0 чел.-ч');expect(root.querySelector('.presence-kind').hidden).toBe(true);root.querySelector('[data-review-edit]').click();expect(root.querySelector('.presence-kind').hidden).toBe(false);expect(root.querySelector('[data-presence-save]').disabled).toBe(true);
 });
+
+
+it('uses only the selected visits in a batch when historical approvals have incomplete inputs',async()=>{
+ const {root,win,data}=setup();
+ Object.assign(data.stays[1],{job_id:null,stay_from:'2026-10-19T06:00Z',stay_to:'2026-10-19T07:00Z'});
+ const jobs=[{id:'job',clients:{name:'Объект'}}],profiles=[{id:'engineer',role:'engineer',full_name:'Анна'}];
+ root.innerHTML=presenceHTML(data,jobs,profiles,{workspace:true});
+ let selected;
+ mountPresenceReview(root,data,{jobs,profiles,initialMode:'all',onConfirmVisits:async visits=>{selected=visits;}});
+ const pending=root.querySelector('[data-presence-id="pending"]');
+ pending.querySelector('[data-presence="job_id"]').value='job';
+ pending.querySelector('[data-presence="crew_ids"] option').selected=true;
+ pending.querySelector('[data-presence="minutes_mgr"]').value='60';
+ const checkbox=root.querySelector('[data-batch-stay="pending"]');
+ checkbox.checked=true;
+ checkbox.dispatchEvent(new win.Event('change',{bubbles:true}));
+ expect(root.querySelector('.presence-batch [role=status]').textContent).toContain('1 чел·ч');
+ expect(root.querySelector('.presence-batch').hidden).toBe(false);
+ await root.querySelector('.presence-batch button').onclick();
+ expect(selected.map(visit=>({id:visit.id,status:visit.status}))).toEqual([{id:'pending',status:'approved'}]);
+ expect(data.stays[1].status).toBe('approved');
+});

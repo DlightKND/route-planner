@@ -904,7 +904,7 @@
 .presence-stop-entry { display:flex; gap:var(--sp-2); align-items:center; }
 .presence-stop-entry > .presence-stop { flex:1; min-width:0; }
 .presence-stop-entry > input[type=checkbox] { flex:none; margin:0 var(--sp-1); }
-.presence-batch { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--sp-3); padding:var(--sp-3); border-top:1px solid var(--line); }
+.presence-batch { display:flex; flex:none; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--sp-3); padding:var(--sp-3); border-top:1px solid var(--line); }
 
 .journal-gps-activity { margin-block:var(--sp-5); }
 .journal-orphan-overview > .gps-resolution-entry { margin-block:var(--sp-4); }
