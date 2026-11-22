@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 const job=fixtureIDs.job,order=fixtureIDs.order,trip=fixtureIDs.trip,other='00000000-0000-4000-8000-000000000003';
-async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false,paymentJourney=false,roadJourney=false,scopedFinanceJourney=false}={}){
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,unifiedJournalJourney:roadJourney,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan,paymentJourney,roadJourney,scopedFinanceJourney}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
+async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false,paymentJourney=false,roadJourney=false,scopedFinanceJourney=false,tripOrderPicker=false}={}){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,unifiedJournalJourney:roadJourney,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan,paymentJourney,roadJourney,scopedFinanceJourney,tripOrderPicker}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
 }
 async function navigate(page,view,hash){await page.evaluate(hash=>{location.hash=hash;},hash);await expect(page.locator('.view-'+view)).toHaveClass(/active/);}
 async function reopenRequest(page){await navigate(page,'planner','/planner/jobs');await navigate(page,'job','/job/'+job);}
@@ -12,6 +12,29 @@ async function clean(page,errors){expect(errors).toEqual([]);expect(await page.e
 const dialog=page=>page.locator('dialog.entity-panel-dialog:visible').last();
 async function cancelEditor(page){await dialog(page).locator('[data-entity-cancel]').click();await expect(page.locator('#confirmOverlay')).toBeVisible();await page.locator('#confirmYes').click();await expect(page.locator('[data-entity-save]')).toHaveCount(0);}
 async function keepOnlyOther(page,select){await page.locator(select+' + .engineer-picker').click();const choices=page.locator('.engineer-options');await expect(choices).toBeVisible();await choices.locator('input[type=checkbox]').first().uncheck();await choices.getByRole('button',{name:'Готово',exact:true}).click();}
+
+test('V16: chooses an existing assignment from the trip menu and writes only when saving the plan',async({page},info)=>{
+ const errors=await boot(page,info,{route:'trip/'+trip,tripOrderPicker:true});
+ const writes=()=>page.evaluate(()=>window.__visualQA.financeWrites.filter(write=>write.name==='trip_plan_save_tasks'));
+ await page.locator('#tripMore').click();
+ await page.getByRole('dialog',{name:'Другие действия'}).getByRole('button',{name:'Привязать задание'}).click();
+ const picker=page.getByRole('dialog',{name:'Привязать задание'}),search=picker.getByRole('searchbox');
+ await search.fill('нет такого задания');
+ await expect(picker.getByText('Заданий по этому запросу нет.')).toBeVisible();
+ await expect(picker.getByRole('radio')).toHaveCount(0);
+ await search.fill('102');
+ await picker.getByRole('radio',{name:/№102/}).check();
+ await picker.getByRole('button',{name:'Добавить в план'}).click();
+ await expect(picker).toHaveCount(0);
+ await expect(page).toHaveURL(/\/plan$/);
+ await expect(page.locator('#tpLinkedOrders')).toContainText('102');
+ expect(await writes()).toEqual([]);
+ await page.locator('#tpSave').click();
+ await page.locator('#tpChangeReason').fill('Дополнительные работы по заявке');
+ await page.locator('#tpSave').click();
+ await expect.poll(writes).toEqual([expect.objectContaining({args:expect.objectContaining({p_trip:trip,p_order_ids:[order,'20000000-0000-4000-8000-000000000002']})})]);
+ await clean(page,errors);
+});
 
 test('M15: payment fields inherit independently and open the work exception for reset',async({page},info)=>{
  const errors=await boot(page,info,{stage:'in_progress',tripResultJourney:'engineer',paymentJourney:true});

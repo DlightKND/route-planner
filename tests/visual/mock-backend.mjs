@@ -333,8 +333,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     tables.service_order_history=[task,activeTask].flatMap(target=>[{id:'order-history-'+target.id,order_id:target.id,actor_id:manager,recorded_at:'2026-10-04T16:10:00Z',reason:'Назначены исполнитель и срок выполнения'},{id:'order-history-start-'+target.id,order_id:target.id,actor_id:engineer,recorded_at:'2026-10-05T06:15:00Z',reason:target.status==='in_progress'?'Выполнение задания начато':'Исполнитель ознакомился с заданием'}]);
     tables.entity_responsibility_events=Object.entries(activityConfig).map(([kind,c],index)=>({id:'responsibility-'+kind,entity_kind:kind,entity_id:kind==='order'?activeTask.id:c.rows[0].id,actor_id:manager,owner_id:manager,curator_id:manager,previous_owner_id:null,previous_curator_id:null,created_at:'2026-10-04T15:00:00Z',reason:'Назначены владелец и куратор'}));
     resultEvents.push({id:'80000000-0000-4000-8000-000000000001',order_id:activeTask.id,actor_id:engineer,recorded_at:'2026-10-05T06:25:00Z',actual_date:'2026-10-04',snapshot:{...resultSnapshot(activeTask),note:'Диагностика завершена. Замена уплотнения запланирована на следующий этап.'}});
-    activeTask.trip_service_orders=[{trip_id:trip,trips:ride}];
-    tables.trip_service_orders.push({trip_id:trip,order_id:activeTask.id,service_orders:activeTask,trips:ride});
+    if(!managerJourney?.tripOrderPicker){
+      activeTask.trip_service_orders=[{trip_id:trip,trips:ride}];
+      tables.trip_service_orders.push({trip_id:trip,order_id:activeTask.id,service_orders:activeTask,trips:ride});
+    }
   }
   if(summaryOrphans)tables.trip_jobs.push({trip_id:'removed-trip',job_id:job,ord:0,jobs:request});
   if(decisionQueue)tables.trip_stays.find(s=>s.id==='stay-past').status='detected';

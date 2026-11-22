@@ -45,6 +45,9 @@ dialog.entity-actions-menu::backdrop { background:rgba(0,0,0,.55);backdrop-filte
 :is(.entity-actions-menu,.entity-panel-dialog) .entity-dialog-head form { flex:none;margin:0; }
 .entity-actions-menu .entity-dialog-head .btn { min-width:44px;min-height:44px;padding:8px; }
 :is(.entity-actions-menu,.entity-panel-dialog) .entity-menu-list { display:grid;gap:4px; }
+.entity-panel-dialog .trip-task-option[hidden] { display:none; }
+.entity-panel-dialog .trip-task-option span { display:grid;gap:2px; }
+.entity-panel-dialog .trip-task-option :is(b,small) { white-space:normal;overflow-wrap:anywhere; }
 :is(.entity-actions-menu,.entity-panel-dialog) .entity-menu-item { display:flex;align-items:center;gap:8px;box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;border:0;border-radius:var(--r-sm);background:transparent;color:var(--ink);font:400 14px/1.4 var(--sans);text-align:left;white-space:normal;overflow-wrap:anywhere;cursor:pointer; }
 :is(.entity-actions-menu,.entity-panel-dialog) .entity-menu-item:hover:not(:disabled) { background:var(--panel-2); }
 :is(.entity-actions-menu,.entity-panel-dialog) .entity-menu-item:disabled { color:var(--ink-faint);cursor:not-allowed; }

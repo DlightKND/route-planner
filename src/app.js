@@ -3896,6 +3896,7 @@ function configureEntityActions(kind,record){
  }else{
   $('tripResponsibilitySection').hidden=true;mountEntityActions({trigger,items:()=>[
    {label:'Зафиксировать результат задания',hidden:!id,onSelect:()=>recordEntityResult(kind,id)},
+   {label:'Привязать задание',hidden:!canLinkTripOrder(record),onSelect:()=>openTripOrderPicker(record,trigger)},
    {label:'Передать ответственность',hidden:!id,onSelect:()=>panel('Ответственность',$('tripResponsibilitySection'))},
    {label:canWriteTrip(record)?'Изменить даты выезда':'Запросить перенос',hidden:!id||!['planned','assigned'].includes(record.status),onSelect:()=>openReschedModal(id)},
    {label:'Проверка и версия выезда',hidden:!id,onSelect:()=>panel('Проверка выезда',$('tripTechnicalDetails'))},
@@ -6329,6 +6330,49 @@ function renderTripLinkedOrders(){
   const clear=box.querySelector('[data-related-clear-request]');
   if(clear)clear.onclick=()=>{tripResultRequest=null;renderTripLinkedOrders();box.querySelector('[data-related-search]').focus();};
 }
+function canLinkTripOrder(trip){return !!trip?.id&&['planned','assigned'].includes(trip.status)&&canWriteTrip(trip);}
+function stageTripOrder(orderId,included){
+  tripPlanDirty=true;
+  tripRemainingRoute=null;
+  if(included)curTripOrders.add(orderId);else curTripOrders.delete(orderId);
+  syncTripJobsFromOrders();
+  if(tripMainJobId&&!curTripJobs.has(tripMainJobId))tripMainJobId=null;
+  const before=tripRouteStops.map(keyOf).join('|');
+  syncRouteStops();renderTripJobs();
+  if(before!==tripRouteStops.map(keyOf).join('|'))resetTripRoute();else tripEcon();
+  syncTripSave();
+}
+function openTripOrderPicker(trip,trigger){
+  if(tripEditId!==trip.id||!canLinkTripOrder(trip))return;
+  const candidates=tripOrdersAll.filter(order=>!curTripOrders.has(order.id)&&!['review','completed','cancelled'].includes(order.status));
+  const panel=document.createElement('div');
+  if(!candidates.length){
+    panel.textContent='Нет заданий, доступных для добавления в план выезда.';
+    document.body.append(panel);openEntityPanel({title:'Привязать задание',panel,trigger,dispose:true});return;
+  }
+  panel.innerHTML='<label class="field">Найти задание<input type="search" placeholder="Номер, название или заявка" data-trip-order-search></label><div class="entity-menu-list"></div><p class="hint" data-trip-order-empty hidden>Заданий по этому запросу нет.</p>';
+  const options=panel.querySelector('.entity-menu-list');
+  for(const [index,order] of candidates.entries()){
+    const request=tripJobsAll.find(job=>job.id===order.job_id);
+    const client=request?.clients?.name||'';
+    const label=document.createElement('label');label.className='trip-task-option';
+    label.innerHTML=`<input type="radio" name="trip-order-choice" value="${index}"><span><b>№${order.number} · ${esc(order.title)}</b><small>${esc(client)}</small></span>`;
+    label.dataset.search=`${order.number} ${order.title} ${String(order.job_id).slice(0,8)} ${client}`.toLocaleLowerCase('ru');
+    options.append(label);
+  }
+  panel.querySelector('[data-trip-order-search]').oninput=event=>{
+    const query=event.target.value.trim().toLocaleLowerCase('ru');
+    for(const row of options.children){row.hidden=!row.dataset.search.includes(query);if(row.hidden)row.firstElementChild.checked=false;}
+    panel.querySelector('[data-trip-order-empty]').hidden=[...options.children].some(row=>!row.hidden);
+  };
+  document.body.append(panel);
+  openEntityPanel({title:'Привязать задание',panel,trigger,dispose:true,saveLabel:'Добавить в план',saveHint:'Связь вступит в силу после сохранения плана выезда.',onSave:()=>{
+    const choice=panel.querySelector('input[name="trip-order-choice"]:checked');
+    if(!choice)throw Error('Выберите задание.');
+    if(tripEditId!==trip.id||!canLinkTripOrder(trips.find(row=>row.id===trip.id)))throw Error('Выезд недоступен для изменения плана.');
+    stageTripOrder(candidates[Number(choice.value)].id,true);return true;
+  },onSaved:()=>{tripResultRequest=null;renderTripLinkedOrders();setTripPane('plan');notify('Задание добавлено в план. Проверьте команду и маршрут, затем сохраните выезд.');}});
+}
 function renderTripJobs(){ const box=$('tpJobs');
   renderTripLinkedOrders();
   const routeOnly=$('tpJobsRoute')?$('tpJobsRoute').checked:false; const useFilter=routeOnly&&tripRouteKeys.size>0;
@@ -6350,7 +6394,7 @@ function renderTripJobs(){ const box=$('tpJobs');
   if(useFilter&&hidden>0){const h=document.createElement('div');h.className='hint';h.style.marginTop='6px';h.textContent='Скрыто '+hidden+' заданий вне маршрута.';box.appendChild(h);}
   box.querySelectorAll('[data-tjmain]').forEach(r=>r.onchange=()=>{tripPlanDirty=true;tripMainJobId=r.checked?r.dataset.tjmain:null;renderTripJobs();tripEcon();});
   box.querySelectorAll('[data-tjopen]').forEach(b=>b.onclick=()=>openJob(b.dataset.tjopen));
-  box.querySelectorAll('[data-torder]').forEach(c=>c.onchange=()=>{tripPlanDirty=true;tripRemainingRoute=null;if(c.checked)curTripOrders.add(c.dataset.torder);else curTripOrders.delete(c.dataset.torder);syncTripJobsFromOrders();if(tripMainJobId&&!curTripJobs.has(tripMainJobId))tripMainJobId=null;const before=tripRouteStops.map(keyOf).join('|');syncRouteStops();const after=tripRouteStops.map(keyOf).join('|');renderTripJobs();if(before!==after)resetTripRoute();else tripEcon();});
+  box.querySelectorAll('[data-torder]').forEach(c=>c.onchange=()=>stageTripOrder(c.dataset.torder,c.checked));
 }
 // tariff_profiles попадают в снапшот наравне с тарифами и себестоимостями
 // (аудит, В10). Раньше их там не было, и roadByPayer читал текущие профили —
