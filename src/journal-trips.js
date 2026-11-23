@@ -207,6 +207,40 @@ export function createJournalTrips(ctx){
     }catch(error){if(current())extra.textContent='Не удалось загрузить дополнительные GPS-записи: '+error.message;}
    })();
   }
+  if(['admin','logist'].includes(ctx.role())){
+   const roadDrafts=root.ownerDocument.createElement('section');
+   root.querySelector('.journal-trip-documents').prepend(roadDrafts);
+   void (async()=>{
+    try{
+     const drafts=result(await ctx.db().from('gps_road_cut_drafts').select('cuts,source_current,supplemental')
+      .eq('trip_id',id))||[];
+     if(!current()||!drafts.some(draft=>draft.cuts?.length))return;
+     roadDrafts.innerHTML='<h3>Разделения дороги из GPS-записей</h3><ul class="gps-source-stops"></ul><p class="hint" role="status"></p>';
+     const list=roadDrafts.querySelector('ul'),feedback=roadDrafts.querySelector('[role=status]');
+     const format=new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Kyiv',dateStyle:'medium',timeStyle:'short'});
+     for(const draft of drafts)for(const cut of draft.cuts){
+      const row=root.ownerDocument.createElement('li');row.className='gps-source-stop';
+      const label=root.ownerDocument.createElement('strong');label.textContent=format.format(Number(cut)*1000);row.append(label);
+      if(editable&&draft.source_current&&!draft.supplemental){
+       const button=root.ownerDocument.createElement('button');button.type='button';button.className='btn ghost';
+       button.textContent='Проверить разделение';button.onclick=async()=>{
+        if(!trackResponse.data?.data?.segments?.length){
+         feedback.textContent='Сначала откройте карту и проверьте основной трек выезда.';return;
+        }
+        button.disabled=true;feedback.textContent='';switchPane('route');
+        try{await roadView.prepareCut(Number(cut));}
+        catch(error){if(current()&&pane==='route'){switchPane('documents');feedback.textContent=error.message;button.focus();}}
+        finally{if(button.isConnected)button.disabled=false;}
+       };row.append(button);
+      }else{
+       const hint=root.ownerDocument.createElement('span');hint.className='hint';
+       hint.textContent=draft.supplemental?'Дополнительная GPS-запись':!draft.source_current?'GPS изменился · нужна повторная сверка':'Подготовлено до привязки';row.append(hint);
+      }
+      list.append(row);
+     }
+    }catch(error){if(current())roadDrafts.textContent='Не удалось загрузить разделения дороги: '+error.message;}
+   })();
+  }
   const discussion=root.querySelector('.journal-gps-activity');
   const activity=mountEntityActivity({root:discussion,db:ctx.db(),entity:'gpsTrip',id,userId:ctx.userId,people:ctx.people});
   let historyLoaded=!data.history_deferred,historyLoading=false;

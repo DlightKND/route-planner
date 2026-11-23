@@ -96,7 +96,7 @@ export function mountJournalRoute(root,{trip,track,stays,leaflet:L,makeBase,onSt
   roadMarker?.remove();roadMarker=null;pickRoad=null;
   if(!map||!section)return;
   const parts=sectionGeometry(segments,section),part=parts.find(piece=>piece.from<=time&&piece.to>=time);
-  if(part?.to>part.from)roadMarker=L.circleMarker(part.at(part.start+part.length*(time-part.from)/(part.to-part.from)),
+  if(part&&part.to>part.from)roadMarker=L.circleMarker(part.at(part.start+part.length*(time-part.from)/(part.to-part.from)),
    {radius:6,weight:3,color:'#fff',fillColor:'#266fe0',fillOpacity:1,interactive:false}).addTo(map);
   pickRoad=(point,geometry)=>{
    let closest=null;

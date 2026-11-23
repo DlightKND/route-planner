@@ -129,6 +129,37 @@ test('links extra GPS evidence to a completed trip as a separate journal record'
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);
  await clean(page);
 });
+test('prepares a road cut before GPS linking and applies it with the trip road editor',async({page},info)=>{
+ await open(page,info,'admin',1,'road-draft');await openOrphanOverview(page);
+ await page.getByRole('button',{name:'Дорога',exact:true}).click();
+ const road=page.locator('.journal-road-sections'),split=page.getByRole('form',{name:'Разделение участка'});
+ await expect(road.getByRole('table',{name:'Участки дороги'})).toBeVisible();
+ await expect(road).toContainText('Пробег неизвестен');
+ await road.locator('[data-road-expand]').first().click();
+ await road.getByRole('button',{name:'Разделить участок'}).click();
+ const cut=Date.parse('2026-10-04T08:00:00Z')/1000;
+ await split.getByRole('slider').fill(String(cut/60));
+ await split.getByRole('button',{name:'Сохранить разделение'}).click();
+ await expect(road.locator('[data-road-row]')).toHaveCount(2);
+ await page.reload();
+ if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
+ await expect(road.locator('[data-road-row]')).toHaveCount(2);
+ await page.getByRole('button',{name:'Обзор',exact:true}).click();
+ await page.getByRole('button',{name:'Связать с выездом',exact:true}).click();
+ const prompt=page.locator('#promptOverlay');
+ await prompt.locator('[data-pf=trip]').selectOption({index:1});
+ await prompt.locator('[data-pf=reason]').fill('Поездка и дорога проверены');
+ await page.locator('#promptYes').click();
+ await page.locator('[data-journal-pane=documents]').click();
+ await page.getByRole('button',{name:'Проверить разделение'}).click();
+ await expect(split.getByRole('slider')).toHaveValue(String(cut/60));
+ expect(await page.evaluate(()=>window.__visualQA.roadWrites)).toEqual([]);
+ await split.getByRole('button',{name:'Разделить',exact:true}).click();
+ await expect(road.locator('[data-road-row]')).toHaveCount(2);
+ expect(await page.evaluate(()=>window.__visualQA.roadWrites.map(write=>write.p_value))).toEqual([cut]);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);
+ await clean(page);
+});
 test('charge shows the cost basis and requires a separate amount confirmation',async({page},info)=>{
  await open(page,info);await openOrphanOverview(page);await page.getByRole('button',{name:'Записать списание инженеру',exact:true}).click();
  await expect(page.locator('.gps-resolution-summary')).toContainText('12,5');await page.locator('[data-pf=engineer]').selectOption('00000000-0000-4000-8000-000000000002');

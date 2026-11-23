@@ -383,12 +383,14 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   tables.vehicle_telemetry_archive=unassignedJourney?[{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:00:00Z',lat:49.99,lng:36.23},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:01:00Z',lat:50.01,lng:36.25},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T09:00:00Z',lat:49.99,lng:36.23}]:[];
   tables.unassigned_track_events=[];
   const supplementalJourney=unassignedJourney==='supplement';
-  const sourceStopJourney=unassignedJourney==='stop-draft'||supplementalJourney;
+  const sourceRoadJourney=unassignedJourney==='road-draft';
+  const sourceStopJourney=unassignedJourney==='stop-draft'||supplementalJourney||sourceRoadJourney;
   const sourceStopPoints=sourceStopJourney?['07:00','07:04','07:08','07:12'].map(time=>({
     vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T'+time+':00Z',status:'idle',lat:client.lat,lng:client.lng
   })):null;
   tables.gps_record_stop_drafts=sourceStopJourney?JSON.parse(localStorage.getItem('qa:source-stop-drafts')||'[]'):[];
   tables.gps_manual_visit_drafts=sourceStopJourney?JSON.parse(localStorage.getItem('qa:source-manual-visits')||'[]'):[];
+  tables.gps_road_cut_drafts=sourceRoadJourney?JSON.parse(localStorage.getItem('qa:source-road-cuts')||'[]'):[];
   if(sourceStopJourney)tables.vehicle_telemetry_archive=sourceStopPoints;
   if(supplementalJourney)Object.assign(ride,{status:'done',fact_km:321,started_at:'2026-10-04T07:00:00Z',finished_at:'2026-10-04T13:00:00Z'});
   if(financeJourney){
@@ -459,7 +461,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     works:task.service_order_items.filter(row=>row.kind==='work').map(row=>({id:row.id,title:row.title,local:savedTerms('work',order,row.id)}))});
   const paymentTrip=()=>({id:trip,title:ride.vehicle_label,local:savedTerms('trip',trip),jobs:[paymentRequest(),secondPaymentJob]});
   if(managerJourney?.paymentJourney)audit.paymentWrites=[];
-  const roadJourney=managerJourney?.roadJourney;
+  const roadJourney=managerJourney?.roadJourney||sourceRoadJourney;
   const roadSource=[ride.workbench_revision,stamp];
   const roads=[
     {id:'start~journal-stay-1',base_id:'start~journal-stay-1',title:'Начало записи → Демо · объект',start_at:'2026-10-05T05:12:00Z',end_at:'2026-10-05T05:28:00Z',
@@ -467,6 +469,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     {id:'journal-stay-5~finish',base_id:'journal-stay-5~finish',title:'Возврат в депо',start_at:'2026-10-05T14:10:00Z',end_at:'2026-10-05T14:46:00Z',
       km:null,measured_km:10,request_id:null,returning:true,shares:{},manual:false,local:{},rates:{}},
   ];
+  if(sourceRoadJourney){
+    Object.assign(roads[0],{start_at:'2026-10-04T07:12:00Z',end_at:'2026-10-04T09:00:00Z'});
+    roads.splice(1);
+  }
   let roadRevision=0;
   const roadModel=()=>({scope:'trip',item:paymentTrip(),sections:roads,revision:roadRevision,source:roadSource,editable:role!=='engineer',tariffs:{
     tariffs:{km:15},costs:{km:8},tariff_profiles:[{id:'standard',def_paid:true,road:{km_rate:20}},{id:'warranty',def_warranty:true,road:{km_rate:12}}]}});
@@ -949,11 +955,26 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         Object.assign(ride,{status:'finished',started_at:source.started_at,finished_at:source.ended_at});
         const [draft]=tables.gps_record_stop_drafts;
         if(draft)Object.assign(draft,{trip_id:trip,source_current:true});
+        for(const road of tables.gps_road_cut_drafts)Object.assign(road,{trip_id:trip,source_current:true,supplemental:false});
+        if(sourceRoadJourney){
+          const segment={kind:'track',km:20,fromTs:roads[0].start_at,toTs:roads[0].end_at,
+            line:[[client.lng,client.lat],[client.lng+.1,client.lat+.05]]};
+          tables.trip_tracks.push({trip_id:trip,km:20,updated_at:stamp,data:{trackKm:20,roadKm:0,segments:[segment]}});
+        }
         for(const manual of tables.gps_manual_visit_drafts)manual.trip_id=trip;
         const [first]=sourceStopPoints,last=sourceStopPoints.at(-1);
         stays.push({id:'source-linked-stay',trip_id:trip,job_id:job,status:'detected',lat:first.lat,lng:first.lng,
           stay_from:first.ts,stay_to:last.ts,minutes_raw:12,crew_ids:[engineer],crew_source:'snapshot'});
         return {data:{trip_id:trip},error:null};
+      }
+      if(sourceRoadJourney&&name==='gps_road_cut_draft_save'){
+        const [existing]=tables.gps_road_cut_drafts;
+        if(args.p_expected!==(existing?.revision||0))return {data:null,error:{message:'Участки уже изменены'}};
+        const draft={track_id:args.p_track,cuts:args.p_cuts,revision:args.p_expected+1,
+          source_revision:args.p_source_revision,source_points:args.p_source_points};
+        tables.gps_road_cut_drafts=[draft];
+        localStorage.setItem('qa:source-road-cuts',JSON.stringify([draft]));
+        return {data:draft.revision,error:null};
       }
       if(sourceStopJourney&&name==='gps_manual_visit_draft_save'){
         const drafts=tables.gps_manual_visit_drafts;

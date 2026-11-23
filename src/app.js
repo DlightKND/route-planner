@@ -119,7 +119,7 @@ const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,ro
 });
 const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,
  onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state)=>routeSet(journalRecordRoute(id,state)),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
- ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
+ ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',trackMaxSpeed:()=>appSettings.track_max_kmh,prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
 
 const plannerWorkspace=createPlannerWorkspace({host:()=>document.getElementById('canonicalPlannerHost'),db:()=>sb,

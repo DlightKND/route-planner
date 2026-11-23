@@ -33,6 +33,7 @@ beforeAll(async()=>{
  await db.exec('alter table public.jobs add column deleted_at timestamptz');
  await db.exec(readFileSync(new URL('../supabase/migrations/20261123083009_gps_manual_visit_drafts.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261123085411_gps_existing_trip_link.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261123145742_gps_road_cut_drafts.sql',import.meta.url),'utf8'));
 
 },30000);
 beforeEach(async()=>{
@@ -264,4 +265,32 @@ it('offers only covering trips of the same vehicle and preserves an accepted tri
  await q("select set_config('test.uid',$1,true)",[id(2)]);
  await expect(q('select * from gps_existing_trip_options($1)',[id(101)])).rejects.toThrow('привязывает диспетчер');
  expect(await q("select has_function_privilege('anon','gps_existing_trip_link(uuid,integer,integer,uuid,text,text)','execute') allowed")).toEqual([{allowed:false}]);
+});
+
+it('versions pre-link road cuts and carries only the draft into the trip',async()=>{
+ const track=id(123),trip=id(50),from='2026-10-03T10:00:00Z',to='2026-10-03T10:12:00Z';
+ await q("insert into unassigned_tracks(id,vehicle_id,started_at,last_ts,ended_at,state) values($1,$2,$3,$4,$4,'review')",[track,id(10),from,to]);
+ await q("insert into vehicle_telemetry_archive(vehicle_id,ts,lat,lng,status) select $1,$2::timestamptz+i*interval '4 minutes',50,30+.001*i,'moving' from generate_series(0,3) i",[id(10),from]);
+ const cut=Date.parse('2026-10-03T10:06:00Z')/1000;
+ const save=(revision,cuts,count=4)=>q('select gps_road_cut_draft_save($1,0,$2,$3,$4) revision',[track,count,revision,cuts]);
+ await db.exec('set role authenticated');
+ await expect(save(0,[cut],3)).rejects.toThrow('GPS изменился');
+ await expect(save(0,[cut+1])).rejects.toThrow('точностью до минуты');
+ expect(await save(0,[cut,cut])).toEqual([{revision:1}]);
+ expect(await save(0,[cut])).toEqual([{revision:1}]);
+ await expect(save(0,[cut+60])).rejects.toThrow('Участки уже изменены');
+ expect(await save(1,[cut,cut+60])).toEqual([{revision:2}]);
+ await q("select set_config('test.uid',$1,true)",[id(2)]);
+ expect(await q('select cuts from gps_road_cut_drafts')).toEqual([]);
+ await expect(save(2,[cut])).rejects.toThrow('готовит диспетчер');
+ await q("select set_config('test.uid',$1,true)",[id(1)]);
+ await db.exec('reset role');
+ await q("insert into trips(id,vehicle_id,status,owner_id,curator_id) values($1,$2,'planned',$3,$3)",[trip,id(10),id(1)]);
+ const source=await quote(track);
+ await q('select unassigned_track_resolve($1,$2,$3,$4)',[track,source.revision,'link',{trip,points:source.points,km:source.km,reason:'Проверена GPS-запись'}]);
+ const [stored]=await q('select trip_id,cuts,source_current,supplemental from gps_road_cut_drafts where track_id=$1',[track]);
+ expect(stored).toMatchObject({trip_id:trip,source_current:true,supplemental:false});
+ expect(stored.cuts.map(Number)).toEqual([cut,cut+60]);
+ expect(await q('select trip_id from trip_tracks where trip_id=$1',[trip])).toEqual([]);
+ await expect(save(2,[cut])).rejects.toThrow('непривязанная GPS-запись');
 });

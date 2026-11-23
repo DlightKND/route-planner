@@ -8,6 +8,8 @@ import {timelineHTML,mountJournalRoute,wireJournalTimeline} from './journal-rout
 import {wireDetailsPopover} from './details-popover.js';
 import {infoHint} from './info-hints.js';
 import {mountSourceStops,observedSourceStops} from './journal-source-stops.js';
+import {mountRoadSections} from './journal-road.js';
+import {createSourceRoadAdapter} from './journal-source-road.js';
 import {manualDraftFields,manualVisitPartyFields,manualVisitTimeFields,renderManualVisitDrafts} from './journal-manual-drafts.js';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=value=>Number(value||0).toLocaleString('ru',{maximumFractionDigits:2});
@@ -211,7 +213,7 @@ export function createUnassignedTracks(ctx){
   sourceTitle.append(...sourceHead.childNodes);sourceHead.classList.add('journal-trip-head');
   sourceHead.append(box.querySelector('[data-ut-back]'),sourceTitle);
   sourceTabs.className='journal-trip-tabs seg';sourceTabs.setAttribute('role','group');sourceTabs.setAttribute('aria-label','Разделы GPS-записи');
-  sourceTabs.innerHTML='<button type="button" data-orphan-pane="stops">Обзор</button><button type="button" data-orphan-pane="documents">Данные</button>';
+  sourceTabs.innerHTML='<button type="button" data-orphan-pane="stops">Обзор</button><button type="button" data-orphan-pane="route">Дорога</button><button type="button" data-orphan-pane="documents">Данные</button>';
   sourceHead.append(sourceTabs);
   const stays=observedSourceStops(parts);
   const overview=document.createElement('section');overview.className='journal-orphan-overview';
@@ -229,10 +231,17 @@ export function createUnassignedTracks(ctx){
   const route=document.createElement('section');route.className='journal-trip-route';route.hidden=true;box.append(route);
   const routeView=mountJournalRoute(route,{trip,track,stays,leaflet:ctx.leaflet?.(),makeBase:ctx.makeTrackBase,canEdit:false});
   maps.add({container:route,destroy:()=>routeView.destroy()});
+  const roads=document.createElement('section');roads.className='journal-road-sections';
+  route.querySelector('.journal-route-metrics').before(roads);
+  const adapter=createSourceRoadAdapter({db:ctx.db,trip,parts,stays,quote,maxSpeed:ctx.trackMaxSpeed?.(),editable:canResolve});
+  const roadView=mountRoadSections(roads,{db:ctx.db,tripId:id,adapter,
+   current:()=>uid===ctx.userId()&&activeId===id&&route.isConnected,
+   focus:routeView.focusRoad,onSplitPoint:routeView.markRoadCut,splitHost:route.querySelector('.journal-route-map')});
+  let roadLoaded=false;
   const timeline=document.createElement('div');timeline.className='journal-timeline-host';timeline.innerHTML=timelineHTML(trip,track,stays);
   overview.append(timeline);const timelineView=wireJournalTimeline(timeline);maps.add({container:timeline,destroy:()=>timelineView.destroy()});
   timeline.querySelectorAll('[data-journal-stop]').forEach(button=>button.onclick=()=>{switchOrphanPane('route');routeView.select(button.dataset.journalStop);});
-  let sourcePane='stops';function switchOrphanPane(pane,notify=true){sourcePane=pane;box.querySelector('[data-ut-back]').textContent=pane==='stops'?'← К журналу':'← К поездке';overview.hidden=pane!=='stops';route.hidden=pane!=='route';documents.hidden=pane!=='documents';host().classList.toggle('journal-map-expanded',pane==='route');box.querySelectorAll('[data-orphan-pane]').forEach(b=>{b.classList.toggle('on',b.dataset.orphanPane===(pane==='route'?'stops':pane));b.setAttribute('aria-pressed',String(b.dataset.orphanPane===(pane==='route'?'stops':pane)));});if(notify)ctx.onSource?.(id,pane);}
+  let sourcePane='stops';function switchOrphanPane(pane,notify=true){sourcePane=pane;if(pane==='route'&&!roadLoaded){roadLoaded=true;void roadView.load();}box.querySelector('[data-ut-back]').textContent=pane==='stops'?'← К журналу':'← К поездке';overview.hidden=pane!=='stops';route.hidden=pane!=='route';documents.hidden=pane!=='documents';host().classList.toggle('journal-map-expanded',pane==='route');box.querySelectorAll('[data-orphan-pane]').forEach(b=>{b.classList.toggle('on',b.dataset.orphanPane===pane);b.setAttribute('aria-pressed',String(b.dataset.orphanPane===pane));});if(notify)ctx.onSource?.(id,pane);}
   const draftResponse=canResolve?await ctx.db().from('gps_record_stop_drafts').select('revision,source_revision,source_points,stops').eq('track_id',id).maybeSingle():null;
   if(uid!==ctx.userId()||activeId!==id||!stopsPanel.isConnected)return;
   const draftUI=mountSourceStops(stopsPanel,{stays,source:r,quote,draft:draftResponse?.data,writable:canResolve&&!draftResponse?.error,
@@ -246,7 +255,7 @@ export function createUnassignedTracks(ctx){
    const manualPanel=document.createElement('section');
    stopsPanel.after(manualPanel);manualWorking=mountManualDraftEditor(manualPanel,r);
   }
-  sourceView={id,...draftUI,isSaving:()=>draftUI.isSaving()||manualWorking(),navigate:pane=>switchOrphanPane(pane,false)};switchOrphanPane(state.pane||'stops',open);drawMap(overview,points);box.querySelector('[data-ut-back]').onclick=async()=>{if(sourcePane!=='stops'){switchOrphanPane('stops');return;}if(!await leave())return;host().classList.remove('gps-show-detail','journal-map-expanded');ctx.onList?.();window.requestAnimationFrame(()=>{host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;host().querySelector('[data-ut-details="'+id+'"]')?.focus({preventScroll:true});});};box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(id,b.dataset.utAction)));box.querySelector('[data-ut-trip]')?.addEventListener('click',()=>ctx.openTrip(r.trip_id));box.querySelector('[data-ut-cancel]')?.addEventListener('click',e=>perform(e.currentTarget,()=>cancel(id)));paintList();if(open&&mobile)window.requestAnimationFrame(()=>{if(pane)pane.scrollTop=0;box.querySelector('[data-ut-back]')?.focus({preventScroll:true});});
+  sourceView={id,...draftUI,isSaving:()=>draftUI.isSaving()||manualWorking()||roadView.isSaving(),navigate:pane=>switchOrphanPane(pane,false)};switchOrphanPane(state.pane||'stops',open);drawMap(overview,points);box.querySelector('[data-ut-back]').onclick=async()=>{if(sourcePane!=='stops'){switchOrphanPane('stops');return;}if(!await leave())return;host().classList.remove('gps-show-detail','journal-map-expanded');ctx.onList?.();window.requestAnimationFrame(()=>{host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;host().querySelector('[data-ut-details="'+id+'"]')?.focus({preventScroll:true});});};box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(id,b.dataset.utAction)));box.querySelector('[data-ut-trip]')?.addEventListener('click',()=>ctx.openTrip(r.trip_id));box.querySelector('[data-ut-cancel]')?.addEventListener('click',e=>perform(e.currentTarget,()=>cancel(id)));paintList();if(open&&mobile)window.requestAnimationFrame(()=>{if(pane)pane.scrollTop=0;box.querySelector('[data-ut-back]')?.focus({preventScroll:true});});
   }catch(e){if(activeId===id&&box.isConnected)detailFailure(box,id,e,state);}
  }
  async function resolve(id,action){const uid=ctx.userId(),row=rows.find(x=>x.id===id);if(!row)return;
