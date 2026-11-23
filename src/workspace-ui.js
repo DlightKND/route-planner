@@ -1,4 +1,5 @@
 import {journalIcon} from './journal-icons.js';
+import {metaDate,metaPeriod,crewLabel,metadataList,requestLabel} from './workflow-meta.js';
 import {openEntityPanel} from './entity-actions.js';
 import {presenceBounds} from './core/trip-presence-recovery.js';
 
@@ -60,11 +61,23 @@ function framePane(view,headerNodes){
 function addOverviewState(panel, prefix, action){
  const state=element(panel.ownerDocument,'section','workflow-overview-state');
  state.setAttribute('aria-label','Текущее состояние');
- state.innerHTML='<div><span>Текущая ситуация</span><h2></h2><p></p></div>';
+ state.innerHTML='<div><span>Текущая ситуация</span><h2></h2><p></p></div><div class="workflow-overview-actions"></div>';
  state.id=prefix+'OverviewState';
- if(action)state.append(action);
+ if(action)state.lastElementChild.append(action);
  panel.prepend(state);
  return state;
+}
+
+// The mockup pairs the next step with one secondary action (report works or check GPS).
+export function overviewActions(root){return root?.querySelector('.workflow-overview-actions')||root;}
+export function setOverviewSecondary(root, action, {after=false}={}){
+ if(!root)return null;
+ const box=overviewActions(root);let button=box.querySelector('[data-overview-secondary]');
+ if(!action){button?.remove();return null;}
+ if(!button){button=root.ownerDocument.createElement('button');button.type='button';button.className='btn workflow-overview-secondary';button.dataset.overviewSecondary='';}
+ button.textContent=action.label;button.onclick=action.onClick;button.disabled=!!action.disabled;
+ if(after)box.append(button);else box.prepend(button);
+ return button;
 }
 
 export function setOverviewState(root, title, detail){
@@ -91,8 +104,8 @@ export function installWorkspaceStructure(root=document){
  if(job){
   const estimate=root.getElementById('jobEstimatePane'),base=element(root,'details','request-estimate-base workflow-finance-tool'),heading=element(root,'header','workspace-section-head');
   heading.innerHTML='<h2>План/факт заявки</h2>';
-  base.id='jobBaseEstimate';base.open=true;
-  base.innerHTML='<summary>Смета заявки</summary>';const lines=element(root,'div','request-estimate-lines');for(const card of [...estimate.querySelectorAll(':scope>.card')])lines.append(card);base.append(lines,root.getElementById('jobHeadEcon'));
+  base.id='jobBaseEstimate';base.open=true;base.hidden=true;
+  base.innerHTML='<summary>Смета заявки</summary><p class="hint" id="jobEstimateLock" hidden></p>';const lines=element(root,'div','request-estimate-lines');for(const card of [...estimate.querySelectorAll(':scope>.card')])lines.append(card);base.append(lines,root.getElementById('jobHeadEcon'));
   const cost=element(root,'section','workflow-request-cost');cost.id='jobTaskCosts';
   estimate.append(heading,cost,base);
   const context=element(root,'section','card request-context');context.id='requestContext';context.hidden=true;
@@ -123,10 +136,10 @@ export function installWorkspaceStructure(root=document){
   overview.prepend(grid);grid.append(route,state,details);
   const toolbar=trip.querySelector('.trip-toolbar');
   const economy=root.getElementById('tpEconomyPane'),legacy=element(root,'details','workflow-finance-tool');
-  legacy.id='tpContractEconomy';legacy.open=true;legacy.innerHTML='<summary>Договорная смета и ручные суммы</summary>';
+  legacy.id='tpContractEconomy';legacy.open=true;legacy.hidden=true;legacy.innerHTML='<summary>Договорная смета и ручные суммы</summary>';
   const oldEconomy=root.getElementById('tpEconBody').closest('.card'),oldSummary=root.getElementById('tripHeadEcon');
   economy.append(legacy);legacy.append(oldSummary,oldEconomy);
-  const allocation=element(root,'details','workflow-finance-tool');allocation.id='tpCostReview';
+  const allocation=element(root,'details','workflow-finance-tool');allocation.id='tpCostReview';allocation.hidden=true;
   allocation.innerHTML='<summary>Распределение затрат по заданиям</summary>';
   allocation.append(root.getElementById('tpTripAllocation'));economy.append(allocation);
   economy.prepend(root.getElementById('tpReviewSummary'));
@@ -270,7 +283,8 @@ export function presentRequestWorkspace({saved,editable,client,equipment,status,
  }
  context.querySelector('.request-description').textContent=notes||'Описание не указано.';
  const rows=[['Клиент',client],['Техника',equipment||'Без привязки'],['Контакт',contact||'Не указан'],['Телефон',phone||'Не указан']];
- context.querySelector('dl').innerHTML=rows.map(([label,value])=>`<div><dt>${label}</dt><dd>${escape(value)}</dd></div>`).join('');
+ const tel=phone?String(phone).replace(/[^\d+]/g,''):'';
+ context.querySelector('dl').innerHTML=rows.map(([label,value])=>`<div><dt>${label}</dt><dd>${label==='Телефон'&&tel?`<a class="link" href="tel:${escape(tel)}">${escape(value)}</a>`:escape(value)}</dd></div>`).join('');
  const edit=root.getElementById('requestEditContext');edit.hidden=!saved||!editable;edit.onclick=()=>editContext?editContext(edit):openEntityPanel({title:'Изменить заявку',panel:form,trigger:edit,confirmDiscard});
 }
 
@@ -295,10 +309,17 @@ export function frameOrderWorkspace({record,editable,people},root=document){
   title.textContent='Задание №'+record.number;
   const subject=title.nextElementSibling;subject.className='workflow-subject';subject.textContent=record.title||'';
   const status=editor.querySelector('.entity-head-meta .design-status');status.classList.add('workflow-stage');if(record.closed_with_remainder_at)status.textContent='Закрыто с остатком';title.after(status);
+  const meta=editor.querySelector('.entity-head-meta'),saveState=root.getElementById('orderSaveState'),crew=(record.engineer_ids||[]).map(id=>(people||[]).find(p=>p.id===id)?.full_name||'Инженер');
+  if(meta){meta.className='entity-head-meta workflow-head-facts';meta.innerHTML=metadataList([['SLA · выполнить до',record.jobs?.due_date?metaDate(record.jobs.due_date):'Не задан'],['Плановые даты',metaPeriod(record.date_from,record.date_to)],['Исполнители',crewLabel(crew),crew.join(', ')]]);if(saveState)meta.append(saveState);}
   const button=element(doc,'button','btn workflow-edit');button.id='orderEditData';button.type='button';button.innerHTML=journalIcon('edit')+'<span>Изменить</span>';button.setAttribute('aria-label','Изменить данные');button.hidden=true;
   controls.prepend(button);
   const origin=root.getElementById('orderRequest');
-  if(origin)root.getElementById('orderBrief').append(origin);
+  if(origin){
+   const label=requestLabel(record.jobs,record.job_id);
+   origin.className='link workflow-request-link';origin.textContent=label+(record.jobs?.clients?.name?' · '+record.jobs.clients.name:'');
+   const crumbLink=element(doc,'button','link workflow-crumb-link');crumbLink.type='button';crumbLink.textContent=label;crumbLink.onclick=()=>origin.click();breadcrumb.after(crumbLink);
+   const line=element(doc,'p','workflow-request-origin');line.append(origin);root.getElementById('orderBrief').append(line);
+  }
  }
  crumbs.append(controls);
  inner.append(crumbs,editor.querySelector('.trip-head'),toolbar);head.append(inner);
@@ -329,8 +350,9 @@ export function frameOrderWorkspace({record,editable,people},root=document){
   const name=id=>people.find(p=>p.id===id)?.full_name||'Не назначен';
   const brief=root.getElementById('orderBrief');brief.querySelector('.order-team-meta')?.remove();
   brief.querySelector('.order-brief-head .hint')?.remove();
-  const context=element(doc,'dl','order-brief-context');context.innerHTML=`<div><dt>Клиент</dt><dd>${escape(record.jobs?.clients?.name||'Не указан')}</dd></div><div><dt>Техника</dt><dd>${escape(record.jobs?.equipment?.model||'Без привязки')}</dd></div><div><dt>Ответственный</dt><dd>${escape(name(record.lead_engineer))}</dd></div><div><dt>Куратор</dt><dd>${escape(name(record.curator_id))}</dd></div>`;brief.append(context);
+  root.getElementById('orderBrief').querySelector('.order-brief-context')?.remove();
   const organization=root.getElementById('orderOrganization');organization.hidden=true;root.getElementById('orderAuxiliary').append(organization);
+  editor.setAttribute('data-saved-task','');
   const composition=root.getElementById('orderComposition'),details=element(doc,'details','workspace-composition-editor');details.innerHTML=`<summary>${editable?'Плановые данные и изменение состава':'Плановые данные задания'}</summary>`;composition.before(details);details.append(composition);
   if(editable){
    const fields=element(doc,'details','workspace-organization-editor');

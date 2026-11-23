@@ -1,0 +1,77 @@
+/* Approved workflow mockup v65: page-level corrections applied after every legacy stylesheet.
+   The design system marks card padding !important, so flattened sections repeat the priority. */
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobActivitySection,#tripActivitySection,#orderHistory) {
+ margin:28px 0 0!important;padding:22px 0 0!important;border:0!important;border-top:1px solid var(--line)!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;
+}
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-details>#tripActivitySection { margin-top:24px!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#requestContext,#orderBrief) {
+ padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;margin:0 0 4px!important;
+}
+
+/* Current situation: one primary and at most one secondary action. */
+.workflow-overview-state>.workflow-overview-actions { display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px;flex:0 1 auto;min-width:0; }
+.workflow-overview-state>.workflow-overview-actions:empty { display:none; }
+.workflow-overview-actions:has(>button:not([hidden]):nth-child(2))>button { width:min(100%,232px); }
+.workflow-overview-actions>[hidden] { display:none!important; }
+.workflow-trip-overview .workflow-overview-actions { display:grid;justify-content:stretch;width:100%; }
+.workflow-trip-overview .workflow-overview-actions>button { width:100%; }
+@media(max-width:760px){
+ .workflow-overview-state>.workflow-overview-actions { width:100%;justify-content:flex-start;flex-direction:column;align-items:stretch; }
+ .workflow-overview-actions>button,.workflow-overview-actions:has(>button:not([hidden]):nth-child(2))>button { width:100%; }
+}
+
+/* Request: the brief reads as a plain section; calling uses the phone link, routing lives in ⋯. */
+html#dlight-ui[data-ui-system] .view.workflow-card #requestContext .request-contact-actions { display:none!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .entity-payment-terms { margin-bottom:24px!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card #requestContext h2,html#dlight-ui[data-ui-system] .view.workflow-card #orderBrief h3 { margin:0 0 8px!important;font:600 18px/26px var(--sans)!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#requestContext,#orderBrief) dd .link { color:var(--ink);text-decoration:underline;text-underline-offset:3px; }
+.view.workflow-card .workflow-request-origin { margin:12px 0 0; }
+.view.workflow-card .workflow-request-link,.view.workflow-card .workflow-crumb-link { min-height:0;padding:0;border:0;background:transparent;color:var(--ink);font:500 14px/22px var(--sans);text-decoration:underline;text-underline-offset:3px;cursor:pointer; }
+.view.workflow-card .workflow-crumb-link { font-size:12px;margin-left:12px; }
+.view.workflow-card .workflow-planning-warnings { margin:8px 0 0;color:var(--warn,var(--ink-dim));font-size:13px; }
+.view.workflow-card .workflow-planning-warnings p { margin:0; }
+.view.workflow-card .workflow-head-facts { display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 24px; }
+.view.workflow-card .workflow-head-facts #orderSaveState { font-size:12px;color:var(--ink-dim); }
+.view.workflow-card .workflow-head-facts #orderSaveState[data-saved=true] { display:none; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(.workflow-request-link,.workflow-crumb-link) {
+ min-height:0!important;height:auto!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;
+ color:var(--ink)!important;font:500 14px/22px var(--sans)!important;text-decoration:underline!important;text-underline-offset:3px;text-align:start;white-space:normal;
+}
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-crumb-link { font-size:12px!important;line-height:18px!important;margin-left:12px; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#requestContext) dd { font-weight:400!important; }
+
+/* Saved trip: the tasks tab is the linked-task table only. Plan fields open from «Изменить»,
+   linking a task opens from ⋯, so their legacy inline blocks stay out of the reading flow. */
+.view-trip[data-saved-trip] .workflow-trip-edit:not([open]),
+.view-trip[data-saved-trip] #tpTaskPicker,
+.view-trip[data-saved-trip] #tripOrderParent { display:none!important; }
+.view-trip[data-saved-trip] .workflow-trip-edit[open] { margin-top:24px; }
+/* Saved task: planned composition opens from ⋯ («Плановые данные …»), not as a stray heading under the works. */
+#orderEditor[data-saved-task] :is(.workspace-composition-editor,.workspace-organization-editor):not([open]) { display:none!important; }
+#orderEditor[data-saved-task] .order-grid:not(:has(>:not(:is(.workspace-composition-editor,.workspace-organization-editor):not([open])))) { display:none!important; }
+
+/* Plan/fact: collapsible cards with a header row and full-bleed tables, as in the mockup. */
+html#dlight-ui[data-ui-system] .scoped-finance :is(.scoped-finance-work-column>details,.scoped-finance-work) { padding:0!important;overflow:hidden; }
+html#dlight-ui[data-ui-system] .scoped-finance :is(.scoped-finance-work-column>details,.scoped-finance-details>details)>summary { list-style:none; }
+html#dlight-ui[data-ui-system] .scoped-finance summary::-webkit-details-marker { display:none; }
+html#dlight-ui[data-ui-system] .scoped-finance :is(.scoped-finance-work-column>details,.scoped-finance-work)>summary {
+ display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;padding:12px 16px!important;font:600 18px/26px var(--sans)!important;color:var(--ink);cursor:pointer;
+}
+html#dlight-ui[data-ui-system] .scoped-finance :is(.scoped-finance-work-column>details,.scoped-finance-work)[open]>summary { border-bottom:1px solid var(--line); }
+html#dlight-ui[data-ui-system] .scoped-finance details>summary::after {
+ content:'';flex:none;width:7px;height:7px;margin:0 4px 4px auto;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);color:var(--ink-dim);
+}
+html#dlight-ui[data-ui-system] .scoped-finance details[open]>summary::after { margin-bottom:0;margin-top:4px;transform:rotate(-135deg); }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-details>details>summary { display:flex;align-items:center;gap:12px;padding:0 8px;font:500 14px/22px var(--sans)!important; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-details>details>:not(summary) { margin-bottom:12px; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-details>details .scoped-finance-allocation { padding:0 8px; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-details>details>.hint { padding:0 8px;margin:0 0 8px; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-note { margin:12px 0 0;font-size:12px;line-height:18px; }
+.scoped-finance-work-column>details .scoped-finance-scroll { margin:0; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-trip-link { min-height:0!important;padding:0!important;border:0!important;background:transparent!important;color:var(--ink)!important;font:500 14px/22px var(--sans)!important;text-decoration:underline;text-underline-offset:3px; }
+html#dlight-ui[data-ui-system] .scoped-finance th small.hint { color:var(--ink-dim); }
+html#dlight-ui[data-ui-system] .scoped-finance { margin:0 0 var(--sp-5)!important; }
+html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle] { width:40px;height:40px;min-width:40px;padding:0;border:1px solid var(--line)!important;border-radius:var(--r-sm,8px); }
+html#dlight-ui[data-ui-system] .scoped-finance :is([data-finance-work-toggle],[data-finance-mileage-toggle]) { display:inline-grid;place-items:center;width:40px;height:40px;min-width:40px;min-height:40px;padding:0!important;border:1px solid var(--line)!important;border-radius:var(--r-sm,8px)!important;background:transparent; }
+html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle] svg { width:18px;height:18px;transform:rotate(90deg); }
+html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle][aria-expanded=true] svg { transform:rotate(-90deg); }

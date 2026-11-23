@@ -271,7 +271,7 @@ test('M7: related record tables keep search, work details and trip actions in th
 
 test('M7: choosing a result among several linked tasks opens the trip table filtered by request',async({page},info)=>{
  const errors=await boot(page,info,{route:'job/'+job+'/trips',stage:'in_progress',tripResultJourney:'multiple'});
- await page.locator('#jobLinkedTrips').getByRole('button',{name:'Внести выполненные работы'}).click();
+ await page.locator('#jobLinkedTrips').getByRole('button',{name:'Отчитаться о работах'}).click();
  const list=page.locator('#tpLinkedOrders'),records=list.locator('[data-related-row]');
  await expect(page.locator('#tpTabPlan')).toHaveAttribute('aria-selected','true');
  await expect(list.getByRole('table',{name:'Задания выезда'})).toBeVisible();
@@ -281,7 +281,7 @@ test('M7: choosing a result among several linked tasks opens the trip table filt
  await expect(records).toHaveCount(3);
  await expect(records.filter({hasText:'Работы по другой заявке'})).toBeVisible();
  await expect(list.getByRole('searchbox')).toBeFocused();
- await records.first().getByRole('button',{name:'Внести выполненные работы'}).click();
+ await records.first().getByRole('button',{name:'Отчитаться о работах'}).click();
  await expect(page.locator('.view-order')).toHaveClass(/active/);
  await expect(page.locator('#orderTab-scope')).toHaveAttribute('aria-selected','true');
  await clean(page,errors);
@@ -516,7 +516,7 @@ test('M12: planned parts stay with the work from draft through acceptance',async
 test('M12: a manual result records parts under their work without a trip',async({page},info)=>{
  const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope',standaloneWorkPlan:'parts'});
  const panel=page.locator('#orderTripResults');
- await panel.getByRole('button',{name:'Зафиксировать результат'}).click();
+ await panel.getByRole('button',{name:'Отчитаться о работах'}).click();
  const parts=dialog(page).locator('.order-manual-parts');
  await expect(parts.locator('[data-result-qty]')).toBeHidden();
  await parts.locator('summary').click();
@@ -647,7 +647,7 @@ for(const stage of ['in_progress','paused'])test('M11: the curator saves the wor
  await group.getByRole('textbox',{name:'План, н-ч'}).fill('7,5');
  await group.getByRole('button',{name:'Сохранить план'}).click();
  await expect(group.getByRole('status')).toHaveText('План сохранён');
- await panel.getByRole('button',{name:'Зафиксировать результат'}).click();
+ await panel.getByRole('button',{name:'Отчитаться о работах'}).click();
  const row=dialog(page).locator('[data-result-item]').first();
  await row.locator('[data-result-qty]').fill('3');
  await row.locator('[data-result-note]').fill('Осталась проверка');
