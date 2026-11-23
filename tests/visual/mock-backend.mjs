@@ -387,6 +387,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T'+time+':00Z',status:'idle',lat:client.lat,lng:client.lng
   })):null;
   tables.gps_record_stop_drafts=sourceStopJourney?JSON.parse(localStorage.getItem('qa:source-stop-drafts')||'[]'):[];
+  tables.gps_manual_visit_drafts=sourceStopJourney?JSON.parse(localStorage.getItem('qa:source-manual-visits')||'[]'):[];
   if(sourceStopJourney)tables.vehicle_telemetry_archive=sourceStopPoints;
   if(financeJourney){
     task.service_order_items=[
@@ -942,10 +943,37 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         Object.assign(ride,{status:'finished',started_at:source.started_at,finished_at:source.ended_at});
         const [draft]=tables.gps_record_stop_drafts;
         if(draft)Object.assign(draft,{trip_id:trip,source_current:true});
+        for(const manual of tables.gps_manual_visit_drafts)manual.trip_id=trip;
         const [first]=sourceStopPoints,last=sourceStopPoints.at(-1);
         stays.push({id:'source-linked-stay',trip_id:trip,job_id:job,status:'detected',lat:first.lat,lng:first.lng,
           stay_from:first.ts,stay_to:last.ts,minutes_raw:12,crew_ids:[engineer],crew_source:'snapshot'});
         return {data:{trip_id:trip},error:null};
+      }
+      if(sourceStopJourney&&name==='gps_manual_visit_draft_save'){
+        const drafts=tables.gps_manual_visit_drafts;
+        const prior=drafts.find(row=>row.id===args.p_id);
+        if((prior?.revision||0)!==args.p_expected)return {data:null,error:{message:'Черновик изменился'}};
+        if(args.p_remove&&prior){
+          drafts.splice(drafts.indexOf(prior),1);
+          localStorage.setItem('qa:source-manual-visits',JSON.stringify(drafts));
+          return {data:prior.revision,error:null};
+        }
+        const revision=args.p_expected+1;
+        const next={id:args.p_id,track_id:args.p_track,revision,confirmed_at:null,
+          stay_from:new Date(args.p_from+'+03:00').toISOString(),stay_to:new Date(args.p_to+'+03:00').toISOString(),
+          job_id:args.p_job,crew_ids:args.p_crew,reason:args.p_reason,jobs:request};
+        if(prior)Object.assign(prior,next);else drafts.push(next);
+        localStorage.setItem('qa:source-manual-visits',JSON.stringify(drafts));
+        return {data:revision,error:null};
+      }
+      if(sourceStopJourney&&name==='gps_manual_visit_draft_confirm'){
+        const draft=tables.gps_manual_visit_drafts.find(row=>row.id===args.p_draft&&row.trip_id===args.p_trip);
+        if(!draft)return {data:null,error:{message:'Черновик недоступен'}};
+        draft.confirmed_at=stamp;
+        stays.push({id:draft.id,trip_id:trip,job_id:args.p_job,crew_ids:args.p_crew,manual_origin:true,
+          stay_from:draft.stay_from,stay_to:draft.stay_to,minutes_mgr:30,status:'approved',note:draft.reason});
+        ride.workbench_revision++;
+        return {data:ride.workbench_revision,error:null};
       }
       const reads = {
         unassigned_track_points:(tables.vehicle_telemetry_archive||[]).map(p=>({...p,part:1})),

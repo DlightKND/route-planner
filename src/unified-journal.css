@@ -930,3 +930,7 @@
  padding-inline:var(--journal-gutter);
 }
 .journal-gps-actions:empty,.journal-no-work:empty { display:none; }
+
+.journal-manual-drafts>header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--sp-3)}
+.journal-orphan-overview .journal-manual-drafts{margin-bottom:var(--sp-5)}
+.gps-source-stop>.journal-manual-draft-actions{display:flex;flex-wrap:wrap;gap:var(--sp-2)}

@@ -8,6 +8,7 @@ import {timelineHTML,mountJournalRoute,wireJournalTimeline} from './journal-rout
 import {wireDetailsPopover} from './details-popover.js';
 import {infoHint} from './info-hints.js';
 import {mountSourceStops,observedSourceStops} from './journal-source-stops.js';
+import {manualDraftFields,manualVisitPartyFields,manualVisitTimeFields,renderManualVisitDrafts} from './journal-manual-drafts.js';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=value=>Number(value||0).toLocaleString('ru',{maximumFractionDigits:2});
 const date=value=>!value||!Number.isFinite(Date.parse(value))?'Нет даты':new Date(value).toLocaleString('ru',{timeZone:'Europe/Kyiv',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -135,6 +136,63 @@ export function createUnassignedTracks(ctx){
   const card=host().querySelector('[data-ut-card="'+result.track_id+'"]');card?.scrollIntoView({block:'nearest'});
  }
  function detailFailure(box,id,error,state){box.innerHTML='<p class="err" role="alert">'+escape(error.message||'Не удалось загрузить запись')+'</p><button class="btn" data-ut-retry>Повторить загрузку</button><button class="btn ghost gps-back" data-ut-back>← К журналу</button>';box.querySelector('[data-ut-retry]').onclick=()=>details(id,true,state);box.querySelector('[data-ut-back]').onclick=()=>{host().classList.remove('gps-show-detail','journal-map-expanded');ctx.onList?.();host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;};}
+ function mountManualDraftEditor(panel,source){
+  let working=false;
+  const retry=new Map();
+  const uid=ctx.userId(),current=()=>uid===ctx.userId()&&activeId===source.id&&panel.isConnected;
+  async function load(){
+   const {data,error}=await ctx.db().from('gps_manual_visit_drafts').select(manualDraftFields)
+    .eq('track_id',source.id).order('stay_from');
+   if(!current())return;
+   if(error){
+    panel.textContent='Не удалось загрузить ручные посещения: '+error.message+' ';
+    const button=panel.ownerDocument.createElement('button');
+    button.type='button';button.className='btn ghost';button.textContent='Повторить';
+    button.onclick=()=>perform(button,load);panel.append(button);return;
+   }
+   renderManualVisitDrafts(panel,data||[],{
+    onCreate:button=>perform(button,()=>edit()),
+    onEdit:(draft,button)=>perform(button,()=>edit(draft)),
+    onRemove:(draft,button)=>perform(button,()=>remove(draft))
+   });
+  }
+  async function edit(draft){
+   if(working)return;
+   working=true;
+   try{
+    const {data:jobs,error}=await ctx.db().from('jobs').select('id,clients(name)').is('deleted_at',null).order('created_at',{ascending:false});
+    if(error)throw error;
+    if(!current())return;
+    const pending=retry.get(draft?.id||'new');
+    const fields=[
+     ...manualVisitTimeFields(draft,source),
+     ...manualVisitPartyFields(jobs||[],ctx.people(),{job:draft?.job_id,crew:draft?.crew_ids})
+    ];
+    for(const field of fields)if(pending?.values[field.key]!=null)field.value=pending.values[field.key];
+    const values=await ctx.prompt('Черновик посещения без GPS · время по Киеву',fields,{okText:'Сохранить черновик'});
+    if(!values||!current())return;
+    const id=draft?.id||pending?.id||crypto.randomUUID();
+    retry.set(draft?.id||'new',{id,values});
+    await rpc('gps_manual_visit_draft_save',{p_track:source.id,p_id:id,p_expected:draft?.revision??0,
+     p_from:values.from,p_to:values.to,p_job:values.job,p_crew:values.crew,p_reason:values.reason,p_remove:false});
+    retry.delete(draft?.id||'new');
+    if(current()){await load();ctx.notify('Черновик посещения сохранён.','ok');}
+   }finally{working=false;}
+  }
+  async function remove(draft){
+   if(working)return;
+   working=true;
+   try{
+    if(!await ctx.confirm('Удалить черновик ручного посещения?',{okText:'Удалить',danger:true})||!current())return;
+    await rpc('gps_manual_visit_draft_save',{p_track:source.id,p_id:draft.id,p_expected:draft.revision,
+     p_from:null,p_to:null,p_job:null,p_crew:null,p_reason:null,p_remove:true});
+    retry.delete(draft.id);
+    if(current())await load();
+   }finally{working=false;}
+  }
+  void load();
+  return ()=>working;
+ }
  async function details(id,open=true,state={},reload=false){if(!manager()&&!rows.find(r=>r.id===id)?._direct)return;if((id!==activeId||reload)&&!await leave())return;const mobile=window.innerWidth<=1100,pane=host()?.closest('.pane');if(open&&!host()?.classList.contains('gps-show-detail'))listScroll=host().querySelector('.gps-journal-sidebar')?.scrollTop||0;const uid=ctx.userId(),r=rows.find(x=>x.id===id),box=host()?.querySelector('.gps-journal-detail');if(!r||!box)return;if(!reload&&id===activeId&&r._trip&&pendingTrip?.id===id){host().classList.toggle('gps-show-detail',open);await pendingTrip.promise.catch(()=>{});if(uid===ctx.userId()&&activeId===id&&box.querySelector('.journal-trip-head'))return details(id,open,state);return;}if(!reload&&id===activeId&&r._trip&&box.querySelector('.journal-trip-head')){host().classList.toggle('gps-show-detail',open);ctx.tripReviews.navigate(state);paintList();return;}sourceView=null;sourceActivity?.destroy();sourceActivity=null;activeId=id;host().classList.toggle('gps-show-detail',open);paintList();clearMaps(box);clearMaps(host().querySelector('[data-journal-shared-timeline]'));box.innerHTML='<p role="status">Загружаем трек…</p>';
   if(r._trip){sourceView=null;let mounting;try{mounting=ctx.tripReviews.mount(box,{...r._trip,recordNumber:recordNumber(r)},{...state,back:async()=>{if(!await leave())return;host().classList.remove('gps-show-detail');ctx.onList?.();host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;host().querySelector('[data-ut-details="'+id+'"]')?.focus({preventScroll:true});},changed:(tripId,stay)=>{const t=tripRows.find(t=>t.id===tripId);if(t?.review){if(stay.__review)t.review=stay.__review;else if(!['approved','rejected'].includes(stay.__previousStatus))t.review.done=Math.min(t.review.total,t.review.done+1);}paintList();}});pendingTrip={id,promise:mounting};await mounting;if(uid!==ctx.userId()||activeId!==id||!box.isConnected)return;if(open)ctx.onRecord?.(r._trip.id,state);if(mobile&&open&&box.isConnected){if(pane)pane.scrollTop=0;box.querySelector('[data-ut-back]')?.focus({preventScroll:true});}}catch(e){if(uid===ctx.userId()&&activeId===id&&box.isConnected)detailFailure(box,id,e,state);}finally{if(pendingTrip?.promise===mounting)pendingTrip=null;}return;}ctx.tripReviews?.destroy();
   try{const {quote,points}=await previewFor(id);if(uid!==ctx.userId()||activeId!==id||!box.isConnected)return;
@@ -177,7 +235,12 @@ export function createUnassignedTracks(ctx){
   });
   if(draftResponse?.error)stopsPanel.querySelector('[data-source-status]').textContent='Не удалось прочитать выбор стоянок: '+draftResponse.error.message;
   box.querySelectorAll('[data-orphan-pane]').forEach(b=>b.onclick=()=>switchOrphanPane(b.dataset.orphanPane));
-  sourceView={id,...draftUI,navigate:pane=>switchOrphanPane(pane,false)};switchOrphanPane(state.pane||'stops',open);drawMap(overview,points);box.querySelector('[data-ut-back]').onclick=async()=>{if(sourcePane!=='stops'){switchOrphanPane('stops');return;}if(!await leave())return;host().classList.remove('gps-show-detail','journal-map-expanded');ctx.onList?.();window.requestAnimationFrame(()=>{host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;host().querySelector('[data-ut-details="'+id+'"]')?.focus({preventScroll:true});});};box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(id,b.dataset.utAction)));box.querySelector('[data-ut-trip]')?.addEventListener('click',()=>ctx.openTrip(r.trip_id));box.querySelector('[data-ut-cancel]')?.addEventListener('click',e=>perform(e.currentTarget,()=>cancel(id)));paintList();if(open&&mobile)window.requestAnimationFrame(()=>{if(pane)pane.scrollTop=0;box.querySelector('[data-ut-back]')?.focus({preventScroll:true});});
+  let manualWorking=()=>false;
+  if(canResolve){
+   const manualPanel=document.createElement('section');
+   stopsPanel.after(manualPanel);manualWorking=mountManualDraftEditor(manualPanel,r);
+  }
+  sourceView={id,...draftUI,isSaving:()=>draftUI.isSaving()||manualWorking(),navigate:pane=>switchOrphanPane(pane,false)};switchOrphanPane(state.pane||'stops',open);drawMap(overview,points);box.querySelector('[data-ut-back]').onclick=async()=>{if(sourcePane!=='stops'){switchOrphanPane('stops');return;}if(!await leave())return;host().classList.remove('gps-show-detail','journal-map-expanded');ctx.onList?.();window.requestAnimationFrame(()=>{host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;host().querySelector('[data-ut-details="'+id+'"]')?.focus({preventScroll:true});});};box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(id,b.dataset.utAction)));box.querySelector('[data-ut-trip]')?.addEventListener('click',()=>ctx.openTrip(r.trip_id));box.querySelector('[data-ut-cancel]')?.addEventListener('click',e=>perform(e.currentTarget,()=>cancel(id)));paintList();if(open&&mobile)window.requestAnimationFrame(()=>{if(pane)pane.scrollTop=0;box.querySelector('[data-ut-back]')?.focus({preventScroll:true});});
   }catch(e){if(activeId===id&&box.isConnected)detailFailure(box,id,e,state);}
  }
  async function resolve(id,action){const uid=ctx.userId(),row=rows.find(x=>x.id===id);if(!row)return;

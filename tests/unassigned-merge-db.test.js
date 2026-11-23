@@ -30,6 +30,8 @@ beforeAll(async()=>{
  return rev; end $$;`);
  await db.exec(readFileSync(new URL('../supabase/migrations/20261122153845_workflow_gps_record_operations.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261122211452_gps_record_stop_drafts.sql',import.meta.url),'utf8'));
+ await db.exec('alter table public.jobs add column deleted_at timestamptz');
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261123083009_gps_manual_visit_drafts.sql',import.meta.url),'utf8'));
 
 },30000);
 beforeEach(async()=>{
@@ -182,4 +184,45 @@ it('records an explicit manual visit in Kyiv time without manufacturing GPS time
  expect(await visit('2026-10-03T10:00','2026-10-03T10:30')).toEqual([{revision:1}]);
  expect(await q('select manual_origin,status,minutes_mgr from trip_stays where id=$1',[operation])).toEqual([{manual_origin:true,status:'approved',minutes_mgr:'30.0000000000000000'}]);
  expect(await q('select * from vehicle_positions')).toEqual([]);
+});
+
+it('keeps a manual visit separate until the linked trip confirms it exactly once',async()=>{
+ const track=id(120),trip=id(50),job=id(51),draft=id(121),engineer=id(2);
+ const start='2026-10-04T07:00:00Z',end='2026-10-04T09:00:00Z';
+ await q("insert into unassigned_tracks(id,vehicle_id,started_at,last_ts,ended_at,state) values($1,$2,$3,$4,$4,'review')",[track,id(10),start,end]);
+ await q("insert into vehicle_telemetry_archive(vehicle_id,ts,lat,lng,status) values($1,$2,50,30,'moving'),($1,$3,50,30,'moving')",[id(10),start,end]);
+ await q('insert into jobs(id) values($1)',[job]);
+ const save=(expected,from,to,reason,remove=false)=>q('select gps_manual_visit_draft_save($1,$2,$3,$4,$5,$6,$7,$8,$9) version',
+  [track,draft,expected,from,to,job,[engineer,engineer],reason,remove]);
+ const confirm=(expected,draftRevision,crew=[engineer])=>q('select gps_manual_visit_draft_confirm($1,$2,$3,$4,$5,$6) version',
+  [trip,expected,draft,draftRevision,job,crew]);
+ await db.exec('set role authenticated');
+ await expect(save(0,'2026-10-04T09:30','2026-10-04T10:30','Журнал инженера')).rejects.toThrow('внутри GPS-записи');
+ expect(await save(0,'2026-10-04T10:30','2026-10-04T11:00','Журнал инженера')).toEqual([{version:1}]);
+ expect(await save(0,'2026-10-04T10:30','2026-10-04T11:00','Журнал инженера')).toEqual([{version:1}]);
+ expect(await save(1,'2026-10-04T10:30','2026-10-04T11:00','Подтверждено заказчиком')).toEqual([{version:2}]);
+ await expect(save(1,'2026-10-04T11:00','2026-10-04T11:30','Старая версия')).rejects.toThrow('Черновик изменился');
+ expect(await q("select trip_id,crew_ids,confirmed_at from gps_manual_visit_drafts")).toEqual([{trip_id:null,crew_ids:[engineer],confirmed_at:null}]);
+ expect(await q("select has_table_privilege('authenticated','gps_manual_visit_drafts','INSERT') direct_write")).toEqual([{direct_write:false}]);
+ await q("select set_config('test.uid',$1,true)",[engineer]);
+ expect(await q('select id from gps_manual_visit_drafts')).toEqual([]);
+ await expect(save(2,'2026-10-04T11:00','2026-10-04T11:30','Без доступа')).rejects.toThrow('готовит диспетчер');
+ await q("select set_config('test.uid',$1,true)",[id(1)]);
+ await db.exec('reset role');
+ await q("insert into trips(id,vehicle_id,status,owner_id,curator_id) values($1,$2,'planned',$3,$3)",[trip,id(10),id(1)]);
+ const source=await quote(track);
+ await q('select unassigned_track_resolve($1,$2,$3,$4)',[track,source.revision,'link',{trip,points:source.points,km:source.km,reason:'Проверена GPS-запись'}]);
+ expect(await q('select id from trip_stays')).toEqual([]);
+ expect(await q('select trip_id,confirmed_at from gps_manual_visit_drafts')).toEqual([{trip_id:trip,confirmed_at:null}]);
+ await expect(confirm(0,1)).rejects.toThrow('Черновик изменился');
+ await expect(confirm(0,2)).rejects.toThrow('Заявка не относится');
+ await q('insert into trip_jobs values($1,$2,0)',[trip,job]);
+ await q("insert into vehicle_positions(vehicle_id,trip_id,ts,lat,lng,status) values($1,$2,'2026-10-04T07:40Z',50,30,'moving')",[id(10),trip]);
+ await expect(confirm(0,2)).rejects.toThrow('пересекается с движением');
+ await q("delete from vehicle_positions where ts='2026-10-04T07:40Z'");
+ expect(await confirm(0,2,[engineer,engineer])).toEqual([{version:1}]);
+ expect(await confirm(0,2)).toEqual([{version:1}]);
+ expect(await q('select id,crew_ids,status,manual_origin,note from trip_stays')).toEqual([{id:draft,crew_ids:[engineer],
+  status:'approved',manual_origin:true,note:'Ручное посещение без GPS · Подтверждено заказчиком'}]);
+ expect((await q('select confirmed_at from gps_manual_visit_drafts'))[0].confirmed_at).toBeTruthy();
 });

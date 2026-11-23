@@ -9,6 +9,7 @@ import {presenceRoadConflicts,reviewedStop,routeAmounts,kmText} from './core/gps
 import {mountJournalRoute,timelineHTML,wireJournalTimeline} from './journal-route.js';
 import {mountRoadSections} from './journal-road.js';
 import {mountLinkedStopDrafts} from './journal-source-stops.js';
+import {manualDraftFields,manualVisitPartyFields,renderManualVisitDrafts} from './journal-manual-drafts.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const when=v=>v?new Date(v).toLocaleString('ru-RU',{timeZone:'Europe/Kyiv',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Продолжается';
 const result=({data,error})=>{if(error)throw error;return data;};
@@ -105,37 +106,64 @@ export function createJournalTrips(ctx){
    })();
   }
   const candidateJobs=jobs.filter(job=>data.jobIds.includes(job.id));
-  if(editable&&ctx.prompt&&candidateJobs.length&&['in_progress','finished','done'].includes(data.trip.status)){
-   const manual=root.ownerDocument.createElement('button');manual.type='button';manual.className='btn ghost';
-   manual.textContent='Добавить посещение без GPS';
-   const engineers=ctx.people().filter(person=>person.role==='engineer'&&person.active!==false);
-   let draft={},operation=null;
-   manual.onclick=async()=>{
-    if(saving||pendingSave||review?.isDirty()){
-     message.textContent='Сначала сохраните выбранные решения по остановкам.';return;
-    }
-    manual.disabled=true;
+  const canConfirmManual=editable&&ctx.prompt&&candidateJobs.length&&['in_progress','finished','done'].includes(data.trip.status);
+  const manualDrafts=root.ownerDocument.createElement('section');actions.prepend(manualDrafts);
+  if(editable||['admin','logist'].includes(ctx.role())){
+   void (async()=>{
     try{
-     const values=await ctx.prompt('Посещение без GPS · время по Киеву',[
-      {key:'job',label:'Заявка и объект',type:'select',required:true,value:draft.job,options:[{value:'',label:'Выберите заявку'},...candidateJobs.map(job=>({value:job.id,label:job.clients?.name||'Заявка №'+job.id.slice(0,8)}))]},
-      {key:'from',label:'Начало',type:'datetime-local',required:true,value:draft.from},
-      {key:'to',label:'Окончание',type:'datetime-local',required:true,value:draft.to},
-      {key:'crew',label:'Присутствовавшие инженеры',type:'select',multiple:true,required:true,value:draft.crew||data.trip.engineer_ids||[],options:engineers.map(person=>({value:person.id,label:person.full_name||'Инженер'}))},
-      {key:'reason',label:'Основание ручного учёта',type:'textarea',required:true,value:draft.reason}
-     ],{okText:'Подтвердить посещение'});
-     if(!values||!current())return;
-     if(JSON.stringify(values)!==JSON.stringify(draft)){draft=values;operation=crypto.randomUUID();}
-     const answer=await ctx.db().rpc('gps_record_manual_visit',{
-      p_trip:id,p_expected:data.trip.workbench_revision,p_operation:operation,p_job:values.job,
-      p_from:values.from,p_to:values.to,p_crew:values.crew,p_reason:values.reason
+     const drafts=result(await ctx.db().from('gps_manual_visit_drafts').select(manualDraftFields)
+      .eq('trip_id',id).is('confirmed_at',null).order('stay_from'))||[];
+     if(!current())return;
+     renderManualVisitDrafts(manualDrafts,drafts,{
+      onConfirm:canConfirmManual?(draft,button)=>confirmManual(button,draft):null
      });
-     if(answer.error)throw answer.error;
-     await ctx.afterManualVisit?.(data.trip,answer.data);
-     if(current())await remount('Ручное посещение подтверждено.');
-    }catch(error){if(current())message.textContent=error.message;}
-    finally{if(manual.isConnected)manual.disabled=false;}
-   };
-   actions.append(manual);
+     if(editable&&drafts.length&&!candidateJobs.length){
+      const hint=root.ownerDocument.createElement('p');hint.className='hint';
+      hint.textContent='Для подтверждения в выезде нужна связанная заявка.';manualDrafts.append(hint);
+     }
+    }catch(error){if(current())manualDrafts.textContent='Не удалось загрузить ручные посещения: '+error.message;}
+   })();
+  }
+  let manualInput={},manualOperation=null,manualBusy=false;
+  async function confirmManual(button,prepared){
+   if(manualBusy)return;
+   if(saving||pendingSave||review?.isDirty()){
+    message.textContent='Сначала сохраните выбранные решения по остановкам.';return;
+   }
+   manualBusy=true;button.disabled=true;
+   try{
+    let fields=manualVisitPartyFields(candidateJobs,ctx.people(),prepared?{
+     job:prepared.job_id,crew:prepared.crew_ids
+    }:{job:manualInput.job,crew:manualInput.crew||data.trip.engineer_ids||[]});
+    if(!prepared)fields=[
+     fields[0],
+     {key:'from',label:'Начало',type:'datetime-local',required:true,value:manualInput.from},
+     {key:'to',label:'Окончание',type:'datetime-local',required:true,value:manualInput.to},
+     fields[1],
+     {key:'reason',label:'Основание ручного учёта',type:'textarea',required:true,value:manualInput.reason}
+    ];
+    const title=prepared?'Проверить посещение · '+intervalText(prepared.stay_from,prepared.stay_to):'Посещение без GPS · время по Киеву';
+    const values=await ctx.prompt(title,fields,{okText:'Подтвердить посещение'});
+    if(!values||!current())return;
+    const args={p_trip:id,p_expected:data.trip.workbench_revision,p_job:values.job,p_crew:values.crew};
+    if(!prepared&&JSON.stringify(values)!==JSON.stringify(manualInput)){
+     manualInput=values;manualOperation=crypto.randomUUID();
+    }
+    const answer=prepared?await ctx.db().rpc('gps_manual_visit_draft_confirm',{
+     ...args,p_draft:prepared.id,p_draft_revision:prepared.revision
+    }):await ctx.db().rpc('gps_record_manual_visit',{
+     ...args,p_operation:manualOperation,p_from:values.from,p_to:values.to,p_reason:values.reason
+    });
+    if(answer.error)throw answer.error;
+    await ctx.afterManualVisit?.(data.trip,answer.data);
+    if(current())await remount('Ручное посещение подтверждено.');
+   }catch(error){if(current())message.textContent=error.message;}
+   finally{manualBusy=false;if(button.isConnected)button.disabled=false;}
+  }
+  if(canConfirmManual){
+   const button=root.ownerDocument.createElement('button');button.type='button';button.className='btn ghost';
+   button.textContent='Добавить посещение без GPS';button.onclick=()=>confirmManual(button);
+   actions.append(button);
   }
   const notify=()=>ctx.onNavigate?.({tripId:id,pane,stopId:pane==='stops'?selected:null,...(pane==='route'&&selected?{returnStopId:selected}:{}),...(pane==='route'&&roadId?{roadId}:{})});
   review=mountPresenceReview(host,data,{jobs,profiles:ctx.people(),readonly:!editable,leaflet:ctx.leaflet,makeBase:ctx.makeTrackBase,owner:uid,initialMode:'all',onJobChange:(row,job)=>ctx.renderAllocations(row,job,orders),track,onRoute:()=>switchPane('route'),onSelect:stayId=>{selected=stayId;updateSelection();notify();},onBack:()=>{selected=null;updateSelection();notify();},onConfirmVisits:editable?confirmVisits:null,onPin:stay=>readerAction('pin',stay),onReaderAction:ctx.role()==='engineer'?readerAction:null});
