@@ -40,7 +40,7 @@ test('GPS register and GPS preview remain usable at each width',async({page},inf
 });
 test('creates the GPS trip draft without collecting new request details or writing data',async({page},info)=>{
  await open(page,info);await openOrphanOverview(page);
- await page.getByRole('button',{name:'Создать выезд',exact:true}).click();
+ await page.getByRole('button',{name:'Привязать к выезду',exact:true}).click();await page.locator('#promptOverlay [data-gps-choice=create]').click();
  const overlay=page.locator('#promptOverlay');
  await expect(overlay).toBeVisible();
  await expect(overlay.locator('[data-pf=client],[data-pf=title]')).toHaveCount(0);
@@ -62,7 +62,7 @@ test('restores unlinked stop choices and carries the decision into the linked vi
  await expect(stops.getByRole('status')).toContainText('Выбор сохранён');
  await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await expect(choice).toHaveValue('include');await expect(note).toHaveValue('Объект сверили с инженером');
- await page.getByRole('button',{name:'Связать с выездом',exact:true}).click();
+ await page.getByRole('button',{name:'Привязать к выезду',exact:true}).click();
  await page.locator('[data-pf=trip]').selectOption({index:1});
  await page.locator('[data-pf=reason]').fill('Поездку проверили');
  await page.locator('#promptYes').click();
@@ -96,7 +96,7 @@ test('prepares a manual visit before linking and confirms it in the trip',async(
  await manual.getByRole('button',{name:'Изменить',exact:true}).click();
  await expect(prompt.locator('[data-pf=from]')).toHaveValue('2026-10-04T10:30');
  await page.locator('#promptNo').click();
- await page.getByRole('button',{name:'Связать с выездом',exact:true}).click();
+ await page.getByRole('button',{name:'Привязать к выезду',exact:true}).click();
  await prompt.locator('[data-pf=trip]').selectOption({index:1});
  await prompt.locator('[data-pf=reason]').fill('Поездку проверили');
  await page.locator('#promptYes').click();
@@ -112,7 +112,7 @@ test('prepares a manual visit before linking and confirms it in the trip',async(
 });
 test('links extra GPS evidence to a completed trip as a separate journal record',async({page},info)=>{
  await open(page,info,'admin',1,'supplement');await openOrphanOverview(page);
- await page.getByRole('button',{name:'Связать с выездом',exact:true}).click();
+ await page.getByRole('button',{name:'Привязать к выезду',exact:true}).click();
  const prompt=page.locator('#promptOverlay'),trips=prompt.locator('[data-pf=trip]');
  await expect(trips.locator('option').last()).toContainText('завершён · дополнительная запись');
  await trips.selectOption({index:1});
@@ -131,7 +131,7 @@ test('links extra GPS evidence to a completed trip as a separate journal record'
 });
 test('previews and confirms supplemental GPS accounting while keeping an odometer reading',async({page},info)=>{
  await open(page,info,'admin',1,'supplement-accounting');await openOrphanOverview(page);
- await page.getByRole('button',{name:'Связать с выездом',exact:true}).click();
+ await page.getByRole('button',{name:'Привязать к выезду',exact:true}).click();
  const prompt=page.locator('#promptOverlay');
  await prompt.locator('[data-pf=trip]').selectOption({index:1});
  await prompt.locator('[data-pf=reason]').fill('Уточнение данных поездки');
@@ -170,7 +170,7 @@ test('prepares a road cut before GPS linking and applies it with the trip road e
  if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
  await expect(road.locator('[data-road-row]')).toHaveCount(2);
  await page.getByRole('button',{name:'Обзор',exact:true}).click();
- await page.getByRole('button',{name:'Связать с выездом',exact:true}).click();
+ await page.getByRole('button',{name:'Привязать к выезду',exact:true}).click();
  const prompt=page.locator('#promptOverlay');
  await prompt.locator('[data-pf=trip]').selectOption({index:1});
  await prompt.locator('[data-pf=reason]').fill('Поездка и дорога проверены');
@@ -186,7 +186,7 @@ test('prepares a road cut before GPS linking and applies it with the trip road e
  await clean(page);
 });
 test('charge shows the cost basis and requires a separate amount confirmation',async({page},info)=>{
- await open(page,info);await openOrphanOverview(page);await page.getByRole('button',{name:'Записать списание инженеру',exact:true}).click();
+ await open(page,info);await openOrphanOverview(page);await page.getByRole('button',{name:'Привязать к выезду',exact:true}).click();await page.locator('#promptOverlay [data-gps-choice=charge]').click();
  await expect(page.locator('.gps-resolution-summary')).toContainText('12,5');await page.locator('[data-pf=engineer]').selectOption('00000000-0000-4000-8000-000000000002');
  await page.locator('[data-pf=reason]').fill('Подтверждённая личная поездка');await page.locator('#promptYes').click();
  await expect(page.locator('#confirmOverlay')).toBeVisible();await expect(page.locator('#confirmOverlay')).toContainText('1 500');
@@ -194,7 +194,7 @@ test('charge shows the cost basis and requires a separate amount confirmation',a
 });
 test('engineer sees own charge without manager resolution controls',async({page},info)=>{
  await open(page,info,'engineer');await expect(page.locator('[data-ut-card]')).toContainText('Списание инженеру');
- await expect(page.getByRole('button',{name:'Создать выезд',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Посмотреть трек'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Привязать к выезду',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Посмотреть трек'})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Отменить списание'})).toHaveCount(0);
  await page.locator('[data-journal-exit]').click();await expect(page.locator('#tripAdd')).toBeHidden();await expect(page.locator('#tripTrash')).toBeHidden();
  await clean(page);

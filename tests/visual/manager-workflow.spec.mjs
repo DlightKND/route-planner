@@ -212,13 +212,13 @@ test('M1 M2: request deadline, note, team and status have explicit save and real
  await page.locator('#requestEditContext').click();await page.locator('#jbStatus').selectOption('in_progress');await keepOnlyOther(page,'#jbEng');await dialog(page).locator('[data-entity-save]').click();await expect(page.locator('[data-entity-save]')).toHaveCount(0);await reopenRequest(page);await expect(page.locator('#jbStatus')).toHaveValue('in_progress');expect(await page.locator('#jbEng').evaluate(e=>[...e.selectedOptions].map(o=>o.value))).toEqual([other]);await shot(page,info,'request-saved');await clean(page,errors);
 });
 for(const stage of ['draft','assigned','in_progress','paused','review'])test('M3 M6 M7: manager plans '+stage+' without changing SLA, trip crew or recorded work',async({page},info)=>{
- const errors=await boot(page,info,{stage,route:'order/'+order}),before=await page.evaluate(()=>window.__visualQA.managerState);await page.locator('[data-order-edit-dates]').click();await page.locator('#orderPlanTo').fill('2026-10-12');await page.locator('#orderPlanReason').fill('Согласован срок с заказчиком');await expect(dialog(page)).toContainText('SLA');await expect(dialog(page).locator('.planning-warnings')).toContainText('позже срока');await shot(page,info,'task-'+stage+'-planning');await dialog(page).locator('[data-entity-save]').click();await expect(page.locator('[data-entity-save]')).toHaveCount(0);await expect(page.locator('.order-planning-summary')).toContainText('12.10.2026');
- await page.locator('[data-order-edit-crew]').click();await keepOnlyOther(page,'#orderPlanCrew');await page.locator('#orderPlanLead').selectOption(other);await page.locator('#orderPlanReason').fill('Передаём следующему инженеру');await dialog(page).locator('[data-entity-save]').click();await expect(page.locator('[data-entity-save]')).toHaveCount(0);const state=await page.evaluate(()=>window.__visualQA.managerState);expect(state.order).toMatchObject({status:stage,date_to:'2026-10-12',engineer_ids:[other],lead_engineer:other});expect(state.request).toEqual(before.request);expect(state.trip).toEqual(before.trip);expect(state.order.items).toEqual(before.order.items);await navigate(page,'planner','/planner/orders');await navigate(page,'order','/order/'+order);await expect(page.locator('.order-planning-summary')).toContainText('12.10.2026');await shot(page,info,'task-'+stage+'-saved');await clean(page,errors);
+ const errors=await boot(page,info,{stage,route:'order/'+order}),before=await page.evaluate(()=>window.__visualQA.managerState);await page.locator('#orderEditData').click();await page.locator('#orderPlanTo').fill('2026-10-12');await page.locator('#orderPlanReason').fill('Согласован срок с заказчиком');await expect(dialog(page)).toContainText('SLA');await expect(dialog(page).locator('.planning-warnings')).toContainText('позже срока');await shot(page,info,'task-'+stage+'-planning');await dialog(page).locator('[data-entity-save]').click();await expect(page.locator('[data-entity-save]')).toHaveCount(0);await expect(page.locator('.workflow-head-facts')).toContainText('12.10.2026');
+ await page.locator('#orderEditData').click();await keepOnlyOther(page,'#orderPlanCrew');await page.locator('#orderPlanLead').selectOption(other);await page.locator('#orderPlanReason').fill('Передаём следующему инженеру');await dialog(page).locator('[data-entity-save]').click();await expect(page.locator('[data-entity-save]')).toHaveCount(0);const state=await page.evaluate(()=>window.__visualQA.managerState);expect(state.order).toMatchObject({status:stage,date_to:'2026-10-12',engineer_ids:[other],lead_engineer:other});expect(state.request).toEqual(before.request);expect(state.trip).toEqual(before.trip);expect(state.order.items).toEqual(before.order.items);await navigate(page,'planner','/planner/orders');await navigate(page,'order','/order/'+order);await expect(page.locator('.workflow-head-facts')).toContainText('12.10.2026');await shot(page,info,'task-'+stage+'-saved');await clean(page,errors);
 });
 
 test('M4: cancelling handoff keeps the plan; saving precedes handoff and uses the fresh revision',async({page},info)=>{
  const errors=await boot(page,info,{route:'order/'+order});await page.locator('#orderTab-scope').click();await page.locator('.workspace-organization-editor>summary').click();await page.locator('#orderTo').fill('2026-10-12');await page.locator('#orderMore').click();await page.getByRole('button',{name:'Ответственность',exact:true}).click();await dialog(page).locator('select[name=person]').selectOption(other);await dialog(page).locator('input[name=reason]').fill('Новый ведущий куратор задания');await dialog(page).getByRole('button',{name:'Передать',exact:true}).click();await page.locator('[data-draft-choice=cancel]').click();expect(await page.evaluate(()=>window.__visualQA.managerWrites.length)).toBe(0);await expect(page.locator('#orderTo')).toHaveValue('2026-10-12');
- await dialog(page).getByRole('button',{name:'Передать',exact:true}).click();await page.locator('[data-draft-choice=save]').click();await expect.poll(()=>page.evaluate(()=>window.__visualQA.managerWrites.map(w=>w.name))).toEqual(['service_order_save_one','entity_responsibility_assign']);const writes=await page.evaluate(()=>window.__visualQA.managerWrites);expect(writes[1].args.p_expected).toBe(1);await page.locator('#orderTab-overview').click();await expect(page.locator('.order-planning-summary')).toContainText('12.10.2026');await shot(page,info,'responsibility-saved');await clean(page,errors);
+ await dialog(page).getByRole('button',{name:'Передать',exact:true}).click();await page.locator('[data-draft-choice=save]').click();await expect.poll(()=>page.evaluate(()=>window.__visualQA.managerWrites.map(w=>w.name))).toEqual(['service_order_save_one','entity_responsibility_assign']);const writes=await page.evaluate(()=>window.__visualQA.managerWrites);expect(writes[1].args.p_expected).toBe(1);await page.locator('#orderTab-overview').click();await expect(page.locator('.workflow-head-facts')).toContainText('12.10.2026');await shot(page,info,'responsibility-saved');await clean(page,errors);
 });
 
 test('M5: manager changes trip dates through plan save instead of sending a request',async({page},info)=>{
@@ -226,7 +226,7 @@ test('M5: manager changes trip dates through plan save instead of sending a requ
 });
 
 test('M3 M5: engineer proposes a deadline and requests trip rescheduling without manager planning rights',async({page},info)=>{
- const errors=await boot(page,info,{role:'engineer',route:'order/'+order});await expect(page.locator('[data-order-edit-dates],[data-order-edit-crew]')).toHaveCount(0);await page.locator('[data-order-propose-date]').click();await page.locator('#orderDeadlineDate').fill('2026-10-12');await page.locator('#orderDeadlineReason').fill('Нужен дополнительный день');await page.locator('#orderDeadlineSend').click();await expect.poll(()=>page.evaluate(()=>window.__visualQA.managerWrites.map(w=>w.name))).toEqual(['service_order_deadline_propose']);await dialog(page).getByRole('button',{name:'Закрыть',exact:true}).click();if(await page.locator('#confirmOverlay').isVisible())await page.locator('#confirmYes').click();await navigate(page,'trip','/trip/'+trip);await page.locator('#tripMore').click();await page.getByRole('dialog',{name:'Другие действия'}).getByRole('button',{name:/^(Изменить даты выезда|Запросить перенос)$/}).click();await expect(page.locator('#reschedOverlay')).toBeVisible();await page.locator('#rsFrom').fill('2026-10-12');await page.locator('#rsTo').fill('2026-10-13');await page.locator('#rsReason').fill('Согласовать перенос');await page.locator('#rsSend').click();await expect(page.locator('#reschedOverlay')).toBeHidden();await expect(page.locator('#tpFrom')).toHaveValue('2026-10-05');expect(await page.evaluate(()=>window.__visualQA.managerWrites.map(w=>w.name))).toEqual(['service_order_deadline_propose','trip_reschedule_request']);await clean(page,errors);
+ const errors=await boot(page,info,{role:'engineer',route:'order/'+order});await expect(page.locator('[data-order-edit-dates],[data-order-edit-crew]')).toHaveCount(0);await page.locator('#orderMore').click();await page.getByRole('dialog',{name:'Другие действия'}).getByRole('button',{name:'Предложить срок',exact:true}).click();await page.locator('#orderDeadlineDate').fill('2026-10-12');await page.locator('#orderDeadlineReason').fill('Нужен дополнительный день');await page.locator('#orderDeadlineSend').click();await expect.poll(()=>page.evaluate(()=>window.__visualQA.managerWrites.map(w=>w.name))).toEqual(['service_order_deadline_propose']);await dialog(page).getByRole('button',{name:'Закрыть',exact:true}).click();if(await page.locator('#confirmOverlay').isVisible())await page.locator('#confirmYes').click();await navigate(page,'trip','/trip/'+trip);await page.locator('#tripMore').click();await page.getByRole('dialog',{name:'Другие действия'}).getByRole('button',{name:/^(Изменить даты выезда|Запросить перенос)$/}).click();await expect(page.locator('#reschedOverlay')).toBeVisible();await page.locator('#rsFrom').fill('2026-10-12');await page.locator('#rsTo').fill('2026-10-13');await page.locator('#rsReason').fill('Согласовать перенос');await page.locator('#rsSend').click();await expect(page.locator('#reschedOverlay')).toBeHidden();await expect(page.locator('#tpFrom')).toHaveValue('2026-10-05');expect(await page.evaluate(()=>window.__visualQA.managerWrites.map(w=>w.name))).toEqual(['service_order_deadline_propose','trip_reschedule_request']);await clean(page,errors);
 });
 
 
@@ -271,7 +271,7 @@ test('M7: related record tables keep search, work details and trip actions in th
 
 test('M7: choosing a result among several linked tasks opens the trip table filtered by request',async({page},info)=>{
  const errors=await boot(page,info,{route:'job/'+job+'/trips',stage:'in_progress',tripResultJourney:'multiple'});
- await page.locator('#jobLinkedTrips').getByRole('button',{name:'Внести выполненные работы'}).click();
+ await page.locator('#jobLinkedTrips').getByRole('button',{name:'Отчитаться о работах'}).click();
  const list=page.locator('#tpLinkedOrders'),records=list.locator('[data-related-row]');
  await expect(page.locator('#tpTabPlan')).toHaveAttribute('aria-selected','true');
  await expect(list.getByRole('table',{name:'Задания выезда'})).toBeVisible();
@@ -281,7 +281,7 @@ test('M7: choosing a result among several linked tasks opens the trip table filt
  await expect(records).toHaveCount(3);
  await expect(records.filter({hasText:'Работы по другой заявке'})).toBeVisible();
  await expect(list.getByRole('searchbox')).toBeFocused();
- await records.first().getByRole('button',{name:'Внести выполненные работы'}).click();
+ await records.first().getByRole('button',{name:'Отчитаться о работах'}).click();
  await expect(page.locator('.view-order')).toHaveClass(/active/);
  await expect(page.locator('#orderTab-scope')).toHaveAttribute('aria-selected','true');
  await clean(page,errors);
@@ -301,7 +301,7 @@ test('M8: closing a partial task offers its remaining work when the request gets
  await expect(page.locator('#orderOverviewState h2')).toHaveText('Закрыто с остатком');
  expect(await page.evaluate(()=>window.__visualQA.remainderWrites.length)).toBe(1);
 
- await page.locator('#orderRequest').click();
+ await page.locator('.workflow-crumb-link').click();
  await expect(page.locator('#jobOverviewState h2')).toHaveText('Есть остаток работ');
  await page.locator('#jobRecordResult').click();
  const candidates=page.locator('#orderRequestRemainders [data-remainder-item]');
@@ -516,7 +516,7 @@ test('M12: planned parts stay with the work from draft through acceptance',async
 test('M12: a manual result records parts under their work without a trip',async({page},info)=>{
  const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope',standaloneWorkPlan:'parts'});
  const panel=page.locator('#orderTripResults');
- await panel.getByRole('button',{name:'Зафиксировать результат'}).click();
+ await panel.getByRole('button',{name:'Отчитаться о работах'}).click();
  const parts=dialog(page).locator('.order-manual-parts');
  await expect(parts.locator('[data-result-qty]')).toBeHidden();
  await parts.locator('summary').click();
@@ -647,7 +647,7 @@ for(const stage of ['in_progress','paused'])test('M11: the curator saves the wor
  await group.getByRole('textbox',{name:'План, н-ч'}).fill('7,5');
  await group.getByRole('button',{name:'Сохранить план'}).click();
  await expect(group.getByRole('status')).toHaveText('План сохранён');
- await panel.getByRole('button',{name:'Зафиксировать результат'}).click();
+ await panel.getByRole('button',{name:'Отчитаться о работах'}).click();
  const row=dialog(page).locator('[data-result-item]').first();
  await row.locator('[data-result-qty]').fill('3');
  await row.locator('[data-result-note]').fill('Осталась проверка');

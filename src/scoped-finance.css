@@ -77,7 +77,7 @@ html#dlight-ui[data-ui-system] .scoped-finance-editor :is(.scoped-finance-delta 
  .scoped-finance-money dt{line-height:24px}
  .scoped-finance-money dd{min-height:29px}
  .scoped-finance-money dd strong{font-size:20px;line-height:27px}
- .scoped-finance-status{font-size:11px;padding:0 6px}
+ .scoped-finance-status{font-size:12px;padding:0 6px}
  .scoped-finance-total{gap:8px;padding-inline:10px}
  .scoped-finance-editor{padding:10px}
  .scoped-finance-total-editor{margin-inline:8px}

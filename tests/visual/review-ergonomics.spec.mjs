@@ -42,7 +42,7 @@ test('GPS list detail and resolution form preserve context on mobile and desktop
   const last=page.locator('[data-ut-details]').last();await last.scrollIntoViewIfNeeded();await last.click();
   if(mobile){await expect(page.locator('[data-ut-back]')).toBeInViewport();if(page.viewportSize().width<=760)await expect(page.locator('#tripJournalPeriod')).toBeHidden();}
   await expect(page.locator('.journal-orphan-overview .leaflet-container')).toBeVisible();await expect(page.locator('.journal-orphan-overview .leaflet-tile-loaded').first()).toBeVisible();await shot(page,info,'gps-detail');
-  await page.getByRole('button',{name:'Создать выезд',exact:true}).click();
+  await page.getByRole('button',{name:'Привязать к выезду',exact:true}).click();await page.locator('#promptOverlay [data-gps-choice=create]').click();
   await expect(page.locator('#promptOverlay [data-pf=reason]')).toBeInViewport();
   await expect(page.locator('#promptOverlay #promptYes')).toBeInViewport();await shot(page,info,'gps-resolution-start');
   await page.locator('[data-pf=reason]').fill('Черновик визуальной проверки');

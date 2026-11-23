@@ -939,7 +939,7 @@
       "source": [
         {
           "file": "src/entity-activity.js",
-          "marker": "activity-compose-disclosure"
+          "marker": "comment-form"
         }
       ],
       "catalogue": {

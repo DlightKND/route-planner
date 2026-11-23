@@ -46,7 +46,8 @@ import './review-workspaces.css';
 import './unified-journal.css';
 import './ui/application-design-system.css';
 import {installApplicationDesignSystem} from './ui/application-design-system.js';
-import {frameGpsResolutionPrompt,restoreGpsResolutionPrompt,framePresenceWorkspace,installWorkspaceStructure,presentRequestWorkspace,setOverviewState,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
+import {metaDate,metaPeriod,crewLabel,metadataList,rememberNumbers,requestLabel,tripLabel} from './workflow-meta.js';
+import {frameGpsResolutionPrompt,restoreGpsResolutionPrompt,framePresenceWorkspace,installWorkspaceStructure,presentRequestWorkspace,setOverviewState,setOverviewSecondary,setCatalogWorkspace,setSettingsWorkspace,presentDispatcherSection} from './workspace-ui.js';
 import { loadChartHTML } from './dashboard-chart.js';
 import { infoHint, installInfoHints } from './info-hints.js';
 import { dashboardMetrics,roadPersonHours,statisticsPlanBlocks } from './core/dashboard-metrics.js';
@@ -73,6 +74,7 @@ import {createPlannerWorkspace} from './planner-workspace.js';
 import './planner-workspace.css';
 import './planner-approved.css';
 import './planner-integration.css';
+import './mockup-v65.css';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,preparePhoto:shrinkImage,
  showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),onOrderViewChange:()=>routeSet(routeForView('order')),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,openJournalTrip,cardOrigin,returnToCard,recordTripResult:(trip,job)=>recordEntityResult('trip',trip,job),canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
@@ -1382,7 +1384,7 @@ function renderWorkFeed(){
       // сведений на месте, где могут быть дата и часы. Модель показываем,
       // когда она есть, и всегда — срок с трудоёмкостью.
       const hrs=(job.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
-      const sub=['Заявка '+String(job.id).slice(0,8),dayLabel(job.due_date)];
+      const sub=[requestLabel(job,job.id),dayLabel(job.due_date)];
       const mdl=(job.equipment&&job.equipment.model)||''; if(mdl) sub.push(mdl);
       if(hrs) sub.push(hrs.toFixed(hrs%1?1:0)+' ч');
       h+='<button type="button" class="wf-row" data-jfly="'+esc(job.client_id)+'" data-jid="'+esc(job.id)+'" style="border-left-color:'+col+'">'
@@ -1396,7 +1398,7 @@ function renderWorkFeed(){
     buckets.cold.slice(0,6).forEach(j=>{
       h+='<button type="button" class="wf-row" data-jfly="'+esc(j.client_id)+'" data-jid="'+esc(j.id)+'">'
         +'<div style="flex:1"><div class="wf-t">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
-        +'<div class="wf-s">'+esc('Заявка '+String(j.id).slice(0,8)+' · '+((j.equipment&&j.equipment.model)||'без техники'))+'</div></div></button>';
+        +'<div class="wf-s">'+esc(requestLabel(j,j.id)+' · '+((j.equipment&&j.equipment.model)||'без техники'))+'</div></div></button>';
     });
   }
 
@@ -1892,7 +1894,7 @@ function wireJobCards(box){
   box.querySelectorAll('[data-jstat]').forEach(sel=>sel.onchange=()=>jobSetStatus(sel.dataset.jstat, sel.value)); }
 async function renderJobs(){ await ensureRefs(); renderJobChips();
   const { data, error }=await sb.from('jobs').select('*, clients(name), equipment(model,kind),'+JOB_FINANCE_SELECT).is('deleted_at',null).order('created_at',{ascending:false});
-  const box=$('jobList'); if(error){listLoadError(box,error,renderJobs);return;}
+  const box=$('jobList'); if(error){listLoadError(box,error,renderJobs);return;}rememberNumbers(data);
   const queued=await qAll();
   jobs=projectLegacyFinanceRows(data||[]).map(j=>{
     const pending=pendingJobState(queued,j.id,j.job_parts,j.job_works);
@@ -3822,6 +3824,7 @@ async function fetchJobFull(id){
       .eq('id',id).is('deleted_at',null).maybeSingle();
     if(error) throw error;
     const full=projectRequestFinance(data||null);
+    if(full)rememberNumbers([full]);
     if(full) await snapSet('job:'+session?.user?.id+':'+id,full);
     return full;
   }catch(e){ console.warn('Заявка не дочитана:',e); return null; }
@@ -3833,7 +3836,7 @@ function prepareEntityPages(){
  const deadline=$('jbDue').closest('.card');deadline.id='jobDeadlineFields';auxiliary.append(deadline,$('jobResponsibilitySection'),$('jbFixCard'),job.querySelector('.job-photos'));
  $('jobLegacyPanels').remove();
  for(const [view,prefix] of [[job,'job'],[trip,'trip']]){
-  const actions=document.createElement('div');actions.className='entity-header-actions';actions.innerHTML=`<button type="button" class="btn amber" id="${prefix}RecordResult" hidden>Зафиксировать результат</button><button type="button" class="btn" id="${prefix}More">⋯</button>`;view.querySelector('.trip-head').append(actions);
+  const actions=document.createElement('div');actions.className='entity-header-actions';actions.innerHTML=`<button type="button" class="btn amber" id="${prefix}RecordResult" hidden>Отчитаться о работах</button><button type="button" class="btn" id="${prefix}More">⋯</button>`;view.querySelector('.trip-head').append(actions);
   const meta=document.createElement('div');meta.id=prefix+'ResponsibilityMeta';meta.className='entity-meta';view.querySelector('.th-main').append(meta);
  }
  $('jobFoot').className='entity-primary-wrap';$('jobFootHint').hidden=true;$('jobMore').before($('jobFoot'));
@@ -3875,6 +3878,7 @@ async function openRequestEditor(panel,title,trigger,focusId){
  });
  if(focusId)(panel.querySelector('#'+focusId+' + .engineer-picker')||panel.querySelector('#'+focusId))?.focus({preventScroll:true});return dialog;
 }
+function jobNavUrl(){const cl=clients.find(c=>c.id==$('jbClient')?.value);return cl&&cl.lat!=null&&cl.lng!=null?navHref(cl.lat,cl.lng):'';}
 function configureEntityActions(kind,record){
  const id=record?.id,prefix=kind==='job'?'job':'trip',trigger=$(prefix+'More'),discard=()=>confirmDialog('Закрыть без сохранения изменений?',{okText:'Закрыть',cancelText:'Продолжить ввод'}),panel=(title,node)=>openEntityPanel({title,panel:node,trigger,confirmDiscard:discard});
  const responsible=pid=>profilesList.find(p=>p.id===pid)?.full_name||'Не назначен';$(prefix+'ResponsibilityMeta').textContent=id?'Владелец: '+responsible(record.owner_id)+' · куратор: '+responsible(record.curator_id):'';
@@ -3882,9 +3886,10 @@ function configureEntityActions(kind,record){
  if(kind==='job'){
   report.hidden=true;
   mountEntityActions({trigger,items:()=>[
-   {label:'Зафиксировать результат',hidden:!id,onSelect:()=>recordEntityResult(kind,id)},
+   {label:'Отчитаться о работах',hidden:!id,onSelect:()=>recordEntityResult(kind,id)},
    {label:'Назначить инженеров',hidden:!canWriteJob(),onSelect:()=>openRequestEditor($('requestContextFields'),'Назначить инженеров',trigger,'jbEng')},
    {label:'Изменить срок и заметку',onSelect:()=>openRequestEditor($('jobDeadlineFields'),'Срок заявки и заметка',trigger)},
+   {label:'Проложить маршрут к объекту',hidden:!jobNavUrl(),onSelect:()=>window.open(jobNavUrl(),'_blank','noopener')},
    {label:'График работ',hidden:!id,onSelect:()=>switchTab('schedule')},
    {label:'Передать ответственность',hidden:!id,onSelect:()=>panel('Ответственность',$('jobResponsibilitySection'))},
    {label:'Фото и вложения',hidden:!id,onSelect:()=>panel('Фото и вложения',document.querySelector('.job-photos'))},
@@ -3895,7 +3900,7 @@ function configureEntityActions(kind,record){
   ]});$('jobFoot').style.display='none';
  }else{
   $('tripResponsibilitySection').hidden=true;mountEntityActions({trigger,items:()=>[
-   {label:'Зафиксировать результат задания',hidden:!id,onSelect:()=>recordEntityResult(kind,id)},
+   {label:'Отчитаться о работах',hidden:!id,onSelect:()=>recordEntityResult(kind,id)},
    {label:'Привязать задание',hidden:!canLinkTripOrder(record),onSelect:()=>openTripOrderPicker(record,trigger)},
    {label:'Передать ответственность',hidden:!id,onSelect:()=>panel('Ответственность',$('tripResponsibilitySection'))},
    {label:canWriteTrip(record)?'Изменить даты выезда':'Запросить перенос',hidden:!id||!['planned','assigned'].includes(record.status),onSelect:()=>openReschedModal(id)},
@@ -3908,10 +3913,14 @@ function configureEntityActions(kind,record){
   let datesAction=$('tripDatesAction');if(!datesAction){datesAction=document.createElement('button');datesAction.id='tripDatesAction';datesAction.type='button';datesAction.className='btn sm ghost';$('tpFrom').closest('.row').before(datesAction);}
   datesAction.hidden=!id||!['planned','assigned'].includes(record?.status);datesAction.textContent=canWriteTrip(record)?'Изменить даты':'Запросить перенос';datesAction.onclick=()=>openReschedModal(id);
   const action=['planned','assigned'].includes(record?.status)?'start':record?.status==='in_progress'?'finish':record?.status==='finished'&&canWriteTrip(record)?'confirm':null;
+  const state=$('tripOverviewState'),reportWork={label:'Отчитаться о работах',onClick:()=>recordEntityResult('trip',id)};
+  setOverviewSecondary(state,null);
   if(action==='confirm'){
-   report.textContent='Сверить навигацию';
+   report.textContent='Сверить данные GPS';
    report.onclick=()=>openJournalTrip(id);
+   setOverviewSecondary(state,reportWork,{after:true});
   }else if(action){
+   if(action==='finish')setOverviewSecondary(state,reportWork);
    report.textContent={start:'Начать выезд',finish:'Завершить поездку'}[action];
    report.onclick=async()=>{if(await leaveTripEditor()){await tripAction(id,action);await openTrip(id);}};
   }else{
@@ -3964,6 +3973,11 @@ async function loadCardPayment(scope,id,anchor,currentId){
     }).catch(()=>{});
   }catch(error){if(current()){host.hidden=false;host.textContent=error.message||'Условия оплаты недоступны';}}
 }
+// Cost allocation stays a collapsible card under the plan/fact; actions open and focus it.
+function openTripCostReview(){
+  const detail=$('tpCostReview');if(!detail)return;detail.dataset.requested='';detail.open=true;
+  detail.querySelector('summary')?.focus({preventScroll:true});detail.scrollIntoView?.({block:'start'});
+}
 function mountCardFinance(scope,id,pane,currentId){
   const hostId=scope+'ScopedFinance';$(hostId)?.remove();
   const tripReview=scope==='trip'?[$('tpReviewSummary'),$('tpPresence')?.closest('.card')]:[];
@@ -3983,10 +3997,7 @@ function mountCardFinance(scope,id,pane,currentId){
     },
     onAllocate:async row=>{
       if(scope==='job')await openTrip(row.id,{pane:'economy'});
-      if(tripEditId===row.id&&$('tpCostReview')){
-        const detail=$('tpCostReview');detail.dataset.requested='';detail.open=true;
-        detail.querySelector('summary').focus({preventScroll:true});detail.scrollIntoView({block:'start'});
-      }
+      if(tripEditId===row.id&&$('tpCostReview'))openTripCostReview();
     },
     onTrip:row=>scope==='trip'?openJournalTrip(row.id,{pane:'route'}):openTrip(row.id,{pane:'economy'}),
     onGPS:trip=>openJournalTrip(trip,{pane:'route'}),
@@ -4020,7 +4031,7 @@ async function openJob(id,presetClient,presetEquip,{pane:requestedPane,returning
   $('jbClient').innerHTML=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   $('jbEng').innerHTML=profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
   $('jbWorkPick').innerHTML='<option value="">— выбрать работу —</option>'+catalog.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join('');
-  $('jobTitle').textContent=id?'Заявка №'+String(id).slice(0,8):'Новая заявка';
+  $('jobTitle').textContent=id?requestLabel(jobs.find(x=>x.id===id),id):'Новая заявка';
   $('jbClient').value=j?j.client_id:(presetClient||(clients[0]?clients[0].id:'')); populateEquip();
   $('jbStatus').value=j?j.status:'open'; setEngineerSelect('jbEng',j?jobEngineerIds(j):[]); $('jbDate').value=j?(j.scheduled_date||''):''; $('jbWindow').value=j?(j.time_window||''):''; $('jbDue').value=j?(j.due_date||''):''; $('jbNotes').value=j?(j.notes||''):''; if($('jbWarrDays')) $('jbWarrDays').value=(appSettings.repair_warranty_days==null?90:appSettings.repair_warranty_days);
   if(presetEquip) $('jbEquip').value=presetEquip; else if(j) $('jbEquip').value=j.equipment_id||'';
@@ -4058,7 +4069,7 @@ async function openJob(id,presetClient,presetEquip,{pane:requestedPane,returning
   }
   if($('jobSaveState')){ $('jobSaveState').style.display=(jobEditId&&!ro)?'':'none'; jobSaveState(pendingEdit?'ждёт отправки':'сохранено'); }
   if($('jobRefToggle')) $('jobRefToggle').textContent='Подробности заявки';
-  $('jobErr').textContent=financeTaskLocked()?'Состав работ и материалов закреплён: связанное задание уже в работе. Изменения оформляются через согласованную корректировку.':''; jobHead(); jobFootUpdate();
+  $('jobErr').textContent='';{const lock=$('jobEstimateLock');if(lock){lock.textContent=financeTaskLocked()?'Состав работ и материалов закреплён: связанное задание уже в работе. Изменения оформляются через согласованную корректировку.':'';lock.hidden=!financeTaskLocked();}} jobHead(); jobFootUpdate();
   loadJobPhotos(); loadJobVisits(); await loadJobParts(); loadFixes();
   // Куда вернёт хлебная крошка. Заявку открывают из пяти мест — со сводки,
   // с карты, из канбана, из выезда, — и возвращать всегда в канбан значит
@@ -4087,13 +4098,16 @@ async function openJob(id,presetClient,presetEquip,{pane:requestedPane,returning
       const title=finished?'Заявка '+ST[$('jbStatus').value]:remaining?'Есть остаток работ':tasks?.length?completed?'Работы завершены':'Можно продолжить работы':tasks?'Нужно подготовить задания':'Задания временно недоступны';
       const detail=finished?'Результаты доступны в план/факте.':remaining?'Выберите остаток при создании следующего задания.':completed?'Результаты доступны в план/факте.':shouldCreate?'Опишите работы и назначьте исполнителей.':'Откройте задания, чтобы отчитаться о работах или проверить результат.';
       setOverviewState($('jobOverviewState'),title,detail);
+      const openWork=!finished&&tasks?.some(task=>!['completed','cancelled','draft'].includes(task.status));
+      setOverviewSecondary($('jobOverviewState'),openWork?{label:'Отчитаться о работах',onClick:()=>recordEntityResult('job',id)}:null);
       button.hidden=finished;
       button.textContent=shouldCreate?'Создать задание':completed?'Посмотреть результат':'Открыть задания';
       button.onclick=()=>{if(shouldCreate)$('jobOrders').querySelector('[data-order-new]')?.click();else requestTabs.select(completed?'estimate':'tasks');};
       if(!finished&&canWriteJob()&&await pendingGPS&&jobEditId===id&&!['done','cancelled'].includes($('jbStatus').value)){
        const review=$('jobLinkedTrips').querySelector('[data-related-review]');
        if(!review)return;
-       setOverviewState($('jobOverviewState'),'Нужно сверить данные GPS','Откройте выезд на проверке и подтвердите рабочие посещения.');
+       setOverviewState($('jobOverviewState'),'Нужно сверить данные GPS','Выберите выезд на проверке и подтвердите рабочие посещения. Затем отчитайтесь о работах в заданиях.');
+       if(openWork)setOverviewSecondary($('jobOverviewState'),{label:'Отчитаться о работах',onClick:()=>recordEntityResult('job',id)},{after:true});
        button.textContent='Сверить данные GPS';
        button.onclick=()=>{requestTabs.select('trips');if(review.getAttribute('aria-pressed')!=='true')review.click();};
       }
@@ -4204,11 +4218,11 @@ function jobHead(){
   const eqName=(()=>{ const sel=$('jbEquip'); return (sel&&sel.selectedIndex>0)?sel.options[sel.selectedIndex].text:''; })();
   const nm=cl?cl.name:'Новая заявка';
   const subject=$('jbNotes').value.trim().split('\n')[0]||curWorks[0]?.title||curWorks[0]?.name||nm;
-  $('jobTitle').textContent=jobEditId?'Заявка №'+String(jobEditId).slice(0,8):'Новая заявка';
+  $('jobTitle').textContent=jobEditId?requestLabel(jobs.find(x=>x.id===jobEditId),jobEditId):'Новая заявка';
   $('jobCrumb').textContent='Диспетчер / Заявки';
   $('jbEng').setAttribute('aria-label','Инженеры заявки');
   const due=$('jbDue').value;
-  $('jobSub').innerHTML='<p class="workflow-subject">'+esc(subject)+'</p><dl class="workflow-metadata"><div><dt>SLA · выполнить до</dt><dd>'+esc(due?dateHuman(due):'Не задан')+'</dd></div></dl>';
+  $('jobSub').innerHTML='<p class="workflow-subject">'+esc(subject)+'</p>'+metadataList([['SLA · выполнить до',due?metaDate(due):'Не задан']]);
   // Позвонить и доехать — прямо в шапке заявки, а не после поисков по карте.
   // Кнопки появляются, только когда есть чему появляться: номер задан,
   // координаты у точки есть.
@@ -5945,7 +5959,7 @@ function renderTripReviewSummary(){
  if(state)setOverviewState($('tripOverviewState'),...state);
  const states=[['Выезд',ST_TRIP[t.status]||t.status,t.status==='done'?'confirmed':'neutral','plan','tpReviewPlan','Открыть план'],['Присутствие',presence,pending?'pending':approved?'confirmed':'neutral','presence','tpReviewPresence','Открыть присутствие'],['Распределение затрат',tripCostReviewState,tripCostReviewState==='подтверждены'?'confirmed':'pending','economy','tpReviewCosts',canWriteTrip()?'Сверить затраты':'Открыть затраты'],['Выполнение заданий',tasks.length?'Принято '+accepted+' из '+tasks.length+' заданий':'Задания не добавлены',tasks.length&&accepted===tasks.length?'confirmed':'neutral','plan','tpReviewTasks','Открыть задания']];
  box.innerHTML='<h3 class="trip-review-heading">Проверка выезда</h3><div class="trip-review-grid">'+states.map(([label,value,state,pane,id,action])=>'<button type="button" class="trip-review-item" id="'+id+'" data-review-state="'+state+'" data-review-pane="'+pane+'"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong><small>'+esc(action)+' →</small></button>').join('')+'</div>';
- box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{button.closest('dialog[open]')?.close();if(button.id==='tpReviewPresence'){openJournalTrip(t.id);return;}setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewCosts'){const detail=$('tpCostReview');if(detail){detail.dataset.requested='';detail.open=true;}$('tpTripAllocation').scrollIntoView({block:'start'});}if(button.id==='tpReviewTasks')$('tpLinkedOrders')?.scrollIntoView({block:'start'});});
+ box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{button.closest('dialog[open]')?.close();if(button.id==='tpReviewPresence'){openJournalTrip(t.id);return;}setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewCosts'){openTripCostReview();}if(button.id==='tpReviewTasks')$('tpLinkedOrders')?.scrollIntoView({block:'start'});});
 }
 function listLoadError(box,error,retry){box.className='';box.innerHTML='<p class="err" role="alert">Не удалось загрузить данные: '+esc(error.message)+'</p><button type="button" class="btn sm" data-list-retry>Повторить загрузку</button>';box.querySelector('[data-list-retry]').onclick=retry;}
 async function loadWorkbench(id){
@@ -6155,7 +6169,7 @@ function wireTripCards(box){
 async function renderTrips(){ await ensureRefs(); renderTripChips();
   const {data,error}=await sb.from('trips').select('*, trip_jobs(job_id)').is('deleted_at',null).order('created_at',{ascending:false});
   const box=$('tripList'); if(error){listLoadError(box,error,renderTrips);return;}
-  trips=data||[]; const q=$('tripSearch').value.trim().toLowerCase();
+  trips=data||[];rememberNumbers(trips); const q=$('tripSearch').value.trim().toLowerCase();
   const filter=$('tripEngFilter');
   if(filter&&filter.dataset.filled!=='1'){
     filter.innerHTML='<option value="">все инженеры</option>'+profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(p.full_name||'инженер')+'</option>').join('');
@@ -6191,7 +6205,7 @@ async function openTrip(id,{includeOrderId=null,plannedOrderIds=[],seedOrder=nul
   await ensureTurf().catch(()=>{});
   if(id!==tripEditId||resultRequest!==tripResultRequest)$('tpLinkedOrders').replaceChildren();
   tripEditId=id;tripResultRequest=resultRequest;tripGpsSource=gpsSource;
-  if(id){ const {data,error}=await sb.from('trips').select('*').eq('id',id).single(); if(error){notify(error.message,'err');return;} const i=trips.findIndex(x=>x.id===id);if(i<0)trips.push(data);else trips[i]=data; }
+  if(id){ const {data,error}=await sb.from('trips').select('*').eq('id',id).single(); if(error){notify(error.message,'err');return;} rememberNumbers([data]);const i=trips.findIndex(x=>x.id===id);if(i<0)trips.push(data);else trips[i]=data; }
   const t=id?getTrip(id):null; tripNewPlanId=newPlan&&t?.status==='planned'&&!t.started_at?id:null; tripMainJobId=(t&&t.main_job_id)||null;
   if(t&&canWriteTrip(t)&&!canWrite()){
     const finance=await sb.rpc('entity_finance_config',{p_kind:'trip',p_id:id});
@@ -6251,6 +6265,7 @@ async function openTrip(id,{includeOrderId=null,plannedOrderIds=[],seedOrder=nul
     $('tripMore').before(edit);edit.onclick=openTripPlanFields;
   }
   edit.hidden=!id||ro;
+  document.querySelector('.view-trip')?.toggleAttribute('data-saved-trip',!!id&&!ro);
   if(includeOrderId){const order=tripOrdersAll.find(o=>o.id===includeOrderId);if(!t||!canWriteTrip(t)||!['planned','assigned'].includes(t.status)||!order||['completed','cancelled','review'].includes(order.status)){notify('Задание нельзя добавить в этот план выезда.','warn');}else if(curTripOrders.has(includeOrderId)){notify('Задание уже включено в выезд.');}else{curTripOrders.add(includeOrderId);syncTripJobsFromOrders();syncRouteStops();resetTripRoute();renderRouteStops();renderTripJobs();tripPlanDirty=true;notify('Задание добавлено в план. Проверь команду и маршрут, затем сохрани выезд.');}}
   renderTripReviewSummary();void loadCardPayment('trip',id,$('tripOverviewState'),()=>tripEditId);const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
 // Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
@@ -6280,7 +6295,7 @@ function renderTpFactKm(){
 
 function tripHead(){
   const per=tripPeriod($('tpFrom').value,$('tpTo').value);
-  $('tripTitle').textContent=tripEditId?'Выезд №'+String(tripEditId).slice(0,8):'Новый выезд';
+  $('tripTitle').textContent=tripEditId?tripLabel(getTrip(tripEditId),tripEditId):'Новый выезд';
   $('tripCrumb').textContent='Диспетчер / Выезды';
   const veh=vehicles.find(x=>x.id==$('tpVeh').value);
   const engs=engineerNames(selectedEngineerIds('tpEng'));
@@ -6293,7 +6308,8 @@ function tripHead(){
   stage.textContent=status?status[0].toUpperCase()+status.slice(1):'';
   stage.hidden=!tripEditId;
   const vehicle=veh?veh.name+(veh.plate?' · '+veh.plate:''):'Автомобиль не выбран';
-  $('tripSub').innerHTML='<p class="workflow-subject">'+esc(vehicle)+'</p><dl class="workflow-metadata"><div><dt>Плановые даты</dt><dd>'+esc(per)+'</dd></div><div><dt>Команда</dt><dd>'+esc(engs.join(', ')||'Не назначена')+'</dd></div></dl>';
+  const tripDue=[...curTripOrders].map(oid=>tripOrdersAll.find(o=>o.id===oid)).map(o=>o?.jobs?.due_date||jobs.find(j=>j.id===o?.job_id)?.due_date).filter(Boolean).sort()[0];
+  $('tripSub').innerHTML='<p class="workflow-subject">'+esc(vehicle)+'</p>'+metadataList([tripDue&&['SLA · выполнить до',metaDate(tripDue)],['Плановые даты',metaPeriod($('tpFrom').value,$('tpTo').value)],['Команда',crewLabel(engs),engs.join(', ')]]);
   $('tripOverviewDescription').textContent=$('tpNotes').value.trim()||'Описание не указано.';
   $('tripHeadEcon').hidden=!canWriteTrip();
   const pc=e.profit>=0?'var(--ink)':'var(--red)';

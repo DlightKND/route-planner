@@ -252,8 +252,8 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         expect(bounds[1].width,'The route gets the primary workspace column').toBeGreaterThan(bounds[0].width);
         expect(bounds[1].width/bounds[0].width,'Balanced route and state widths').toBeLessThan(1.5);
       }
-      await active.locator('#tpTabPlan').click();
-      await active.locator('.workflow-trip-edit>summary').click();
+      if(await active.locator('#tripEditData').isVisible())await active.locator('#tripEditData').click();
+      else{await active.locator('#tpTabPlan').click();await active.locator('.workflow-trip-edit>summary').click();}
       await reveal(active.locator('#tpFrom'));
       if(role==='engineer'){
         await expect(active.locator('#tpSave')).toBeHidden();
@@ -425,7 +425,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await shot(page,testInfo,`${role}-trip-economics`);
       await active.locator('#tpTabOverview').click();
       await checkedPane(page,active,active.locator('#tpOverviewPane'),audit,testInfo);
-      await reveal(active.locator('#tripActivity .activity-controls'));
+      await reveal(active.locator('#tripActivity .comment-form'));
       await expect(active.locator('#tripActivity .entity-activity-feed')).toContainText('Уточнён порядок');
       await shot(page,testInfo,`${role}-trip-history`);
     }

@@ -1,3 +1,4 @@
+import {metaDate,tripLabel} from './workflow-meta.js';
 import {calculateRoadAccounting} from './journal-road-accounting.js';
 import {saveRoadModel} from './journal-road.js';
 import {distanceText} from './core/journal-display.js';
@@ -200,6 +201,7 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onGPS,onOrde
       ${model.editable?`<button type="button" class="btn" data-finance-total="${key}" aria-label="Изменить итог · ${title} · ${heading}">Изменить</button>`:''}</div>`;
     })).join(''))}
     ${onAllocate&&data.mileage.length?allocationActions(data.mileage):''}
+    <p class="hint scoped-finance-note">Приход по плановым и принятым объёмам. Δ — факт минус план, в гривнах. Факт показан по известным данным.</p>
    </section></div>`;
   root.querySelectorAll('details[data-finance-section]').forEach(node=>{node.ontoggle=()=>node.open?disclosures.add(node.dataset.financeSection):disclosures.delete(node.dataset.financeSection);});
   root.querySelectorAll('[data-finance-mode]').forEach(button=>{button.onclick=()=>{view=button.dataset.financeMode;
@@ -225,8 +227,7 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onGPS,onOrde
  const units=value=>value==null?'—':format.format(value);
  function allocationActions(trips){
   const button=(index,label)=>`<button type="button" class="btn" data-finance-allocate="${index}">${esc(label)}</button>`;
-  return trips.length===1?`<div class="scoped-finance-allocation">${button(0,'Распределить расходы')}</div>`:
-   disclosure('allocation','Распределить расходы',`<div class="scoped-finance-allocation">${trips.map((trip,i)=>button(i,trip.title||trip.date||'Выезд')).join('')}</div>`);
+  return disclosure('allocation','Распределить расходы',`<p class="hint">Расходы выезда делятся между заданиями по принятым часам и пробегу.</p><div class="scoped-finance-allocation">${trips.map((trip,i)=>button(i,trips.length===1?'Распределить расходы':tripLabel(trip,trip.id)+(trip.date?' · '+metaDate(trip.date):''))).join('')}</div>`);
  }
  function tripContributions(works,trips){
   const byTrip=trips.map(trip=>knownSum(works.flatMap(work=>(work.sources||[]).filter(source=>source.trip===trip.id).map(source=>amount(source.hours)))));
@@ -244,8 +245,8 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onGPS,onOrde
    <span class="hint"> · ${section.mode==='plan'?'План':'Факт'}</span></th>
    <td>${section.mode==='plan'?units(section.km):'—'}</td><td>${section.mode==='fact'?units(section.km):'—'}</td></tr>`):
    trips.map((row,index)=>{
-    const title=esc(row.title||row.date||'Выезд'),key='finance-mileage-'+scope+'-'+id+'-'+row.id,expanded=disclosures.has(key);
-    return `<tr><th scope="row"><button type="button" class="btn ghost" data-finance-trip="${index}">${title}</button></th>
+    const title=esc(tripLabel(row,row.id)),sub=[metaDate(row.date),row.title].filter(Boolean).map(esc).join(' · '),key='finance-mileage-'+scope+'-'+id+'-'+row.id,expanded=disclosures.has(key);
+    return `<tr><th scope="row"><button type="button" class="btn ghost scoped-finance-trip-link" data-finance-trip="${index}">${title}</button>${sub?`<small class="hint">${sub}</small>`:''}</th>
      <td>${units(row.plan_km)}</td><td>${units(row.actual)}</td><td><button type="button" class="btn ghost" data-finance-mileage-toggle
      aria-controls="${esc(key)}" aria-expanded="${expanded}" aria-label="Пробег выезда · ${title}">${journalIcon('chevron')}</button></td></tr>
      <tr class="scoped-finance-work-detail" id="${esc(key)}" ${expanded?'':'hidden'}><td colspan="4">
@@ -256,7 +257,7 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onGPS,onOrde
       ${row.whole?'':`<tr><th scope="row">${scope==='job'?'Пробег по заявке':'Пробег по заданию'}</th><td>${units(row.plan_km)}</td><td>${units(row.actual)}</td></tr>`}</tbody>
      </table></td></tr>`;
    });
-  return disclosure('mileage',title,`${bySection&&onGPS?`<button type="button" class="btn ghost" data-finance-gps="${esc(trip.id)}">Журнал GPS</button>`:''}<div class="scoped-finance-scroll"><table aria-label="${title}">
+  return disclosure('mileage',title,`<div class="scoped-finance-scroll"><table aria-label="${title}">
    <thead><tr><th scope="col">${bySection?'Участок':'Выезд'}</th><th scope="col">План, км</th><th scope="col">Факт, км</th>${bySection?'':'<th scope="col"><span class="sr-only">Детали</span></th>'}</tr></thead>
    <tbody>${rows.join('')}</tbody><tfoot><tr><th scope="row">${trip?'Всего по выезду':'Итого'}</th>
     <td>${units(knownSum(trips.map(row=>amount(row.plan_km))))}</td><td>${units(knownSum(trips.map(row=>amount(row.actual))))}</td>${bySection?'':'<td></td>'}</tr></tfoot>
@@ -306,7 +307,7 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onGPS,onOrde
       <td data-caption="План, н-ч">${units(plan)}</td><td data-caption="Факт, чел·ч">${units(fact)}</td>
       ${grouped?'':`<td data-caption="Принятый объём">${accepted(row)}</td><td data-caption="Состояние"><span class="${excess||pending?'scoped-finance-work-cue':''}">${status}</span></td>`}
       <td><button type="button" class="btn ghost" data-finance-work-toggle aria-expanded="${open}" aria-controls="${detailId}"
-       aria-label="${grouped?'Работы задания №'+esc(row.number):'Источники работы «'+esc(row.title)+'»'}"><span aria-hidden="true">⌄</span></button></td></tr>
+       aria-label="${grouped?'Работы задания №'+esc(row.number):'Источники работы «'+esc(row.title)+'»'}">${journalIcon('chevron')}</button></td></tr>
       <tr class="scoped-finance-work-detail" id="${detailId}" ${open?'':'hidden'}><td colspan="${grouped?4:6}">${details}</td></tr>`;
     }).join('')}
     </tbody><tfoot><tr><th scope="row" data-finance-work-total>Итого</th><td data-finance-work-plan></td><td data-finance-work-fact></td><td colspan="${grouped?1:3}"></td></tr></tfoot>

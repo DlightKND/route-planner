@@ -1,0 +1,275 @@
+/* Approved workflow mockup v65: page-level corrections applied after every legacy stylesheet.
+   The design system marks card padding !important, so flattened sections repeat the priority. */
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobActivitySection,#tripActivitySection,#orderHistory) {
+ margin:28px 0 0!important;padding:22px 0 0!important;border:0!important;border-top:1px solid var(--line)!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;
+}
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-details>#tripActivitySection { margin-top:24px!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#requestContext,#orderBrief) {
+ padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;margin:0 0 4px!important;
+}
+
+/* Current situation: one primary and at most one secondary action. */
+.workflow-overview-state>.workflow-overview-actions { display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px;flex:0 1 auto;min-width:0; }
+.workflow-overview-state>.workflow-overview-actions:empty { display:none; }
+.workflow-overview-actions:has(>button:not([hidden]):nth-child(2))>button { width:min(100%,232px); }
+.workflow-overview-actions>[hidden] { display:none!important; }
+.workflow-trip-overview .workflow-overview-actions { display:grid;justify-content:stretch;width:100%; }
+.workflow-trip-overview .workflow-overview-actions>button { width:100%; }
+@media(max-width:760px){
+ .workflow-overview-state>.workflow-overview-actions { width:100%;justify-content:flex-start;flex-direction:column;align-items:stretch; }
+ .workflow-overview-actions>button,.workflow-overview-actions:has(>button:not([hidden]):nth-child(2))>button { width:100%; }
+}
+
+/* Request: the brief reads as a plain section; calling uses the phone link, routing lives in ⋯. */
+html#dlight-ui[data-ui-system] .view.workflow-card #requestContext .request-contact-actions { display:none!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .entity-payment-terms { margin-bottom:24px!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card #requestContext h2,html#dlight-ui[data-ui-system] .view.workflow-card #orderBrief h3 { margin:0 0 8px!important;font:600 18px/26px var(--sans)!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#requestContext,#orderBrief) dd .link { color:var(--ink);text-decoration:underline;text-underline-offset:3px; }
+.view.workflow-card .workflow-request-origin { margin:12px 0 0; }
+.view.workflow-card .workflow-request-link,.view.workflow-card .workflow-crumb-link { min-height:0;padding:0;border:0;background:transparent;color:var(--ink);font:500 14px/22px var(--sans);text-decoration:underline;text-underline-offset:3px;cursor:pointer; }
+.view.workflow-card .workflow-crumb-link { font-size:12px;margin-left:12px; }
+.view.workflow-card .workflow-planning-warnings { margin:8px 0 0;color:var(--warn,var(--ink-dim));font-size:13px; }
+.view.workflow-card .workflow-planning-warnings p { margin:0; }
+.view.workflow-card .workflow-head-facts { display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 24px; }
+.view.workflow-card .workflow-head-facts #orderSaveState { font-size:12px;color:var(--ink-dim); }
+.view.workflow-card .workflow-head-facts #orderSaveState[data-saved=true] { display:none; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(.workflow-request-link,.workflow-crumb-link) {
+ min-height:0!important;height:auto!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;
+ color:var(--ink)!important;font:500 14px/22px var(--sans)!important;text-decoration:underline!important;text-underline-offset:3px;text-align:start;white-space:normal;
+}
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-crumb-link { font-size:12px!important;line-height:18px!important;margin-left:12px; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#requestContext) dd { font-weight:400!important; }
+
+/* Saved trip: the tasks tab is the linked-task table only. Plan fields open from «Изменить»,
+   linking a task opens from ⋯, so their legacy inline blocks stay out of the reading flow. */
+.view-trip[data-saved-trip] .workflow-trip-edit:not([open]),
+.view-trip[data-saved-trip] #tpTaskPicker,
+.view-trip[data-saved-trip] #tripOrderParent { display:none!important; }
+.view-trip[data-saved-trip] .workflow-trip-edit[open] { margin-top:24px; }
+/* Saved task: planned composition opens from ⋯ («Плановые данные …»), not as a stray heading under the works. */
+#orderEditor[data-saved-task] .workspace-composition-editor:not([open]) { display:none!important; }
+#orderEditor[data-saved-task] .order-grid:not(:has(>:not(.workspace-composition-editor:not([open])))) { display:none!important; }
+
+/* Plan/fact: collapsible cards with a header row and full-bleed tables, as in the mockup. */
+html#dlight-ui[data-ui-system] .scoped-finance :is(.scoped-finance-work-column>details,.scoped-finance-work) { padding:0!important;overflow:hidden; }
+html#dlight-ui[data-ui-system] .scoped-finance :is(.scoped-finance-work-column>details,.scoped-finance-details>details)>summary { list-style:none; }
+html#dlight-ui[data-ui-system] .scoped-finance summary::-webkit-details-marker { display:none; }
+html#dlight-ui[data-ui-system] .scoped-finance :is(.scoped-finance-work-column>details,.scoped-finance-work)>summary {
+ display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;padding:12px 16px!important;font:600 18px/26px var(--sans)!important;color:var(--ink);cursor:pointer;
+}
+html#dlight-ui[data-ui-system] .scoped-finance :is(.scoped-finance-work-column>details,.scoped-finance-work)[open]>summary { border-bottom:1px solid var(--line); }
+html#dlight-ui[data-ui-system] .scoped-finance details>summary::after {
+ content:'';flex:none;width:7px;height:7px;margin:0 4px 4px auto;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);color:var(--ink-dim);
+}
+html#dlight-ui[data-ui-system] .scoped-finance details[open]>summary::after { margin-bottom:0;margin-top:4px;transform:rotate(-135deg); }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-details>details>summary { display:flex;align-items:center;gap:12px;padding:0 8px;font:500 14px/22px var(--sans)!important; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-details>details>:not(summary) { margin-bottom:12px; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-details>details .scoped-finance-allocation { padding:0 8px; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-details>details>.hint { padding:0 8px;margin:0 0 8px; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-note { margin:12px 0 0;font-size:12px;line-height:18px; }
+.scoped-finance-work-column>details .scoped-finance-scroll { margin:0; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-trip-link { padding-inline:0!important;border:0!important;background:transparent!important;color:var(--ink)!important;text-decoration:underline;text-underline-offset:3px; }
+html#dlight-ui[data-ui-system] .scoped-finance th small.hint { color:var(--ink-dim); }
+html#dlight-ui[data-ui-system] .scoped-finance { margin:0 0 var(--sp-5)!important; }
+html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle] { width:40px;height:40px;min-width:40px;padding:0;border:1px solid var(--line)!important;border-radius:var(--r-sm,8px); }
+html#dlight-ui[data-ui-system] .scoped-finance :is([data-finance-work-toggle],[data-finance-mileage-toggle]) { display:inline-grid;place-items:center;width:40px;height:40px;min-width:40px;min-height:40px;padding:0!important;border:1px solid var(--line)!important;border-radius:var(--r-sm,8px)!important;background:transparent; }
+html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle] svg { width:18px;height:18px;transform:rotate(90deg); }
+html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle][aria-expanded=true] svg { transform:rotate(-90deg); }
+
+/* GPS record (mockup v65): crumbs and facts in the header, tabs underneath, list and map as two equal cards,
+   the stop list keeps its natural height and the selection bar stays pinned while the page scrolls. */
+html#dlight-ui[data-ui-system] .view :is(.journal-trip-detail:not(.journal-stop-open)>.journal-trip-head,:not(.journal-stop-open)>.journal-trip-head:has(>.workflow-gps-crumbs)) { display:block!important;position:relative;padding:16px var(--journal-gutter,24px) 0!important;border-bottom:1px solid var(--line)!important; }
+.journal-trip-head .workflow-gps-crumbs { display:flex;align-items:center;gap:12px;min-height:44px;margin-bottom:16px; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-crumbs>.gps-back { display:inline-grid!important;place-items:center;width:44px;height:44px;min-width:44px;padding:0!important;margin:0!important;border:1px solid var(--line)!important;border-radius:var(--r-sm,8px)!important;background:transparent!important; }
+.journal-trip-head .workflow-gps-crumb { font-size:12px;color:var(--ink-dim); }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-crumb-link { min-height:0!important;padding:0!important;border:0!important;background:transparent!important;color:var(--ink)!important;font:500 12px/18px var(--sans)!important;text-decoration:underline;text-underline-offset:3px; }
+.journal-trip-head .workflow-gps-title { display:block; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>h2 { display:inline;margin:0 12px 0 0!important;padding:0!important;font:600 28px/36px var(--sans)!important;letter-spacing:-.02em; }
+.journal-trip-head .workflow-gps-title>.design-status { vertical-align:6px; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>p { margin:6px 0 0!important;font-size:15px;color:var(--ink); }
+.journal-trip-head .workflow-gps-facts { display:flex;flex-wrap:wrap;gap:8px 28px;margin:14px 0 0; }
+.journal-trip-head .workflow-gps-facts>div { display:grid;gap:2px; }
+.journal-trip-head .workflow-gps-facts dt { font-size:12px;color:var(--ink-dim); }
+.journal-trip-head .workflow-gps-facts dd { margin:0;font-weight:500; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-facts .workflow-request-link { min-height:0!important;padding:0!important;border:0!important;background:transparent!important;color:var(--ink)!important;font:500 14px/22px var(--sans)!important;text-decoration:underline;text-underline-offset:3px; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs { position:static!important;display:flex!important;width:auto!important;max-width:none!important;grid-area:auto!important;margin:16px 0 0!important;padding:0!important;gap:8px!important;justify-content:flex-start;box-shadow:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs>button { flex:none!important;min-height:44px;padding:0 12px!important;border:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;background:none!important;color:var(--ink-dim);font:500 14px/22px var(--sans)!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs>button.on { color:var(--ink)!important;border-bottom-color:var(--accent)!important; }
+.journal-trip-detail>.journal-list-modes[hidden] { display:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes { display:flex!important;width:max-content;max-width:100%;margin:24px 0 12px var(--journal-gutter,24px); }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { min-width:112px;padding:0 16px!important; }
+@media (min-width:761px) {
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open) {
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-template-rows:none!important;grid-auto-rows:max-content!important;align-content:start;column-gap:24px;
+ }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-head { grid-column:1/-1;grid-row:1; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-list-modes { grid-column:1;grid-row:2; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-stops { grid-column:1;grid-row:3;margin-left:var(--journal-gutter,24px);min-height:min-content!important; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-overview {
+  grid-column:2;grid-row:2 / span 2;align-self:start;position:sticky;top:0;margin:24px var(--journal-gutter,24px) 0 0;padding:16px!important;overflow:visible!important;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);
+ }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>:is(.journal-gps-actions,.journal-gps-activity,.journal-trip-message) { grid-column:1/-1;margin-inline:var(--journal-gutter,24px)!important;padding-inline:0!important; }
+}
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-sidebar { height:auto!important;max-height:none!important;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);overflow:visible!important; }
+
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list { height:auto!important;max-height:none!important;min-height:calc(3 * 64px);overflow:visible!important;padding:0!important;margin:0!important; }
+
+html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open) .journal-trip-stops .presence-batch { position:sticky!important;bottom:0;z-index:6;border-top:1px solid var(--line);border-radius:0 0 var(--r-md,12px) var(--r-md,12px);background:var(--panel)!important;box-shadow:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-overview .journal-overview-map { border-radius:var(--r-sm,8px);overflow:hidden; }
+@media (max-width:760px){
+ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes { width:auto!important;max-width:none!important;margin:16px 16px 8px; }
+ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { flex:1;min-width:0; }
+ html#dlight-ui[data-ui-system] .view .journal-trip-stops { padding-inline:12px; }
+}
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>.design-eyebrow { display:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>.tag { display:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>.unassigned-period { margin:2px 0 0!important;font:400 14px/22px var(--sans)!important;color:var(--ink-dim)!important; }
+/* Unlinked GPS record: one pinned action at the bottom of the overview. */
+html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned { position:sticky;bottom:0;z-index:7;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin:24px 0 0;padding:12px 16px;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);box-shadow:none; }
+html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned>.hint { margin:0;flex:1 1 280px; }
+html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned .gps-resolution-choices { display:flex;gap:8px;margin:0; }
+html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned [hidden] { display:none!important; }
+@media(max-width:760px){ html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned .gps-resolution-choices,html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned .gps-resolution-choices>button { width:100%; } }
+
+/* Trip overview route card: one card inset, map and points flush with the card content, left-aligned table. */
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card { padding:0!important;overflow:hidden; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>.workflow-route-head { padding:16px!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>#tpMapWrap,
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>.wb-route-actions { margin-inline:16px!important;width:auto!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>.wb-route-actions { padding:12px 0 16px!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>.workflow-route-points { margin:0!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview .workflow-route-points :is(th,td) { text-align:start!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview .workflow-route-points :is(th,td):last-child { text-align:end!important;white-space:nowrap; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>#tpRemainingInfo:empty { display:none; }
+/* Linked task and trip tables: row actions are visible secondary buttons, as in the mockup. */
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-related-table td .btn.ghost:not([data-related-expand]):not([aria-controls]) { border:1px solid var(--line)!important;padding-inline:16px!important; }
+@media(min-width:761px){
+ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview { grid-template-areas:"route state" "route payment" "route details";grid-template-rows:auto auto 1fr; }
+ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.entity-payment-terms { grid-area:payment;margin:0!important; }
+}
+html#dlight-ui[data-ui-system] .view :is(a.workflow-request-link,a.workflow-crumb-link) { color:var(--ink)!important;text-decoration:underline;text-underline-offset:3px;font-weight:500; }
+html#dlight-ui[data-ui-system] .view a.workflow-crumb-link { font-size:12px;margin-left:12px; }
+/* Remaining contract tools (request estimate, contract sums, cost allocation) read as collapsible cards. */
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview) { margin:0 0 16px!important;padding:0!important;border:1px solid var(--line)!important;border-radius:var(--r-md,12px)!important;background:var(--panel)!important;overflow:hidden; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)>summary { display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;padding:12px 16px!important;font:600 18px/26px var(--sans)!important;list-style:none;cursor:pointer; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)>summary::-webkit-details-marker { display:none; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)>summary::after { content:'';flex:none;width:7px;height:7px;margin:0 4px 4px auto;border-right:1.5px solid var(--ink-dim);border-bottom:1.5px solid var(--ink-dim);transform:rotate(45deg); }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)[open]>summary { border-bottom:1px solid var(--line); }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)[open]>summary::after { margin:4px 4px 0 auto;transform:rotate(-135deg); }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)>:not(summary) { margin:16px!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card #jobEstimateLock { margin:16px 16px 0!important;color:var(--warn,var(--ink-dim)); }
+/* The stop column grows with its content; the record page scrolls instead of clipping the list. */
+html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open)>.journal-trip-stops,
+html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open)>.journal-trip-stops>.presence-review-workspace { height:auto!important;max-height:none!important;overflow:visible!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open)>.journal-trip-stops .presence-review-sidebar { height:auto!important;flex:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { height:40px!important;min-height:40px!important; }
+@media (pointer:coarse),(max-width:760px){ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { height:48px!important;min-height:48px!important; } }
+html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail:not(.journal-stop-open)>:is(.journal-list-modes,.journal-trip-stops) { align-self:start; }
+/* List switch and stop list share one grid row with the map card, so the map height never opens a gap under the switch. */
+@media (min-width:761px){
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-stops { grid-row:2!important;margin-top:82px!important; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-overview { grid-row:2!important; }
+}
+
+/* Floating map timeline (mockup v65): legend on top, band, ticks and caption over the bottom of the map.
+   The map and the timeline share one grid cell, so the overlay survives map re-renders. */
+html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating) { grid-template-columns:minmax(0,1fr);align-content:start; }
+@media(min-width:761px){ html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating) { display:grid!important; } }
+@media(max-width:760px){ html#dlight-ui[data-ui-system] .view .journal-trip-detail:not([data-journal-map-mode=list])>.journal-trip-overview:has(>.journal-timeline-floating) { display:grid!important; } }
+html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating)>.journal-overview-map { grid-area:1/1; }
+html#dlight-ui[data-ui-system] .view .journal-trip-overview>.journal-timeline-host.journal-timeline-floating {
+ grid-area:1/1;align-self:end;position:relative;z-index:700;margin:0 12px 22px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm,8px);background:var(--panel);color:var(--ink);box-shadow:var(--shadow-md,none);
+}
+.journal-timeline-floating .journal-timeline-disclosure>summary,
+.journal-timeline-floating .journal-timeline-stops,
+.journal-timeline-floating .journal-time-days { display:none!important; }
+.journal-timeline-floating .journal-timeline-disclosure { margin:0;padding:0;border:0; }
+.journal-timeline-floating .journal-timeline { display:flex;flex-direction:column;gap:4px;padding:0!important;margin:0!important;border:0!important;background:none!important; }
+.journal-timeline-floating .journal-legend { order:-1;margin:0 0 4px;gap:6px 14px;font-size:12px;line-height:18px; }
+.journal-timeline-floating .journal-legend>span::before { width:16px;height:5px;border-radius:0;vertical-align:2px; }
+.journal-timeline-floating .journal-time-band { order:0;height:24px; }
+.journal-timeline-floating .journal-time-band::before,.journal-timeline-floating .journal-time-part::after { inset:6px 0; }
+.journal-timeline-floating .journal-time-part { padding:6px 0!important; }
+.journal-timeline-floating .journal-time-part:not(:disabled) { cursor:pointer; }
+.journal-timeline-floating .journal-time-labels { order:1;height:18px;font-size:12px;font-family:var(--mono); }
+.journal-timeline-floating .map-current-stop { order:2;margin:2px 0 0;font-size:12px;line-height:18px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.journal-timeline-floating .journal-conflict { order:3;margin-top:4px; }
+html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating) .journal-expand-map { top:12px!important;bottom:auto!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating)>.journal-overview-map { min-height:clamp(340px,52vh,560px); }
+@media(max-width:760px){
+ html#dlight-ui[data-ui-system] .view .journal-trip-overview>.journal-timeline-host.journal-timeline-floating { margin:0 8px 22px;padding:8px 10px; }
+ .journal-timeline-floating .journal-legend { gap:4px 10px; }
+}
+
+/* Stop table (mockup v65): search, filter chips and count above a Стоянка / Длительность / Заявки table. */
+html#dlight-ui[data-ui-system] .view .presence-review-sidebar>.journal-stop-tools { display:grid!important;gap:10px;padding:16px!important;border-bottom:1px solid var(--line); }
+html#dlight-ui[data-ui-system] .view .journal-stop-tools input[type=search] { width:100%;margin:0!important; }
+html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips[data-ui-group=filters] { display:flex!important;flex-wrap:wrap!important;gap:8px!important;width:auto!important;max-width:100%;margin:0!important;padding:0!important; }
+html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips>[data-ui=chip] { gap:6px;white-space:nowrap; }
+.journal-stop-tools .journal-stop-count-row { display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;font-size:12px;color:var(--ink-dim); }
+.journal-stop-tools .journal-stop-count-row>p { margin:0; }
+.journal-stop-tools .journal-stop-gaps { margin:0 0 0 auto!important;font-size:12px; }
+.journal-stop-table { width:100%;border-collapse:collapse;table-layout:fixed; }
+.journal-stop-table thead th { padding:8px 12px;border-bottom:1px solid var(--line);font:500 12px/18px var(--sans);color:var(--ink-dim);text-align:start; }
+.journal-stop-table thead th:nth-child(2) { width:118px; }
+.journal-stop-table thead th:nth-child(3) { width:104px; }
+.journal-stop-table thead th:last-child { width:72px; }
+.journal-stop-table :is(thead,tbody) tr>:first-child { padding-inline-start:16px!important; }
+.journal-stop-table :is(thead,tbody) tr>:last-child { padding-inline-end:16px!important; }
+.journal-stop-table td.journal-stop-open { text-align:end!important; }
+.journal-stop-table tbody tr { border-bottom:1px solid var(--line); }
+.journal-stop-table tbody tr:last-child { border-bottom:0; }
+.journal-stop-table tbody :is(th,td) { padding:8px 12px;vertical-align:middle;font-weight:400;text-align:start;overflow:hidden; }
+.journal-stop-table .journal-stop-day { padding:10px 12px 4px!important;font:500 12px/18px var(--sans)!important;color:var(--ink-dim); }
+.journal-stop-table .presence-stop-entry.is-selected { box-shadow:inset 3px 0 0 var(--accent); }
+.journal-stop-table .presence-stop-entry.is-included { background:color-mix(in srgb,var(--accent) 8%,transparent); }
+.journal-stop-table .journal-stop-heading { display:flex;align-items:center;gap:10px;min-width:0; }
+.journal-stop-table .journal-stop-heading>input[type=checkbox],.journal-stop-table .journal-stop-check-gap { flex:none;width:20px;height:20px;margin:0; }
+.journal-stop-table .journal-stop-number { flex:none; }
+.journal-stop-table .journal-stop-copy { display:grid;gap:2px;flex:1;min-width:0; }
+html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop { display:block!important;width:100%;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;text-align:start;cursor:pointer; }
+html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop strong { display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:500 14px/22px var(--sans)!important;color:var(--ink);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--ink) 35%,transparent);text-underline-offset:3px; }
+.journal-stop-table .journal-stop-top { display:flex;flex-wrap:nowrap;align-items:center;gap:2px 10px;min-width:0;overflow:hidden;font-size:12px;line-height:18px; }
+.journal-stop-table .journal-stop-top>* { flex:none; }
+.journal-stop-table .journal-stop-top>.journal-stop-state { flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis; }
+.journal-stop-table .journal-stop-time { font-family:var(--mono);color:var(--ink-dim); }
+.journal-stop-table .journal-stop-state { display:inline-flex;align-items:center;gap:4px; }
+.journal-stop-table .journal-stop-state .journal-icon { width:13px;height:13px; }
+.journal-stop-table .journal-stop-warning { color:var(--warn,var(--accent)); }
+.journal-stop-table .journal-stop-location { flex:1 1 0!important;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;line-height:18px;color:var(--ink-dim); }
+.journal-stop-table .journal-stop-location::before { content:'· ';margin-right:2px; }
+html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop { display:flex!important;align-items:center; }
+.journal-stop-table .journal-mobile-request { display:none; }
+.journal-stop-table .journal-stop-duration { font:500 13px/20px var(--mono);white-space:nowrap; }
+.journal-stop-table .journal-stop-request { font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+html#dlight-ui[data-ui-system] .view .journal-stop-table .journal-stop-open .btn { display:inline-grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0!important;border:1px solid var(--line)!important; }
+.journal-stop-table .journal-stop-open .journal-icon { width:16px;height:16px; }
+.presence-review-list>.journal-stop-empty { margin:0;padding:16px; }
+@media(max-width:760px){
+ .journal-stop-table { table-layout:auto; }
+ .journal-stop-table thead { display:none; }
+ .journal-stop-table tbody tr>th { max-width:0;width:100%; }
+ .journal-stop-table .journal-stop-request { display:none; }
+ .journal-stop-table .journal-mobile-request { display:inline; }
+ .journal-stop-table tbody :is(th,td) { padding:8px 8px; }
+ .journal-stop-table tbody tr>th { width:auto; }
+ .journal-stop-table .journal-stop-duration { width:76px;font-size:12px;text-align:end; }
+ .journal-stop-table .journal-stop-open { width:72px; }
+ html#dlight-ui[data-ui-system] .view .journal-stop-table .journal-stop-open .btn { width:48px;height:48px;min-width:48px; }
+ .journal-stop-tools .journal-stop-gaps { margin-left:0!important; }
+ html#dlight-ui[data-ui-system] .view .journal-overview-modes[data-ui-group=segments]:not([hidden]) { display:flex!important;width:auto;max-width:none;margin:16px 16px 0!important; }
+ html#dlight-ui[data-ui-system] .view .journal-overview-modes>[data-ui=segment] { flex:1;min-width:0; }
+ html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips[data-ui-group=filters] { flex-wrap:nowrap!important;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;margin:-6px -16px!important;padding:6px 16px!important; }
+ .journal-stop-table .journal-stop-number,.journal-stop-table .journal-stop-check-gap { display:none; }
+ .journal-stop-table .journal-stop-heading { gap:8px; }
+ .journal-stop-table .journal-stop-state-text { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0); }
+}
+html#dlight-ui[data-ui-system] .view .journal-stop-table tr.presence-stop-entry { display:table-row!important;gap:0!important; }
+/* The stop name is the row's open control: it keeps the shared touch target (40 px, 48 px on touch screens). */
+html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop { min-height:40px!important; }
+@media (pointer:coarse),(max-width:760px){ html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop { min-height:48px!important; } }
+html#dlight-ui[data-ui-system] .view .journal-stop-table tbody :is(th,td) { padding-block:4px; }
+
+/* Standalone navigation links (crumbs, linked record) keep a 24 px target, 44 px on touch. */
+html#dlight-ui[data-ui-system] .view :is(.journal-trip-head .workflow-crumb-link,.workflow-card .workflow-crumb-link,a.workflow-crumb-link,a.workflow-request-link) { display:inline-flex!important;align-items:center;min-height:24px!important;vertical-align:middle; }
+@media(pointer:coarse),(max-width:760px){ html#dlight-ui[data-ui-system] .view :is(.journal-trip-head .workflow-crumb-link,.workflow-card .workflow-crumb-link,a.workflow-crumb-link,a.workflow-request-link) { min-height:44px!important; } }

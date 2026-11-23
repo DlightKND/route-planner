@@ -1119,7 +1119,6 @@ html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{con
 }
 
 .view-trip.workflow-card .workflow-trip-overview>.wb-route-card { min-width:0; padding:0!important; }
-.workflow-trip-details .activity-page-head { flex-wrap:wrap; gap:12px; }
 .workflow-route-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 16px; padding:16px 24px 24px; }
 .workflow-route-head h2 { margin:0; font:600 18px/24px var(--sans); }
 .workflow-route-head .hint { margin:0; }
