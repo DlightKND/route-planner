@@ -10,6 +10,8 @@ html:root {
   --ui-card-pad:24px;--ui-option:48px;--ui-inset-radius:var(--ds-inset-radius);
   --control-h:var(--ui-h);--touch-h:48px;--fs-body:var(--ui-body);--fs-caption:var(--ui-help);
   --count-neutral-bg:color-mix(in srgb,var(--ink) 10%,transparent);
+  /* Legacy caption steps never render below the 12 px metadata minimum. */
+  --fs-1:12px;--fs-2:12px;
 }
 @media(pointer:coarse),(max-width:760px){html:root{
   --ui-h:var(--ds-touch-h);--ui-py:var(--ds-touch-py);--ui-font:var(--ds-touch-font);--ui-line:var(--ds-touch-line);

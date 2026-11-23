@@ -25,7 +25,7 @@
 | ID | Паттерн | Спецификация 0.2 | Пример 0.6 | Приоритет | Источник | Правило 0.3 |
 | --- | --- | --- | --- | --- | --- | --- |
 | action-button | Кнопка: primary / secondary / tertiary / destructive | Описан | Есть | P1 | [src/entity-actions.js:27](../src/entity-actions.js#L27) | [Контракт](design-system.md#button--iconbutton--link) |
-| icon-button | Кнопка с иконкой и доступным именем | Описан | Есть | P1 | [src/journal-route.js:60](../src/journal-route.js#L60) | [Контракт](design-system.md#button--iconbutton--link) |
+| icon-button | Кнопка с иконкой и доступным именем | Описан | Есть | P1 | [src/journal-route.js:63](../src/journal-route.js#L63) | [Контракт](design-system.md#button--iconbutton--link) |
 | navigation-link | Ссылка, переход и browser back | Описан | Есть | P1 | [src/app.js:826](../src/app.js#L826) | [Контракт](design-system.md#button--iconbutton--link) |
 | status-badge | Неинтерактивный статус | Описан | Есть | P1 | [src/presence-decision.js:18](../src/presence-decision.js#L18) | [Контракт](design-system.md#badge--filterchip--selectionchip) |
 | count-badge | Вложенный счётчик: смысл / 0 / неизвестно | Описан | Есть | P1 | [src/unified-journal.css:458](../src/unified-journal.css#L458) | [Контракт](design-system.md#countbadge-вложенная-мини-пилюля-из-журнала) |
@@ -66,7 +66,7 @@
 | gps-evidence | Измерение / восстановление / принятое решение | Частично | Есть | P0 | [src/presence-review-controls.js:36](../src/presence-review-controls.js#L36) | [Контракт](design-system.md#pattern-data) |
 | allocation-editor | Распределение времени / пробега и остаток | Частично | Есть | P0 | [src/presence-review-controls.js:18](../src/presence-review-controls.js#L18) | [Контракт](design-system.md#pattern-workflows) |
 | charts-tables | Сопоставимые диаграммы и таблицы | Пропуск | Есть | P1 | [src/dashboard-visuals.js:7](../src/dashboard-visuals.js#L7) | [Контракт](design-system.md#pattern-data) |
-| activity-comments | Лента, комментарии, закрепление, доказательства | Пропуск | Есть | P1 | [src/entity-activity.js:59](../src/entity-activity.js#L59) | [Контракт](design-system.md#pattern-data) |
+| activity-comments | Лента, комментарии, закрепление, доказательства | Пропуск | Есть | P1 | [src/entity-activity.js:71](../src/entity-activity.js#L71) | [Контракт](design-system.md#pattern-data) |
 | notifications-inbox | Входящие: прочитано / действия / счётчик | Пропуск | Есть | P1 | [src/notifications.js:63](../src/notifications.js#L63) | [Контракт](design-system.md#pattern-feedback) |
 | load-more | Догрузка списка без потери выбора и фокуса | Пропуск | Есть | P1 | [src/notifications.js:63](../src/notifications.js#L63) | [Контракт](design-system.md#pattern-data) |
 | push-permission | Push: устройство, разрешение, отказ, timeout | Пропуск | Есть | P1 | [src/app.js:6766](../src/app.js#L6766) | [Контракт](design-system.md#pattern-session) |
@@ -107,7 +107,7 @@
 - `color` → `color-picker` (1 файл)
 - `date` → `date-field` (4 файла)
 - `email` → `text-field` (1 файл)
-- `file` → `photo-upload` (2 файла)
+- `file` → `photo-upload` (3 файла)
 - `number` → `number-unit` (6 файлов)
 - `password` → `auth-session` (1 файл)
 - `radio` → `decision-radio` (2 файла)
@@ -135,4 +135,4 @@
 
 Связь type/role с ID классифицирует сигнал, а не автоматически распознаёт смысл каждого его вхождения.
 
-Хеш проверенных production-исходников: `5583fe205ea962a404475a07c9289df8e4dd791f5ab3439c5f584fa6046d2808`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
+Хеш проверенных production-исходников: `6aa6442db7d134df90386e34c5db9861ba7805e306abb1822438d1188eac1587`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.

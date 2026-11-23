@@ -3,7 +3,7 @@ import {journalIcon} from '../journal-icons.js';
 // Existing IDs, native form state, handlers and permission checks stay owned by screens.
 export const UI_SELECTORS = {
   segment: '.seg:not(.chipseg):not(.unassigned-filter):not(.journal-trip-tabs),.summary-view-switch,.summary-period-presets,.notice-tabs,.rquick,.presence-kind',
-  filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.design-filter-chips,#rVariants',
+  filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.journal-stop-chips,.design-filter-chips,#rVariants',
   count: '.chip-n,.cnt,.rchip .n,.unassigned-filter button b,[data-activity-count],.engineer-picker-count,.ui-count,.notice-badge,[data-decision-count]',
   card: '.card,.kcard,.record-card,.notice-row,.staff-row,.stock-row,.emrow,.eqitem,.pt,.order-brief,.order-child,.trip-choice-card,.order-result-summary,.summary-quick-actions,.planwarn',
   popover: '#moreSheet,.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover,.anchored-context-panel',
@@ -92,7 +92,7 @@ export function installApplicationDesignSystem(root=document) {
     root.querySelectorAll('dialog,.modal,.presence-editor').forEach(el=>assign(el,'uiSurface',el.matches('.overlay,#moreSheet,#phView')?'overlay':el.matches(UI_SELECTORS.popover)?'popover':'dialog'));
     root.querySelectorAll(UI_SELECTORS.count).forEach(el=>{
       assign(el,'ui','count');
-      const parent=el.closest('button'),key=parent?.dataset.js||parent?.dataset.ts||parent?.dataset.os||parent?.dataset.utMode||'';
+      const parent=el.closest('button'),key=parent?.dataset.js||parent?.dataset.ts||parent?.dataset.os||parent?.dataset.utMode||parent?.dataset.reviewMode||'';
       const tone=el.dataset.uiTone||(el.matches('.notice-badge')?'warning':el.matches('[data-decision-count]')?'danger':['pending','review'].includes(key)?'danger':['completed','approved','accepted'].includes(key)?'success':['paused','recovery','gps'].includes(key)?'warning':'neutral');
       assign(el,'uiTone',tone);assign(el,'uiEmpty',String(/^0$/.test(el.textContent.trim())));
     });

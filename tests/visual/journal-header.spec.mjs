@@ -44,7 +44,7 @@ test('journal header stop filters fit long labels and back arrows stay visible a
  const tools=page.locator('.journal-stop-tools');await expect(tools.getByRole('searchbox',{name:'Найти стоянку'})).toBeVisible();
  if(page.viewportSize().width>760)await expect(page.locator('.journal-stop-table thead th')).toHaveText(['Стоянка','Длительность','Заявки','Открыть']);
  const chips=tools.locator('[data-review-mode]');await expect(chips.first()).toBeVisible();
- for(const chip of await chips.all()){const box=await chip.boundingBox();if(box&&box.x+box.width<=page.viewportSize().width)expect(box.height).toBeGreaterThanOrEqual(info.project.use.hasTouch?48:40);}
+ for(const chip of await chips.all()){const box=await chip.boundingBox();if(box&&box.x+box.width<=page.viewportSize().width)expect(box.height).toBeGreaterThanOrEqual(info.project.use.hasTouch?48:36);}
  await expect(page.locator('[data-stop-count]')).toHaveText('Показано 5 из 5');
  await auditApplicationDesign(page);await shot(page,info,'07-stop-filters');
  await tools.locator('[data-review-mode=done]').click();await expect(page.locator('.presence-stop')).toHaveCount(2);await tools.locator('[data-review-mode=pending]').click();await expect(page.locator('.presence-stop')).toHaveCount(3);await tools.locator('[data-review-mode=all]').click();await expect(page.locator('.presence-stop')).toHaveCount(5);

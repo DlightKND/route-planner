@@ -53,8 +53,8 @@ export function createJournalTrips(ctx){
   const tripHead=root.querySelector('.journal-trip-head');
   frameGpsRecordHead(tripHead,{back,linkLabel:tripLabel(data.trip,id),linkHref:'#/trip/'+encodeURIComponent(id),openLink:()=>ctx.openTrip(id),source:vehicle?.wialon_id?'Wialon · '+vehicle.wialon_id:'GPS приложения',status:'Связана с выездом'});
   const overviewBox=root.querySelector('.journal-overview-map');
-  const display=root.ownerDocument.createElement('div');display.className='journal-overview-modes';display.setAttribute('role','group');display.setAttribute('aria-label','Вид обзора');
-  display.innerHTML='<button type="button" class="btn" data-journal-overview-mode="list">Список</button><button type="button" class="btn" data-journal-overview-mode="map">Карта</button>';
+  const display=root.ownerDocument.createElement('div');display.className='seg journal-overview-modes';display.setAttribute('role','group');display.setAttribute('aria-label','Вид обзора');
+  display.innerHTML='<button type="button" data-journal-overview-mode="list">Список</button><button type="button" data-journal-overview-mode="map">Карта</button>';
   tripHead.after(display);
   const win=root.ownerDocument.defaultView;
   const preference='dlight-journal-overview-mode';

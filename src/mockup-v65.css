@@ -98,7 +98,6 @@ html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workf
 .journal-trip-detail>.journal-list-modes[hidden] { display:none!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes { display:flex!important;width:max-content;max-width:100%;margin:24px 0 12px var(--journal-gutter,24px); }
 html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { min-width:112px;padding:0 16px!important; }
-html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button.on { background:var(--ink)!important;color:var(--bg)!important; }
 @media (min-width:761px) {
  html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open) {
   grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-template-rows:none!important;grid-auto-rows:max-content!important;align-content:start;column-gap:24px;
@@ -115,10 +114,10 @@ html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-sideba
 
 html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list { height:auto!important;max-height:none!important;min-height:calc(3 * 64px);overflow:visible!important;padding:0!important;margin:0!important; }
 
-html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open) .journal-trip-stops .presence-batch { position:sticky!important;bottom:0;z-index:6;border-top:1px solid var(--line);border-radius:0 0 var(--r-md,12px) var(--r-md,12px);background:var(--panel)!important;box-shadow:0 -8px 16px -12px rgba(0,0,0,.5); }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open) .journal-trip-stops .presence-batch { position:sticky!important;bottom:0;z-index:6;border-top:1px solid var(--line);border-radius:0 0 var(--r-md,12px) var(--r-md,12px);background:var(--panel)!important;box-shadow:none!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-overview .journal-overview-map { border-radius:var(--r-sm,8px);overflow:hidden; }
 @media (max-width:760px){
- html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes { margin:16px 16px 8px; }
+ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes { width:auto!important;max-width:none!important;margin:16px 16px 8px; }
  html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { flex:1;min-width:0; }
  html#dlight-ui[data-ui-system] .view .journal-trip-stops { padding-inline:12px; }
 }
@@ -126,7 +125,7 @@ html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>.des
 html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>.tag { display:none!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>.unassigned-period { margin:2px 0 0!important;font:400 14px/22px var(--sans)!important;color:var(--ink-dim)!important; }
 /* Unlinked GPS record: one pinned action at the bottom of the overview. */
-html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned { position:sticky;bottom:0;z-index:7;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin:24px 0 0;padding:12px 16px;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);box-shadow:0 -8px 20px -14px rgba(0,0,0,.6); }
+html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned { position:sticky;bottom:0;z-index:7;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin:24px 0 0;padding:12px 16px;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);box-shadow:none; }
 html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned>.hint { margin:0;flex:1 1 280px; }
 html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned .gps-resolution-choices { display:flex;gap:8px;margin:0; }
 html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned [hidden] { display:none!important; }
@@ -179,37 +178,34 @@ html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeli
 @media(max-width:760px){ html#dlight-ui[data-ui-system] .view .journal-trip-detail:not([data-journal-map-mode=list])>.journal-trip-overview:has(>.journal-timeline-floating) { display:grid!important; } }
 html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating)>.journal-overview-map { grid-area:1/1; }
 html#dlight-ui[data-ui-system] .view .journal-trip-overview>.journal-timeline-host.journal-timeline-floating {
- grid-area:1/1;align-self:end;position:relative;z-index:700;margin:0 12px 22px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);box-shadow:0 6px 18px -10px rgba(0,0,0,.55);
+ grid-area:1/1;align-self:end;position:relative;z-index:700;margin:0 12px 22px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm,8px);background:var(--panel);color:var(--ink);box-shadow:var(--shadow-md,none);
 }
 .journal-timeline-floating .journal-timeline-disclosure>summary,
 .journal-timeline-floating .journal-timeline-stops,
 .journal-timeline-floating .journal-time-days { display:none!important; }
 .journal-timeline-floating .journal-timeline-disclosure { margin:0;padding:0;border:0; }
 .journal-timeline-floating .journal-timeline { display:flex;flex-direction:column;gap:4px;padding:0!important;margin:0!important;border:0!important;background:none!important; }
-.journal-timeline-floating .journal-legend { order:-1;margin:0 0 4px;gap:6px 14px;font-size:11px;line-height:17px; }
+.journal-timeline-floating .journal-legend { order:-1;margin:0 0 4px;gap:6px 14px;font-size:12px;line-height:18px; }
 .journal-timeline-floating .journal-legend>span::before { width:16px;height:5px;border-radius:0;vertical-align:2px; }
 .journal-timeline-floating .journal-time-band { order:0;height:24px; }
 .journal-timeline-floating .journal-time-band::before,.journal-timeline-floating .journal-time-part::after { inset:6px 0; }
 .journal-timeline-floating .journal-time-part { padding:6px 0!important; }
 .journal-timeline-floating .journal-time-part:not(:disabled) { cursor:pointer; }
-.journal-timeline-floating .journal-time-labels { order:1;height:16px;font-size:11px; }
+.journal-timeline-floating .journal-time-labels { order:1;height:18px;font-size:12px;font-family:var(--mono); }
 .journal-timeline-floating .map-current-stop { order:2;margin:2px 0 0;font-size:12px;line-height:18px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
 .journal-timeline-floating .journal-conflict { order:3;margin-top:4px; }
 html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating) .journal-expand-map { top:12px!important;bottom:auto!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating)>.journal-overview-map { min-height:clamp(340px,52vh,560px); }
 @media(max-width:760px){
  html#dlight-ui[data-ui-system] .view .journal-trip-overview>.journal-timeline-host.journal-timeline-floating { margin:0 8px 22px;padding:8px 10px; }
- .journal-timeline-floating .journal-legend { font-size:10px;gap:4px 10px; }
+ .journal-timeline-floating .journal-legend { gap:4px 10px; }
 }
 
 /* Stop table (mockup v65): search, filter chips and count above a Стоянка / Длительность / Заявки table. */
 html#dlight-ui[data-ui-system] .view .presence-review-sidebar>.journal-stop-tools { display:grid!important;gap:10px;padding:16px!important;border-bottom:1px solid var(--line); }
 html#dlight-ui[data-ui-system] .view .journal-stop-tools input[type=search] { width:100%;margin:0!important; }
-html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips { display:flex!important;flex-wrap:nowrap;gap:6px;width:auto!important;max-width:100%;padding:0!important;border:0!important;background:none!important;overflow-x:auto;scrollbar-width:none; }
-html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips>button { flex:none!important;width:auto!important;min-width:0!important;display:inline-flex!important;align-items:center;padding:0 12px!important;border:1px solid var(--line)!important;background:transparent!important;color:var(--ink-dim)!important;font-size:13px!important;white-space:nowrap; }
-html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips>button.on { background:var(--ink)!important;border-color:var(--ink)!important;color:var(--bg)!important; }
-.journal-stop-tools .ui-count { margin-left:4px;font:500 12px/1 var(--mono);opacity:.8; }
-.journal-stop-tools .ui-count:empty { display:none; }
+html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips[data-ui-group=filters] { display:flex!important;flex-wrap:wrap!important;gap:8px!important;width:auto!important;max-width:100%;margin:0!important;padding:0!important; }
+html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips>[data-ui=chip] { gap:6px;white-space:nowrap; }
 .journal-stop-tools .journal-stop-count-row { display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;font-size:12px;color:var(--ink-dim); }
 .journal-stop-tools .journal-stop-count-row>p { margin:0; }
 .journal-stop-tools .journal-stop-gaps { margin:0 0 0 auto!important;font-size:12px; }
@@ -217,7 +213,10 @@ html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips>but
 .journal-stop-table thead th { padding:8px 12px;border-bottom:1px solid var(--line);font:500 12px/18px var(--sans);color:var(--ink-dim);text-align:start; }
 .journal-stop-table thead th:nth-child(2) { width:118px; }
 .journal-stop-table thead th:nth-child(3) { width:104px; }
-.journal-stop-table thead th:last-child { width:56px; }
+.journal-stop-table thead th:last-child { width:72px; }
+.journal-stop-table :is(thead,tbody) tr>:first-child { padding-inline-start:16px!important; }
+.journal-stop-table :is(thead,tbody) tr>:last-child { padding-inline-end:16px!important; }
+.journal-stop-table td.journal-stop-open { text-align:end!important; }
 .journal-stop-table tbody tr { border-bottom:1px solid var(--line); }
 .journal-stop-table tbody tr:last-child { border-bottom:0; }
 .journal-stop-table tbody :is(th,td) { padding:8px 12px;vertical-align:middle;font-weight:400;text-align:start;overflow:hidden; }
@@ -255,16 +254,22 @@ html#dlight-ui[data-ui-system] .view .journal-stop-table .journal-stop-open .btn
  .journal-stop-table tbody :is(th,td) { padding:8px 8px; }
  .journal-stop-table tbody tr>th { width:auto; }
  .journal-stop-table .journal-stop-duration { width:76px;font-size:12px;text-align:end; }
- .journal-stop-table .journal-stop-open { width:56px; }
+ .journal-stop-table .journal-stop-open { width:72px; }
  html#dlight-ui[data-ui-system] .view .journal-stop-table .journal-stop-open .btn { width:48px;height:48px;min-width:48px; }
  .journal-stop-tools .journal-stop-gaps { margin-left:0!important; }
+ html#dlight-ui[data-ui-system] .view .journal-overview-modes[data-ui-group=segments]:not([hidden]) { display:flex!important;width:auto;max-width:none;margin:16px 16px 0!important; }
+ html#dlight-ui[data-ui-system] .view .journal-overview-modes>[data-ui=segment] { flex:1;min-width:0; }
+ html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips[data-ui-group=filters] { flex-wrap:nowrap!important;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;margin:-6px -16px!important;padding:6px 16px!important; }
  .journal-stop-table .journal-stop-number,.journal-stop-table .journal-stop-check-gap { display:none; }
  .journal-stop-table .journal-stop-heading { gap:8px; }
  .journal-stop-table .journal-stop-state-text { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0); }
 }
 html#dlight-ui[data-ui-system] .view .journal-stop-table tr.presence-stop-entry { display:table-row!important;gap:0!important; }
-html#dlight-ui[data-ui-system] .view .journal-stop-chips>button.on .ui-count { color:inherit!important;background:none!important; }
 /* The stop name is the row's open control: it keeps the shared touch target (40 px, 48 px on touch screens). */
 html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop { min-height:40px!important; }
 @media (pointer:coarse),(max-width:760px){ html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop { min-height:48px!important; } }
 html#dlight-ui[data-ui-system] .view .journal-stop-table tbody :is(th,td) { padding-block:4px; }
+
+/* Standalone navigation links (crumbs, linked record) keep a 24 px target, 44 px on touch. */
+html#dlight-ui[data-ui-system] .view :is(.journal-trip-head .workflow-crumb-link,.workflow-card .workflow-crumb-link,a.workflow-crumb-link,a.workflow-request-link) { display:inline-flex!important;align-items:center;min-height:24px!important;vertical-align:middle; }
+@media(pointer:coarse),(max-width:760px){ html#dlight-ui[data-ui-system] .view :is(.journal-trip-head .workflow-crumb-link,.workflow-card .workflow-crumb-link,a.workflow-crumb-link,a.workflow-request-link) { min-height:44px!important; } }
