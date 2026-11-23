@@ -168,3 +168,9 @@ html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open
 html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open)>.journal-trip-stops .presence-review-sidebar { height:auto!important;flex:none!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { height:40px!important;min-height:40px!important; }
 @media (pointer:coarse),(max-width:760px){ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { height:48px!important;min-height:48px!important; } }
+html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail:not(.journal-stop-open)>:is(.journal-list-modes,.journal-trip-stops) { align-self:start; }
+/* List switch and stop list share one grid row with the map card, so the map height never opens a gap under the switch. */
+@media (min-width:761px){
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-stops { grid-row:2!important;margin-top:82px!important; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-overview { grid-row:2!important; }
+}
