@@ -110,6 +110,25 @@ test('prepares a manual visit before linking and confirms it in the trip',async(
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);
  await clean(page);
 });
+test('links extra GPS evidence to a completed trip as a separate journal record',async({page},info)=>{
+ await open(page,info,'admin',1,'supplement');await openOrphanOverview(page);
+ await page.getByRole('button',{name:'Связать с выездом',exact:true}).click();
+ const prompt=page.locator('#promptOverlay'),trips=prompt.locator('[data-pf=trip]');
+ await expect(trips.locator('option').last()).toContainText('завершён · дополнительная запись');
+ await trips.selectOption({index:1});
+ await expect(prompt.locator('.gps-resolution-summary')).toContainText('Пробег, статус и принятые часы выезда сохранятся.');
+ await prompt.locator('[data-pf=reason]').fill('Сверка истории поездки');
+ await page.locator('#promptYes').click();
+ await expect(page.locator('.gps-supplement-note')).toBeVisible();
+ await page.getByRole('button',{name:'К GPS-журналу выезда'}).click();
+ await expect(page.locator('.journal-trip-head')).toBeVisible();
+ await page.locator('[data-journal-pane=documents]').click();
+ const supplement=page.locator('.journal-trip-documents').getByRole('link',{name:/Запись №/});
+ await expect(supplement).toBeVisible();await supplement.click();
+ await expect(page.locator('.gps-supplement-note')).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);
+ await clean(page);
+});
 test('charge shows the cost basis and requires a separate amount confirmation',async({page},info)=>{
  await open(page,info);await openOrphanOverview(page);await page.getByRole('button',{name:'Записать списание инженеру',exact:true}).click();
  await expect(page.locator('.gps-resolution-summary')).toContainText('12,5');await page.locator('[data-pf=engineer]').selectOption('00000000-0000-4000-8000-000000000002');

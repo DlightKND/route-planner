@@ -63,8 +63,8 @@ export function createUnassignedTracks(ctx){
   const refresh=document.getElementById('tripJournalRefresh');if(refresh)refresh.onclick=async()=>{if(!await leave())return;previews.clear();load();};box.querySelector('[data-ut-more]').onclick=()=>{offset=(offset||50)+50;paintList();};
   box.querySelectorAll('[data-ut-mode]').forEach(b=>{b.classList.toggle('on',b.dataset.utMode===mode);b.setAttribute('aria-pressed',String(b.dataset.utMode===mode));b.onclick=async()=>{if(mode===b.dataset.utMode)return;if(!await leave())return;mode=b.dataset.utMode;selected=[];mergePreview=null;scaffold();load();};});
  }
- function inMode(r,key){if(key==='all')return true;if(r._trip)return key==='linked'?true:key==='pending'?tripAttention(r._trip):key==='archive'?r._trip.review?.total>0&&!tripAttention(r._trip):false;return key==='pending'||key==='unlinked'?['recording','review'].includes(r.state):key==='charged'?r.state==='charged':['charged','merged'].includes(r.state);}
- const recordNumber=r=>String(r._sources?.[0]?.id||r.trip_id||r.id).replace(/^trip:/,'').slice(0,8);
+ function inMode(r,key){if(key==='all')return true;if(r._supplement)return key==='linked';if(r._trip)return key==='linked'?true:key==='pending'?tripAttention(r._trip):key==='archive'?r._trip.review?.total>0&&!tripAttention(r._trip):false;return key==='pending'||key==='unlinked'?['recording','review'].includes(r.state):key==='charged'?r.state==='charged':['charged','merged'].includes(r.state);}
+ const recordNumber=r=>String(r._supplement?r.id:r._sources?.[0]?.id||r.trip_id||r.id).replace(/^trip:/,'').slice(0,8);
  function visibleRows(){const term=search.trim().toLocaleLowerCase();return rows.filter(r=>(!vehicleFilter||r.vehicle_id===vehicleFilter)&&inMode(r,mode)&&(!term||[recordNumber(r),vehicleName(r.vehicle_id),r.trip_id,r.review_note].join(' ').toLocaleLowerCase().includes(term))&&(!gapsOnly||(r._trip?(r._trip.review?.recovery||r._trip.review?.gaps):Number(previews.get(r.id)?.quote?.gaps)>0)));}
 
  function paintList(){
@@ -72,7 +72,7 @@ export function createUnassignedTracks(ctx){
   const list=box.querySelector('.journal-register tbody'),visible=visibleRows(),displayed=visible.slice(0,offset||50);
   more=visible.length>displayed.length;
   list.innerHTML=displayed.map(r=>{
-   const id=escape(r.id),reference='№'+escape(recordNumber(r)),link=r._trip?'Выезд №'+escape(String(r.trip_id||r._trip.id).slice(0,8)):escape(status[r.state]||r.state);
+   const id=escape(r.id),reference='№'+escape(recordNumber(r)),link=r._trip?'Выезд №'+escape(String(r.trip_id||r._trip.id).slice(0,8)):r._supplement?'Дополнительная · выезд №'+escape(r.trip_id.slice(0,8)):escape(status[r.state]||r.state);
    const issues=r._trip?tripReviewIssues(r._trip).map(issue=>issue.label).join(' · '):'';
    const charge=r.state==='charged'?'<small>'+number(r.resolution?.cost)+' '+escape(r.resolution?.currency||ctx.currency())+' · '+escape(person(r.engineer_id))+'</small>':'';
    const action=manager()?'<button type="button" class="btn" data-ut-details="'+id+'" aria-label="Открыть запись '+reference+'">Открыть запись</button>':'';
@@ -201,6 +201,7 @@ export function createUnassignedTracks(ctx){
   box.innerHTML='<button type="button" class="btn ghost gps-back" data-ut-back>← К списку</button><header class="gps-detail-head"><p class="design-eyebrow">Выбранная GPS-запись</p><h2>GPS-запись №'+escape(recordNumber(r))+'</h2><p>'+escape(vehicleName(r.vehicle_id))+'</p><span class="tag">'+escape(status[r.state])+'</span><p class="unassigned-period">'+date(r.started_at)+' — '+(r.state==='recording'?'последняя точка '+date(r.last_ts):date(r.ended_at||r.last_ts))+'</p></header>'+trackPreview(points)+'<div class="gps-detail-metrics"><div><span>По GPS</span><b>'+number(quote.km)+' км</b></div><div><span>Точки телеметрии</span><b>'+number(quote.points)+'</b></div><div><span>Разрывы / выбросы</span><b>'+quote.gaps+' / '+quote.rejected+'</b></div><div><span>Себестоимость</span><b>'+(quote.rate==null?'Не настроена':number(quote.cost)+' '+escape(ctx.currency()))+'</b></div></div><p class="hint">Разрывы линии — участки без GPS. Пробег по ним не измерен.</p>'
    +(r.state==='charged'?'<section class="card"><h3>Списание записано</h3><p>'+escape(person(r.engineer_id))+' · '+number(r.resolution?.km)+' км × '+number(r.resolution?.rate)+' = '+number(r.resolution?.cost)+' '+escape(r.resolution?.currency||ctx.currency())+'</p><p>'+escape(r.resolution?.reason)+'</p></section>':'')
    +(canResolve?'<section class="gps-resolution-entry"><h3>Оформить поездку</h3><p class="hint">Привязка GPS-записи не подтверждает посещения объектов и выполнение работ.</p><div class="gps-resolution-choices"><button type="button" class="btn" data-ut-action="link">Связать с выездом</button><button type="button" class="btn" data-ut-action="create">Создать выезд</button><button type="button" class="btn ghost" data-ut-action="charge">Записать списание инженеру</button></div></section>':r.state==='recording'?'<p class="hint">Запись продолжается. Оформление доступно после завершения.</p>':'')
+   +(r._supplement?'<p class="gps-supplement-note">Дополнительная запись. Пробег и часы учитываются по основному треку выезда.</p>':'')
    +(r.state==='linked'?'<button type="button" class="btn" data-ut-trip>Открыть выезд</button>':'')+(manager()&&r.state==='charged'?'<button type="button" class="btn ghost" data-ut-cancel>Отменить списание</button>':'')
    +'<details class="gps-event-history"><summary>История решения · '+(events||[]).length+'</summary>'+(events||[]).map(e=>'<p class="unassigned-event">'+date(e.created_at)+' · '+escape(e.reason)+'</p>').join('')+'</details>';
   const documents=document.createElement('section');documents.className='journal-trip-documents';documents.hidden=true;for(const node of [...box.querySelectorAll('.gps-resolution-entry,.gps-event-history,.card,[data-ut-trip],[data-ut-cancel]')])documents.append(node);
@@ -218,6 +219,11 @@ export function createUnassignedTracks(ctx){
   const stopsPanel=document.createElement('section');stopsPanel.className='journal-link-required';
   overview.append(stopsPanel);
   const resolution=documents.querySelector('.gps-resolution-entry');if(resolution)overview.prepend(resolution);
+  if(r._supplement){
+   overview.prepend(overview.querySelector('.gps-supplement-note'));
+   const parent=document.createElement('button');parent.type='button';parent.className='btn';
+   parent.textContent='К GPS-журналу выезда';parent.onclick=()=>openRecord(r.trip_id);overview.prepend(parent);
+  }
   overview.append(discussion);box.append(overview,documents);
   sourceActivity=mountEntityActivity({root:discussion,db:ctx.db(),entity:'gpsTrack',id,userId:ctx.userId,people:ctx.people});
   const route=document.createElement('section');route.className='journal-trip-route';route.hidden=true;box.append(route);
@@ -247,13 +253,20 @@ export function createUnassignedTracks(ctx){
   if(sourceView?.isDirty()||sourceView?.isSaving())throw Error('Сохраните выбор стоянок перед оформлением записи.');const quote=await rpc('unassigned_track_quote',{p_track:id});if(uid!==ctx.userId())return;
   if(row.state==='recording'&&new Date(row.last_ts)>Date.now()-300000)throw Error('Поездка ещё записывается. Разобрать её можно после завершения.');
   const engineers=ctx.people().filter(x=>x.role==='engineer'&&x.active!==false).map(p=>({value:p.id,label:p.full_name||p.name||p.email||'Инженер'}));
-  const fields=[];
-  if(action==='link'){const {data,error}=await ctx.db().from('trips').select('id,date_from,status,vehicle_id').eq('vehicle_id',row.vehicle_id).is('deleted_at',null).in('status',['planned','assigned']).is('started_at',null).is('finished_at',null).is('fact_km',null);if(error)throw error;fields.push({key:'trip',type:'select',label:'Выезд той же машины',required:true,options:[{value:'',label:'Выберите выезд'},...(data||[]).map(t=>({value:t.id,label:t.date_from+' · '+vehicleName(t.vehicle_id)+' · '+({planned:'план',assigned:'назначен'}[t.status]||t.status)+' · '+t.id.slice(0,8)}))]});}
+  const fields=[];let linkOptions=[];
+  if(action==='link'){
+   linkOptions=await rpc('gps_existing_trip_options',{p_track:id})||[];
+   const stages={planned:'план',assigned:'назначен',in_progress:'в работе',finished:'на проверке',done:'завершён'};
+   fields.push({key:'trip',type:'select',label:'Выезд той же машины',required:true,options:[
+    {value:'',label:linkOptions.length?'Выберите выезд':'Нет выездов на эти даты'},
+    ...linkOptions.map(t=>({value:t.id,label:`${t.date_from} — ${t.date_to} · №${t.id.slice(0,8)} · ${stages[t.status]||t.status}${t.link_mode==='supplement'?' · дополнительная запись':''}`}))
+   ]});
+  }
   if(action==='charge')fields.push({key:'engineer',type:'select',label:'Инженер',required:true,options:[{value:'',label:'Выберите инженера'},...engineers]});
   if(action==='charge')fields.push({key:'km',type:'number',min:0,step:.01,label:'Подтверждённый пробег, км',value:quote.km,required:true});fields.push({key:'reason',type:'textarea',label:'Основание решения',required:true});
   if(action==='charge'&&!(quote.rate>0))throw Error('Сначала настройте себестоимость километра машины или отдела.');
   const draftKey=uid+':'+id+':'+action,draft=resolutionDrafts.get(draftKey);if(draft)fields.forEach(field=>{if(Object.hasOwn(draft,field.key))field.value=draft[field.key];});
-  const values=await ctx.prompt(action==='create'?'Создать выезд из GPS-записи':action==='charge'?'Списание инженеру · '+number(quote.rate)+' '+ctx.currency()+'/км':'Привязать поездку к выезду',fields,{okText:action==='charge'?'Проверить сумму':action==='create'?'Заполнить выезд':'Подтвердить связь',gpsResolution:{action,vehicle:vehicleName(row.vehicle_id),period:date(row.started_at)+' — '+date(row.ended_at||row.last_ts),km:number(quote.km),points:quote.points,gaps:quote.gaps,rate:number(quote.rate)+' '+ctx.currency()+'/км',canCharge:quote.rate>0,cost:km=>number(distanceCost(km,quote.rate))+' '+ctx.currency()}});if(!values||uid!==ctx.userId())return;
+  const values=await ctx.prompt(action==='create'?'Создать выезд из GPS-записи':action==='charge'?'Списание инженеру · '+number(quote.rate)+' '+ctx.currency()+'/км':'Привязать поездку к выезду',fields,{okText:action==='charge'?'Проверить сумму':action==='create'?'Заполнить выезд':'Подтвердить связь',gpsResolution:{action,vehicle:vehicleName(row.vehicle_id),period:date(row.started_at)+' — '+date(row.ended_at||row.last_ts),km:number(quote.km),points:quote.points,gaps:quote.gaps,rate:number(quote.rate)+' '+ctx.currency()+'/км',linkOptions,canCharge:quote.rate>0,cost:km=>number(distanceCost(km,quote.rate))+' '+ctx.currency()}});if(!values||uid!==ctx.userId())return;
   if(values.__nextAction){resolutionDrafts.set(draftKey,values.__draft||{});return resolve(id,values.__nextAction);}
   resolutionDrafts.set(draftKey,values);
   if(action==='create'){
@@ -264,8 +277,11 @@ export function createUnassignedTracks(ctx){
   const cost=action==='charge'?distanceCost(values.km,quote.rate):null;
   if(action==='charge'&&!await ctx.confirm('Списать '+number(cost)+' '+ctx.currency()+' инженеру?\n'+number(values.km)+' км × '+number(quote.rate)+' '+ctx.currency()+'/км.\nОснование: '+values.reason,{title:'Подтверждение списания',danger:true,okText:'Списать по себестоимости'}))return;
   if(uid!==ctx.userId())return;
-  const result=await rpc('unassigned_track_resolve',{p_track:id,p_expected:quote.revision,p_action:action,p_data:{...values,km:values.km??quote.km,points:quote.points,cost}});
-  if(uid!==ctx.userId())return;resolutionDrafts.delete(draftKey);await load();ctx.notify(action==='charge'?'Списание сохранено в журнале':'Трек привязан к выезду','ok');if(result.trip_id){await ctx.reload();await openRecord(result.trip_id);}
+  const result=action==='link'?await rpc('gps_existing_trip_link',{
+   p_track:id,p_expected:quote.revision,p_points:quote.points,p_trip:values.trip,
+   p_mode:linkOptions.find(trip=>trip.id===values.trip)?.link_mode,p_reason:values.reason
+  }):await rpc('unassigned_track_resolve',{p_track:id,p_expected:quote.revision,p_action:action,p_data:{...values,km:values.km??quote.km,points:quote.points,cost}});
+  if(uid!==ctx.userId())return;resolutionDrafts.delete(draftKey);await load();ctx.notify(action==='charge'?'Списание сохранено в журнале':'Трек привязан к выезду','ok');if(result.trip_id){await ctx.reload();if(result.link_mode==='supplement')await openSource(id);else await openRecord(result.trip_id);}
  }
  async function cancel(id){const uid=ctx.userId(),r=rows.find(x=>x.id===id);if(!r)return;const v=await ctx.prompt('Отменить списание',[{key:'reason',label:'Причина отмены',type:'textarea',required:true}],{okText:'Отменить списание'});if(!v||uid!==ctx.userId())return;await rpc('unassigned_track_charge_cancel',{p_track:id,p_expected:r.revision,p_reason:v.reason});if(uid===ctx.userId())await load();}
  async function open(){const uid=ctx.userId();if(owner===uid&&host()?.querySelector('.journal-page-head'))return;if(owner!==uid){reset();owner=uid;mode=manager()?'all':'charged';}scaffold();try{await ctx.ensureRefs();if(uid===ctx.userId())return load();}catch(e){if(uid===ctx.userId()&&host())host().querySelector('.unassigned-status').textContent='Не удалось загрузить справочники: '+(e.message||'нет связи');}}
@@ -277,6 +293,7 @@ export function createUnassignedTracks(ctx){
   }
   if(!ctx.tripReviews?.isDirty())return true;const ok=!!await ctx.confirm('Выйти без сохранения решения по остановке?',{title:'Несохранённые изменения',okText:'Выйти без сохранения',cancelText:'Продолжить работу',danger:true});if(ok)ctx.tripReviews.discard();return ok;}
  async function openRecord(tripId,state={}){const id='trip:'+tripId;if(activeId===id&&host()?.querySelector('[data-journal-trip]')){if(!host().classList.contains('gps-show-detail'))listScroll=host().querySelector('.gps-journal-sidebar').scrollTop;host().classList.add('gps-show-detail');ctx.tripReviews.navigate(state);if(state.roadId)ctx.onRecord?.(tripId,state);return;}if(!rows.some(r=>r.id===id))rows.push({id,_trip:{id:tripId},_direct:true});else rows.find(r=>r.id===id)._direct=true;await details(id,true,state);}
- async function openSource(id,state={}){if(!manager())return;if(activeId===id&&sourceView?.id===id){if(!host().classList.contains('gps-show-detail'))listScroll=host().querySelector('.gps-journal-sidebar').scrollTop;host().classList.add('gps-show-detail');sourceView.navigate(state.pane||'stops');return;}if(!rows.some(r=>r.id===id)){const {data,error}=await ctx.db().from('unassigned_tracks').select('*').eq('id',id).maybeSingle();if(error)throw error;if(!data)throw Error('GPS-запись недоступна');if(data.state==='linked'&&data.trip_id)return openRecord(data.trip_id,state);rows.push(data);}return details(id,true,state);}
+ async function openSource(id,state={}){if(!manager())return;if(activeId===id&&sourceView?.id===id){if(!host().classList.contains('gps-show-detail'))listScroll=host().querySelector('.gps-journal-sidebar').scrollTop;host().classList.add('gps-show-detail');sourceView.navigate(state.pane||'stops');return;}if(!rows.some(r=>r.id===id)){const {data,error}=await ctx.db().from('unassigned_tracks').select('*').eq('id',id).maybeSingle();if(error)throw error;if(!data)throw Error('GPS-запись недоступна');if(data.state==='linked'&&data.trip_id&&data.resolution?.link_mode!=='supplement')return openRecord(data.trip_id,state);
+   rows.push({...data,_supplement:data.resolution?.link_mode==='supplement'});}return details(id,true,state);}
  return {open,openRecord,openSource,isDirty:()=>!!(sourceView?.isDirty()||sourceView?.isSaving()),showList:async()=>{if(!await leave())return;ctx.tripReviews?.navigate({pane:'stops'});host()?.classList.remove('gps-show-detail','journal-map-expanded');if(host())host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;},reset,leave,refresh:async()=>{if(!await leave())return;previews.clear();selected=[];mergePreview=null;paintSelection();host()?.querySelectorAll('[data-ut-select]').forEach(c=>c.checked=false);return load();}};
 }

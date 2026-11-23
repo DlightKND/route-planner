@@ -32,6 +32,7 @@ beforeAll(async()=>{
  await db.exec(readFileSync(new URL('../supabase/migrations/20261122211452_gps_record_stop_drafts.sql',import.meta.url),'utf8'));
  await db.exec('alter table public.jobs add column deleted_at timestamptz');
  await db.exec(readFileSync(new URL('../supabase/migrations/20261123083009_gps_manual_visit_drafts.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261123085411_gps_existing_trip_link.sql',import.meta.url),'utf8'));
 
 },30000);
 beforeEach(async()=>{
@@ -225,4 +226,42 @@ it('keeps a manual visit separate until the linked trip confirms it exactly once
  expect(await q('select id,crew_ids,status,manual_origin,note from trip_stays')).toEqual([{id:draft,crew_ids:[engineer],
   status:'approved',manual_origin:true,note:'Ручное посещение без GPS · Подтверждено заказчиком'}]);
  expect((await q('select confirmed_at from gps_manual_visit_drafts'))[0].confirmed_at).toBeTruthy();
+});
+
+it('offers only covering trips of the same vehicle and preserves an accepted trip when attaching evidence',async()=>{
+ const track=id(100),planned=id(40),running=id(41),accepted=id(42),other=id(43),cancelled=id(44),late=id(45),stopped=id(46);
+ for(const [trip,status,vehicle,day] of [[planned,'planned',id(10),'2026-10-03'],[running,'in_progress',id(10),'2026-10-03'],
+  [accepted,'done',id(10),'2026-10-03'],[other,'planned',id(11),'2026-10-03'],[cancelled,'cancelled',id(10),'2026-10-03'],
+  [late,'planned',id(10),'2026-10-04'],[stopped,'finished',id(10),'2026-10-03']]){
+  await q('insert into trips(id,vehicle_id,status,owner_id,curator_id,date_from,date_to) values($1,$2,$3,$4,$4,$5,$5)',[trip,vehicle,status,id(1),day]);
+ }
+ await q("update trips set fact_km=321,fact_km_source='odometer',workbench_revision=7,started_at='2026-10-03T07:00Z',finished_at='2026-10-03T09:00Z' where id=$1",[accepted]);
+ await q('insert into trip_tracks(trip_id,km,data) values($1,321,$2)',[accepted,{verdict:'Проверен',trackKm:321}]);
+ await q("insert into trip_stays(id,trip_id,status,minutes_mgr) values($1,$2,'approved',30)",[id(53),accepted]);
+ const source=await quote(track);
+ const link=(trip,mode,points=source.points)=>q('select gps_existing_trip_link($1,$2,$3,$4,$5,$6) result',
+  [track,source.revision,points,trip,mode,'Подтверждена история поездки']);
+ await db.exec('set role authenticated');
+ expect(await q('select id,status,link_mode from gps_existing_trip_options($1)',[track])).toEqual([
+  {id:planned,status:'planned',link_mode:'import'},{id:running,status:'in_progress',link_mode:'supplement'},
+  {id:accepted,status:'done',link_mode:'supplement'},{id:stopped,status:'finished',link_mode:'supplement'}]);
+ await expect(link(cancelled,'supplement')).rejects.toThrow('покрывает даты');
+ await expect(link(accepted,'import')).rejects.toThrow('изменились фактические');
+ await expect(link(accepted,'supplement',source.points-1)).rejects.toThrow('GPS изменился');
+ const linked=await link(accepted,'supplement');
+ expect(linked).toMatchObject([{result:{link_mode:'supplement',trip_id:accepted}}]);
+ expect(await link(accepted,'supplement')).toEqual(linked);
+ expect(await q('select status,fact_km,fact_km_source,workbench_revision from trips where id=$1',[accepted]))
+  .toEqual([{status:'done',fact_km:'321',fact_km_source:'odometer',workbench_revision:7}]);
+ expect(await q('select km,data from trip_tracks where trip_id=$1',[accepted])).toEqual([{km:'321',data:{verdict:'Проверен',trackKm:321}}]);
+ expect(await q('select status,minutes_mgr from trip_stays where trip_id=$1',[accepted])).toEqual([{status:'approved',minutes_mgr:'30'}]);
+ expect(await q('select trip_id from vehicle_positions')).toEqual([]);
+ expect(await q('select count(*)::integer as n from unassigned_track_events where track_id=$1',[track])).toEqual([{n:1}]);
+ const second=await quote(id(102));
+ await q('select gps_existing_trip_link($1,$2,$3,$4,$5,$6)',[id(102),second.revision,second.points,planned,'import','Оформление планового выезда']);
+ expect(await q('select status from trips where id=$1',[planned])).toEqual([{status:'finished'}]);
+ expect(await q('select count(*)::integer as n from vehicle_positions where trip_id=$1',[planned])).toEqual([{n:2}]);
+ await q("select set_config('test.uid',$1,true)",[id(2)]);
+ await expect(q('select * from gps_existing_trip_options($1)',[id(101)])).rejects.toThrow('привязывает диспетчер');
+ expect(await q("select has_function_privilege('anon','gps_existing_trip_link(uuid,integer,integer,uuid,text,text)','execute') allowed")).toEqual([{allowed:false}]);
 });

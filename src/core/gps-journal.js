@@ -44,7 +44,9 @@ export function journalEntries(unassigned,trips){
  const records=new Map();
  // Canonical keys are stable even before a linked trip page arrives.
  for(const source of unassigned){
-  if(source.state==='linked'&&source.trip_id){const id='trip:'+source.trip_id,old=records.get(id);records.set(id,{...source,id,_trip:{id:source.trip_id,vehicle_id:source.vehicle_id,started_at:source.started_at,finished_at:source.ended_at||source.last_ts},_sources:[...(old?._sources||[]),source]});}
+  if(source.state==='linked'&&source.trip_id&&source.resolution?.link_mode==='supplement'){
+   records.set(source.id,{...source,_supplement:true});
+  }else if(source.state==='linked'&&source.trip_id){const id='trip:'+source.trip_id,old=records.get(id);records.set(id,{...source,id,_trip:{id:source.trip_id,vehicle_id:source.vehicle_id,started_at:source.started_at,finished_at:source.ended_at||source.last_ts},_sources:[...(old?._sources||[]),source]});}
   else records.set(source.id,{...source});
  }
  for(const trip of trips){const id='trip:'+trip.id,old=records.get(id);records.set(id,{id,trip_id:trip.id,_trip:trip,_sources:old?._sources||[],vehicle_id:trip.vehicle_id,started_at:trip.started_at,last_ts:trip.finished_at||trip.updated_at||trip.started_at,ended_at:trip.finished_at,state:trip.finished_at?'linked':'recording'});}

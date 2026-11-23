@@ -382,13 +382,15 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   if(unassignedJourney&&unassignedCount>1)tables.unassigned_tracks=Array.from({length:unassignedCount},(_,i)=>({...tables.unassigned_tracks[0],started_at:new Date(Date.UTC(2026,9,4+i,7)).toISOString(),last_ts:new Date(Date.UTC(2026,9,4+i,9)).toISOString(),ended_at:new Date(Date.UTC(2026,9,4+i,9)).toISOString(),id:i?`40000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`:unassignedID}));
   tables.vehicle_telemetry_archive=unassignedJourney?[{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:00:00Z',lat:49.99,lng:36.23},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T07:01:00Z',lat:50.01,lng:36.25},{vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T09:00:00Z',lat:49.99,lng:36.23}]:[];
   tables.unassigned_track_events=[];
-  const sourceStopJourney=unassignedJourney==='stop-draft';
+  const supplementalJourney=unassignedJourney==='supplement';
+  const sourceStopJourney=unassignedJourney==='stop-draft'||supplementalJourney;
   const sourceStopPoints=sourceStopJourney?['07:00','07:04','07:08','07:12'].map(time=>({
     vehicle_id:unknownVehicle,trip_id:null,ts:'2026-10-04T'+time+':00Z',status:'idle',lat:client.lat,lng:client.lng
   })):null;
   tables.gps_record_stop_drafts=sourceStopJourney?JSON.parse(localStorage.getItem('qa:source-stop-drafts')||'[]'):[];
   tables.gps_manual_visit_drafts=sourceStopJourney?JSON.parse(localStorage.getItem('qa:source-manual-visits')||'[]'):[];
   if(sourceStopJourney)tables.vehicle_telemetry_archive=sourceStopPoints;
+  if(supplementalJourney)Object.assign(ride,{status:'done',fact_km:321,started_at:'2026-10-04T07:00:00Z',finished_at:'2026-10-04T13:00:00Z'});
   if(financeJourney){
     task.service_order_items=[
       {...item,id:'50000000-0000-4000-8000-000000000001',legacy_job_work_id:'60000000-0000-4000-8000-000000000001',approved_at:stamp,financial_revenue_snapshot:7500,financial_cost_snapshot:4500,created_at:stamp,legacy_snapshot:{title:'Историческая работа'}},
@@ -937,9 +939,13 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         localStorage.setItem('qa:source-stop-drafts',JSON.stringify([row]));
         return {data:row.revision,error:null};
       }
-      if(sourceStopJourney&&name==='unassigned_track_resolve'&&args.p_action==='link'&&args.p_data.trip===trip){
+      if(sourceStopJourney&&name==='gps_existing_trip_link'&&args.p_trip===trip){
         const [source]=tables.unassigned_tracks;
         Object.assign(source,{state:'linked',trip_id:trip});
+        if(supplementalJourney){
+          source.resolution={link_mode:'supplement',trip_id:trip};
+          return {data:source.resolution,error:null};
+        }
         Object.assign(ride,{status:'finished',started_at:source.started_at,finished_at:source.ended_at});
         const [draft]=tables.gps_record_stop_drafts;
         if(draft)Object.assign(draft,{trip_id:trip,source_current:true});
@@ -976,6 +982,8 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         return {data:ride.workbench_revision,error:null};
       }
       const reads = {
+        gps_existing_trip_options:sourceStopJourney?[{id:trip,date_from:'2026-10-04',date_to:'2026-10-06',
+          status:ride.status,link_mode:supplementalJourney?'supplement':'import'}]:[],
         unassigned_track_points:(tables.vehicle_telemetry_archive||[]).map(p=>({...p,part:1})),
         unassigned_track_quote:{track_id:unassignedID,revision:0,km:120,points:sourceStopPoints?.length||3,gaps:1,rejected:0,rate:12.5,cost:1500},
         legacy_personal_schedule_read:legacyCrewMissing&&role==='engineer'&&(args.p_trips||[]).includes(trip)?[{id:trip,status:'done',date_from:ride.date_from,date_to:ride.date_to,day_plan:ride.day_plan,engineer_ids:[],lead_engineer:null,schedule_only:true,route_stops:ride.route_stops.map(s=>({type:s.type,lat:s.lat,lng:s.lng})),econ_snapshot:{driveH:ride.econ_snapshot.driveH,legs:[]}}]:[],

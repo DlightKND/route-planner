@@ -191,6 +191,22 @@ export function createJournalTrips(ctx){
    }finally{saving=false;host.inert=false;}
   }
   function updateSelection(){actions.hidden=pane!=='stops'||!!selected;discussion.hidden=actions.hidden;root.classList.toggle('journal-stop-open',!!selected);display.hidden=pane!=='stops'||!!selected;root.querySelector('.journal-trip-overview').hidden=pane!=='stops'||!!selected;documentsButton.hidden=pane!=='stops'||!!selected;(root.closest('.unified-gps-journal')||root).querySelectorAll('[data-journal-stop]').forEach(b=>b.classList.toggle('is-selected',b.dataset.journalStop===selected));const timeline=root.querySelector('.journal-timeline-host');if(pane==='stops'&&!selected)root.querySelector('.journal-overview-map').after(timeline);else root.querySelector('.journal-trip-head').after(timeline);routeMap?.select(selected);overviewMap?.select(selected);}
+  if(['admin','logist'].includes(ctx.role())){
+   const extra=root.ownerDocument.createElement('section');
+   extra.className='journal-source-choices';
+   root.querySelector('.journal-trip-documents').prepend(extra);
+   void (async()=>{
+    try{
+     const linked=result(await ctx.db().from('unassigned_tracks')
+      .select('id,started_at,ended_at,resolution').eq('trip_id',id).eq('state','linked').order('started_at'))||[];
+     const records=linked.filter(record=>record.resolution?.link_mode==='supplement');
+     if(!current()||!records.length)return;
+     extra.innerHTML='<h3>Дополнительные GPS-записи</h3><ul class="gps-source-stops">'+records.map(record=>
+      '<li class="gps-source-stop"><div><strong>'+esc(intervalText(record.started_at,record.ended_at))+
+      '</strong></div><a class="btn ghost" href="#/journal/record/'+encodeURIComponent(record.id)+'">'+esc('Запись №'+record.id.slice(0,8))+'</a></li>').join('')+'</ul>';
+    }catch(error){if(current())extra.textContent='Не удалось загрузить дополнительные GPS-записи: '+error.message;}
+   })();
+  }
   const discussion=root.querySelector('.journal-gps-activity');
   const activity=mountEntityActivity({root:discussion,db:ctx.db(),entity:'gpsTrip',id,userId:ctx.userId,people:ctx.people});
   let historyLoaded=!data.history_deferred,historyLoading=false;
