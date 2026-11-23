@@ -60,6 +60,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   };
   const request = {
     id: job,
+    number: 101,
     client_id: client.id,
     equipment_id: equipment.id,
     clients: client,
@@ -134,6 +135,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   };
   const ride = {
     id: trip,
+    number: 58,
     status: "planned",
     date_from: "2026-10-05",
     date_to: "2026-10-06",

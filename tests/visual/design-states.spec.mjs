@@ -120,7 +120,7 @@ test('design state: presence evidence and decision stay separate',async({page},i
 });
 test('design state: GPS resolution separates the operation, parameters and saved facts',async({page},info)=>{
  const errors=await start(page,info,'planner/tracking',{role:'admin',unassignedJourney:true});
- await openOrphanOverview(page);await page.getByRole('button',{name:'Создать выезд',exact:true}).click();const overlay=page.locator('#promptOverlay');
+ await openOrphanOverview(page);await page.getByRole('button',{name:'Привязать к выезду',exact:true}).click();await page.locator('#promptOverlay [data-gps-choice=create]').click();const overlay=page.locator('#promptOverlay');
  await expect(overlay.locator('.gps-resolution-workspace')).toBeVisible();await expect(overlay.locator('[data-gps-choice]')).toHaveCount(3);
  await overlay.locator('[data-pf=reason]').fill('Основание создания выезда');await expect(overlay.locator('#promptYes')).toBeInViewport();await expect(overlay.locator('#promptNo')).toBeInViewport();await capture(page,info,'gps-resolution',errors);
  await overlay.locator('[data-gps-choice=charge]').click();await expect(overlay.locator('[data-pf=km]')).toBeVisible();await expect(overlay.locator('.gps-resolution-summary')).toContainText('12,5');

@@ -1,4 +1,6 @@
 import {mountEntityActivity} from './entity-activity.js';
+import {frameGpsRecordHead} from './gps-record-head.js';
+import {tripLabel} from './workflow-meta.js';
 import {journalIcon as icon} from './journal-icons.js';
 import {intervalText} from './core/journal-display.js';
 import {journalEntries,tripAttention,tripReviewIssues,kmText} from './core/gps-journal.js';
@@ -217,6 +219,7 @@ export function createUnassignedTracks(ctx){
   sourceTabs.className='journal-trip-tabs seg';sourceTabs.setAttribute('role','group');sourceTabs.setAttribute('aria-label','Разделы GPS-записи');
   sourceTabs.innerHTML='<button type="button" data-orphan-pane="stops">Обзор</button><button type="button" data-orphan-pane="route">Дорога</button><button type="button" data-orphan-pane="documents">Данные</button>';
   sourceHead.append(sourceTabs);
+  frameGpsRecordHead(sourceHead,{back:()=>sourceHead.querySelector('[data-ut-back]')?.click(),linkLabel:r.trip_id?tripLabel(null,r.trip_id):'Без выезда',openLink:r.trip_id&&ctx.openTrip?()=>ctx.openTrip(r.trip_id):null,source:'GPS · '+vehicleName(r.vehicle_id),status:r.state==='linked'||r.trip_id?'Связана с выездом':r.state==='charged'?'Списание инженеру':r.state==='recording'?'Идёт запись':'Без выезда'});
   const stays=observedSourceStops(parts);
   const overview=document.createElement('section');overview.className='journal-orphan-overview';
   for(const node of [...box.children])if(!node.matches('.gps-back,.gps-detail-head'))overview.append(node);
@@ -244,7 +247,11 @@ export function createUnassignedTracks(ctx){
    const parent=document.createElement('button');parent.type='button';parent.className='btn';
    parent.textContent='К GPS-журналу выезда';parent.onclick=()=>openRecord(r.trip_id);overview.prepend(parent);
   }
-  overview.append(discussion);box.append(overview,documents);
+  overview.append(discussion);
+  // Mockup v65: one pinned action opens the single linking dialog (existing trip, new trip or charge).
+  const pinned=overview.querySelector('.gps-resolution-entry');
+  if(pinned){pinned.classList.add('workflow-gps-pinned');pinned.querySelector('h3')?.remove();pinned.querySelectorAll('[data-ut-action=create],[data-ut-action=charge]').forEach(b=>{b.hidden=true;});const link=pinned.querySelector('[data-ut-action=link]');if(link){link.textContent='Привязать к выезду';link.classList.add('amber');}overview.append(pinned);}
+  box.append(overview,documents);
   sourceActivity=mountEntityActivity({root:discussion,db:ctx.db(),entity:'gpsTrack',id,userId:ctx.userId,people:ctx.people});
   const route=document.createElement('section');route.className='journal-trip-route';route.hidden=true;box.append(route);
   const routeView=mountJournalRoute(route,{trip,track,stays,leaflet:ctx.leaflet?.(),makeBase:ctx.makeTrackBase,canEdit:false});
@@ -259,7 +266,7 @@ export function createUnassignedTracks(ctx){
   const timeline=document.createElement('div');timeline.className='journal-timeline-host';timeline.innerHTML=timelineHTML(trip,track,stays);
   overview.append(timeline);const timelineView=wireJournalTimeline(timeline);maps.add({container:timeline,destroy:()=>timelineView.destroy()});
   timeline.querySelectorAll('[data-journal-stop]').forEach(button=>button.onclick=()=>{switchOrphanPane('route');routeView.select(button.dataset.journalStop);});
-  let sourcePane='stops';function switchOrphanPane(pane,notify=true){sourcePane=pane;if(pane==='route'&&!roadLoaded){roadLoaded=true;void roadView.load();}box.querySelector('[data-ut-back]').textContent=pane==='stops'?'← К журналу':'← К поездке';overview.hidden=pane!=='stops';route.hidden=pane!=='route';documents.hidden=pane!=='documents';host().classList.toggle('journal-map-expanded',pane==='route');box.querySelectorAll('[data-orphan-pane]').forEach(b=>{b.classList.toggle('on',b.dataset.orphanPane===pane);b.setAttribute('aria-pressed',String(b.dataset.orphanPane===pane));});if(notify)ctx.onSource?.(id,pane);}
+  let sourcePane='stops';function switchOrphanPane(pane,notify=true){sourcePane=pane;if(pane==='route'&&!roadLoaded){roadLoaded=true;void roadView.load();}box.querySelector('[data-ut-back]').setAttribute('aria-label',pane==='stops'?'К журналу':'К поездке');overview.hidden=pane!=='stops';route.hidden=pane!=='route';documents.hidden=pane!=='documents';host().classList.toggle('journal-map-expanded',pane==='route');box.querySelectorAll('[data-orphan-pane]').forEach(b=>{b.classList.toggle('on',b.dataset.orphanPane===pane);b.setAttribute('aria-pressed',String(b.dataset.orphanPane===pane));});if(notify)ctx.onSource?.(id,pane);}
   const draftResponse=canResolve?await ctx.db().from('gps_record_stop_drafts').select('revision,source_revision,source_points,stops').eq('track_id',id).maybeSingle():null;
   if(uid!==ctx.userId()||activeId!==id||!stopsPanel.isConnected)return;
   const draftUI=mountSourceStops(stopsPanel,{stays,source:r,quote,draft:draftResponse?.data,writable:canResolve&&!draftResponse?.error,
@@ -286,7 +293,7 @@ export function createUnassignedTracks(ctx){
    const stages={planned:'план',assigned:'назначен',in_progress:'в работе',finished:'на проверке',done:'завершён'};
    fields.push({key:'trip',type:'select',label:'Выезд той же машины',required:true,options:[
     {value:'',label:linkOptions.length?'Выберите выезд':'Нет выездов на эти даты'},
-    ...linkOptions.map(t=>({value:t.id,label:`${t.date_from} — ${t.date_to} · №${t.id.slice(0,8)} · ${stages[t.status]||t.status}${t.link_mode==='supplement'?' · дополнительная запись':''}`}))
+    ...linkOptions.map(t=>({value:t.id,label:`${t.date_from} — ${t.date_to} · №${t.number??t.id.slice(0,8)} · ${stages[t.status]||t.status}${t.link_mode==='supplement'?' · дополнительная запись':''}`}))
    ]});
   }
   if(action==='charge')fields.push({key:'engineer',type:'select',label:'Инженер',required:true,options:[{value:'',label:'Выберите инженера'},...engineers]});

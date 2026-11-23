@@ -75,3 +75,62 @@ html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle] { widt
 html#dlight-ui[data-ui-system] .scoped-finance :is([data-finance-work-toggle],[data-finance-mileage-toggle]) { display:inline-grid;place-items:center;width:40px;height:40px;min-width:40px;min-height:40px;padding:0!important;border:1px solid var(--line)!important;border-radius:var(--r-sm,8px)!important;background:transparent; }
 html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle] svg { width:18px;height:18px;transform:rotate(90deg); }
 html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle][aria-expanded=true] svg { transform:rotate(-90deg); }
+
+/* GPS record (mockup v65): crumbs and facts in the header, tabs underneath, list and map as two equal cards,
+   the stop list keeps its natural height and the selection bar stays pinned while the page scrolls. */
+html#dlight-ui[data-ui-system] .view :is(.journal-trip-detail>.journal-trip-head,.journal-trip-head:has(>.workflow-gps-crumbs)) { display:block!important;position:relative;padding:16px var(--journal-gutter,24px) 0!important;border-bottom:1px solid var(--line)!important; }
+.journal-trip-head .workflow-gps-crumbs { display:flex;align-items:center;gap:12px;min-height:44px;margin-bottom:16px; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-crumbs>.gps-back { display:inline-grid!important;place-items:center;width:44px;height:44px;min-width:44px;padding:0!important;margin:0!important;border:1px solid var(--line)!important;border-radius:var(--r-sm,8px)!important;background:transparent!important; }
+.journal-trip-head .workflow-gps-crumb { font-size:12px;color:var(--ink-dim); }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-crumb-link { min-height:0!important;padding:0!important;border:0!important;background:transparent!important;color:var(--ink)!important;font:500 12px/18px var(--sans)!important;text-decoration:underline;text-underline-offset:3px; }
+.journal-trip-head .workflow-gps-title { display:block; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>h2 { display:inline;margin:0 12px 0 0!important;padding:0!important;font:600 28px/36px var(--sans)!important;letter-spacing:-.02em; }
+.journal-trip-head .workflow-gps-title>.design-status { vertical-align:6px; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>p { margin:6px 0 0!important;font-size:15px;color:var(--ink); }
+.journal-trip-head .workflow-gps-facts { display:flex;flex-wrap:wrap;gap:8px 28px;margin:14px 0 0; }
+.journal-trip-head .workflow-gps-facts>div { display:grid;gap:2px; }
+.journal-trip-head .workflow-gps-facts dt { font-size:12px;color:var(--ink-dim); }
+.journal-trip-head .workflow-gps-facts dd { margin:0;font-weight:500; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-facts .workflow-request-link { min-height:0!important;padding:0!important;border:0!important;background:transparent!important;color:var(--ink)!important;font:500 14px/22px var(--sans)!important;text-decoration:underline;text-underline-offset:3px; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs { position:static!important;display:flex!important;width:auto!important;max-width:none!important;grid-area:auto!important;margin:16px 0 0!important;padding:0!important;gap:8px!important;justify-content:flex-start;box-shadow:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs>button { flex:none!important;min-height:44px;padding:0 12px!important;border:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;background:none!important;color:var(--ink-dim);font:500 14px/22px var(--sans)!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs>button.on { color:var(--ink)!important;border-bottom-color:var(--accent)!important; }
+.journal-trip-detail>.journal-list-modes[hidden] { display:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes { display:flex!important;width:max-content;max-width:100%;margin:24px 0 12px var(--journal-gutter,24px); }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { min-width:112px;min-height:36px!important;height:36px;padding:0 16px!important;font-size:13px!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button.on { background:var(--ink)!important;color:var(--bg)!important; }
+@media (min-width:761px) {
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open) {
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-template-rows:none!important;grid-auto-rows:auto;align-content:start;column-gap:24px;
+ }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-head { grid-column:1/-1;grid-row:1; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-list-modes { grid-column:1;grid-row:2; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-stops { grid-column:1;grid-row:3;margin-left:var(--journal-gutter,24px);min-height:0; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-overview {
+  grid-column:2;grid-row:2 / span 2;align-self:start;position:sticky;top:0;margin:24px var(--journal-gutter,24px) 0 0;padding:16px!important;overflow:visible!important;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);
+ }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>:is(.journal-gps-actions,.journal-gps-activity,.journal-trip-message) { grid-column:1/-1;margin-inline:var(--journal-gutter,24px)!important;padding-inline:0!important; }
+}
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-sidebar { height:auto!important;max-height:none!important;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);overflow:visible!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-sidebar>header { padding:16px!important;border-bottom:1px solid var(--line); }
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list { height:auto!important;max-height:none!important;min-height:calc(3 * 64px);overflow:visible!important;padding:0!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list .presence-stop { border-radius:0!important;border-width:0 0 1px!important;border-color:var(--line)!important;margin:0!important;padding:12px 16px!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list .presence-stop.is-selected { box-shadow:inset 3px 0 0 var(--accent)!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list .journal-stop-day { padding:12px 16px 4px!important;font-size:12px!important;color:var(--ink-dim);border-bottom:1px solid var(--line); }
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-stop-entry { padding-left:0!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-batch { position:sticky!important;bottom:0;z-index:6;border-top:1px solid var(--line);border-radius:0 0 var(--r-md,12px) var(--r-md,12px);background:var(--panel)!important;box-shadow:0 -8px 16px -12px rgba(0,0,0,.5); }
+html#dlight-ui[data-ui-system] .view .journal-trip-overview .journal-overview-map { border-radius:var(--r-sm,8px);overflow:hidden; }
+@media (max-width:760px){
+ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes { margin:16px 16px 8px; }
+ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { flex:1;min-width:0; }
+ html#dlight-ui[data-ui-system] .view .journal-trip-stops { padding-inline:12px; }
+}
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>.design-eyebrow { display:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>.tag { display:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-title>.unassigned-period { margin:2px 0 0!important;font:400 14px/22px var(--sans)!important;color:var(--ink-dim)!important; }
+/* Unlinked GPS record: one pinned action at the bottom of the overview. */
+html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned { position:sticky;bottom:0;z-index:7;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin:24px 0 0;padding:12px 16px;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);box-shadow:0 -8px 20px -14px rgba(0,0,0,.6); }
+html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned>.hint { margin:0;flex:1 1 280px; }
+html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned .gps-resolution-choices { display:flex;gap:8px;margin:0; }
+html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned [hidden] { display:none!important; }
+@media(max-width:760px){ html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned .gps-resolution-choices,html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned .gps-resolution-choices>button { width:100%; } }

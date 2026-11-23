@@ -18,6 +18,9 @@ export function metadataList(rows){
 }
 // Requests and trips carry a sequential number once the numbering migration is applied;
 // until then the short identifier keeps links readable.
-export const recordNumber=(record,id)=>record?.number!=null?String(record.number):String(id??record?.id??'').slice(0,8);
+const knownNumbers=new Map();
+// Lists loaded with select('*') register their numbers so cards and links that only hold an id stay consistent.
+export function rememberNumbers(rows){for(const row of rows||[])if(row?.id&&row.number!=null)knownNumbers.set(String(row.id),String(row.number));}
+export const recordNumber=(record,id)=>{const key=String(id??record?.id??'');return record?.number!=null?String(record.number):knownNumbers.get(key)||key.slice(0,8);};
 export const requestLabel=(record,id)=>'Заявка №'+recordNumber(record,id);
 export const tripLabel=(record,id)=>'Выезд №'+recordNumber(record,id);
