@@ -112,12 +112,9 @@ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>bu
  html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>:is(.journal-gps-actions,.journal-gps-activity,.journal-trip-message) { grid-column:1/-1;margin-inline:var(--journal-gutter,24px)!important;padding-inline:0!important; }
 }
 html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-sidebar { height:auto!important;max-height:none!important;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);overflow:visible!important; }
-html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-sidebar>header { padding:16px!important;border-bottom:1px solid var(--line); }
-html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list { height:auto!important;max-height:none!important;min-height:calc(3 * 64px);overflow:visible!important;padding:0!important; }
-html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list .presence-stop { border-radius:0!important;border-width:0 0 1px!important;border-color:var(--line)!important;margin:0!important;padding:8px 16px!important; }
-html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list .presence-stop.is-selected { box-shadow:inset 3px 0 0 var(--accent)!important; }
-html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list .journal-stop-day { padding:12px 16px 4px!important;font-size:12px!important;color:var(--ink-dim);border-bottom:1px solid var(--line); }
-html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-stop-entry { padding-left:0!important; }
+
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list { height:auto!important;max-height:none!important;min-height:calc(3 * 64px);overflow:visible!important;padding:0!important;margin:0!important; }
+
 html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open) .journal-trip-stops .presence-batch { position:sticky!important;bottom:0;z-index:6;border-top:1px solid var(--line);border-radius:0 0 var(--r-md,12px) var(--r-md,12px);background:var(--panel)!important;box-shadow:0 -8px 16px -12px rgba(0,0,0,.5); }
 html#dlight-ui[data-ui-system] .view .journal-trip-overview .journal-overview-map { border-radius:var(--r-sm,8px);overflow:hidden; }
 @media (max-width:760px){
@@ -204,3 +201,70 @@ html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeli
  html#dlight-ui[data-ui-system] .view .journal-trip-overview>.journal-timeline-host.journal-timeline-floating { margin:0 8px 22px;padding:8px 10px; }
  .journal-timeline-floating .journal-legend { font-size:10px;gap:4px 10px; }
 }
+
+/* Stop table (mockup v65): search, filter chips and count above a Стоянка / Длительность / Заявки table. */
+html#dlight-ui[data-ui-system] .view .presence-review-sidebar>.journal-stop-tools { display:grid!important;gap:10px;padding:16px!important;border-bottom:1px solid var(--line); }
+html#dlight-ui[data-ui-system] .view .journal-stop-tools input[type=search] { width:100%;margin:0!important; }
+html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips { display:flex!important;flex-wrap:nowrap;gap:6px;width:auto!important;max-width:100%;padding:0!important;border:0!important;background:none!important;overflow-x:auto;scrollbar-width:none; }
+html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips>button { flex:none!important;width:auto!important;min-width:0!important;display:inline-flex!important;align-items:center;padding:0 12px!important;border:1px solid var(--line)!important;background:transparent!important;color:var(--ink-dim)!important;font-size:13px!important;white-space:nowrap; }
+html#dlight-ui[data-ui-system] .view .journal-stop-tools .journal-stop-chips>button.on { background:var(--ink)!important;border-color:var(--ink)!important;color:var(--bg)!important; }
+.journal-stop-tools .ui-count { margin-left:4px;font:500 12px/1 var(--mono);opacity:.8; }
+.journal-stop-tools .ui-count:empty { display:none; }
+.journal-stop-tools .journal-stop-count-row { display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;font-size:12px;color:var(--ink-dim); }
+.journal-stop-tools .journal-stop-count-row>p { margin:0; }
+.journal-stop-tools .journal-stop-gaps { margin:0 0 0 auto!important;font-size:12px; }
+.journal-stop-table { width:100%;border-collapse:collapse;table-layout:fixed; }
+.journal-stop-table thead th { padding:8px 12px;border-bottom:1px solid var(--line);font:500 12px/18px var(--sans);color:var(--ink-dim);text-align:start; }
+.journal-stop-table thead th:nth-child(2) { width:118px; }
+.journal-stop-table thead th:nth-child(3) { width:104px; }
+.journal-stop-table thead th:last-child { width:56px; }
+.journal-stop-table tbody tr { border-bottom:1px solid var(--line); }
+.journal-stop-table tbody tr:last-child { border-bottom:0; }
+.journal-stop-table tbody :is(th,td) { padding:8px 12px;vertical-align:middle;font-weight:400;text-align:start;overflow:hidden; }
+.journal-stop-table .journal-stop-day { padding:10px 12px 4px!important;font:500 12px/18px var(--sans)!important;color:var(--ink-dim); }
+.journal-stop-table .presence-stop-entry.is-selected { box-shadow:inset 3px 0 0 var(--accent); }
+.journal-stop-table .presence-stop-entry.is-included { background:color-mix(in srgb,var(--accent) 8%,transparent); }
+.journal-stop-table .journal-stop-heading { display:flex;align-items:center;gap:10px;min-width:0; }
+.journal-stop-table .journal-stop-heading>input[type=checkbox],.journal-stop-table .journal-stop-check-gap { flex:none;width:20px;height:20px;margin:0; }
+.journal-stop-table .journal-stop-number { flex:none; }
+.journal-stop-table .journal-stop-copy { display:grid;gap:2px;flex:1;min-width:0; }
+html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop { display:block!important;width:100%;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;text-align:start;cursor:pointer; }
+html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop strong { display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:500 14px/22px var(--sans)!important;color:var(--ink);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--ink) 35%,transparent);text-underline-offset:3px; }
+.journal-stop-table .journal-stop-top { display:flex;flex-wrap:nowrap;align-items:center;gap:2px 10px;min-width:0;overflow:hidden;font-size:12px;line-height:18px; }
+.journal-stop-table .journal-stop-top>* { flex:none; }
+.journal-stop-table .journal-stop-top>.journal-stop-state { flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis; }
+.journal-stop-table .journal-stop-time { font-family:var(--mono);color:var(--ink-dim); }
+.journal-stop-table .journal-stop-state { display:inline-flex;align-items:center;gap:4px; }
+.journal-stop-table .journal-stop-state .journal-icon { width:13px;height:13px; }
+.journal-stop-table .journal-stop-warning { color:var(--warn,var(--accent)); }
+.journal-stop-table .journal-stop-location { flex:1 1 0!important;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;line-height:18px;color:var(--ink-dim); }
+.journal-stop-table .journal-stop-location::before { content:'· ';margin-right:2px; }
+html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop { display:flex!important;align-items:center; }
+.journal-stop-table .journal-mobile-request { display:none; }
+.journal-stop-table .journal-stop-duration { font:500 13px/20px var(--mono);white-space:nowrap; }
+.journal-stop-table .journal-stop-request { font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+html#dlight-ui[data-ui-system] .view .journal-stop-table .journal-stop-open .btn { display:inline-grid;place-items:center;width:40px;height:40px;min-width:40px;padding:0!important;border:1px solid var(--line)!important; }
+.journal-stop-table .journal-stop-open .journal-icon { width:16px;height:16px; }
+.presence-review-list>.journal-stop-empty { margin:0;padding:16px; }
+@media(max-width:760px){
+ .journal-stop-table { table-layout:auto; }
+ .journal-stop-table thead { display:none; }
+ .journal-stop-table tbody tr>th { max-width:0;width:100%; }
+ .journal-stop-table .journal-stop-request { display:none; }
+ .journal-stop-table .journal-mobile-request { display:inline; }
+ .journal-stop-table tbody :is(th,td) { padding:8px 8px; }
+ .journal-stop-table tbody tr>th { width:auto; }
+ .journal-stop-table .journal-stop-duration { width:76px;font-size:12px;text-align:end; }
+ .journal-stop-table .journal-stop-open { width:56px; }
+ html#dlight-ui[data-ui-system] .view .journal-stop-table .journal-stop-open .btn { width:48px;height:48px;min-width:48px; }
+ .journal-stop-tools .journal-stop-gaps { margin-left:0!important; }
+ .journal-stop-table .journal-stop-number,.journal-stop-table .journal-stop-check-gap { display:none; }
+ .journal-stop-table .journal-stop-heading { gap:8px; }
+ .journal-stop-table .journal-stop-state-text { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0); }
+}
+html#dlight-ui[data-ui-system] .view .journal-stop-table tr.presence-stop-entry { display:table-row!important;gap:0!important; }
+html#dlight-ui[data-ui-system] .view .journal-stop-chips>button.on .ui-count { color:inherit!important;background:none!important; }
+/* The stop name is the row's open control: it keeps the shared touch target (40 px, 48 px on touch screens). */
+html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop { min-height:40px!important; }
+@media (pointer:coarse),(max-width:760px){ html#dlight-ui[data-ui-system] .view .journal-stop-table .presence-stop { min-height:48px!important; } }
+html#dlight-ui[data-ui-system] .view .journal-stop-table tbody :is(th,td) { padding-block:4px; }
