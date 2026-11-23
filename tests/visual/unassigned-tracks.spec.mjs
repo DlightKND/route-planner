@@ -66,7 +66,7 @@ test('restores unlinked stop choices and carries the decision into the linked vi
  await page.locator('[data-pf=trip]').selectOption({index:1});
  await page.locator('[data-pf=reason]').fill('Поездку проверили');
  await page.locator('#promptYes').click();
- const transferred=page.locator('.journal-source-choices');
+ const transferred=page.locator('.journal-source-choices').filter({has:page.getByRole('heading',{name:'Выбор до привязки GPS',exact:true})});
  await expect(transferred).toContainText('Объект сверили с инженером');
  await transferred.getByRole('button',{name:'Проверить стоянку'}).click();
  await expect(page.locator('.journal-review-note')).toHaveValue('Объект сверили с инженером');
