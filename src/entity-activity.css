@@ -21,7 +21,7 @@
 .entity-activity .activity-meta { display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 14px;margin:0 0 4px;font-size:12px;line-height:18px;color:var(--ink-dim); }
 .entity-activity .activity-meta strong { font-size:13px;font-weight:500;color:var(--ink); }
 .entity-activity .activity-meta .activity-type { margin:0;font-size:12px; }
-.entity-activity .activity-pin { margin-left:auto;width:32px;height:32px;min-width:32px;min-height:32px;padding:0;align-self:center; }
+.entity-activity .activity-pin { margin:-13px 0 -13px auto;width:44px;height:44px;min-width:44px;padding:0;align-self:center; }
 .entity-activity .activity-body { margin:0;font:400 14px/22px var(--sans);color:var(--ink);overflow-wrap:anywhere; }
 .entity-activity .is-event .activity-body,.entity-activity .is-photo .activity-body,.entity-activity .is-decision .activity-body { font-size:13px;color:var(--ink-dim); }
 .entity-activity .activity-result-subject { font-weight:500; }

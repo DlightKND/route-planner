@@ -219,7 +219,7 @@ export function createUnassignedTracks(ctx){
   sourceTabs.className='journal-trip-tabs seg';sourceTabs.setAttribute('role','group');sourceTabs.setAttribute('aria-label','Разделы GPS-записи');
   sourceTabs.innerHTML='<button type="button" data-orphan-pane="stops">Обзор</button><button type="button" data-orphan-pane="route">Дорога</button><button type="button" data-orphan-pane="documents">Данные</button>';
   sourceHead.append(sourceTabs);
-  frameGpsRecordHead(sourceHead,{back:()=>sourceHead.querySelector('[data-ut-back]')?.click(),linkLabel:r.trip_id?tripLabel(null,r.trip_id):'Без выезда',openLink:r.trip_id&&ctx.openTrip?()=>ctx.openTrip(r.trip_id):null,source:'GPS · '+vehicleName(r.vehicle_id),status:r.state==='linked'||r.trip_id?'Связана с выездом':r.state==='charged'?'Списание инженеру':r.state==='recording'?'Идёт запись':'Без выезда'});
+  frameGpsRecordHead(sourceHead,{back:()=>sourceHead.querySelector('[data-ut-back]')?.click(),linkLabel:r.trip_id?tripLabel(null,r.trip_id):'Без выезда',linkHref:r.trip_id?'#/trip/'+encodeURIComponent(r.trip_id):'',openLink:r.trip_id&&ctx.openTrip?()=>ctx.openTrip(r.trip_id):null,source:'GPS · '+vehicleName(r.vehicle_id),status:r.state==='linked'||r.trip_id?'Связана с выездом':r.state==='charged'?'Списание инженеру':r.state==='recording'?'Идёт запись':'Без выезда'});
   const stays=observedSourceStops(parts);
   const overview=document.createElement('section');overview.className='journal-orphan-overview';
   for(const node of [...box.children])if(!node.matches('.gps-back,.gps-detail-head'))overview.append(node);

@@ -20,12 +20,12 @@ async function capture(page,info,name,errors){
 }
 test('design state: assignment timeline and explicit independent composer',async({page},info)=>{
  const errors=await start(page,info,'order/'+fixtureIDs.activeOrder);await page.locator('#orderTab-overview').click();
- const activity=page.locator('#orderActivity');await expect(activity.locator('.activity-entry')).toHaveCount(7);
- await expect(activity.getByRole('heading',{name:'Комментарии и события'})).toBeVisible();await expect(activity.locator('textarea')).toBeHidden();
+ const activity=page.locator('#orderActivity');await expect(activity.locator('.activity-entry')).toHaveCount(5);await expect(activity.locator('[data-activity-more]')).toHaveText('Показать ещё · 2');
+ await expect(activity.getByRole('heading',{name:'Комментарии и события'})).toBeVisible();await expect(activity.locator('textarea')).toBeVisible();
  await capture(page,info,'assignment-timeline',errors);
- await activity.locator('[data-activity-filter=result]').click();await expect(activity.locator('.is-result')).toHaveCount(1);await expect(activity.locator('.is-comment')).toHaveCount(0);
+ await activity.locator('[data-activity-more]').click();await expect(activity.locator('.activity-entry')).toHaveCount(7);await expect(activity.locator('.is-result')).toHaveCount(1);
  await activity.locator('[data-activity-open-result]').click();await expect(page.locator('#orderPane-scope')).toBeVisible();
- await page.locator('#orderTab-overview').click();await activity.locator('[data-activity-compose]').click();await activity.locator('textarea').fill('Черновик комментария');
+ await page.locator('#orderTab-overview').click();await activity.locator('textarea').fill('Черновик комментария');
  await page.locator('#orderTab-travel').click();await page.locator('#orderTab-overview').click();await expect(activity.locator('textarea')).toHaveValue('Черновик комментария');
  expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
 });

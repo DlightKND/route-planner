@@ -47,8 +47,8 @@ html#dlight-ui[data-ui-system] .view.workflow-card :is(#requestContext) dd { fon
 .view-trip[data-saved-trip] #tripOrderParent { display:none!important; }
 .view-trip[data-saved-trip] .workflow-trip-edit[open] { margin-top:24px; }
 /* Saved task: planned composition opens from ⋯ («Плановые данные …»), not as a stray heading under the works. */
-#orderEditor[data-saved-task] :is(.workspace-composition-editor,.workspace-organization-editor):not([open]) { display:none!important; }
-#orderEditor[data-saved-task] .order-grid:not(:has(>:not(:is(.workspace-composition-editor,.workspace-organization-editor):not([open])))) { display:none!important; }
+#orderEditor[data-saved-task] .workspace-composition-editor:not([open]) { display:none!important; }
+#orderEditor[data-saved-task] .order-grid:not(:has(>:not(.workspace-composition-editor:not([open])))) { display:none!important; }
 
 /* Plan/fact: collapsible cards with a header row and full-bleed tables, as in the mockup. */
 html#dlight-ui[data-ui-system] .scoped-finance :is(.scoped-finance-work-column>details,.scoped-finance-work) { padding:0!important;overflow:hidden; }
@@ -68,7 +68,7 @@ html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-details>details .
 html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-details>details>.hint { padding:0 8px;margin:0 0 8px; }
 html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-note { margin:12px 0 0;font-size:12px;line-height:18px; }
 .scoped-finance-work-column>details .scoped-finance-scroll { margin:0; }
-html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-trip-link { min-height:0!important;padding:0!important;border:0!important;background:transparent!important;color:var(--ink)!important;font:500 14px/22px var(--sans)!important;text-decoration:underline;text-underline-offset:3px; }
+html#dlight-ui[data-ui-system] .scoped-finance .scoped-finance-trip-link { padding-inline:0!important;border:0!important;background:transparent!important;color:var(--ink)!important;text-decoration:underline;text-underline-offset:3px; }
 html#dlight-ui[data-ui-system] .scoped-finance th small.hint { color:var(--ink-dim); }
 html#dlight-ui[data-ui-system] .scoped-finance { margin:0 0 var(--sp-5)!important; }
 html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle] { width:40px;height:40px;min-width:40px;padding:0;border:1px solid var(--line)!important;border-radius:var(--r-sm,8px); }
@@ -78,7 +78,7 @@ html#dlight-ui[data-ui-system] .scoped-finance [data-finance-work-toggle][aria-e
 
 /* GPS record (mockup v65): crumbs and facts in the header, tabs underneath, list and map as two equal cards,
    the stop list keeps its natural height and the selection bar stays pinned while the page scrolls. */
-html#dlight-ui[data-ui-system] .view :is(.journal-trip-detail>.journal-trip-head,.journal-trip-head:has(>.workflow-gps-crumbs)) { display:block!important;position:relative;padding:16px var(--journal-gutter,24px) 0!important;border-bottom:1px solid var(--line)!important; }
+html#dlight-ui[data-ui-system] .view :is(.journal-trip-detail:not(.journal-stop-open)>.journal-trip-head,:not(.journal-stop-open)>.journal-trip-head:has(>.workflow-gps-crumbs)) { display:block!important;position:relative;padding:16px var(--journal-gutter,24px) 0!important;border-bottom:1px solid var(--line)!important; }
 .journal-trip-head .workflow-gps-crumbs { display:flex;align-items:center;gap:12px;min-height:44px;margin-bottom:16px; }
 html#dlight-ui[data-ui-system] .view .journal-trip-head .workflow-gps-crumbs>.gps-back { display:inline-grid!important;place-items:center;width:44px;height:44px;min-width:44px;padding:0!important;margin:0!important;border:1px solid var(--line)!important;border-radius:var(--r-sm,8px)!important;background:transparent!important; }
 .journal-trip-head .workflow-gps-crumb { font-size:12px;color:var(--ink-dim); }
@@ -97,15 +97,15 @@ html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workf
 html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs>button.on { color:var(--ink)!important;border-bottom-color:var(--accent)!important; }
 .journal-trip-detail>.journal-list-modes[hidden] { display:none!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes { display:flex!important;width:max-content;max-width:100%;margin:24px 0 12px var(--journal-gutter,24px); }
-html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { min-width:112px;min-height:36px!important;height:36px;padding:0 16px!important;font-size:13px!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { min-width:112px;padding:0 16px!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button.on { background:var(--ink)!important;color:var(--bg)!important; }
 @media (min-width:761px) {
  html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open) {
-  grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-template-rows:none!important;grid-auto-rows:auto;align-content:start;column-gap:24px;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-template-rows:none!important;grid-auto-rows:max-content!important;align-content:start;column-gap:24px;
  }
  html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-head { grid-column:1/-1;grid-row:1; }
  html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-list-modes { grid-column:1;grid-row:2; }
- html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-stops { grid-column:1;grid-row:3;margin-left:var(--journal-gutter,24px);min-height:0; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-stops { grid-column:1;grid-row:3;margin-left:var(--journal-gutter,24px);min-height:min-content!important; }
  html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-overview {
   grid-column:2;grid-row:2 / span 2;align-self:start;position:sticky;top:0;margin:24px var(--journal-gutter,24px) 0 0;padding:16px!important;overflow:visible!important;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);
  }
@@ -114,11 +114,11 @@ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>bu
 html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-sidebar { height:auto!important;max-height:none!important;border:1px solid var(--line);border-radius:var(--r-md,12px);background:var(--panel);overflow:visible!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-sidebar>header { padding:16px!important;border-bottom:1px solid var(--line); }
 html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list { height:auto!important;max-height:none!important;min-height:calc(3 * 64px);overflow:visible!important;padding:0!important; }
-html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list .presence-stop { border-radius:0!important;border-width:0 0 1px!important;border-color:var(--line)!important;margin:0!important;padding:12px 16px!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list .presence-stop { border-radius:0!important;border-width:0 0 1px!important;border-color:var(--line)!important;margin:0!important;padding:8px 16px!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list .presence-stop.is-selected { box-shadow:inset 3px 0 0 var(--accent)!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-list .journal-stop-day { padding:12px 16px 4px!important;font-size:12px!important;color:var(--ink-dim);border-bottom:1px solid var(--line); }
 html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-stop-entry { padding-left:0!important; }
-html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-batch { position:sticky!important;bottom:0;z-index:6;border-top:1px solid var(--line);border-radius:0 0 var(--r-md,12px) var(--r-md,12px);background:var(--panel)!important;box-shadow:0 -8px 16px -12px rgba(0,0,0,.5); }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open) .journal-trip-stops .presence-batch { position:sticky!important;bottom:0;z-index:6;border-top:1px solid var(--line);border-radius:0 0 var(--r-md,12px) var(--r-md,12px);background:var(--panel)!important;box-shadow:0 -8px 16px -12px rgba(0,0,0,.5); }
 html#dlight-ui[data-ui-system] .view .journal-trip-overview .journal-overview-map { border-radius:var(--r-sm,8px);overflow:hidden; }
 @media (max-width:760px){
  html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes { margin:16px 16px 8px; }
@@ -134,3 +134,37 @@ html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned>.
 html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned .gps-resolution-choices { display:flex;gap:8px;margin:0; }
 html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned [hidden] { display:none!important; }
 @media(max-width:760px){ html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned .gps-resolution-choices,html#dlight-ui[data-ui-system] .view .gps-resolution-entry.workflow-gps-pinned .gps-resolution-choices>button { width:100%; } }
+
+/* Trip overview route card: one card inset, map and points flush with the card content, left-aligned table. */
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card { padding:0!important;overflow:hidden; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>.workflow-route-head { padding:16px!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>#tpMapWrap,
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>.wb-route-actions { margin-inline:16px!important;width:auto!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>.wb-route-actions { padding:12px 0 16px!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>.workflow-route-points { margin:0!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview .workflow-route-points :is(th,td) { text-align:start!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview .workflow-route-points :is(th,td):last-child { text-align:end!important;white-space:nowrap; }
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-route-card>#tpRemainingInfo:empty { display:none; }
+/* Linked task and trip tables: row actions are visible secondary buttons, as in the mockup. */
+html#dlight-ui[data-ui-system] .view.workflow-card .workflow-related-table td .btn.ghost:not([data-related-expand]):not([aria-controls]) { border:1px solid var(--line)!important;padding-inline:16px!important; }
+@media(min-width:761px){
+ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview { grid-template-areas:"route state" "route payment" "route details";grid-template-rows:auto auto 1fr; }
+ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.entity-payment-terms { grid-area:payment;margin:0!important; }
+}
+html#dlight-ui[data-ui-system] .view :is(a.workflow-request-link,a.workflow-crumb-link) { color:var(--ink)!important;text-decoration:underline;text-underline-offset:3px;font-weight:500; }
+html#dlight-ui[data-ui-system] .view a.workflow-crumb-link { font-size:12px;margin-left:12px; }
+/* Remaining contract tools (request estimate, contract sums, cost allocation) read as collapsible cards. */
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview) { margin:0 0 16px!important;padding:0!important;border:1px solid var(--line)!important;border-radius:var(--r-md,12px)!important;background:var(--panel)!important;overflow:hidden; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)>summary { display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;padding:12px 16px!important;font:600 18px/26px var(--sans)!important;list-style:none;cursor:pointer; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)>summary::-webkit-details-marker { display:none; }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)>summary::after { content:'';flex:none;width:7px;height:7px;margin:0 4px 4px auto;border-right:1.5px solid var(--ink-dim);border-bottom:1.5px solid var(--ink-dim);transform:rotate(45deg); }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)[open]>summary { border-bottom:1px solid var(--line); }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)[open]>summary::after { margin:4px 4px 0 auto;transform:rotate(-135deg); }
+html#dlight-ui[data-ui-system] .view.workflow-card :is(#jobBaseEstimate,#tpContractEconomy,#tpCostReview)>:not(summary) { margin:16px!important; }
+html#dlight-ui[data-ui-system] .view.workflow-card #jobEstimateLock { margin:16px 16px 0!important;color:var(--warn,var(--ink-dim)); }
+/* The stop column grows with its content; the record page scrolls instead of clipping the list. */
+html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open)>.journal-trip-stops,
+html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open)>.journal-trip-stops>.presence-review-workspace { height:auto!important;max-height:none!important;overflow:visible!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail:not(.journal-stop-open)>.journal-trip-stops .presence-review-sidebar { height:auto!important;flex:none!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { height:40px!important;min-height:40px!important; }
+@media (pointer:coarse),(max-width:760px){ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-list-modes>button { height:48px!important;min-height:48px!important; } }

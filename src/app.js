@@ -3892,7 +3892,6 @@ function configureEntityActions(kind,record){
    {label:'Проложить маршрут к объекту',hidden:!jobNavUrl(),onSelect:()=>window.open(jobNavUrl(),'_blank','noopener')},
    {label:'График работ',hidden:!id,onSelect:()=>switchTab('schedule')},
    {label:'Передать ответственность',hidden:!id,onSelect:()=>panel('Ответственность',$('jobResponsibilitySection'))},
-   {label:'Смета заявки',hidden:!id,onSelect:()=>{const d=$('jobBaseEstimate');d.open=true;panel('Смета заявки',d);}},
    {label:'Фото и вложения',hidden:!id,onSelect:()=>panel('Фото и вложения',document.querySelector('.job-photos'))},
    {label:'Согласования и правки',hidden:!id,onSelect:()=>panel('Согласования и правки',$('jbFixCard'))},
    {label:$('jobPrimary').textContent||'Изменить стадию заявки',hidden:$('jobFoot').dataset.available!=='true',onSelect:()=>$('jobPrimary').click()},
@@ -3906,8 +3905,6 @@ function configureEntityActions(kind,record){
    {label:'Передать ответственность',hidden:!id,onSelect:()=>panel('Ответственность',$('tripResponsibilitySection'))},
    {label:canWriteTrip(record)?'Изменить даты выезда':'Запросить перенос',hidden:!id||!['planned','assigned'].includes(record.status),onSelect:()=>openReschedModal(id)},
    {label:'Проверка и версия выезда',hidden:!id,onSelect:()=>panel('Проверка выезда',$('tripTechnicalDetails'))},
-   {label:'Распределение затрат по заданиям',hidden:!id,onSelect:()=>openTripCostReview(trigger)},
-   {label:'Договорная смета и ручные суммы',hidden:!id,onSelect:()=>{const d=$('tpContractEconomy');d.open=true;panel('Договорная смета и ручные суммы',d);}},
    {label:'Подтвердить выезд',hidden:record?.status!=='finished'||!canWriteTrip(record),onSelect:async()=>{if(await leaveTripEditor()){await tripAction(id,'confirm');await openTrip(id);}}},
    {label:'Редактировать маршрут на карте',hidden:!id||!canWriteTrip(record),onSelect:()=>showTripOnMap(id,{editing:true})},
    {label:$('tpKmCalc')?.textContent||'Свести пробег по треку',hidden:!id||!canWriteTrip(record),onSelect:()=>$('tpKmCalc')?.click()},
@@ -3976,10 +3973,10 @@ async function loadCardPayment(scope,id,anchor,currentId){
     }).catch(()=>{});
   }catch(error){if(current()){host.hidden=false;host.textContent=error.message||'Условия оплаты недоступны';}}
 }
-// Cost allocation is a rare correction: it opens over the plan/fact instead of living under it.
-function openTripCostReview(trigger){
+// Cost allocation stays a collapsible card under the plan/fact; actions open and focus it.
+function openTripCostReview(){
   const detail=$('tpCostReview');if(!detail)return;detail.dataset.requested='';detail.open=true;
-  if(!detail.closest('dialog[open]'))openEntityPanel({title:'Распределение затрат по заданиям',panel:detail,trigger,confirmDiscard:()=>confirmDialog('Закрыть без сохранения изменений?',{okText:'Закрыть',cancelText:'Продолжить ввод'})});
+  detail.querySelector('summary')?.focus({preventScroll:true});detail.scrollIntoView?.({block:'start'});
 }
 function mountCardFinance(scope,id,pane,currentId){
   const hostId=scope+'ScopedFinance';$(hostId)?.remove();
@@ -4000,7 +3997,7 @@ function mountCardFinance(scope,id,pane,currentId){
     },
     onAllocate:async row=>{
       if(scope==='job')await openTrip(row.id,{pane:'economy'});
-      if(tripEditId===row.id&&$('tpCostReview'))openTripCostReview(document.activeElement);
+      if(tripEditId===row.id&&$('tpCostReview'))openTripCostReview();
     },
     onTrip:row=>scope==='trip'?openJournalTrip(row.id,{pane:'route'}):openTrip(row.id,{pane:'economy'}),
     onGPS:trip=>openJournalTrip(trip,{pane:'route'}),
@@ -5962,7 +5959,7 @@ function renderTripReviewSummary(){
  if(state)setOverviewState($('tripOverviewState'),...state);
  const states=[['Выезд',ST_TRIP[t.status]||t.status,t.status==='done'?'confirmed':'neutral','plan','tpReviewPlan','Открыть план'],['Присутствие',presence,pending?'pending':approved?'confirmed':'neutral','presence','tpReviewPresence','Открыть присутствие'],['Распределение затрат',tripCostReviewState,tripCostReviewState==='подтверждены'?'confirmed':'pending','economy','tpReviewCosts',canWriteTrip()?'Сверить затраты':'Открыть затраты'],['Выполнение заданий',tasks.length?'Принято '+accepted+' из '+tasks.length+' заданий':'Задания не добавлены',tasks.length&&accepted===tasks.length?'confirmed':'neutral','plan','tpReviewTasks','Открыть задания']];
  box.innerHTML='<h3 class="trip-review-heading">Проверка выезда</h3><div class="trip-review-grid">'+states.map(([label,value,state,pane,id,action])=>'<button type="button" class="trip-review-item" id="'+id+'" data-review-state="'+state+'" data-review-pane="'+pane+'"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong><small>'+esc(action)+' →</small></button>').join('')+'</div>';
- box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{button.closest('dialog[open]')?.close();if(button.id==='tpReviewPresence'){openJournalTrip(t.id);return;}setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewCosts'){openTripCostReview(button);}if(button.id==='tpReviewTasks')$('tpLinkedOrders')?.scrollIntoView({block:'start'});});
+ box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{button.closest('dialog[open]')?.close();if(button.id==='tpReviewPresence'){openJournalTrip(t.id);return;}setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewCosts'){openTripCostReview();}if(button.id==='tpReviewTasks')$('tpLinkedOrders')?.scrollIntoView({block:'start'});});
 }
 function listLoadError(box,error,retry){box.className='';box.innerHTML='<p class="err" role="alert">Не удалось загрузить данные: '+esc(error.message)+'</p><button type="button" class="btn sm" data-list-retry>Повторить загрузку</button>';box.querySelector('[data-list-retry]').onclick=retry;}
 async function loadWorkbench(id){
@@ -6268,7 +6265,7 @@ async function openTrip(id,{includeOrderId=null,plannedOrderIds=[],seedOrder=nul
     $('tripMore').before(edit);edit.onclick=openTripPlanFields;
   }
   edit.hidden=!id||ro;
-  document.querySelector('.view-trip')?.toggleAttribute('data-saved-trip',!!id);
+  document.querySelector('.view-trip')?.toggleAttribute('data-saved-trip',!!id&&!ro);
   if(includeOrderId){const order=tripOrdersAll.find(o=>o.id===includeOrderId);if(!t||!canWriteTrip(t)||!['planned','assigned'].includes(t.status)||!order||['completed','cancelled','review'].includes(order.status)){notify('Задание нельзя добавить в этот план выезда.','warn');}else if(curTripOrders.has(includeOrderId)){notify('Задание уже включено в выезд.');}else{curTripOrders.add(includeOrderId);syncTripJobsFromOrders();syncRouteStops();resetTripRoute();renderRouteStops();renderTripJobs();tripPlanDirty=true;notify('Задание добавлено в план. Проверь команду и маршрут, затем сохрани выезд.');}}
   renderTripReviewSummary();void loadCardPayment('trip',id,$('tripOverviewState'),()=>tripEditId);const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
 // Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
@@ -6311,7 +6308,7 @@ function tripHead(){
   stage.textContent=status?status[0].toUpperCase()+status.slice(1):'';
   stage.hidden=!tripEditId;
   const vehicle=veh?veh.name+(veh.plate?' · '+veh.plate:''):'Автомобиль не выбран';
-  const tripDue=[...curTripOrders].map(oid=>tripOrdersAll.find(o=>o.id===oid)?.job_id).map(jid=>jobs.find(j=>j.id===jid)?.due_date).filter(Boolean).sort()[0];
+  const tripDue=[...curTripOrders].map(oid=>tripOrdersAll.find(o=>o.id===oid)).map(o=>o?.jobs?.due_date||jobs.find(j=>j.id===o?.job_id)?.due_date).filter(Boolean).sort()[0];
   $('tripSub').innerHTML='<p class="workflow-subject">'+esc(vehicle)+'</p>'+metadataList([tripDue&&['SLA · выполнить до',metaDate(tripDue)],['Плановые даты',metaPeriod($('tpFrom').value,$('tpTo').value)],['Команда',crewLabel(engs),engs.join(', ')]]);
   $('tripOverviewDescription').textContent=$('tpNotes').value.trim()||'Описание не указано.';
   $('tripHeadEcon').hidden=!canWriteTrip();

@@ -36,16 +36,12 @@ for(const role of ['admin','logist','engineer'])test(`${role}: cumulative result
   const composer=()=>page.locator('#orderActivity textarea[name="body"]');
 
   // A comment has its own draft and must not dirty the task's operational form.
-  await activity.locator('[data-activity-compose]').click();
   await composer().fill(draft);
   await expect(page.locator('#orderSaveState')).toHaveText('Сохранено');
   await page.locator('#orderTab-scope').click();
   await page.locator('#orderTab-overview').click();
   await expect(composer()).toHaveValue(draft);
-  await activity.locator('[data-activity-filter="event"]').click();
-  await expect(activity.locator('.entity-activity-feed .is-comment')).toHaveCount(0);
   await expect(activity.locator('.entity-activity-feed .is-event').first()).toBeVisible();
-  await activity.locator('[data-activity-filter="all"]').click();
   expect(await page.evaluate(()=>window.__visualQA.entityWrites)).toEqual([]);
 
   // Enter totals, then close the modal and change sections before reopening it.
@@ -74,12 +70,9 @@ for(const role of ['admin','logist','engineer'])test(`${role}: cumulative result
 
   // Saving produces a typed event with a cumulative snapshot, never a text comment.
   await page.locator('#orderTab-overview').click();
-  await page.locator('#orderActivity [data-activity-filter="result"]').click();
   const resultEntry=page.locator('#orderActivity .entity-activity-feed .is-result').filter({hasText:note});
   await expect(resultEntry).toHaveCount(1);await expect(resultEntry).toContainText('3 / 6 ч');
   await expect(resultEntry).toContainText('Выполнено 05.10.2026');
-  await expect(page.locator('#orderActivity .entity-activity-feed .is-comment')).toHaveCount(0);
-  await expect(page.locator('#orderActivity .entity-activity-feed .is-event')).toHaveCount(0);
   await expect(composer()).toHaveValue(draft);await expect(page.locator('#orderSaveState')).toHaveText('Сохранено');
   const afterResult=await page.evaluate(()=>window.__visualQA);
   const saved=afterResult.entityWrites.filter(w=>w.name==='service_order_record_result');
@@ -93,18 +86,17 @@ for(const role of ['admin','logist','engineer'])test(`${role}: cumulative result
   await picture(page,info,role+'-saved-result-feed');
 
   // Posting and pinning are independent from result saving and preserve authorship.
-  await page.locator('#orderActivity [data-activity-filter="all"]').click();
   await page.locator('#orderActivity form button[type="submit"]').click();
   await expect(page.locator('#orderActivity form [role="status"]')).toHaveText('Комментарий добавлен.');
   await expect(composer()).toHaveValue('');
   const comment=page.locator('#orderActivity .entity-activity-feed .is-comment').filter({hasText:draft});
   await expect(comment).toHaveCount(1);
-  await expect(comment.locator('header')).toContainText(role==='engineer'?'Анна Смирнова':'Демо · диспетчер');
+  await expect(comment.locator('.activity-meta')).toContainText(role==='engineer'?'Анна Смирнова':'Демо · диспетчер');
   await expect(page.locator('#orderSaveState')).toHaveText('Сохранено');
   if(role==='engineer'){
     await expect(page.locator('#orderActivity [data-pin]')).toHaveCount(0);
   }else{
-    const pin=comment.locator('[data-pin]'),header=comment.locator('header');
+    const pin=comment.locator('[data-pin]'),header=comment.locator('.activity-meta');
     const pinBox=await pin.boundingBox(),headerBox=await header.boundingBox();
     expect(pinBox.width).toBeGreaterThanOrEqual(44);expect(pinBox.height).toBeGreaterThanOrEqual(44);
     expect(pinBox.y).toBeLessThanOrEqual(headerBox.y+1);

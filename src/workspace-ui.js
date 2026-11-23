@@ -104,7 +104,7 @@ export function installWorkspaceStructure(root=document){
  if(job){
   const estimate=root.getElementById('jobEstimatePane'),base=element(root,'details','request-estimate-base workflow-finance-tool'),heading=element(root,'header','workspace-section-head');
   heading.innerHTML='<h2>План/факт заявки</h2>';
-  base.id='jobBaseEstimate';base.open=true;base.hidden=true;
+  base.id='jobBaseEstimate';base.open=true;
   base.innerHTML='<summary>Смета заявки</summary><p class="hint" id="jobEstimateLock" hidden></p>';const lines=element(root,'div','request-estimate-lines');for(const card of [...estimate.querySelectorAll(':scope>.card')])lines.append(card);base.append(lines,root.getElementById('jobHeadEcon'));
   const cost=element(root,'section','workflow-request-cost');cost.id='jobTaskCosts';
   estimate.append(heading,cost,base);
@@ -136,10 +136,10 @@ export function installWorkspaceStructure(root=document){
   overview.prepend(grid);grid.append(route,state,details);
   const toolbar=trip.querySelector('.trip-toolbar');
   const economy=root.getElementById('tpEconomyPane'),legacy=element(root,'details','workflow-finance-tool');
-  legacy.id='tpContractEconomy';legacy.open=true;legacy.hidden=true;legacy.innerHTML='<summary>Договорная смета и ручные суммы</summary>';
+  legacy.id='tpContractEconomy';legacy.open=true;legacy.innerHTML='<summary>Договорная смета и ручные суммы</summary>';
   const oldEconomy=root.getElementById('tpEconBody').closest('.card'),oldSummary=root.getElementById('tripHeadEcon');
   economy.append(legacy);legacy.append(oldSummary,oldEconomy);
-  const allocation=element(root,'details','workflow-finance-tool');allocation.id='tpCostReview';allocation.hidden=true;
+  const allocation=element(root,'details','workflow-finance-tool');allocation.id='tpCostReview';
   allocation.innerHTML='<summary>Распределение затрат по заданиям</summary>';
   allocation.append(root.getElementById('tpTripAllocation'));economy.append(allocation);
   economy.prepend(root.getElementById('tpReviewSummary'));
@@ -315,10 +315,12 @@ export function frameOrderWorkspace({record,editable,people},root=document){
   controls.prepend(button);
   const origin=root.getElementById('orderRequest');
   if(origin){
-   const label=requestLabel(record.jobs,record.job_id);
-   origin.className='link workflow-request-link';origin.textContent=label+(record.jobs?.clients?.name?' · '+record.jobs.clients.name:'');
-   const crumbLink=element(doc,'button','link workflow-crumb-link');crumbLink.type='button';crumbLink.textContent=label;crumbLink.onclick=()=>origin.click();breadcrumb.after(crumbLink);
-   const line=element(doc,'p','workflow-request-origin');line.append(origin);root.getElementById('orderBrief').append(line);
+   // Text links (mockup v65); the hidden original button keeps the leave-and-open guard.
+   const label=requestLabel(record.jobs,record.job_id),href='#/job/'+encodeURIComponent(record.job_id);
+   const link=(className,text)=>{const a=element(doc,'a',className);a.href=href;a.textContent=text;a.onclick=event=>{event.preventDefault();origin.click();};return a;};
+   origin.hidden=true;
+   breadcrumb.after(link('workflow-crumb-link',label));
+   const line=element(doc,'p','workflow-request-origin');line.append(link('workflow-request-link',label+(record.jobs?.clients?.name?' · '+record.jobs.clients.name:'')),origin);root.getElementById('orderBrief').append(line);
   }
  }
  crumbs.append(controls);
