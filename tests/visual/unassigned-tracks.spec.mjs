@@ -129,6 +129,31 @@ test('links extra GPS evidence to a completed trip as a separate journal record'
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize().width+1);
  await clean(page);
 });
+test('previews and confirms supplemental GPS accounting while keeping an odometer reading',async({page},info)=>{
+ await open(page,info,'admin',1,'supplement-accounting');await openOrphanOverview(page);
+ await page.getByRole('button',{name:'Связать с выездом',exact:true}).click();
+ const prompt=page.locator('#promptOverlay');
+ await prompt.locator('[data-pf=trip]').selectOption({index:1});
+ await prompt.locator('[data-pf=reason]').fill('Уточнение данных поездки');
+ await page.locator('#promptYes').click();
+ const apply=page.getByRole('button',{name:'Проверить и учесть GPS'});
+ await apply.click();
+ const preview=page.locator('#confirmOverlay');
+ await expect(preview).toContainText('Добавится GPS-точек: 2');
+ await expect(preview).toContainText('Показание одометра останется фактом');
+ await expect(preview).toContainText('Точек за пределами выезда в архиве: 1');
+ await page.locator('#confirmNo').click();
+ expect(await page.evaluate(()=>window.__visualQA.supplementWrites)).toEqual([]);
+ await apply.click();
+ await page.locator('#confirmYes').click();
+ await expect(page.locator('.journal-trip-route')).toBeVisible();
+ expect(await page.evaluate(()=>window.__visualQA.supplementWrites.length)).toBe(1);
+ await page.locator('[data-journal-pane=documents]').click();
+ await page.locator('.journal-trip-documents').getByRole('link',{name:/Запись №/}).click();
+ await expect(page.locator('.gps-supplement-note')).toContainText('Запись учтена в основном треке');
+ await expect(apply).toHaveCount(0);
+ await clean(page);
+});
 test('prepares a road cut before GPS linking and applies it with the trip road editor',async({page},info)=>{
  await open(page,info,'admin',1,'road-draft');await openOrphanOverview(page);
  await page.getByRole('button',{name:'Дорога',exact:true}).click();

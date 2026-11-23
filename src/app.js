@@ -119,7 +119,7 @@ const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,ro
 });
 const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,
  onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state)=>routeSet(journalRecordRoute(id,state)),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
- ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',trackMaxSpeed:()=>appSettings.track_max_kmh,prompt:promptDialog,confirm:confirmDialog,notify,openTrip,
+ ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',trackMaxSpeed:()=>appSettings.track_max_kmh,prompt:promptDialog,confirm:confirmDialog,notify,openTrip,applySupplement:applyGpsSupplement,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
 
 const plannerWorkspace=createPlannerWorkspace({host:()=>document.getElementById('canonicalPlannerHost'),db:()=>sb,
@@ -7940,7 +7940,11 @@ async function recalculateFactTrack(tid,{replaceOdometer=false}={}){
 async function measureTripKm(tid){
   const requestedUser=session?.user?.id;
   const {data:context,error:contextError}=await sb.rpc('trip_track_rebuild_context',{p_trip:tid});if(contextError)throw contextError;
-  const raw=(await loadTripPositions(tid,null,context.source_to)).filter(p=>p.lat!=null&&p.lng!=null);
+  const raw=await loadTripPositions(tid,null,context.source_to);
+  return measureTrackSnapshot(context,raw,requestedUser);
+}
+async function measureTrackSnapshot(context,points,requestedUser){
+  const raw=points.filter(p=>p.lat!=null&&p.lng!=null);
   if(raw.length<2) return {ok:false,why:'трека нет'};
 
   const t=context.trip;
@@ -7962,6 +7966,41 @@ async function measureTripKm(tid){
   const fact=validatedTrackFact(m);
   if(!fact)return {ok:false,why:'Некорректный итог проверки пробега',measure:m};
   return {ok:true,...fact,measure:m};
+}
+
+async function applyGpsSupplement(trackId,tripId){
+ const user=session?.user?.id;
+ let measured,context;
+ try{
+  busy('Читаю основную и дополнительную GPS-записи…');
+  const {data,error}=await sb.rpc('gps_supplement_preview',{p_track:trackId,p_trip:tripId});
+  if(error)throw error;
+  if(data.already)return {already:true};
+  context=data;
+  const points=await loadTripPositions(tripId,null,context.source_to);
+  if(user!==session?.user?.id)return null;
+  measured=await measureTrackSnapshot(context,[...points,...context.extra],user);
+  if(!measured.ok)throw Error(measured.why);
+ }finally{busyDone();}
+ if(user!==session?.user?.id)return null;
+ const odometer=context.trip.fact_km_source==='odometer',format=km=>km==null?'не сведён':Number(km).toLocaleString('ru-RU',{maximumFractionDigits:1})+' км';
+ const review=['Добавится GPS-точек: '+context.extra.length+'.',
+  'Факт-пробег сейчас: '+format(context.trip.fact_km)+'.',
+  'Пробег объединённого трека: '+format(measured.km)+'.',
+  odometer?'Показание одометра останется фактом.':'Проверенный пробег станет фактом выезда.'];
+ if(context.outside)review.push('Точек за пределами выезда в архиве: '+context.outside+'.');
+ if(!await confirmDialog(review.join('\n'),{title:'Учесть дополнительный GPS',okText:'Сохранить объединённый трек'}))return null;
+ if(user!==session?.user?.id)return null;
+ const stored=slimMeasure(measured.measure);
+ const {data,error}=await sb.rpc('gps_supplement_apply',{p_track:trackId,p_trip:tripId,p_trip_revision:context.trip.workbench_revision,
+  p_source_revision:context.source_revision,p_before_digest:context.before_digest,p_extra_digest:context.extra_digest,p_track_data:stored});
+ if(error)throw error;
+ delete lastMeasure[tripId];
+ try{
+  await loadFactHours(tripId);
+  if(context.trip.status==='done'&&!await refreshTripEcon(tripId))notify('Трек сохранён; экономику нужно пересчитать.','warn');
+ }catch(e){notify('Трек сохранён; обновить сводку не удалось: '+e.message,'warn');}
+ return data;
 }
 
 // Ручной ввод одометра — фолбэк, когда треку верить нельзя. Человек читает

@@ -74,7 +74,7 @@ export function createUnassignedTracks(ctx){
   const list=box.querySelector('.journal-register tbody'),visible=visibleRows(),displayed=visible.slice(0,offset||50);
   more=visible.length>displayed.length;
   list.innerHTML=displayed.map(r=>{
-   const id=escape(r.id),reference='№'+escape(recordNumber(r)),link=r._trip?'Выезд №'+escape(String(r.trip_id||r._trip.id).slice(0,8)):r._supplement?'Дополнительная · выезд №'+escape(r.trip_id.slice(0,8)):escape(status[r.state]||r.state);
+   const id=escape(r.id),reference='№'+escape(recordNumber(r)),link=r._trip?'Выезд №'+escape(String(r.trip_id||r._trip.id).slice(0,8)):r._supplement?(r.resolution?.accounting?'В учёте':'Дополнительная')+' · выезд №'+escape(r.trip_id.slice(0,8)):escape(status[r.state]||r.state);
    const issues=r._trip?tripReviewIssues(r._trip).map(issue=>issue.label).join(' · '):'';
    const charge=r.state==='charged'?'<small>'+number(r.resolution?.cost)+' '+escape(r.resolution?.currency||ctx.currency())+' · '+escape(person(r.engineer_id))+'</small>':'';
    const action=manager()?'<button type="button" class="btn" data-ut-details="'+id+'" aria-label="Открыть запись '+reference+'">Открыть запись</button>':'';
@@ -203,7 +203,9 @@ export function createUnassignedTracks(ctx){
   box.innerHTML='<button type="button" class="btn ghost gps-back" data-ut-back>← К списку</button><header class="gps-detail-head"><p class="design-eyebrow">Выбранная GPS-запись</p><h2>GPS-запись №'+escape(recordNumber(r))+'</h2><p>'+escape(vehicleName(r.vehicle_id))+'</p><span class="tag">'+escape(status[r.state])+'</span><p class="unassigned-period">'+date(r.started_at)+' — '+(r.state==='recording'?'последняя точка '+date(r.last_ts):date(r.ended_at||r.last_ts))+'</p></header>'+trackPreview(points)+'<div class="gps-detail-metrics"><div><span>По GPS</span><b>'+number(quote.km)+' км</b></div><div><span>Точки телеметрии</span><b>'+number(quote.points)+'</b></div><div><span>Разрывы / выбросы</span><b>'+quote.gaps+' / '+quote.rejected+'</b></div><div><span>Себестоимость</span><b>'+(quote.rate==null?'Не настроена':number(quote.cost)+' '+escape(ctx.currency()))+'</b></div></div><p class="hint">Разрывы линии — участки без GPS. Пробег по ним не измерен.</p>'
    +(r.state==='charged'?'<section class="card"><h3>Списание записано</h3><p>'+escape(person(r.engineer_id))+' · '+number(r.resolution?.km)+' км × '+number(r.resolution?.rate)+' = '+number(r.resolution?.cost)+' '+escape(r.resolution?.currency||ctx.currency())+'</p><p>'+escape(r.resolution?.reason)+'</p></section>':'')
    +(canResolve?'<section class="gps-resolution-entry"><h3>Оформить поездку</h3><p class="hint">Привязка GPS-записи не подтверждает посещения объектов и выполнение работ.</p><div class="gps-resolution-choices"><button type="button" class="btn" data-ut-action="link">Связать с выездом</button><button type="button" class="btn" data-ut-action="create">Создать выезд</button><button type="button" class="btn ghost" data-ut-action="charge">Записать списание инженеру</button></div></section>':r.state==='recording'?'<p class="hint">Запись продолжается. Оформление доступно после завершения.</p>':'')
-   +(r._supplement?'<p class="gps-supplement-note">Дополнительная запись. Пробег и часы учитываются по основному треку выезда.</p>':'')
+   +(r._supplement?'<p class="gps-supplement-note">'+(r.resolution?.accounting
+     ?'Запись учтена в основном треке · добавлено GPS-точек: '+number(r.resolution.accounting.points_added)
+     :'Дополнительная запись. Пробег и часы учитываются по основному треку выезда.')+'</p>':'')
    +(r.state==='linked'?'<button type="button" class="btn" data-ut-trip>Открыть выезд</button>':'')+(manager()&&r.state==='charged'?'<button type="button" class="btn ghost" data-ut-cancel>Отменить списание</button>':'')
    +'<details class="gps-event-history"><summary>История решения · '+(events||[]).length+'</summary>'+(events||[]).map(e=>'<p class="unassigned-event">'+date(e.created_at)+' · '+escape(e.reason)+'</p>').join('')+'</details>';
   const documents=document.createElement('section');documents.className='journal-trip-documents';documents.hidden=true;for(const node of [...box.querySelectorAll('.gps-resolution-entry,.gps-event-history,.card,[data-ut-trip],[data-ut-cancel]')])documents.append(node);
@@ -221,8 +223,24 @@ export function createUnassignedTracks(ctx){
   const stopsPanel=document.createElement('section');stopsPanel.className='journal-link-required';
   overview.append(stopsPanel);
   const resolution=documents.querySelector('.gps-resolution-entry');if(resolution)overview.prepend(resolution);
+  let merging=false;
   if(r._supplement){
    overview.prepend(overview.querySelector('.gps-supplement-note'));
+   if(!r.resolution?.accounting&&ctx.applySupplement){
+    const apply=document.createElement('button');apply.type='button';apply.className='btn';
+    apply.textContent='Проверить и учесть GPS';
+    apply.onclick=()=>perform(apply,async()=>{
+     merging=true;
+     try{
+      const receipt=await ctx.applySupplement(id,r.trip_id);
+      if(!receipt||uid!==ctx.userId())return;
+      previews.delete(id);merging=false;
+      await load();
+      ctx.notify('Дополнительный GPS учтён в выезде.','ok');await openRecord(r.trip_id,{pane:'route'});
+     }finally{merging=false;}
+    });
+    overview.prepend(apply);
+   }
    const parent=document.createElement('button');parent.type='button';parent.className='btn';
    parent.textContent='К GPS-журналу выезда';parent.onclick=()=>openRecord(r.trip_id);overview.prepend(parent);
   }
@@ -255,7 +273,7 @@ export function createUnassignedTracks(ctx){
    const manualPanel=document.createElement('section');
    stopsPanel.after(manualPanel);manualWorking=mountManualDraftEditor(manualPanel,r);
   }
-  sourceView={id,...draftUI,isSaving:()=>draftUI.isSaving()||manualWorking()||roadView.isSaving(),navigate:pane=>switchOrphanPane(pane,false)};switchOrphanPane(state.pane||'stops',open);drawMap(overview,points);box.querySelector('[data-ut-back]').onclick=async()=>{if(sourcePane!=='stops'){switchOrphanPane('stops');return;}if(!await leave())return;host().classList.remove('gps-show-detail','journal-map-expanded');ctx.onList?.();window.requestAnimationFrame(()=>{host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;host().querySelector('[data-ut-details="'+id+'"]')?.focus({preventScroll:true});});};box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(id,b.dataset.utAction)));box.querySelector('[data-ut-trip]')?.addEventListener('click',()=>ctx.openTrip(r.trip_id));box.querySelector('[data-ut-cancel]')?.addEventListener('click',e=>perform(e.currentTarget,()=>cancel(id)));paintList();if(open&&mobile)window.requestAnimationFrame(()=>{if(pane)pane.scrollTop=0;box.querySelector('[data-ut-back]')?.focus({preventScroll:true});});
+  sourceView={id,...draftUI,isSaving:()=>draftUI.isSaving()||manualWorking()||roadView.isSaving()||merging,navigate:pane=>switchOrphanPane(pane,false)};switchOrphanPane(state.pane||'stops',open);drawMap(overview,points);box.querySelector('[data-ut-back]').onclick=async()=>{if(sourcePane!=='stops'){switchOrphanPane('stops');return;}if(!await leave())return;host().classList.remove('gps-show-detail','journal-map-expanded');ctx.onList?.();window.requestAnimationFrame(()=>{host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;host().querySelector('[data-ut-details="'+id+'"]')?.focus({preventScroll:true});});};box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(id,b.dataset.utAction)));box.querySelector('[data-ut-trip]')?.addEventListener('click',()=>ctx.openTrip(r.trip_id));box.querySelector('[data-ut-cancel]')?.addEventListener('click',e=>perform(e.currentTarget,()=>cancel(id)));paintList();if(open&&mobile)window.requestAnimationFrame(()=>{if(pane)pane.scrollTop=0;box.querySelector('[data-ut-back]')?.focus({preventScroll:true});});
   }catch(e){if(activeId===id&&box.isConnected)detailFailure(box,id,e,state);}
  }
  async function resolve(id,action){const uid=ctx.userId(),row=rows.find(x=>x.id===id);if(!row)return;
