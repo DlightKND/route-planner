@@ -36,7 +36,17 @@
 .entity-activity .activity-more { margin-top:8px;padding-inline:0;border:0;background:transparent;text-decoration:underline;text-underline-offset:3px; }
 .entity-activity .activity-empty { margin:0;padding:8px 0;font-size:13px;color:var(--ink-dim); }
 .entity-activity :is(button,a,textarea,summary):focus-visible { outline:2px solid var(--focus);outline-offset:2px; }
+/* Attachments: paper-clip control beside «Отправить», chosen files under the form, links under a comment. */
+.entity-activity .comment-attach { position:relative;display:inline-grid;place-items:center;width:40px;min-width:40px;padding:0;cursor:pointer; }
+.entity-activity .comment-attach input[type=file] { position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font:inherit; }
+.entity-activity .comment-attach:focus-within { outline:2px solid var(--focus);outline-offset:2px; }
+.entity-activity .comment-file-names { grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 12px;margin:0;padding:0;list-style:none;font-size:13px; }
+.entity-activity .comment-file-names:empty { display:none; }
+.entity-activity .comment-file-names li { display:inline-flex;align-items:center;gap:6px; }
+.entity-activity .activity-files { display:flex;flex-wrap:wrap;gap:4px 16px;margin:6px 0 0;padding:0;list-style:none;font-size:13px; }
+.entity-activity .activity-files a { color:var(--ink);text-decoration:underline;text-underline-offset:3px; }
 @media(max-width:760px) {
+ .entity-activity .comment-attach { width:48px;min-width:48px; }
  .entity-activity .comment-form { grid-template-columns:minmax(0,1fr); }
  .entity-activity .comment-actions { justify-content:flex-end; }
  .entity-activity textarea { min-height:72px;font-size:16px; }

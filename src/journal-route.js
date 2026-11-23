@@ -45,13 +45,16 @@ export function timelineHTML(trip,track,stays){
 
 }
 export function wireJournalTimeline(root){
- const labels=root.querySelector('.journal-time-labels'),disclosure=root.querySelector('.journal-timeline-disclosure');if(disclosure)disclosure.open=root.dataset.timelineExpanded?root.dataset.timelineExpanded==='true':false;const toggle=e=>{if(e.target===disclosure){root.dataset.timelineExpanded=String(disclosure.open);fit();}};root.addEventListener('toggle',toggle,true);
+ const labels=root.querySelector('.journal-time-labels'),disclosure=root.querySelector('.journal-timeline-disclosure');if(disclosure)disclosure.open=root.dataset.timelineExpanded?root.dataset.timelineExpanded==='true':false;const toggle=e=>{if(e.target===disclosure){if(!root.classList.contains('journal-timeline-floating'))root.dataset.timelineExpanded=String(disclosure.open);fit();}};if(disclosure&&root.classList.contains('journal-timeline-floating'))disclosure.open=true;root.addEventListener('toggle',toggle,true);
  function fit(){if(!labels||!labels.clientWidth)return;const ticks=[...labels.children],last=ticks.at(-1);if(ticks.length<2)return;let edge=ticks[0].getBoundingClientRect().right;const limit=last.getBoundingClientRect().left;
   for(const tick of ticks.slice(1,-1)){tick.hidden=false;const box=tick.getBoundingClientRect();tick.hidden=box.left<edge+12||box.right>limit-12;if(!tick.hidden)edge=box.right;}
  }
  const observer=labels&&typeof ResizeObserver!=='undefined'?new ResizeObserver(fit):null;observer?.observe(labels);fit();
  const close=e=>{if(e.target.closest('[data-journal-stop]')){const choices=root.querySelector('.journal-timeline-stops');if(choices)choices.open=false;}};root.addEventListener('click',close);
- return {fit,destroy(){observer?.disconnect();root.removeEventListener('click',close);root.removeEventListener('toggle',toggle,true);}};
+ // Floating map timeline (mockup v65): the caption names the interval under the pointer or focus.
+ const describe=e=>{const caption=root.querySelector('.map-current-stop'),part=e.target.closest?.('.journal-time-part');if(!caption)return;caption.textContent=part&&e.type!=='pointerleave'&&e.type!=='focusout'?part.title:caption.dataset.idle||'';};
+ for(const type of ['pointerover','focusin','pointerleave','focusout'])root.addEventListener(type,describe);
+ return {fit,destroy(){observer?.disconnect();root.removeEventListener('click',close);root.removeEventListener('toggle',toggle,true);for(const type of ['pointerover','focusin','pointerleave','focusout'])root.removeEventListener(type,describe);}};
 }
 export function mountJournalRoute(root,{trip,track,stays,leaflet:L,makeBase,onStop,onRebuild,onExpand,canEdit,mini=false,selectedStopId=null,jobs=[]}){
  const data=track?.data||track||{},amounts=routeAmounts(track),segments=data.segments||[],issues=segments.map((s,i)=>({...s,index:i})).filter(s=>s.kind!=='track'),conflicts=stays.flatMap(s=>presenceRoadConflicts(s,track).map(m=>({stay:s,...m})));
@@ -124,4 +127,15 @@ export function mountJournalRoute(root,{trip,track,stays,leaflet:L,makeBase,onSt
   const legend=root.querySelector('.journal-route-explainer');for(const conflict of current){const button=root.ownerDocument.createElement('button');button.className='journal-conflict';button.dataset.routeConflict='';button.textContent='Конфликт времени · Остановка '+(stays.indexOf(conflict.stay)+1)+' · '+clock(conflict.from)+'–'+clock(conflict.to);button.onclick=()=>onStop?.(conflict.stay.id);legend.before(button);}
  }
  return {select(id){activeStopId=id;for(const marker of new Set(markers.values()))marker.getElement()?.classList.toggle('selected',markers.get(id)===marker);},refreshPresence,focus,focusRoad,markRoadCut,destroy(){box.removeEventListener('mousedown',keepPointerFocus,true);observer?.disconnect();map?.off('zoomend',drawStops);map?.remove();}};
+}
+
+// Overview placement (mockup v65): the timeline floats over the bottom of the map, always expanded,
+// with the legend on top and a caption; elsewhere it returns to its collapsible strip.
+export function floatJournalTimeline(host,floating){
+ if(!host)return;host.classList.toggle('journal-timeline-floating',!!floating);
+ const disclosure=host.querySelector('.journal-timeline-disclosure');
+ if(disclosure)disclosure.open=floating?true:host.dataset.timelineExpanded==='true';
+ let caption=host.querySelector('.map-current-stop');
+ if(floating&&!caption){caption=host.ownerDocument.createElement('p');caption.className='map-current-stop';caption.setAttribute('aria-live','polite');caption.dataset.idle='Наведите на участок или выберите стоянку в списке';caption.textContent=caption.dataset.idle;(host.querySelector('.journal-timeline')||host).append(caption);}
+ if(caption)caption.hidden=!floating;
 }

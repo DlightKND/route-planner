@@ -174,3 +174,33 @@ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail:not(.jo
  html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-stops { grid-row:2!important;margin-top:82px!important; }
  html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-overview { grid-row:2!important; }
 }
+
+/* Floating map timeline (mockup v65): legend on top, band, ticks and caption over the bottom of the map.
+   The map and the timeline share one grid cell, so the overlay survives map re-renders. */
+html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating) { grid-template-columns:minmax(0,1fr);align-content:start; }
+@media(min-width:761px){ html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating) { display:grid!important; } }
+@media(max-width:760px){ html#dlight-ui[data-ui-system] .view .journal-trip-detail:not([data-journal-map-mode=list])>.journal-trip-overview:has(>.journal-timeline-floating) { display:grid!important; } }
+html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating)>.journal-overview-map { grid-area:1/1; }
+html#dlight-ui[data-ui-system] .view .journal-trip-overview>.journal-timeline-host.journal-timeline-floating {
+ grid-area:1/1;align-self:end;position:relative;z-index:700;margin:0 12px 22px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);box-shadow:0 6px 18px -10px rgba(0,0,0,.55);
+}
+.journal-timeline-floating .journal-timeline-disclosure>summary,
+.journal-timeline-floating .journal-timeline-stops,
+.journal-timeline-floating .journal-time-days { display:none!important; }
+.journal-timeline-floating .journal-timeline-disclosure { margin:0;padding:0;border:0; }
+.journal-timeline-floating .journal-timeline { display:flex;flex-direction:column;gap:4px;padding:0!important;margin:0!important;border:0!important;background:none!important; }
+.journal-timeline-floating .journal-legend { order:-1;margin:0 0 4px;gap:6px 14px;font-size:11px;line-height:17px; }
+.journal-timeline-floating .journal-legend>span::before { width:16px;height:5px;border-radius:0;vertical-align:2px; }
+.journal-timeline-floating .journal-time-band { order:0;height:24px; }
+.journal-timeline-floating .journal-time-band::before,.journal-timeline-floating .journal-time-part::after { inset:6px 0; }
+.journal-timeline-floating .journal-time-part { padding:6px 0!important; }
+.journal-timeline-floating .journal-time-part:not(:disabled) { cursor:pointer; }
+.journal-timeline-floating .journal-time-labels { order:1;height:16px;font-size:11px; }
+.journal-timeline-floating .map-current-stop { order:2;margin:2px 0 0;font-size:12px;line-height:18px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.journal-timeline-floating .journal-conflict { order:3;margin-top:4px; }
+html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating) .journal-expand-map { top:12px!important;bottom:auto!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating)>.journal-overview-map { min-height:clamp(340px,52vh,560px); }
+@media(max-width:760px){
+ html#dlight-ui[data-ui-system] .view .journal-trip-overview>.journal-timeline-host.journal-timeline-floating { margin:0 8px 22px;padding:8px 10px; }
+ .journal-timeline-floating .journal-legend { font-size:10px;gap:4px 10px; }
+}

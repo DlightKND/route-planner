@@ -1,0 +1,43 @@
+import {it,expect} from 'vitest';
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync} from 'node:fs';
+const migration=readFileSync(new URL('../supabase/migrations/20261123184724_comment_attachments.sql',import.meta.url),'utf8');
+const A='00000000-0000-4000-8000-00000000000a',B='00000000-0000-4000-8000-00000000000b',JOB_COMMENT='10000000-0000-4000-8000-000000000001',TRIP_COMMENT='20000000-0000-4000-8000-000000000001';
+it('lets authors attach files to their visible comments and hides files of comments the reader cannot see',async()=>{
+ const db=new PGlite();try{
+  await db.exec(`create role anon;create role authenticated;create schema auth;create schema storage;create schema dlight_private;
+   grant usage on schema public,storage,dlight_private,auth to authenticated;
+   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid',true),'')::uuid $$;
+   grant execute on function auth.uid() to authenticated;
+   create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint);
+   create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,owner_id text default auth.uid()::text);
+   alter table storage.objects enable row level security;grant select,insert on storage.objects to authenticated;
+   create table public.job_comments(id uuid primary key,author_id uuid,body text);
+   create table public.service_order_comments(id uuid primary key,author_id uuid,body text);
+   create table public.trip_comments(id uuid primary key,author_id uuid,body text);
+   create table public.gps_record_comments(id uuid primary key,author_id uuid,body text);
+   alter table public.job_comments enable row level security;alter table public.trip_comments enable row level security;
+   create policy read_all on public.job_comments for select to authenticated using (true);
+   create policy read_author on public.trip_comments for select to authenticated using (author_id = auth.uid());
+   grant select on public.job_comments,public.service_order_comments,public.trip_comments,public.gps_record_comments to authenticated;
+   insert into public.job_comments values('${JOB_COMMENT}','${A}','Фото узла');
+   insert into public.trip_comments values('${TRIP_COMMENT}','${A}','Чек АЗС');`);
+  await db.exec(migration);
+  const as=async(uid,sql,params=[])=>{await db.query("select set_config('test.uid',$1,false)",[uid]);await db.exec('set role authenticated');try{return await db.query(sql,params);}finally{await db.exec('reset role');}};
+  const path='job/'+JOB_COMMENT+'/30000000-0000-4000-8000-000000000001-узел.jpg';
+  await expect(as(B,'insert into storage.objects(bucket_id,name) values($1,$2)',['comment-files',path])).rejects.toThrow();
+  await expect(as(A,'insert into storage.objects(bucket_id,name) values($1,$2)',['comment-files','job/../x'])).rejects.toThrow();
+  await as(A,'insert into storage.objects(bucket_id,name) values($1,$2)',['comment-files',path]);
+  await expect(as(B,'insert into public.comment_attachments(comment_kind,comment_id,path,name,size,created_by) values($1,$2,$3,$4,$5,$6)',['job',JOB_COMMENT,path,'узел.jpg',10,B])).rejects.toThrow();
+  await as(A,'insert into public.comment_attachments(comment_kind,comment_id,path,name,size) values($1,$2,$3,$4,$5)',['job',JOB_COMMENT,path,'узел.jpg',10]);
+  expect((await as(B,'select name from public.comment_attachments')).rows.map(r=>r.name)).toEqual(['узел.jpg']);
+  expect((await as(B,"select name from storage.objects where bucket_id='comment-files'")).rows).toHaveLength(1);
+  const tripPath='trip/'+TRIP_COMMENT+'/30000000-0000-4000-8000-000000000002-чек.pdf';
+  await as(A,'insert into storage.objects(bucket_id,name) values($1,$2)',['comment-files',tripPath]);
+  await as(A,'insert into public.comment_attachments(comment_kind,comment_id,path,name,size) values($1,$2,$3,$4,$5)',['trip',TRIP_COMMENT,tripPath,'чек.pdf',20]);
+  expect((await as(B,'select name from public.comment_attachments order by name')).rows.map(r=>r.name)).toEqual(['узел.jpg']);
+  expect((await as(B,"select name from storage.objects where bucket_id='comment-files'")).rows).toHaveLength(1);
+  expect((await as(A,'select name from public.comment_attachments order by name')).rows).toHaveLength(2);
+  await expect(as(A,'insert into public.comment_attachments(comment_kind,comment_id,path,name,size) values($1,$2,$3,$4,$5)',['job',TRIP_COMMENT,'job/'+TRIP_COMMENT+'/x','x',1])).rejects.toThrow();
+ }finally{await db.close();}
+},20000);
