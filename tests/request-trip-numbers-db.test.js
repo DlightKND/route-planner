@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {PGlite} from '@electric-sql/pglite';
 import {readFileSync} from 'node:fs';
-const migration=readFileSync(new URL('../supabase/migrations/20261123160000_request_trip_numbers.sql',import.meta.url),'utf8');
+const migration=readFileSync(new URL('../supabase/migrations/20261123223413_request_trip_numbers.sql',import.meta.url),'utf8');
 it('numbers existing requests and trips without firing row triggers and keeps numbers immutable',async()=>{
  const db=new PGlite();try{
   await db.exec(`create schema dlight_private;
