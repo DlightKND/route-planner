@@ -37,6 +37,7 @@ beforeAll(async()=>{
  await db.exec(readFileSync(new URL('../supabase/migrations/20261124141616_planner_progress.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261124141702_planner_progress_early_only.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261124142021_planner_snapshot_overdue.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261124145531_planner_stop_task_dates.sql',import.meta.url),'utf8'));
  // The fixture scenarios were written with one approved overtime hour per day.
  await db.exec('update settings set tolerance_h=1 where id');
 },30000);
@@ -269,4 +270,17 @@ it('lists overdue tasks and late trips for all dates with the snapshot',async()=
  expect((await snapshot()).overdue.find(x=>x.kind==='order').type).toBe('overrun');
  await as(4);
  expect((await snapshot()).overdue).toEqual([]);
+});
+it('orders tasks on one site by their dates instead of booking the earlier one',async()=>{
+ // Trip 17 case: both tasks on the same site, the later-dated one was added to the trip first.
+ await db.exec('reset role');
+ await q("update service_orders set date_from='2026-10-27',date_to='2026-10-27' where id=$1",[id(20)]);
+ await q("insert into service_orders(id,title,job_id,engineer_ids,date_from,date_to) values($1,'Вторая работа',$2,$3,'2026-10-26','2026-10-26')",[id(21),id(10),[id(2),id(3)]]);
+ await q("insert into service_order_items(id,order_id,kind,unit,planned_qty) values($1,$2,'work','ч',5)",[id(41),id(21)]);
+ await q('insert into trip_service_orders values($1,$2,1)',[id(30),id(21)]);
+ await as(1);
+ const groups=(await snapshot()).groups,first=groups.find(g=>g.order_id===id(21)),second=groups.find(g=>g.order_id===id(20));
+ expect(first.booking).toBeUndefined();
+ expect(first.parts[0]).toMatchObject({date:'2026-10-26',start:8,end:13});
+ expect(second.parts[0]).toMatchObject({date:'2026-10-27',start:7,end:9});
 });
