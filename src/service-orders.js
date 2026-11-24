@@ -119,7 +119,7 @@ export function createServiceOrders(ctx){
      cells:[`${taskButton(task,origin)}<small>№${esc(task.number)} · работ ${works}</small>`,
       esc(crew.join(', ')||'Команда не назначена'),`<span class="order-child-period">${esc(planningPeriod(task.date_from,task.date_to))}</span>${task.jobs?.due_date?`<small>SLA ${esc(planningDate(task.jobs.due_date))}</small>`:''}`,
       `<span class="related-status">${esc(ORDER_STATUS[task.status]||task.status)}</span>${historicalClosedDraft(task)?`<small aria-label="${esc(historicalClosedNote)}">${esc(historicalClosedNote)}</small>`:''}${tripContext}`],
-     actions:reportAllowed(task)?`<button type="button" class="btn ghost" data-related-order-result="${esc(task.id)}">Отчитаться о работах</button>`:'',
+     actions:reportAllowed(task)?`<button type="button" class="btn" data-related-order-result="${esc(task.id)}">Отчитаться о работах</button>`:'',
      detail:`<div data-related-work-details="${esc(task.id)}">${relatedWorkPreview(work,{tripScoped:!!trip,open:taskButton(task,origin,'Открыть работы','data-related-order-works')})}</div>`};
    })});
  }
@@ -191,7 +191,7 @@ export function createServiceOrders(ctx){
     const canReport=pending.length>0;
     const canView=linkedTasks.some(accepted);
     if(!canReport&&!canView)return '';
-    return `<button class="btn ghost" type="button" data-related-trip-result="${esc(trip.id)}"${canReport&&pending.length===1?` data-related-report-order="${esc(pending[0].id)}"`:''}${canReport?'':' data-related-view-result'}>${canReport?'Отчитаться о работах':'Посмотреть результат'}</button>`;
+    return `<button class="btn" type="button" data-related-trip-result="${esc(trip.id)}"${canReport&&pending.length===1?` data-related-report-order="${esc(pending[0].id)}"`:''}${canReport?'':' data-related-view-result'}>${canReport?'Отчитаться о работах':'Посмотреть результат'}</button>`;
    }});
   return relatedTable({idPrefix:order?'task-linked-trip':'request-linked-trip',title:'Выезды',searchLabel:'Найти выезд',placeholder:'Номер, техника или инженер',
    columns:['Выезд','Техника / команда','Часы по посещениям','Состояние'],rows,actions,review:true,totalHours:true,

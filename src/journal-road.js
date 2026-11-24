@@ -112,7 +112,7 @@ export function mountRoadSections(root,{db,tripId,focus,current,onSplitPoint,spl
   const left=rows.reduce((sum,row)=>sum+cents(remainder(row)||0),0)/100;
   root.innerHTML=`<h2>Участки дороги</h2>${model.preview?'<p class="hint">'+(model.stale?'GPS изменился. Сверьте сохранённые точки разделения. ':'')+'Распределение километров по заявкам доступно после привязки.</p>':''}${rows.length?`
    <label><span class="sr-only">Найти участок</span><input type="search" data-road-search value="${esc(search)}" placeholder="Участок или заявка"></label>
-   <div class="seg journal-road-filters" role="group" aria-label="Фильтр участков">${[['all','Все'],['unassigned','Без заявки']].map(([key,label])=>
+   <div class="journal-road-filters" role="group" aria-label="Фильтр участков">${[['all','Все'],['unassigned','Без заявки']].map(([key,label])=>
     `<button type="button" data-road-filter="${key}" aria-pressed="${filter===key}">${label}</button>`).join('')}</div>
    <p class="hint" data-road-count role="status"></p>
    <table class="journal-road-table" aria-label="Участки дороги"><thead><tr><th>Участок</th><th>Пробег</th><th class="journal-road-request-cell">Заявки</th><th><span class="sr-only">Подробнее</span></th></tr></thead><tbody>${body}</tbody></table>

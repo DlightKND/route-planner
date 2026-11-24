@@ -276,7 +276,7 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onGPS,onOrde
   const flagged=[...groups.values()].filter(works=>works.some(attention)).length;
   return `<details class="scoped-finance-work" data-finance-section="labor" ${disclosures.has('labor')?'open':''}><summary>Трудозатраты по работам</summary>
    <header><label><span class="sr-only">Найти работу</span><input type="search" data-finance-work-search value="${esc(searchText)}" placeholder="Работа, задание или заявка"></label>
-    <button type="button" class="btn" aria-pressed="${attentionOnly}" data-finance-work-alert>Внимание <span class="scoped-finance-work-cue">${flagged}</span></button></header>
+    <div class="scoped-finance-work-filters" role="group" aria-label="Фильтр работ"><button type="button" aria-pressed="${attentionOnly}" data-finance-work-alert>Внимание <span class="scoped-finance-work-cue ui-count" data-ui-tone="warning">${flagged}</span></button></div></header>
    <p class="hint" data-finance-work-count role="status"></p>
    <div class="scoped-finance-scroll"><table aria-label="Трудозатраты по работам">
     <thead><tr><th scope="col">${grouped?'Задание':'Работа'}</th><th scope="col">План, н-ч</th><th scope="col">Факт, чел·ч</th>

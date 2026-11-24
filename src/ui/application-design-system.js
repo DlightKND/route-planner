@@ -3,7 +3,7 @@ import {journalIcon} from '../journal-icons.js';
 // Existing IDs, native form state, handlers and permission checks stay owned by screens.
 export const UI_SELECTORS = {
   segment: '.seg:not(.chipseg):not(.unassigned-filter):not(.journal-trip-tabs),.summary-view-switch,.summary-period-presets,.notice-tabs,.rquick,.presence-kind',
-  filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.journal-stop-chips,.design-filter-chips,#rVariants',
+  filters: '.chipseg,.chips,.echips,.activity-filters,.unassigned-filter,.journal-stop-chips,.journal-road-filters,.scoped-finance-work-filters,.design-filter-chips,#rVariants',
   count: '.chip-n,.cnt,.rchip .n,.unassigned-filter button b,[data-activity-count],.engineer-picker-count,.ui-count,.notice-badge,[data-decision-count]',
   card: '.card,.kcard,.record-card,.notice-row,.staff-row,.stock-row,.emrow,.eqitem,.pt,.order-brief,.order-child,.trip-choice-card,.order-result-summary,.summary-quick-actions,.planwarn',
   popover: '#moreSheet,.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover,.anchored-context-panel',
