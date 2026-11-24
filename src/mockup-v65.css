@@ -339,3 +339,19 @@ html#dlight-ui[data-ui-system] .view .journal-map-group-panel { z-index:1001!imp
 /* The floating timeline lets clicks through to the map; only its time bands stay interactive. */
 html#dlight-ui[data-ui-system] .view .journal-timeline-host.journal-timeline-floating { pointer-events:none; }
 html#dlight-ui[data-ui-system] .view .journal-timeline-host.journal-timeline-floating :is(button,a,summary,input) { pointer-events:auto; }
+/* Stop detail as an expanded table row on wide screens (mockup v65): the map stays beside the list. */
+@media(min-width:761px){
+ html#dlight-ui[data-ui-system] .view .journal-stop-table [data-review-open] svg { transform:rotate(90deg);transition:transform .15s; }
+ html#dlight-ui[data-ui-system] .view .journal-stop-table [data-review-open][aria-expanded=true] svg { transform:rotate(-90deg); }
+ html#dlight-ui[data-ui-system] .view .journal-stop-table tr.journal-stop-detail-row>td { padding:0 16px 16px!important;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--accent) 4%,transparent); }
+ html#dlight-ui[data-ui-system] .view .journal-stop-table tr.presence-stop-entry.is-selected:has(+ .journal-stop-detail-row)>* { border-bottom:0!important; }
+ html#dlight-ui[data-ui-system] .view .journal-stop-detail-row .presence-review-detail { display:block!important;position:static!important;inset:auto!important;width:auto!important;height:auto!important;max-height:none!important;margin:0!important;padding:16px!important;overflow:visible!important;border:1px solid var(--line)!important;border-radius:var(--r-sm,8px)!important;background:var(--panel)!important;box-shadow:none!important; }
+ html#dlight-ui[data-ui-system] .view .journal-stop-detail-row .presence-review-scroll { height:auto!important;max-height:none!important;overflow:visible!important;padding:0!important; }
+ html#dlight-ui[data-ui-system] .view .journal-stop-detail-row .presence-review-back,
+ html#dlight-ui[data-ui-system] .view .journal-stop-detail-row .presence-selected-heading>:is(h2,.journal-title-expand,p:not(.journal-decision-state)) { display:none!important; }
+ html#dlight-ui[data-ui-system] .view .journal-stop-detail-row .presence-selected-heading { margin:0!important;padding:0!important;min-height:0!important; }
+ html#dlight-ui[data-ui-system] .view .journal-stop-detail-row .presence-review-save { position:static!important;margin:16px -16px -16px!important;padding:12px 16px!important;border-top:1px solid var(--line);background:none!important; }
+ html#dlight-ui[data-ui-system] .view .presence-review-workspace.is-inline-detail { grid-template-columns:minmax(0,1fr)!important; }
+}
+@media(min-width:761px){ html#dlight-ui[data-ui-system] .view .journal-stop-table tr.presence-stop-entry:has(+ .journal-stop-detail-row) .presence-stop strong { white-space:normal!important; } }
+@media(min-width:761px){ html#dlight-ui[data-ui-system] .view .journal-trip-detail>.journal-trip-head:has(>.workflow-gps-crumbs) { display:block!important;position:relative;padding:16px var(--journal-gutter,24px) 0!important;border-bottom:1px solid var(--line)!important; } }
