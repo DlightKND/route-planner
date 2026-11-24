@@ -39,7 +39,7 @@ export function controlVariant(el){
   if(/^(Отмена(?: правки)?|Назад|Закрыть|Позже)$/.test(el.textContent.trim()))return 'secondary';
   if(el.matches('.ghost'))return 'tertiary';
   if(el.id==='emShowAdd'){const editor=el.ownerDocument.getElementById('emForm');if(editor&&editor.style.display!=='none')return 'secondary';}
-  const repeated=el.closest('.kcard,.record-card,.notice-row,.notice-decision-card,.pt,.eqitem,.emrow,.staff-row,.leaflet-popup,table');
+  const repeated=!el.closest('.journal-stop-detail-row .presence-review-save')&&el.closest('.kcard,.record-card,.notice-row,.notice-decision-card,.pt,.eqitem,.emrow,.staff-row,.leaflet-popup,table');
   const rowAction=el.matches('#tpStayMap,#profCreate,[data-decision-open],[data-jst],[data-tstart],[data-tfin],[data-tconf],[data-tstaymap],[data-pok],[data-fok],[data-rok],[data-rt],[data-mhs],[data-stay-select],[data-stay-job],a[href^="tel:"]');
   return el.matches('.amber')&&!repeated&&!rowAction?'primary':'secondary';
 }

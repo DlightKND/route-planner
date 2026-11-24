@@ -3,7 +3,7 @@ import {decisionLabel,zeroPresenceSignature,intervalText,dayKey,dayText} from '.
 import {savedPresenceHTML} from './presence-decision.js';
 import {installPresenceControls} from './presence-review-controls.js';
 import {presenceRoadConflicts,stopKind,stopState,stopTitle,stopPlace,decisionComment,numericText,evidenceExtent} from './core/gps-journal.js';
-import {presenceBounds} from './core/trip-presence-recovery.js';
+import {presenceBounds,acceptedPresenceIntervals,intervalMinutes} from './core/trip-presence-recovery.js';
 import {readPresenceForm} from './trip-workbench.js';
 import {validatePresence} from './core/trip-review.js';
 import {mountGpsTrackMap} from './gps-track-map.js';
@@ -45,6 +45,16 @@ export function mountPresenceReview(root,data,{jobs=[],profiles=[],readonly=fals
  table.remove();root.querySelector('.wb-metrics')?.remove();root.querySelector('[data-presence-message]')?.remove();
  const design=installPresenceControls(root,data,{readonly,profiles,jobs,onRoute});
  const list=workspace.querySelector('.presence-review-list');
+ // A stop opens as an expanded table row (mockup v65): a compact summary first, the full decision behind «Уточнить».
+ const inlineDetail=()=>typeof doc.defaultView.matchMedia==='function',detailPanel=workspace.querySelector('.presence-review-detail'),detailHome=workspace.querySelector('.presence-review-sidebar');
+ function placeDetail(){
+  const open=workspace.classList.contains('presence-show-detail')&&inlineDetail()&&active,row=open&&[...list.querySelectorAll('[data-stop-row]')].find(item=>item.dataset.stopRow===active);
+  const holder=list.querySelector('.journal-stop-detail-row');
+  if(!row){if(detailPanel.parentElement!==workspace)detailHome.after(detailPanel);holder?.remove();workspace.classList.remove('is-inline-detail');list.querySelectorAll('[data-review-open]').forEach(b=>b.setAttribute('aria-expanded','false'));return;}
+  let detailRow=holder;if(!detailRow){detailRow=doc.createElement('tr');detailRow.className='journal-stop-detail-row';const cell=doc.createElement('td');cell.colSpan=4;detailRow.append(cell);}
+  row.after(detailRow);const cell=detailRow.firstElementChild;cell.replaceChildren(stopSummary(data.stays.find(item=>item.id===active)),detailPanel);detailRow.classList.toggle('is-compact',compact);workspace.classList.add('is-inline-detail');
+  list.querySelectorAll('[data-review-open]').forEach(b=>b.setAttribute('aria-expanded',String(b.dataset.reviewOpen===active)));
+ }
  const sidebar=list.parentElement;
  const batch=doc.createElement('div');
  if(onConfirmVisits){
@@ -98,7 +108,30 @@ export function mountPresenceReview(root,data,{jobs=[],profiles=[],readonly=fals
   workspace.querySelectorAll('[data-review-count]').forEach(el=>{el.textContent=String(count[el.dataset.reviewCount]??'');});
   workspace.querySelector('[data-stop-count]').textContent='Показано '+shown+' из '+data.stays.length;
  }
+ let compact=false;
+ const durationLabel=value=>minutesText(Math.round(value));
+ const clock=value=>new Date(value).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Kyiv'});
+ function stopSummary(stay){
+  const box=doc.createElement('div');box.className='journal-stop-summary';if(!stay)return box;
+  const extent=evidenceExtent(stay),from=Date.parse(extent.from),to=Date.parse(extent.to),span=Math.max(1,to-from),evidence=stay.presence_evidence;
+  const gps=evidence?.gps_intervals?.length?evidence.gps_intervals:[{from:stay.stay_from,to:stay.stay_to}],accepted=stay.status==='approved'?acceptedPresenceIntervals(stay):[];
+  const part=(row,kind)=>{const a=Math.max(from,Date.parse(row.from)),b=Math.min(to,Date.parse(row.to));return b>a?'<span class="journal-stop-rail-part '+kind+'" style="left:'+((a-from)/span*100).toFixed(2)+'%;width:'+((b-a)/span*100).toFixed(2)+'%"></span>':'';};
+  const recovery=evidence?.recovery_parts||[];
+  const rail=recovery.map(p=>part(p,'is-recovery')).join('')+gps.map(p=>part(p,'is-gps')).join('')+accepted.filter(p=>!gps.some(g=>Date.parse(g.from)<=Date.parse(p.from)&&Date.parse(g.to)>=Date.parse(p.to))).map(p=>part(p,'is-accepted')).join('');
+  const total=stay.status==='approved'?intervalMinutes(accepted):stay.status==='rejected'?0:intervalMinutes(gps);
+  const label=stay.status==='approved'?'К учёту':stay.status==='rejected'?'Не учитывается':'По GPS';
+  const sources=[...gps.map(p=>['GPS',p]),...recovery.map(p=>['Достройка',p])],manual=stay.manual_origin?1:0;
+  const job=stay.job_id?jobs.find(j=>j.id===stay.job_id):null,request=stay.job_id?'№'+recordNumber(job,stay.job_id)+(job?.clients?.name?' · '+job.clients.name:''):'Не привязана';
+  box.innerHTML='<p class="journal-stop-summary-request"><span>Заявка</span><strong>'+esc(request)+'</strong></p>'
+   +'<div class="journal-stop-accounting"><div class="journal-stop-rail-wrap"><div class="journal-stop-rail" role="img" aria-label="'+esc('GPS и достройка, '+intervalText(extent.from,extent.to))+'">'+rail+'</div><div class="journal-stop-rail-times"><span>'+esc(clock(from))+'</span><span>'+esc(clock(to))+'</span></div></div>'
+   +'<div class="journal-stop-accounting-duration"><span>'+label+'</span><strong>'+esc(total?durationLabel(total):'—')+'</strong></div>'
+   +'<button type="button" class="btn" data-stop-refine aria-expanded="'+String(!compact)+'">'+(compact?'Уточнить':'Скрыть детали')+'</button></div>'
+   +'<details class="journal-stop-originals"><summary>Исходные записи · '+(sources.length+manual)+'</summary><ul>'+sources.map(([kind,p])=>'<li><span>'+kind+'</span><span>'+esc(intervalText(p.from,p.to))+'</span><strong>'+esc(durationLabel(intervalMinutes([p])))+'</strong></li>').join('')+(manual?'<li><span>Вручную</span><span>Посещение добавлено без GPS</span><strong></strong></li>':'')+'</ul></details>';
+  box.querySelector('[data-stop-refine]').onclick=()=>{compact=!compact;placeDetail();};
+  return box;
+ }
  function paintList(){
+  if(detailPanel.parentElement!==workspace)detailHome.after(detailPanel);
   const scroll=list.scrollTop,rowsShown=visible();let lastDay=null;
   const body=rowsShown.map(s=>{const index=data.stays.indexOf(s),place=stopPlace(s,jobs,index),extent=evidenceExtent(s),day=dayKey(extent.from),heading=day!==lastDay&&new Set(data.stays.map(x=>dayKey(evidenceExtent(x).from))).size>1?'<tr class="journal-stop-day-row"><th colspan="4" scope="rowgroup" class="journal-stop-day">'+esc(dayText(extent.from))+'</th></tr>':'';lastDay=day;
    const interval=intervalText(extent.from,extent.to),short=dayKey(extent.from)===dayKey(extent.to)?interval.split(', ').at(-1):interval,state=s.status==='approved'?'Подтверждено':s.status==='rejected'?(stopKind(s)==='road'?'Остановка в пути':'Не учитывать'):'Не подтверждено';
@@ -119,11 +152,11 @@ export function mountPresenceReview(root,data,{jobs=[],profiles=[],readonly=fals
   firstStops=[...list.querySelectorAll('[data-review-stop]')].slice(0,3);
   firstStops.forEach(stop=>sizeObserver?.observe(stop));
   reserveVisibleStops();
-  list.querySelectorAll('[data-review-stop],[data-review-open]').forEach(b=>b.onclick=()=>select(b.dataset.reviewStop||b.dataset.reviewOpen));workspace.querySelectorAll('[data-review-mode]').forEach(b=>{b.classList.toggle('on',mode===b.dataset.reviewMode);b.setAttribute('aria-pressed',String(mode===b.dataset.reviewMode));});
+  list.querySelectorAll('[data-review-stop],[data-review-open]').forEach(b=>b.onclick=()=>{const id=b.dataset.reviewStop||b.dataset.reviewOpen,disclosure=!!b.dataset.reviewOpen;if(disclosure&&inlineDetail()&&id===active&&workspace.classList.contains('presence-show-detail')){back();return;}compact=disclosure&&inlineDetail();select(id);});placeDetail();workspace.querySelectorAll('[data-review-mode]').forEach(b=>{b.classList.toggle('on',mode===b.dataset.reviewMode);b.setAttribute('aria-pressed',String(mode===b.dataset.reviewMode));});
  }
 
  function capture(){for(const s of data.stays.filter(s=>dirty.has(s.id))){const row=rows.get(s.id),values={};for(const f of row.querySelectorAll('[data-presence],[data-recovery-part]'))values[f.dataset.recoveryPart||f.dataset.presence]=f.multiple?[...f.selectedOptions].map(o=>o.value):f.value;for(const item of row.querySelectorAll('[data-task-allocation-row]'))values['task:'+item.dataset.taskAllocationRow]={checked:item.querySelector('[data-task-allocation-order]').checked,value:item.querySelector('[data-task-allocation-share]').value};if(dirty.has(s.id))store.write(s,{fields:values,kind:row.dataset.stopKind,comment:comments.get(s.id)||'',dirty:true});}}
- function select(id,open=true,notify=true){const s=data.stays.find(s=>s.id===id);if(!s)return;if(active!==id)zeroAck=null;active=id;root.dataset.reviewActive=id;editing=!reviewed(s)||dirty.has(id);workspace.classList.toggle('presence-show-detail',open);root.closest('.journal-trip-detail')?.classList.toggle('journal-stop-open',open);for(const [key,row] of rows)row.hidden=key!==id;
+ function select(id,open=true,notify=true){const s=data.stays.find(s=>s.id===id);if(!s)return;if(active!==id)zeroAck=null;active=id;root.dataset.reviewActive=id;editing=!reviewed(s)||dirty.has(id);workspace.classList.toggle('presence-show-detail',open);root.closest('.journal-trip-detail')?.classList.toggle('journal-stop-open',open&&!inlineDetail());for(const [key,row] of rows)row.hidden=key!==id;
   workspace.querySelector('.presence-selected-heading').innerHTML='<h2>'+esc(title(s))+'</h2>'+(title(s).length>65?'<button type="button" class="btn ghost journal-title-expand" aria-expanded="false">Полное название</button>':'')+'<p>'+esc(intervalText(evidenceExtent(s).from,evidenceExtent(s).to))+'</p><p class="journal-decision-state" role="status"></p>';
   const heading=workspace.querySelector('.presence-selected-heading'),expand=heading.querySelector('.journal-title-expand');heading.classList.remove('is-expanded');if(expand)expand.onclick=()=>{const full=heading.classList.toggle('is-expanded');expand.setAttribute('aria-expanded',String(full));expand.textContent=full?'Свернуть название':'Полное название';};workspace.querySelector('.journal-review-note').value=comments.get(id)||'';maps.splice(0).forEach(m=>m.destroy());const box=workspace.querySelector('.presence-review-map');box.innerHTML='';if(s.lat!=null&&s.lng!=null){box.innerHTML='<svg role="img" aria-label="Место остановки"><text x="12" y="30">'+esc(Number(s.lat).toFixed(5)+', '+Number(s.lng).toFixed(5))+'</text></svg>';const map=mountGpsTrackMap(box.querySelector('svg'),[{lat:s.lat,lng:s.lng,ts:s.stay_from}],{leaflet:leaflet?.(),makeBase,mini:true,endpoints:false,color:'#588347',pointStyle:presenceBounds(s)?.gps===0?{radius:28,color:'#ad8000',dashArray:'5 4',fillColor:'#efc845',fillOpacity:.2,weight:2}:{radius:6,color:'#fff',fillColor:'#3c7954',fillOpacity:1,weight:2},label:presenceBounds(s)?.gps===0?'Предполагаемое место остановки':'Место остановки',className:presenceBounds(s)?.gps===0?'journal-hypothesis-map':''});if(map)maps.push(map);}else box.innerHTML='<p class="hint">Место не определено</p>';
   if(onPin&&s.job_id&&s.dist_m>0&&s.status!=='rejected'&&(!readonly||s.status!=='approved')){const pin=doc.createElement('button');pin.className='btn ghost journal-object-pin';pin.type='button';pin.textContent='Уточнить точку объекта ('+s.dist_m+' м)';pin.onclick=()=>onPin(s);box.append(pin);}
@@ -147,7 +180,7 @@ export function mountPresenceReview(root,data,{jobs=[],profiles=[],readonly=fals
  }
  workspace.querySelectorAll('[data-presence-kind]').forEach(b=>b.onclick=()=>{if(readonly||!active)return;const row=rows.get(active),source=data.stays.find(s=>s.id===active),visit=b.dataset.presenceKind==='visit';if(visit===(row.dataset.stopKind==='visit'))return;editing=true;zeroAck=null;row.dataset.stopKind=visit?'visit':source.status==='approved'?'excluded':'later';row.querySelector('[data-presence="status"]').value=visit?'approved':source.status==='approved'?'rejected':source.status==='rejected'?'rejected':'';dirty.add(active);capture();paintResult();});
  function saveDraft(){capture();const source=data.stays.find(s=>s.id===active),draft=store.read(source);if(draft)store.write(source,{...draft,dirty:false});dirty.delete(active);}
- function back(notify=true){capture();workspace.classList.remove('presence-show-detail');root.closest('.journal-trip-detail')?.classList.remove('journal-stop-open');if(notify)onBack?.();}
+ function back(notify=true){capture();workspace.classList.remove('presence-show-detail');root.closest('.journal-trip-detail')?.classList.remove('journal-stop-open');placeDetail();if(notify)onBack?.();}
  const draft=doc.createElement('button');draft.type='button';draft.className='btn ghost';draft.dataset.reviewDraft='';draft.textContent='Сохранить черновик';draft.onclick=()=>{saveDraft();workspace.querySelector('.journal-stop-actions').open=false;workspace.querySelector('.journal-decision-state').textContent='Черновик сохранён в этом браузере. Решение на сервере не изменено.';};workspace.querySelector('.journal-stop-actions>div').append(draft);const stopMenu=wireDetailsPopover(workspace.querySelector('.journal-stop-actions'));
 
  const update=e=>{const row=e.target.closest?.('[data-presence-id]');if(!row&&!e.target.matches?.('.journal-review-note'))return;if(row)dirty.add(row.dataset.presenceId);if(e.target.matches?.('.journal-review-note')){comments.set(active,e.target.value);dirty.add(active);}zeroAck=null;capture();paintResult();paintBatch();};root.addEventListener('input',update);root.addEventListener('change',update);let pointerActive=false;const startPointer=()=>{pointerActive=true;},endPointer=()=>{pointerActive=false;};root.addEventListener('pointerdown',startPointer,true);doc.defaultView.addEventListener('pointerup',endPointer,true);doc.defaultView.addEventListener('pointercancel',endPointer,true);const revealFocus=e=>{if(pointerActive)return;const scroll=e.target.closest?.('.presence-review-scroll');if(!scroll||!e.target.matches?.('input,select,textarea,button'))return;const box=e.target.getBoundingClientRect(),clip=scroll.getBoundingClientRect();if(box.top<clip.top+12||box.bottom>clip.bottom-12)e.target.scrollIntoView?.({block:'center',inline:'nearest',behavior:'instant'});};root.addEventListener('focusin',revealFocus);
