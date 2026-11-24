@@ -31,7 +31,7 @@ export function createPlannerWorkspace(ctx){
   state={durationMin:null,durationMax:null,profitMin:null,profitMax:null,profitSource:'plan',profitMetric:'margin',from:today,to:plannerDate(today,6),people:[],status:'',workMode:'',warranty:'any',scale:45,zoom:18,showFact:true,hideOffHours:false,showLegend:false,colleagues:false,mode:'graph',statsMode:null,mobile:false,collapsed:false,contextOpen:null,contextKind:'overview',dayControlsDate:null,selection:null,multiParts:[],selecting:false,...saved,zoom:saved.zoom??(saved.scale?null:18)};
   if(!/^\d{4}-\d{2}-\d{2}$/.test(state.from)||!/^\d{4}-\d{2}-\d{2}$/.test(state.to)||state.to<state.from||(Date.parse(state.to)-Date.parse(state.from))/86400000>366){state.from=today;state.to=plannerDate(today,6);}state.scale=Math.max(10,Math.min(120,Number(state.scale)||45));state.people=Array.isArray(state.people)?state.people:[];if(actor().role==='engineer'){state.profitMin=null;state.profitMax=null;}
  }
- async function open(){initialize();const ticket=++renderVersion;host().classList.add('pw-root');host().innerHTML='<div class="pw-loading" role="status">Загрузка нового графика…</div>';try{await store.load({from:state.from,to:state.to});if(ticket!==renderVersion)return;if(!state.people.length)state.people=data().profiles.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>p.id);render(false);if(store.state.pending.length)store.flush();}catch{paintFailure();}}
+ async function open(){initialize();const ticket=++renderVersion;host().classList.add('pw-root');host().innerHTML='<div class="pw-loading" role="status">Загрузка нового графика…</div>';try{await store.load({from:state.from,to:state.to});if(ticket!==renderVersion)return;if(!state.people.length)state.people=data().profiles.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>p.id);render(false);scrollToWorkStart();if(store.state.pending.length)store.flush();}catch{paintFailure();}}
  async function refresh(){if(!state)return open();try{await store.load({from:state.from,to:state.to});render();}catch{paintFailure();}}
  function paintFailure(){if(!host())return;host().innerHTML=`<div class="pw-empty"><h1>График</h1><p role="alert">${esc(store.state.error||'Не удалось загрузить данные.')}</p><button type="button" class="btn" data-pw="refresh">Повторить</button></div>`;}
  function render(keepPosition=true){
@@ -43,6 +43,16 @@ export function createPlannerWorkspace(ctx){
   q('.pw-calendar').addEventListener('wheel',zoomWheel,{passive:false});
   q('.pw-calendar').addEventListener('scroll',()=>{collapseRail(q('.pw-calendar'));paintCrewHours();syncFocusbar();positionFloating();},{passive:true});q('.pw-statistics').addEventListener('scroll',()=>collapseRail(q('.pw-statistics')),{passive:true});
   if(keepPosition){q('.pw-calendar').scrollTop=previous.top;q('.pw-calendar').scrollLeft=previous.left;q('.pw-statistics').scrollTop=previous.stats;}persist();
+ }
+ // The day grid spans 00:00–24:00; open at the earliest work window of today (or the first day) instead of midnight.
+ function scrollToWorkStart(){
+  const cal=q('.pw-calendar');if(!cal||state.viewDays>=7)return;
+  const today=plannerLocalTime(new Date()).date,days=qa('.pw-day'),day=days.find(d=>d.dataset.date===today)||days[0],body=day?.querySelector('.pw-day-body');if(!body)return;
+  const start=Number(day.dataset.start),scale=Number(day.dataset.scale||state.scale),windows=plannerPeople(data(),state,actor()).map(person=>dayWindow(person.id,day.dataset.date,data().settings)).filter(Boolean);
+  const hour=Math.max(start,Math.min(...windows.map(w=>w.start),Number(data().settings?.dayStart??7))-.5);
+  // The programmatic jump is not a user scroll: keep the header expanded so the rail does not shift the grid back.
+  railAdjusting=true;cal.scrollTop=Math.max(0,calendarTop(body)+(hour-start)*scale-(q('.pw-crew-head')?.offsetHeight||0));
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{railAdjusting=false;}));
  }
  function sizeCalendarColumns(){const people=plannerPeople(data(),state,actor()),gutter=state.viewDays>=7?(state.mobile?72:84):(state.mobile?48:68),available=q('.pw-calendar')?.clientWidth||host().clientWidth||600,lane=state.mobile?Math.max(166,available-gutter):Math.max(state.viewDays>=7&&state.showFact?300:220,(available-gutter)/Math.max(1,people.length));for(const name of ['--pw-lane','--lane'])host().style.setProperty(name,lane+'px');for(const name of ['--pw-gutter','--gutter'])host().style.setProperty(name,gutter+'px');q('.pw-calendar-inner').style.width=(gutter+people.length*lane)+'px';}
  function calendarTop(node){const cal=q('.pw-calendar');return node.getBoundingClientRect().top-cal.getBoundingClientRect().top+cal.scrollTop;}

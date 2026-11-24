@@ -144,9 +144,17 @@ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.wb-r
 /* Linked task and trip tables: row actions are visible secondary buttons, as in the mockup. */
 html#dlight-ui[data-ui-system] .view.workflow-card .workflow-related-table td .btn.ghost:not([data-related-expand]):not([aria-controls]) { border:1px solid var(--line)!important;padding-inline:16px!important; }
 @media(min-width:761px){
- html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview { grid-template-areas:"route state" "route payment" "route details";grid-template-rows:auto auto 1fr; }
- html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.entity-payment-terms { grid-area:payment;margin:0!important; }
+ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview { grid-template-areas:"route side";grid-template-rows:auto; }
+ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.workflow-overview-side { grid-area:side;display:grid;align-content:start;gap:16px;min-width:0; }
+ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-overview-side>:is(.workflow-overview-state,.entity-payment-terms,.workflow-trip-details) { margin:0!important; }
 }
+/* Wide screens: the route column and the side column (situation, payment, description, comments) scroll separately. */
+@media(min-width:1101px){
+ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview { height:calc(100dvh - var(--overview-top,300px) - 32px);min-height:480px;grid-template-rows:minmax(0,1fr);align-items:stretch; }
+ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>:is(.wb-route-card,.workflow-overview-side) { min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable; }
+ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-trip-overview>.workflow-overview-side { padding-right:4px; }
+}
+@media(max-width:760px){ html#dlight-ui[data-ui-system] .view.workflow-card .workflow-overview-side { display:contents; } }
 html#dlight-ui[data-ui-system] .view :is(a.workflow-request-link,a.workflow-crumb-link) { color:var(--ink)!important;text-decoration:underline;text-underline-offset:3px;font-weight:500; }
 html#dlight-ui[data-ui-system] .view a.workflow-crumb-link { font-size:12px;margin-left:12px; }
 /* Remaining contract tools (request estimate, contract sums, cost allocation) read as collapsible cards. */

@@ -6025,7 +6025,7 @@ $('rRebuildRemaining').onclick=async()=>{
   finally{rBusy=false;button.disabled=false;updateRouteActions();}
 };
 async function loadTripJobs(){ const {data}=await sb.from('jobs').select('id,status,scheduled_date,equipment_id,at_depot, clients(name,lat,lng), equipment(model,lat,lng), '+JOB_FINANCE_SELECT).is('deleted_at',null).or('at_depot.is.null,at_depot.eq.false').order('created_at',{ascending:false}); tripJobsAll=projectLegacyFinanceRows(data||[]); }
-async function loadTripOrders(){const {data,error}=await sb.from('service_orders').select('id,number,title,status,work_mode,job_id,seed_request_id,engineer_ids,owner_id,curator_id,date_from,date_to,jobs!service_orders_job_id_fkey(due_date),service_order_items(id,kind,title,unit,planned_qty,done_qty,planned_labor_hours,parent_work_id,request_finance_void_event_id)').not('job_id','is',null).eq('work_mode','onsite').order('created_at',{ascending:false});if(error)throw error;tripOrdersAll=data||[];}
+async function loadTripOrders(){const {data,error}=await sb.from('service_orders').select('id,number,title,status,work_mode,job_id,seed_request_id,lead_engineer,engineer_ids,owner_id,curator_id,date_from,date_to,jobs!service_orders_job_id_fkey(due_date),service_order_items(id,kind,title,unit,planned_qty,done_qty,planned_labor_hours,parent_work_id,request_finance_void_event_id)').not('job_id','is',null).eq('work_mode','onsite').order('created_at',{ascending:false});if(error)throw error;tripOrdersAll=data||[];}
 function syncTripJobsFromOrders(){curTripJobs=new Set(tripOrdersAll.filter(o=>curTripOrders.has(o.id)).map(o=>o.job_id));}
 function tripStops(){ const stops=[]; const seen=new Set(); tripJobsAll.filter(j=>curTripJobs.has(j.id)).forEach(j=>{ const eq=j.equipment; const lat=(eq&&eq.lat!=null)?eq.lat:(j.clients?j.clients.lat:null); const lng=(eq&&eq.lng!=null)?eq.lng:(j.clients?j.clients.lng:null); if(lat==null) return; const nm=(eq&&eq.lat!=null)?((j.clients?j.clients.name:'')+' · '+(eq.model||'')):(j.clients?j.clients.name:''); const key=(+lat).toFixed(5)+','+(+lng).toFixed(5); if(seen.has(key)) return; seen.add(key); stops.push({name:nm,lat,lng}); }); return stops; }
 const keyOf=s=>(+s.lat).toFixed(5)+','+(+s.lng).toFixed(5);
@@ -6232,6 +6232,7 @@ async function openTrip(id,{includeOrderId=null,plannedOrderIds=[],seedOrder=nul
     const planned=new Set(plannedOrderIds);
     tripOrdersAll.filter(order=>planned.has(order.id)&&!['review','completed','cancelled'].includes(order.status)).forEach(order=>curTripOrders.add(order.id));
   }
+  if(!id&&!gpsSource)seedTripFromOrders();
   if(t&&!curTripOrders.size){const {data}=await sb.from('trip_jobs').select('job_id').eq('trip_id',id);const ids=new Set((data||[]).map(r=>r.job_id));tripOrdersAll.filter(o=>ids.has(o.job_id)&&o.seed_request_id===o.job_id).forEach(o=>curTripOrders.add(o.id));}
   syncTripJobsFromOrders();if(tripMainJobId&&!curTripJobs.has(tripMainJobId))tripMainJobId=null;
   const ro=!canWriteTrip(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
@@ -6469,7 +6470,22 @@ function loadTripIntoPlanner(trip){
 $('tripCancel').onclick=async()=>{if((tripPlanDirty||tripPresenceDirty)&&!await confirmDialog('Выйти без сохранения изменений карточки?',{okText:'Выйти'}))return;tripPlanDirty=false;tripPresenceDirty=false;await returnToCard(tripBack);};
 ['tpFrom','tpTo','tpEng','tpStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',tripEcon); });
 $('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
-$('tpSave').onclick=async ()=>{ const jobIds=[...curTripJobs]; const stops=routeAll(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
+// A trip formed from tasks takes its plan dates and crew from them when those fields are empty,
+// so the schedule can place it and its tasks never drop out of the planner.
+function seedTripFromOrders(){
+  const orders=tripOrdersAll.filter(order=>curTripOrders.has(order.id)&&order.status!=='cancelled');if(!orders.length)return false;
+  let changed=false;
+  if(!$('tpFrom').value&&!$('tpTo').value){
+    const from=orders.map(o=>o.date_from).filter(Boolean).sort()[0]||'',to=orders.map(o=>o.date_to||o.date_from).filter(Boolean).sort().at(-1)||'';
+    if(from){$('tpFrom').value=from;$('tpTo').value=to&&to>=from?to:from;changed=true;}
+  }
+  if(!selectedEngineerIds('tpEng').length){
+    const crew=[...new Set(orders.flatMap(o=>[o.lead_engineer,...(o.engineer_ids||[])]).filter(Boolean))];
+    if(crew.length){setEngineerSelect('tpEng',crew);changed=true;}
+  }
+  return changed;
+}
+$('tpSave').onclick=async ()=>{ if(canWriteTrip()&&!tripGpsSource)seedTripFromOrders(); const jobIds=[...curTripJobs]; const stops=routeAll(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
   if(!canWriteTrip())return;
   if(tripEditId&&tripNewPlanId!==tripEditId&&!$('tpChangeReason').value.trim()){ $('tripErr').textContent='Укажи причину изменения плана.';openTripPlanFields();$('tpChangeReason').focus({preventScroll:true});$('tpChangeReason').scrollIntoView({block:'center',behavior:'auto'});return; }
   const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};

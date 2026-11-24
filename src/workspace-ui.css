@@ -976,13 +976,13 @@ html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{con
 .workflow-trip-overview {
  display:grid;
  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
- grid-template-areas:"route state" "route details";
+ grid-template-areas:"route side";
  align-items:start;
  gap:16px var(--workflow-card-gap);
 }
 .workflow-trip-overview>.wb-route-card { grid-area:route; }
-.workflow-trip-overview>.workflow-overview-state { grid-area:state;margin:0;padding:16px; }
-.workflow-trip-details { grid-area:details;min-width:0; }
+.workflow-trip-overview .workflow-overview-state { margin:0;padding:16px; }
+.workflow-trip-details { min-width:0; }
 .workflow-trip-description {
  padding:16px;
  background:var(--panel);
@@ -1013,7 +1013,7 @@ html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{con
  .workflow-overview-state>.btn { width:100%; }
  .workflow-card :is(.request-context-data,.order-brief-context) { grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
  .workflow-trip-overview { display:flex;flex-direction:column;align-items:stretch; }
- .workflow-trip-overview>.workflow-overview-state { order:-1; }
+ .workflow-trip-overview .workflow-overview-state { order:-1; }
  .workflow-related-table th,.workflow-related-table td { padding-inline:6px; }
 }
 

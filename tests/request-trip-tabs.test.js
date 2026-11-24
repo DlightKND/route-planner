@@ -147,7 +147,7 @@ it('reveals trip validation in its own section before any write and keeps the un
   const start=app.indexOf('const tripTabs=createEntityTabs'),end=app.indexOf("document.querySelector('.view-trip')?.addEventListener",start);
   vm.runInContext(app.slice(start,end),context);
   const rpc=vi.fn();Object.assign(context,{curTripJobs:new Set(),routeAll:()=>[],vehicles:[],canWriteTrip:()=>true,
-    tripPresenceDirty:false,tripPlanDirty:true,tripEditId:'trip-1',tripNewPlanId:null,sb:{rpc},tripWorkbench:{stays:[]},readPresenceForm:()=>[]});
+    tripPresenceDirty:false,tripPlanDirty:true,tripEditId:'trip-1',tripNewPlanId:null,tripGpsSource:null,seedTripFromOrders:()=>false,sb:{rpc},tripWorkbench:{stays:[]},readPresenceForm:()=>[]});
   const saveStart=app.indexOf("$('tpSave').onclick=async"),saveEnd=app.indexOf('async function delTrip(',saveStart);
   vm.runInContext(app.slice(saveStart,saveEnd),context);
   get('tpNotes').value='Новый маршрут';get('tpTabEconomy').click();await get('tpSave').onclick();
@@ -156,4 +156,22 @@ it('reveals trip validation in its own section before any write and keeps the un
   expect(get('tripErr').textContent).toContain('причину');expect(rpc).not.toHaveBeenCalled();
   expect(app).not.toContain('p_stays:presenceChanges');expect(get('tpNotes').value).toBe('Новый маршрут');expect(context.tripPlanDirty).toBe(true);
 
+});
+
+it('seeds an empty trip period and crew from its linked tasks only when those fields are empty',()=>{
+  const start=app.indexOf('function seedTripFromOrders('),end=app.indexOf("$('tpSave').onclick=async",start);
+  const fields={tpFrom:{value:''},tpTo:{value:''}};let crew=[];
+  const context=vm.createContext({$:id=>fields[id],selectedEngineerIds:()=>crew,setEngineerSelect:(id,ids)=>{crew=ids;},
+    curTripOrders:new Set(['a','b','c']),tripOrdersAll:[
+      {id:'a',status:'in_progress',date_from:'2026-11-25',date_to:'2026-11-25',lead_engineer:'e1',engineer_ids:['e1']},
+      {id:'b',status:'assigned',date_from:'2026-11-24',date_to:null,lead_engineer:null,engineer_ids:['e2']},
+      {id:'c',status:'cancelled',date_from:'2026-11-01',date_to:'2026-12-01',lead_engineer:'e3',engineer_ids:[]},
+      {id:'d',status:'assigned',date_from:'2026-10-01',date_to:'2026-10-02',lead_engineer:'e4',engineer_ids:[]}]});
+  vm.runInContext(app.slice(start,end)+';globalThis.seed=seedTripFromOrders;',context);
+  expect(context.seed()).toBe(true);
+  expect([fields.tpFrom.value,fields.tpTo.value]).toEqual(['2026-11-24','2026-11-25']);
+  expect(crew).toEqual(['e1','e2']);
+  fields.tpFrom.value='2026-11-30';fields.tpTo.value='';crew=['e9'];
+  expect(context.seed()).toBe(false);
+  expect([fields.tpFrom.value,crew]).toEqual(['2026-11-30',['e9']]);
 });
