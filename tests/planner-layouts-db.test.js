@@ -29,6 +29,7 @@ beforeAll(async()=>{
  await db.exec(readFileSync(new URL('../supabase/migrations/20261026194156_canonical_planner_layouts.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261029093102_planner_sequence_ergonomics.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261029095227_planner_trip_auto_reset.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261124111315_planner_undated_trips.sql',import.meta.url),'utf8'));
 },30000);
 afterAll(async()=>db?.close());
 beforeEach(async()=>{await db.exec('begin');transactional=true;await q("insert into profiles values($1,'admin',true),($2,'engineer',true),($3,'engineer',true),($4,'engineer',true)",[1,2,3,4].map(id));await q('insert into jobs values($1,50,36,null,null)',[id(10)]);await q("insert into service_orders(id,title,job_id,engineer_ids,date_from,date_to) values($1,'Ремонт',$2,$3,'2026-10-26','2026-10-27')",[id(20),id(10),[id(2),id(3)]]);await q("insert into trips(id,date_from,date_to,lead_engineer,engineer_ids,route_stops,econ_snapshot) values($1,'2026-10-26','2026-10-27',$2,$3,$4,$5)",[id(30),id(2),[id(2),id(3)],[{type:'place',lat:49,lng:35},{type:'job',lat:50,lng:36},{type:'place',lat:49,lng:35}],{driveH:2,legs:[{a:'depot',b:'job',h:1},{a:'job',b:'depot',h:1}]}]);await q('insert into trip_service_orders values($1,$2,0)',[id(30),id(20)]);await q("insert into service_order_items(id,order_id,kind,unit,planned_qty) values($1,$2,'work','ч',2)",[id(40),id(20)]);await as(1);});
@@ -132,4 +133,23 @@ it('does not accept a forged automatic-clock marker or a partial clock-mode roll
 });
 it('uses one explicit weekend window and respects a closed override even for an explicitly dated trip',async()=>{
  await db.exec('reset role');await q("insert into staff_day values($1,'2026-10-31',9,14,1)",[id(2)]);const opened=(await q("select dlight_private.planner_window($1,'2026-10-31',false) value",[[id(2)]]))[0].value;expect(opened).toEqual({start:9,end:14,ceiling:15});expect((await q("select dlight_private.planner_window($1,'2026-10-31',false) value",[[id(3)]]))[0].value).toBeNull();expect((await q("select dlight_private.planner_window($1,'2026-11-01',false) value",[[id(2)]]))[0].value).toBeNull();await q("update staff_day set start_h=0,end_h=0,tol_h=0 where engineer=$1 and date='2026-10-31'",[id(2)]);expect((await q("select dlight_private.planner_window($1,'2026-10-31',true) value",[[id(2)]]))[0].value).toBeNull();
+});
+it('places tasks of an undated crewless trip from the tasks themselves',async()=>{
+ await db.exec('reset role');
+ await q("update service_orders set lead_engineer=$1 where id=$2",[id(2),id(20)]);
+ await q("update trips set date_from=null,date_to=null,lead_engineer=null,engineer_ids='{}',started_at='2026-10-26 06:30+00' where id=$1",[id(30)]);
+ await as(1);
+ const work=(await snapshot()).groups.filter(g=>g.kind==='work');
+ expect(work).toHaveLength(1);
+ expect(work[0].order_id).toBe(id(20));
+ expect(work[0].parts[0].date).toBe('2026-10-26');
+ expect([...work[0].people].sort()).toEqual([id(2),id(3)]);
+});
+it('uses the saved day-plan start when a trip has no plan dates',async()=>{
+ await db.exec('reset role');
+ await q("update trips set date_from=null,date_to=null,day_plan=$2 where id=$1",[id(30),{start:{d:'2026-10-26',h:8}}]);
+ await as(1);
+ const work=(await snapshot()).groups.filter(g=>g.kind==='work');
+ expect(work).toHaveLength(1);
+ expect(work[0].parts[0].date).toBe('2026-10-26');
 });

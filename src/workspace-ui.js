@@ -133,7 +133,16 @@ export function installWorkspaceStructure(root=document){
   const description=element(root,'section','workflow-trip-description');description.innerHTML='<h2>Описание выезда</h2><p id="tripOverviewDescription"></p>';
   const grid=element(root,'div','workflow-trip-overview');
   const details=element(root,'div','workflow-trip-details');details.append(description,root.getElementById('tripActivitySection'));
-  overview.prepend(grid);grid.append(route,state,details);
+  // Route and the side column (state, payment terms, description, comments) scroll independently on wide screens.
+  const side=element(root,'div','workflow-overview-side');side.append(state,details);
+  overview.prepend(grid);grid.append(route,side);
+  // The two columns fill the scroll pane below the header, so each keeps its own scroll.
+  const view=root.defaultView,fitOverview=()=>{
+   const pane=grid.closest('.scrollp');if(!pane||!grid.offsetParent)return;
+   grid.style.setProperty('--overview-top',Math.round(grid.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop)+'px');
+  };
+  if(view?.ResizeObserver){const watch=new view.ResizeObserver(fitOverview);watch.observe(overview);const head=trip.querySelector('.workspace-masthead');if(head)watch.observe(head);}
+  view?.addEventListener('resize',fitOverview);
   const toolbar=trip.querySelector('.trip-toolbar');
   const economy=root.getElementById('tpEconomyPane'),legacy=element(root,'details','workflow-finance-tool');
   legacy.id='tpContractEconomy';legacy.open=true;legacy.innerHTML='<summary>Договорная смета и ручные суммы</summary>';

@@ -31,9 +31,9 @@
 | count-badge | Вложенный счётчик: смысл / 0 / неизвестно | Описан | Есть | P1 | [src/unified-journal.css:458](../src/unified-journal.css#L458) | [Контракт](design-system.md#countbadge-вложенная-мини-пилюля-из-журнала) |
 | filter-chip | Фильтры: один или несколько, сброс | Описан | Есть | P1 | [src/unassigned-tracks.js:53](../src/unassigned-tracks.js#L53) | [Контракт](design-system.md#badge--filterchip--selectionchip) |
 | view-segment | Сегментированный выбор представления | Описан | Есть | P1 | [src/app.js:3691](../src/app.js#L3691) | [Контракт](design-system.md#segmentedcontrol-переключатели-со-сводки) |
-| decision-radio | Radio / взаимоисключающий выбор в черновике | Описан | Есть | P1 | [src/app.js:6405](../src/app.js#L6405) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
+| decision-radio | Radio / взаимоисключающий выбор в черновике | Описан | Есть | P1 | [src/app.js:6406](../src/app.js#L6406) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | checkbox-group | Один checkbox и множественный выбор | Описан | Есть | P1 | [src/engineer-picker.js:33](../src/engineer-picker.js#L33) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
-| boolean-switch | Немедленная настройка Вкл / Выкл | Описан | Есть | P1 | [src/app.js:8352](../src/app.js#L8352) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
+| boolean-switch | Немедленная настройка Вкл / Выкл | Описан | Есть | P1 | [src/app.js:8368](../src/app.js#L8368) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | native-select | Одиночный выбор из списка | Описан | Есть | P1 | [index.html:2545](../index.html#L2545) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | multi-select-popover | Выбор инженеров: popover с checkbox, без поиска | Частично | Есть | P1 | [src/engineer-picker.js:26](../src/engineer-picker.js#L26) | [Контракт](design-system.md#pattern-selection) |
 | search-field | Поиск списка: debounce / clear / пусто / ошибка | Пропуск | Есть | P1 | [src/notifications.js:75](../src/notifications.js#L75) | [Контракт](design-system.md#pattern-selection) |
@@ -60,7 +60,7 @@
 | action-menu | Другие действия: disclosure / menu / dialog | Описан | Есть | P1 | [src/entity-actions.js:5](../src/entity-actions.js#L5) | [Контракт](design-system.md#menu--dialog--feedback) |
 | editable-items | Повторяемые строки работ / материалов | Пропуск | Есть | P0 | [src/service-orders.js:581](../src/service-orders.js#L581) | [Контракт](design-system.md#pattern-workflows) |
 | bulk-selection | Массовый выбор и preview объединения | Пропуск | Есть | P0 | [src/unassigned-tracks.js:122](../src/unassigned-tracks.js#L122) | [Контракт](design-system.md#pattern-workflows) |
-| reorder | Перестановка маршрута / карточек / панелей | Пропуск | Есть | P0 | [src/app.js:8459](../src/app.js#L8459) | [Контракт](design-system.md#pattern-workflows) |
+| reorder | Перестановка маршрута / карточек / панелей | Пропуск | Есть | P0 | [src/app.js:8475](../src/app.js#L8475) | [Контракт](design-system.md#pattern-workflows) |
 | schedule-manipulation | Перенос / изменение / разделение графика | Пропуск | Есть | P0 | [src/schedule-interactions.js:2](../src/schedule-interactions.js#L2) | [Контракт](design-system.md#pattern-workflows) |
 | map-explorer | Карта / миникарта / маркеры / список | Частично | Есть | P1 | [src/gps-track-map.js:12](../src/gps-track-map.js#L12) | [Контракт](design-system.md#pattern-data) |
 | gps-evidence | Измерение / восстановление / принятое решение | Частично | Есть | P0 | [src/presence-review-controls.js:36](../src/presence-review-controls.js#L36) | [Контракт](design-system.md#pattern-data) |
@@ -69,7 +69,7 @@
 | activity-comments | Лента, комментарии, закрепление, доказательства | Пропуск | Есть | P1 | [src/entity-activity.js:71](../src/entity-activity.js#L71) | [Контракт](design-system.md#pattern-data) |
 | notifications-inbox | Входящие: прочитано / действия / счётчик | Пропуск | Есть | P1 | [src/notifications.js:63](../src/notifications.js#L63) | [Контракт](design-system.md#pattern-feedback) |
 | load-more | Догрузка списка без потери выбора и фокуса | Пропуск | Есть | P1 | [src/notifications.js:63](../src/notifications.js#L63) | [Контракт](design-system.md#pattern-data) |
-| push-permission | Push: устройство, разрешение, отказ, timeout | Пропуск | Есть | P1 | [src/app.js:6766](../src/app.js#L6766) | [Контракт](design-system.md#pattern-session) |
+| push-permission | Push: устройство, разрешение, отказ, timeout | Пропуск | Есть | P1 | [src/app.js:6782](../src/app.js#L6782) | [Контракт](design-system.md#pattern-session) |
 | feedback | Toast / постоянный banner / inline error | Описан | Есть | P1 | [src/app.js:300](../src/app.js#L300) | [Контракт](design-system.md#menu--dialog--feedback) |
 | loading-progress | Ожидание и прогресс длительной операции | Частично | Есть | P1 | [src/app.js:292](../src/app.js#L292) | [Контракт](design-system.md#pattern-feedback) |
 | draft-guard | Несохранённый черновик и связанное действие | Частично | Есть | P0 | [src/entity-draft-resolution.js:2](../src/entity-draft-resolution.js#L2) | [Контракт](design-system.md#pattern-recovery) |
@@ -80,7 +80,7 @@
 | auth-session | Вход, потеря сессии и выход | Пропуск | Есть | P0 | [src/app.js:1043](../src/app.js#L1043) | [Контракт](design-system.md#pattern-session) |
 | profile-preferences | Аватар / профиль / preview и сохранение темы | Частично | Есть | P1 | [src/account-profile.js:4](../src/account-profile.js#L4) | [Контракт](design-system.md#pattern-session) |
 | responsive-sticky | Адаптация, sticky-footer, safe-area и фокус | Частично | Есть | P1 | [src/visual-system.css:4](../src/visual-system.css#L4) | [Контракт](design-system.md#pattern-navigation) |
-| external-copy | Копирование и переход во внешнюю карту | Пропуск | Есть | P1 | [src/app.js:6513](../src/app.js#L6513) | [Контракт](design-system.md#pattern-feedback) |
+| external-copy | Копирование и переход во внешнюю карту | Пропуск | Есть | P1 | [src/app.js:6529](../src/app.js#L6529) | [Контракт](design-system.md#pattern-feedback) |
 | floating-action | Существующая FAB «Создать точку» на карте | Частично | Есть | P0 | [index.html:2485](../index.html#L2485) | [Контракт](design-system.md#pattern-navigation) |
 
 ## Контроли, которые не следует выдавать за найденные
@@ -135,4 +135,4 @@
 
 Связь type/role с ID классифицирует сигнал, а не автоматически распознаёт смысл каждого его вхождения.
 
-Хеш проверенных production-исходников: `54810410150511f4d20a46ab3b5a3a18e720934b68ae2898d1051519fb1bda21`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
+Хеш проверенных production-исходников: `0c3c3f6fc3bb2156f350a60c494eed088f3ede8edc3c96d2ff3fdf32efabef07`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
