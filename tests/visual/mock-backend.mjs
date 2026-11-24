@@ -560,7 +560,12 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   if(canonicalPlanner==='resources'){
     // The same engineers are booked by a standalone block in the middle of the trip work.
     const work=plannerGroups.find(g=>g.kind==='work');
+    for(const g of plannerGroups)if(g.kind==='road')g.route_stale=true;
     plannerGroups.push({...structuredClone(work),source_key:'work:'+order+':base',trip_id:null,parts:[{id:'busy',date:'2026-10-05',start:11,end:13,offset:0}],auto_parts:[{id:'busy',date:'2026-10-05',start:11,end:13,offset:0}]});
+  }
+  if(canonicalPlanner==='progress'){
+    // The whole trip was planned for last week and is still not started; one stop lost its task.
+    for(const g of plannerGroups){g.parts=g.parts.map(p=>({...p,date:'2026-10-02'}));g.auto_parts=structuredClone(g.parts);if(g.kind==='road')g.route_stale=true;}
   }
   const plannerReceipts=new Map();audit.plannerWrites=[];tables.planner_layout_history=[];
   if(canonicalPlanner==='historical'){task.status='completed';ride.status='done';}
@@ -822,7 +827,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         audit.visitWrites.push(structuredClone(args));
         return {data:{revision:task.revision,event:visit.event},error:null};
       }
-      if(name==='planner_snapshot')return {data:{groups:structuredClone(plannerGroups.filter(g=>g.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to)||g.trip_id&&plannerGroups.some(h=>h.trip_id===g.trip_id&&h.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to))))},error:null};
+      if(name==='planner_snapshot')return {data:{overdue:canonicalPlanner==='progress'?[{kind:'order',id:order,type:'overdue',date:'2026-10-02'},{kind:'trip',id:trip,type:'late',date:'2026-10-02'}]:[],groups:structuredClone(plannerGroups.filter(g=>g.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to)||g.trip_id&&plannerGroups.some(h=>h.trip_id===g.trip_id&&h.parts.some(p=>p.date>=args.p_from&&p.date<=args.p_to))))},error:null};
       if(name==='planner_apply'&&canonicalPlanner){
         if(plannerReceipts.has(args.p_operation))return {data:structuredClone(plannerReceipts.get(args.p_operation)),error:null};
         if(role==='engineer')return {data:null,error:{message:'Нет права изменять это задание'}};

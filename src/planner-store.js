@@ -57,7 +57,7 @@ export function createPlannerStore(ctx){
     if(extraByOrder.has(order.id))order.extra_part_cost=extraByOrder.get(order.id);
     for(const item of order.service_order_items||[])if(item.finance_voided_at)item.legacy_snapshot={request_finance_voided_at:item.finance_voided_at};
    }
-   const groups=plan?.groups||[],profiles=clone(ctx.profiles?.()||[]),source=normalizePlannerData({orders,requests,trips:live,groups,extraPartCosts,orderPlanHours:plan?.order_plan_hours||{},links:reads[0].value,stays:reads[1].status==='fulfilled'?reads[1].value:[],tracks:reads[2].status==='fulfilled'?reads[2].value:[],profiles,settings:settingsForPlanner(ctx.settings?.()||{},days),notices,period:{...period}});
+   const groups=plan?.groups||[],profiles=clone(ctx.profiles?.()||[]),source=normalizePlannerData({orders,requests,trips:live,groups,extraPartCosts,orderPlanHours:plan?.order_plan_hours||{},overdue:plan?.overdue||[],links:reads[0].value,stays:reads[1].status==='fulfilled'?reads[1].value:[],tracks:reads[2].status==='fulfilled'?reads[2].value:[],profiles,settings:settingsForPlanner(ctx.settings?.()||{},days),notices,period:{...period}});
    if(ticket!==version||identity!==key())return data;
    data=overlayPending(source);state={status:'ready',offline:false,error:'',savedAt:Date.now()};try{cache();}catch{state.error='Данные загружены. Сохранить копию для работы без связи не удалось.';}emit();return data;
   }catch(error){if(ticket!==version||identity!==key())return data;

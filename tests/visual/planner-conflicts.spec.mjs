@@ -9,7 +9,7 @@ async function boot(page,info,mode='conflicts'){
   await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,canonicalPlanner:mode});
   await page.goto('/#/schedule');
   if(await page.locator('#todayLater').isVisible().catch(()=>false))await page.locator('#todayLater').click();
-  await expect(page.locator('.pw-plan').first()).toBeVisible();
+  await expect(page.locator(mode==='progress'?'.pw-calendar':'.pw-plan').first()).toBeVisible();
   return errors;
 }
 async function shot(page,info,name){const path='test-results/planner-conflicts/'+info.project.name;mkdirSync(path,{recursive:true});await page.screenshot({path:path+'/'+name+'.png',animations:'disabled'});}
@@ -57,8 +57,24 @@ test('planner conflicts: one engineer in two blocks is reported on both blocks a
   const panel=await openOverview(page);
   const rows=panel.locator('[data-conflict=busy]');
   await expect(rows).toHaveCount(2);await expect(rows.first()).toContainText('Двойная занятость · Анна Смирнова');
+  await expect(panel.locator('[data-conflict=route]')).toHaveCount(1);
   await rows.first().click();
   await expect(page.locator('.pw-conflict[data-conflict=busy]').first()).toContainText('05.10 11:00–13:00 у Анна Смирнова уже стоит задание №101.');
   await shot(page,info,'busy');
+  await openOverview(page).catch(()=>{});await page.locator('[data-pw=overview]').first().click().catch(()=>{});
+  const route=page.locator('.pw-context [data-conflict=route]');if(!await route.isVisible())await page.locator('[data-pw=overview]').first().click();
+  await route.click();await expect(page.locator('.pw-conflict[data-conflict=route] [data-pw=full]')).toHaveText('Пересчитать маршрут в выезде →');
+  expect(errors).toEqual([]);
+});
+
+test('planner conflicts: overdue plans of past dates are listed in the overview and a stale route is explained',async({page},info)=>{
+  const errors=await boot(page,info,'progress');
+  const panel=await openOverview(page);
+  await expect(panel.locator('[data-overdue=overdue]')).toContainText('План просрочен · работа не начата');
+  await expect(panel.locator('[data-overdue=late]')).toContainText('Выезд не начат по плану');
+  await shot(page,info,'overdue');
+  await page.locator('.pw-calendar').evaluate(()=>{});
+  await panel.locator('[data-overdue=late]').click();
+  await expect(page.locator('.pw-context')).toContainText('Выезд №');
   expect(errors).toEqual([]);
 });
