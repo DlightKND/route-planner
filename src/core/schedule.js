@@ -41,7 +41,7 @@
 
 const DAY = 86400000;
 
-export const SCHEDULE_DEFAULTS = { dayStart: 7, dayEnd: 16, toleranceH: 1, weekend: [0, 6], staffDay: {} };
+export const SCHEDULE_DEFAULTS = { dayStart: 7, dayEnd: 16, toleranceH: 0, weekend: [0, 6], staffDay: {} };
 export const SCHEDULE_TIME_ZONE = 'Europe/Kyiv';
 
 // График относится к рабочему часовому поясу компании, а не к часовому

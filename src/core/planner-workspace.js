@@ -21,6 +21,7 @@ export function plannerEditIssue(group,data,actor){
   const order=data.orders.find(o=>o.id===group.order_id),trip=data.trips.find(t=>t.id===group.trip_id);
   if(group.trip_id&&!trip)return 'Контекст выезда доступен только для просмотра. Откройте задание для проверки размещения.';
   if(group.schedule_only)return 'Исторический план без подтверждённого экипажа доступен только для просмотра.';
+  if(group.booking)return 'Бронирование не переносится: сначала согласуйте порядок маршрута и даты задания.';
   if(!plannerCanManage(group.kind==='road'?trip:order,actor))return 'Нет права изменять размещение этой сущности.';
   if(order?.status==='cancelled')return 'Отменённое задание недоступно для размещения.';
   if(trip?.status==='cancelled')return 'Отменённый выезд недоступен для размещения.';
@@ -32,7 +33,7 @@ export function normalizePlannerData(input={}){
   const links=(input.links||[]).filter(l=>orderIds.has(l.order_id));
   const groups=(input.groups||[]).filter(g=>g.kind==='work'?orderIds.has(g.order_id):tripIds.has(g.trip_id)).map(g=>({...g,people:[...new Set(g.people||[])],parts:clone(g.parts||[]).sort((a,b)=>a.offset-b.offset)}));
   for(const g of groups)if(g.order_id&&g.trip_id&&!links.some(l=>l.order_id===g.order_id&&l.trip_id===g.trip_id))links.push({order_id:g.order_id,trip_id:g.trip_id});
-  return {...input,orders,trips,links,groups,requests:input.requests||[],profiles:input.profiles||[],stays:input.stays||[],tracks:input.tracks||[],settings:input.settings||{dayStart:7,dayEnd:16,toleranceH:1,weekend:[0,6],staffDay:{}}};
+  return {...input,orders,trips,links,groups,requests:input.requests||[],profiles:input.profiles||[],stays:input.stays||[],tracks:input.tracks||[],settings:input.settings||{dayStart:7,dayEnd:16,toleranceH:0,weekend:[0,6],staffDay:{}}};
 }
 export function plannerAssignments(data){
   const orders=byId(data.orders),trips=byId(data.trips);
@@ -105,7 +106,7 @@ export function plannerDayFrame(date,data,actor,facts=[],view={}){
   if(!starts.length)return {start:0,end:24,span:24,closed:true};
   const start=Math.max(0,Math.floor(Math.min(...starts)*4)/4),end=Math.min(24,Math.ceil(Math.max(...ends)*4)/4),frame={start,end,span:Math.max(.25,end-start),closed:false};
   // A personal override changes that window, not the zoom of every other column/day.
-  if(!personal)frame.scaleSpan=Math.max(.25,Number(data.settings.dayEnd??16)+Number(data.settings.toleranceH??1)-Number(data.settings.dayStart??7));
+  if(!personal)frame.scaleSpan=Math.max(.25,Number(data.settings.dayEnd??16)+Number(data.settings.toleranceH??0)-Number(data.settings.dayStart??7));
   return frame;
 }
 export function plannerWorkDayValues({start,end,tolerance,closed=false,propose=false}){
@@ -210,8 +211,8 @@ export function movePlannerSelection(groups,selection,anchor,date,start,settings
  }
  return [...changed.values()];
 }
-export function resetPlannerTrip(groups,tripId){const selected=groups.filter(g=>g.trip_id===tripId);if(!selected.length)throw Error('В выезде нет плановых брусков.');return selected.map(g=>({...clone(g),parts:clone(g.trip_auto_parts||g.auto_parts),people:clone(g.auto_people),manual:false,stale:false,reset_trip:true,clock_reset:true}));}
-export function shiftPlannerTrip(groups,tripId,days,hours=0){return groups.filter(g=>g.trip_id===tripId).map(g=>({...clone(g),manual:true,parts:g.parts.map(p=>({...p,date:plannerDate(p.date,days),start:p.start+hours,end:p.end+hours}))}));}
+export function resetPlannerTrip(groups,tripId){const selected=groups.filter(g=>g.trip_id===tripId&&!g.booking);if(!selected.length)throw Error('В выезде нет плановых брусков.');return selected.map(g=>({...clone(g),parts:clone(g.trip_auto_parts||g.auto_parts),people:clone(g.auto_people),manual:false,stale:false,reset_trip:true,clock_reset:true}));}
+export function shiftPlannerTrip(groups,tripId,days,hours=0){return groups.filter(g=>g.trip_id===tripId&&!g.booking).map(g=>({...clone(g),manual:true,parts:g.parts.map(p=>({...p,date:plannerDate(p.date,days),start:p.start+hours,end:p.end+hours}))}));}
 export function plannerChangeIssue(changes,data,actor){
   const changed=new Map(changes.map(g=>[g.source_key,g]));
   for(const group of changes){const old=data.groups.find(g=>g.source_key===group.source_key),issue=plannerEditIssue(group,data,actor);if(issue)return issue;

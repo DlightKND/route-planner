@@ -16,7 +16,7 @@ export async function readExtraPartCosts(db,tripIds=null){
 }
 function settingsForPlanner(settings,days){
  // A booking outside the calendar never silently creates ordinary working hours.
- return {dayStart:Number(settings.day_start??7),dayEnd:Number(settings.day_end??16),toleranceH:Number(settings.tolerance_h??1),weekend:[0,6],staffDay:Object.fromEntries(days.map(d=>[d.engineer+'|'+d.date,d]))};
+ return {dayStart:Number(settings.day_start??7),dayEnd:Number(settings.day_end??16),toleranceH:Number(settings.tolerance_h??0),weekend:[0,6],staffDay:Object.fromEntries(days.map(d=>[d.engineer+'|'+d.date,d]))};
 }
 export function createPlannerStore(ctx){
  let data=null,identity=null,pending=[],undo=[],busy=false,version=0,state={status:'idle',offline:false,error:'',savedAt:null};

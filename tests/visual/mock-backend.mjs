@@ -551,6 +551,12 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     {source_key:'work:'+order+':'+trip,kind:'work',trip_id:trip,order_id:order,people:[engineer,other],parts:[{id:'work-first',date:'2026-10-05',start:9,end:15,offset:0}]},
     {source_key:'road:'+trip+':1',kind:'road',trip_id:trip,order_id:null,people:[engineer,other],parts:[{id:'road-last',date:'2026-10-05',start:15,end:17,offset:0}]}
   ].filter(g=>canonicalPlanner!=='carryover'||g.kind==='work').map(g=>canonicalPlanner==='carryover'?{...g,parts:[{id:'work-first',date:'2026-10-05',start:12,end:17,offset:0}]}:g).map(g=>({...g,revision:0,order_revision:g.order_id?task.revision:null,trip_revision:ride.workbench_revision,manual:false,stale:false,basis:'synthetic',auto_parts:structuredClone(g.parts),auto_people:[...g.people]}));
+  if(canonicalPlanner==='conflicts'){
+    // Overflow past the task end date and a route-order booking on the next day.
+    task.date_from='2026-10-05';task.date_to='2026-10-05';
+    const work=plannerGroups.find(g=>g.kind==='work');work.parts=[{id:'work-first',date:'2026-10-05',start:9,end:15,offset:0},{id:'work-late',date:'2026-10-06',start:7,end:9,offset:6}];work.auto_parts=structuredClone(work.parts);
+    plannerGroups.push({...structuredClone(work),source_key:'work:'+order+':booking',booking:true,conflict:'order',parts:[{id:'booking',date:'2026-10-06',start:11,end:14,offset:0}],auto_parts:[{id:'booking',date:'2026-10-06',start:11,end:14,offset:0}]});
+  }
   const plannerReceipts=new Map();audit.plannerWrites=[];tables.planner_layout_history=[];
   if(canonicalPlanner==='historical'){task.status='completed';ride.status='done';}
   if(canonicalPlanner){
@@ -894,6 +900,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         tables.service_orders.push({...task,...args.p_data,id,number:109,status:'draft',revision:0,seed_request_id:null,trip_service_orders:[],service_order_items:rows});
         audit.remainderWrites.push({name,args:structuredClone(args)});
         return {data:id,error:null};
+      }
+      if(canonicalPlanner==='conflicts'&&name==='service_order_organization_save'){
+        if(args.p_id!==task.id||args.p_expected!==task.revision)return {data:null,error:{message:'Задание изменено другим пользователем',code:'QA'}};
+        (audit.deadlineWrites||(audit.deadlineWrites=[])).push(structuredClone(args));Object.assign(task,{date_from:args.p_date_from,date_to:args.p_date_to});task.revision++;return {data:task.revision,error:null};
       }
       if(managerJourney&&['service_order_organization_save','service_order_save_one','entity_responsibility_assign','service_order_deadline_propose','trip_reschedule_request'].includes(name)){
         const bad=message=>({data:null,error:{message,code:'QA_MANAGER_VALIDATION'}}),target=name==='entity_responsibility_assign'?(args.p_kind==='order'?tables.service_orders.find(o=>o.id===args.p_id):args.p_kind==='job'?request:ride):tables.service_orders.find(o=>o.id===(args.p_id||args.p_order));
