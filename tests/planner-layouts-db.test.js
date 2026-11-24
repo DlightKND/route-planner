@@ -32,6 +32,7 @@ beforeAll(async()=>{
  await db.exec(readFileSync(new URL('../supabase/migrations/20261124111315_planner_undated_trips.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261124124714_planner_task_dates_conflicts.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261124124716_overtime_default_zero.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261124134528_planner_trip_weekends.sql',import.meta.url),'utf8'));
  // The fixture scenarios were written with one approved overtime hour per day.
  await db.exec('update settings set tolerance_h=1 where id');
 },30000);
@@ -198,4 +199,19 @@ it('places an undated task outside trips at the latest point before its SLA, ski
  await as(1);
  task=(await snapshot()).groups.find(g=>g.order_id===id(22));
  expect(task.parts[0].date).toBe('2026-10-29');
+});
+it('pauses a trip over a closed weekend and uses a weekend day opened for the crew',async()=>{
+ // Order 20 needs 12 h starting Friday 30.10: 7–16 on Friday, the rest continues on Monday.
+ await db.exec('reset role');
+ await q("update trips set date_from='2026-10-30',date_to='2026-11-02' where id=$1",[id(30)]);
+ await q("update service_orders set date_from=null,date_to=null where id=$1",[id(20)]);
+ await q("update service_order_items set planned_qty=12 where id=$1",[id(40)]);
+ await as(1);
+ let work=(await snapshot()).groups.find(g=>g.order_id===id(20));
+ expect(work.parts.map(p=>p.date)).toEqual(['2026-10-30','2026-11-02']);
+ await db.exec('reset role');
+ await q("insert into staff_day values($1,'2026-10-31',8,12,0),($2,'2026-10-31',8,12,0)",[id(2),id(3)]);
+ await as(1);
+ work=(await snapshot()).groups.find(g=>g.order_id===id(20));
+ expect(work.parts.map(p=>p.date)).toEqual(['2026-10-30','2026-10-31']);
 });
