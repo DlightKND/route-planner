@@ -13,7 +13,7 @@ beforeAll(async()=>{
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
  create table profiles(id uuid primary key,role text,active boolean default true);
  create function public.user_role() returns text language sql stable security definer set search_path='' as $$select role from public.profiles where id=auth.uid() and active$$;
- create table jobs(id uuid primary key,lat double precision,lng double precision,owner_id uuid,curator_id uuid);
+ create table jobs(id uuid primary key,lat double precision,lng double precision,owner_id uuid,curator_id uuid,due_date date);
  create function public.job_point(p_job uuid) returns table(lat double precision,lng double precision) language sql stable as $$select lat,lng from public.jobs where id=p_job$$;
  create table service_orders(id uuid primary key,title text,status text default 'assigned',work_mode text default 'onsite',job_id uuid,lead_engineer uuid,engineer_ids uuid[] default '{}',owner_id uuid,curator_id uuid,date_from date,date_to date,revision integer default 0,created_at timestamptz default now());
  create table trips(id uuid primary key,status text default 'assigned',date_from date,date_to date,lead_engineer uuid,engineer_ids uuid[] default '{}',owner_id uuid,curator_id uuid,deleted_at timestamptz,started_at timestamptz,finished_at timestamptz,route_stops jsonb default '[]',econ_snapshot jsonb default '{}',plan_econ_snapshot jsonb,day_plan jsonb,workbench_revision integer default 0);
@@ -30,6 +30,10 @@ beforeAll(async()=>{
  await db.exec(readFileSync(new URL('../supabase/migrations/20261029093102_planner_sequence_ergonomics.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261029095227_planner_trip_auto_reset.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261124111315_planner_undated_trips.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261124124714_planner_task_dates_conflicts.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261124124716_overtime_default_zero.sql',import.meta.url),'utf8'));
+ // The fixture scenarios were written with one approved overtime hour per day.
+ await db.exec('update settings set tolerance_h=1 where id');
 },30000);
 afterAll(async()=>db?.close());
 beforeEach(async()=>{await db.exec('begin');transactional=true;await q("insert into profiles values($1,'admin',true),($2,'engineer',true),($3,'engineer',true),($4,'engineer',true)",[1,2,3,4].map(id));await q('insert into jobs values($1,50,36,null,null)',[id(10)]);await q("insert into service_orders(id,title,job_id,engineer_ids,date_from,date_to) values($1,'Ремонт',$2,$3,'2026-10-26','2026-10-27')",[id(20),id(10),[id(2),id(3)]]);await q("insert into trips(id,date_from,date_to,lead_engineer,engineer_ids,route_stops,econ_snapshot) values($1,'2026-10-26','2026-10-27',$2,$3,$4,$5)",[id(30),id(2),[id(2),id(3)],[{type:'place',lat:49,lng:35},{type:'job',lat:50,lng:36},{type:'place',lat:49,lng:35}],{driveH:2,legs:[{a:'depot',b:'job',h:1},{a:'job',b:'depot',h:1}]}]);await q('insert into trip_service_orders values($1,$2,0)',[id(30),id(20)]);await q("insert into service_order_items(id,order_id,kind,unit,planned_qty) values($1,$2,'work','ч',2)",[id(40),id(20)]);await as(1);});
@@ -152,4 +156,46 @@ it('uses the saved day-plan start when a trip has no plan dates',async()=>{
  const work=(await snapshot()).groups.filter(g=>g.kind==='work');
  expect(work).toHaveLength(1);
  expect(work[0].parts[0].date).toBe('2026-10-26');
+});
+const secondStop=async({from,to,hours=3})=>{
+ await db.exec('reset role');
+ await q('insert into jobs values($1,51,37,null,null,null)',[id(11)]);
+ await q("insert into service_orders(id,title,job_id,engineer_ids,date_from,date_to) values($1,'Наладка',$2,$3,$4,$5)",[id(21),id(11),[id(2),id(3)],from,to]);
+ await q("insert into service_order_items(id,order_id,kind,unit,planned_qty) values($1,$2,'work','ч',$3)",[id(41),id(21),hours]);
+ await q('insert into trip_service_orders values($1,$2,1)',[id(30),id(21)]);
+ await q('update trips set route_stops=$2,econ_snapshot=$3 where id=$1',[id(30),[{type:'place',lat:49,lng:35},{type:'job',lat:50,lng:36},{type:'job',lat:51,lng:37},{type:'place',lat:49,lng:35}],{driveH:3,legs:[{a:'depot',b:'a',h:1},{a:'a',b:'b',h:1},{a:'b',b:'depot',h:1}]}]);
+};
+it('lets a dated task in a trip wait for the start of its own day',async()=>{
+ await secondStop({from:'2026-10-28',to:'2026-10-28'});await as(1);
+ const groups=(await snapshot()).groups,work=groups.find(g=>g.order_id===id(21));
+ expect(work.booking).toBeUndefined();
+ expect(work.parts[0]).toMatchObject({date:'2026-10-28',start:7,end:10});
+ const roadToB=groups.find(g=>g.kind==='road'&&g.route_key==='a>b');
+ expect(roadToB.parts[0]).toMatchObject({date:'2026-10-26',start:10,end:11});
+});
+it('books the own date of a task the route reaches after a later-dated task and refuses to move it',async()=>{
+ await db.exec('reset role');await q("update service_orders set date_from='2026-10-27',date_to='2026-10-27' where id=$1",[id(20)]);
+ await secondStop({from:'2026-10-26',to:'2026-10-26'});await as(1);
+ const groups=(await snapshot()).groups,booking=groups.find(g=>g.order_id===id(21)),first=groups.find(g=>g.order_id===id(20));
+ expect(booking).toMatchObject({booking:true,conflict:'order'});
+ expect(booking.parts[0]).toMatchObject({date:'2026-10-26',start:7,end:10});
+ expect(first.parts[0]).toMatchObject({date:'2026-10-27',start:7,end:9});
+ // The route continues from the first task; the booked task is outside the chain.
+ expect(groups.find(g=>g.kind==='road'&&g.route_key==='a>b').parts[0]).toMatchObject({date:'2026-10-27',start:9,end:10});
+ await expect(save(booking,[{...booking.parts[0],date:'2026-10-28'}])).rejects.toThrow(/Бронирование не переносится/);
+});
+it('places an undated task outside trips at the latest point before its SLA, skipping busy days backwards',async()=>{
+ await db.exec('reset role');
+ await q("insert into jobs values($1,51,37,null,null,'2026-10-30')",[id(12)]);
+ await q("insert into service_orders(id,title,job_id,lead_engineer,engineer_ids) values($1,'Плановое ТО',$2,$3,$4)",[id(22),id(12),id(4),[id(4)]]);
+ await q("insert into service_order_items(id,order_id,kind,unit,planned_qty) values($1,$2,'work','ч',3)",[id(42),id(22)]);
+ await as(1);
+ let task=(await snapshot()).groups.find(g=>g.order_id===id(22));
+ expect(task.parts).toEqual([expect.objectContaining({date:'2026-10-30',start:7,end:10})]);
+ await db.exec('reset role');
+ await q("insert into service_orders(id,title,job_id,lead_engineer,engineer_ids,date_from,date_to) values($1,'Занятость',$2,$3,$4,'2026-10-30','2026-10-30')",[id(23),id(12),id(4),[id(4)]]);
+ await q("insert into service_order_items(id,order_id,kind,unit,planned_qty) values($1,$2,'work','ч',9)",[id(43),id(23)]);
+ await as(1);
+ task=(await snapshot()).groups.find(g=>g.order_id===id(22));
+ expect(task.parts[0].date).toBe('2026-10-29');
 });

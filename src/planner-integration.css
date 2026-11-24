@@ -439,3 +439,14 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button{min
  html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-day:first-of-type>.calendar-date-overlay>.pw-day-disclosure::after{top:0;bottom:-20px}
  html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-workday-button{min-height:48px!important}
 }
+
+/* Schedule conflicts. A red edge marks a block that breaks a task date, SLA or route order.
+   A booking is a hatched red reservation: the time is taken, the order is not settled yet. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-plan[data-conflict]{box-shadow:inset 4px 0 0 var(--red),inset 0 0 0 1px var(--red)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-plan[data-conflict] .pw-plan-warning{color:var(--red)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-plan[data-booking=true]{background:repeating-linear-gradient(135deg,var(--danger-bg) 0 10px,color-mix(in srgb,var(--danger-bg) 78%,var(--red)) 10px 20px)!important;border-color:var(--red)!important;color:var(--ink)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-plan[data-booking=true] .event-state-label{background:var(--red)!important;color:var(--danger-ink,var(--bg))!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-conflict{display:grid;gap:8px;margin:0 0 16px;padding:12px 16px;border:1px solid var(--red);border-left-width:4px;border-radius:12px;background:var(--danger-bg)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-conflict strong{color:var(--ink)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-conflict p{margin:0;color:var(--ink-dim,var(--dim))}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-conflict-actions{display:flex;flex-wrap:wrap;gap:8px}

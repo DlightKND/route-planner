@@ -132,6 +132,8 @@ const plannerWorkspace=createPlannerWorkspace({host:()=>document.getElementById(
  createOrder:()=>serviceOrders.open(null),openResult:id=>serviceOrders.openResult(id),tripAction,
  openJournal:async(id,stopId)=>{if(!await plannerWorkspace.leave())return;await switchTab('planner','tracking');await unassignedTracks.openRecord(id,{stopId,pane:'stops'});},
  transitionOrder:async(order,status)=>{const reason=delegatedOwnerIntervenes(order)?await askInterventionReason():'Изменение стадии из графика';if(reason===null)return;const {error}=await sb.rpc('service_order_transition',{p_id:order.id,p_expected:order.revision,p_status:status,p_reason:reason});if(error)throw error;},
+ // Resolves a schedule overflow: the task end date moves to the day the work actually ends.
+ saveOrderDeadline:async(order,date)=>{const {error}=await sb.rpc('service_order_organization_save',{p_id:order.id,p_expected:order.revision,p_date_from:order.date_from,p_date_to:date,p_engineer_ids:order.engineer_ids||[],p_lead_engineer:order.lead_engineer||null,p_reason:'Перенос срока из графика: работа не помещается в срок задания'});if(error)throw error;},
  saveWorkDay:async({person,date,start,end,tolerance,propose,closed=false})=>{if(closed&&(!['admin','logist'].includes(role)||propose))throw Error('Только менеджер задаёт выходной.');({start,end,tolerance}=plannerWorkDayValues({start,end,tolerance,closed,propose}));const row=propose?{engineer:person,date,proposed_end_h:end,proposed_by:session.user.id,proposed_at:new Date().toISOString()}:{engineer:person,date,start_h:start,end_h:end,tol_h:tolerance,...(closed?{proposed_end_h:null,proposed_by:null,proposed_at:null}:{})};const {error}=await sb.from('staff_day').upsert(row);if(error)throw error;},
  restoreWorkDay:async({person,date,before,expected})=>{if(!['admin','logist'].includes(role))throw Error('Только менеджер меняет рабочие часы.');let query=before?sb.from('staff_day').update(plannerWorkDayReceipt(before)):sb.from('staff_day').delete();query=query.eq('engineer',person).eq('date',date);for(const field of plannerWorkDayFields)query=expected[field]==null?query.is(field,null):query.eq(field,expected[field]);const {data:restored,error}=await query.select('engineer,date');if(error)throw error;if(restored?.length!==1)throw Error('Рабочие часы уже изменились. Обновите график перед отменой.');},
  decideWorkDay:async({person,date,accept,row})=>{if(!canWrite())throw Error('Только менеджер подтверждает рабочие часы.');const {error}=await sb.from('staff_day').upsert({engineer:person,date,start_h:row.start_h,end_h:accept?row.proposed_end_h:row.end_h,tol_h:row.tol_h,proposed_end_h:null,proposed_by:null,proposed_at:null});if(error)throw error;}
@@ -2158,9 +2160,9 @@ window.addEventListener('scroll',gtStickyRequest,{passive:true});window.addEvent
 function gtDragZoom(){ return gtDrag&&gtDrag.zoom; }
 const GT_WEEK_PX_H=5;
 function gtWindowHours(){return Math.max(.25,((+appSettings.day_end)||16)-((+appSettings.day_start)||7));}
-function gtEff(){ return gtWindowHours()+((+appSettings.tolerance_h)||1); }
+function gtEff(){ return gtWindowHours()+(+(appSettings.tolerance_h??0)||0); }
 function gtSettings(blocks){
-  const dayStart=(+appSettings.day_start)||7,dayEnd=(+appSettings.day_end)||16,toleranceH=(+appSettings.tolerance_h)||1;
+  const dayStart=(+appSettings.day_start)||7,dayEnd=(+appSettings.day_end)||16,toleranceH=+(appSettings.tolerance_h??0)||0;
   const staffDay={...staffDayMap};
   // Старые ручные планы могли уже быть прибиты к выходному до появления
   // staff_day. Открываем только даты, явно названные в плане; остальные
@@ -2308,7 +2310,7 @@ function gtDayHtml(key){
       +'<span class="vg-tolerance" style="top:'+geo.yOf(w.end)+'px;height:'+(geo.yOf(w.ceiling)-geo.yOf(w.end))+'px"></span>'
       +'<button class="vg-win-line start" data-winline="start" data-engineer="'+esc(l.id)+'" style="top:'+geo.yOf(w.start)+'px"><i>начало '+clockLabel(w.start)+'</i></button>'
       +'<button class="vg-win-line end" data-winline="end" data-engineer="'+esc(l.id)+'" style="top:'+geo.yOf(w.end)+'px"><i>конец '+clockLabel(w.end)+'</i></button>'
-      +'<button class="vg-win-line tolerance" data-winline="tol" data-engineer="'+esc(l.id)+'" style="top:'+geo.yOf(w.ceiling)+'px"><i>допуск '+clockLabel(w.ceiling)+'</i></button>'
+      +'<button class="vg-win-line tolerance" data-winline="tol" data-engineer="'+esc(l.id)+'" style="top:'+geo.yOf(w.ceiling)+'px"><i>сверхурочные '+clockLabel(w.ceiling)+'</i></button>'
       +(w.proposedEnd!=null?'<span class="vg-proposed" style="top:'+geo.yOf(w.proposedEnd)+'px">предложено '+clockLabel(w.proposedEnd)+'</span>':'');
     let bars='';
     gtBlocks().filter(b=>(b.engineer||' free')===l.id).forEach(b=>{
@@ -2374,7 +2376,7 @@ function gtWeekProblem(key,lanes){
     const w=dayWindow(l.id,iso,gtSettings()),over=gtLaneLoad(l.id,iso)-(w?Math.max(.25,w.ceiling-w.start):gtEff());
     if(over>.01&&(!worst||over>worst.over)) worst={over,l,iso,i};
   }));
-  if(worst) return WD_RU[(worst.i+1)%7]+' у '+worst.l.name+' '+fmtH(gtLaneLoad(worst.l.id,worst.iso))+' — на '+fmtH(worst.over)+' сверх допуска';
+  if(worst) return WD_RU[(worst.i+1)%7]+' у '+worst.l.name+' '+fmtH(gtLaneLoad(worst.l.id,worst.iso))+' — на '+fmtH(worst.over)+' сверх смены';
   const warning=(feedCtx.plan.warnings||[]).find(w=>days.includes(w.date)||days.includes(w.sla));
   if(warning) return warning.kind==='late'?'не успеваем к сроку '+shortDate(warning.sla):'график требует решения';
   if(gtBlocks().some(b=>(b.engineer||' free')===' free'&&gtPieces(b).some(p=>days.includes(p.iso)))) return 'есть работа без инженера';
@@ -2474,7 +2476,7 @@ function gtVerticalHtml(key){
     const groups=Object.values(groupBounds).map(g=>'<div class="vg-group'+(g.hasAction?' has-act':'')+'" data-vggroup data-gb="'+esc(g.b.id)+'" data-job-id="'+esc((g.b.jobIds||[]).length===1?g.b.jobIds[0]:'')+'" style="top:'+g.top+'px;height:'+(g.bottom-g.top)+'px"><b class="vg-gtitle">'+esc(g.name)+(g.b.manual?' ✎':'')+'</b>'+gtPlanTools(g.b)+'</div>').join('');
     tracks+='<div class="vg-lane" data-vglane="'+esc(l.id)+'" style="height:'+totalH+'px">'+cells+bars+groups+'<span class="vg-tip" hidden></span></div>';
   });
-  return '<div class="vg-tools"><span>'+(feedCtx.mine?'Работы по дням':'Рабочее окно '+fmtH((+appSettings.day_end||16)-(+appSettings.day_start||7))+' · допуск '+fmtH(appSettings.tolerance_h||1))+' '+infoHint((feedCtx.mine?'':'Перетащите работу на субботу или воскресенье, чтобы открыть выходной. ')+'Нажмите на день — сутки и ручная раскладка.', 'Работа с графиком')+'</span>'+gtLanePicker(key)+'</div>'
+  return '<div class="vg-tools"><span>'+(feedCtx.mine?'Работы по дням':'Рабочее окно '+fmtH((+appSettings.day_end||16)-(+appSettings.day_start||7))+' · сверхурочные '+fmtH(+(appSettings.tolerance_h??0)||0))+' '+infoHint((feedCtx.mine?'':'Перетащите работу на субботу или воскресенье, чтобы открыть выходной. ')+'Нажмите на день — сутки и ручная раскладка.', 'Работа с графиком')+'</span>'+gtLanePicker(key)+'</div>'
     +'<div class="vg-scroll" style="--lane-min:'+laneMin+'px"><div class="vg-grid" style="--week-h:'+totalH+'px;--lanes:'+Math.max(1,lanes.length)+'">'+axis+'<div class="vg-heads">'+heads+'</div><div class="vg-tracks">'+tracks+'</div></div></div>'
 
     +'<div class="gleg"><span><i class="trip-edge"></i>выезд</span><span><i class="job-edge"></i>заявка</span><span><i class="road"></i>дорога</span></div>';
@@ -2542,7 +2544,7 @@ function gtWire(key,box){
     const cancel=()=>{cleanup();line.style.top=top;line.querySelector('i').textContent=text;};
     const escape=ev=>{if(ev.key==='Escape'){ev.stopPropagation();cancel();}};
     line.onpointercancel=cancel;line.onlostpointercapture=cancel;document.addEventListener('keydown',escape,true);
-    line.setPointerCapture(e.pointerId);line.onpointermove=ev=>{if(ev.pointerId!==e.pointerId)return;if(Math.abs(ev.clientY-e.clientY)>3)moved=true;if(!moved)return;value=q4(Math.max(0,Math.min(24,initial+(ev.clientY-e.clientY)/20)));const g=gtDayGeometry(gtWeekLanes(key),iso);line.style.top=g.yOf(value)+'px';line.querySelector('i').textContent=(kind==='tol'?'допуск ':(kind==='start'?'начало ':'конец '))+clockLabel(value);};
+    line.setPointerCapture(e.pointerId);line.onpointermove=ev=>{if(ev.pointerId!==e.pointerId)return;if(Math.abs(ev.clientY-e.clientY)>3)moved=true;if(!moved)return;value=q4(Math.max(0,Math.min(24,initial+(ev.clientY-e.clientY)/20)));const g=gtDayGeometry(gtWeekLanes(key),iso);line.style.top=g.yOf(value)+'px';line.querySelector('i').textContent=(kind==='tol'?'сверхурочные ':(kind==='start'?'начало ':'конец '))+clockLabel(value);};
     line.onpointerup=async ev=>{if(ev.pointerId!==e.pointerId)return;ev.stopPropagation();cleanup();if(!moved||value===initial)return;const old=staffDayMap[engineer+'|'+iso]||{},rec={engineer,date:iso,start_h:old.start_h,end_h:old.end_h,tol_h:old.tol_h};
       if(role==='engineer'){const {error}=await sb.from('staff_day').upsert({engineer,date:iso,proposed_end_h:value,proposed_by:session.user.id,proposed_at:new Date().toISOString()});if(error)notify(error.message,'err');else showToast('Предложение отправлено менеджеру');}
       else{if(kind==='start'){const delta=value-w.start;rec.start_h=value;rec.end_h=q4(w.end+delta);for(const b of gtBlocks()){const cuts=(b.plan&&b.plan.cuts)||[],changed=cuts.some(c=>c.at&&c.at.d===iso);if(changed){const next=cuts.map(c=>c.at&&c.at.d===iso?{...c,at:{...c.at,t:q4(Math.max(value,+c.at.t+delta))}}:c);await sb.from(String(b.id)[0]==='t'?'trips':'jobs').update({day_plan:{...b.plan,cuts:next}}).eq('id',String(b.id).slice(1));}}}else if(kind==='end')rec.end_h=value;else rec.tol_h=Math.max(0,q4(value-w.end));const {error}=await sb.from('staff_day').upsert(rec);if(error)notify(error.message,'err');else showToast('Рабочее окно обновлено');}
@@ -2591,7 +2593,7 @@ function gtWire(key,box){
         const dir=top<0?-1:top>=lane.clientHeight?1:0;
         const iso=hit?.dataset.dayTransfer||(dir?isoOf(utcOf(sourceIso)+dir*DAY_MS):sourceIso);
         let t=hit||dir?+el.dataset.pieceFrom:q4(gtLaneTime(lane,top));
-        {const w=dayWindow(b.engineer,iso,gtSettings())||{start:+appSettings.day_start||7,ceiling:(+appSettings.day_end||16)+(+appSettings.tolerance_h||1)};t=q4(Math.max(w.start,Math.min(w.ceiling-.25,t)));}
+        {const w=dayWindow(b.engineer,iso,gtSettings())||{start:+appSettings.day_start||7,ceiling:(+appSettings.day_end||16)+(+(appSettings.tolerance_h??0)||0)};t=q4(Math.max(w.start,Math.min(w.ceiling-.25,t)));}
         return {iso,t,join:iso===sourceIso?scheduleJoinCandidate({pieces:gtPieces(b),cuts:b.cuts,sourceAt:at,sourceIso,iso,t}):null};
       },onPreview:target=>{
         box.querySelectorAll('.joining').forEach(x=>x.classList.remove('joining'));document.querySelectorAll('[data-transfer-portal]').forEach(x=>x.classList.remove('active'));
@@ -6542,7 +6544,7 @@ function tripGmaps(id,points,trigger){
 // Есть ли в базе settings.day_start (миграция sql/27). Если нет — не пишем
 // его при сохранении: иначе не сохранились бы и все остальные настройки.
 let hasDayStart=true;
-let appSettings={shift_hours:8,deviation_pct:10,day_start:7,day_end:16,tolerance_h:1,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,avoid_zones:[],tariff_profiles:[],ors_proxy:'',depot_radius_m:5000,depot_exit_margin_m:300,depot_outside_minutes:60};
+let appSettings={shift_hours:8,deviation_pct:10,day_start:7,day_end:16,tolerance_h:0,currency:'грн',tariffs:{km:0,hour:0,day:0,night:0},costs:{km:0,hour:0,day:0,night:0},default_theme:{},repair_warranty_days:90,contact_period_days:0,avoid_zones:[],tariff_profiles:[],ors_proxy:'',depot_radius_m:5000,depot_exit_margin_m:300,depot_outside_minutes:60};
 let staffDayMap={};
 async function loadStaffDays(){
   try{ const {data,error}=await sb.from('staff_day').select('*'); if(error) throw error;
@@ -6634,7 +6636,7 @@ function renderSettings(){
   document.querySelectorAll('[data-settings-admin-group]').forEach(el=>el.hidden=role!=='admin');
   if(role!=='admin')return;
   const s=appSettings; $('stShift').value=s.shift_hours; $('stDev').value=s.deviation_pct;
-  if($('stDayStart')) $('stDayStart').value=(s.day_start==null?7:s.day_start); if($('stDayEnd')) $('stDayEnd').value=(s.day_end==null?16:s.day_end); if($('stTolerance')) $('stTolerance').value=(s.tolerance_h==null?1:s.tolerance_h); $('stCur').value=s.currency||'';
+  if($('stDayStart')) $('stDayStart').value=(s.day_start==null?7:s.day_start); if($('stDayEnd')) $('stDayEnd').value=(s.day_end==null?16:s.day_end); if($('stTolerance')) $('stTolerance').value=(s.tolerance_h==null?0:s.tolerance_h); $('stCur').value=s.currency||'';
   const c=s.costs||{}; $('csKm').value=c.km||0;$('csHour').value=c.hour||0;$('csDay').value=c.day||0;$('csNight').value=c.night||0;
   if($('stStayRad')) $('stStayRad').value=(s.stay_radius_m==null?300:s.stay_radius_m);
   if($('stStayMin')) $('stStayMin').value=(s.stay_min_minutes==null?10:s.stay_min_minutes);
