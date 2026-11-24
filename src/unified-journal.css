@@ -806,6 +806,35 @@
 .view-planner.journal-open #plTrips>.stickyhead>.workspace-dispatcher-head>.workspace-heading-row {
  display:none!important;
 }
+/* In the journal the pane has no padding, so the dispatcher rail must not pull itself up by the
+   page gutter: that cut the top off the section tabs. */
+.view-planner.journal-open #plTrips>.stickyhead>.workspace-dispatcher-head {
+ margin:0!important;
+ padding-top:0!important;
+}
+.view-planner.journal-open #plTrips>.stickyhead .workspace-page-tabs {
+ margin-top:0!important;
+}
+/* Phone: once the register scrolls, the period folds into a calendar button; the row layout lives in
+   application-design-system.css next to the other journal header grid rules. */
+@media (max-width:760px) {
+ .view .unified-gps-journal[data-collapsed=true] [data-journal-period] .summary-period-range {
+  padding:0!important;
+  border:0!important;
+  background:none!important;
+  width:var(--control-h);
+  min-width:0;
+ }
+ .view .unified-gps-journal[data-collapsed=true] [data-journal-period] [data-summary-shift] { display:none!important; }
+ .view .unified-gps-journal[data-collapsed=true] [data-journal-period] [data-summary-dates] {
+  width:var(--control-h)!important;
+  min-width:var(--control-h)!important;
+  height:var(--control-h);
+  padding:0!important;
+  justify-content:center;
+ }
+ .view .unified-gps-journal[data-collapsed=true] [data-journal-period] [data-summary-dates]>span { display:none!important; }
+}
 @media (min-width:761px) {
  .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open) {
   display:grid;

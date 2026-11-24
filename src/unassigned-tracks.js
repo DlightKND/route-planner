@@ -58,6 +58,8 @@ export function createUnassignedTracks(ctx){
   actions.querySelector('.gps-journal-selection').append(box.querySelector('[data-journal-refresh]'));
   const help=actions.querySelector('.qm');if(help){help.textContent=help.getAttribute('aria-label');help.classList.add('ghost');}
   headerMenus=[wireDetailsPopover(filters),wireDetailsPopover(actions)];
+  // Phone: the header folds into one row once the register scrolls and unfolds back at the top.
+  const sidebar=box.querySelector('.gps-journal-sidebar');sidebar.addEventListener('scroll',()=>{const top=sidebar.scrollTop,folded=box.dataset.collapsed==='true';if(!folded&&top>48)box.dataset.collapsed='true';else if(folded&&top<=0)box.dataset.collapsed='false';},{passive:true});box.dataset.collapsed='false';
   const period=document.getElementById('tripJournalPeriod');if(period){box.querySelector('[data-journal-period]').append(period);period.style.display='';}box.querySelector('[data-journal-exit]').onclick=()=>{box.querySelector('.journal-actions').open=false;ctx.onExit?.();};box.querySelector('[data-journal-refresh]').onclick=async()=>{if(!await leave())return;previews.clear();load();};
   box.querySelector('[data-ut-search]').value=search;box.querySelector('[data-ut-vehicle]').value=vehicleFilter;box.querySelector('[data-ut-gaps]').checked=gapsOnly;box.querySelector('[data-ut-gaps]').closest('label').hidden=!manager();
   box.querySelector('[data-ut-search]').oninput=e=>{search=e.target.value;paintList();};

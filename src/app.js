@@ -997,6 +997,8 @@ async function plannerSub(name){ if(dispCur==='tracking'&&name!=='tracking'&&!aw
   document.querySelectorAll('[data-trip-board-only]').forEach(el=>el.style.display=journal||(el.id==='tripAdd'&&!canWrite())?'none':'');
   document.querySelectorAll('[data-trip-section]').forEach(b=>{if(b.classList.contains('subtab'))return;if(b.dataset.tripSection==='tracking'){b.textContent=journal?'← Выезды':'GPS-журнал';b.setAttribute('aria-label',journal?'Вернуться к выездам':'Открыть GPS-журнал');}const on=journal?b.dataset.tripSection==='tracking':b.dataset.tripSection==='board';b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});
   document.querySelector('.view-planner').classList.toggle('journal-open',journal);
+  // На узком экране лента вкладок прокручивается вбок: выбранная («Журнал» — последняя) не должна торчать обрезанной.
+  requestAnimationFrame(()=>document.querySelectorAll('.view-planner .workspace-page-tabs').forEach(strip=>{const on=strip.querySelector('.subtab.active');if(on&&strip.offsetParent&&strip.scrollWidth>strip.clientWidth)strip.scrollLeft=Math.max(0,Math.min(on.offsetLeft-strip.offsetLeft-16,strip.scrollWidth-strip.clientWidth));}));
   routeSet(journal?'journal':'planner/'+name);
   if(name==='mine')renderMine();else if(name==='jobs')renderJobs();else if(name==='orders')serviceOrders.board();else if(journal)await unassignedTracks.open();else renderTripsView(); }
 document.querySelectorAll('[data-trip-section]').forEach(b=>b.onclick=()=>plannerSub(b.dataset.tripSection==='tracking'&&dispCur!=='tracking'?'tracking':'trips'));
