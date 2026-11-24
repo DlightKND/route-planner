@@ -450,3 +450,119 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-conflict{display:grid;g
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-conflict strong{color:var(--ink)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-conflict p{margin:0;color:var(--ink-dim,var(--dim))}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-conflict-actions{display:flex;flex-wrap:wrap;gap:8px}
+
+/* ── Planner layout (24.11.2026): docked panel, selection actions, card footer, menus ─────────────
+   Desktop panels sit beside the grid and narrow it instead of covering a column. Block actions live in
+   the selection row (desktop) or a bottom bar (phone), never over the grid. Cards keep one main action;
+   the rest is behind «Другие действия». */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .pw-body{display:flex!important;align-items:stretch}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .pw-body>:is(.pw-chart,.pw-statistics){flex:1 1 auto;min-width:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .pw-context:not([hidden]),
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .pw-body>.pw-dialog[data-floating=true]:not(.pw-workday-dialog){position:relative!important;inset:auto!important;margin:0!important;flex:0 0 400px;width:400px!important;max-width:400px!important;height:auto!important;max-height:none!important;align-self:stretch;order:5;border:0!important;border-left:1px solid var(--line)!important;border-radius:0!important;box-shadow:none!important;display:flex;flex-direction:column;overflow:hidden;padding:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .pw-body>.pw-dialog[data-floating=true]:not(.pw-workday-dialog)>form{display:flex;flex-direction:column;flex:1;min-height:0;height:100%}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .pw-body>.pw-dialog[data-floating=true]:not(.pw-workday-dialog) .dialog-scroll{flex:1;min-height:0;overflow:auto}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .pw-context .context-body{flex:1;min-height:0;overflow:auto}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .pw-context .context-grab{display:none!important}
+
+/* The lane keeps a narrow right strip for GPS facts and day boundaries, so neither covers a block. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-calendar{--pw-rail:48px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-calendar{--pw-rail:40px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary,
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary:not(.pw-day-boundary){left:auto!important;right:0!important;width:var(--pw-rail)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.pw-day-boundary::before{left:calc(var(--pw-rail) - var(--pw-lane))!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary small{left:auto!important;right:2px!important;padding:1px 3px!important;font-family:var(--mono)!important;font-size:11px!important;line-height:16px!important;white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary .pw-boundary-name{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .calendar-boundary.tolerance small{color:var(--warning)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .calendar .pw-fact-mark{right:calc(var(--pw-rail) / 2 - 5px)}
+
+/* Conflicts are named and marked with ⚠; red alone also means GPS facts and «now». */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-plan .pw-plan-conflict{display:flex!important;align-items:center;gap:4px;color:var(--red)!important;font-weight:600}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-plan .pw-plan-conflict .di,html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-plan .pw-plan-conflict svg{width:14px;height:14px;flex:none}
+
+/* Selection actions: desktop selection row. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .focusbar{position:relative!important;z-index:30!important;overflow:visible!important;padding-right:16px!important;height:56px;min-height:56px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .focusbar>.pw-selection-actions{position:relative!important;inset:auto!important;z-index:30;transform:none!important;display:flex!important;order:1;margin-left:auto;width:auto!important;max-width:none!important;background:none!important;border:0!important;box-shadow:none!important;padding:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .focusbar>.focus-clear{order:2}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .pw-selection-actions .pw-floating-title{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-selection-actions .schedule-floating-main{display:flex!important;align-items:center;gap:8px;padding:0!important;border:0!important;min-height:0!important;background:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-selection-actions .pw-floating-buttons{display:flex;align-items:center;gap:8px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-actions .pw-floating-buttons>:is(.btn,.pw-drag-grip){font-family:var(--sans)!important;letter-spacing:0!important;display:inline-flex!important;align-items:center;justify-content:center;gap:6px;height:40px!important;min-height:40px!important;width:auto!important;min-width:40px!important;padding:0 14px!important;font-size:14px!important;border:1px solid var(--input-line)!important;border-radius:8px!important;background:transparent!important;color:var(--ink)!important;white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-actions .pw-floating-buttons>.pw-drag-grip{padding:0!important;width:40px!important;cursor:grab}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-actions .pw-floating-buttons :is(.di,svg){width:18px;height:18px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-actions .pw-more-trigger[aria-expanded=true]{border-color:var(--accent-line)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile) .pw-selection-actions .schedule-floating-menu{position:absolute!important;right:0;left:auto!important;top:calc(100% + 12px)!important;bottom:auto!important;z-index:40;width:320px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-selection-actions .pw-multi-tools{display:none}
+
+/* Selection actions: phone bottom bar above the navigation. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile>.pw-selection-actions{position:absolute!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;transform:none!important;z-index:16;width:auto!important;max-width:none!important;display:block!important;padding:10px 16px 12px!important;background:var(--panel)!important;border:0!important;border-top:1px solid var(--line)!important;border-radius:0!important;box-shadow:0 -6px 16px #0002!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-selection-actions .schedule-floating-main{flex-direction:column;align-items:stretch;gap:8px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-selection-actions .pw-floating-title{display:flex;align-items:baseline;gap:8px;font-weight:600;font-size:15px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-selection-actions .pw-floating-title small{font-family:var(--mono);font-weight:400;color:var(--ink-dim)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-selection-actions .pw-floating-buttons>:is(.btn,.pw-drag-grip){flex:1;height:48px!important;min-height:48px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-selection-actions .pw-floating-buttons>:is(.pw-drag-grip,.pw-more-trigger){flex:0 0 48px;width:48px!important;padding:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-selection-actions .schedule-floating-menu{position:absolute!important;left:8px;right:8px;bottom:calc(100% + 6px);top:auto!important;z-index:40;max-height:60vh;overflow:auto}
+
+/* Phone sheets: the handle sits inside the 56 px header row instead of taking a row of its own. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-context>.sheet-handle,
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile dialog[data-mobile=true] .sheet-handle{position:absolute!important;top:0!important;left:calc(50% - 60px)!important;right:auto!important;transform:none!important;width:120px!important;height:24px!important;min-height:24px!important;margin:0!important;padding:0!important;z-index:3}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile dialog[data-mobile=true]>form{position:relative}
+
+/* Phone header: «График | Статистика» is one segmented switch on both screens; period arrows 48 px. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .top .pw-title-row.title-row>h1{display:none!important}
+/* Collapsed phone header: the segmented tabs take the title's place in the single row. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile.collapsed .top .pw-title-row>.pw-tabs{grid-column:1;grid-row:1;align-self:center;justify-self:start;min-width:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile.collapsed .top .pw-tabs{padding:2px!important;gap:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile.collapsed .top .pw-tabs>button{padding-inline:7px!important;font-size:13px!important;min-width:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile:not(.collapsed) .top .mobile-top-actions{margin-left:auto}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-title-row .pw-tabs{display:flex!important;flex:none;gap:0!important;padding:3px!important;margin:0!important;border:0!important;border-radius:10px!important;background:var(--panel-2)!important;box-shadow:none!important;height:auto!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-title-row .pw-tabs>button{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 12px;border-radius:8px;font:600 14px/20px var(--sans);color:var(--ink-dim);cursor:pointer}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-title-row .pw-tabs>button[aria-selected=true]{background:var(--ink)!important;color:var(--panel)!important;box-shadow:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-title-row .pw-tabs>button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile[data-narrow=true] .pw-title-row .pw-tabs>button{padding:0 8px;font-size:13px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-period .period-step{flex:0 0 48px!important;width:48px!important;min-width:48px!important;padding:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-period .period-selector{flex:1 1 auto!important;min-width:0!important}
+
+/* Menus: one look for block actions and «Другие действия» in cards. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.schedule-floating-menu,.pw-more-menu){display:flex!important;flex-direction:column;align-items:stretch!important;gap:0!important;padding:6px 0!important;background:var(--panel-2)!important;border:1px solid var(--input-line)!important;border-radius:12px!important;box-shadow:0 12px 32px #0005!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.schedule-floating-menu,.pw-more-menu) button{all:unset;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;margin:0!important;height:auto!important;box-sizing:border-box;display:grid!important;grid-template-columns:24px minmax(0,1fr);gap:12px;align-items:start;width:100%;min-height:44px;padding:10px 16px!important;text-align:left!important;justify-content:start!important;color:var(--ink);font:400 14px/20px var(--sans);cursor:pointer}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.schedule-floating-menu,.pw-more-menu) button:is(:hover,:focus-visible){background:var(--panel)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.schedule-floating-menu,.pw-more-menu) button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.schedule-floating-menu,.pw-more-menu) button:disabled{opacity:.5;cursor:default}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-menu-icon{display:flex;align-items:center;height:20px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-menu-icon :is(.di,svg){width:18px;height:18px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-menu-label small{display:block;margin-top:2px;color:var(--ink-dim);font-size:12px;line-height:16px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-menu-caption{display:block;padding:6px 16px 2px;font-size:12px;line-height:16px;color:var(--ink-dim)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-menu-group+.pw-menu-group{margin-top:6px;padding-top:6px;border-top:1px solid var(--line)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.pw-menu-risky button,button.pw-menu-risky){color:var(--warning)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-menu-note{margin:6px 16px;color:var(--ink-dim)}
+
+/* Card footer: one main action and «Другие действия». */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-card-actions{display:flex!important;flex-direction:row!important;align-items:stretch;gap:8px;bottom:-16px!important;padding:12px 0 16px!important;margin-bottom:-16px!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-card-actions>.btn{flex:1;width:auto;margin:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-more{position:relative;flex:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-more>summary{list-style:none;display:inline-flex;align-items:center;gap:6px;height:100%;min-height:44px;padding:0 14px;border:1px solid var(--input-line);border-radius:8px;cursor:pointer;white-space:nowrap;box-sizing:border-box}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile .pw-context .pw-more>summary{min-height:48px;width:56px;justify-content:center;padding:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-more>summary::-webkit-details-marker{display:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-more[open]>summary{border-color:var(--accent-line)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-more-menu{position:absolute;right:0;bottom:calc(100% + 6px);z-index:30;min-width:260px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-card-actions:only-child,html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-card-actions>.pw-more:only-child{margin-left:auto}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .context-body .pw-open-link{all:unset;display:inline-flex!important;align-items:center;gap:4px;margin:2px 0 10px!important;padding:0!important;border:0!important;background:none!important;color:var(--accent-line)!important;font:500 14px/20px var(--sans)!important;cursor:pointer;min-height:32px!important;width:auto!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-open-link:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-open-link :is(.di,svg){width:16px;height:16px}
+
+/* Work overview: links as rows with counts; a zero stays neutral. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-links{display:flex;flex-direction:column}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .context-body .pw-link-row{all:unset;border:0!important;border-bottom:1px solid var(--line)!important;border-radius:0!important;background:transparent!important;width:100%!important;margin:0!important;padding:0 2px!important;font:400 15px/22px var(--sans)!important;box-sizing:border-box;display:grid;grid-template-columns:1fr auto 20px;gap:8px;align-items:center;min-height:44px;padding:0 2px;border-bottom:1px solid var(--line);cursor:pointer;color:var(--ink)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .context-body .pw-link-row:last-child{border-bottom:0!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-link-row:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-link-count{color:var(--ink-dim);font-variant-numeric:tabular-nums}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .badge.danger{background:var(--danger-bg)!important;color:var(--red)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app :is(.schedule-floating-menu,.pw-more-menu) button:is(:hover,:focus-visible){background:var(--panel)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-more>summary .di{display:inline-flex;width:18px;height:18px;flex:none}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-more>summary .di svg{width:18px;height:18px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app.mobile>.pw-selection-actions .pw-floating-title{font-family:var(--sans)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-more>summary{display:inline-flex!important;flex-wrap:nowrap!important;align-items:center!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-more>summary::after,html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-more>summary::before{content:none!important;display:none!important}
+/* The statistics team switch shows one chevron; a generic summary marker drew a second glyph under it. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-details>summary::after,html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-details>summary::before{content:none!important;display:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .section-title .badge.soft{background:var(--panel-2)!important;color:var(--ink-dim)!important;border-color:transparent!important;box-shadow:none!important}

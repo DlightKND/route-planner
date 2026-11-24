@@ -737,10 +737,37 @@ function applyMobileNav(){
 // сколько пунктов оставила роль, и от безопасной зоны телефона —
 // любое зашитое число разойдётся с вёрсткой в первый же день.
 // На широком экране рельс стоит слева, загораживать нечего — ноль.
+// Боковой рельс на ПК раскрывается при наведении поверх содержимого. После
+// щелчка по пункту он сворачивается, пока курсор не уйдёт: иначе раскрытый
+// рельс закрывает левый край только что открытой страницы, и до её пунктов
+// не дотянуться, не выведя курсор за рельс. На сенсорном экране снимаем фокус.
+(function railRest(){
+  const rail=document.querySelector('#appShell>.rail'); if(!rail) return;
+  // Клавиатура ли ведёт фокус: Tab и стрелки — да, любое касание или щелчок — нет.
+  let keyboard=false;
+  document.addEventListener('keydown',e=>{ if(e.key==='Tab'||e.key.startsWith('Arrow')){ keyboard=true; rail.classList.remove('rail-rest'); } },true);
+  document.addEventListener('pointerdown',()=>{ keyboard=false; },true);
+  // Фокус, вернувшийся в рельс после щелчка (закрыли «Мой профиль»), рельс не раскрывает.
+  rail.addEventListener('focusin',()=>{ if(!keyboard) rail.classList.add('rail-rest'); });
+  rail.addEventListener('click',e=>{
+    if(e.detail===0) return;
+    if(matchMedia('(hover:none)').matches){ document.activeElement?.blur?.(); return; }
+    rail.classList.add('rail-rest');
+  });
+  // Курсор ушёл — рельс сворачивается, даже если в нём остался фокус с клавиатуры;
+  // вернулся — раскрывается снова.
+  rail.addEventListener('pointerenter',()=>rail.classList.remove('rail-rest'));
+  rail.addEventListener('pointerleave',()=>rail.classList.add('rail-rest'));
+  // Открылась другая страница — показываем её, а не раскрытый рельс; следующий Tab раскроет его снова.
+  addEventListener('hashchange',()=>{ if(!rail.matches(':hover')) rail.classList.add('rail-rest'); });
+})();
 function railHeight(){
   const rail=document.querySelector('.rail'); if(!rail) return;
-  const over=getComputedStyle(rail).position==='absolute';
-  const px=over?Math.round(rail.getBoundingClientRect().height):0;
+  // Боковой рельс на широком экране тоже absolute (он раскрывается поверх
+  // содержимого), но лежит вертикально: снизу ничего не загораживает.
+  const box=rail.getBoundingClientRect();
+  const over=getComputedStyle(rail).position==='absolute'&&box.width>box.height;
+  const px=over?Math.round(box.height):0;
   document.documentElement.style.setProperty('--rail-h',px+'px');
   // Высота пришвартованной снизу шторки карты — по той же причине.
   // Карта идёт под неё и под рельс, значит подпись об источнике карты

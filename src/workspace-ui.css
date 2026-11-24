@@ -1169,3 +1169,29 @@ html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{con
  .view-order.workflow-card:has(#orderPane-overview[hidden]) .workspace-main::after{display:none;}
  .view-order.workflow-card:has(#orderPane-overview[hidden]) .workspace-main{padding-bottom:calc(32px + var(--rail-h));}
 }
+
+/* Left rail on desktop (24.11.2026). While not in use it shows icons only; on hover or keyboard focus it
+   widens over the content so every label fits on one line. The content does not move: the rail overlays it.
+   Labels stay in the accessibility tree in both states. After a mouse click on an item the rail folds back
+   (.rail-rest, set in app.js) until the pointer leaves it, so the opened page is not covered. */
+@media (min-width:761px){
+  #appShell{--rail-w:64px;position:relative;padding-left:var(--rail-w)}
+  #appShell>.rail{position:absolute!important;left:0;top:0;bottom:0;width:var(--rail-w)!important;padding-inline:0!important;align-items:stretch!important;overflow-x:hidden!important;overflow-y:auto!important;transition:width .16s ease,box-shadow .16s ease}
+  #appShell>.rail .rail-brand{align-self:center}
+  #appShell>.rail :is(.rail-items,.rail-foot){align-items:flex-start!important;padding-inline:8px;box-sizing:border-box;width:100%}
+  #appShell>.rail .nav-i{position:relative;width:48px!important;min-height:44px;flex-direction:row!important;justify-content:flex-start!important;align-items:center!important;gap:12px!important;padding:10px 14px!important;box-sizing:border-box;border-radius:10px!important;white-space:nowrap}
+  #appShell>.rail .nav-i>span:not(.profile-avatar),#appShell>.rail .profile-trigger .who{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip-path:inset(50%);white-space:nowrap!important}
+  #appShell>.rail .nav-i .notice-badge{position:absolute!important;top:2px!important;left:22px!important;right:auto!important;bottom:auto!important;width:auto!important;min-width:18px;max-width:28px;margin:0!important}
+  #appShell.workspace-shell>.rail .nav-i.active::before{left:-8px;top:8px;bottom:8px;width:4px}
+  #appShell.workspace-shell>.rail .nav-i.active::after{inset:0!important;border-radius:10px}
+  #appShell>.rail:is(:hover,:has(:focus-visible)):not(.rail-rest){width:max-content!important;min-width:var(--rail-w);box-shadow:8px 0 24px rgb(0 0 0 / .28)}
+  #appShell>.rail:is(:hover,:has(:focus-visible)):not(.rail-rest) .nav-i{width:100%!important;padding-right:20px!important}
+  #appShell>.rail:is(:hover,:has(:focus-visible)):not(.rail-rest) .nav-i>span:not(.profile-avatar),
+  #appShell>.rail:is(:hover,:has(:focus-visible)):not(.rail-rest) .profile-trigger .who{position:static!important;width:auto!important;height:auto!important;overflow:visible!important;clip-path:none;font:500 14px/20px var(--sans)!important;letter-spacing:0!important;text-transform:none!important;text-align:left!important}
+  #appShell>.rail:is(:hover,:has(:focus-visible)):not(.rail-rest) .profile-trigger .who>*{white-space:nowrap}
+}
+@media (min-width:761px) and (hover:none){
+  #appShell>.rail:focus-within:not(.rail-rest){width:max-content!important;box-shadow:8px 0 24px rgb(0 0 0 / .28)}
+  #appShell>.rail:focus-within:not(.rail-rest) .nav-i{width:100%!important}
+  #appShell>.rail:focus-within:not(.rail-rest) .nav-i>span:not(.profile-avatar){position:static!important;width:auto!important;height:auto!important;overflow:visible!important;clip-path:none;font:500 14px/20px var(--sans)!important}
+}

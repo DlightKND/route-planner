@@ -475,7 +475,7 @@ for(const role of ['admin','logist','engineer'])test(`${role} account profile an
   await shot(page,testInfo,role+'-profile');
   await page.keyboard.press('Escape');await expect(profile).toHaveCount(0);
   if(testInfo.project.use.viewport.width>760)await expect(page.locator('#profileBtn')).toBeFocused();
-  await page.goto('/#/settings');const active=page.locator('.view-settings.active');
+  await page.goto('/#/settings');const active=page.locator('.view-settings.active');{const v=page.viewportSize();await page.mouse.move(v.width-4,v.height/2);}
   await expect(active).toBeVisible();if(role==='admin')await active.locator('[data-sec=theme]').click();
   await expect(active.locator('#modeDark')).toBeVisible();await expect(active.locator('#modeLight')).toBeVisible();
   if(role!=='admin'){await expect(active.locator('[data-admin-settings]:visible')).toHaveCount(0);await expect(active.locator('[data-sec=tariffs]:visible')).toHaveCount(0);}
