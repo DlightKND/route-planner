@@ -3,7 +3,7 @@ import {decisionLabel,zeroPresenceSignature,intervalText,dayKey,dayText} from '.
 import {savedPresenceHTML} from './presence-decision.js';
 import {installPresenceControls} from './presence-review-controls.js';
 import {presenceRoadConflicts,stopKind,stopState,stopTitle,stopPlace,decisionComment,numericText,evidenceExtent} from './core/gps-journal.js';
-import {presenceBounds} from './core/trip-presence-recovery.js';
+import {presenceBounds,acceptedPresenceIntervals,intervalMinutes} from './core/trip-presence-recovery.js';
 import {readPresenceForm} from './trip-workbench.js';
 import {validatePresence} from './core/trip-review.js';
 import {mountGpsTrackMap} from './gps-track-map.js';
@@ -45,14 +45,14 @@ export function mountPresenceReview(root,data,{jobs=[],profiles=[],readonly=fals
  table.remove();root.querySelector('.wb-metrics')?.remove();root.querySelector('[data-presence-message]')?.remove();
  const design=installPresenceControls(root,data,{readonly,profiles,jobs,onRoute});
  const list=workspace.querySelector('.presence-review-list');
- // On wide screens a stop opens as an expanded table row (mockup v65); phones keep the separate stop page.
- const inlineDetail=()=>!!doc.defaultView.matchMedia?.('(min-width:761px)').matches,detailPanel=workspace.querySelector('.presence-review-detail'),detailHome=workspace.querySelector('.presence-review-sidebar');
+ // A stop opens as an expanded table row (mockup v65): a compact summary first, the full decision behind «Уточнить».
+ const inlineDetail=()=>typeof doc.defaultView.matchMedia==='function',detailPanel=workspace.querySelector('.presence-review-detail'),detailHome=workspace.querySelector('.presence-review-sidebar');
  function placeDetail(){
   const open=workspace.classList.contains('presence-show-detail')&&inlineDetail()&&active,row=open&&[...list.querySelectorAll('[data-stop-row]')].find(item=>item.dataset.stopRow===active);
   const holder=list.querySelector('.journal-stop-detail-row');
   if(!row){if(detailPanel.parentElement!==workspace)detailHome.after(detailPanel);holder?.remove();workspace.classList.remove('is-inline-detail');list.querySelectorAll('[data-review-open]').forEach(b=>b.setAttribute('aria-expanded','false'));return;}
   let detailRow=holder;if(!detailRow){detailRow=doc.createElement('tr');detailRow.className='journal-stop-detail-row';const cell=doc.createElement('td');cell.colSpan=4;detailRow.append(cell);}
-  row.after(detailRow);detailRow.firstElementChild.append(detailPanel);workspace.classList.add('is-inline-detail');
+  row.after(detailRow);const cell=detailRow.firstElementChild;cell.replaceChildren(stopSummary(data.stays.find(item=>item.id===active)),detailPanel);detailRow.classList.toggle('is-compact',compact);workspace.classList.add('is-inline-detail');
   list.querySelectorAll('[data-review-open]').forEach(b=>b.setAttribute('aria-expanded',String(b.dataset.reviewOpen===active)));
  }
  const sidebar=list.parentElement;
@@ -108,6 +108,28 @@ export function mountPresenceReview(root,data,{jobs=[],profiles=[],readonly=fals
   workspace.querySelectorAll('[data-review-count]').forEach(el=>{el.textContent=String(count[el.dataset.reviewCount]??'');});
   workspace.querySelector('[data-stop-count]').textContent='Показано '+shown+' из '+data.stays.length;
  }
+ let compact=false;
+ const durationLabel=value=>minutesText(Math.round(value));
+ const clock=value=>new Date(value).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Kyiv'});
+ function stopSummary(stay){
+  const box=doc.createElement('div');box.className='journal-stop-summary';if(!stay)return box;
+  const extent=evidenceExtent(stay),from=Date.parse(extent.from),to=Date.parse(extent.to),span=Math.max(1,to-from),evidence=stay.presence_evidence;
+  const gps=evidence?.gps_intervals?.length?evidence.gps_intervals:[{from:stay.stay_from,to:stay.stay_to}],accepted=stay.status==='approved'?acceptedPresenceIntervals(stay):[];
+  const part=(row,kind)=>{const a=Math.max(from,Date.parse(row.from)),b=Math.min(to,Date.parse(row.to));return b>a?'<span class="journal-stop-rail-part '+kind+'" style="left:'+((a-from)/span*100).toFixed(2)+'%;width:'+((b-a)/span*100).toFixed(2)+'%"></span>':'';};
+  const recovery=evidence?.recovery_parts||[];
+  const rail=recovery.map(p=>part(p,'is-recovery')).join('')+gps.map(p=>part(p,'is-gps')).join('')+accepted.filter(p=>!gps.some(g=>Date.parse(g.from)<=Date.parse(p.from)&&Date.parse(g.to)>=Date.parse(p.to))).map(p=>part(p,'is-accepted')).join('');
+  const total=stay.status==='approved'?intervalMinutes(accepted):stay.status==='rejected'?0:intervalMinutes(gps);
+  const label=stay.status==='approved'?'К учёту':stay.status==='rejected'?'Не учитывается':'По GPS';
+  const sources=[...gps.map(p=>['GPS',p]),...recovery.map(p=>['Достройка',p])],manual=stay.manual_origin?1:0;
+  const job=stay.job_id?jobs.find(j=>j.id===stay.job_id):null,request=stay.job_id?'№'+recordNumber(job,stay.job_id)+(job?.clients?.name?' · '+job.clients.name:''):'Не привязана';
+  box.innerHTML='<p class="journal-stop-summary-request"><span>Заявка</span><strong>'+esc(request)+'</strong></p>'
+   +'<div class="journal-stop-accounting"><div class="journal-stop-rail-wrap"><div class="journal-stop-rail" role="img" aria-label="'+esc('GPS и достройка, '+intervalText(extent.from,extent.to))+'">'+rail+'</div><div class="journal-stop-rail-times"><span>'+esc(clock(from))+'</span><span>'+esc(clock(to))+'</span></div></div>'
+   +'<div class="journal-stop-accounting-duration"><span>'+label+'</span><strong>'+esc(total?durationLabel(total):'—')+'</strong></div>'
+   +'<button type="button" class="btn" data-stop-refine aria-expanded="'+String(!compact)+'">'+(compact?'Уточнить':'Скрыть детали')+'</button></div>'
+   +'<details class="journal-stop-originals"><summary>Исходные записи · '+(sources.length+manual)+'</summary><ul>'+sources.map(([kind,p])=>'<li><span>'+kind+'</span><span>'+esc(intervalText(p.from,p.to))+'</span><strong>'+esc(durationLabel(intervalMinutes([p])))+'</strong></li>').join('')+(manual?'<li><span>Вручную</span><span>Посещение добавлено без GPS</span><strong></strong></li>':'')+'</ul></details>';
+  box.querySelector('[data-stop-refine]').onclick=()=>{compact=!compact;placeDetail();};
+  return box;
+ }
  function paintList(){
   if(detailPanel.parentElement!==workspace)detailHome.after(detailPanel);
   const scroll=list.scrollTop,rowsShown=visible();let lastDay=null;
@@ -130,7 +152,7 @@ export function mountPresenceReview(root,data,{jobs=[],profiles=[],readonly=fals
   firstStops=[...list.querySelectorAll('[data-review-stop]')].slice(0,3);
   firstStops.forEach(stop=>sizeObserver?.observe(stop));
   reserveVisibleStops();
-  list.querySelectorAll('[data-review-stop],[data-review-open]').forEach(b=>b.onclick=()=>{const id=b.dataset.reviewStop||b.dataset.reviewOpen;if(b.dataset.reviewOpen&&inlineDetail()&&id===active&&workspace.classList.contains('presence-show-detail')){back();return;}select(id);});placeDetail();workspace.querySelectorAll('[data-review-mode]').forEach(b=>{b.classList.toggle('on',mode===b.dataset.reviewMode);b.setAttribute('aria-pressed',String(mode===b.dataset.reviewMode));});
+  list.querySelectorAll('[data-review-stop],[data-review-open]').forEach(b=>b.onclick=()=>{const id=b.dataset.reviewStop||b.dataset.reviewOpen,disclosure=!!b.dataset.reviewOpen;if(disclosure&&inlineDetail()&&id===active&&workspace.classList.contains('presence-show-detail')){back();return;}compact=disclosure&&inlineDetail();select(id);});placeDetail();workspace.querySelectorAll('[data-review-mode]').forEach(b=>{b.classList.toggle('on',mode===b.dataset.reviewMode);b.setAttribute('aria-pressed',String(mode===b.dataset.reviewMode));});
  }
 
  function capture(){for(const s of data.stays.filter(s=>dirty.has(s.id))){const row=rows.get(s.id),values={};for(const f of row.querySelectorAll('[data-presence],[data-recovery-part]'))values[f.dataset.recoveryPart||f.dataset.presence]=f.multiple?[...f.selectedOptions].map(o=>o.value):f.value;for(const item of row.querySelectorAll('[data-task-allocation-row]'))values['task:'+item.dataset.taskAllocationRow]={checked:item.querySelector('[data-task-allocation-order]').checked,value:item.querySelector('[data-task-allocation-share]').value};if(dirty.has(s.id))store.write(s,{fields:values,kind:row.dataset.stopKind,comment:comments.get(s.id)||'',dirty:true});}}
