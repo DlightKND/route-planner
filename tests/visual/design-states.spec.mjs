@@ -177,8 +177,8 @@ test('layout: desktop rail stays left and page bottoms remain reachable in short
  const errors=await start(page,info,'planner/orders');
  const mobile=page.viewportSize().width<=760,rail=await page.locator('.rail').boundingBox();
  if(mobile){expect(rail.y+rail.height).toBeCloseTo(600,0);}else{
-  expect(rail.x).toBe(0);expect(rail.y).toBe(0);expect(rail.width).toBe(76);expect(rail.height).toBe(600);
-  expect((await page.locator('#appRoot').boundingBox()).x).toBe(76);
+  expect(rail.x).toBe(0);expect(rail.y).toBe(0);expect(rail.width).toBe(64);expect(rail.height).toBe(600);
+  expect((await page.locator('#appRoot').boundingBox()).x).toBe(64);
  }
  for(const [route,list] of [['orders','orderList'],['jobs','jobList'],['trips','tripList']]){
   await page.goto('/#/planner/'+route);await expect(page.locator('#'+list+' .kcard').first()).toBeVisible();
@@ -230,12 +230,12 @@ test('layout: summary schedule and statistics scroll independently below a fixed
 test('polish: wide workspaces use the available width and the rail indicator sits at the edge',async({page},info)=>{
  test.skip(page.viewportSize().width<1440,'Wide desktop composition');await page.setViewportSize({width:1920,height:1000});
  const errors=await start(page,info,'planner/orders');
- const header=page.locator('#plOrders .workspace-dispatcher-head');await expect(header).toBeVisible();const heading=await header.evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {left:r.left+parseFloat(s.paddingLeft),right:r.right-parseFloat(s.paddingRight)};});expect(heading).toEqual({left:108,right:1888});
+ const header=page.locator('#plOrders .workspace-dispatcher-head');await expect(header).toBeVisible();const heading=await header.evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {left:r.left+parseFloat(s.paddingLeft),right:r.right-parseFloat(s.paddingRight)};});expect(heading).toEqual({left:96,right:1888});
  const marker=await page.locator('.rail .nav-i.active').evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el,'::before');return {edge:r.left+parseFloat(s.left),width:parseFloat(s.width)};});expect(marker.edge).toBe(0);expect(marker.width).toBe(4);
  await capture(page,info,'wide-dispatcher',errors);
  for(const route of ['catalog','job/'+fixtureIDs.job,'order/'+fixtureIDs.activeOrder,'trip/'+fixtureIDs.trip]){
   await page.goto('/#/'+route);const main=page.locator('.view-'+route.split('/')[0]+'.active .workspace-main');await expect(main).toBeVisible();
-  await expect.poll(async()=>{const r=await main.boundingBox();return r&&{x:r.x,width:r.width};}).toEqual({x:76,width:1844});
+  await expect.poll(async()=>{const r=await main.boundingBox();return r&&{x:r.x,width:r.width};}).toEqual({x:64,width:1856});
  }
  const card=page.locator('#jobOrders .related-records');await page.goto('/#/job/'+fixtureIDs.job+'/tasks');await expect(card).toBeVisible();
  expect(await card.evaluate(el=>[...['Top','Right','Bottom','Left']].map(side=>getComputedStyle(el)['border'+side+'Width']))).toEqual(['1px','1px','1px','1px']);

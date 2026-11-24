@@ -38,12 +38,16 @@ test('planner overlays: filters remain above day and week decorations with acces
 });
 
 test('planner overlays: selecting a bar opens details and the selection pill; action menu stays inside its panel',async({page},info)=>{
- const errors=await boot(page,info);await selectWork(page);
+ const errors=await boot(page,info),isMobile=await mobile(page);await selectWork(page);
+ if(isMobile){await expect(page.locator('.pw-context')).toBeHidden();await expect(page.locator('.app>.pw-selection-actions')).toBeVisible();await page.locator('[data-pw=part-details]').click();}
  await expect(page.locator('.pw-context')).toBeVisible();await expect(page.locator('.pw-context .entity-title-row')).toContainText('Задание №101');await expect(page.locator('.focusbar')).toBeVisible();await expect(page.locator('.focus-name')).toHaveText('Задание №101');
+ if(isMobile){await page.locator('[data-pw=context-close]').click();await expect(page.locator('.app>.pw-selection-actions')).toBeVisible();}
  await page.locator('[data-pw=part-menu]').click();const tool=page.locator('.pw-floating'),menu=page.locator('.schedule-floating-menu');await expect(menu).toBeVisible();
- const rect=await tool.boundingBox(),header=await page.locator('.schedule-floating-main').boundingBox(),body=await menu.boundingBox(),button=await page.locator('[data-pw=part-menu]').boundingBox();const target=await mobile(page)?48:44;expect(button.width).toBe(target);expect(button.height).toBe(target);expect(body.x).toBeGreaterThanOrEqual(rect.x);expect(body.x+body.width).toBeLessThanOrEqual(rect.x+rect.width+1);expect(body.y).toBeGreaterThanOrEqual(header.y+header.height-1);
+ const rect=await tool.boundingBox(),body=await menu.boundingBox(),button=await page.locator('[data-pw=part-menu]').boundingBox(),viewport=page.viewportSize();
+ if(isMobile){expect(button.width).toBe(48);expect(button.height).toBe(48);expect(body.y+body.height).toBeLessThanOrEqual(rect.y+1);}else{expect(button.height).toBe(40);expect(body.y).toBeGreaterThanOrEqual(rect.y+rect.height-1);expect(Math.abs(body.x+body.width-(rect.x+rect.width))).toBeLessThan(2);}
+ expect(body.x).toBeGreaterThanOrEqual(0);expect(body.x+body.width).toBeLessThanOrEqual(viewport.width);expect(body.y).toBeGreaterThanOrEqual(0);expect(body.y+body.height).toBeLessThanOrEqual(viewport.height);
  expect(await menu.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);await capture(page,info,'selection-menu');
- await page.locator('[data-pw=part-menu]').click();await page.locator('[data-pw=context-close]').click();await page.locator('[data-pw=focus-details]').click();await expect(page.locator('.pw-context')).toBeVisible();await page.locator('[data-pw=selection-clear]').click();await expect(page.locator('.focusbar')).toBeHidden();
+ await page.locator('[data-pw=part-menu]').click();if(await page.locator('[data-pw=context-close]').isVisible())await page.locator('[data-pw=context-close]').click();await page.locator('[data-pw=focus-details]').click();await expect(page.locator('.pw-context')).toBeVisible();await page.locator('[data-pw=selection-clear]').click();await expect(page.locator('.focusbar')).toBeHidden();
  await selectWork(page);await page.locator('[data-pw=focus-picker]').click();await expect(page.locator('.pw-dialog')).toHaveCount(0);await expect(page.locator('.pw-context .entity-tabs')).toBeVisible();await page.locator('.pw-context [data-pw=index][data-kind=request]').click();await page.locator('.pw-context [data-pw=entity][data-kind=request]').first().click();await expect(page.locator('.focus-name')).toHaveText(/^Заявка №/);await expect(page.locator('.pw-context .entity-title-row')).toContainText('Заявка');await page.locator('.pw-context [data-kind=trip]').first().click();await expect(page.locator('.focus-name')).toHaveText(/^Выезд №/);await expect(page.locator('.pw-context .entity-title-row')).toContainText('Выезд');expect(errors).toEqual([]);
 });
 
@@ -62,11 +66,11 @@ test('planner overlays: compact rail keeps desktop dates and zoom while the phon
  const errors=await boot(page,info),isMobile=await mobile(page),period=page.locator('[data-pw=period]');
  const title=await period.getAttribute('title');expect(title).toContain('05.10 — 06.10.2026');
  for(const mode of ['graph','stats']){
-  if(mode==='stats')await page.locator(isMobile?'.pw-mobile-mode':'#pw-tab-stats').click();
+  if(mode==='stats'){const v=page.viewportSize();await page.mouse.move(v.width-4,v.height/2);await page.locator('#pw-tab-stats').click();}
   const scroller=page.locator(mode==='graph'?'.pw-calendar':'.pw-statistics');
   await expect(period.locator('.date-text')).toBeVisible();await scroller.evaluate(el=>el.scrollTop=200);
   await expect(page.locator('.pw-root')).toHaveAttribute('data-collapsed','true');
-  if(isMobile){await expect(period.locator('.date-text')).toBeHidden();const modeButton=page.locator('.pw-mobile-mode');await expect(modeButton).toBeVisible();await expect(modeButton).toHaveText(mode==='graph'?'Статистика→':'График→');const left=await modeButton.boundingBox(),right=await period.boundingBox();expect(left.x+left.width).toBeLessThanOrEqual(right.x+1);expect(Math.abs(left.y-right.y)).toBeLessThan(5);}else{await expect(period.locator('.date-text')).toBeVisible();if(mode==='graph')await expect(page.locator('.desktop-scale')).toBeVisible();}await expect(period.locator('.di')).toBeVisible();
+  if(isMobile){await expect(period.locator('.date-text')).toBeHidden();const modeButton=page.locator('#pw-tab-'+mode);await expect(modeButton).toBeVisible();await expect(modeButton).toHaveAttribute('aria-selected','true');const left=await page.locator('.pw-tabs').boundingBox(),right=await period.boundingBox();expect(left.x+left.width).toBeLessThanOrEqual(right.x+1);expect(Math.abs((left.y+left.height/2)-(right.y+right.height/2))).toBeLessThan(5);}else{await expect(period.locator('.date-text')).toBeVisible();if(mode==='graph')await expect(page.locator('.desktop-scale')).toBeVisible();}await expect(period.locator('.di')).toBeVisible();
   const rect=await period.boundingBox();if(isMobile){expect(rect.width).toBe(44);expect(rect.height).toBe(rect.width);expect((await page.locator('.pw-period').boundingBox()).width).toBe(rect.width);}else expect(rect.width).toBeGreaterThan(100);
   await expect(period).toHaveAttribute('title',title);await capture(page,info,'compact-calendar-'+mode);
   await period.click();await expect(page.locator('.pw-dialog [name=from]')).toHaveValue('2026-10-05');await expect(page.locator('.pw-dialog [name=to]')).toHaveValue('2026-10-06');

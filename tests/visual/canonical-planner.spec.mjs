@@ -14,7 +14,7 @@ async function clean(page,errors){expect(errors).toEqual([]);expect(await page.e
 test('canonical planner: same-column fact, physical selection and flat desktop tabs',async({page},info)=>{
  const errors=await boot(page,info),mobile=await mobilePlanner(page);await expect(page.locator('.pw-fact-mark')).toHaveCount(4);expect(await page.locator('.pw-plan[data-part=work-first]').first().evaluate(e=>e.getBoundingClientRect().height/Number(e.closest('.pw-day').dataset.scale))).toBeCloseTo(6,1);await expect(page.locator('.pw-crew').first()).toContainText('Анна Смирнова');if(!mobile){await expect(page.locator('.pw-tabs [data-mode=graph]')).toHaveCSS('background-color','rgba(0, 0, 0, 0)');await expect(page.locator('.pw-tick').first()).toHaveText('00:00');}
  await revealTime(page,8);await selectWork(page);await expect(page.locator('.pw-plan[data-state=primary]')).toHaveCount(1);await expect(page.locator('.pw-plan[data-state=shared]')).toHaveCount(1);await expect(page.locator('.pw-plan[data-state=related]')).toHaveCount(4);await expect(page.locator('.pw-floating')).toBeVisible();await shot(page,info,'plan-selection');
- if(mobile)await page.locator('[data-pw=context-close]').click();
+ if(mobile&&await page.locator('[data-pw=context-close]').isVisible())await page.locator('[data-pw=context-close]').click();
  await page.locator('.pw-fact-hit').first().click();await expect(page.locator(mobile?'.pw-context':'.pw-fact-popover')).toContainText('Достроено');await expect(page.locator(mobile?'.pw-context':'.pw-fact-popover')).toContainText('Ожидает проверки');expect(await page.locator('.pw-fact-mark').first().evaluate(e=>e.getBoundingClientRect().width)).toBe(10);await shot(page,info,'fact-details');await clean(page,errors);
 });
 
@@ -23,7 +23,7 @@ test('canonical planner: split and undo use new layout RPC and preserve measurem
 });
 
 test('canonical planner: engineer day frame, no money and collapsing statistics header',async({page},info)=>{
- const errors=await boot(page,info,'engineer');await page.setViewportSize({width:page.viewportSize().width,height:600});await expect(page.locator('.pw-tick').first()).toHaveText('07:00');await expect(page.locator('.pw-root')).not.toContainText('сверхурочные');const mode=await mobilePlanner(page)?'.pw-mobile-mode':'.pw-tabs [data-mode=stats]';await page.locator(mode).click();await expect(page.locator('.pw-statistics')).toContainText('Моя статистика');await expect(page.locator('.pw-statistics')).not.toContainText('Выручка');await page.locator('.pw-statistics').evaluate(e=>{e.scrollTop=200;});await expect(page.locator('.pw-root')).toHaveAttribute('data-collapsed','true');await shot(page,info,'engineer-statistics');await clean(page,errors);
+ const errors=await boot(page,info,'engineer');await page.setViewportSize({width:page.viewportSize().width,height:600});await expect(page.locator('.pw-tick').first()).toHaveText('07:00');await expect(page.locator('.pw-root')).not.toContainText('сверхурочные');const mode='.pw-tabs [data-mode=stats]';await page.locator(mode).click();await expect(page.locator('.pw-statistics')).toContainText('Моя статистика');await expect(page.locator('.pw-statistics')).not.toContainText('Выручка');await page.locator('.pw-statistics').evaluate(e=>{e.scrollTop=200;});await expect(page.locator('.pw-root')).toHaveAttribute('data-collapsed','true');await shot(page,info,'engineer-statistics');await clean(page,errors);
 });
 
 test('canonical planner: road can be split and rejoined without shifting the neighboring task',async({page},info)=>{
