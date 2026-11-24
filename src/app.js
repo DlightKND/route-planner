@@ -759,7 +759,7 @@ function applyMobileNav(){
   rail.addEventListener('pointerenter',()=>rail.classList.remove('rail-rest'));
   rail.addEventListener('pointerleave',()=>rail.classList.add('rail-rest'));
   // Открылась другая страница — показываем её, а не раскрытый рельс; следующий Tab раскроет его снова.
-  addEventListener('hashchange',()=>{ if(!rail.matches(':hover')) rail.classList.add('rail-rest'); });
+  window.addEventListener('hashchange',()=>{ if(!rail.matches(':hover')) rail.classList.add('rail-rest'); });
 })();
 function railHeight(){
   const rail=document.querySelector('.rail'); if(!rail) return;
