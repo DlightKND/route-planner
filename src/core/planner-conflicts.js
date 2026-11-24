@@ -13,8 +13,14 @@
 // vehicle  — one vehicle is in two trips whose spans overlap.
 // crew     — a task engineer is not in the crew of the trip that carries the task.
 // closed   — the task dates contain no working day for an engineer of its crew.
+// Progress (stage 3)
+// overdue  — the planned work is in the past and the task is not started.
+// overrun  — the planned work is in the past and the started task is still not handed in.
+// late     — the planned trip should have started and is still not started.
+// route    — the route still passes a task stop with no active task left (server: route_stale).
 
 import {dayWindow} from './schedule.js';
+import {plannerLocalTime} from './planner-workspace.js';
 
 const CLOSED_ORDERS=new Set(['completed','cancelled','review']);
 const CLOSED_TRIPS=new Set(['finished','done','cancelled']);
@@ -76,6 +82,25 @@ function dateConflicts(group,data){
   return result;
 }
 
+function progressConflicts(group,data,today,add){
+  const parts=(group.parts||[]).map(p=>p.date).sort(),first=parts[0],last=parts.at(-1);if(!last)return;
+  if(group.kind==='work'&&!group.booking){
+    const order=data.orders?.find(o=>o.id===group.order_id);
+    if(order&&last<today&&['draft','assigned'].includes(order.status))add(group,{type:'overdue',label:'План просрочен · работа не начата',
+      detail:`Работа стояла на ${dayLabel(last)}, но задание ещё не начато. Начните задание или перенесите его на новую дату.`});
+    if(order&&last<today&&['in_progress','paused'].includes(order.status))add(group,{type:'overrun',label:'План закончился, задание в работе',
+      detail:`Плановое время закончилось ${dayLabel(last)}, а задание ещё не сдано на проверку. Внесите результат или запланируйте остаток.`});
+  }
+  if(group.kind==='road'&&group.trip_id){
+    const trip=data.trips?.find(t=>t.id===group.trip_id);
+    const start=(data.groups||[]).filter(g=>g.trip_id===group.trip_id&&!g.booking).flatMap(g=>(g.parts||[]).map(p=>p.date)).sort()[0]||first;
+    if(trip&&['planned','assigned'].includes(trip.status)&&start<today)add(group,{type:'late',key:'late:'+trip.id,label:'Выезд не начат по плану',
+      detail:`Выезд должен был начаться ${dayLabel(start)}, но ещё не начат. Начните выезд или перенесите его целиком.`});
+    if(group.route_stale)add(group,{type:'route',key:'route:'+group.trip_id,label:'Маршрут выезда устарел',entity:{kind:'trip',id:group.trip_id},
+      detail:'В маршруте осталась точка, где больше нет заданий: задание убрано из выезда или отменено. Пересчитайте маршрут в выезде, чтобы дорога считалась без неё.'});
+  }
+}
+
 function busyConflicts(groups,data,add){
   const byPerson=new Map();
   for(const group of groups)for(const person of new Set(group.people||[]))for(const part of group.parts||[]){
@@ -123,6 +148,8 @@ function compute(data){
   const conflicts=new Map(),groups=(data.groups||[]).filter(g=>active(g,data));
   const add=(group,conflict)=>{const list=conflicts.get(group.source_key)||[];const key=conflict.key||group.source_key+':'+conflict.type+':'+(conflict.person||'');if(!list.some(c=>c.key===key))list.push({...conflict,key});conflicts.set(group.source_key,list);};
   for(const group of groups)for(const conflict of dateConflicts(group,data))add(group,conflict);
+  const today=data.today||plannerLocalTime(new Date()).date;
+  for(const group of groups)progressConflicts(group,data,today,add);
   busyConflicts(groups,data,add);
   vehicleConflicts(groups,data,add);
   return conflicts;
@@ -130,7 +157,7 @@ function compute(data){
 
 // One computation per layout: the view asks for every block, the overview and the cards.
 const memo=new WeakMap();
-function signature(data){let sum=(data.groups||[]).length;for(const g of data.groups||[])for(const p of g.parts||[])sum=(sum*31+dayNumber(p.date)+p.start*7+p.end*13)%1e9;return sum+':'+(data.orders||[]).length+':'+(data.trips||[]).length;}
+function signature(data){let sum=(data.groups||[]).length;for(const g of data.groups||[])for(const p of g.parts||[])sum=(sum*31+dayNumber(p.date)+p.start*7+p.end*13)%1e9;return sum+':'+(data.orders||[]).length+':'+(data.trips||[]).length+':'+(data.today||plannerLocalTime(new Date()).date);}
 export function plannerConflicts(data){
   const sign=signature(data),hit=memo.get(data);
   if(hit&&hit.groups===data.groups&&hit.sign===sign)return hit.map;

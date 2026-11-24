@@ -18,6 +18,7 @@ beforeAll(async()=>{
  create table service_orders(id uuid primary key,title text,status text default 'assigned',work_mode text default 'onsite',job_id uuid,lead_engineer uuid,engineer_ids uuid[] default '{}',owner_id uuid,curator_id uuid,date_from date,date_to date,revision integer default 0,created_at timestamptz default now());
  create table trips(id uuid primary key,status text default 'assigned',date_from date,date_to date,lead_engineer uuid,engineer_ids uuid[] default '{}',owner_id uuid,curator_id uuid,deleted_at timestamptz,started_at timestamptz,finished_at timestamptz,route_stops jsonb default '[]',econ_snapshot jsonb default '{}',plan_econ_snapshot jsonb,day_plan jsonb,workbench_revision integer default 0);
  create table trip_service_orders(trip_id uuid,order_id uuid,ordinal integer default 0);
+ create table service_order_history(id bigserial primary key,order_id uuid,recorded_at timestamptz default now(),reason text,snapshot jsonb);
  create table service_order_items(id uuid primary key,order_id uuid,kind text,unit text,planned_qty numeric,transferred_qty numeric default 0,request_finance_void_event_id uuid,legacy_snapshot jsonb default '{}');
  create table staff_day(engineer uuid,date date,start_h numeric,end_h numeric,tol_h numeric);
  create table settings(id boolean primary key,day_start numeric,day_end numeric,tolerance_h numeric);insert into settings values(true,7,16,1);
@@ -33,6 +34,9 @@ beforeAll(async()=>{
  await db.exec(readFileSync(new URL('../supabase/migrations/20261124124714_planner_task_dates_conflicts.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261124124716_overtime_default_zero.sql',import.meta.url),'utf8'));
  await db.exec(readFileSync(new URL('../supabase/migrations/20261124134528_planner_trip_weekends.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261124141616_planner_progress.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261124141702_planner_progress_early_only.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/20261124142021_planner_snapshot_overdue.sql',import.meta.url),'utf8'));
  // The fixture scenarios were written with one approved overtime hour per day.
  await db.exec('update settings set tolerance_h=1 where id');
 },30000);
@@ -214,4 +218,55 @@ it('pauses a trip over a closed weekend and uses a weekend day opened for the cr
  await as(1);
  work=(await snapshot()).groups.find(g=>g.order_id===id(20));
  expect(work.parts.map(p=>p.date)).toEqual(['2026-10-30','2026-10-31']);
+});
+it('cuts a task closed earlier than planned and continues the route from the closing moment',async()=>{
+ await db.exec('reset role');
+ await q("update service_orders set status='review' where id=$1",[id(20)]);
+ await q("insert into service_order_history(order_id,recorded_at,reason) values($1,'2026-10-26 08:00+00','Статус: assigned → in_progress'),($1,'2026-10-26 09:00+02','Статус: in_progress → review')",[id(20)]);
+ await as(1);
+ const groups=(await snapshot()).groups;
+ expect(groups.find(g=>g.order_id===id(20)).parts).toEqual([expect.objectContaining({date:'2026-10-26',start:8,end:9})]);
+ expect(groups.find(g=>g.source_key===`road:${id(30)}:1`).parts[0]).toMatchObject({date:'2026-10-26',start:9,end:10});
+});
+it('starts the not started remainder of a started trip from today',async()=>{
+ await db.exec('reset role');
+ await q("update trips set status='in_progress',started_at='2026-10-26 05:00+00' where id=$1",[id(30)]);
+ await q("update service_orders set date_to=null where id=$1",[id(20)]);
+ const today=(await q("select (now() at time zone 'Europe/Kyiv')::date::text d"))[0].d;
+ let day=new Date(today+'T00:00:00Z');while([0,6].includes(day.getUTCDay()))day=new Date(day.getTime()+864e5);
+ const expected=day.toISOString().slice(0,10);
+ await as(1);
+ const groups=(await q('select planner_snapshot($1,$2) data',[expected,expected]))[0].data.groups,placed=groups.find(g=>g.order_id===id(20)),road=groups.find(g=>g.source_key===`road:${id(30)}:0`);
+ expect(road.parts[0]).toMatchObject({date:expected,start:7,end:8});
+ expect(placed.parts[0]).toMatchObject({date:expected,start:8,end:10});
+});
+it('marks the roads of a route that still passes a stop without active tasks',async()=>{
+ await secondStop({from:'2026-10-26',to:'2026-10-28'});
+ await q("update service_orders set status='cancelled' where id=$1",[id(21)]);
+ await as(1);
+ const roads=(await snapshot()).groups.filter(g=>g.kind==='road');
+ expect(roads.length).toBeGreaterThan(0);
+ expect(roads.every(g=>g.route_stale===true)).toBe(true);
+ await db.exec('reset role');await q("update service_orders set status='assigned' where id=$1",[id(21)]);await as(1);
+ expect((await snapshot()).groups.filter(g=>g.kind==='road').some(g=>g.route_stale)).toBe(false);
+});
+it('keeps the plan when a task is sent for review later than planned',async()=>{
+ await db.exec('reset role');
+ await q("update service_orders set status='review' where id=$1",[id(20)]);
+ await q("insert into service_order_history(order_id,recorded_at,reason) values($1,'2026-10-29 12:00+02','Статус: in_progress → review')",[id(20)]);
+ await as(1);
+ const groups=(await snapshot()).groups;
+ expect(groups.find(g=>g.order_id===id(20)).parts).toEqual([expect.objectContaining({date:'2026-10-26',start:8,end:10})]);
+ expect(groups.find(g=>g.source_key===`road:${id(30)}:1`).parts[0]).toMatchObject({date:'2026-10-26',start:10,end:11});
+});
+it('lists overdue tasks and late trips for all dates with the snapshot',async()=>{
+ // The fixture trip and task are planned for 26.10 and not started.
+ const data=await snapshot();
+ expect(data.overdue).toEqual([
+  {kind:'order',id:id(20),type:'overdue',date:'2026-10-26'},
+  {kind:'trip',id:id(30),type:'late',date:'2026-10-26'}]);
+ await db.exec('reset role');await q("update service_orders set status='in_progress' where id=$1",[id(20)]);await as(1);
+ expect((await snapshot()).overdue.find(x=>x.kind==='order').type).toBe('overrun');
+ await as(4);
+ expect((await snapshot()).overdue).toEqual([]);
 });
