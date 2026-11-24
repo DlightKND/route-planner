@@ -13,21 +13,12 @@ const metrics={revenue:'Приход',cost:'Расход'};
 
 function ratesFor(model,row,request){
  const view=roadPaymentView(model,row,request),{payer,warranty}=view.effective;
- const profiles=model.tariffs.tariff_profiles||[],override=row.rates||{};
- const job=request&&model.item.jobs.find(job=>job.id===request);
- const defaultProfile=profiles.find(profile=>profile[warranty==='warranty'?'def_warranty':'def_paid']);
- const defaultRate=real(defaultProfile?.road?.km_rate)??real(model.tariffs.tariffs?.km);
- const baseCost=real(model.tariffs.costs?.km);
- let baseRevenue=null;
- if(payer?.startsWith('client:')){
-  const billedJob=model.item.jobs.find(job=>job.id===payer.slice(7))||job;
-  const configured=billedJob?.profiles?.[warranty];
-  baseRevenue=real(profiles.find(profile=>profile.id===configured)?.road?.km_rate)??defaultRate;
- }else if(payer==='warranty-dept'){
-  baseRevenue=real(profiles.find(profile=>profile.id===payer)?.road?.km_rate)??real(profiles.find(profile=>profile.def_warranty)?.road?.km_rate);
- }else if(payer==='service'){
-  baseRevenue=real(profiles.find(profile=>profile.id===payer)?.road?.km_rate);
- }
+ const profiles=model.tariffs?.tariff_profiles||[],override=row.rates||{};
+ // The payer is a tariff profile and its road rate applies; a profile without one needs a rate on the section.
+ // Only when no profile matches (none configured) the flagged default and then the global km tariff are used.
+ const profile=profiles.find(item=>item.id===payer),fallback=profiles.find(item=>item[warranty==='warranty'?'def_warranty':'def_paid']);
+ const baseRevenue=profile?real(profile.road?.km_rate):real(fallback?.road?.km_rate)??real(model.tariffs?.tariffs?.km);
+ const baseCost=real(model.tariffs?.costs?.km);
  return {revenue:real(override.revenue)??baseRevenue,cost:real(override.cost)??baseCost,payer:paymentLabel(view,'payer',payer)};
 }
 

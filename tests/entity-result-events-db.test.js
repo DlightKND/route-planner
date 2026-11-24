@@ -72,12 +72,18 @@ beforeAll(async()=>{
   await db.exec(file('../supabase/migrations/20261120200145_scoped_finance_workspace.sql'));
   await db.exec(file('../supabase/migrations/20261120202510_planned_road_tariffs.sql'));
   await db.exec(file('../supabase/migrations/20261121051500_finance_work_group_names.sql'));
+  await db.exec('alter table public.clients add column default_profile text;');
+  await db.exec(file('../supabase/migrations/20261124102346_tariff_payers.sql'));
 },30000);
+// Payers are tariff profiles from settings.
+const tariffProfiles=[{id:'tp-client',name:'Клиент',def_paid:true,work_paid:{rate:1250}},{id:'tp-factory',name:'Производство',def_warranty:true,work_warr:{rate:600}},
+ {id:'tp-service',name:'Отдел сервиса',work_paid:{rate:900},work_warr:{rate:500},road:{km_rate:30}}];
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
   await db.exec('begin');
   await q("insert into profiles values($1,'admin',true),($2,'logist',true),($3,'engineer',true),($4,'engineer',true),($5,'admin',false),($6,'engineer',true),($7,'engineer',true)",[1,2,3,4,5,6,7].map(id));
   await q("insert into clients values($1,'Клиент',50,30)",[id(20)]);
+  await q('update settings set tariff_profiles=$1 where id=true',[JSON.stringify(tariffProfiles)]);
   await q("insert into jobs(id,client_id,status,engineer_ids,owner_id,curator_id) values($1,$3,'in_progress',$4,$5,$5),($2,$3,'done',$6,$5,$5)",[id(10),id(11),id(20),[id(3),id(4)],id(6),[id(7)]]);
   await q("insert into service_orders(id,title,job_id,status,engineer_ids,lead_engineer,owner_id,curator_id) values($1,'Диагностика',$3,'in_progress',$5,$6,$7,$7),($2,'Архив',$4,'draft',$8,$9,$7,$7)",[id(30),id(31),id(10),id(11),[id(3),id(4)],id(3),id(6),[id(7)],id(7)]);
   await q('update service_orders set seed_request_id=job_id where id=$1',[id(31)]);
@@ -194,13 +200,14 @@ it('prices verified road intervals independently of stops, preserves shares on s
   expect(original).toMatchObject({editable:false,revision:0,sections:[
     {id:first,km:10,measured_km:10,shares:{[id(10)]:10},returning:false},
     {id:id(85)+'~finish',km:null,measured_km:24,shares:{},returning:true}]});
-  await rejected(()=>save(original,first,'terms',{payer:'service'}),/куратор/);
+  await rejected(()=>save(original,first,'terms',{payer:'tp-service'}),/куратор/);
   await as(6);
   await rejected(()=>save(original,first,'shares',{[id(11)]:1}),/километры/);
   await rejected(()=>save(original,first,'shares',{[id(10)]:10.01}),/больше длины/);
   let latest=await save(original,first,'shares',{[id(10)]:6.03});
-  await rejected(()=>save(original,first,'terms',{payer:'service'}),/Маршрут изменился/);
-  latest=await save(latest,first,'terms',{payer:'service',warranty:'warranty'});
+  await rejected(()=>save(original,first,'terms',{payer:'tp-service'}),/Маршрут изменился/);
+  await rejected(()=>save(latest,first,'terms',{payer:'service'}),/тарифных профилей/);
+  latest=await save(latest,first,'terms',{payer:'tp-service',warranty:'warranty'});
   await rejected(()=>save(latest,first,'rates',{revenue:-1}),/тарифы/);
   latest=await save(latest,first,'rates',{revenue:23.5,cost:10});
   const cut=Date.parse(iso('08:30'))/1000;
@@ -211,8 +218,8 @@ it('prices verified road intervals independently of stops, preserves shares on s
   await rejected(()=>preview(original,first,cut),/Маршрут изменился/);
   latest=await save(latest,first,'split',cut);
   expect(latest.sections.slice(0,2)).toMatchObject([
-    {id:first,km:5,shares:{[id(10)]:3.02},local:{payer:'service',warranty:'warranty'},rates:{revenue:23.5,cost:10}},
-    {id:first+'~'+cut,km:5,shares:{[id(10)]:3.01},local:{payer:'service',warranty:'warranty'},rates:{revenue:23.5,cost:10}}]);
+    {id:first,km:5,shares:{[id(10)]:3.02},local:{payer:'tp-service',warranty:'warranty'},rates:{revenue:23.5,cost:10}},
+    {id:first+'~'+cut,km:5,shares:{[id(10)]:3.01},local:{payer:'tp-service',warranty:'warranty'},rates:{revenue:23.5,cost:10}}]);
   const [exceptions]=await q("select public.journal_road_exceptions('job',$1) rows",[id(10)]);
   expect(exceptions.rows[0].sections.map(row=>row.id)).toEqual([first,first+'~'+cut]);
   await as(3);
@@ -262,13 +269,23 @@ it('saves independent payment overrides and resets them with an audit trail',asy
   await rejected(()=>save('work',30,{},{warranty:'warranty'},id(40)),/куратор/);
   await rejected(()=>q('select * from dlight_private.payment_terms'),/permission denied/);
   await as(6);
-  const jobTerms={warranty:'warranty',payer:'warranty-dept'};
+  expect((await readTerms('job',10)).profiles.map(profile=>profile.id)).toEqual(['tp-client','tp-service','tp-factory']);
+  const jobTerms={warranty:'warranty',payer:'tp-factory'};
   expect(await save('job',10,{},jobTerms)).toEqual(jobTerms);
   await rejected(()=>save('job',10,{},jobTerms),/Обновите карточку/);
+  await db.exec('reset role');
+  const lineTerms=(profile,billable)=>q('select dlight_private.payment_work_terms($1,$2,$3,$4,$5) terms',[id(10),id(30),id(40),profile,billable]).then(rows=>rows[0].terms);
+  // A hand-picked work profile wins over the request payer; the default profile does not.
+  expect(await lineTerms('tp-service',true)).toEqual({warranty:'warranty',payer:'tp-service',default_payer:'tp-factory'});
+  expect(await lineTerms('tp-client',true)).toEqual({warranty:'warranty',payer:'tp-factory',default_payer:'tp-factory'});
+  await q('update clients set default_profile=$2 where id=$1',[id(20),'tp-service']);
+  expect(await q('select dlight_private.tariff_default_payer($1,$2) paid,dlight_private.tariff_default_payer($1,$3) warranty',[id(10),'paid','warranty']))
+    .toEqual([{paid:'tp-service',warranty:'tp-factory'}]);
+  await as(6);
   await rejected(()=>save('work',30,{},{warranty:'warranty'},id(41)),/не принадлежит/);
-  await rejected(()=>save('trip',50,{},{payer:'client:'+id(11)}),/связанных заявок/);
+  for(const payer of ['warranty-dept','service','client:'+id(10)])await rejected(()=>save('trip',50,{},{payer}),/тарифных профилей/);
   await rejected(()=>save('order',30,{},{cost:9}),/Проверьте условия/);
-  const workTerms={payer:'service'};
+  const workTerms={payer:'tp-service'};
   expect(await save('work',30,{},workTerms,id(40))).toEqual(workTerms);
   expect(await readTerms('job',10)).toMatchObject({editable:true,item:{local:jobTerms},orders:[{local:{},works:[{local:workTerms}]}],
     trips:[{id:id(50),local:{},jobs:[{local:jobTerms}]}]});
