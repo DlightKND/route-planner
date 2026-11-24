@@ -2,62 +2,78 @@ import {openEntityPanel} from './entity-actions.js';
 
 const keys=['warranty','payer'];
 const warranties={paid:'Вне гарантии',warranty:'Гарантийная'};
-const departments={'warranty-dept':'Гарантийный отдел',service:'Сервисный отдел'};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const requestTerms=job=>job?{warranty:'paid',payer:'client:'+job.id,...job.local}:{warranty:null,payer:null};
+// Payers are tariff profiles from settings; the stored value is the profile id.
+const profilesOf=model=>model?.profiles||model?.tariffs?.tariff_profiles||[];
+const known=(profiles,id)=>!!id&&profiles.some(profile=>profile.id===id);
+const flagged=(profiles,warranty)=>profiles.filter(profile=>profile[warranty==='warranty'?'def_warranty':'def_paid']).map(profile=>profile.id).sort()[0]||null;
+// Default payer of a request: the profile its works were billed to, the client profile for paid work, then the flagged default.
+export function defaultPayer(job,warranty,profiles){
+ const billed=job?.profiles?.[warranty==='warranty'?'warranty':'paid'];
+ if(known(profiles,billed))return billed;
+ if(warranty!=='warranty'&&known(profiles,job?.default_profile))return job.default_profile;
+ return flagged(profiles,warranty);
+}
+// Local terms from the request down to the card itself; the most specific value wins.
+function resolve(job,chain,profiles){
+ const pick=key=>chain.reduceRight((found,local)=>found||local?.[key]||null,null);
+ const warranty=pick('warranty')||'paid';
+ return {warranty,payer:pick('payer')||defaultPayer(job,warranty,profiles)};
+}
+// A work profile chosen by hand (not the default it would get anyway) is the work's own payer.
+const manualProfile=(job,work,profiles)=>known(profiles,work?.tariff_profile)&&work.tariff_profile!==defaultPayer({...job,profiles:null},work.billable===false?'warranty':'paid',profiles)?{payer:work.tariff_profile}:{};
 const different=(local,parent)=>keys.some(key=>local[key]&&local[key]!==parent[key]);
 const requestOrigin=job=>job?'Из заявки · '+job.title:'';
 
 export function paymentView(model,workId){
  if(!model)return null;
- const {scope,item,editable}=model;
+ const {scope,item,editable}=model,profiles=profilesOf(model);
  if(workId){
   const work=item.works?.find(row=>row.id===workId);
   if(!work)return null;
-  return makeView('work',item.id,work,item.job?[item.job]:[],{...requestTerms(item.job),...item.local},editable,'Из задания №'+item.number);
+  const chain=[item.job?.local,item.local,manualProfile(item.job,work,profiles)];
+  return makeView('work',item.id,work,item.job?[item.job]:[],resolve(item.job,chain,profiles),resolve(item.job,[...chain,work.local],profiles),editable,'Из задания №'+item.number,profiles);
  }
- if(scope==='job')return makeView('job',item.id,item,[item],{warranty:'paid',payer:'client:'+item.id},editable,'');
- if(scope==='order')return makeView('order',item.id,item,item.job?[item.job]:[],requestTerms(item.job),editable,requestOrigin(item.job));
+ if(scope==='job')return makeView('job',item.id,item,[item],resolve(item,[],profiles),resolve(item,[item.local],profiles),editable,'',profiles);
+ if(scope==='order')return makeView('order',item.id,item,item.job?[item.job]:[],resolve(item.job,[item.job?.local],profiles),resolve(item.job,[item.job?.local,item.local],profiles),editable,requestOrigin(item.job),profiles);
  const jobs=item.jobs||[];
- return makeView('trip',item.id,item,jobs,tripTerms(jobs),editable,jobs.length===1?requestOrigin(jobs[0]):jobs.length?'По связанным заявкам':'');
+ return makeView('trip',item.id,item,jobs,tripTerms(jobs,[],profiles),tripTerms(jobs,[item.local],profiles),editable,jobs.length===1?requestOrigin(jobs[0]):jobs.length?'По связанным заявкам':'',profiles);
 }
 
-function tripTerms(jobs){
- const values=jobs.map(requestTerms);
- return Object.fromEntries(keys.map(key=>[key,!values.length?null:values.every(value=>value[key]===values[0][key])?values[0][key]:'mixed']));
+function tripTerms(jobs,extra,profiles){
+ if(!jobs.length)return resolve(null,extra,profiles);
+ const values=jobs.map(job=>resolve(job,[job.local,...extra],profiles));
+ return Object.fromEntries(keys.map(key=>[key,values.every(value=>value[key]===values[0][key])?values[0][key]:'mixed']));
 }
 
 export function roadPaymentView(model,section,request){
- const jobs=model.item.jobs||[],allocated=Object.keys(section.shares||{});
+ const jobs=model.item.jobs||[],allocated=Object.keys(section.shares||{}),profiles=profilesOf(model);
  const jobId=request===undefined?(allocated.length===1?allocated[0]:null):request;
- const job=jobs.find(row=>row.id===jobId);
- const parent={...tripTerms(job?[job]:jobs),...model.item.local};
- return makeView('road',model.item.id,section,jobs,parent,model.editable,'Из выезда');
+ const job=jobs.find(row=>row.id===jobId),scope=job?[job]:jobs;
+ return makeView('road',model.item.id,section,jobs,tripTerms(scope,[model.item.local],profiles),tripTerms(scope,[model.item.local,section.local],profiles),model.editable,'Из выезда',profiles);
 }
 
-function makeView(scope,id,item,jobs,parent,editable,origin){
+function makeView(scope,id,item,jobs,parent,effective,editable,origin,profiles){
  const local=item.local||{};
- const clients=Object.fromEntries(jobs.map(job=>['client:'+job.id,job.title]));
- const payerNames={...clients,...departments,mixed:'Разные плательщики'};
- const effective={...parent,...local};
- const names={warranty:{...warranties,mixed:'Смешанные условия'},payer:payerNames};
+ const payers=Object.fromEntries(profiles.map(profile=>[profile.id,profile.name]));
+ const names={warranty:{...warranties,mixed:'Смешанные условия'},payer:{...payers,mixed:'Разные плательщики'}};
  return {scope,id,subject:['work','road'].includes(scope)?item.id:'',item,editable,origin,local,parent,effective,names,
-  options:{warranty:warranties,payer:{...clients,...departments}},exception:scope!=='job'&&different(local,parent)};
+  options:{warranty:warranties,payer:payers},exception:scope!=='job'&&different(local,parent)};
 }
 
 export function paymentExceptions(model){
- const rows=[];
+ const rows=[],profiles=profilesOf(model);
  for(const item of model.scope==='order'?[model.item]:model.orders||[]){
-  const scope={scope:'order',item};
+  const scope={scope:'order',item,profiles};
   if(model.scope==='job'&&paymentView(scope).exception)rows.push({scope:'order',id:item.id,label:'Задание №'+item.number});
   for(const work of item.works||[])if(paymentView(scope,work.id)?.exception)rows.push({scope:'work',id:item.id,work:work.id,label:work.title});
  }
  if(model.scope==='job')for(const trip of model.trips||[]){
-  if(different(trip.local||{},requestTerms(model.item)))rows.push({scope:'trip',id:trip.id,label:trip.title});
+  if(different(trip.local||{},resolve(model.item,[model.item.local],profiles)))rows.push({scope:'trip',id:trip.id,label:trip.title});
  }
  for(const road of model.roads||[]){
   const item=model.scope==='trip'?model.item:{...road.item,jobs:road.item.jobs.map(job=>job.id===model.item.id?model.item:job)};
-  for(const section of road.sections)if(roadPaymentView({item},section,model.scope==='job'?model.item.id:undefined).exception)
+  for(const section of road.sections)if(roadPaymentView({item,profiles:profilesOf(road).length?profilesOf(road):profiles},section,model.scope==='job'?model.item.id:undefined).exception)
    rows.push({scope:'road',id:item.id,roadId:section.id,label:'Участок · '+section.title});
  }
  return rows;
@@ -68,7 +84,7 @@ export const paymentLabel=(view,key,value)=>view.names[key][value]||(key==='paye
 const label=paymentLabel;
 const readout=view=>'<dl class="payment-term-values">'+keys.map(key=>`<div><dt>${labels[key]}</dt><dd>${esc(label(view,key,view.effective[key]))}</dd></div>`).join('')+'</dl>';
 const controls=view=>'<div class="payment-term-fields">'+keys.map(key=>{
- const fallback=view.scope==='job'?(key==='payer'?'Клиент заявки':'Вне гарантии'):'Наследовать · '+label(view,key,view.parent[key]);
+ const fallback=view.scope==='job'?(key==='payer'?'По умолчанию · '+label(view,key,view.parent.payer):'Вне гарантии'):'Наследовать · '+label(view,key,view.parent[key]);
  return `<label>${labels[key]}<select data-payment-field="${key}"><option value="">${esc(fallback)}</option>${Object.entries(view.options[key])
   .map(([id,title])=>`<option value="${esc(id)}" ${view.local[key]===id?'selected':''}>${esc(title)}</option>`).join('')}</select></label>`;
 }).join('')+'</div>';

@@ -16,15 +16,14 @@ const financeValue=value=>value==null?'':String(value).replace('.',',');
 
 function plannedRevenue(line,pricing){
  const baseline=amount(line.base_revenue);
- const terms=line.terms||{},payer=terms.payer,warranty=terms.warranty||(line.billable===false?'warranty':'paid');
- if(!payer&&!terms.warranty)return baseline;
- if(!line.hourly)return !payer&&warranty===(line.billable===false?'warranty':'paid')?baseline:null;
- const profiles=pricing?.profiles||[];
- const profile=payer==='service'?profiles.find(p=>p.id===payer):
-  payer==='warranty-dept'?profiles.find(p=>p.id===payer)||profiles.find(p=>p.def_warranty):
-  profiles.find(p=>p.id===line.tariff_profile)||profiles.find(p=>p[warranty==='warranty'?'def_warranty':'def_paid']);
+ // The payer is a tariff profile id; without one the server reports the default profile for the line.
+ const terms=line.terms||{},own=line.billable===false?'warranty':'paid',warranty=terms.warranty||own,explicit=terms.payer||null;
+ if((!explicit||explicit===line.tariff_profile)&&warranty===own)return baseline;
+ if(!line.hourly)return null;
+ const profiles=pricing?.profiles||[],payer=explicit||terms.default_payer;
+ const profile=profiles.find(p=>p.id===payer)||profiles.find(p=>p[warranty==='warranty'?'def_warranty':'def_paid']);
  const rate=amount(profile?.[warranty==='warranty'?'work_warr':'work_paid']?.rate);
- return rate??(!payer||payer.startsWith('client:')?warranty==='paid'?amount(pricing?.tariffs?.hour):baseline:null);
+ return rate??(warranty==='paid'?amount(pricing?.tariffs?.hour):null);
 }
 function calculateLine(line,pricing){
  const planQty=amount(line.plan_qty),factQty=amount(line.fact_qty),baseRevenue=amount(line.base_revenue),baseCost=amount(line.base_cost);
