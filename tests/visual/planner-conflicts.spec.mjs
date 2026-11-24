@@ -2,11 +2,11 @@ import {test,expect} from '@playwright/test';
 import {installMockBackend} from './mock-backend.mjs';
 import {mkdirSync} from 'node:fs';
 
-async function boot(page,info){
+async function boot(page,info,mode='conflicts'){
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());
   await page.clock.install({time:new Date('2026-10-05T10:00Z')});
-  await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,canonicalPlanner:'conflicts'});
+  await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,canonicalPlanner:mode});
   await page.goto('/#/schedule');
   if(await page.locator('#todayLater').isVisible().catch(()=>false))await page.locator('#todayLater').click();
   await expect(page.locator('.pw-plan').first()).toBeVisible();
@@ -48,5 +48,17 @@ test('planner conflicts: moving the deadline saves the task period and clears th
   expect(write).toMatchObject({p_date_from:'2026-10-05',p_date_to:'2026-10-06'});
   await expect(page.locator('.pw-plan[data-conflict=overflow]')).toHaveCount(0);
   expect(await page.evaluate(()=>window.__visualQA.plannerWrites.length)).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test('planner conflicts: one engineer in two blocks is reported on both blocks and in the overview',async({page},info)=>{
+  const errors=await boot(page,info,'resources');
+  await expect(page.locator('.pw-plan[data-conflict=busy]')).not.toHaveCount(0);
+  const panel=await openOverview(page);
+  const rows=panel.locator('[data-conflict=busy]');
+  await expect(rows).toHaveCount(2);await expect(rows.first()).toContainText('Двойная занятость · Анна Смирнова');
+  await rows.first().click();
+  await expect(page.locator('.pw-conflict[data-conflict=busy]').first()).toContainText('05.10 11:00–13:00 у Анна Смирнова уже стоит задание №101.');
+  await shot(page,info,'busy');
   expect(errors).toEqual([]);
 });

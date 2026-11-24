@@ -557,6 +557,11 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     const work=plannerGroups.find(g=>g.kind==='work');work.parts=[{id:'work-first',date:'2026-10-05',start:9,end:15,offset:0},{id:'work-late',date:'2026-10-06',start:7,end:9,offset:6}];work.auto_parts=structuredClone(work.parts);
     plannerGroups.push({...structuredClone(work),source_key:'work:'+order+':booking',booking:true,conflict:'order',parts:[{id:'booking',date:'2026-10-06',start:11,end:14,offset:0}],auto_parts:[{id:'booking',date:'2026-10-06',start:11,end:14,offset:0}]});
   }
+  if(canonicalPlanner==='resources'){
+    // The same engineers are booked by a standalone block in the middle of the trip work.
+    const work=plannerGroups.find(g=>g.kind==='work');
+    plannerGroups.push({...structuredClone(work),source_key:'work:'+order+':base',trip_id:null,parts:[{id:'busy',date:'2026-10-05',start:11,end:13,offset:0}],auto_parts:[{id:'busy',date:'2026-10-05',start:11,end:13,offset:0}]});
+  }
   const plannerReceipts=new Map();audit.plannerWrites=[];tables.planner_layout_history=[];
   if(canonicalPlanner==='historical'){task.status='completed';ride.status='done';}
   if(canonicalPlanner){
