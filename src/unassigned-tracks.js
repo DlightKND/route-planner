@@ -6,6 +6,7 @@ import {intervalText} from './core/journal-display.js';
 import {journalEntries,tripAttention,tripReviewIssues,kmText} from './core/gps-journal.js';
 import {calendarPeriodBounds} from './core/calendar-period.js';
 import {gpsSegments,mountGpsTrackMap} from './gps-track-map.js';
+import {TRACK_STYLE} from './core/track-style.js';
 import {timelineHTML,mountJournalRoute,wireJournalTimeline} from './journal-route.js';
 import {wireDetailsPopover} from './details-popover.js';
 import {infoHint} from './info-hints.js';
@@ -37,14 +38,14 @@ export function trackPreview(points){
 export function createUnassignedTracks(ctx){
  let sourceView=null,pendingTrip=null;let listScroll=0;let activeId=null,choosing=false,search='',vehicleFilter='',gapsOnly=false;const previews=new Map();
  let rows=[],tripRows=[],mode='all',offset=0,more=false,owner=null,version=0,selected=[],mergePreview=null;
- const maps=new Set(),resolutionDrafts=new Map();let sourceActivity;let headerMenus=[];
+ const maps=new Set(),resolutionDrafts=new Map(),peekPoints=new Map();let peekId=null,peekToken=0;let sourceActivity;let headerMenus=[];
  function clearHeaderMenus(){headerMenus.forEach(menu=>menu.destroy());headerMenus=[];}
  function clearMaps(scope){for(const entry of maps)if(!scope||scope.contains(entry.container)){entry.destroy();maps.delete(entry);}}
  function drawMap(box,points,mini=false){const entry=mountGpsTrackMap(box.querySelector('svg.unassigned-preview'),points,{leaflet:ctx.leaflet?.(),makeBase:ctx.makeTrackBase,mini,color:getComputedStyle(box).getPropertyValue('--accent').trim()||'#25845a'});if(entry)maps.add(entry);}
  const manager=()=>['admin','logist'].includes(ctx.role());
  const host=()=>document.getElementById('unassignedHost');
  const mergeEligible=r=>r&&!r._trip&&(r.state==='review'||r.state==='recording'&&new Date(r.last_ts)<=Date.now()-300000);
- function reset(){sourceView=null;sourceActivity?.destroy();sourceActivity=null;clearHeaderMenus();pendingTrip=null;ctx.tripReviews?.destroy();previews.clear();activeId=null;choosing=false;clearMaps();resolutionDrafts.clear();rows=[];tripRows=[];selected=[];mergePreview=null;owner=null;version++;if(host()){const period=document.getElementById('tripJournalPeriod');if(period&&host().contains(period))document.getElementById('plUnassigned').before(period);host().replaceChildren();}}
+ function reset(){sourceView=null;peekId=null;sourceActivity?.destroy();sourceActivity=null;clearHeaderMenus();pendingTrip=null;ctx.tripReviews?.destroy();previews.clear();peekPoints.clear();activeId=null;choosing=false;clearMaps();resolutionDrafts.clear();rows=[];tripRows=[];selected=[];mergePreview=null;owner=null;version++;if(host()){const period=document.getElementById('tripJournalPeriod');if(period&&host().contains(period))document.getElementById('plUnassigned').before(period);host().replaceChildren();}}
  const vehicle=id=>ctx.vehicles().find(v=>v.id===id);
  const vehicleName=id=>{const v=vehicle(id);return [v?.name||v?.model||'Машина',v?.plate].filter(Boolean).join(' · ');};
  const person=id=>{const p=ctx.people().find(v=>v.id===id);return p?.full_name||p?.name||p?.email||'Инженер';};
@@ -60,30 +61,42 @@ export function createUnassignedTracks(ctx){
   headerMenus=[wireDetailsPopover(filters),wireDetailsPopover(actions)];
   // Phone: the header folds into one row once the register scrolls and unfolds back at the top.
   const sidebar=box.querySelector('.gps-journal-sidebar');sidebar.addEventListener('scroll',()=>{const top=sidebar.scrollTop,folded=box.dataset.collapsed==='true';if(!folded&&top>48)box.dataset.collapsed='true';else if(folded&&top<=0)box.dataset.collapsed='false';},{passive:true});box.dataset.collapsed='false';
-  const period=document.getElementById('tripJournalPeriod');if(period){box.querySelector('[data-journal-period]').append(period);period.style.display='';}box.querySelector('[data-journal-exit]').onclick=()=>{box.querySelector('.journal-actions').open=false;ctx.onExit?.();};box.querySelector('[data-journal-refresh]').onclick=async()=>{if(!await leave())return;previews.clear();load();};
+  const period=document.getElementById('tripJournalPeriod');if(period){box.querySelector('[data-journal-period]').append(period);period.style.display='';}box.querySelector('[data-journal-exit]').onclick=()=>{box.querySelector('.journal-actions').open=false;ctx.onExit?.();};box.querySelector('[data-journal-refresh]').onclick=async()=>{if(!await leave())return;previews.clear();peekPoints.clear();load();};
   box.querySelector('[data-ut-search]').value=search;box.querySelector('[data-ut-vehicle]').value=vehicleFilter;box.querySelector('[data-ut-gaps]').checked=gapsOnly;box.querySelector('[data-ut-gaps]').closest('label').hidden=!manager();
   box.querySelector('[data-ut-search]').oninput=e=>{search=e.target.value;paintList();};
   box.querySelector('[data-ut-vehicle]').onchange=async e=>{if(!await leave()){e.target.value=vehicleFilter;return;}vehicleFilter=e.target.value;load();};
   box.querySelector('[data-ut-gaps]').onchange=e=>{gapsOnly=e.target.checked;if(gapsOnly){Promise.allSettled(rows.filter(r=>!r._trip).map(r=>previewFor(r.id))).then(()=>{if(box.isConnected)paintList();});}paintList();};
   box.querySelector('[data-ut-choose]')?.addEventListener('click',()=>{choosing=!choosing;selected=[];mergePreview=null;box.querySelector('.journal-actions').open=false;paintList();});
-  const refresh=document.getElementById('tripJournalRefresh');if(refresh)refresh.onclick=async()=>{if(!await leave())return;previews.clear();load();};box.querySelector('[data-ut-more]').onclick=()=>{offset=(offset||50)+50;paintList();};
+  const refresh=document.getElementById('tripJournalRefresh');if(refresh)refresh.onclick=async()=>{if(!await leave())return;previews.clear();peekPoints.clear();load();};box.querySelector('[data-ut-more]').onclick=()=>{offset=(offset||50)+50;paintList();};
   box.querySelectorAll('[data-ut-mode]').forEach(b=>{b.classList.toggle('on',b.dataset.utMode===mode);b.setAttribute('aria-pressed',String(b.dataset.utMode===mode));b.onclick=async()=>{if(mode===b.dataset.utMode)return;if(!await leave())return;mode=b.dataset.utMode;selected=[];mergePreview=null;scaffold();load();};});
  }
  function inMode(r,key){if(key==='all')return true;if(r._supplement)return key==='linked';if(r._trip)return key==='linked'?true:key==='pending'?tripAttention(r._trip):key==='archive'?r._trip.review?.total>0&&!tripAttention(r._trip):false;return key==='pending'||key==='unlinked'?['recording','review'].includes(r.state):key==='charged'?r.state==='charged':['charged','merged'].includes(r.state);}
  const recordNumber=r=>String(r._supplement?r.id:r._sources?.[0]?.id||r.trip_id||r.id).replace(/^trip:/,'').slice(0,8);
  function visibleRows(){const term=search.trim().toLocaleLowerCase();return rows.filter(r=>(!vehicleFilter||r.vehicle_id===vehicleFilter)&&inMode(r,mode)&&(!term||[recordNumber(r),vehicleName(r.vehicle_id),r.trip_id,r.review_note].join(' ').toLocaleLowerCase().includes(term))&&(!gapsOnly||(r._trip?(r._trip.review?.recovery||r._trip.review?.gaps):Number(previews.get(r.id)?.quote?.gaps)>0)));}
 
+ // Быстрый взгляд на трек прямо в списке: карта под строкой, точки грузятся один раз.
+ function peekLoad(r){const key=r._trip?'trip:'+r._trip.id:r.id;if(!peekPoints.has(key)){const loading=(r._trip?Promise.resolve(ctx.tripPoints?.(r._trip.id)||[]):readPoints(r.id)).catch(e=>{peekPoints.delete(key);throw e;});peekPoints.set(key,loading);}return peekPoints.get(key);}
+ async function mountPeek(list,id){const r=rows.find(x=>x.id===id),row=list.querySelector('[data-ut-peek-row="'+CSS.escape(id)+'"]');if(!r||!row)return;const token=++peekToken,status=row.querySelector('[role=status]');
+  try{const points=(await peekLoad(r)).filter(p=>p.lat!=null&&p.lng!=null);if(token!==peekToken||!row.isConnected)return;
+   if(!points.length){status.textContent='В записи нет GPS-точек.';return;}
+   const entry=mountGpsTrackMap(row.querySelector('svg.unassigned-preview'),points,{leaflet:ctx.leaflet?.(),makeBase:ctx.makeTrackBase,mini:true,label:'Трек записи №'+recordNumber(r),color:TRACK_STYLE.measured});
+   if(entry){maps.add(entry);status.remove();}else status.textContent='Карта недоступна.';
+  }catch(e){if(token===peekToken&&row.isConnected)status.textContent='Трек не загрузился: '+(e.message||'нет связи');}}
+ function openPeekMap(id){const r=rows.find(x=>x.id===id);if(!r)return;if(r._trip){ctx.showTripMap?.(r._trip.id);return;}ctx.showRecordMap?.(r.id,{title:'GPS-запись №'+recordNumber(r),sub:vehicleName(r.vehicle_id)+' · '+intervalText(r.started_at,r.ended_at||r.last_ts)});}
+
  function paintList(){
   const box=host();if(!box)return;
-  const list=box.querySelector('.journal-register tbody'),visible=visibleRows(),displayed=visible.slice(0,offset||50);
+  const list=box.querySelector('.journal-register tbody'),visible=visibleRows(),displayed=visible.slice(0,offset||50);clearMaps(list);if(peekId&&!displayed.some(r=>r.id===peekId))peekId=null;
   more=visible.length>displayed.length;
   list.innerHTML=displayed.map(r=>{
    const id=escape(r.id),reference='№'+escape(recordNumber(r)),link=r._trip?'Выезд №'+escape(String(r.trip_id||r._trip.id).slice(0,8)):r._supplement?(r.resolution?.accounting?'В учёте':'Дополнительная')+' · выезд №'+escape(r.trip_id.slice(0,8)):escape(status[r.state]||r.state);
    const issues=r._trip?tripReviewIssues(r._trip).map(issue=>issue.label).join(' · '):'';
    const charge=r.state==='charged'?'<small>'+number(r.resolution?.cost)+' '+escape(r.resolution?.currency||ctx.currency())+' · '+escape(person(r.engineer_id))+'</small>':'';
+   const peekOpen=peekId===r.id,peek=manager()?'<button type="button" class="btn ut-peek-toggle" data-ut-peek="'+id+'" aria-expanded="'+peekOpen+'" aria-label="'+(peekOpen?'Скрыть трек ':'Показать трек ')+reference+'">'+(peekOpen?'Скрыть трек':'Трек')+'</button>':'';
    const action=manager()?'<button type="button" class="btn" data-ut-details="'+id+'" aria-label="Открыть запись '+reference+'">Открыть запись</button>':'';
    const merge=choosing&&manager()&&mergeEligible(r)?'<label class="journal-merge-choice"><input type="checkbox" data-ut-select="'+id+'" '+(selected.includes(r.id)?'checked':'')+'>Выбрать для объединения</label>':'';
-   return '<tr data-ut-card="'+id+'"><th scope="row">'+reference+'</th><td data-label="Период">'+escape(intervalText(r.started_at,r.ended_at||r.last_ts))+'</td><td data-label="Техника / источник">'+escape(vehicleName(r.vehicle_id))+'<small>GPS</small></td><td data-label="Связь">'+link+charge+(issues?'<small>'+escape(issues)+'</small>':'')+'</td><td>'+action+merge+'</td></tr>';
+   return '<tr data-ut-card="'+id+'"><th scope="row">'+reference+'</th><td data-label="Период">'+escape(intervalText(r.started_at,r.ended_at||r.last_ts))+'</td><td data-label="Техника / источник">'+escape(vehicleName(r.vehicle_id))+'<small>GPS</small></td><td data-label="Связь">'+link+charge+(issues?'<small>'+escape(issues)+'</small>':'')+'</td><td><span class="ut-row-actions">'+peek+action+'</span>'+merge+'</td></tr>'
+    +(peekOpen?'<tr class="ut-peek-row" data-ut-peek-row="'+id+'"><td colspan="5"><div class="ut-peek"><div class="ut-peek-map"><svg class="unassigned-preview" aria-hidden="true"></svg><p class="hint" role="status">Загружаем трек…</p></div><button type="button" class="btn ut-peek-open" data-ut-peek-map="'+id+'">Просмотреть на карте</button></div></td></tr>':'');
   }).join('');
   box.querySelectorAll('[data-ut-mode]').forEach(button=>{
    const labels={pending:'Внимание',linked:'Связанные',unlinked:'Без выезда',archive:'Без проблем маршрута',all:'Все',charged:'Списания'};
@@ -93,6 +106,9 @@ export function createUnassignedTracks(ctx){
   box.querySelector('[data-ut-more]').hidden=!more;
   box.querySelector('[data-ut-choose]')?.setAttribute('aria-pressed',String(choosing));
   list.querySelectorAll('[data-ut-details]').forEach(button=>button.onclick=()=>perform(button,()=>details(button.dataset.utDetails)));
+  list.querySelectorAll('[data-ut-peek]').forEach(button=>button.onclick=()=>{const id=button.dataset.utPeek;peekId=peekId===id?null:id;paintList();list.querySelector('[data-ut-peek="'+CSS.escape(id)+'"]')?.focus({preventScroll:true});});
+  list.querySelectorAll('[data-ut-peek-map]').forEach(button=>button.onclick=()=>openPeekMap(button.dataset.utPeekMap));
+  if(peekId)mountPeek(list,peekId);
   list.querySelectorAll('[data-ut-select]').forEach(input=>input.onchange=()=>{
    selected=input.checked?[...selected,input.dataset.utSelect]:selected.filter(id=>id!==input.dataset.utSelect);
    selected.sort((a,b)=>Date.parse(rows.find(r=>r.id===a).started_at)-Date.parse(rows.find(r=>r.id===b).started_at));
@@ -219,7 +235,7 @@ export function createUnassignedTracks(ctx){
   sourceTitle.append(...sourceHead.childNodes);sourceHead.classList.add('journal-trip-head');
   sourceHead.append(box.querySelector('[data-ut-back]'),sourceTitle);
   sourceTabs.className='journal-trip-tabs seg';sourceTabs.setAttribute('role','group');sourceTabs.setAttribute('aria-label','Разделы GPS-записи');
-  sourceTabs.innerHTML='<button type="button" data-orphan-pane="stops">Обзор</button><button type="button" data-orphan-pane="route">Дорога</button><button type="button" data-orphan-pane="documents">Данные</button>';
+  sourceTabs.innerHTML='<button type="button" data-orphan-pane="stops">Обзор</button><button type="button" data-orphan-pane="documents">Данные</button>';
   sourceHead.append(sourceTabs);
   frameGpsRecordHead(sourceHead,{back:()=>sourceHead.querySelector('[data-ut-back]')?.click(),linkLabel:r.trip_id?tripLabel(null,r.trip_id):'Без выезда',linkHref:r.trip_id?'#/trip/'+encodeURIComponent(r.trip_id):'',openLink:r.trip_id&&ctx.openTrip?()=>ctx.openTrip(r.trip_id):null,source:'GPS · '+vehicleName(r.vehicle_id),status:r.state==='linked'||r.trip_id?'Связана с выездом':r.state==='charged'?'Списание инженеру':r.state==='recording'?'Идёт запись':'Без выезда'});
   const stays=observedSourceStops(parts);
@@ -268,6 +284,28 @@ export function createUnassignedTracks(ctx){
   const timeline=document.createElement('div');timeline.className='journal-timeline-host';timeline.innerHTML=timelineHTML(trip,track,stays);
   overview.append(timeline);const timelineView=wireJournalTimeline(timeline);maps.add({container:timeline,destroy:()=>timelineView.destroy()});
   timeline.querySelectorAll('[data-journal-stop]').forEach(button=>button.onclick=()=>{switchOrphanPane('route');routeView.select(button.dataset.journalStop);});
+  // Тот же вид, что у записи выезда: слева стоянки (и «Дорога»), справа
+  // мини-карта с лентой времени и пробегом; «Просмотреть на карте» открывает
+  // общий просмотр трека на большой карте.
+  overview.classList.add('journal-orphan-split');
+  overview.querySelector('svg.unassigned-preview')?.remove();
+  const listCol=document.createElement('div');listCol.className='orphan-col orphan-list';
+  const mapCol=document.createElement('section');mapCol.className='orphan-col orphan-map';mapCol.setAttribute('aria-label','Карта GPS-записи');
+  const listModes=document.createElement('div');listModes.className='seg journal-list-modes orphan-list-modes';listModes.setAttribute('role','group');listModes.setAttribute('aria-label','Состав GPS-записи');
+  listModes.innerHTML='<button type="button" data-orphan-pane="stops" aria-pressed="true" class="on">Стоянки</button><button type="button" data-orphan-pane="route" aria-pressed="false">Дорога</button>';
+  listCol.append(listModes,stopsPanel);
+  const routeModes=listModes.cloneNode(true);routeModes.classList.replace('orphan-list-modes','orphan-route-modes');route.prepend(routeModes);
+  const miniBox=document.createElement('div');miniBox.className='journal-overview-map';
+  const metrics=overview.querySelector('.gps-detail-metrics'),metricsHint=metrics?.nextElementSibling?.matches('p.hint')?metrics.nextElementSibling:null;
+  const dataLink=document.createElement('button');dataLink.type='button';dataLink.className='btn ghost orphan-data-link';dataLink.dataset.orphanPane='documents';dataLink.textContent='Данные GPS-записи →';
+  mapCol.append(miniBox,timeline);if(metrics)mapCol.append(metrics);if(metricsHint)mapCol.append(metricsHint);mapCol.append(dataLink);
+  const pinnedBar=overview.querySelector('.gps-resolution-entry');
+  overview.prepend(listCol,mapCol);listCol.append(discussion);if(pinnedBar)overview.append(pinnedBar);
+  const recordTitle=sourceHead.querySelector('h2')?.textContent||'GPS-запись';
+  const miniView=mountJournalRoute(miniBox,{trip,track,stays,leaflet:ctx.leaflet?.(),makeBase:ctx.makeTrackBase,mini:true,canEdit:false,
+   onStop:stayId=>{switchOrphanPane('route');routeView.select(stayId);},
+   onExpand:()=>ctx.showRecordMap?ctx.showRecordMap(id,{title:recordTitle,sub:vehicleName(r.vehicle_id)+' · '+intervalText(r.started_at,r.ended_at||r.last_ts)}):switchOrphanPane('route')});
+  maps.add({container:miniBox,destroy:()=>miniView.destroy()});
   let sourcePane='stops';function switchOrphanPane(pane,notify=true){sourcePane=pane;if(pane==='route'&&!roadLoaded){roadLoaded=true;void roadView.load();}box.querySelector('[data-ut-back]').setAttribute('aria-label',pane==='stops'?'К журналу':'К поездке');overview.hidden=pane!=='stops';route.hidden=pane!=='route';documents.hidden=pane!=='documents';host().classList.toggle('journal-map-expanded',pane==='route');box.querySelectorAll('[data-orphan-pane]').forEach(b=>{b.classList.toggle('on',b.dataset.orphanPane===pane);b.setAttribute('aria-pressed',String(b.dataset.orphanPane===pane));});if(notify)ctx.onSource?.(id,pane);}
   const draftResponse=canResolve?await ctx.db().from('gps_record_stop_drafts').select('revision,source_revision,source_points,stops').eq('track_id',id).maybeSingle():null;
   if(uid!==ctx.userId()||activeId!==id||!stopsPanel.isConnected)return;
@@ -282,7 +320,7 @@ export function createUnassignedTracks(ctx){
    const manualPanel=document.createElement('section');
    stopsPanel.after(manualPanel);manualWorking=mountManualDraftEditor(manualPanel,r);
   }
-  sourceView={id,...draftUI,isSaving:()=>draftUI.isSaving()||manualWorking()||roadView.isSaving()||merging,navigate:pane=>switchOrphanPane(pane,false)};switchOrphanPane(state.pane||'stops',open);drawMap(overview,points);box.querySelector('[data-ut-back]').onclick=async()=>{if(sourcePane!=='stops'){switchOrphanPane('stops');return;}if(!await leave())return;host().classList.remove('gps-show-detail','journal-map-expanded');ctx.onList?.();window.requestAnimationFrame(()=>{host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;host().querySelector('[data-ut-details="'+id+'"]')?.focus({preventScroll:true});});};box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(id,b.dataset.utAction)));box.querySelector('[data-ut-trip]')?.addEventListener('click',()=>ctx.openTrip(r.trip_id));box.querySelector('[data-ut-cancel]')?.addEventListener('click',e=>perform(e.currentTarget,()=>cancel(id)));paintList();if(open&&mobile)window.requestAnimationFrame(()=>{if(pane)pane.scrollTop=0;box.querySelector('[data-ut-back]')?.focus({preventScroll:true});});
+  sourceView={id,...draftUI,isSaving:()=>draftUI.isSaving()||manualWorking()||roadView.isSaving()||merging,navigate:pane=>switchOrphanPane(pane,false)};switchOrphanPane(state.pane||'stops',open);box.querySelector('[data-ut-back]').onclick=async()=>{if(sourcePane!=='stops'){switchOrphanPane('stops');return;}if(!await leave())return;host().classList.remove('gps-show-detail','journal-map-expanded');ctx.onList?.();window.requestAnimationFrame(()=>{host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;host().querySelector('[data-ut-details="'+id+'"]')?.focus({preventScroll:true});});};box.querySelectorAll('[data-ut-action]').forEach(b=>b.onclick=()=>perform(b,()=>resolve(id,b.dataset.utAction)));box.querySelector('[data-ut-trip]')?.addEventListener('click',()=>ctx.openTrip(r.trip_id));box.querySelector('[data-ut-cancel]')?.addEventListener('click',e=>perform(e.currentTarget,()=>cancel(id)));paintList();if(open&&mobile)window.requestAnimationFrame(()=>{if(pane)pane.scrollTop=0;box.querySelector('[data-ut-back]')?.focus({preventScroll:true});});
   }catch(e){if(activeId===id&&box.isConnected)detailFailure(box,id,e,state);}
  }
  async function resolve(id,action){const uid=ctx.userId(),row=rows.find(x=>x.id===id);if(!row)return;
@@ -331,5 +369,5 @@ export function createUnassignedTracks(ctx){
  async function openRecord(tripId,state={}){const id='trip:'+tripId;if(activeId===id&&host()?.querySelector('[data-journal-trip]')){if(!host().classList.contains('gps-show-detail'))listScroll=host().querySelector('.gps-journal-sidebar').scrollTop;host().classList.add('gps-show-detail');ctx.tripReviews.navigate(state);if(state.roadId)ctx.onRecord?.(tripId,state);return;}if(!rows.some(r=>r.id===id))rows.push({id,_trip:{id:tripId},_direct:true});else rows.find(r=>r.id===id)._direct=true;await details(id,true,state);}
  async function openSource(id,state={}){if(!manager())return;if(activeId===id&&sourceView?.id===id){if(!host().classList.contains('gps-show-detail'))listScroll=host().querySelector('.gps-journal-sidebar').scrollTop;host().classList.add('gps-show-detail');sourceView.navigate(state.pane||'stops');return;}if(!rows.some(r=>r.id===id)){const {data,error}=await ctx.db().from('unassigned_tracks').select('*').eq('id',id).maybeSingle();if(error)throw error;if(!data)throw Error('GPS-запись недоступна');if(data.state==='linked'&&data.trip_id&&data.resolution?.link_mode!=='supplement')return openRecord(data.trip_id,state);
    rows.push({...data,_supplement:data.resolution?.link_mode==='supplement'});}return details(id,true,state);}
- return {open,openRecord,openSource,isDirty:()=>!!(sourceView?.isDirty()||sourceView?.isSaving()),showList:async()=>{if(!await leave())return;ctx.tripReviews?.navigate({pane:'stops'});host()?.classList.remove('gps-show-detail','journal-map-expanded');if(host())host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;},reset,leave,refresh:async()=>{if(!await leave())return;previews.clear();selected=[];mergePreview=null;paintSelection();host()?.querySelectorAll('[data-ut-select]').forEach(c=>c.checked=false);return load();}};
+ return {open,openRecord,openSource,isDirty:()=>!!(sourceView?.isDirty()||sourceView?.isSaving()),showList:async()=>{if(!await leave())return;ctx.tripReviews?.navigate({pane:'stops'});host()?.classList.remove('gps-show-detail','journal-map-expanded');if(host())host().querySelector('.gps-journal-sidebar').scrollTop=listScroll;},reset,leave,refresh:async()=>{if(!await leave())return;previews.clear();peekPoints.clear();selected=[];mergePreview=null;paintSelection();host()?.querySelectorAll('[data-ut-select]').forEach(c=>c.checked=false);return load();}};
 }

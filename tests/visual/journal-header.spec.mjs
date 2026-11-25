@@ -81,12 +81,12 @@ test('journal header linked trip uses two sections and keeps the stop actions me
 test('journal header GPS source uses the same two sections',async({page},info)=>{
  const errors=await boot(page,info);
  await page.locator('[data-ut-details]').first().click();
- // «Дорога» — отдельный раздел GPS-записи с разрезами дороги (9c7399a).
- const tabs=page.locator('[data-orphan-pane]');
- await expect(tabs).toHaveText(['Обзор','Дорога','Данные']);
+ // Как у записи выезда: разделы «Обзор · Данные», «Дорога» — переключатель внутри обзора.
+ const tabs=page.locator('.journal-trip-tabs [data-orphan-pane]');
+ await expect(tabs).toHaveText(['Обзор','Данные']);
  await tabs.last().click();await expect(page.locator('.journal-trip-documents')).toBeVisible();
  await tabs.first().click();await expect(page.locator('.journal-orphan-overview')).toBeVisible();
- await tabs.nth(1).click();await expect(page.locator('.journal-trip-route')).toBeVisible();
+ await page.locator('.orphan-list-modes [data-orphan-pane=route]').click();await expect(page.locator('.journal-trip-route')).toBeVisible();
  await shot(page,info,'12-source-sections');
  expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });

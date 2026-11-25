@@ -89,7 +89,7 @@ function journalRecordRoute(id,{stopId,pane,roadId,returnStopId}={}){
  return 'journal/trip/'+id+tail;
 }
 const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,role:()=>role,period:()=>dashRanges.journal,vehicles:()=>vehicles,people:()=>profilesList,
- confirm:confirmDialog,prompt:promptDialog,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,onNavigate:state=>routeSet(journalRecordRoute(state.tripId,state)),
+ confirm:confirmDialog,prompt:promptDialog,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),canEdit:canWriteTrip,openTrip,showTripMap:id=>showTripOnMap(id,{back:location.hash}),onNavigate:state=>routeSet(journalRecordRoute(state.tripId,state)),
  jobs:async ids=>{if(!ids.length)return [];const {data,error}=await sb.from('jobs').select('id,clients(name),equipment(model)').in('id',ids);if(error)throw error;return data||[];},renderAllocations:renderTaskAllocationControls,
  afterManualVisit:async(trip,revision)=>{
   try{
@@ -120,7 +120,7 @@ const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,ro
   return nextRevision;
  }
 });
-const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,
+const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,showRecordMap:(id,meta)=>showRecordOnMap(id,{...meta,back:location.hash}),showTripMap:id=>showTripOnMap(id,{back:location.hash}),tripPoints:id=>loadTripPositions(id),db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,
  onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state)=>routeSet(journalRecordRoute(id,state)),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',trackMaxSpeed:()=>appSettings.track_max_kmh,prompt:promptDialog,confirm:confirmDialog,notify,openTrip,applySupplement:applyGpsSupplement,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
@@ -989,6 +989,7 @@ async function returnToCard(origin){
  return switchTab(origin.name,origin.sub);
 }
 async function switchTab(name, sub,{writeRoute=true}={}){ if(!tabAllowed(name)) return;
+  if(name!=='map'&&trackView) exitTrackView();
   if(name!=='schedule'&&document.querySelector('.view-schedule.active')&&!await plannerWorkspace.leave())return;
   if(document.querySelector('.view-planner.active')&&dispCur==='tracking'&&(name!=='planner'||sub&&sub!=='tracking')&&!await unassignedTracks.leave())return;
   if(document.querySelector('.view-settings.active')&&(settingsParamsDirty||settingsThemeDirty||document.querySelector('.staff-row[data-dirty]'))&&!await leaveSettingsEditor())return;
@@ -7909,6 +7910,7 @@ let mapTripPlan=null;
 const trackPanelIcon='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>';
 function trackPanelInline(){ return window.innerWidth<=960; }
 function closeMapPanel(){
+  if(trackView) return; // в просмотре трека панель — часть нижней ленты
   if(trackPanelInline()){
     sideTab(document.querySelector('.view-map .side').dataset.trackReturn||'points');
     document.querySelector('#sideTabs button.on')?.focus({preventScroll:true});
@@ -7920,6 +7922,7 @@ function closeMapPanel(){
 }
 function placeMapPanel(){
   if(!factLegendEl)return;
+  if(trackView){ const body=factLegendEl.querySelector('.mleg-body'); factLegendEl.append(body); $('tvPanelSlot').append(factLegendEl); factLegendEl.querySelector('details').open=true; return; }
   const inline=trackPanelInline(),details=factLegendEl.querySelector('details');
   const wasInline=factLegendEl.parentElement===$('trackBlock');
   const selected=document.querySelector('#sideTabs button.on')?.dataset.sb;
@@ -7935,6 +7938,72 @@ function placeMapPanel(){
     sideTab(document.querySelector('.view-map .side').dataset.trackReturn||'points');
   }
 }
+// ── Просмотр трека на карте ─────────────────────────────────────────────
+// Один режим для выезда и для GPS-записи: штатные панели карты спрятаны,
+// сверху «Вернуться» (туда, откуда пришли) и «×» (остаться на карте без
+// трека), снизу — лента времени с интервалом и слоями трека.
+let trackView=null;
+function backLabelFor(hash){ const h=hash||''; return /^#\/journal\/(record|trip)\//.test(h)?'К записи':/^#\/(journal|planner\/tracking)/.test(h)?'К журналу':/^#\/trip\//.test(h)?'К выезду':/^#\/map/.test(h)?'К карте':'Назад'; }
+function enterTrackView({title,sub,back,backLabel}){
+  trackView={back:back||'#/map'};
+  document.querySelector('.view-map')?.classList.add('track-view');
+  $('tvTitle').textContent=title||'Трек'; $('tvSub').textContent=sub||'';
+  $('tvBackLabel').textContent=backLabel||'Вернуться';
+  $('trackViewBar').hidden=false; $('trackViewDock').hidden=false;
+  map.closePopup(); placeMapPanel(); renderTrackTimeline();
+  setTimeout(()=>map.invalidateSize(),60);
+}
+function clearTrackLayers(){ tripLayer.clearLayers(); mapTripPlan=null; stayBindMap=null; factClear(); renderMapPanel(); }
+function exitTrackView({clear=true,go=null}={}){
+  if(!trackView) return; trackView=null;
+  document.querySelector('.view-map')?.classList.remove('track-view');
+  $('trackViewBar').hidden=true; $('trackViewDock').hidden=true; $('tvTimeline').innerHTML='';
+  if(clear) clearTrackLayers(); else placeMapPanel();
+  setTimeout(()=>map.invalidateSize(),60);
+  if(go) location.hash=go;
+}
+$('tvClose').onclick=()=>{ exitTrackView(); routeSet('map'); };
+$('tvBack').onclick=()=>{ const back=trackView?.back||'#/map'; exitTrackView({go:back}); };
+// Лента времени: движение, стоянки, восстановленное и участки без GPS по
+// всему треку; выбранный интервал подсвечен. Клик по участку — карта на него.
+function renderTrackTimeline(){
+  const box=$('tvTimeline'); if(!box||!trackView) return;
+  const m=factLast; if(!m||!(m.segments||[]).length){ box.innerHTML='<p class="hint">Трека нет — показан плановый маршрут.</p>'; return; }
+  const [a,b]=factBounds(m); const span=Math.max(1,b-a); const pct=t=>Math.max(0,Math.min(100,(t-a)/span*100));
+  // Скорость участка — по его времени: у сохранённого разбора длительности в отрезке может не быть.
+  const kmhOf=g=>{ const dur=(+new Date(g.toTs||g.fromTs))-(+new Date(g.fromTs)); return dur>0?(g.km||0)/(dur/3600000):segKmh(g); };
+  const kindOf=g=>g.kind==='road'?'road':g.kind==='line'?'gap':(kmhOf(g)<3?'stay':'move');
+  const blocks=[];
+  (m.segments||[]).forEach((g,i)=>{ const k=kindOf(g), f=+new Date(g.fromTs), t=+new Date(g.toTs||g.fromTs); const last=blocks[blocks.length-1];
+    if(last&&last.k===k&&f-last.t<=60000){ last.t=t; last.km+=g.km||0; last.to=g.toPt; } else blocks.push({k,f,t,km:g.km||0,from:g.fromPt,to:g.toPt}); });
+  const label={move:'Движение по GPS',stay:'Остановка',road:'Восстановлено по дорогам',gap:'Нет GPS'};
+  const from=factFrom==null?a:factFrom, to=factTo==null?b:factTo;
+  const step=[1,2,3,6,12,24,48].map(h=>h*3600000).find(s=>span/s<=8)||span/6;
+  const ticks=[]; let t0=new Date(a); t0.setMinutes(0,0,0); for(let t=+t0+step;t<b;t+=step) ticks.push(t);
+  const oneDay=new Date(a).toDateString()===new Date(b).toDateString();
+  const tickText=t=>{ const d=new Date(t); const hm=pad2(d.getHours())+':'+pad2(d.getMinutes()); return oneDay||d.getHours()?hm:d.getDate()+'.'+pad2(d.getMonth()+1); };
+  box.innerHTML='<div class="tv-legend" aria-hidden="true">'+['move','stay','road','gap'].map(k=>'<span><i class="tv-'+k+'"></i>'+label[k]+'</span>').join('')+'</div>'
+    +'<div class="tv-bar" role="group" aria-label="Участки трека по времени">'
+    +blocks.map((x,i)=>'<button type="button" class="tv-block tv-'+x.k+'" data-tv="'+i+'" style="left:'+pct(x.f)+'%;width:'+Math.max(.3,pct(x.t)-pct(x.f))+'%" title="'+esc(label[x.k]+' · '+atTime(x.f)+'–'+atTime(x.t)+(x.km>=0.1?' · '+x.km.toFixed(1)+' км':''))+'" aria-label="'+esc(label[x.k]+' '+atTime(x.f)+'–'+atTime(x.t))+'"></button>').join('')
+    +((factFrom!=null||factTo!=null)?'<span class="tv-window" style="left:'+pct(from)+'%;width:'+(pct(to)-pct(from))+'%"></span>':'')+'</div>'
+    +'<div class="tv-ticks" aria-hidden="true"><span style="left:0">'+atTime(a)+'</span>'+ticks.map(t=>'<span style="left:'+pct(t)+'%">'+tickText(t)+'</span>').join('')+'<span style="left:100%">'+atTime(b)+'</span></div>';
+  box.querySelectorAll('[data-tv]').forEach(btn=>btn.onclick=()=>{ const x=blocks[+btn.dataset.tv]; if(!x.from||!x.to) return;
+    const bnds=L.latLngBounds([[x.from.lat,x.from.lng],[x.to.lat,x.to.lng]]); map.fitBounds(bnds.pad(0.4),{maxZoom:16,...fitPadL(fitPad(60))}); });
+}
+// GPS-запись без выезда: тот же слой факта, точки — из записи.
+async function showRecordOnMap(id,{title,sub,back}={}){
+  if(!await switchTab('map',null,{writeRoute:false})) return;
+  try{
+    const points=[]; for(let offset=0;;offset+=1000){ const {data,error}=await sb.rpc('unassigned_track_points',{p_track:id,p_offset:offset,p_limit:1000}); if(error) throw error; points.push(...(data||[])); if((data||[]).length<1000) break; }
+    if(!points.length){ notify('В записи нет точек.','warn'); return; }
+    tripLayer.clearLayers(); mapTripPlan=null; routeLayer.clearLayers(); sideTab('points');
+    const m=await measureTrip(points,trackOpts(),{},null);
+    if(!paintFactMeasure(m,points,null,null,{quiet:true})) return;
+    routeSet('map');
+    enterTrackView({title:title||'GPS-запись',sub,back:back||'#/journal/record/'+encodeURIComponent(id),backLabel:backLabelFor(back||'#/journal/record/')});
+  }catch(e){ notify('Трек записи не загрузился: '+(e.message||e),'err'); }
+}
+window.showRecordOnMap=showRecordOnMap;
 function mountMapPanel(){
   factLegendEl=document.createElement('aside');factLegendEl.className='mleg';factLegendEl.setAttribute('aria-label','Параметры трека');
   factLegendEl.innerHTML='<details class="mleg-details"><summary>'+trackPanelIcon+'<span>Данные трека</span><b data-track-total></b><span aria-hidden="true">⌄</span></summary><div class="mleg-body">'
@@ -8133,8 +8202,11 @@ function drawTripPlan(t){
   return pts.length>0;
 }
 let tripMapRequest=0;
-async function showTripOnMap(tid,{focus=null,editing=false}={}){
+async function showTripOnMap(tid,{focus=null,editing=false,back=null}={}){
   const request=++tripMapRequest,uid=session?.user?.id;
+  // Куда вернёт «Назад» в просмотре: в выезд, если пришли по его ссылке на карту;
+  // на карту, если пришли с самой карты; иначе — туда, где были.
+  const cur=location.hash||'', returnHash=back||(/^#\/trip\/[^/]+\/map/.test(cur)?'#/trip/'+encodeURIComponent(tid):/^#\/map/.test(cur)?(trackView?.back||'#/map'):cur)||'#/map';
   const valid=()=>request===tripMapRequest&&session?.user?.id===uid;
   const trip=await routeTrip(tid);
   if(!valid())return;
@@ -8158,6 +8230,9 @@ async function showTripOnMap(tid,{focus=null,editing=false}={}){
   if(edit)showRouteTab();
   if(!fact&&!edit)showToast(shown?'Факта нет — показан плановый маршрут':'У выезда нет ни маршрута, ни трека');
   routeSet('trip/'+encodeURIComponent(tid)+'/map'+(edit?'/edit':''));
+  if(!edit&&(fact||shown)){
+    enterTrackView({title:tripLabel(trip,tid),sub:tripPeriod(trip.date_from,trip.date_to)+(trip.vehicle_label?' · '+trip.vehicle_label:''),back:returnHash,backLabel:backLabelFor(returnHash)});
+  }
 }
 async function loadTripMapJobs(tid){
   try{
@@ -8308,6 +8383,7 @@ function drawFact(m){
   });
   drawFactLiveTail(m);
   factApplyVis();
+  if(trackView) renderTrackTimeline();
 }
 
 // Окно времени: [от, до] в миллисекундах. Пусто — весь выезд.
@@ -8385,7 +8461,13 @@ async function showTripFact(tid,opt){
     if(!resolved){setTimeout(()=>map.invalidateSize(),60);if(!quiet)showToast('Фактического трека нет');return false;}
     if(opt?.isCurrent&&!opt.isCurrent())return false;
     const {measure:m,raw}=resolved;
-    if(!m.segments.length&&!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return; }
+    return paintFactMeasure(m,raw,t,tid,opt);
+  }catch(e){ notify('Трек не загрузился: '+(e.message||e),'err'); }
+}
+// Нарисовать посчитанный факт: общий путь для выезда и GPS-записи.
+function paintFactMeasure(m,raw,t,tid,opt){
+    const quiet=!!(opt&&opt.quiet);
+    if(!m.segments.length&&!m.points.length){ setTimeout(()=>map.invalidateSize(),60); showToast('Трек есть, но весь состоит из ошибок приёмника'); return false; }
     factTripId=tid; factTrip=t; factRaw=raw; factFrom=null; factTo=null;
 
     drawFact(m);
@@ -8404,7 +8486,6 @@ async function showTripFact(tid,opt){
     if(m.stored) bits.push('разбор от '+new Date(m.at).toLocaleString('ru'));
     if(t&&t.fact_km!=null) bits.push('записано '+Math.round(t.fact_km)+' км'+factSrcRu(t.fact_km_source));
     if(!quiet)showToast(bits.join(' · '));return true;
-  }catch(e){ notify('Трек не загрузился: '+(e.message||e),'err'); }
 }
 
 // Что показала проверка при сведении выезда. Держим, чтобы карта рисовала
