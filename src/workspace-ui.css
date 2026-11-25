@@ -1195,3 +1195,97 @@ html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{con
   #appShell>.rail:focus-within:not(.rail-rest) .nav-i{width:100%!important}
   #appShell>.rail:focus-within:not(.rail-rest) .nav-i>span:not(.profile-avatar){position:static!important;width:auto!important;height:auto!important;overflow:visible!important;clip-path:none;font:500 14px/20px var(--sans)!important}
 }
+
+/* Map work (24.11.2026): tasks waiting for a plan, selection and trip assembly. */
+.map-workspace #sideTools .chiprow[hidden],.map-workspace .map-workspace-head[hidden],.view-map .map-workspace #listHead[hidden] { display:none!important; }
+.map-workspace[data-map-panel=points] #pointsBlock>.block-body { padding-top:16px; }
+.map-workspace[data-map-panel=points] #sideTools { padding:0;background:transparent;border:0; }
+.map-task-mode { display:flex;width:100%;gap:4px;padding:3px;margin:0 0 8px;border:1px solid var(--line);border-radius:10px;background:transparent; }
+.map-task-mode>button { flex:1;min-height:40px;padding:6px 8px;border:0;border-radius:7px;background:transparent;color:var(--ink-dim);font:500 13px/1.3 var(--sans); }
+.map-task-mode>button.on { background:var(--ink);color:var(--bg); }
+.map-workspace #workFeed .map-task-group { margin:18px 0 8px;color:var(--ink);font:500 13px/1.4 var(--sans); }
+.map-task-group .urg-dot { width:8px;height:8px;border-radius:50%;background:var(--ink-faint);flex:none; }
+.map-task-group.urg-overdue .urg-dot { background:#dc2626; }
+.map-task-group.urg-acute .urg-dot { background:#f59e0b; }
+.map-task-group.urg-calm .urg-dot { background:#16a34a; }
+.map-task-group.urg-cold .urg-dot { background:#0ea5e9; }
+.map-task-group .cnt { color:var(--ink-dim);font:12px/1.4 var(--mono); }
+.map-task { display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 12px;align-items:start;padding:12px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;background:var(--panel); }
+.map-task.in-trip,.map-task.map-request { grid-template-columns:minmax(0,1fr) auto; }
+/* The left edge carries urgency, as the directory cards carry the point colour. */
+.map-task { border-left-width:3px;border-left-color:var(--line); }
+.map-task.urg-overdue { border-left-color:#dc2626; }
+.map-task.urg-acute { border-left-color:#f59e0b; }
+.map-task.urg-calm { border-left-color:#16a34a; }
+.map-task.urg-cold { border-left-color:#0ea5e9; }
+.map-task.picked { border-color:var(--accent); }
+.map-task.picked { border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--panel)); }
+.map-task-pick { width:22px;height:22px;margin:2px 0 0;accent-color:var(--accent); }
+.map-workspace #workFeed .map-task-body { all:unset;box-sizing:border-box;cursor:pointer;display:flex!important;flex-direction:column;align-items:stretch!important;gap:3px;width:100%;min-width:0;min-height:0!important;padding:0!important;border:0!important;border-radius:6px;background:transparent!important;color:inherit;text-align:left!important;font:inherit; }
+.map-workspace #workFeed .map-task-body:focus-visible { outline:2px solid var(--accent);outline-offset:3px; }
+.map-task-top { display:flex;justify-content:space-between;gap:8px;align-items:baseline; }
+.map-task-top strong { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 14px/1.4 var(--sans); }
+.map-task-top b { flex:none;font:500 12px/1.4 var(--mono);color:var(--ink-dim); }
+.map-task-top b.urg-overdue { color:var(--red); }
+.map-task-top b.urg-acute { color:var(--warning); }
+.map-task-title { font:13px/1.45 var(--sans);color:var(--ink);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical; }
+.map-task-meta { font:12px/1.4 var(--sans);color:var(--ink-dim); }
+.map-task.map-request>.btn { align-self:center; }
+.map-task-actions { grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;margin-top:10px; }
+.map-task.in-trip .map-task-actions,.map-task.in-trip .map-task-body { grid-column:1/-1; }
+.map-select-bar { flex:none;display:flex;flex-direction:column;gap:10px;padding:12px 20px 16px;border-top:1px solid var(--line);background:var(--panel-2);border-radius:0 0 16px 16px; }
+.map-select-bar[hidden] { display:none; }
+.map-select-sum { display:flex;align-items:baseline;gap:8px; }
+.map-select-sum span { flex:1;color:var(--ink-dim);font-size:13px; }
+.map-select-actions { display:grid;grid-template-columns:1fr 1fr;gap:8px; }
+.map-select-actions .btn { min-height:44px;margin:0; }
+.cbub.cbub-planned { color:#1c1c19!important; }
+.cbub.cbub-picked { outline:3px solid var(--accent);outline-offset:2px; }
+.client-popup-head { display:flex;flex-direction:column;gap:2px; }
+.client-popup-head strong { font:600 15px/1.35 var(--sans); }
+.client-popup-head span { font-size:12px;color:var(--ink-dim); }
+.client-popup-work { display:flex;flex-direction:column;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line); }
+.client-popup-label { font-size:11px;color:var(--ink-dim);margin-top:2px; }
+.client-popup-task { display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.35; }
+.client-popup-task>span { flex:1;min-width:0; }
+.client-popup-task input { width:18px;height:18px;margin:0;accent-color:var(--accent);flex:none; }
+.client-popup-task b { flex:none;font:500 12px/1.3 var(--mono);color:var(--ink-dim); }
+.client-popup-task b.urg-overdue { color:var(--red); }
+.client-popup-task b.urg-acute { color:var(--warning); }
+.leaflet-popup .client-popup .client-popup-task .btn { width:auto;min-height:40px!important;height:auto!important;padding:4px 10px;font-size:12px;white-space:nowrap; }
+@media(max-width:768px){ .leaflet-popup .client-popup .client-popup-task .btn { min-height:48px!important; } }
+.map-assemble { display:flex;flex-direction:column;gap:14px;min-width:min(520px,80vw); }
+.map-assemble section { display:flex;flex-direction:column;gap:8px; }
+.map-assemble h4 { margin:0;font:500 14px/1.4 var(--sans); }
+.map-assemble-item { display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer; }
+.map-assemble-item input { width:20px;height:20px;margin:1px 0 0;accent-color:var(--accent);flex:none; }
+.map-assemble-item small { display:block;margin-top:2px;font-size:12px;color:var(--ink-dim); }
+.map-assemble-item.disabled { opacity:.65;cursor:default; }
+.map-assemble-item.request { border-style:dashed; }
+.map-assemble-sum { margin:0;padding:10px 12px;border-radius:8px;background:var(--panel-2);font-size:13px; }
+.map-assemble.over-shift .map-assemble-sum { background:color-mix(in srgb,var(--warning) 14%,var(--panel));color:var(--ink); }
+.map-trip-picker { display:flex;flex-direction:column;gap:8px;min-width:min(480px,80vw); }
+.map-trip-choice { display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:10px; }
+.map-trip-choice>div { flex:1;min-width:0;display:flex;flex-direction:column;gap:2px; }
+.map-trip-choice span,.map-trip-choice small { font-size:12px;color:var(--ink-dim); }
+@media(max-width:760px){
+ .map-select-bar { padding:10px 16px 12px;border-radius:0; }
+}
+/* Creating a point is a directory action: the floating «+» only shows there. */
+.view-map:has(.map-workspace:not([data-map-panel=directory])) #pointToolsFab { display:none; }
+@media(max-width:760px){
+ /* A selection stays reachable when the sheet is folded down to its handle. */
+ .view-map .side.map-workspace.sheet-collapsed.has-selection { height:auto!important;max-height:none!important; }
+}
+/* Touch screens zoom with two fingers: the +/− pair only took map space there. */
+@media(hover:none) and (pointer:coarse){ .view-map .leaflet-control-zoom { display:none; } }
+.map-legend { display:flex;flex-direction:column;gap:4px;padding:8px 12px;margin:0 0 16px 16px!important;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:12px/1.4 var(--sans); }
+.map-legend[hidden] { display:none; }
+.map-legend>div { display:flex;flex-wrap:wrap;gap:4px 12px; }
+.map-legend span { display:inline-flex;align-items:center;gap:6px; }
+.map-legend i { width:10px;height:10px;border-radius:50%;flex:none; }
+.map-legend i.ring { border:2px solid var(--accent); }
+.map-legend i.dashed { border:1px dashed var(--ink-dim); }
+.map-legend .map-legend-sub { color:var(--ink-dim); }
+@media(min-width:761px){.view-map:has(.map-workspace) .leaflet-bottom.leaflet-left { margin-left:calc(472px + var(--rail-w)); }}
+@media(max-width:760px){ .map-legend { display:none!important; } }

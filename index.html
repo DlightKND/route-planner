@@ -2350,7 +2350,7 @@
            заголовка друг под другом, и «Маршрут» на телефоне жил ниже
            экрана: чтобы его увидеть, надо было сперва свернуть точки. -->
       <div class="side-tabs2" id="sideTabs">
-        <button type="button" class="on" data-sb="points"><span id="sideTitle">В работе</span> <span class="cnt" id="cliCount">0</span></button>
+        <button type="button" class="on" data-sb="points"><span id="sideTitle">Задания</span> <span class="cnt" id="cliCount">0</span></button>
         <button type="button" data-sb="route">Маршрут <span class="cnt" id="rCount">0</span></button>
         <button type="button" data-sb="directory">Справочник <span class="cnt" id="directoryCount">0</span></button>
         <button type="button" data-sb="track" hidden>Трек</button>
@@ -2460,6 +2460,9 @@
         </div>
       </div>
       </div>
+      <!-- Выбор заданий для выезда: что отмечено и что с этим сделать. Под
+           списком, а не в нём, чтобы кнопка не уезжала вместе с прокруткой. -->
+      <div class="map-select-bar" id="mapSelectBar" role="region" aria-label="Выбранные задания" hidden></div>
       <section id="trackBlock" aria-label="Данные трека"></section>
     </aside>
     <div class="map-wrap">
