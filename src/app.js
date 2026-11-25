@@ -553,14 +553,43 @@ let ctxLatLng=null;
 // забрать координаты. «Сделать стартом» ушло: старт меняется в самой
 // карточке маршрута, где он и написан. Объезды ушли тоже — они больше
 // не режим карты, а настройка построения (см. панель «Маршрут»).
-function showCtxMenu(e){ ctxLatLng=e.latlng; const m=$('ctxMenu'); let h='';
-  if(canWrite()){ h+='<button data-cx="add">Добавить точку здесь</button><button data-cx="wp">В маршрут</button>'; }
-  h+='<button data-cx="copy">Копировать координаты</button>'; m.innerHTML=h;
-  const x=e.originalEvent.clientX, y=e.originalEvent.clientY; m.style.left=Math.min(x,window.innerWidth-230)+'px'; m.style.top=Math.min(y,window.innerHeight-180)+'px'; m.classList.add('on');m.tabIndex=-1;openContextPanel(m,{trigger:map.getContainer(),label:'Действия на карте'});
-  m.querySelectorAll('[data-cx]').forEach(b=>b.onclick=()=>{ ctxAction(b.dataset.cx); m.classList.remove('on');if(m.matches(':popover-open'))m.hidePopover(); }); }
-function ctxAction(a){ if(!ctxLatLng) return; const ll=ctxLatLng;
-  if(a==='add'){ if(addModeOn) toggleAdd(false); $('fName').value=''; $('fDesc').value=''; $('formErr').textContent=''; pendingLatLng={lat:ll.lat,lng:ll.lng}; flashPending(); openPointModal(); }
-  else if(a==='wp'){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:ll.lat,lng:ll.lng}); showRouteTab(); renderRoutePanel(); resetBuilt(); }
+// Контекстное меню карты: адрес места и рабочие действия. Точек без
+// работы в выезд отсюда не попадает: промежуточная точка — только в
+// маршруте, который уже собирается, и сразу с именем.
+let mapNear=null, afterPointSave=null;
+const NEAR_KM=10;
+function nearestClient(ll,maxKm){ let best=null,bd=Infinity; clients.forEach(c=>{ if(c.is_base||c.lat==null) return; const d=haversineKm({lat:+c.lat,lng:+c.lng},ll); if(d<bd){bd=d;best=c;} }); return best&&bd<=maxKm?{c:best,km:bd}:null; }
+function nearCount(ll,km){ return mapTasks.filter(r=>!r.trip).concat(mapRequests.map(j=>({clientId:j.client_id}))).filter(r=>{ const c=clients.find(x=>x.id===r.clientId); return c&&c.lat!=null&&haversineKm({lat:+c.lat,lng:+c.lng},ll)<=km; }).length; }
+function showCtxMenu(e){ ctxLatLng=e.latlng; const m=$('ctxMenu'); const ll={lat:e.latlng.lat,lng:e.latlng.lng}; let h='';
+  const near=nearestClient(ll,0.05);
+  h+='<div class="ctx-head"><strong id="ctxAddr">'+esc(near?near.c.name:'Ищу адрес…')+'</strong><span>'+ll.lat.toFixed(5)+', '+ll.lng.toFixed(5)+'</span></div>';
+  if(canWrite()){
+    const n=nearCount(ll,NEAR_KM); const routeOpen=rStops.length>0||!!plannerTripId;
+    h+='<button type="button" data-cx="job">'+(near?'Новая заявка · '+esc(near.c.name):'Новая заявка здесь')+'</button>'
+      +'<button type="button" data-cx="add">Новый клиент или депо здесь</button>'
+      +'<button type="button" data-cx="near">Задания рядом<small>'+(n?n+' в '+NEAR_KM+' км':'в '+NEAR_KM+' км нет')+'</small></button>'
+      +'<button type="button" data-cx="avoid">Объезжать участок здесь</button>'
+      +'<hr>'
+      +'<button type="button" data-cx="wp"'+(routeOpen?'':' disabled aria-describedby="ctxWpHint"')+'>Промежуточная точка маршрута'+(routeOpen?'':'<small id="ctxWpHint">откройте выезд или начните маршрут</small>')+'</button>';
+  }
+  h+='<button type="button" data-cx="copy">Копировать координаты</button>'; m.innerHTML=h;
+  const x=e.originalEvent.clientX, y=e.originalEvent.clientY; m.style.left=Math.min(x,window.innerWidth-300)+'px'; m.style.top=Math.min(y,window.innerHeight-380)+'px'; m.tabIndex=-1;
+  // В Linux contextmenu приходит на нажатии; если открыть меню сразу, отпускание
+  // кнопки закрывает его как «клик мимо». Ждём отпускания.
+  const show=()=>{ m.classList.add('on'); openContextPanel(m,{trigger:map.getContainer(),label:'Действия на карте'}); };
+  if(e.originalEvent&&(e.originalEvent.buttons&2)) window.addEventListener('pointerup',()=>setTimeout(show),{once:true}); else show();
+  m.querySelectorAll('[data-cx]').forEach(b=>b.onclick=()=>{ if(b.disabled) return; ctxAction(b.dataset.cx); m.classList.remove('on');if(m.matches(':popover-open'))m.hidePopover(); });
+  if(!near) geoReverse(ll.lat,ll.lng).then(addr=>{ const el=$('ctxAddr'); if(el&&ctxLatLng===e.latlng) el.textContent=addr||'Адрес не найден'; }).catch(()=>{ const el=$('ctxAddr'); if(el) el.textContent='Адрес не найден'; }); }
+async function ctxAction(a){ if(!ctxLatLng) return; const ll=ctxLatLng;
+  if(a==='add'||a==='job'){
+    if(a==='job'){ const near=nearestClient({lat:ll.lat,lng:ll.lng},0.05); if(near){ newJobForClient(near.c.id); return; } afterPointSave='job'; }
+    else afterPointSave=null;
+    if(addModeOn) toggleAdd(false); $('fName').value=''; $('fDesc').value=''; $('formErr').textContent=''; pendingLatLng={lat:ll.lat,lng:ll.lng}; flashPending(); openPointModal();
+    if(a==='job'){ setPointType('client'); $('formErr').textContent='После сохранения клиента откроется новая заявка.'; } }
+  else if(a==='near'){ mapNear={lat:ll.lat,lng:ll.lng,km:NEAR_KM}; mapTaskMode='unplanned'; sideTab('points'); renderWorkFeed(); }
+  else if(a==='avoid'){ addAvoidZone(ll); }
+  else if(a==='wp'){ const r=await promptDialog('Промежуточная точка',[{key:'name',label:'Что это за точка (заправка, склад, обед)',value:'',required:true}],{okText:'Добавить в маршрут'}); if(!r||!String(r.name||'').trim()) return;
+    rStops.push({type:'wp',name:String(r.name).trim(),noWork:true,lat:ll.lat,lng:ll.lng}); showRouteTab(); renderRoutePanel(); resetBuilt(); }
   else if(a==='copy'){ const t=ll.lat.toFixed(6)+', '+ll.lng.toFixed(6); try{ navigator.clipboard.writeText(t); }catch(e){} showToast('Координаты: '+t); } }
 map.on('contextmenu',e=>{ if(e.originalEvent) e.originalEvent.preventDefault(); showCtxMenu(e); });
 map.on('click',()=>$('ctxMenu').classList.remove('on'));
@@ -1140,6 +1169,8 @@ async function onSignedIn(){ const { data:{ session:s } }=await sb.auth.getSessi
   await qRefresh();
   setTimeout(()=>{ map.invalidateSize(); fitUkraine(); },80);
   await loadAll(); await loadPlaces(); await loadVehicles(); await loadEqModels();
+  // Интервалы ТО приходят с моделями — после них перерисовать значки «ТО скоро».
+  if(canWrite()){ renderMarkers(); renderWorkFeed(); }
   await loadVehState(); subscribeVeh(); await loadFactHours(); await loadRescheds();
   // Очередь: показать, сколько лежит, и сразу попробовать отправить —
   // приложение чаще всего открывают уже вернувшись в зону связи.
@@ -1174,7 +1205,7 @@ async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
   // срочность клиента для раскраски точек на карте. Отдельного похода
   // в базу это не стоит, а карта из справочника координат превращается
   // в картину дня.
-  try{ const {data,error}=await sb.from('jobs').select('id,number,client_id,status,due_date,created_at,at_depot,clients(name),equipment(model),'+JOB_FINANCE_SELECT).is('deleted_at',null);
+  try{ const {data,error}=await sb.from('jobs').select('id,number,client_id,equipment_id,status,due_date,created_at,at_depot,clients(name),equipment(model),'+JOB_FINANCE_SELECT).is('deleted_at',null);
     if(error) throw error;
     const financeRows=projectLegacyFinanceRows(data||[]);
     const ch=+((appSettings.costs&&appSettings.costs.hour))||0;
@@ -1306,6 +1337,12 @@ function profitColorOf(p){ if(!(p>0)) return '#6b7280';
 // Маркер клиента. В «Заданиях» цифра — сколько работы ждёт плана; клиент,
 // вся работа которого уже в выездах, рисуется пунктиром без цифры. В
 // справочнике цифра — техника клиента, как и была.
+// Техника, которой пора на ТО и на которую ещё нет открытой заявки.
+function eqOpenRequest(e){ return Object.values(mapJobsById||{}).find(j=>j.equipment_id===e.id&&!j.deleted_at&&!['done','cancelled'].includes(j.status))||null; }
+function serviceDue(){ const out=[]; clients.forEach(c=>{ if(c.is_base) return; (eqByClient[c.id]||[]).forEach(e=>{ const st=eqStatus(e); if(st&&st.tone!=='good'&&!eqOpenRequest(e)) out.push({c,e,st}); }); });
+  return out.sort((a,b)=>(a.st.tone==='bad'?0:1)-(b.st.tone==='bad'?0:1)); }
+function clientSvcTone(cid){ let t=null; (eqByClient[cid]||[]).forEach(e=>{ const st=eqStatus(e); if(st?.tone==='bad') t='bad'; else if(st?.tone==='warn'&&!t) t='warn'; }); return t; }
+function nearOk(cid){ if(!mapNear) return true; const c=clients.find(x=>x.id===cid); return !!c&&c.lat!=null&&haversineKm({lat:+c.lat,lng:+c.lng},mapNear)<=mapNear.km; }
 function clientIcon(c,col=markerColor(c)){
   const w=mapWork[c.id]||{toPlan:0,planned:0},work=mapScope==='work';
   const count=work?w.toPlan:(eqByClient[c.id]||[]).length;
@@ -1313,7 +1350,8 @@ function clientIcon(c,col=markerColor(c)){
   const picked=mapTasks.some(row=>row.clientId===c.id&&mapSelected.has(row.id));
   const d=Math.min(46,(work?24:20)+count*4);
   const cls='cbub'+(plannedOnly?' cbub-planned':'')+(picked?' cbub-picked':'');
-  return L.divIcon({className:'',html:'<div class="'+cls+'" style="background:'+(plannedOnly?'#94a3b8':col)+';border:2.5px '+(plannedOnly?'dashed':'solid')+' '+ringColor()+'">'+(count||'')+'</div>',iconSize:[d,d],iconAnchor:[d/2,d/2]});
+  const svc=canWrite()?clientSvcTone(c.id):null;
+  return L.divIcon({className:'',html:'<div class="cbub-wrap"><div class="'+cls+'" style="background:'+(plannedOnly?'#94a3b8':col)+';border:2.5px '+(plannedOnly?'dashed':'solid')+' '+ringColor()+'">'+(count||'')+'</div>'+(svc?'<span class="cbub-svc '+svc+'" title="'+(svc==='bad'?'У техники просрочено ТО':'У техники скоро ТО')+'"></span>':'')+'</div>',iconSize:[d,d],iconAnchor:[d/2,d/2]});
 }
 function refreshClientMarker(cid){ const c=clients.find(x=>x.id===cid),m=markerById[cid]; if(c&&m&&!c.is_base) m.setIcon(clientIcon(c)); }
 function urgBadge(u){ if(!u||u.level==='cold') return 'без срока'; return u.level==='overdue'?('−'+(-u.left)+' дн'):(u.left+' дн'); }
@@ -1426,15 +1464,30 @@ function eqAlert(e){ const r={contact:false,service:false,any:false,reasons:[]};
                              : ('Наработка ~'+Math.round(sv.since)+' моточасов (ТО каждые '+Math.round(sv.interval)+', грубая оценка)')); }
   else if(sv&&sv.rate>0&&sv.daysLeft!=null&&sv.daysLeft<=14){ r.service=true; r.reasons.push('ТО через ~'+sv.daysLeft+' дн (темп '+sv.rate.toFixed(1)+' мч/сут)'); }
   r.any=r.contact||r.service; return r; }
+// Главное действие у техники на карте зависит от работы по ней: нет
+// заявки — завести (на ТО, если срок подходит); есть задание без выезда —
+// в выезд; уже в выезде — открыть выезд; заявка без задания — создать его.
+function eqPrimary(e){ const job=eqOpenRequest(e);
+  if(job){ const task=mapTasks.find(t=>t.jobId===job.id);
+    if(task&&task.trip) return {kind:'trip',label:tripShort(task.trip),task,job};
+    if(task) return {kind:'assign',label:'В выезд…',task,job};
+    return {kind:'seed',label:'Создать задание',job}; }
+  const st=eqStatus(e); return st&&st.tone!=='good'?{kind:'service',label:'Заявка на ТО'}:{kind:'request',label:'Заявка по технике'}; }
+window.eqPrimaryAction=function(cid,eid,btn){ const e=(eqByClient[cid]||[]).find(x=>x.id===eid); if(!e||!canWrite()) return; const p=eqPrimary(e);
+  if(p.kind==='trip'){ map.closePopup(); showTripOnMap(p.task.trip.id); }
+  else if(p.kind==='assign') chooseTripForTasks([p.task.id],btn);
+  else if(p.kind==='seed') seedRequestTask(p.job.id,btn);
+  else if(p.kind==='service') newMaintenanceJob(cid,eid);
+  else newJobForEquip(cid,eid); };
 function renderEqMarkers(){ eqMarkers.clearLayers(); if(!revealedClient) return; const c=clients.find(x=>x.id===revealedClient); if(!c) return; const col=c.color||'#9aa1ad';
   (eqByClient[c.id]||[]).forEach(e=>{ if(e.lat==null||e.lng==null) return;
     L.polyline([[c.lat,c.lng],[e.lat,e.lng]],{color:col,weight:1.5,opacity:.5,dashArray:'4 5'}).addTo(eqMarkers);
     const m=L.circleMarker([e.lat,e.lng],{radius:6,color:ringColor(),fillColor:col,fillOpacity:.9,weight:2.5,opacity:1});
     const al=eqAlert(e);
     let eh='<strong>'+esc(e.model)+'</strong><br><span style="color:var(--ink-dim)">'+esc(c.name)+(e.kind?' · '+esc(e.kind):'')+'</span>';
-    eh+='<br><span style="color:var(--ink-faint);font-size: var(--fs-2)">'+(e.last_visit?('визит '+esc(e.last_visit)):'визитов нет')+(e.last_service?(' · ТО '+esc(e.last_service)):'')+'</span>';
-    if(al.any) eh+='<br><span style="color:var(--red);font-size: var(--fs-2)">⚠ '+esc(al.reasons.join('; '))+'</span>';
-    if(canWrite()) eh+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3)"><button onclick="addEquipToRoute(\''+c.id+'\',\''+e.id+'\')" class="btn amber">+ маршрут</button><button onclick="newJobForEquip(\''+c.id+'\',\''+e.id+'\')" class="btn">+ заявка</button></span>';
+    eh+='<br><span style="color:var(--ink-faint);font-size: var(--fs-2)">'+(e.last_visit?('визит '+esc(shortDate(e.last_visit))):'визитов нет')+(e.last_service?(' · ТО '+esc(shortDate(e.last_service))):'')+'</span>';
+    const st=eqStatus(e); if(st) eh+='<br><span class="eq-state '+st.tone+'">'+esc(st.text)+'</span>'; else if(al.any) eh+='<br><span style="color:var(--red);font-size: var(--fs-2)">⚠ '+esc(al.reasons.join('; '))+'</span>';
+    if(canWrite()){ const p=eqPrimary(e); eh+='<span class="eq-pop-acts"><button type="button" onclick="eqPrimaryAction(\''+c.id+'\',\''+e.id+'\',this)" class="btn amber">'+esc(p.label)+'</button><button type="button" onclick="openEquip(\''+c.id+'\')" class="btn">Техника клиента</button></span>'; }
     m.bindPopup(eh); eqMarkers.addLayer(m);
     if(al.any){ const ab=L.divIcon({className:'',html:'<div class="eq-alert">'+(al.service?'🔧':'📞')+'</div>',iconSize:[22,22],iconAnchor:[-4,28]}); L.marker([e.lat,e.lng],{icon:ab,interactive:false,zIndexOffset:1200}).addTo(eqMarkers); } }); }
 let pointFilter='all';
@@ -1531,16 +1584,24 @@ function renderWorkFeed(){
     h+='<div class="seg map-task-mode" role="group" aria-label="Какие задания показать">'
       +'<button type="button" data-task-mode="unplanned" class="'+(mapTaskMode==='unplanned'?'on':'')+'" aria-pressed="'+(mapTaskMode==='unplanned')+'">Не запланировано · '+(unplanned+mapRequests.length)+'</button>'
       +'<button type="button" data-task-mode="planned" class="'+(mapTaskMode==='planned'?'on':'')+'" aria-pressed="'+(mapTaskMode==='planned')+'">В выездах · '+planned+'</button></div>';
+    if(mapNear) h+='<div class="map-near-chip" role="status"><span>Рядом с точкой на карте · '+mapNear.km+' км</span><button type="button" class="btn ghost" data-near-clear>Показать все</button></div>';
     if(mapTaskMode==='unplanned'){
-      const groups=groupUnplanned(mapTasks,q);
+      const groups=groupUnplanned(mapTasks.filter(r=>nearOk(r.clientId)),q);
       groups.forEach(g=>{ h+='<div class="wf-h map-task-group urg-'+g.level+'"><i class="urg-dot" aria-hidden="true"></i>'+esc(g.label)+' <span class="cnt">'+g.rows.length+'</span></div>'; g.rows.forEach(row=>{ h+=mapTaskRowHTML(row); }); });
-      const reqs=mapRequests.filter(job=>{ if(!ql) return true; const c=clients.find(x=>x.id===job.client_id); return String(c?.name||'').toLowerCase().includes(ql)||String(job.number??'')===ql.replace(/^№\s*/,''); });
+      const reqs=mapRequests.filter(job=>{ if(!nearOk(job.client_id)) return false; if(!ql) return true; const c=clients.find(x=>x.id===job.client_id); return String(c?.name||'').toLowerCase().includes(ql)||String(job.number??'')===ql.replace(/^№\s*/,''); });
       if(reqs.length){
         h+='<div class="wf-h map-task-group">Заявки без задания <span class="cnt">'+reqs.length+'</span></div>';
         reqs.slice(0,40).forEach(job=>{ const c=clients.find(x=>x.id===job.client_id)||{};
           h+='<div class="map-task map-request urg-cold"><div class="map-task-body"><span class="map-task-top"><strong>'+esc(c.name||'—')+'</strong></span><span class="map-task-title">'+esc(requestLabel(job,job.id))+(job.due_date?(' · срок '+esc(shortDate(job.due_date))):'')+'</span></div><button type="button" class="btn sm" data-map-seed="'+esc(job.id)+'">Создать задание</button></div>'; });
       }
-      if(!groups.length&&!reqs.length) h+='<div class="kempty">'+(q?'По запросу ничего не найдено.':'Вся работа запланирована. Новые задания появятся здесь.')+'</div>';
+      const due=serviceDue().filter(x=>nearOk(x.c.id)&&(!ql||(x.c.name+' '+(x.e.model||'')).toLowerCase().includes(ql)));
+      if(due.length){
+        h+='<div class="wf-h map-task-group">ТО скоро <span class="cnt">'+due.length+'</span></div>';
+        due.slice(0,20).forEach(x=>{ h+='<div class="map-due"><div class="map-due-body"><strong>'+esc(x.c.name)+'</strong><span>'+esc((x.e.model||'Техника')+' · '+x.st.text)+'</span></div>'
+          +'<button type="button" class="btn ghost" data-due-fly="'+esc(x.c.id)+'" aria-label="Показать '+esc(x.c.name)+' на карте">На карте</button>'
+          +(canWriteJob()?'<button type="button" class="btn" data-due-job="'+esc(x.c.id)+'|'+esc(x.e.id)+'">Заявка на ТО</button>':'')+'</div>'; });
+      }
+      if(!groups.length&&!reqs.length&&!due.length) h+='<div class="kempty">'+(q?'По запросу ничего не найдено.':mapNear?'Рядом с этой точкой незапланированной работы нет.':'Вся работа запланирована. Новые задания появятся здесь.')+'</div>';
     } else {
       const rows=plannedRows(mapTasks,q);
       rows.forEach(row=>{ h+=mapTaskRowHTML(row); });
@@ -1564,6 +1625,9 @@ function renderWorkFeed(){
   if(!h) h='<div class="kempty">'+(canWrite()?'Машин на связи нет.':'На сегодня выездов нет.')+'<br>Открой «Справочник», чтобы увидеть все точки.</div>';
   box.innerHTML=h;
   box.querySelectorAll('[data-task-mode]').forEach(b=>b.onclick=()=>{ mapTaskMode=b.dataset.taskMode; mapOpenTask=null; renderWorkFeed(); });
+  box.querySelector('[data-near-clear]')?.addEventListener('click',()=>{ mapNear=null; renderWorkFeed(); });
+  box.querySelectorAll('[data-due-fly]').forEach(b=>b.onclick=()=>flyToClient(b.dataset.dueFly,true));
+  box.querySelectorAll('[data-due-job]').forEach(b=>b.onclick=()=>{ const [cid,eid]=b.dataset.dueJob.split('|'); newMaintenanceJob(cid,eid); });
   box.querySelectorAll('[data-my-trip]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.myTrip));
   box.querySelectorAll('[data-map-pick]').forEach(el=>el.onchange=()=>toggleMapTask(el.dataset.mapPick,el.checked));
   box.querySelectorAll('[data-task-open]').forEach(b=>b.onclick=()=>{ const id=b.dataset.taskOpen; mapOpenTask=mapOpenTask===id?null:id; renderWorkFeed(); const row=mapTasks.find(r=>r.id===id); if(row&&mapOpenTask) hlMarker(row.clientId,true); });
@@ -1880,7 +1944,7 @@ if($('layersBtn')) $('layersBtn').onclick=(e)=>{ e.stopPropagation();
 document.addEventListener('click',(e)=>{ const p=$('layersPop'); if(!p||!p.classList.contains('on')) return;
   if(p.contains(e.target)||e.target===$('layersBtn')) return;
   p.classList.remove('on');if(p.matches(':popover-open'))p.hidePopover(); const b=$('layersBtn'); if(b) b.classList.remove('on'); });
-$('cancelBtn').onclick=()=>{ resetForm(); toggleAdd(false); $('pointOverlay').classList.remove('on'); };
+$('cancelBtn').onclick=()=>{ afterPointSave=null; resetForm(); toggleAdd(false); $('pointOverlay').classList.remove('on'); };
 function resetForm(){ $('fName').value='';$('fDesc').value='';$('fColor').value='#9aa1ad';$('fBase').checked=false;setPointType('client');$('geoQuery').value='';$('geoResults').innerHTML='';$('formErr').textContent=''; pendingLatLng=null; if(pendingMarker){map.removeLayer(pendingMarker);pendingMarker=null;} }
 // Тип новой точки — сегментный выбор; флажок fBase остаётся носителем значения для сохранения.
 function setPointType(type){
@@ -1896,7 +1960,9 @@ document.querySelectorAll('#pointOverlay [data-swatch]').forEach(b=>b.onclick=()
 if($('fColor')) $('fColor').addEventListener('input',paintSwatches);
 $('saveBtn').onclick=async ()=>{ const name=$('fName').value.trim(); if(!name){ $('formErr').textContent='Введи название.'; return; } if(!pendingLatLng){ $('formErr').textContent='Задай точку на карте или по адресу.'; return; }
   $('saveBtn').disabled=true; const { error }=await sb.from('clients').insert({name,description:$('fDesc').value.trim(),phone:($('fPhone').value.trim()||null),color:$('fColor').value,lat:pendingLatLng.lat,lng:pendingLatLng.lng,is_base:$('fBase').checked}); $('saveBtn').disabled=false;
-  if(error){ $('formErr').textContent='Ошибка: '+error.message; return; } const wasBase=$('fBase').checked; resetForm(); $('pointOverlay').classList.remove('on'); await loadAll(); showToast(wasBase?'Депо сохранено':'Точка сохранена'); };
+  if(error){ $('formErr').textContent='Ошибка: '+error.message; return; } const wasBase=$('fBase').checked, at={...pendingLatLng}, thenJob=afterPointSave==='job'&&!wasBase; afterPointSave=null; resetForm(); $('pointOverlay').classList.remove('on'); await loadAll(); showToast(wasBase?'Депо сохранено':'Точка сохранена');
+  // «Новая заявка здесь» из меню карты: клиента только что создали — сразу заявка.
+  if(thenJob){ const c=clients.find(x=>x.name===name&&Math.abs(x.lat-at.lat)<1e-7&&Math.abs(x.lng-at.lng)<1e-7); if(c) newJobForClient(c.id); } };
 // ---------- client dialog ----------
 // Окно клиента: контакты, договор, место на карте. Координаты руками не
 // вводятся — только перестановкой на карте или поиском по адресу; сдвиг
@@ -2228,6 +2294,16 @@ function geoSearch(q, limit){
   // Цепочка, а не параллель: две подсказки одновременно — уже нарушение.
   _geoChain = _geoChain.then(run, run);
   return _geoChain;
+}
+// Адрес места для контекстного меню карты. Та же очередь, что у поиска:
+// Nominatim не разрешает параллельных запросов.
+function geoReverse(lat,lng){
+  const run=async()=>{ const wait=NOMINATIM_GAP_MS-(Date.now()-_geoLast); if(wait>0) await new Promise(r=>setTimeout(r,wait)); _geoLast=Date.now();
+    const r=await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=uk,ru,en&lat='+lat+'&lon='+lng,{headers:{'Accept':'application/json'}});
+    if(!r.ok) return null; const d=await r.json(); const a=d?.address||{};
+    const street=[a.road||a.pedestrian||a.hamlet,a.house_number].filter(Boolean).join(', '); const place=a.city||a.town||a.village||a.municipality||'';
+    return [street,place].filter(Boolean).join(', ')||d?.display_name||null; };
+  _geoChain=_geoChain.then(run,run); return _geoChain;
 }
 $('geoBtn').onclick=geocode; $('geoQuery').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); geocode(); } });
 async function geocode(){ const q=$('geoQuery').value.trim(); const box=$('geoResults'); if(!q){ box.innerHTML=''; return; } box.innerHTML='<div class="hint">Ищу…</div>';

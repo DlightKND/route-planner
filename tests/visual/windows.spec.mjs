@@ -119,6 +119,16 @@ test('equipment service date is not marked by hand; service starts as a request'
  await expect(page.locator('.eq-card [data-mhr]')).toHaveCount(1);
 });
 
+test('map context menu offers work actions and keeps unnamed stops out of trips',async({page},info)=>{
+ test.skip(info.project.name.startsWith('mobile'),'right click is a desktop gesture');
+ await page.goto('/#/map');await expect(page.locator('#map')).toBeVisible();
+ const box=await page.locator('#map').boundingBox();
+ await page.mouse.click(box.x+box.width*0.75,box.y+box.height*0.4,{button:'right'});
+ const menu=page.locator('#ctxMenu');await expect(menu).toBeVisible();
+ await expect(menu.locator('[data-cx="job"]')).toBeVisible();await expect(menu.locator('[data-cx="near"]')).toBeVisible();
+ await expect(menu.locator('[data-cx="wp"]')).toBeDisabled();
+});
+
 test('destructive buttons meet text contrast in both themes',async({page})=>{
  await page.locator('#profileBtn').evaluate(el=>el.click());const button=page.locator('[data-profile-logout]');await expect(button).toBeVisible();
  const contrast=await button.evaluate(el=>{const s=getComputedStyle(el),l=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{const c=v/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};const a=l(s.color),b=l(s.backgroundColor);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05);});

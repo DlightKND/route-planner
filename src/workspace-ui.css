@@ -1427,3 +1427,28 @@ html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{con
 }
 .eq-summary[hidden] { display:none!important; }
 @media(max-width:560px){ .eq-card-head>h4 { flex-basis:calc(100% - 72px); } }
+/* Map context menu: place header and two-line items */
+.ctxmenu { width:300px;max-width:calc(100vw - 16px); }
+.ctxmenu .ctx-head { display:flex;flex-direction:column;gap:2px;padding:8px 10px 10px;margin-bottom:4px;border-bottom:1px solid var(--line); }
+.ctxmenu .ctx-head strong { font-weight:600;overflow-wrap:anywhere; }
+.ctxmenu .ctx-head span { font-family:var(--mono);font-size:12px;color:var(--ink-dim); }
+.ctxmenu button { min-height:44px; }
+.ctxmenu button small { display:block;font-size:12px;color:var(--ink-dim); }
+.ctxmenu button[disabled] { color:var(--ink-dim);cursor:not-allowed; }
+.ctxmenu hr { border:0;border-top:1px solid var(--line);margin:4px 0; }
+/* «Рядом с точкой» filter chip in the work feed */
+.map-near-chip { display:flex;align-items:center;gap:8px;padding:8px 10px;margin:0 0 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2);font-size:13px; }
+.map-near-chip span { flex:1; }
+.map-near-chip .btn { min-height:36px; }
+/* Service due in the feed */
+.map-due { display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px; }
+.map-due-body { flex:1;min-width:0;display:flex;flex-direction:column;gap:2px; }
+.map-due-body strong { font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.map-due-body span { font-size:12px;color:var(--ink-dim); }
+.map-due .btn { flex:none;min-height:40px; }
+/* Client marker: a unit of its equipment is due for service */
+.cbub-wrap { position:relative;width:100%;height:100%; }
+.cbub-svc { position:absolute;right:-6px;top:-6px;width:16px;height:16px;border-radius:50%;background:var(--warning);border:2px solid var(--panel);box-sizing:border-box; }
+.cbub-svc.bad { background:var(--red); }
+.eq-pop-acts { display:flex;flex-wrap:wrap;gap:8px;margin-top:10px; }
+.leaflet-popup .eq-state { display:inline-block;margin-top:6px; }
