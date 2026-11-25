@@ -2507,7 +2507,8 @@
         <div class="lay-t">Цвет точек</div>
         <div class="seg" id="colorMode"><button class="on" data-cm="urgency">срочность</button><button data-cm="profit">прибыль</button><button data-cm="own">свой</button></div>
         <div class="lay-legend" id="profitLegend"></div>
-        <label class="lay"><input type="checkbox" id="ptAlert"><span class="lay-x">Только требующие внимания</span><b class="cnt" id="alertCnt"></b><span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Оставляет на карте точки, где просрочен контакт или подходит ТО. Остальные гаснут, но не пропадают.</span></span></label>
+        <div class="lay-t">Фильтр</div>
+        <label class="lay lay-filter"><input type="checkbox" id="ptAlert"><span class="lay-x">Только требующие внимания<small>просрочен контакт или подходит ТО; остальные точки гаснут</small></span><b class="cnt" id="alertCnt"></b></label>
       </div><div class="mode-tag" id="modeTag">● Кликни по карте</div><div id="map"></div></div>
   </div>
 
@@ -3074,24 +3075,32 @@
 </div></div>
 
 
-<div class="overlay" id="pointOverlay"><div class="modal">
+<div class="overlay" id="pointOverlay"><div class="modal pane-modal client-modal">
   <h3>Новая точка</h3>
-  <!-- Тип точки — первым выбором: от него зависят цвет, роль в маршруте
-       и где точку искать. Раньше это был флажок «депо» рядом с цветом. -->
-  <div class="seg point-type" id="pointType" role="radiogroup" aria-label="Тип точки"><button type="button" role="radio" aria-checked="true" class="on" data-point-type="client">Клиент</button><button type="button" role="radio" aria-checked="false" data-point-type="base">Депо</button></div>
-  <button class="btn amber" id="addMode" style="width:100%">📍 Указать на карте</button>
-  <div class="hint" id="addHint" style="display:none">Кликните по карте — координаты подставятся сюда.</div>
-  <div class="row" style="margin-top: var(--sp-3)"><input type="text" id="geoQuery" placeholder="…или найти по адресу" class="grow"><button class="btn" id="geoBtn">Найти</button></div>
-  <div id="geoResults"></div>
-  <div class="hint" id="pointCoords" style="margin-top: var(--sp-3)"></div>
-  <div id="form" style="margin-top: var(--sp-3)">
-    <label>Название</label><input type="text" id="fName" placeholder="Напр. ТОВ «Назва»">
-    <label>Телефон на месте</label><input type="tel" id="fPhone" inputmode="tel" autocomplete="tel" placeholder="+380 …">
-    <label>Описание</label><textarea id="fDesc"></textarea>
-    <div class="row point-color-row" style="align-items:flex-end"><div class="grow"><label>Цвет на карте</label><div class="point-swatches" role="radiogroup" aria-label="Цвет на карте"><button type="button" role="radio" data-swatch="#9aa1ad" style="--sw:#9aa1ad" aria-label="Серый"></button><button type="button" role="radio" data-swatch="#3e9bdc" style="--sw:#3e9bdc" aria-label="Синий"></button><button type="button" role="radio" data-swatch="#8e6bd8" style="--sw:#8e6bd8" aria-label="Фиолетовый"></button><button type="button" role="radio" data-swatch="#d86ba8" style="--sw:#d86ba8" aria-label="Розовый"></button><button type="button" role="radio" data-swatch="#e08a3c" style="--sw:#e08a3c" aria-label="Оранжевый"></button><label class="point-swatch-own" title="Свой цвет"><span class="sr-only">Свой цвет</span><input type="color" id="fColor" value="#9aa1ad"></label></div></div><input type="checkbox" id="fBase" hidden aria-hidden="true" tabindex="-1"></div>
-    <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="saveBtn">Сохранить</button><button class="btn ghost" id="cancelBtn">Отмена</button></div>
-    <div class="err" id="formErr"></div>
+  <div class="pane-body" id="form">
+  <!-- Та же раскладка, что у окна клиента: тип, контакты, место на карте.
+       Место — вторичными кнопками в своём разделе, а не жёлтой кнопкой над формой. -->
+  <div class="client-kind"><div class="seg point-type" id="pointType" role="radiogroup" aria-label="Тип точки"><button type="button" role="radio" aria-checked="true" class="on" data-point-type="client">Клиент</button><button type="button" role="radio" aria-checked="false" data-point-type="base">Депо</button></div></div>
+  <section class="modal-section" aria-labelledby="fContactsH"><h4 id="fContactsH">Контакты</h4>
+    <label for="fName">Название</label><input type="text" id="fName" placeholder="Напр. ТОВ «Назва»">
+    <div class="form-grid point-client-only">
+      <div><label for="fContact">Контактное лицо</label><input type="text" id="fContact" placeholder="Имя, должность"></div>
+      <div><label for="fPhone">Телефон на месте</label><input type="tel" id="fPhone" inputmode="tel" autocomplete="tel" placeholder="+380 …"></div>
+      <div><label for="fAddress">Адрес</label><input type="text" id="fAddress" placeholder="Город, улица, дом"></div>
+      <div><label for="fAccess">Доступ на объект</label><input type="text" id="fAccess" placeholder="Пропуск, часы работы"></div>
+    </div>
+    <label for="fDesc">Описание</label><textarea id="fDesc"></textarea>
+  </section>
+  <section class="modal-section" aria-labelledby="fMapH"><h4 id="fMapH">На карте</h4>
+    <p class="client-coords" id="pointCoords"></p>
+    <div class="row client-place-actions"><button type="button" class="btn" id="addMode">Указать на карте</button><button type="button" class="btn" id="geoOpen" aria-expanded="false" aria-controls="geoBox">Найти по адресу</button></div>
+    <div class="hint" id="addHint" style="display:none">Кликните по карте — координаты подставятся сюда.</div>
+    <div id="geoBox" hidden><div class="row"><input type="text" id="geoQuery" placeholder="Город, улица, дом" class="grow" aria-label="Адрес для поиска"><button type="button" class="btn" id="geoBtn">Найти</button></div><div id="geoResults"></div></div>
+    <div class="client-color-row point-color-row"><label>Цвет на карте</label><div class="point-swatches" role="radiogroup" aria-label="Цвет на карте"><button type="button" role="radio" data-swatch="#9aa1ad" style="--sw:#9aa1ad" aria-label="Серый"></button><button type="button" role="radio" data-swatch="#3e9bdc" style="--sw:#3e9bdc" aria-label="Синий"></button><button type="button" role="radio" data-swatch="#8e6bd8" style="--sw:#8e6bd8" aria-label="Фиолетовый"></button><button type="button" role="radio" data-swatch="#d86ba8" style="--sw:#d86ba8" aria-label="Розовый"></button><button type="button" role="radio" data-swatch="#e08a3c" style="--sw:#e08a3c" aria-label="Оранжевый"></button><label class="point-swatch-own" title="Свой цвет"><span class="sr-only">Свой цвет</span><input type="color" id="fColor" value="#9aa1ad"></label></div><input type="checkbox" id="fBase" hidden aria-hidden="true" tabindex="-1"></div>
+  </section>
+  <div class="err" id="formErr"></div>
   </div>
+  <div class="row modal-actions client-actions"><span class="grow"></span><button type="button" class="btn ghost" id="cancelBtn">Отмена</button><button type="button" class="btn amber" id="saveBtn">Сохранить</button></div>
 </div></div>
 
 <div class="overlay" id="trashOverlay"><div class="modal l">
@@ -3123,7 +3132,7 @@
   </section>
   <section class="modal-section" aria-labelledby="eContractH"><h4 id="eContractH">Договор</h4>
     <div class="form-grid">
-      <div><label for="eProfile">Тариф по умолчанию</label><select id="eProfile"></select></div>
+      <div class="form-wide"><label for="eProfile">Тариф по умолчанию</label><select id="eProfile"></select></div>
       <div><label for="eSigner">Подписант актов</label><input type="text" id="eSigner" placeholder="Директор Петров П.П."></div>
     </div>
   </section>

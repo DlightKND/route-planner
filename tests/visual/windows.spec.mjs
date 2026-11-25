@@ -84,7 +84,6 @@ test('timeline primary action stays readable and help does not compete with trip
 
 test('map actions remain touch-sized and hit-testable above the mobile bottom sheet',async({page})=>{
  await open(page,'mapClient');const popup=page.locator('.leaflet-popup').last();await expect(popup).toBeVisible();
- await popup.locator('.client-popup-more summary').click();
  for(const action of await popup.locator('.btn:visible').all()){
   await action.scrollIntoViewIfNeeded();const r=await action.boundingBox();expect(r.height).toBeGreaterThanOrEqual(page.viewportSize().width<=768?48:40);
   expect(await action.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);
@@ -175,14 +174,14 @@ test('vehicle summary is compact, corners clip correctly and GPS details remain 
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-vehicle.png'});
  await page.locator('#vehJournal').click();await expect(page.locator('#vehOverlay')).toBeHidden();await expect(page.locator('#plUnassigned')).toBeVisible();
 });
-test('client popup keeps primary actions in a row and exposes secondary actions on demand',async({page},info)=>{
+test('client popup keeps primary actions in a row and lists secondary actions',async({page},info)=>{
  await open(page,'mapClient');const pop=page.locator('.leaflet-popup:visible');await expect(pop).toBeVisible();
  const surface=await pop.locator('.leaflet-popup-content-wrapper').evaluate(el=>{const sample=document.createElement('div');sample.style.background=CSS.supports('backdrop-filter','blur(1px)')?'var(--glass-panel)':'var(--panel)';sample.style.color='var(--ink)';document.body.append(sample);const actual=getComputedStyle(el),expected=getComputedStyle(sample),result={background:actual.backgroundColor,expectedBackground:expected.backgroundColor,color:actual.color,expectedColor:expected.color,shadow:actual.boxShadow,popover:el.closest('.leaflet-popup').hasAttribute('popover')};sample.remove();return result;});
  expect(surface.background).toBe(surface.expectedBackground);expect(surface.color).toBe(surface.expectedColor);if(surface.popover)expect(surface.shadow).toBe('none');
- await expect(pop.getByRole('button',{name:'Редактировать клиента',exact:true})).toBeHidden();
  const geometry=await pop.locator('.client-popup-primary').evaluate(el=>Array.from(el.children,x=>{const r=x.getBoundingClientRect();return {top:r.top,height:r.height,width:r.width};}));
  expect(geometry).toHaveLength(2);expect(geometry[0].top).toBe(geometry[1].top);for(const r of geometry){expect(r.height).toBeGreaterThanOrEqual(page.viewportSize().width<=768?48:40);expect(r.width).toBeGreaterThan(90);}
- await pop.locator('.client-popup-more summary').click();await expect(pop.getByRole('button',{name:'Техника',exact:true})).toBeVisible();await expect(pop.getByRole('button',{name:'Создать заявку',exact:true})).toBeVisible();
+ // Прочие действия видны сразу, списком под главными кнопками.
+ await expect(pop.locator('.client-popup-tools')).toBeVisible();await expect(pop.getByRole('button',{name:/^Техника/})).toBeVisible();await expect(pop.getByRole('button',{name:'Создать заявку',exact:true})).toBeVisible();
  await page.screenshot({path:'test-results/surface-fixes/'+info.project.name+'-client.png'});
  await pop.getByRole('button',{name:'Редактировать клиента',exact:true}).click();await expect(page.locator('#editOverlay')).toBeVisible();
 });

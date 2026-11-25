@@ -58,7 +58,7 @@ function vehicle({user='curator',trip=own,answer='target',reason='Перенос
   const context={role:'engineer',session:{user:{id:user}},getTrip:()=>null,tripCache:{},currentJobAuthority:false,
     vehState:[{vehicle_id:'car',ts:'2026-09-30T12:00:00Z',lat:50,lng:30}],vehicles:[{id:'car',name:'Car'}],
     vehModalId:null,vehClass:()=> 'idle',vehAgeMin:()=>0,todayISO:()=> '2026-09-30',VEH_STALE_MIN:60,
-    $:id=>doc.getElementById(id),esc:String,personShort:()=> '',openTrip:vi.fn(),canWrite:()=>false,updateVehInfo:vi.fn(),vehTitle:()=> 'Стоит',vehRow:(a,b)=>`<div>${a}: ${b}</div>`,vehAgeText:()=> 'сейчас',clients:[],
+    $:id=>doc.getElementById(id),esc:String,personShort:()=> '',shortDate:d=>String(d),openTrip:vi.fn(),canWrite:()=>false,updateVehInfo:vi.fn(),vehTitle:()=> 'Стоит',vehRow:(a,b)=>`<div>${a}: ${b}</div>`,vehAgeText:()=> 'сейчас',clients:[],
     vehTrackSessions:[{trip_id:trip.id,vehicle_id:'car',state:'armed',planned_start_at:'2026-10-01T09:00:00Z',trip}],vehActiveTrips:{},trips:[],ST_TRIP:{},appSettings:{},
     showToast:vi.fn(),notify:vi.fn(),promptDialog:prompt,sb:{rpc,from:()=>({select(){return this;},eq(){return this;},in(){return this;},is:async()=>({data:targets,error:null})})},loadVehicles:vi.fn(),tripAction:vi.fn(),confirmDialog:async()=>true,
     loadAll:vi.fn(),loadVehState:vi.fn(),tripPeriod:()=> '01.10',delegatedOwnerIntervenes:row=>row.owner_id===user&&row.curator_id!==user,askInterventionReason:vi.fn(()=>reason)};

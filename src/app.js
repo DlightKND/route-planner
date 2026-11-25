@@ -544,7 +544,7 @@ function updatePointSaveState(){
   b.disabled=!(hasName&&hasPlace);
 }
 
-function updatePointCoords(){ const el=$('pointCoords'); if(!el) return; if(pendingLatLng){ el.innerHTML='<span class="ok">📍 координаты заданы: '+(+pendingLatLng.lat).toFixed(5)+', '+(+pendingLatLng.lng).toFixed(5)+'</span>'; } else { el.textContent='Место не задано — «Указать на карте» или найдите по адресу.'; } updatePointSaveState(); }
+function updatePointCoords(){ const el=$('pointCoords'); if(!el) return; if(pendingLatLng){ el.innerHTML='Координаты <output>'+(+pendingLatLng.lat).toFixed(5)+', '+(+pendingLatLng.lng).toFixed(5)+'</output>'; } else { el.textContent='Место не задано — укажите на карте или найдите по адресу.'; } updatePointSaveState(); }
 if($('fName')) $('fName').oninput=updatePointSaveState;
 function openPointModal(){ updatePointCoords(); updatePointSaveState(); $('pointOverlay').classList.add('on'); setTimeout(()=>{ try{ $('fName').focus(); }catch(e){} },40); }
 map.on('click',e=>{ if(avoidModeOn){ addAvoidZone(e.latlng); return; } if(addModeOn){ pendingLatLng=e.latlng; toggleAdd(false); flashPending(); openPointModal(); return; } if(wpModeOn){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:e.latlng.lat,lng:e.latlng.lng}); renderRoutePanel(); resetBuilt(); } });
@@ -567,16 +567,18 @@ function nearCount(ll,km){ return mapTasks.filter(r=>!r.trip).concat(mapRequests
 function showCtxMenu(e){ ctxLatLng=e.latlng; const m=$('ctxMenu'); const ll={lat:e.latlng.lat,lng:e.latlng.lng}; let h='';
   const near=nearestClient(ll,0.05);
   h+='<div class="ctx-head"><strong id="ctxAddr">'+esc(near?near.c.name:'Ищу адрес…')+'</strong><span>'+ll.lat.toFixed(5)+', '+ll.lng.toFixed(5)+'</span></div>';
+  const ico=d=>'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
+  const item=(cx,icon,label,sub,dis)=>'<button type="button" data-cx="'+cx+'"'+(dis?' disabled':'')+'>'+ico(icon)+'<span>'+label+(sub?'<small>'+sub+'</small>':'')+'</span></button>';
   if(canWrite()){
     const n=nearCount(ll,NEAR_KM); const routeOpen=rStops.length>0||!!plannerTripId;
-    h+='<button type="button" data-cx="job">'+(near?'Новая заявка · '+esc(near.c.name):'Новая заявка здесь')+'</button>'
-      +'<button type="button" data-cx="add">Новый клиент или депо здесь</button>'
-      +'<button type="button" data-cx="near">Задания рядом<small>'+(n?n+' в '+NEAR_KM+' км':'в '+NEAR_KM+' км нет')+'</small></button>'
-      +'<button type="button" data-cx="avoid">Объезжать участок здесь</button>'
+    h+=item('job','<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 8v6M9 11h6"/>',near?'Новая заявка · '+esc(near.c.name):'Новая заявка здесь')
+      +item('add','<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><path d="M12 7v6M9 10h6"/>','Новый клиент или депо здесь')
+      +item('near','<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/>','Задания рядом',n?n+' в '+NEAR_KM+' км':'в '+NEAR_KM+' км нет')
+      +item('avoid','<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>','Объезжать участок здесь')
       +'<hr>'
-      +'<button type="button" data-cx="wp"'+(routeOpen?'':' disabled aria-describedby="ctxWpHint"')+'>Промежуточная точка маршрута'+(routeOpen?'':'<small id="ctxWpHint">откройте выезд или начните маршрут</small>')+'</button>';
+      +item('wp','<path d="M4 19l6-6 4 4 6-10"/>','Промежуточная точка маршрута',routeOpen?'':'откройте выезд или начните маршрут',!routeOpen);
   }
-  h+='<button type="button" data-cx="copy">Копировать координаты</button>'; m.innerHTML=h;
+  h+=(canWrite()?'':'')+'<button type="button" data-cx="copy"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg><span>Копировать координаты</span></button>'; m.innerHTML=h;
   const x=e.originalEvent.clientX, y=e.originalEvent.clientY; m.style.left=Math.min(x,window.innerWidth-300)+'px'; m.style.top=Math.min(y,window.innerHeight-380)+'px'; m.tabIndex=-1;
   // В Linux contextmenu приходит на нажатии; если открыть меню сразу, отпускание
   // кнопки закрывает его как «клик мимо». Ждём отпускания.
@@ -1266,7 +1268,7 @@ function recomputeAlerts(){
   alertCount={};
   clients.forEach(c=>{ alertCount[c.id]=(eqByClient[c.id]||[]).filter(e=>eqAlert(e).any).length; });
   const total=Object.values(alertCount).filter(x=>x>0).length;
-  const el=$('alertCnt'); if(el) el.textContent=total?('· '+total):'';
+  const el=$('alertCnt'); if(el) el.textContent=total?String(total):'';
 }
 function alertOnly(){ return !!($('ptAlert')&&$('ptAlert').checked); }
 
@@ -1324,9 +1326,8 @@ function renderColorLegend(){
     el.innerHTML=[dot('#16a34a','высокая'),dot('#84cc16','средняя'),
       dot('#eab308','низкая'),dot('#6b7280','нет прибыли')].join('');
   } else if(colorMode==='urgency'){
-    el.innerHTML=[dot(URG_COL.overdue,URG_TXT.overdue),dot(URG_COL.acute,URG_TXT.acute),
-      dot(URG_COL.calm,URG_TXT.calm),dot(URG_COL.cold,URG_TXT.cold),
-      dot('#94a3b8','нет заявок')].join('');
+    // Обозначения срочности — в углу карты («Обозначения»), здесь не дублируем.
+    el.innerHTML='';
   } else {
     el.innerHTML='Цвет задаётся в карточке точки.';
   }
@@ -1386,22 +1387,31 @@ function clientPopupHTML(c){
   }
   const s=clientStats[c.id];
   if(canWrite()&&s){ const cur=appSettings.currency||'грн'; h+='<details class="map-popup-stats"><summary>Показатели клиента</summary><span style="display:block;margin-top: var(--sp-2);font-size: var(--fs-2);color:var(--ink-dim);line-height:1.6">выручка <b style="color:var(--ink)">'+Math.round(s.rev)+' '+esc(cur)+'</b> · прибыль <b style="color:'+(s.profit>=0?'var(--green)':'var(--red)')+'">'+Math.round(s.profit)+'</b><br>гарантия '+s.warrShare+'% · заявок '+s.jobs+(s.done?(' · закрыто '+s.done):'')+'</span></details>'; }
+  // Действия: сверху две главные кнопки по ситуации, под ними — все прочие
+  // сразу видны, без скрытого «Другие действия».
+  const ico=d=>'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
+  const I={eq:ico('<rect x="3" y="7" width="18" height="12" rx="2"/><path d="M8 7V5h8v2"/>'),nav:ico('<path d="M3 11l18-8-8 18-2-8z"/>'),req:ico('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 8v6M9 11h6"/>'),edit:ico('<path d="M4 20h4L19 9l-4-4L4 16z"/>'),tel:ico('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>'),route:ico('<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h6a4 4 0 0 0 0-8h-4a4 4 0 0 1 0-8h6"/>')};
+  const tool=(attrs,icon,label)=>'<button type="button" class="btn ghost cp-tool" '+attrs+'>'+icon+'<span>'+label+'</span></button>';
+  const link=(href,icon,label,ext)=>'<a href="'+esc(href)+'" class="btn ghost cp-tool"'+(ext?' target="_blank" rel="noopener"':'')+'>'+icon+'<span>'+label+'</span></a>';
+  const eqLabel='Техника'+(count?' · '+count:'');
   h+='<div class="client-popup-actions"><div class="client-popup-primary">';
+  const tools=[];
   if(canWrite()){
-    if(open.length){ const all=open.every(row=>mapSelected.has(row.id)); h+='<button type="button" class="btn amber" data-map-pick-all="'+esc(c.id)+'">'+(all?'Снять выбор':(open.length>1?'Выбрать все':'Выбрать'))+'</button>'; }
-    else h+='<button type="button" onclick="addClientToRoute(\''+c.id+'\')" class="btn amber">+ маршрут</button>';
-    if(tel) h+='<a href="'+esc(tel)+'" class="btn">Позвонить</a>';
+    if(open.length){ const all=open.every(row=>mapSelected.has(row.id)); h+='<button type="button" class="btn amber" data-map-pick-all="'+esc(c.id)+'">'+(all?'Снять выбор':(open.length>1?'Выбрать все':'Выбрать'))+'</button>';
+      h+='<button type="button" onclick="addClientToRoute(\''+c.id+'\')" class="btn">В маршрут</button>';
+      tools.push(tool('onclick="newJobForClient(\''+c.id+'\')" aria-label="Создать заявку"',I.req,'Заявка')); }
+    else { h+='<button type="button" onclick="newJobForClient(\''+c.id+'\')" class="btn amber">Создать заявку</button>'; }
+    if(!open.length) h+=tel?'<a href="'+esc(tel)+'" class="btn">Позвонить</a>':'<button type="button" onclick="openEquip(\''+c.id+'\')" class="btn">'+esc(eqLabel)+'</button>';
+    if(open.length&&tel) tools.push(link(tel,I.tel,'Позвонить'));
+    if(open.length||tel) tools.push(tool('onclick="openEquip(\''+c.id+'\')"',I.eq,esc(eqLabel)));
+    tools.push(link(navHref(c.lat,c.lng),I.nav,'Проехать',true));
+    tools.push(tool('onclick="editClient(\''+c.id+'\')" aria-label="Редактировать клиента"',I.edit,'Изменить'));
   } else {
     if(tel) h+='<a href="'+esc(tel)+'" class="btn amber">Позвонить</a>';
-    h+='<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn">Проехать</a>';
+    h+='<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn'+(tel?'':' amber')+'">Проехать</a>';
+    tools.push(tool('onclick="openEquip(\''+c.id+'\')"',I.eq,esc(eqLabel)));
   }
-  h+='</div>';
-  h+='<details class="client-popup-more"><summary class="btn ghost">Другие действия</summary><div class="client-popup-menu">';
-  if(canWrite()) h+='<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn ghost">Проехать</a>';
-  if(canWrite()&&open.length) h+='<button type="button" onclick="addClientToRoute(\''+c.id+'\')" class="btn ghost">Добавить в маршрут</button>';
-  h+='<button type="button" onclick="openEquip(\''+c.id+'\')" class="btn ghost">Техника</button>';
-  if(canWrite()) h+='<button type="button" onclick="newJobForClient(\''+c.id+'\')" class="btn ghost">Создать заявку</button><button type="button" onclick="editClient(\''+c.id+'\')" class="btn ghost">Редактировать клиента</button>';
-  h+='</div></details></div></div>';
+  h+='</div>'+(tools.length?'<div class="client-popup-tools">'+tools.join('')+'</div>':'')+'</div></div>';
   return h;
 }
 function renderMarkers(){ let reopen=null; Object.entries(markerById).forEach(([id,m])=>{ if(m?.isPopupOpen?.()){ reopen=id; m.closePopup(); } }); markers.clearLayers(); eqMarkers.clearLayers(); revealedClient=null; markerById={};
@@ -1437,7 +1447,7 @@ function renderMarkers(){ let reopen=null; Object.entries(markerById).forEach(([
     // Содержимое — один узел на время открытия: Leaflet перечитывает
     // содержимое при каждом обновлении, и строка сбрасывала бы раскрытое
     // «Другие действия» и отметки.
-    m.bindPopup(()=>{ if(!m.__pop){ const box=document.createElement('div'); box.innerHTML=clientPopupHTML(c); m.__pop=box.firstElementChild; } return m.__pop; },{maxWidth:360,minWidth:300,className:'client-popup-wrap'});
+    m.bindPopup(()=>{ if(!m.__pop){ const box=document.createElement('div'); box.innerHTML=clientPopupHTML(c); m.__pop=box.firstElementChild; } return m.__pop; },{maxWidth:360,minWidth:300,className:'client-popup-wrap',autoPanPaddingTopLeft:L.point(72,72),autoPanPaddingBottomRight:L.point(24,24)});
     m.on('popupclose',()=>{ m.__pop=null; });
     m.on('click',()=>{ revealedClient=(revealedClient===c.id)?null:c.id; renderEqMarkers(); });
     if(dim) m.setOpacity(.25);
@@ -1878,6 +1888,7 @@ $('search').oninput=renderSide;
 
 // ---------- client add/edit ----------
 $('addMode').onclick=()=>{ $('pointOverlay').classList.remove('on'); toggleAdd(true); };
+$('geoOpen').onclick=()=>{ const box=$('geoBox'); box.hidden=!box.hidden; $('geoOpen').setAttribute('aria-expanded',String(!box.hidden)); if(!box.hidden) $('geoQuery').focus(); };
 // Создание точки живёт в двух местах разом: кнопкой в панели на широком
 // экране и кругом над картой на телефоне. Действие одно, поэтому и
 // обработчик один — по классу, а не по идентификатору.
@@ -1955,12 +1966,13 @@ document.addEventListener('click',(e)=>{ const p=$('layersPop'); if(!p||!p.class
   if(p.contains(e.target)||e.target===$('layersBtn')) return;
   p.classList.remove('on');if(p.matches(':popover-open'))p.hidePopover(); const b=$('layersBtn'); if(b) b.classList.remove('on'); });
 $('cancelBtn').onclick=()=>{ afterPointSave=null; resetForm(); toggleAdd(false); $('pointOverlay').classList.remove('on'); };
-function resetForm(){ $('fName').value='';$('fDesc').value='';$('fColor').value='#9aa1ad';$('fBase').checked=false;setPointType('client');$('geoQuery').value='';$('geoResults').innerHTML='';$('formErr').textContent=''; pendingLatLng=null; if(pendingMarker){map.removeLayer(pendingMarker);pendingMarker=null;} }
+function resetForm(){ $('fName').value='';$('fDesc').value='';['fContact','fPhone','fAddress','fAccess'].forEach(id=>{ if($(id)) $(id).value=''; });if($('geoBox')){ $('geoBox').hidden=true; $('geoOpen').setAttribute('aria-expanded','false'); }$('fColor').value='#9aa1ad';$('fBase').checked=false;setPointType('client');$('geoQuery').value='';$('geoResults').innerHTML='';$('formErr').textContent=''; pendingLatLng=null; if(pendingMarker){map.removeLayer(pendingMarker);pendingMarker=null;} }
 // Тип новой точки — сегментный выбор; флажок fBase остаётся носителем значения для сохранения.
 function setPointType(type){
   const base=type==='base'; $('fBase').checked=base;
   document.querySelectorAll('#pointType [data-point-type]').forEach(b=>{ const on=b.dataset.pointType===type; b.classList.toggle('on',on); b.setAttribute('aria-checked',String(on)); });
   document.querySelector('#pointOverlay .point-color-row')?.toggleAttribute('hidden',base);
+  document.querySelector('#pointOverlay .point-client-only')?.toggleAttribute('hidden',base);
   if(base) $('fColor').value='#27d3c4'; else if($('fColor').value==='#27d3c4') $('fColor').value='#9aa1ad';
   paintSwatches();
 }
@@ -1969,7 +1981,7 @@ document.querySelectorAll('#pointType [data-point-type]').forEach(b=>b.onclick=(
 document.querySelectorAll('#pointOverlay [data-swatch]').forEach(b=>b.onclick=()=>{ $('fColor').value=b.dataset.swatch; paintSwatches(); });
 if($('fColor')) $('fColor').addEventListener('input',paintSwatches);
 $('saveBtn').onclick=async ()=>{ const name=$('fName').value.trim(); if(!name){ $('formErr').textContent='Введи название.'; return; } if(!pendingLatLng){ $('formErr').textContent='Задай точку на карте или по адресу.'; return; }
-  $('saveBtn').disabled=true; const { error }=await sb.from('clients').insert({name,description:$('fDesc').value.trim(),phone:($('fPhone').value.trim()||null),color:$('fColor').value,lat:pendingLatLng.lat,lng:pendingLatLng.lng,is_base:$('fBase').checked}); $('saveBtn').disabled=false;
+  $('saveBtn').disabled=true; const base=$('fBase').checked; const { error }=await sb.from('clients').insert({name,description:$('fDesc').value.trim(),phone:base?null:($('fPhone').value.trim()||null),contact_person:base?null:($('fContact').value.trim()||null),address:($('fAddress').value.trim()||null),access_notes:base?null:($('fAccess').value.trim()||null),color:$('fColor').value,lat:pendingLatLng.lat,lng:pendingLatLng.lng,is_base:$('fBase').checked}); $('saveBtn').disabled=false;
   if(error){ $('formErr').textContent='Ошибка: '+error.message; return; } const wasBase=$('fBase').checked, at={...pendingLatLng}, thenJob=afterPointSave==='job'&&!wasBase; afterPointSave=null; resetForm(); $('pointOverlay').classList.remove('on'); await loadAll(); showToast(wasBase?'Депо сохранено':'Точка сохранена');
   // «Новая заявка здесь» из меню карты: клиента только что создали — сразу заявка.
   if(thenJob){ const c=clients.find(x=>x.name===name&&Math.abs(x.lat-at.lat)<1e-7&&Math.abs(x.lng-at.lng)<1e-7); if(c) newJobForClient(c.id); } };
@@ -2320,7 +2332,7 @@ async function geocode(){ const q=$('geoQuery').value.trim(); const box=$('geoRe
   try{ const data=await geoSearch(q,6);
     if(!data.length){ box.innerHTML='<div class="hint">Ничего не найдено.</div>'; return; } box.innerHTML='';
     data.forEach(it=>{ const d=document.createElement('button');d.type='button'; d.className='pt geo-result'; d.innerHTML='<div class="nm" style="font-size: var(--fs-3);font-weight:500">'+esc(it.display_name)+'</div>';
-      d.onclick=()=>{ pendingLatLng={lat:parseFloat(it.lat),lng:parseFloat(it.lon)}; flashPending(); map.flyTo([pendingLatLng.lat,pendingLatLng.lng],14); if(!$('fName').value.trim()) $('fName').value=it.display_name.split(',')[0]; box.innerHTML=''; updatePointCoords(); $('fName').focus(); }; box.appendChild(d); });
+      d.onclick=()=>{ pendingLatLng={lat:parseFloat(it.lat),lng:parseFloat(it.lon)}; flashPending(); map.flyTo([pendingLatLng.lat,pendingLatLng.lng],14); if(!$('fName').value.trim()) $('fName').value=it.display_name.split(',')[0]; if($('fAddress')&&!$('fAddress').value.trim()) $('fAddress').value=$('geoQuery').value.trim()||it.display_name; box.innerHTML=''; $('geoBox').hidden=true; $('geoOpen').setAttribute('aria-expanded','false'); updatePointCoords(); $('fName').focus(); }; box.appendChild(d); });
   }catch(err){ box.innerHTML='<div class="err">'+esc(err.message||'Ошибка геокодера.')+'</div>'; } }
 
 // ---------- jobs ----------
@@ -8793,9 +8805,9 @@ function showVehModal(vid){
   const trip=(tracking&&tracking.trip)||vehActiveTrips[linkedTripId]
     ||((trips||[]).find(t=>String(t.id)===String(linkedTripId))||tripCache[linkedTripId]||null);
   const canRunTrip=!!trip&&(canWriteTrip(trip)||assignedTo(trip,session?.user?.id,'lead_engineer'));
-  h+='<section class="vehicle-trip"><h4>Информация о выезде</h4>';
+  h+='<section class="vehicle-trip"><h4>'+(trip?esc(trip.number?'Выезд №'+trip.number:'Выезд'):'Выезд')+'</h4>';
   if(trip){
-    h+=vehRow('Дата', esc(trip.date_from||'—')+(trip.date_to&&trip.date_to!==trip.date_from?(' — '+esc(trip.date_to)):''));
+    if(trip.date_from) h+=vehRow('Дата', esc(shortDate(trip.date_from))+(trip.date_to&&trip.date_to!==trip.date_from?(' — '+esc(shortDate(trip.date_to))):''));
     const crew=[trip.lead_engineer,...(trip.engineer_ids||[])].filter((x,i,a)=>x&&a.indexOf(x)===i).map(id=>personShort(id)).filter(Boolean);
     if(crew.length) h+=vehRow('Экипаж',esc(crew.join(', ')));
     const stops=(trip.route_stops||[]).filter(st=>st&&st.type!=='base'); if(stops.length) h+=vehRow('Остановки',String(stops.length));
@@ -8811,10 +8823,10 @@ function showVehModal(vid){
   }
   if(tracking&&tracking.state==='armed'){
     h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Трекинг подготовлен с '+esc(new Date(tracking.planned_start_at).toLocaleString('ru'))+'. Ожидаем кнопку «Начать» или подтверждённый выход из депо.</div>'
-      +'<div class="row" style="margin-top:var(--sp-3);flex-wrap:wrap">'+(canRunTrip?'<button class="btn sm amber" id="vehTrackStart">Начать выезд</button>':'')
-      +(canWriteTrip(trip||null)?'<button class="btn sm" id="vehTrackMove">Другой выезд</button><button class="btn sm ghost" id="vehTrackCancel">Отменить трек</button>':'')+'</div>';
+      +'<div class="row vehicle-trip-acts">'+(canRunTrip?'<button type="button" class="btn amber" id="vehTrackStart">Начать выезд</button>':'')
+      +(canWriteTrip(trip||null)?'<button type="button" class="btn" id="vehTrackMove">Другой выезд</button><button type="button" class="btn ghost red" id="vehTrackCancel">Отменить трек</button>':'')+'</div>';
   } else if(tracking&&tracking.state==='finish_candidate'){
-    h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Машина не менее '+esc(String(appSettings.depot_outside_minutes||60))+' мин находится в депо.</div>'+(canRunTrip?'<button class="btn sm amber" id="vehTrackFinish" style="margin-top:var(--sp-3)">Завершить выезд</button>':'');
+    h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Машина не менее '+esc(String(appSettings.depot_outside_minutes||60))+' мин находится в депо.</div>'+(canRunTrip?'<div class="row vehicle-trip-acts"><button type="button" class="btn amber" id="vehTrackFinish">Завершить выезд</button></div>':'');
   }
 
   telemetry+='<div class="meta" style="margin: var(--sp-3) 0 var(--sp-1)">Координаты</div>';
@@ -8827,6 +8839,8 @@ function showVehModal(vid){
   // Главная кнопка — по ситуации: есть выезд — открыть его; нет — собрать
   // новый выезд на эту машину. Показать на карте — вторая.
   const prim=$('vehPrimary');
+  // Если в блоке выезда уже есть «Начать/Завершить выезд», жёлтая кнопка одна — там.
+  if(prim) prim.classList.toggle('amber',!(canRunTrip&&tracking&&['armed','finish_candidate'].includes(tracking.state)));
   if(trip&&trip.id){ prim.hidden=false; prim.textContent='Открыть выезд'; prim.onclick=()=>{ $('vehOverlay').classList.remove('on'); openTrip(trip.id); }; }
   else if(canWrite()){ prim.hidden=false; prim.textContent='Новый выезд'; prim.onclick=async ()=>{ $('vehOverlay').classList.remove('on'); await openTrip(null); if($('tpVeh')){ $('tpVeh').value=vid; updateVehInfo(); } }; }
   else prim.hidden=true;
