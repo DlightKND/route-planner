@@ -76,7 +76,7 @@ export function createUnassignedTracks(ctx){
 
  // Быстрый взгляд на трек прямо в списке: карта под строкой, точки грузятся один раз.
  function peekLoad(r){const key=r._trip?'trip:'+r._trip.id:r.id;if(!peekPoints.has(key)){const loading=(r._trip?Promise.resolve(ctx.tripPoints?.(r._trip.id)||[]):readPoints(r.id)).catch(e=>{peekPoints.delete(key);throw e;});peekPoints.set(key,loading);}return peekPoints.get(key);}
- async function mountPeek(list,id){const r=rows.find(x=>x.id===id),row=list.querySelector('[data-ut-peek-row="'+CSS.escape(id)+'"]');if(!r||!row)return;const token=++peekToken,status=row.querySelector('[role=status]');
+ async function mountPeek(list,id){const r=rows.find(x=>x.id===id),row=[...list.querySelectorAll('[data-ut-peek-row]')].find(x=>x.dataset.utPeekRow===id);if(!r||!row)return;const token=++peekToken,status=row.querySelector('[role=status]');
   try{const points=(await peekLoad(r)).filter(p=>p.lat!=null&&p.lng!=null);if(token!==peekToken||!row.isConnected)return;
    if(!points.length){status.textContent='В записи нет GPS-точек.';return;}
    const entry=mountGpsTrackMap(row.querySelector('svg.unassigned-preview'),points,{leaflet:ctx.leaflet?.(),makeBase:ctx.makeTrackBase,mini:true,label:'Трек записи №'+recordNumber(r),color:TRACK_STYLE.measured});
@@ -106,7 +106,7 @@ export function createUnassignedTracks(ctx){
   box.querySelector('[data-ut-more]').hidden=!more;
   box.querySelector('[data-ut-choose]')?.setAttribute('aria-pressed',String(choosing));
   list.querySelectorAll('[data-ut-details]').forEach(button=>button.onclick=()=>perform(button,()=>details(button.dataset.utDetails)));
-  list.querySelectorAll('[data-ut-peek]').forEach(button=>button.onclick=()=>{const id=button.dataset.utPeek;peekId=peekId===id?null:id;paintList();list.querySelector('[data-ut-peek="'+CSS.escape(id)+'"]')?.focus({preventScroll:true});});
+  list.querySelectorAll('[data-ut-peek]').forEach(button=>button.onclick=()=>{const id=button.dataset.utPeek;peekId=peekId===id?null:id;paintList();[...list.querySelectorAll('[data-ut-peek]')].find(x=>x.dataset.utPeek===id)?.focus({preventScroll:true});});
   list.querySelectorAll('[data-ut-peek-map]').forEach(button=>button.onclick=()=>openPeekMap(button.dataset.utPeekMap));
   if(peekId)mountPeek(list,peekId);
   list.querySelectorAll('[data-ut-select]').forEach(input=>input.onchange=()=>{
