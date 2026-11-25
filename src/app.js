@@ -1485,6 +1485,37 @@ function mapTaskRowHTML(row){
       +'<button type="button" class="btn sm ghost" data-task-fly="'+esc(row.id)+'">На карте</button></div>':'')
     +'</div>';
 }
+// Инженеру карта отвечает на два вопроса: куда мне сегодня и как доехать.
+// Выезды на сегодня, где он в бригаде; остановки по порядку с «Проехать»
+// и «Позвонить».
+let myTripsToday=null, myTripsLoading=false;
+async function loadMyTripsToday(){
+  if(myTripsLoading||canWrite()||!session?.user?.id) return; myTripsLoading=true;
+  try{
+    const today=todayISO(), uid=session.user.id;
+    const {data,error}=await sb.from('trips').select('id,number,status,date_from,date_to,vehicle_label,route_stops,engineer_ids,lead_engineer').is('deleted_at',null).in('status',['planned','assigned','in_progress']);
+    if(error) throw error;
+    myTripsToday=(data||[]).filter(t=>(t.lead_engineer===uid||(t.engineer_ids||[]).includes(uid))&&t.date_from&&t.date_from<=today&&(t.date_to||t.date_from)>=today)
+      .sort((a,b)=>String(a.date_from).localeCompare(String(b.date_from)));
+  }catch(e){ myTripsToday=[]; }
+  finally{ myTripsLoading=false; }
+  renderWorkFeed();
+}
+function stopPhone(st){
+  const c=clients.find(x=>(st.clientId&&x.id===st.clientId)||(x.lat!=null&&st.lat!=null&&Math.abs(x.lat-st.lat)<1e-5&&Math.abs(x.lng-st.lng)<1e-5));
+  return telHref(c?.phone);
+}
+function myTripTodayHTML(){
+  if(myTripsToday===null){ void loadMyTripsToday(); return ''; }
+  return myTripsToday.map(t=>{
+    const stops=(t.route_stops||[]).filter(st=>st.type!=='start'&&st.lat!=null);
+    return '<section class="my-trip"><div class="my-trip-head"><strong>Мой выезд сегодня</strong><span>'+esc(['Выезд'+(t.number!=null?' №'+t.number:''),t.vehicle_label].filter(Boolean).join(' · '))+'</span></div>'
+      +'<ol class="my-trip-stops">'+stops.map((st,i)=>{ const tel=stopPhone(st), nav=navHref(st.lat,st.lng);
+        return '<li><span class="my-trip-num">'+(i+1)+'</span><div><strong>'+esc(st.name||'Остановка')+'</strong>'
+          +'<div class="my-trip-acts">'+(nav?'<a class="btn'+(i===0?' amber':'')+'" href="'+esc(nav)+'" target="_blank" rel="noopener">Проехать</a>':'')+(tel?'<a class="btn" href="'+esc(tel)+'">Позвонить</a>':'')+'</div></div></li>'; }).join('')+'</ol>'
+      +'<button type="button" class="btn ghost" data-my-trip="'+esc(t.id)+'">Показать выезд на карте</button></section>';
+  }).join('');
+}
 function renderWorkFeed(){
   const box=$('workFeed'); if(!box) return;
   const q=$('search').value.trim(), ql=q.toLowerCase();
@@ -1510,6 +1541,7 @@ function renderWorkFeed(){
       if(!rows.length) h+='<div class="kempty">'+(q?'По запросу ничего не найдено.':'В выездах сейчас нет открытых заданий.')+'</div>';
     }
   }
+  if(!canWrite()) h+=myTripTodayHTML();
   const moving=(vehState||[]).filter(r=>r&&r.lat!=null&&(!ql||vehLabel((vehicles||[]).find(v=>v.id===r.vehicle_id)||{}).toLowerCase().includes(ql)));
   if(moving.length&&(!canWrite()||mapTaskMode==='unplanned')){
     h+='<div class="wf-h map-task-group">Машины на связи <span class="cnt">'+moving.length+'</span></div>';
@@ -1523,9 +1555,10 @@ function renderWorkFeed(){
         +'<span class="pill" style="color:'+col+';border-color:'+col+'">'+(age>VEH_STALE_MIN?'молчит':'на связи')+'</span></button>';
     });
   }
-  if(!h) h='<div class="kempty">Машин на связи нет.<br>Открой «Справочник», чтобы увидеть все точки.</div>';
+  if(!h) h='<div class="kempty">'+(canWrite()?'Машин на связи нет.':'На сегодня выездов нет.')+'<br>Открой «Справочник», чтобы увидеть все точки.</div>';
   box.innerHTML=h;
   box.querySelectorAll('[data-task-mode]').forEach(b=>b.onclick=()=>{ mapTaskMode=b.dataset.taskMode; mapOpenTask=null; renderWorkFeed(); });
+  box.querySelectorAll('[data-my-trip]').forEach(b=>b.onclick=()=>showTripOnMap(b.dataset.myTrip));
   box.querySelectorAll('[data-map-pick]').forEach(el=>el.onchange=()=>toggleMapTask(el.dataset.mapPick,el.checked));
   box.querySelectorAll('[data-task-open]').forEach(b=>b.onclick=()=>{ const id=b.dataset.taskOpen; mapOpenTask=mapOpenTask===id?null:id; renderWorkFeed(); const row=mapTasks.find(r=>r.id===id); if(row&&mapOpenTask) hlMarker(row.clientId,true); });
   box.querySelectorAll('[data-task-card]').forEach(b=>b.onclick=()=>serviceOrders.open(b.dataset.taskCard));
@@ -1773,12 +1806,17 @@ function toggleAdd(on){ addModeOn=on; $('addMode').classList.toggle('active',on)
 // Кружок на карте только показывает объезд. Правят его в панели «Маршрут»:
 // три кнопки в каждой всплывашке — это тот же орган в двух местах, и они
 // неизбежно разъедутся.
-function renderAvoidZones(){ if(!avoidLayer) return; avoidLayer.clearLayers(); (appSettings.avoid_zones||[]).forEach((z,i)=>{ const circ=L.circle([z.lat,z.lng],{radius:z.r||150,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.12,weight:2,dashArray:'5 5'}); circ.bindPopup('<strong>Объезд '+(i+1)+'</strong> <span style="color:var(--ink-dim)">· '+(z.r||150)+' м</span><br><span style="color:var(--ink-faint);font-size:12px">радиус меняется в панели «Маршрут»</span>'); avoidLayer.addLayer(circ); }); }
+// Объезды общие для всей компании. Временное перекрытие (ремонт моста)
+// получает срок: после него объезд перестаёт влиять на маршруты, но остаётся
+// в списке, пока его не уберут.
+function avoidActive(z,today=todayISO()){ return !z.until||z.until>=today; }
+function activeAvoidZones(){ const today=todayISO(); return (appSettings.avoid_zones||[]).filter(z=>avoidActive(z,today)); }
+function renderAvoidZones(){ if(!avoidLayer) return; avoidLayer.clearLayers(); activeAvoidZones().forEach((z,i)=>{ const circ=L.circle([z.lat,z.lng],{radius:z.r||150,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.12,weight:2,dashArray:'5 5'}); circ.bindPopup('<strong>Объезд '+(i+1)+'</strong> <span style="color:var(--ink-dim)">· '+(z.r||150)+' м</span><br><span style="color:var(--ink-faint);font-size:12px">радиус меняется в панели «Маршрут»</span>'); avoidLayer.addLayer(circ); }); }
 async function saveAvoidZones(){ try{ const {error}=await sb.from('settings').update({avoid_zones:appSettings.avoid_zones||[]}).eq('id',true); if(error) notify('Не удалось сохранить объезды: '+error.message,'err'); }catch(e){ notify('Не удалось сохранить объезды','err'); } }
-function addAvoidZone(ll){ if(!canWrite()) return; appSettings.avoid_zones=appSettings.avoid_zones||[]; appSettings.avoid_zones.push({id:'az'+Date.now().toString(36),lat:ll.lat,lng:ll.lng,r:150}); saveAvoidZones(); renderAvoidZones(); renderAvoidList(); toggleAvoid(false); if(avoidAreaKm2()>180) notify('Объездов много (суммарно ~'+avoidAreaKm2().toFixed(0)+' км²). Сервер ORS может отклонить запрос — уменьши радиусы.','warn'); else showToast('Объезд добавлен'); }
+function addAvoidZone(ll){ if(!canWrite()) return; appSettings.avoid_zones=appSettings.avoid_zones||[]; appSettings.avoid_zones.push({id:'az'+Date.now().toString(36),lat:ll.lat,lng:ll.lng,r:150,by:personShort(session?.user?.id)||null,at:todayISO(),until:null}); saveAvoidZones(); renderAvoidZones(); renderAvoidList(); toggleAvoid(false); if(avoidAreaKm2()>180) notify('Объездов много (суммарно ~'+avoidAreaKm2().toFixed(0)+' км²). Сервер ORS может отклонить запрос — уменьши радиусы.','warn'); else showToast('Объезд добавлен'); }
 function avoidRadius(id,delta){ if(!canWrite()) return; const z=(appSettings.avoid_zones||[]).find(x=>x.id===id); if(!z) return; z.r=Math.max(50,Math.min(3000,(z.r||150)+delta)); saveAvoidZones(); renderAvoidZones(); renderAvoidList(); }
 function avoidDel(id){ if(!canWrite()) return; appSettings.avoid_zones=(appSettings.avoid_zones||[]).filter(x=>x.id!==id); saveAvoidZones(); renderAvoidZones(); renderAvoidList(); map.closePopup(); }
-function avoidPolygons(){ const zs=appSettings.avoid_zones||[]; if(!zs.length||typeof turf==='undefined') return null; const coords=[]; zs.forEach(z=>{ try{ const c=turf.circle([z.lng,z.lat],(z.r||150)/1000,{units:'kilometers',steps:20}); if(c&&c.geometry) coords.push(c.geometry.coordinates); }catch(e){} }); return coords.length?{type:'MultiPolygon',coordinates:coords}:null; }
+function avoidPolygons(){ const zs=activeAvoidZones(); if(!zs.length||typeof turf==='undefined') return null; const coords=[]; zs.forEach(z=>{ try{ const c=turf.circle([z.lng,z.lat],(z.r||150)/1000,{units:'kilometers',steps:20}); if(c&&c.geometry) coords.push(c.geometry.coordinates); }catch(e){} }); return coords.length?{type:'MultiPolygon',coordinates:coords}:null; }
 // Постановка объезда — ОДИНОЧНОЕ действие, а не режим.
 //
 // Раньше это был флажок: включил — и каждый клик по карте ставил «кирпич»,
@@ -1799,26 +1837,30 @@ if($('avoidAdd')) $('avoidAdd').onclick=()=>toggleAvoid(!avoidModeOn);
 // Список объездов в панели. Радиус меняется здесь же, а не во всплывашке
 // на карте: чтобы попасть в неё, надо сперва найти кружок глазами.
 function renderAvoidList(){
-  const box=$('avoidList'); const n=(appSettings.avoid_zones||[]).length;
-  const cnt=$('avoidN'); if(cnt) cnt.textContent=n?String(n):'';
+  const box=$('avoidList'); const n=(appSettings.avoid_zones||[]).length, active=activeAvoidZones().length;
+  const cnt=$('avoidN'); if(cnt) cnt.textContent=active?String(active):'';
   const chip=$('chipAvoid'); if(chip) chip.classList.toggle('has',n>0);
   if(!box) return;
-  if(!n){ box.innerHTML='<div class="hint" style="margin:0">Объездов нет. Маршрут пойдёт как проложит роутер.</div>'; return; }
-  box.innerHTML=(appSettings.avoid_zones||[]).map((z,i)=>
-    '<div class="avrow" data-az="'+esc(z.id)+'">'
-    +'<span class="nm">Объезд '+(i+1)+'</span>'
+  if(!n){ box.innerHTML='<div class="hint" style="margin:0">Объездов нет. Маршрут пойдёт как проложит роутер. Отмеченный объезд действует для всех маршрутов компании.</div>'; return; }
+  const today=todayISO();
+  box.innerHTML='<p class="hint avoid-scope">Объезды действуют для всех маршрутов компании.</p>'+(appSettings.avoid_zones||[]).map((z,i)=>{
+    const on=avoidActive(z,today), who=[z.by,z.at?shortDate(z.at):''].filter(Boolean).join(' · ');
+    return '<div class="avrow'+(on?'':' expired')+'" data-az="'+esc(z.id)+'">'
+    +'<span class="nm">Объезд '+(i+1)+(on?'':' · истёк')+(who?'<small>'+esc(who)+'</small>':'')+'</span>'
     +'<span class="r">'+(z.r||150)+' м</span>'
-    +'<span class="avstep"><button type="button" data-azr="'+esc(z.id)+'" data-d="-50">−</button>'
-    +'<button type="button" data-azr="'+esc(z.id)+'" data-d="50">+</button></span>'
-    +'<button type="button" class="avx" data-azd="'+esc(z.id)+'" title="Убрать">×</button></div>').join('');
+    +'<span class="avstep"><button type="button" data-azr="'+esc(z.id)+'" data-d="-50" aria-label="Уменьшить радиус">−</button>'
+    +'<button type="button" data-azr="'+esc(z.id)+'" data-d="50" aria-label="Увеличить радиус">+</button></span>'
+    +'<label class="avuntil">до <input type="date" data-azu="'+esc(z.id)+'" value="'+esc(z.until||'')+'" aria-label="Объезд '+(i+1)+' действует до"></label>'
+    +'<button type="button" class="avx" data-azd="'+esc(z.id)+'" title="Убрать" aria-label="Убрать объезд '+(i+1)+'">×</button></div>'; }).join('');
   const area=avoidAreaKm2();
   if(area>180) box.innerHTML+='<div class="err">Суммарная площадь ~'+area.toFixed(0)+' км². Сервер маршрутов может отклонить запрос — уменьши радиусы.</div>';
   box.querySelectorAll('[data-azr]').forEach(b=>b.onclick=()=>avoidRadius(b.dataset.azr,+b.dataset.d));
   box.querySelectorAll('[data-azd]').forEach(b=>b.onclick=()=>avoidDel(b.dataset.azd));
+  box.querySelectorAll('[data-azu]').forEach(el=>el.onchange=()=>{ if(!canWrite()) return; const z=(appSettings.avoid_zones||[]).find(x=>x.id===el.dataset.azu); if(!z) return; z.until=el.value||null; saveAvoidZones(); renderAvoidZones(); renderAvoidList(); });
   // Нажатие по строке — показать этот объезд на карте: иначе среди
   // десятка кружков не понять, какой из них правишь.
   box.querySelectorAll('[data-az]').forEach(r=>r.onclick=e=>{
-    if(e.target.closest('button')) return;
+    if(e.target.closest('button,input,label')) return;
     const z=(appSettings.avoid_zones||[]).find(x=>x.id===r.dataset.az); if(!z) return;
     map.setView([z.lat,z.lng],Math.max(map.getZoom(),14));
   });
@@ -1833,7 +1875,19 @@ document.addEventListener('click',(e)=>{ const p=$('layersPop'); if(!p||!p.class
   if(p.contains(e.target)||e.target===$('layersBtn')) return;
   p.classList.remove('on');if(p.matches(':popover-open'))p.hidePopover(); const b=$('layersBtn'); if(b) b.classList.remove('on'); });
 $('cancelBtn').onclick=()=>{ resetForm(); toggleAdd(false); $('pointOverlay').classList.remove('on'); };
-function resetForm(){ $('fName').value='';$('fDesc').value='';$('fColor').value='#9aa1ad';$('fBase').checked=false;$('geoQuery').value='';$('geoResults').innerHTML='';$('formErr').textContent=''; pendingLatLng=null; if(pendingMarker){map.removeLayer(pendingMarker);pendingMarker=null;} }
+function resetForm(){ $('fName').value='';$('fDesc').value='';$('fColor').value='#9aa1ad';$('fBase').checked=false;setPointType('client');$('geoQuery').value='';$('geoResults').innerHTML='';$('formErr').textContent=''; pendingLatLng=null; if(pendingMarker){map.removeLayer(pendingMarker);pendingMarker=null;} }
+// Тип новой точки — сегментный выбор; флажок fBase остаётся носителем значения для сохранения.
+function setPointType(type){
+  const base=type==='base'; $('fBase').checked=base;
+  document.querySelectorAll('#pointType [data-point-type]').forEach(b=>{ const on=b.dataset.pointType===type; b.classList.toggle('on',on); b.setAttribute('aria-checked',String(on)); });
+  document.querySelector('#pointOverlay .point-color-row')?.toggleAttribute('hidden',base);
+  if(base) $('fColor').value='#27d3c4'; else if($('fColor').value==='#27d3c4') $('fColor').value='#9aa1ad';
+  paintSwatches();
+}
+function paintSwatches(){ const v=String($('fColor').value).toLowerCase(); document.querySelectorAll('#pointOverlay [data-swatch]').forEach(b=>{ const on=b.dataset.swatch===v; b.classList.toggle('on',on); b.setAttribute('aria-checked',String(on)); }); }
+document.querySelectorAll('#pointType [data-point-type]').forEach(b=>b.onclick=()=>setPointType(b.dataset.pointType));
+document.querySelectorAll('#pointOverlay [data-swatch]').forEach(b=>b.onclick=()=>{ $('fColor').value=b.dataset.swatch; paintSwatches(); });
+if($('fColor')) $('fColor').addEventListener('input',paintSwatches);
 $('saveBtn').onclick=async ()=>{ const name=$('fName').value.trim(); if(!name){ $('formErr').textContent='Введи название.'; return; } if(!pendingLatLng){ $('formErr').textContent='Задай точку на карте или по адресу.'; return; }
   $('saveBtn').disabled=true; const { error }=await sb.from('clients').insert({name,description:$('fDesc').value.trim(),phone:($('fPhone').value.trim()||null),color:$('fColor').value,lat:pendingLatLng.lat,lng:pendingLatLng.lng,is_base:$('fBase').checked}); $('saveBtn').disabled=false;
   if(error){ $('formErr').textContent='Ошибка: '+error.message; return; } const wasBase=$('fBase').checked; resetForm(); $('pointOverlay').classList.remove('on'); await loadAll(); showToast(wasBase?'Депо сохранено':'Точка сохранена'); };
@@ -8937,9 +8991,9 @@ async function optimizeOrder(){ if(rBusy) return; if(orsKeyMissing()){ orsMissin
     rBusy=false; updateRouteActions(); await doBuildRoute(); return;
   }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка оптимизации: '+esc(e.message||e)+'</span>'; } finally{ rBusy=false; updateRouteActions(); } }
 
-function avoidHits(stops){ const zs=appSettings.avoid_zones||[]; if(!zs.length||typeof turf==='undefined') return []; const out=[];
+function avoidHits(stops){ const zs=activeAvoidZones(); if(!zs.length||typeof turf==='undefined') return []; const out=[];
   stops.forEach(s=>{ zs.forEach(z=>{ try{ if(turf.distance([z.lng,z.lat],[s.lng,s.lat],{units:'kilometers'})*1000<=(z.r||150)) out.push(s.name||'точка'); }catch(e){} }); }); return [...new Set(out)]; }
-function avoidAreaKm2(){ return (appSettings.avoid_zones||[]).reduce((a,z)=>a+Math.PI*Math.pow((z.r||150)/1000,2),0); }
+function avoidAreaKm2(){ return activeAvoidZones().reduce((a,z)=>a+Math.PI*Math.pow((z.r||150)/1000,2),0); }
 function orsErrMsg(status,t){ let msg=t; try{ const j=JSON.parse(t); if(j&&j.error) msg=(typeof j.error==='string')?j.error:(j.error.message||JSON.stringify(j.error)); }catch(e){}
   msg=String(msg||'').slice(0,180);
   if(status===429) return 'превышен лимит запросов ORS (на бесплатном ключе ~40 в минуту). Подожди минуту и повтори.';

@@ -360,6 +360,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     mk('b',159,agro,'Диагностика гидравлики','2026-10-07',2);
     mk('c',163,farm,'Замена гидроцилиндра','2026-10-08',3);
     ride.route_geometry={type:'LineString',coordinates:[[36.2,49.98],[36.23,49.99],[36.35,50.05]]};
+    settings.avoid_zones=[{id:'az-a',lat:50.02,lng:36.3,r:300,by:'Демо',at:'2026-10-01',until:'2026-10-30'},{id:'az-b',lat:49.95,lng:36.1,r:150,until:'2026-09-30'}];
     tables.jobs.push({...request,id:'map-job-d',number:212,client_id:farm.id,clients:farm,equipment:null,equipment_id:null,title:'Плановое ТО',status:'open',due_date:'2026-10-20',created_at:'2026-09-25T07:00:00Z',job_works:[],service_orders:[]});
   }
   if(designTripChoices){tables.trips.push({...ride,id:'30000000-0000-4000-8000-000000000010',vehicle_label:'Выезд с ответственным инженером',engineer_ids:[engineer],trip_service_orders:[]},{...ride,id:'30000000-0000-4000-8000-000000000011',vehicle_label:'Выезд с другой командой',engineer_ids:[other],trip_service_orders:[]});}
