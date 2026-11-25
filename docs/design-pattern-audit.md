@@ -33,19 +33,19 @@
 | view-segment | Сегментированный выбор представления | Описан | Есть | P1 | [src/app.js:4191](../src/app.js#L4191) | [Контракт](design-system.md#segmentedcontrol-переключатели-со-сводки) |
 | decision-radio | Radio / взаимоисключающий выбор в черновике | Описан | Есть | P1 | [src/app.js:6914](../src/app.js#L6914) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | checkbox-group | Один checkbox и множественный выбор | Описан | Есть | P1 | [src/engineer-picker.js:33](../src/engineer-picker.js#L33) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
-| boolean-switch | Немедленная настройка Вкл / Выкл | Описан | Есть | P1 | [src/app.js:8877](../src/app.js#L8877) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
+| boolean-switch | Немедленная настройка Вкл / Выкл | Описан | Есть | P1 | [src/app.js:8887](../src/app.js#L8887) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | native-select | Одиночный выбор из списка | Описан | Есть | P1 | [index.html:2556](../index.html#L2556) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | multi-select-popover | Выбор инженеров: popover с checkbox, без поиска | Частично | Есть | P1 | [src/engineer-picker.js:26](../src/engineer-picker.js#L26) | [Контракт](design-system.md#pattern-selection) |
 | search-field | Поиск списка: debounce / clear / пусто / ошибка | Пропуск | Есть | P1 | [src/notifications.js:75](../src/notifications.js#L75) | [Контракт](design-system.md#pattern-selection) |
 | search-result-picker | Адресный поиск и выбор результата | Частично | Есть | P1 | [src/app.js:2309](../src/app.js#L2309) | [Контракт](design-system.md#pattern-selection) |
-| text-field | Текст / email / телефон / textarea | Описан | Есть | P1 | [index.html:3092](../index.html#L3092) | [Контракт](design-system.md#field--textarea--number--date) |
+| text-field | Текст / email / телефон / textarea | Описан | Есть | P1 | [index.html:3089](../index.html#L3089) | [Контракт](design-system.md#field--textarea--number--date) |
 | number-unit | Количество / деньги / длительность / доля | Частично | Есть | P1 | [src/service-orders.js:581](../src/service-orders.js#L581) | [Контракт](design-system.md#pattern-inputs) |
 | date-field | Дата, время, дата со временем, месяц | Описан | Есть | P1 | [src/app.js:329](../src/app.js#L329) | [Контракт](design-system.md#семейство-datecontrol-не-один-универсальный-календарь) |
 | date-range | Диапазон дат в черновике | Описан | Есть | P1 | [src/app.js:3839](../src/app.js#L3839) | [Контракт](design-system.md#семейство-datecontrol-не-один-универсальный-календарь) |
 | period-navigator | Пресеты, стрелки и календарный период | Описан | Есть | P1 | [src/app.js:3837](../src/app.js#L3837) | [Контракт](design-system.md#семейство-datecontrol-не-один-универсальный-календарь) |
 | month-navigator | Месяц журнала и выбор произвольных дат | Описан | Есть | P1 | [src/app.js:3868](../src/app.js#L3868) | [Контракт](design-system.md#семейство-datecontrol-не-один-универсальный-календарь) |
 | range-slider | Слайдер расстояния / времени / разрыва | Пропуск | Есть | P0 | [index.html:2461](../index.html#L2461) | [Контракт](design-system.md#pattern-inputs) |
-| color-picker | Цвет объекта карты с подписью | Пропуск | Есть | P1 | [index.html:3094](../index.html#L3094) | [Контракт](design-system.md#pattern-inputs) |
+| color-picker | Цвет объекта карты с подписью | Пропуск | Есть | P1 | [index.html:3091](../index.html#L3091) | [Контракт](design-system.md#pattern-inputs) |
 | photo-upload | Файлы / фото: выбор, очередь, повтор | Пропуск | Есть | P0 | [src/app.js:5323](../src/app.js#L5323) | [Контракт](design-system.md#pattern-media) |
 | image-viewer | Просмотр фото и выход из него | Пропуск | Есть | P1 | [src/app.js:4350](../src/app.js#L4350) | [Контракт](design-system.md#pattern-media) |
 | application-navigation | Rail / нижняя навигация / Ещё | Частично | Есть | P1 | [index.html:2319](../index.html#L2319) | [Контракт](design-system.md#pattern-navigation) |
@@ -60,7 +60,7 @@
 | action-menu | Другие действия: disclosure / menu / dialog | Описан | Есть | P1 | [src/entity-actions.js:5](../src/entity-actions.js#L5) | [Контракт](design-system.md#menu--dialog--feedback) |
 | editable-items | Повторяемые строки работ / материалов | Пропуск | Есть | P0 | [src/service-orders.js:581](../src/service-orders.js#L581) | [Контракт](design-system.md#pattern-workflows) |
 | bulk-selection | Массовый выбор и preview объединения | Пропуск | Есть | P0 | [src/unassigned-tracks.js:124](../src/unassigned-tracks.js#L124) | [Контракт](design-system.md#pattern-workflows) |
-| reorder | Перестановка маршрута / карточек / панелей | Пропуск | Есть | P0 | [src/app.js:9048](../src/app.js#L9048) | [Контракт](design-system.md#pattern-workflows) |
+| reorder | Перестановка маршрута / карточек / панелей | Пропуск | Есть | P0 | [src/app.js:9058](../src/app.js#L9058) | [Контракт](design-system.md#pattern-workflows) |
 | schedule-manipulation | Перенос / изменение / разделение графика | Пропуск | Есть | P0 | [src/schedule-interactions.js:2](../src/schedule-interactions.js#L2) | [Контракт](design-system.md#pattern-workflows) |
 | map-explorer | Карта / миникарта / маркеры / список | Частично | Есть | P1 | [src/gps-track-map.js:12](../src/gps-track-map.js#L12) | [Контракт](design-system.md#pattern-data) |
 | gps-evidence | Измерение / восстановление / принятое решение | Частично | Есть | P0 | [src/presence-review-controls.js:36](../src/presence-review-controls.js#L36) | [Контракт](design-system.md#pattern-data) |
@@ -137,4 +137,4 @@
 
 Связь type/role с ID классифицирует сигнал, а не автоматически распознаёт смысл каждого его вхождения.
 
-Хеш проверенных production-исходников: `42946227787f8d3891f68d378aa8498526c6c86814704b1ae4593ace9517bb76`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
+Хеш проверенных production-исходников: `93679eadb9968fb0d54bc9e0ec33bb8eedec29e0fba1332910f147c373f8d997`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.

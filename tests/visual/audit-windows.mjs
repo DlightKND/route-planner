@@ -42,7 +42,6 @@ const cases=[
  {id:'vehOverlay',open:call('vehicle')},
  {id:'baseOverlay',open:call('openBasePicker','start')},
  {id:'baseOverlay-end',selector:'#baseOverlay',open:call('openBasePicker','end')},
- {id:'linkOverlay',template:true,fill:()=>{document.querySelector('#linkText').textContent='У клиента «Коммунальное предприятие · обслуживание насосной станции на удалённом объекте» нет открытых заявок. Создать заявку как основание выезда?';document.querySelector('#linkOverlay').classList.add('on');}},
  {id:'confirmOverlay',open:call('confirmDialog','Удалить точку вместе с её техникой и заявками? Их можно вернуть кнопкой «Отменить».',{danger:true,okText:'Удалить'})},
  {id:'promptOverlay-number',selector:'#promptOverlay',open:call('promptDialog','Пробег по одометру машины',[{key:'km',label:'Показание одометра, км',value:'50232'},{key:'note',label:'Комментарий (необязательно)'}])},
  {id:'promptOverlay-reason',selector:'#promptOverlay',open:call('promptDialog','Аннулировать финансовую строку',[{key:'reason',label:'Причина (обязательно)',type:'textarea'}])},
