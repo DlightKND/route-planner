@@ -294,39 +294,42 @@ test('kanban: status columns stay in one adaptive row and the last column remain
 
 async function openTrackPanel(page,info){
  const errors=await start(page,info,'trip/30000000-0000-4000-8000-000000000002/map',{mapTrackDesign:true});
- await expect(page.locator('.mleg')).toBeVisible();
- if(page.viewportSize().width>960)await page.locator('.mleg-details>summary').click();
- await expect(page.locator('.mleg-body')).toBeVisible();return errors;
+ await expect(page.locator('.view-map.track-view')).toBeVisible();
+ await expect(page.locator('#trackViewDock .mleg-body')).toBeVisible();return errors;
 }
-test('map track: docked layer cards retain real visibility and the selected time window',async({page},info)=>{
- const errors=await openTrackPanel(page,info),inline=page.viewportSize().width<=960,panel=page.locator('.mleg-body');
- await expect(panel.locator('h2')).toHaveText('Параметры трека');await expect(panel.locator('.mleg-layer')).toHaveCount(6);
- expect(await panel.getAttribute('popover')).toBeNull();expect(await panel.evaluate(el=>getComputedStyle(el).position)).toBe('static');
- if(inline){await expect(page.locator('#trackBlock .mleg')).toBeVisible();await expect(page.locator('[data-sb=track]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('#pointsBlock')).toBeHidden();const tops=await page.locator('#sideTabs button:visible').evaluateAll(nodes=>nodes.map(el=>el.getBoundingClientRect().top));expect(Math.max(...tops)-Math.min(...tops)).toBeLessThanOrEqual(1);}
- else{await expect(page.locator('#mapTrackDock .mleg')).toBeVisible();const card=await panel.boundingBox(),tools=await page.locator('.map-tools').boundingBox();expect(card.x+card.width).toBeCloseTo(tools.x+tools.width,0);expect(card.y).toBeGreaterThanOrEqual(tools.y+tools.height+8);}
+test('map track: the track view docks the timeline, interval and layer cards and hides the regular map panels',async({page},info)=>{
+ const errors=await openTrackPanel(page,info),panel=page.locator('#trackViewDock .mleg-body');
+ await expect(page.locator('#trackViewBar')).toBeVisible();await expect(page.locator('#tvBackLabel')).toHaveText('К выезду');await expect(page.locator('#tvClose')).toBeVisible();
+ for(const hidden of ['.view-map .side','.view-map .map-tools','#mapTrackDock'])await expect(page.locator(hidden)).toBeHidden();
+ await expect(page.locator('#tvTimeline .tv-block').first()).toBeVisible();
+ await expect(panel.locator('.mleg-layer')).toHaveCount(6);
+ expect(await panel.getAttribute('popover')).toBeNull();
+ const dock=await page.locator('#trackViewDock').boundingBox(),view=page.viewportSize(),bottom=view.width<=760?(await page.locator('.rail').boundingBox()).y:view.height;
+ expect(dock.y+dock.height).toBeLessThanOrEqual(bottom+1);expect(dock.x).toBeGreaterThanOrEqual(0);expect(dock.x+dock.width).toBeLessThanOrEqual(view.width+1);
  const gps=page.locator('.leaflet-overlay-pane path[stroke="#16a34a"],.leaflet-overlay-pane path[stroke="#a7f3d0"]');
  const plan=page.locator('.leaflet-marker-pane .trip-plan-point');
  await expect(plan).toHaveCount(2);await panel.locator('[data-fl=plan]').uncheck();await expect(plan).toHaveCount(0);await panel.locator('[data-fl=plan]').check();await expect(plan).toHaveCount(2);
  await expect(gps).toHaveCount(2);await expect(page.locator('.leaflet-overlay-pane path[stroke="#d87619"][stroke-dasharray="7 6"]')).toHaveCount(1);await expect(page.locator('.leaflet-overlay-pane path[stroke="#8b8e96"][stroke-dasharray="7 6"]')).toHaveCount(1);await panel.locator('[data-fl=track]').uncheck();await expect(gps).toHaveCount(0);await panel.locator('[data-fl=track]').check();await expect(gps).toHaveCount(2);
  const endDate=await panel.locator('#tfBDate').inputValue();await panel.locator('#tfBDate').fill(await panel.locator('#tfADate').inputValue());await panel.locator('#tfB').fill('09:00');await panel.locator('#tfB').blur();await expect(gps).toHaveCount(1);
+ await expect(page.locator('#tvTimeline .tv-window')).toHaveCount(1);
  await panel.locator('#tfAll').click();await expect(panel.locator('#tfBDate')).toHaveValue(endDate);await expect(gps).toHaveCount(2);
  await expect(panel.locator('#tfDuration')).toContainText('сут.');
- expect(await panel.locator('.mleg-scroll').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
- await expect(panel.locator('.mleg-clear')).toBeInViewport();await capture(page,info,'map-track-parameters',errors);
- await panel.locator('.mleg-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(panel.locator('[data-fl=stay]')).toBeInViewport();await capture(page,info,'map-track-layers',errors);
+ expect(await page.locator('#trackViewDock').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+ await capture(page,info,'map-track-parameters',errors);
+ await panel.locator('[data-fl=stay]').scrollIntoViewIfNeeded();await expect(panel.locator('[data-fl=stay]')).toBeInViewport();await capture(page,info,'map-track-layers',errors);
 });
-test('map track: resizing and closing preserve controls, and clearing leaves a valid map tab',async({page},info)=>{
- const errors=await openTrackPanel(page,info),panel=page.locator('.mleg-body');
+test('map track: resizing keeps the track view state, back returns to the trip and closing clears the map',async({page},info)=>{
+ const errors=await openTrackPanel(page,info),panel=page.locator('#trackViewDock .mleg-body');
  await panel.locator('[data-fl=line]').uncheck();await panel.locator('#tfA').fill('07:00');await panel.locator('#tfA').blur();
  const width=page.viewportSize().width>960?390:1440;await page.setViewportSize({width,height:600});
  await expect(page.locator('.mleg')).toHaveCount(1);await expect(panel).toBeVisible();await expect(panel.locator('[data-fl=line]')).not.toBeChecked();await expect(panel.locator('#tfA')).toHaveValue('07:00');
- await expect(panel.locator('.mleg-clear')).toBeInViewport();const box=await panel.boundingBox(),bottom=width<=760?(await page.locator('.rail').boundingBox()).y:600;expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(bottom+1);
- await panel.locator('#tfA').focus();await page.keyboard.press('Escape');await expect(panel).toBeHidden();
- if(width<=960){await expect(page.locator('#sideTabs button.on')).not.toHaveAttribute('data-sb','track');await page.locator('[data-sb=track]').click();}
- else await page.locator('.mleg-details>summary').click();
- await expect(panel.locator('[data-fl=line]')).not.toBeChecked();await expect(panel.locator('#tfA')).toHaveValue('07:00');
- await panel.locator('.mleg-clear').click();await expect(page.locator('#confirmOverlay')).toBeVisible();await page.locator('#confirmNo').click();await expect(panel).toBeVisible();await expect(panel.locator('[data-fl=line]')).not.toBeChecked();
- await panel.locator('.mleg-clear').click();await page.locator('#confirmYes').click();await expect(page.locator('.mleg')).toHaveCount(0);await expect(page.locator('[data-sb=track]')).toBeHidden();await expect(page.locator('#sideTabs button.on')).not.toHaveAttribute('data-sb','track');
- await expect(page.locator('.leaflet-marker-pane .trip-plan-point')).toHaveCount(0);
+ const box=await page.locator('#trackViewDock').boundingBox(),bottom=width<=760?(await page.locator('.rail').boundingBox()).y:600;expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(bottom+1);
+ await panel.locator('#tfA').focus();await page.keyboard.press('Escape');await expect(panel).toBeVisible();
+ await page.locator('#tvBack').click();await expect(page.locator('.view-map.track-view')).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>location.hash)).toBe('#/trip/30000000-0000-4000-8000-000000000002');
+ await page.evaluate(()=>{location.hash='#/trip/30000000-0000-4000-8000-000000000002/map';});
+ await expect(page.locator('.view-map.track-view')).toBeVisible();
+ await page.locator('#tvClose').click();await expect(page.locator('.view-map.track-view')).toHaveCount(0);await expect(page.locator('.mleg')).toHaveCount(0);await expect(page.locator('[data-sb=track]')).toBeHidden();
+ await expect(page.locator('.leaflet-marker-pane .trip-plan-point')).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>location.hash)).toBe('#/map');
+ await expect(page.locator('.view-map .side')).toBeVisible();
  await capture(page,info,'map-track-cleared',errors);
 });

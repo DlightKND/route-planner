@@ -24,13 +24,14 @@ test('GPS register and GPS preview remain usable at each width',async({page},inf
  expect(button.x).toBeGreaterThanOrEqual(0);expect(button.x+button.width).toBeLessThanOrEqual(page.viewportSize().width);expect(button.height).toBeGreaterThanOrEqual(36);
  await openButton.click();
  await expect(page.getByRole('table',{name:'GPS-записи'})).toBeHidden();
- await expect(page.locator('.gps-journal-detail .unassigned-map')).toBeVisible();
- await expect(page.locator('.gps-journal-detail .unassigned-map .leaflet-tile-loaded').first()).toBeVisible();
- expect(await page.locator('.gps-journal-detail .unassigned-map .leaflet-tile-loaded').first().evaluate(img=>img.naturalWidth)).toBe(256);
- await expect(page.locator('.gps-journal-detail .unassigned-map .leaflet-control-attribution')).toContainText('OpenStreetMap');
- const before=await page.locator('.gps-journal-detail .unassigned-map .gps-track-line').getAttribute('d');
- await page.locator('.gps-journal-detail .unassigned-map .leaflet-control-zoom-in').click();
- await expect.poll(()=>page.locator('.gps-journal-detail .unassigned-map .gps-track-line').getAttribute('d')).not.toBe(before);
+ // The record overview keeps a compact route map beside the stops; the full view opens on the main map.
+ const mini=page.locator('.gps-journal-detail .orphan-map .journal-route-map');
+ await expect(mini).toBeVisible();
+ await expect(mini.locator('.leaflet-tile-loaded').first()).toBeVisible();
+ expect(await mini.locator('.leaflet-tile-loaded').first().evaluate(img=>img.naturalWidth)).toBe(256);
+ await expect(mini.locator('.leaflet-control-attribution')).toContainText('OpenStreetMap');
+ expect(await mini.locator('.leaflet-overlay-pane path').count()).toBeGreaterThan(0);
+ await expect(page.locator('.gps-journal-detail .orphan-map [data-expand-map]')).toHaveText('Просмотреть на карте');
  await expect(page.locator('.gps-journal-detail')).toContainText('120');
  const overflow=await page.locator('#unassignedHost').evaluate(el=>el.scrollWidth-el.clientWidth);expect(overflow).toBeLessThanOrEqual(1);
  await expect(page.locator('[data-ut-more]')).not.toBeVisible();
@@ -258,4 +259,28 @@ test('journal period filters on the server, navigates months and persists after 
  await page.locator('#tripJournalPeriod [data-summary-shift="-1"]').click();await expect(dates).toContainText('01.09 — 30.09.2026');await expect(page.locator('[data-ut-card]')).toHaveCount(0);
  await page.locator('#tripJournalPeriod [data-summary-shift="1"]').click();await expect(dates).toContainText('01.10 — 31.10.2026');await expect(page.locator('[data-ut-card]')).toHaveCount(3);
  expect(await page.locator('.view-planner .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:'test-results/journal-period/'+info.project.name+'.png'});await clean(page);
+});
+
+test('GPS register previews a track under its row and opens it on the main map',async({page},info)=>{
+ await open(page,info,'admin',3);
+ const first=page.locator('[data-ut-peek]').first();
+ await expect(first).toHaveAttribute('aria-expanded','false');
+ await first.click();
+ await expect(page.locator('[data-ut-peek]').first()).toHaveAttribute('aria-expanded','true');
+ const row=page.locator('.ut-peek-row');await expect(row).toHaveCount(1);
+ await expect(row.locator('.unassigned-map .gps-track-line')).toBeVisible();
+ // Only one preview stays open: the next row replaces it.
+ await page.locator('[data-ut-peek]').nth(1).click();
+ await expect(page.locator('.ut-peek-row')).toHaveCount(1);
+ await expect(page.locator('[data-ut-peek]').nth(1)).toHaveAttribute('aria-expanded','true');
+ await expect(page.locator('.ut-peek-row .unassigned-map .gps-track-line')).toBeVisible();
+ await page.locator('[data-ut-peek-map]').click();
+ await expect(page.locator('.view-map.track-view')).toBeVisible();
+ await expect(page.locator('#trackViewDock .tv-block').first()).toBeVisible();
+ await expect(page.locator('#tvBackLabel')).toHaveText('К журналу');
+ await expect(page.locator('.view-map.track-view .side')).toBeHidden();
+ await page.locator('#tvBack').click();
+ await expect(page.locator('.view-map.track-view')).toHaveCount(0);
+ await expect(page.getByRole('table',{name:'GPS-записи'})).toBeVisible();
+ await clean(page);
 });

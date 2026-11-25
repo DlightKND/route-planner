@@ -1542,3 +1542,57 @@ html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar { align-items
 html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar>.entity-tabs { align-self:end!important;margin-bottom:-1px!important;order:9; }
 html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar { row-gap:0!important; }
 html#dlight-ui[data-ui-system] :is(.side-tabs2,.view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs)>button { margin-bottom:-1px!important; }
+
+/* Track view on the main map (25.11.2026): opened from a trip or a GPS record. The map
+   keeps only zoom; the top bar returns or closes, the bottom dock holds the timeline,
+   the interval and the track layers. */
+.view-map.track-view :is(.side,.map-tools,#pointToolsFab,#layersPop,#mapTrackDock,#mapSelectBar,#moveBar),
+.view-map.track-view .leaflet-control-container .map-legend { display:none!important; }
+.view-map.track-view .leaflet-top.leaflet-left { margin-left:var(--rail-w,0px)!important;margin-top:72px!important; }
+.track-view-dock .mleg-scroll>.mleg-layers:only-child { grid-column:1/-1; }
+.view-map.track-view .leaflet-bottom.leaflet-left { margin-left:var(--rail-w,0px)!important; }
+.track-view-bar { position:absolute;z-index:1100;top:12px;left:calc(var(--rail-w,0px) + 12px);right:12px;display:flex;align-items:center;gap:12px;pointer-events:none; }
+.track-view-bar[hidden],.track-view-dock[hidden] { display:none!important; }
+.track-view-bar>* { pointer-events:auto; }
+.track-view-bar>.btn { flex:none;min-height:44px;background:var(--panel)!important;box-shadow:var(--shadow-md); }
+.track-view-bar>#tvBack { display:inline-flex;align-items:center;gap:6px;padding-inline:12px 16px!important; }
+.track-view-bar>#tvClose { margin-left:auto;width:44px;padding:0!important;justify-content:center; }
+.track-view-title { min-width:0;display:flex;flex-direction:column;padding:6px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:var(--shadow-md); }
+.track-view-title strong { font:600 14px/1.3 var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.track-view-title span { font-size:12px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.track-view-title span:empty { display:none; }
+.track-view-dock { position:absolute;z-index:1100;left:calc(var(--rail-w,0px) + 12px);right:12px;bottom:12px;margin:0 auto;max-width:1240px;max-height:48vh;overflow:auto;overscroll-behavior:contain;
+  display:flex;flex-direction:column;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow-lg,0 16px 40px rgb(0 0 0/.3)); }
+/* Timeline */
+.tv-legend { display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--ink-dim); }
+.tv-legend span { display:inline-flex;align-items:center;gap:6px; }
+.tv-legend i { width:16px;height:6px;border-radius:2px; }
+.tv-bar { position:relative;height:18px;margin-top:6px;border-radius:4px;background:repeating-linear-gradient(90deg,var(--panel-2) 0 6px,var(--line) 6px 8px); }
+.tv-block { all:unset;position:absolute;top:0;bottom:0;cursor:pointer;min-width:2px; }
+.tv-block:hover,.tv-block:focus-visible { outline:2px solid var(--focus);outline-offset:1px;z-index:1; }
+.tv-move,.tv-legend .tv-move { background:#3c7954; }
+.tv-stay,.tv-legend .tv-stay { background:#e3b400; }
+.tv-road,.tv-legend .tv-road { background:repeating-linear-gradient(135deg,#d87619 0 4px,transparent 4px 7px),color-mix(in srgb,#d87619 30%,transparent); }
+.tv-gap,.tv-legend .tv-gap { background:#8b8e96; }
+.tv-window { position:absolute;top:-3px;bottom:-3px;border:2px solid var(--ink);border-radius:4px;pointer-events:none; }
+.tv-ticks { position:relative;height:16px;font:500 11px/16px var(--mono);color:var(--ink-dim); }
+.tv-ticks span { position:absolute;transform:translateX(-50%);white-space:nowrap; }
+.tv-ticks span:first-child { transform:none; }
+.tv-ticks span:last-child { transform:translateX(-100%); }
+/* Track parameters panel docked under the timeline */
+.track-view-dock .mleg { position:static!important;inset:auto!important;width:auto!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;border:0!important;background:none!important;box-shadow:none!important;transform:none!important; }
+.track-view-dock .mleg>details>summary,.track-view-dock .mleg-head,.track-view-dock .mleg-footer { display:none!important; }
+.track-view-dock .mleg-body { display:block!important;position:static!important;max-height:none!important;overflow:visible!important;padding:0!important;border:0!important;box-shadow:none!important;background:none!important; }
+.track-view-dock .mleg-scroll { display:grid!important;grid-template-columns:minmax(260px,330px) minmax(0,1fr);gap:16px;max-height:none!important;overflow:visible!important;padding:0!important; }
+.track-view-dock .mleg-period,.track-view-dock .mleg-layers { margin:0!important;padding:0!important;border:0!important; }
+.track-view-dock .mleg-layers { display:grid!important;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;align-content:start; }
+.track-view-dock .mleg-layers>h3,.track-view-dock .mleg-period>h3 { grid-column:1/-1;margin:0 0 4px!important;font:600 13px/1.3 var(--sans)!important;text-transform:none!important;letter-spacing:0!important; }
+.track-view-dock .mleg-layer { margin:0!important; }
+@media(max-width:760px){
+  .track-view-bar { top:8px;left:8px;right:8px;gap:8px; }
+  .track-view-bar>.btn,.track-view-bar>#tvClose { min-height:48px; }
+  .track-view-bar>#tvClose { width:48px; }
+  .track-view-dock { left:8px;right:8px;bottom:calc(var(--rail-h,0px) + 8px);max-height:52vh;padding:12px; }
+  .track-view-dock .mleg-scroll { grid-template-columns:1fr; }
+  .view-map.track-view .leaflet-top.leaflet-left { margin-top:68px!important; }
+}

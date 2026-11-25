@@ -26,8 +26,9 @@ export function mountGpsTrackMap(fallback,points,{leaflet:L,makeBase,color,label
   for(const [p,label,fill] of endpoints?[[first,'Начало трека','#25845a'],[last,'Конец трека','#c34e3c']]:[]){
    L.circleMarker([+p.lat,+p.lng],{radius:5,color:'#fff',weight:2,fillColor:fill,fillOpacity:1}).addTo(map).bindTooltip(label);
   }
-  map.fitBounds(L.featureGroup(layers).getBounds(),{padding:[24,24],maxZoom:16});
-  if(typeof ResizeObserver!=='undefined'){observer=new ResizeObserver(()=>map.invalidateSize({pan:false}));observer.observe(container);}
+  const bounds=L.featureGroup(layers).getBounds(),fit=()=>map.fitBounds(bounds,{padding:[24,24],maxZoom:16,animate:false});fit();
+  // Мини-карта не двигается пользователем: после смены размера заново вписываем трек.
+  if(typeof ResizeObserver!=='undefined'){observer=new ResizeObserver(()=>{map.invalidateSize({pan:false});if(mini)fit();});observer.observe(container);}
   return {container,destroy(){observer?.disconnect();map.remove();}};
  }catch(error){observer?.disconnect();map?.remove();container.replaceWith(fallback);return null;}
 }

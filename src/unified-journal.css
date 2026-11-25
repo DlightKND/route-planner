@@ -970,3 +970,40 @@
  .view #unassignedHost.unified-gps-journal.gps-show-detail > .gps-journal-detail:has(> .journal-orphan-overview){overflow-y:auto!important;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
  .view #unassignedHost .gps-journal-detail > :is(.journal-orphan-overview,.journal-trip-route,.journal-trip-documents){overflow:visible!important;flex:none!important;min-height:auto!important}
 }
+
+/* GPS record without a trip (25.11.2026): same layout as a trip's record — the list on
+   the left, the mini map with the timeline and mileage on the right. */
+.journal-orphan-overview.journal-orphan-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"list map" "pinned pinned";gap:var(--sp-5);align-items:start}
+.journal-orphan-split>.orphan-list{grid-area:list;display:flex;flex-direction:column;gap:var(--sp-4);min-width:0}
+.journal-orphan-split>.orphan-map{grid-area:map;display:flex;flex-direction:column;gap:var(--sp-3);min-width:0;padding:var(--sp-4);border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+.journal-orphan-split>.workflow-gps-pinned{grid-area:pinned}
+.journal-orphan-split .orphan-map .journal-overview-map{height:280px;border-radius:var(--r-sm)}
+.journal-orphan-split .orphan-map .journal-route-map{height:100%}
+.journal-orphan-split [data-source-route]{display:none}
+.journal-orphan-split .orphan-map .gps-detail-metrics{margin:0}
+.journal-orphan-split .orphan-data-link{align-self:flex-start}
+.journal-orphan-split .orphan-list-modes,.orphan-route-modes{width:max-content;max-width:100%}
+.journal-trip-route>.orphan-route-modes{margin:0 0 var(--sp-4)}
+@media (max-width:960px){
+ .journal-orphan-overview.journal-orphan-split{grid-template-columns:1fr;grid-template-areas:"map" "list" "pinned"}
+ .journal-orphan-split .orphan-map .journal-overview-map{height:220px}
+}
+html#dlight-ui[data-ui-system] .journal-expand-map:not(#_){box-shadow:0 2px 8px rgb(0 0 0 / .14)}
+/* Трек под строкой журнала */
+.journal-register .ut-row-actions{display:inline-flex;gap:var(--sp-2);flex-wrap:wrap;justify-content:flex-end}
+.journal-register .ut-peek-row>td{padding:0 var(--sp-4) var(--sp-4);text-align:left}
+.ut-peek{position:relative;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--panel-2)}
+.ut-peek-map{height:240px;display:grid;place-items:center}
+.ut-peek-map>.unassigned-map{width:100%;height:100%}
+.ut-peek-map>svg.unassigned-preview{display:none}
+.ut-peek-open{position:absolute;right:var(--sp-3);bottom:var(--sp-3);z-index:500}
+html#dlight-ui[data-ui-system] .ut-peek-open:not(#_){box-shadow:0 2px 8px rgb(0 0 0 / .14)}
+.journal-register tr:has(+.ut-peek-row)>:is(th,td){border-bottom:0}
+@media (max-width:600px){
+ .journal-register .ut-row-actions{display:flex;width:100%}
+ .journal-register .ut-row-actions>.btn{flex:1 1 0;min-width:0}
+ .journal-register tr.ut-peek-row{padding-top:0}
+ .journal-register tr:has(+.ut-peek-row){border-bottom:0}
+ .journal-register .ut-peek-row>td{padding:0}
+ .ut-peek-map{height:200px}
+}

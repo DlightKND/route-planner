@@ -10,12 +10,13 @@ export async function openOrphanOverview(page){
 
 export async function openJournalPane(page,pane){
  if(pane==='route'){
-  const expand=page.locator('.journal-overview-map [data-expand-map]');
+  // «Просмотреть на карте» now leaves for the main map; the in-record road view is the «Дорога» mode.
+  const mode=page.locator('.journal-list-modes:not(.orphan-route-modes) [data-journal-list-mode=route], .orphan-list-modes [data-orphan-pane=route]').first();
   const stopMap=page.locator('.presence-review-map [data-presence-route]');
   await openLocation(page);
   if(await stopMap.isVisible()){await stopMap.click();return;}
-  await showJournalOverview(page,'map');
-  await expand.click();
+  if(!await mode.isVisible())await showJournalOverview(page,'list');
+  await mode.click();
   return;
  }
  await page.locator('[data-journal-pane="'+pane+'"]').click();
