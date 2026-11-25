@@ -1526,3 +1526,19 @@ html#dlight-ui[data-ui-system] :not(.anchored-context-panel)>.q>.qm::after { con
 .verline .qc { display:inline-grid;place-items:center;width:18px;height:18px;border:1px solid var(--input-line);border-radius:50%;font:600 11px/1 var(--sans);color:var(--ink-dim); }
 /* Scrolling dialog body must not clip the focus ring of its edge fields. */
 .pane-modal>.pane-body { padding:6px 10px 6px 6px!important;margin:-6px -10px -6px -6px!important; }
+
+/* Selected tab marker (25.11.2026): one rule for every tab set. The marker is the
+   selection colour of the rail (--focus: ink in light, yellow in dark), 2 px, and it
+   sits ON the divider under the tabs — no air between them. */
+html#dlight-ui[data-ui-system]:not(#_) :is(
+  .entity-tabs :is([aria-selected=true],.on,.active),
+  .subtabs>.subtab:is(.active,.on),
+  .side-tabs2>button.on,
+  .view .journal-trip-tabs>button.on,
+  .view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs>button.on
+) { border-bottom-color:var(--focus)!important;border-bottom-width:2px!important;border-bottom-style:solid!important; }
+/* Tabs stand on the masthead line, not centred next to taller toolbar buttons. */
+html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar { align-items:flex-end!important;margin-bottom:0!important; }
+html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar>.entity-tabs { align-self:end!important;margin-bottom:-1px!important;order:9; }
+html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar { row-gap:0!important; }
+html#dlight-ui[data-ui-system] :is(.side-tabs2,.view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs)>button { margin-bottom:-1px!important; }

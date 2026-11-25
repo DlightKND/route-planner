@@ -963,3 +963,10 @@
 .journal-manual-drafts>header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--sp-3)}
 .journal-orphan-overview .journal-manual-drafts{margin-bottom:var(--sp-5)}
 .gps-source-stop>.journal-manual-draft-actions{display:flex;flex-wrap:wrap;gap:var(--sp-2)}
+
+/* Phone: a GPS record without a trip scrolls as one page. The overview used to be the
+   only scroller, so the tall header above it was a dead zone for the finger. */
+@media (max-width:760px){
+ .view #unassignedHost.unified-gps-journal.gps-show-detail > .gps-journal-detail:has(> .journal-orphan-overview){overflow-y:auto!important;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+ .view #unassignedHost .gps-journal-detail > :is(.journal-orphan-overview,.journal-trip-route,.journal-trip-documents){overflow:visible!important;flex:none!important;min-height:auto!important}
+}
