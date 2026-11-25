@@ -395,3 +395,13 @@ html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-worksp
 html#dlight-ui[data-ui-system] .view .journal-trip-stops .presence-review-workspace.is-inline-detail>.presence-review-sidebar { display:flex!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-detail:has(.presence-review-workspace.is-inline-detail) { overflow:auto; }
 html#dlight-ui[data-ui-system] .view .journal-trip-stops:has(.presence-review-workspace.is-inline-detail) { overflow:visible!important;flex:none!important; }
+
+/* Tablet (761–960px): two columns leave the stop list ~320px wide and squeeze its table.
+   Stack instead: the map card on top, then the Stops/Road switch and the list full width. */
+@media (min-width:761px) and (max-width:960px){
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open) { grid-template-columns:minmax(0,1fr)!important; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-overview { grid-column:1!important;grid-row:2!important;position:static;margin:24px var(--journal-gutter,24px) 0!important; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>:is(.journal-list-modes,.journal-trip-stops) { grid-column:1!important;grid-row:3!important; }
+ html#dlight-ui[data-ui-system] .unified-gps-journal .journal-trip-detail[data-journal-section=stops]:not(.journal-stop-open)>.journal-trip-stops { margin-right:var(--journal-gutter,24px)!important; }
+ html#dlight-ui[data-ui-system] .view .journal-trip-overview:has(>.journal-timeline-floating)>.journal-overview-map { min-height:clamp(300px,38vh,420px); }
+}
