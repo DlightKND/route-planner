@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false, remainderJourney = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false, remainderJourney = false, mapWork = false } = {}) {
   if(managerJourney){financeJourney=true;entityAudit=true;}
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
@@ -343,6 +343,24 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
   if(summaryOrphans)tables.trip_jobs.push({trip_id:'removed-trip',job_id:job,ord:0,jobs:request});
   if(decisionQueue)tables.trip_stays.find(s=>s.id==='stay-past').status='detected';
   if(reviewOrder||decisionQueue){activeTask.status='review';activeTask.result_note='Диагностика завершена. Осталась замена уплотнения.';}
+  if(mapWork){
+    // Map planning: two more clients with tasks waiting for a plan and one request without a task.
+    const farm={id:'client-b',name:'ФГ «Колос»',lat:50.08,lng:36.4,phone:'+00000000001',deleted_at:null};
+    const agro={id:'client-c',name:'ТОВ «Агро-Схід»',lat:49.9,lng:36.05,phone:'+00000000002',deleted_at:null};
+    tables.clients.push(farm,agro);
+    const mk=(id,number,clientRow,title,due,hours,extra={})=>{
+      const jobRow={...request,id:'map-job-'+id,number:200+number,client_id:clientRow.id,clients:clientRow,equipment:null,equipment_id:null,title,status:'open',due_date:due,created_at:'2026-09-25T07:00:00Z',job_works:[],service_orders:[]};
+      const itemRow={...item,id:'map-item-'+id,order_id:'map-task-'+id,job_id:jobRow.id,planned_qty:hours,unit:'ч'};
+      const taskRow={...task,id:'map-task-'+id,number,title,job_id:jobRow.id,seed_request_id:jobRow.id,status:'draft',lead_engineer:null,engineer_ids:[],date_from:null,date_to:null,jobs:jobRow,service_order_items:[itemRow],trip_service_orders:[],...extra};
+      jobRow.service_orders=[{id:taskRow.id,job_id:jobRow.id,seed_request_id:jobRow.id,status:taskRow.status,service_order_items:[itemRow]}];
+      tables.jobs.push(jobRow);tables.service_orders.push(taskRow);tables.service_order_items.push(itemRow);
+      return taskRow;
+    };
+    mk('a',158,agro,'ТО крана-манипулятора','2026-10-03',4);
+    mk('b',159,agro,'Диагностика гидравлики','2026-10-07',2);
+    mk('c',163,farm,'Замена гидроцилиндра','2026-10-08',3);
+    tables.jobs.push({...request,id:'map-job-d',number:212,client_id:farm.id,clients:farm,equipment:null,equipment_id:null,title:'Плановое ТО',status:'open',due_date:'2026-10-20',created_at:'2026-09-25T07:00:00Z',job_works:[],service_orders:[]});
+  }
   if(designTripChoices){tables.trips.push({...ride,id:'30000000-0000-4000-8000-000000000010',vehicle_label:'Выезд с ответственным инженером',engineer_ids:[engineer],trip_service_orders:[]},{...ride,id:'30000000-0000-4000-8000-000000000011',vehicle_label:'Выезд с другой командой',engineer_ids:[other],trip_service_orders:[]});}
   if(catalogueJourney){
     tables.equipment_models=[{id:'model-a',manufacturer:'PALMS',kind:'Кран-манипулятор',model:'5.72',warranty_months:24,service_interval_hours:500},{id:'model-b',manufacturer:'HIAB',kind:'Кран-манипулятор',model:'X-HiPro 192',warranty_months:12,service_interval_hours:1000},{id:'model-c',manufacturer:'Hatz',kind:'Двигатель',model:'1B40',warranty_months:0,service_interval_hours:null}];

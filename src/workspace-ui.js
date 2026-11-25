@@ -244,10 +244,10 @@ export function frameMapWorkspace(root=document){
  const paint=()=>{
   const mode=tabs.querySelector('button.on')?.dataset.sb||'points';side.dataset.mapPanel=mode;side.classList.toggle('list-folded',(mode==='points'||mode==='directory')&&root.getElementById('pointsBox').classList.contains('folded'));
   routeHead.querySelector('h2').textContent=Number(root.getElementById('rCount').textContent)>0?'План маршрута':'Создание маршрута';
-  const directory=mode==='directory';head.querySelector('[data-map-heading]').textContent=directory?'Справочник точек':'В работе';
-  head.querySelector('[data-map-description]').textContent=directory?'Клиенты, оборудование и депо.':'Заявки и машины, которым нужно внимание.';
-  label.textContent=directory?'Точки справочника':'Рабочая очередь';
-  const input=root.getElementById('search');input.placeholder=directory?'Найти клиента или депо':'Найти клиента или машину';
+  const directory=mode==='directory';head.hidden=!directory;filter.closest('.chiprow').hidden=!directory;head.querySelector('[data-map-heading]').textContent=directory?'Справочник точек':'Задания';
+  head.querySelector('[data-map-description]').textContent=directory?'Клиенты, оборудование и депо.':'';
+  label.textContent=directory?'Точки справочника':'';listHead.hidden=!directory;
+  const input=root.getElementById('search');input.placeholder=directory?'Найти клиента или депо':'Клиент, заявка или задание №';
  };
  paint();const Observer=root.defaultView?.MutationObserver;if(Observer)new Observer(paint).observe(tabs,{attributes:true,childList:true,characterData:true,subtree:true,attributeFilter:['class','style']});
 }

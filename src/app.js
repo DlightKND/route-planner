@@ -3,6 +3,7 @@ import {resolveEntityDraft} from './entity-draft-resolution.js';
 import {decisionReason,stopTitle} from './core/gps-journal.js';
 import {distanceText,googleTripLinks,intervalText} from './core/journal-display.js';
 import {calendarPeriodBounds} from './core/calendar-period.js';
+import {mapTaskRows,requestsWithoutTask,groupUnplanned,plannedRows,clientWork,selectionSummary,assembleChoices,workDays,matchesTask,routeReachKm} from './core/map-work.js';
 import {summaryPreset,summaryUnit,shiftSummaryPeriod,summaryPeriodLabel} from './core/summary-period.js';
 import { openContextPanel } from './context-panels.js';
 import {installMoreNavigation} from './more-navigation.js';
@@ -513,6 +514,8 @@ let markers=L.layerGroup().addTo(map), eqMarkers=L.layerGroup().addTo(map), trip
 let clientStats={}, profitMode=false, avoidModeOn=false, avoidLayer=L.layerGroup().addTo(map);
 // Живые заявки для ленты на карте (см. loadClientStats).
 let jobsLite=[];
+// Map work: open onsite tasks (mapTaskRows), requests still without a task, per-client summary, selection.
+let mapTasks=[],mapRequests=[],mapWork={},mapSelected=new Set(),mapTaskMode='unplanned',mapOpenTask=null;
 // Что карта показывает по умолчанию.
 //
 // 'work' — только то, с чем сейчас идёт работа: точки с живыми заявками,
@@ -595,6 +598,7 @@ function sideTab(name){
   if(p) p.classList.toggle('collapsed',name==='route'||name==='track');
   if(r) r.classList.toggle('collapsed',name!=='route');
   if(name==='route')renderRoutePanel();
+  renderMapSelectBar();
   // Шторка, свёрнутая в черту, по нажатию на вкладку обязана открыться:
   // иначе нажатие ничего не делает и выглядит сломанным.
   const sd=document.querySelector('.view-map .side');
@@ -751,6 +755,9 @@ function applyMobileNav(){
   rail.addEventListener('focusin',()=>{ if(!keyboard) rail.classList.add('rail-rest'); });
   rail.addEventListener('click',e=>{
     if(e.detail===0) return;
+    // На телефоне рельс — нижнее меню, он не раскрывается; фокус там нужен
+    // («Ещё» возвращает его себе после закрытия меню).
+    if(!matchMedia('(min-width:761px)').matches) return;
     if(matchMedia('(hover:none)').matches){ document.activeElement?.blur?.(); return; }
     rail.classList.add('rail-rest');
   });
@@ -959,6 +966,7 @@ async function switchTab(name, sub,{writeRoute=true}={}){ if(!tabAllowed(name)) 
     const hit = t.dataset.tab===name && (!t.dataset.sub || t.dataset.sub===navSub(sub||plannerCur));
     t.classList.toggle('active',hit);
   });
+  const enteringMap=name==='map'&&!document.querySelector('.view-map.active');
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelector('.view-'+name).classList.add('active');
   // У страницы выезда нет своего пункта в рельсе: она — вложенный экран
@@ -966,7 +974,10 @@ async function switchTab(name, sub,{writeRoute=true}={}){ if(!tabAllowed(name)) 
   if(name==='trip'||name==='job'||name==='order') document.querySelectorAll('.nav-i[data-sub="disp"]').forEach(t=>t.classList.add('active'));
   // Высота шторки считается от высоты вкладки, а вкладка получает высоту
   // только когда становится активной: пересчитываем при каждом заходе.
-  if(name==='map'){ if(sheetIsSheet()) sheetSnapTo(sheetSnap); setTimeout(()=>map.invalidateSize(),60); }
+  if(name==='map'){ if(sheetIsSheet()) sheetSnapTo(sheetSnap); setTimeout(()=>map.invalidateSize(),60);
+    // Выезды собирают в карточке выезда: вернувшись на карту, задания должны
+    // уже стоять «в выездах», а не ждать плана.
+    if(enteringMap&&clients.length&&canWrite()){ const before=mapWorkSignature(); void loadClientStats().then(()=>{ if(mapWorkSignature()!==before) render(); }); } }
   if(name==='catalog') catSub(catCur);
   // Клик по «Диспетчеру» возвращает в тот подраздел, где человек был
   // в прошлый раз: уводить его каждый раз на «Заявки» значило бы терять
@@ -1163,7 +1174,7 @@ async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
   // срочность клиента для раскраски точек на карте. Отдельного похода
   // в базу это не стоит, а карта из справочника координат превращается
   // в картину дня.
-  try{ const {data,error}=await sb.from('jobs').select('id,client_id,status,due_date,created_at,clients(name),equipment(model),'+JOB_FINANCE_SELECT).is('deleted_at',null);
+  try{ const {data,error}=await sb.from('jobs').select('id,number,client_id,status,due_date,created_at,at_depot,clients(name),equipment(model),'+JOB_FINANCE_SELECT).is('deleted_at',null);
     if(error) throw error;
     const financeRows=projectLegacyFinanceRows(data||[]);
     const ch=+((appSettings.costs&&appSettings.costs.hour))||0;
@@ -1186,7 +1197,30 @@ async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
       // бы в статистике дешевле, чем он есть.
       const pm=partsMoney(j); s.rev+=pm.rev; s.cost+=pm.cost; });
     Object.values(clientStats).forEach(s=>{ s.profit=s.rev-s.cost; s.warrShare=s.hours>0?Math.round(s.warrH/s.hours*100):0; });
+    await loadMapTasks(data||[]);
   }catch(e){ clientStats={}; loadFail('статистику по клиентам',e); } }
+// Отпечаток работы на карте: перерисовывать маркеры (и закрывать открытую
+// карточку клиента) стоит, только если что-то изменилось.
+function mapWorkSignature(){ return mapTasks.map(r=>r.id+':'+(r.trip?.id||'')+':'+r.urgency.level+':'+r.hours).join('|')+'#'+mapRequests.map(j=>j.id).join('|'); }
+// Задания для карты. Единица работы на карте — задание, а не заявка: график
+// и конфликты живут заданиями, и заявка, чьё задание уже стоит в выезде,
+// не должна «гореть». Заявки без задания показываются отдельно.
+async function loadMapTasks(rawJobs){
+  mapTasks=[];mapRequests=[];mapWork={};
+  try{
+    const jobsById={};rawJobs.forEach(j=>{jobsById[j.id]=j;});
+    const clientsById={};clients.forEach(c=>{clientsById[c.id]=c;});
+    const {data,error}=await sb.from('service_orders').select('id,number,title,status,work_mode,job_id,lead_engineer,date_from,date_to,service_order_items(kind,unit,planned_qty,planned_labor_hours),trip_service_orders(trip_id,trips(id,number,date_from,date_to,status,deleted_at))').eq('work_mode','onsite').not('status','in','(review,completed,cancelled)');
+    if(error)throw error;
+    const now=new Date();
+    mapTasks=mapTaskRows(data||[],jobsById,clientsById,now);
+    const coverage=rawJobs.flatMap(j=>(j.service_orders||[]).map(o=>({job_id:j.id,status:o.status}))).concat((data||[]).map(o=>({job_id:o.job_id,status:o.status})));
+    mapRequests=requestsWithoutTask(rawJobs,coverage,clientsById);
+    mapWork=clientWork(mapTasks,mapRequests,now);
+    const open=new Set(mapTasks.filter(row=>!row.trip).map(row=>row.id));
+    [...mapSelected].forEach(id=>{if(!open.has(id))mapSelected.delete(id);});
+  }catch(e){mapTasks=[];mapRequests=[];mapWork={};loadFail('задания для карты',e);}
+}
 
 // Тревоги по клиентам — один расчёт на загрузку данных, а не на каждую
 // отрисовку. eqAlert() внутри идёт через eqService и eqRate по показаниям
@@ -1201,9 +1235,9 @@ function recomputeAlerts(){
 function alertOnly(){ return !!($('ptAlert')&&$('ptAlert').checked); }
 
 function render(){
-  $('cliCount').textContent=String(clients.filter(x=>x.is_base||((clientStats[x.id]||{}).open>0)).length);
+  $('cliCount').textContent=String(mapTasks.filter(r=>!r.trip).length+mapRequests.length);
   if($('directoryCount'))$('directoryCount').textContent=String(clients.length);
-  places=clients.filter(c=>c.is_base); recomputeAlerts(); renderColorLegend(); renderMarkers(); renderAvoidZones(); renderSide(); }
+  places=clients.filter(c=>c.is_base); recomputeAlerts(); renderColorLegend(); renderMapLegend(); renderMarkers(); renderAvoidZones(); renderSide(); }
 // Раскраска точек — ОДИН выбор из трёх, а не набор независимых флажков.
 //
 // Раньше цвет по умолчанию брался из поля клиента color, то есть означал
@@ -1223,9 +1257,24 @@ function markerColor(c){
     const s=clientStats[c.id]; if(!s) return '#6b7280';
     return profitColorOf(s.profit);
   }
-  const s=clientStats[c.id];
-  if(!s||!s.open) return '#94a3b8';            // живых заявок нет — серый
-  return URG_COL[s.urg]||'#94a3b8';
+  // Цвет — худшая срочность того, что ЖДЁТ ПЛАНА (задания без выезда и
+  // заявки без задания). Всё уже стоящее в выездах — серое.
+  const w=mapWork[c.id];
+  if(!w||!w.toPlan) return '#94a3b8';
+  return URG_COL[w.level]||'#94a3b8';
+}
+// Легенда всегда на карте, а не только в меню слоёв: цвет и цифра маркера
+// должны читаться без лишнего щелчка.
+const mapLegend=L.control({position:'bottomleft'});
+mapLegend.onAdd=()=>{ const el=L.DomUtil.create('div','map-legend'); el.id='mapLegend'; el.setAttribute('aria-label','Легенда карты'); L.DomEvent.disableClickPropagation(el); return el; };
+mapLegend.addTo(map);
+function renderMapLegend(){
+  const el=$('mapLegend'); if(!el) return;
+  const dot=(c,t,extra='')=>'<span><i style="background:'+c+extra+'"></i>'+t+'</span>';
+  if(colorMode!=='urgency'||!canWrite()){ el.hidden=true; return; }
+  el.hidden=false;
+  el.innerHTML='<div>'+dot(URG_COL.overdue,'просрочено')+dot(URG_COL.acute,'горит')+dot(URG_COL.calm,'спокойно')+dot(URG_COL.cold,'без срока')+'</div>'
+    +'<div class="map-legend-sub">'+(mapScope==='work'?'<span>цифра — ждёт плана</span><span><i class="ring"></i>выбрано</span><span><i class="dashed"></i>всё в выездах</span>':'<span>цифра — единицы техники</span>')+'</div>';
 }
 function renderColorLegend(){
   const el=$('profitLegend'); if(!el) return;
@@ -1245,7 +1294,7 @@ function renderColorLegend(){
 document.querySelectorAll('#colorMode button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#colorMode button').forEach(x=>x.classList.toggle('on',x===b));
   colorMode=b.dataset.cm; profitMode=(colorMode==='profit');
-  renderColorLegend(); renderMarkers(); });
+  renderColorLegend(); renderMapLegend(); renderMarkers(); });
 document.querySelectorAll('#mapStyleSeg button[data-mstyle]').forEach(b=>b.onclick=()=>setMapStyle(b.dataset.mstyle));
 syncMapStyleSeg();
 // Шкала прибыльности вынесена из renderMarkers: ею пользуется markerColor(),
@@ -1254,7 +1303,58 @@ let _maxProfit=0;
 function profitColorOf(p){ if(!(p>0)) return '#6b7280';
   const r=_maxProfit>0?(p/_maxProfit):0; return r>=0.6?'#16a34a':(r>=0.3?'#84cc16':'#eab308'); }
 
-function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); revealedClient=null; markerById={};
+// Маркер клиента. В «Заданиях» цифра — сколько работы ждёт плана; клиент,
+// вся работа которого уже в выездах, рисуется пунктиром без цифры. В
+// справочнике цифра — техника клиента, как и была.
+function clientIcon(c,col=markerColor(c)){
+  const w=mapWork[c.id]||{toPlan:0,planned:0},work=mapScope==='work';
+  const count=work?w.toPlan:(eqByClient[c.id]||[]).length;
+  const plannedOnly=work&&!w.toPlan&&w.planned>0;
+  const picked=mapTasks.some(row=>row.clientId===c.id&&mapSelected.has(row.id));
+  const d=Math.min(46,(work?24:20)+count*4);
+  const cls='cbub'+(plannedOnly?' cbub-planned':'')+(picked?' cbub-picked':'');
+  return L.divIcon({className:'',html:'<div class="'+cls+'" style="background:'+(plannedOnly?'#94a3b8':col)+';border:2.5px '+(plannedOnly?'dashed':'solid')+' '+ringColor()+'">'+(count||'')+'</div>',iconSize:[d,d],iconAnchor:[d/2,d/2]});
+}
+function refreshClientMarker(cid){ const c=clients.find(x=>x.id===cid),m=markerById[cid]; if(c&&m&&!c.is_base) m.setIcon(clientIcon(c)); }
+function urgBadge(u){ if(!u||u.level==='cold') return 'без срока'; return u.level==='overdue'?('−'+(-u.left)+' дн'):(u.left+' дн'); }
+function tripShort(t){ return 'выезд '+(t.number!=null?'№'+t.number:'')+(t.dateFrom?(' · '+shortDate(t.dateFrom)):''); }
+// Всплывающая карточка клиента. Главное на карте — работа клиента:
+// задания с галочками выбора, задания в выездах, заявки без задания.
+// «Проехать» — действие инженера, поэтому у менеджера оно в «⋯».
+function clientPopupHTML(c){
+  const list=eqByClient[c.id]||[],count=list.length,w=mapWork[c.id]||{tasks:[],requests:[],toPlan:0},tel=telHref(c.phone);
+  const open=w.tasks.filter(row=>!row.trip),planned=w.tasks.filter(row=>row.trip);
+  let h='<div class="client-popup"><div class="client-popup-head"><strong>'+esc(c.name)+'</strong><span>'+esc([c.description,count?(count+' '+plural(count,'единица','единицы','единиц')+' техники'):'без техники'].filter(Boolean).join(' · '))+'</span></div>';
+  if(canWrite()&&(open.length||planned.length||w.requests.length)){
+    h+='<div class="client-popup-work">';
+    if(open.length){ h+='<span class="client-popup-label">Ждут плана</span>';
+      open.forEach(row=>{ h+='<label class="client-popup-task"><input type="checkbox" data-map-pick="'+esc(row.id)+'"'+(mapSelected.has(row.id)?' checked':'')+'><span>№'+esc(row.number)+' · '+esc(row.title)+'</span><b class="urg-'+row.urgency.level+'">'+esc(urgBadge(row.urgency))+'</b></label>'; }); }
+    w.requests.forEach(job=>{ h+='<div class="client-popup-task"><span>'+esc(requestLabel(job,job.id))+' без задания</span><button type="button" class="btn ghost" data-map-seed="'+esc(job.id)+'">Создать задание</button></div>'; });
+    if(planned.length){ h+='<span class="client-popup-label">В выездах</span>';
+      planned.forEach(row=>{ h+='<div class="client-popup-task planned"><span>№'+esc(row.number)+' · '+esc(row.title)+'</span><button type="button" class="btn ghost" data-map-trip="'+esc(row.trip.id)+'">'+esc(tripShort(row.trip))+'</button></div>'; }); }
+    h+='</div>';
+  }
+  const s=clientStats[c.id];
+  if(canWrite()&&s){ const cur=appSettings.currency||'грн'; h+='<details class="map-popup-stats"><summary>Показатели клиента</summary><span style="display:block;margin-top: var(--sp-2);font-size: var(--fs-2);color:var(--ink-dim);line-height:1.6">выручка <b style="color:var(--ink)">'+Math.round(s.rev)+' '+esc(cur)+'</b> · прибыль <b style="color:'+(s.profit>=0?'var(--green)':'var(--red)')+'">'+Math.round(s.profit)+'</b><br>гарантия '+s.warrShare+'% · заявок '+s.jobs+(s.done?(' · закрыто '+s.done):'')+'</span></details>'; }
+  h+='<div class="client-popup-actions"><div class="client-popup-primary">';
+  if(canWrite()){
+    if(open.length){ const all=open.every(row=>mapSelected.has(row.id)); h+='<button type="button" class="btn amber" data-map-pick-all="'+esc(c.id)+'">'+(all?'Снять выбор':(open.length>1?'Выбрать все':'Выбрать'))+'</button>'; }
+    else h+='<button type="button" onclick="addClientToRoute(\''+c.id+'\')" class="btn amber">+ маршрут</button>';
+    if(tel) h+='<a href="'+esc(tel)+'" class="btn">Позвонить</a>';
+  } else {
+    if(tel) h+='<a href="'+esc(tel)+'" class="btn amber">Позвонить</a>';
+    h+='<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn">Проехать</a>';
+  }
+  h+='</div>';
+  h+='<details class="client-popup-more"><summary class="btn ghost">Другие действия</summary><div class="client-popup-menu">';
+  if(canWrite()) h+='<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn ghost">Проехать</a>';
+  if(canWrite()&&open.length) h+='<button type="button" onclick="addClientToRoute(\''+c.id+'\')" class="btn ghost">Добавить в маршрут</button>';
+  h+='<button type="button" onclick="openEquip(\''+c.id+'\')" class="btn ghost">Техника</button>';
+  if(canWrite()) h+='<button type="button" onclick="newJobForClient(\''+c.id+'\')" class="btn ghost">Создать заявку</button><button type="button" onclick="editClient(\''+c.id+'\')" class="btn ghost">Редактировать клиента</button>';
+  h+='</div></details></div></div>';
+  return h;
+}
+function renderMarkers(){ let reopen=null; Object.entries(markerById).forEach(([id,m])=>{ if(m?.isPopupOpen?.()){ reopen=id; m.closePopup(); } }); markers.clearLayers(); eqMarkers.clearLayers(); revealedClient=null; markerById={};
   _maxProfit=0; Object.values(clientStats).forEach(s=>{ if(s.profit>_maxProfit) _maxProfit=s.profit; });
   // Фильтр «требующие внимания» гасит остальные точки НА КАРТЕ. Раньше он
   // менял только список — а список это та половина экрана, на которую
@@ -1265,7 +1365,7 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
   // Не приглушаются — именно скрываются: смысл режима в том, чтобы на карте
   // осталось только то, чем занимаются. Депо остаются всегда, без них
   // не построить маршрут.
-  const inWork=c=>c.is_base||((clientStats[c.id]||{}).open>0);
+  const inWork=c=>c.is_base||!!(mapWork[c.id]&&(mapWork[c.id].toPlan||mapWork[c.id].planned));
   clients.forEach(c=>{ if(mapScope==='work'&&!inWork(c)) return;
     const col=markerColor(c);
     const dim=dimOthers && !c.is_base && !(alertCount[c.id]>0);
@@ -1283,38 +1383,18 @@ function renderMarkers(){ markers.clearLayers(); eqMarkers.clearLayers(); reveal
       if(canWrite()){ html+='<br><span style="display:inline-flex;gap: var(--gap-row);margin-top: var(--gap-row)"><button onclick="addBaseStop(\''+c.id+'\')" class="btn amber">в маршрут</button><button onclick="editClient(\''+c.id+'\')" class="btn">Редактировать</button></span>'; }
       m.bindPopup(html); markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); return;
     }
-    const list=eqByClient[c.id]||[]; const count=list.length; const withCoords=list.filter(e=>e.lat!=null&&e.lng!=null).length; const d=Math.min(46,20+count*4);
-    const dcol=col;
-    const icon=L.divIcon({className:'',html:'<div class="cbub" style="background:'+dcol+';border:2.5px solid '+ringColor()+'">'+(count||'')+'</div>',iconSize:[d,d],iconAnchor:[d/2,d/2]});
-    const m=L.marker([c.lat,c.lng],{icon});
-    let html='<strong style="font-size: var(--fs-4)">'+esc(c.name)+'</strong>'; if(c.description) html+='<br>'+esc(c.description);
-    html+='<br><span style="color:var(--ink-dim)">техники: '+count+(withCoords?(' · своих точек: '+withCoords):'')+'</span>';
-    // Что означает цвет этой точки — прямо в попапе, чтобы не сверяться
-    // с легендой в меню слоёв.
-    const us=clientStats[c.id];
-    if(colorMode==='urgency'&&us&&us.open){
-      html+='<br><span style="color:'+(URG_COL[us.urg]||'#94a3b8')+';font-size: var(--fs-2)">● '
-        +esc(URG_TXT[us.urg]||'')+' · живых заявок '+us.open+'</span>';
-    }
-    const s=clientStats[c.id]; if(s){ const cur=appSettings.currency||'грн'; html+='<details class="map-popup-stats"><summary>Показатели клиента</summary><span style="display:block;margin-top: var(--sp-2);font-size: var(--fs-2);color:var(--ink-dim);line-height:1.6">выручка <b style="color:var(--ink)">'+Math.round(s.rev)+' '+esc(cur)+'</b> · прибыль <b style="color:'+(s.profit>=0?'var(--green)':'var(--red)')+'">'+Math.round(s.profit)+'</b><br>гарантия '+s.warrShare+'% · заявок '+s.jobs+(s.done?(' · закрыто '+s.done):'')+'</span></details>'; }
-    if(c.phone) html+='<br><span style="color:var(--ink-dim)">тел. '+esc(c.phone)+'</span>';
-    const tel=telHref(c.phone);
-    html+='<div class="client-popup-actions"><div class="client-popup-primary"><a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn">Проехать</a>';
-    if(canWrite()) html+='<button onclick="addClientToRoute(\''+c.id+'\')" class="btn amber">+ маршрут</button>';
-    else if(tel) html+='<a href="'+esc(tel)+'" class="btn amber">Позвонить</a>';
-    else html+='<button onclick="openEquip(\''+c.id+'\')" class="btn">Техника</button>';
-    html+='</div>';
-    if(canWrite()||tel){
-      html+='<details class="client-popup-more"><summary class="btn ghost">Ещё действия</summary><div class="client-popup-menu">';
-      if(canWrite()&&tel) html+='<a href="'+esc(tel)+'" class="btn ghost">Позвонить</a>';
-      html+='<button onclick="openEquip(\''+c.id+'\')" class="btn ghost">Техника</button>';
-      if(canWrite()) html+='<button onclick="newJobForClient(\''+c.id+'\')" class="btn ghost">Создать заявку</button><button onclick="editClient(\''+c.id+'\')" class="btn ghost">Редактировать клиента</button>';
-      html+='</div></details>';
-    }
-    html+='</div>';m.bindPopup(html);
+    const m=L.marker([c.lat,c.lng],{icon:clientIcon(c,col)});
+    // Содержимое — один узел на время открытия: Leaflet перечитывает
+    // содержимое при каждом обновлении, и строка сбрасывала бы раскрытое
+    // «Другие действия» и отметки.
+    m.bindPopup(()=>{ if(!m.__pop){ const box=document.createElement('div'); box.innerHTML=clientPopupHTML(c); m.__pop=box.firstElementChild; } return m.__pop; },{maxWidth:360,minWidth:300,className:'client-popup-wrap'});
+    m.on('popupclose',()=>{ m.__pop=null; });
     m.on('click',()=>{ revealedClient=(revealedClient===c.id)?null:c.id; renderEqMarkers(); });
     if(dim) m.setOpacity(.25);
-    markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); }); }
+    markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); });
+  // Данные обновились, пока карточка клиента была открыта: открываем её снова,
+  // а не теряем вместе со старым маркером.
+  if(reopen&&markerById[reopen]) markerById[reopen].openPopup(); }
 
 let readingsByEq={};
 async function loadReadings(){ readingsByEq={}; try{ const {data,error}=await sb.from('equipment_readings').select('*').order('taken_on');
@@ -1381,18 +1461,58 @@ function renderSide(){
   const f=$('workFeed');  if(f) f.style.display=work?'':'none';
   const l=$('list');      if(l) l.style.display=work?'none':'';
   if(work) renderWorkFeed(); else renderList();
+  renderMapSelectBar();
 }
 
 // Лента «в работе»: машины в пути, затем заявки по остроте.
 // Порядок и разбиение считает attentionBuckets из ядра — та же функция,
 // что и на сводке, так что ленты не разъедутся между экранами.
+// Лента «Задания»: что ждёт плана, сгруппировано по срочности, и что уже
+// стоит в выездах. Галочками собирают выезд; по строке раскрываются действия.
+function personShort(id){ const p=profilesList.find(x=>x.id===id); return p?String(p.full_name||'').split(/\s+/).slice(0,2).join(' '):''; }
+function hoursText(h){ return (Math.round(h*10)/10).toLocaleString('ru-RU')+' ч'; }
+function mapTaskRowHTML(row){
+  const sel=mapSelected.has(row.id),open=mapOpenTask===row.id;
+  const meta=[row.hours?hoursText(row.hours):'',personShort(row.lead),row.dueDate?('срок '+shortDate(row.dueDate)):''].filter(Boolean).join(' · ');
+  return '<div class="map-task urg-'+(row.trip?'trip':row.urgency.level)+(sel?' picked':'')+(open?' open':'')+(row.trip?' in-trip':'')+'" data-task="'+esc(row.id)+'">'
+    +(row.trip?'':'<input type="checkbox" class="map-task-pick" data-map-pick="'+esc(row.id)+'" aria-label="Выбрать задание №'+esc(row.number)+'"'+(sel?' checked':'')+'>')
+    +'<button type="button" class="map-task-body" data-task-open="'+esc(row.id)+'" aria-expanded="'+open+'">'
+    +'<span class="map-task-top"><strong>'+esc(row.clientName)+'</strong><b class="urg-'+(row.trip?'trip':row.urgency.level)+'">'+esc(row.trip?tripShort(row.trip):urgBadge(row.urgency))+'</b></span>'
+    +'<span class="map-task-title">№'+esc(row.number)+' · '+esc(row.title)+'</span>'
+    +(meta?'<span class="map-task-meta">'+esc(meta)+'</span>':'')+'</button>'
+    +(open?'<div class="map-task-actions"><button type="button" class="btn sm" data-task-card="'+esc(row.id)+'">Открыть задание</button>'
+      +(row.trip?'<button type="button" class="btn sm" data-map-trip="'+esc(row.trip.id)+'">Показать выезд</button>':'<button type="button" class="btn sm" data-task-existing="'+esc(row.id)+'">В выезд…</button>')
+      +'<button type="button" class="btn sm ghost" data-task-fly="'+esc(row.id)+'">На карте</button></div>':'')
+    +'</div>';
+}
 function renderWorkFeed(){
   const box=$('workFeed'); if(!box) return;
-  let h='';const q=$('search').value.trim().toLowerCase();
-  const matchesJob=j=>{const c=clients.find(c=>c.id===j.client_id)||j.clients||{};return !(pointFilter==='client'&&c.is_base)&&!(pointFilter==='base'&&!c.is_base)&&(!q||String(c.name||'').toLowerCase().includes(q));};
-  const moving=(vehState||[]).filter(r=>r&&r.lat!=null&&pointFilter==='all'&&(!q||vehLabel((vehicles||[]).find(v=>v.id===r.vehicle_id)||{}).toLowerCase().includes(q)));
-  if(moving.length){
-    h+='<div class="wf-h">В пути сейчас</div>';
+  const q=$('search').value.trim(), ql=q.toLowerCase();
+  let h='';
+  if(canWrite()){
+    const unplanned=mapTasks.filter(r=>!r.trip).length, planned=mapTasks.length-unplanned;
+    h+='<div class="seg map-task-mode" role="group" aria-label="Какие задания показать">'
+      +'<button type="button" data-task-mode="unplanned" class="'+(mapTaskMode==='unplanned'?'on':'')+'" aria-pressed="'+(mapTaskMode==='unplanned')+'">Не запланировано · '+(unplanned+mapRequests.length)+'</button>'
+      +'<button type="button" data-task-mode="planned" class="'+(mapTaskMode==='planned'?'on':'')+'" aria-pressed="'+(mapTaskMode==='planned')+'">В выездах · '+planned+'</button></div>';
+    if(mapTaskMode==='unplanned'){
+      const groups=groupUnplanned(mapTasks,q);
+      groups.forEach(g=>{ h+='<div class="wf-h map-task-group urg-'+g.level+'"><i class="urg-dot" aria-hidden="true"></i>'+esc(g.label)+' <span class="cnt">'+g.rows.length+'</span></div>'; g.rows.forEach(row=>{ h+=mapTaskRowHTML(row); }); });
+      const reqs=mapRequests.filter(job=>{ if(!ql) return true; const c=clients.find(x=>x.id===job.client_id); return String(c?.name||'').toLowerCase().includes(ql)||String(job.number??'')===ql.replace(/^№\s*/,''); });
+      if(reqs.length){
+        h+='<div class="wf-h map-task-group">Заявки без задания <span class="cnt">'+reqs.length+'</span></div>';
+        reqs.slice(0,40).forEach(job=>{ const c=clients.find(x=>x.id===job.client_id)||{};
+          h+='<div class="map-task map-request urg-cold"><div class="map-task-body"><span class="map-task-top"><strong>'+esc(c.name||'—')+'</strong></span><span class="map-task-title">'+esc(requestLabel(job,job.id))+(job.due_date?(' · срок '+esc(shortDate(job.due_date))):'')+'</span></div><button type="button" class="btn sm" data-map-seed="'+esc(job.id)+'">Создать задание</button></div>'; });
+      }
+      if(!groups.length&&!reqs.length) h+='<div class="kempty">'+(q?'По запросу ничего не найдено.':'Вся работа запланирована. Новые задания появятся здесь.')+'</div>';
+    } else {
+      const rows=plannedRows(mapTasks,q);
+      rows.forEach(row=>{ h+=mapTaskRowHTML(row); });
+      if(!rows.length) h+='<div class="kempty">'+(q?'По запросу ничего не найдено.':'В выездах сейчас нет открытых заданий.')+'</div>';
+    }
+  }
+  const moving=(vehState||[]).filter(r=>r&&r.lat!=null&&(!ql||vehLabel((vehicles||[]).find(v=>v.id===r.vehicle_id)||{}).toLowerCase().includes(ql)));
+  if(moving.length&&(!canWrite()||mapTaskMode==='unplanned')){
+    h+='<div class="wf-h map-task-group">Машины на связи <span class="cnt">'+moving.length+'</span></div>';
     moving.forEach(r=>{
       const v=(vehicles||[]).find(x=>x.id===r.vehicle_id);
       const cls=vehClass(r), age=vehAgeMin(r);
@@ -1403,46 +1523,147 @@ function renderWorkFeed(){
         +'<span class="pill" style="color:'+col+';border-color:'+col+'">'+(age>VEH_STALE_MIN?'молчит':'на связи')+'</span></button>';
     });
   }
-
-  const buckets=attentionBuckets(jobsLite.filter(matchesJob),new Date());
-  const dated=buckets.dated;
-  if(dated.length){
-    h+='<div class="wf-h">Требует внимания <span class="cnt">'+dated.length+'</span></div>';
-    dated.slice(0,12).forEach(({job,u})=>{
-      const col=urgHue(u);
-      const badge=u.level==='overdue'?('−'+(-u.left)+' дн'):(u.left+' дн');
-      // Подпись «без техники» стояла на пяти строках из семи — это отсутствие
-      // сведений на месте, где могут быть дата и часы. Модель показываем,
-      // когда она есть, и всегда — срок с трудоёмкостью.
-      const hrs=(job.job_works||[]).reduce((a,w)=>a+(+w.hours||0),0);
-      const sub=[requestLabel(job,job.id),dayLabel(job.due_date)];
-      const mdl=(job.equipment&&job.equipment.model)||''; if(mdl) sub.push(mdl);
-      if(hrs) sub.push(hrs.toFixed(hrs%1?1:0)+' ч');
-      h+='<button type="button" class="wf-row" data-jfly="'+esc(job.client_id)+'" data-jid="'+esc(job.id)+'" style="border-left-color:'+col+'">'
-        +'<div style="flex:1;min-width:0"><div class="wf-t">'+esc((job.clients&&job.clients.name)||'—')+'</div>'
-        +'<div class="wf-s">'+esc(sub.join(' · '))+'</div></div>'
-        +'<span class="pill" style="color:'+col+';border-color:'+col+'">'+esc(badge)+'</span></button>';
-    });
-  }
-  if(buckets.cold.length){
-    h+='<div class="wf-h" style="margin-top: var(--sp-5)">Без срока <span class="cnt">'+buckets.cold.length+'</span></div>';
-    buckets.cold.slice(0,6).forEach(j=>{
-      h+='<button type="button" class="wf-row" data-jfly="'+esc(j.client_id)+'" data-jid="'+esc(j.id)+'">'
-        +'<div style="flex:1"><div class="wf-t">'+esc((j.clients&&j.clients.name)||'—')+'</div>'
-        +'<div class="wf-s">'+esc(requestLabel(j,j.id)+' · '+((j.equipment&&j.equipment.model)||'без техники'))+'</div></div></button>';
-    });
-  }
-
-  if(!h) h=q||pointFilter!=='all'?'<div class="kempty">В текущем списке ничего не найдено. Измени поиск или тип точки.</div>':'<div class="kempty">Живых заявок и машин в пути нет.<br>Открой «Справочник», чтобы увидеть все точки.</div>';
+  if(!h) h='<div class="kempty">Машин на связи нет.<br>Открой «Справочник», чтобы увидеть все точки.</div>';
   box.innerHTML=h;
-
-  const fly=id=>{ const c=clients.find(x=>x.id==id);if(c&&c.lat!=null&&c.lng!=null)map.flyTo([c.lat,c.lng],11);else notify('У точки нет координат. Открой заявку в диспетчере.','warn'); };
-  box.querySelectorAll('[data-jfly]').forEach(el=>el.onclick=()=>fly(el.dataset.jfly));
+  box.querySelectorAll('[data-task-mode]').forEach(b=>b.onclick=()=>{ mapTaskMode=b.dataset.taskMode; mapOpenTask=null; renderWorkFeed(); });
+  box.querySelectorAll('[data-map-pick]').forEach(el=>el.onchange=()=>toggleMapTask(el.dataset.mapPick,el.checked));
+  box.querySelectorAll('[data-task-open]').forEach(b=>b.onclick=()=>{ const id=b.dataset.taskOpen; mapOpenTask=mapOpenTask===id?null:id; renderWorkFeed(); const row=mapTasks.find(r=>r.id===id); if(row&&mapOpenTask) hlMarker(row.clientId,true); });
+  box.querySelectorAll('[data-task-card]').forEach(b=>b.onclick=()=>serviceOrders.open(b.dataset.taskCard));
+  box.querySelectorAll('[data-task-existing]').forEach(b=>b.onclick=()=>chooseTripForTasks([b.dataset.taskExisting],b));
+  box.querySelectorAll('[data-task-fly]').forEach(b=>b.onclick=()=>{ const row=mapTasks.find(r=>r.id===b.dataset.taskFly); if(row) flyToClient(row.clientId,true); });
+  wireMapWorkActions(box);
   box.querySelectorAll('[data-vfly]').forEach(el=>el.onclick=()=>{
     const r=(vehState||[]).find(x=>x.vehicle_id===el.dataset.vfly);
     if(r) map.flyTo([r.lat,r.lng],11); });
 }
-
+// Действия, общие для ленты и всплывающей карточки клиента.
+function wireMapWorkActions(root){
+  root.querySelectorAll('[data-map-trip]').forEach(b=>b.onclick=()=>{ map.closePopup(); showTripOnMap(b.dataset.mapTrip); });
+  root.querySelectorAll('[data-map-seed]').forEach(b=>b.onclick=()=>seedRequestTask(b.dataset.mapSeed,b));
+}
+function flyToClient(cid,popup=false){
+  const c=clients.find(x=>x.id===cid);
+  if(!c||c.lat==null||c.lng==null){ notify('У точки нет координат. Открой заявку в диспетчере.','warn'); return; }
+  if(sheetIsSheet()&&sheetHost()) sheetSnapTo(0);
+  // С карточкой — без полёта: попап открывается сразу у точки, а не после
+  // анимации, которую легко прервать следующим движением.
+  if(!popup){ map.flyTo([c.lat,c.lng],Math.max(map.getZoom(),12)); return; }
+  map.setView([c.lat,c.lng],Math.max(map.getZoom(),12),{animate:false});
+  markerById[cid]?.openPopup();
+}
+function toggleMapTask(id,on){
+  const row=mapTasks.find(r=>r.id===id); if(!row||row.trip) return;
+  if(on??!mapSelected.has(id)) mapSelected.add(id); else mapSelected.delete(id);
+  mapSelectionChanged([row.clientId]);
+}
+function mapSelectionChanged(cids){
+  renderWorkFeed(); renderMapSelectBar();
+  (cids||[...new Set(mapTasks.map(r=>r.clientId))]).forEach(refreshClientMarker);
+}
+// Нижняя панель выбора: сколько выбрано и что с этим сделать.
+function renderMapSelectBar(){
+  const bar=$('mapSelectBar'); if(!bar) return;
+  const side=document.querySelector('.view-map .side');
+  const show=canWrite()&&mapSelected.size>0&&mapScope==='work'&&(side?.dataset.mapPanel||'points')==='points';
+  bar.hidden=!show; side?.classList.toggle('has-selection',show); if(!show) return;
+  const sum=selectionSummary(mapTasks,mapSelected);
+  bar.innerHTML='<div class="map-select-sum"><strong>Выбрано '+sum.count+'</strong><span>'+esc(sum.clients+' '+plural(sum.clients,'клиент','клиента','клиентов')+(sum.hours?(' · '+hoursText(sum.hours)+' работы'):''))+'</span>'
+    +'<button type="button" class="btn sm ghost" data-select-clear>Снять</button></div>'
+    +'<div class="map-select-actions"><button type="button" class="btn amber" data-select-assemble>Собрать выезд</button><button type="button" class="btn" data-select-existing>В выезд…</button></div>';
+  bar.querySelector('[data-select-clear]').onclick=()=>{ mapSelected.clear(); mapSelectionChanged(); };
+  bar.querySelector('[data-select-assemble]').onclick=async e=>{
+    const picked=await openAssembleDialog({selected:new Set(mapSelected),trigger:e.currentTarget});
+    if(!picked) return;
+    mapSelected.clear(); mapSelectionChanged();
+    await openTrip(null,{plannedOrderIds:picked.orderIds});
+  };
+  bar.querySelector('[data-select-existing]').onclick=e=>chooseTripForTasks([...mapSelected],e.currentTarget);
+}
+async function seedRequestTask(jobId,button){
+  if(!canWrite()) return;
+  if(button) button.disabled=true;
+  try{ await seedTaskForRoute(jobId); await refreshStats(); renderSide(); showToast('Задание создано. Проверь его перед планированием.'); }
+  catch(e){ notify('Не удалось создать задание: '+(e.message||e),'err'); }
+  finally{ if(button&&button.isConnected) button.disabled=false; }
+}
+// «Собрать выезд»: состав выезда всегда виден и выбирается явно. Раньше
+// сохранение маршрута молча забирало ВСЕ открытые заявки каждого клиента.
+//   selected  — задания, отмеченные на карте;
+//   clientIds — клиенты маршрута, если окно открыто из вкладки «Маршрут».
+// Возвращает {orderIds, jobIds} или null, если окно закрыли.
+function openAssembleDialog({selected=new Set(),clientIds=null,mode='selection',trigger=null}={}){
+  return new Promise(resolve=>{
+    const choices=assembleChoices(mapTasks,mapRequests,{selected,clientIds});
+    const shift=Number(appSettings.shift_hours)||Math.max(0,(+appSettings.day_end||0)-(+appSettings.day_start||0));
+    const panel=document.createElement('div');panel.className='map-assemble';
+    const task=t=>'<label class="map-assemble-item'+(t.disabled?' disabled':'')+'"><input type="checkbox" data-assemble-task="'+esc(t.row.id)+'"'+(t.checked?' checked':'')+(t.disabled?' disabled':'')+'><span><strong>№'+esc(t.row.number)+'</strong> · '+esc(t.row.title)
+      +'<small>'+esc([t.row.clientName,t.row.hours?hoursText(t.row.hours):'',t.disabled?('уже в '+tripShort(t.row.trip)):(t.row.dueDate?('срок '+shortDate(t.row.dueDate)):'без срока')].filter(Boolean).join(' · '))+'</small></span></label>';
+    const req=r=>{ const c=clients.find(x=>x.id===r.job.client_id)||{}; return '<label class="map-assemble-item request"><input type="checkbox" data-assemble-request="'+esc(r.job.id)+'"><span>'+esc(requestLabel(r.job,r.job.id))+' · без задания<small>'+esc(c.name||'')+' · отметьте — создадим задание и добавим в выезд</small></span></label>'; };
+    panel.innerHTML='<section><h4>Что войдёт в выезд</h4>'
+      +(choices.tasks.length?choices.tasks.map(task).join(''):'<p class="hint">У клиентов маршрута нет открытых заданий.</p>')
+      +choices.requests.map(req).join('')+'</section>'
+      +'<p class="map-assemble-sum" role="status"></p>'
+      +'<p class="hint">'+(mode==='route'?'Выезд сохранится с этим маршрутом. Даты, бригаду и машину укажете в карточке выезда.':'Дальше — карточка нового выезда: даты, бригада, машина и маршрут предложатся по заданиям.')+'</p>';
+    const paint=()=>{
+      const ids=new Set([...panel.querySelectorAll('[data-assemble-task]:checked')].map(el=>el.dataset.assembleTask));
+      const sum=selectionSummary(mapTasks,ids), reqs=panel.querySelectorAll('[data-assemble-request]:checked').length;
+      const days=workDays(sum.hours,shift);
+      panel.querySelector('.map-assemble-sum').textContent=(sum.count||reqs)
+        ?('Заданий: '+(sum.count+reqs)+(sum.hours?(' · работа '+hoursText(sum.hours)):'')+(reqs?' · часы по новым заданиям уточнятся':'')+(days>1?(' · больше смены '+hoursText(shift)+', займёт не меньше '+days+' '+plural(days,'дня','дней','дней')):''))
+        :'Ничего не отмечено.';
+      panel.classList.toggle('over-shift',days>1);
+    };
+    panel.addEventListener('change',paint);paint();
+    let result=null;
+    openEntityPanel({title:mode==='route'?'Сохранить выезд':'Собрать выезд',panel,trigger,dispose:true,
+      saveLabel:mode==='route'?'Сохранить выезд':'Продолжить: даты, бригада, машина',
+      saveHint:'Состав можно будет изменить в карточке выезда.',
+      onSave:async()=>{
+        const orderIds=[...panel.querySelectorAll('[data-assemble-task]:checked')].map(el=>el.dataset.assembleTask);
+        const requestIds=[...panel.querySelectorAll('[data-assemble-request]:checked')].map(el=>el.dataset.assembleRequest);
+        if(!orderIds.length&&!requestIds.length) throw Error('Отметьте хотя бы одно задание.');
+        for(const id of requestIds) orderIds.push(await seedTaskForRoute(id));
+        const jobIds=[...new Set([...mapTasks.filter(r=>orderIds.includes(r.id)).map(r=>r.jobId),...requestIds])];
+        result={orderIds,jobIds};return result;
+      },
+      onSaved:()=>resolve(result),onCancel:()=>resolve(null)});
+  });
+}
+// «В существующий…»: выезды, в которые ещё можно добавить работу, —
+// ближайшие к выбранным клиентам сверху.
+async function chooseTripForTasks(orderIds,trigger){
+  if(!canWrite()||!orderIds.length) return;
+  const panel=document.createElement('div');panel.className='map-trip-picker';panel.innerHTML='<p class="hint">Загружаю выезды…</p>';
+  const dialog=openEntityPanel({title:orderIds.length>1?'Добавить задания в выезд':'Добавить задание в выезд',panel,trigger,dispose:true});
+  try{
+    const {data,error}=await sb.from('trips').select('id,number,date_from,date_to,vehicle_label,status,engineer_ids,owner_id,curator_id,route_stops').is('deleted_at',null).in('status',['planned','assigned']).order('date_from');
+    if(error) throw error;
+    if(!dialog?.open) return;
+    const points=mapTasks.filter(r=>orderIds.includes(r.id)&&r.lat!=null).map(r=>({lat:r.lat,lng:r.lng}));
+    const choices=(data||[]).filter(t=>canWriteTrip(t)).map(t=>({t,km:routeReachKm(t.route_stops,points)}))
+      .sort((a,b)=>(a.km??1e9)-(b.km??1e9)||String(a.t.date_from||'9999').localeCompare(String(b.t.date_from||'9999')));
+    panel.innerHTML=choices.length?choices.map(({t,km})=>'<article class="map-trip-choice"><div><strong>Выезд'+(t.number!=null?' №'+esc(t.number):'')+'</strong><span>'+esc([t.date_from?(shortDate(t.date_from)+(t.date_to&&t.date_to!==t.date_from?'–'+shortDate(t.date_to):'')):'без даты',t.vehicle_label||'машина не выбрана',(t.engineer_ids||[]).map(personShort).filter(Boolean).join(', ')].join(' · '))+'</span>'
+        +(km!=null?'<small>≈ '+Math.round(km)+' км от маршрута</small>':'')+'</div><button type="button" class="btn" data-pick-trip="'+esc(t.id)+'">Добавить</button></article>').join('')
+      :'<p class="hint">Нет выездов, в которые можно добавить работу. Соберите новый.</p>';
+    panel.querySelectorAll('[data-pick-trip]').forEach(b=>b.onclick=async()=>{ dialog.close(); orderIds.forEach(id=>mapSelected.delete(id)); renderMapSelectBar(); await openTrip(b.dataset.pickTrip,{includeOrderIds:orderIds}); });
+  }catch(e){ if(dialog?.open) panel.innerHTML='<p class="err">Не удалось загрузить выезды: '+esc(e.message||e)+'</p>'; }
+}
+// Всплывающая карточка клиента живёт в Leaflet, а он останавливает всплытие
+// событий из попапа. Поэтому слушаем на фазе погружения, один раз на карту.
+function popupClient(target){ const pop=target.closest('.leaflet-popup'); const m=Object.values(markerById).find(x=>x.getPopup&&x.getPopup()?.getElement()===pop); return m?clients.find(c=>markerById[c.id]===m):null; }
+function repaintClientPopup(c){ const m=markerById[c.id]; if(m&&m.isPopupOpen()){ m.__pop=null; m.getPopup().update(); } }
+map.getContainer().addEventListener('change',e=>{
+  const box=e.target.closest('.client-popup [data-map-pick]'); if(!box) return;
+  // Перерисовка — после события: иначе Leaflet увидит щелчок по уже
+  // отсоединённому узлу, сочтёт его щелчком по карте и закроет попап.
+  const c=popupClient(box),id=box.dataset.mapPick,on=box.checked; setTimeout(()=>{ toggleMapTask(id,on); if(c) repaintClientPopup(c); },0);
+},true);
+map.getContainer().addEventListener('click',e=>{
+  const all=e.target.closest('.client-popup [data-map-pick-all]');
+  if(all){ const cid=all.dataset.mapPickAll; setTimeout(()=>{ const open=mapTasks.filter(r=>r.clientId===cid&&!r.trip); const every=open.every(r=>mapSelected.has(r.id)); open.forEach(r=>{ if(every) mapSelected.delete(r.id); else mapSelected.add(r.id); }); mapSelectionChanged([cid]); const c=clients.find(x=>x.id===cid); if(c) repaintClientPopup(c); },0); return; }
+  const trip=e.target.closest('.client-popup [data-map-trip]'); if(trip){ map.closePopup(); showTripOnMap(trip.dataset.mapTrip); return; }
+  const seed=e.target.closest('.client-popup [data-map-seed]'); if(seed){ map.closePopup(); seedRequestTask(seed.dataset.mapSeed); }
+},true);
 const depotOpen=new Set();
 function depotCars(id){
   return (vehState||[]).filter(r=>String(r.current_depot_id||'')===String(id)&&['inside','outside_candidate'].includes(r.depot_state));
@@ -1535,7 +1756,7 @@ function setMapScope(scope){
   mapScope=scope==='all'?'all':'work';
   document.querySelectorAll('#mapScope button').forEach(x=>x.classList.toggle('on',x.dataset.ms===mapScope));
   document.querySelectorAll('#sideTabs button').forEach(b=>{const selected=b.dataset.sb===(mapScope==='all'?'directory':'points');b.classList.toggle('on',selected);b.setAttribute('aria-pressed',String(selected));});
-  renderMarkers(); renderSide();
+  renderMarkers(); renderSide(); renderMapLegend();
 }
 document.querySelectorAll('#mapScope button').forEach(b=>b.onclick=()=>setMapScope(b.dataset.ms));
 document.querySelectorAll('#typeFilter button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('#typeFilter button').forEach(x=>x.classList.toggle('on',x===b)); pointFilter=b.dataset.tf; renderSide(); });
@@ -6228,7 +6449,7 @@ $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) o
 if($('tripEngFilter')) $('tripEngFilter').onchange=renderTrips;
 function canWriteTrip(t=getTrip(tripEditId)){return canWrite()||!!(t?.id&&[t.owner_id,t.curator_id].includes(session?.user?.id));}
 let tripBack={name:'planner',sub:'trips',id:null};
-async function openTrip(id,{includeOrderId=null,plannedOrderIds=[],seedOrder=null,gpsSource=null,newPlan=false,pane:requestedPane,resultRequest=null,returning=false}={}){ if(!await leaveSettingsEditor())return;if(!await leaveJobEditor())return;if(!await leaveTripEditor())return;if(serviceOrders.isDirty()&&!await serviceOrders.leave())return;
+async function openTrip(id,{includeOrderId=null,includeOrderIds=[],plannedOrderIds=[],seedOrder=null,gpsSource=null,newPlan=false,pane:requestedPane,resultRequest=null,returning=false}={}){ if(!await leaveSettingsEditor())return;if(!await leaveJobEditor())return;if(!await leaveTripEditor())return;if(serviceOrders.isDirty()&&!await serviceOrders.leave())return;
   const origin=cardOrigin();if(!returning&&origin.name!=='trip')tripBack=gpsSource?{name:'gpsRecord',id:gpsSource.id}:origin; await ensureRefs(); await loadTripJobs(); await loadTripOrders();
   // econCompute считает дорогу по плательщикам через turf, когда готовых
   // километров в выезде нет. Без turf он молча уйдёт в плоскую ветку и
@@ -6268,7 +6489,8 @@ async function openTrip(id,{includeOrderId=null,plannedOrderIds=[],seedOrder=nul
   syncTripJobsFromOrders();if(tripMainJobId&&!curTripJobs.has(tripMainJobId))tripMainJobId=null;
   const ro=!canWriteTrip(); ['tpFrom','tpTo','tpVeh','tpEng','tpStatus','tpNotes','tpSave'].forEach(x=>{ if($(x)) $(x).disabled=ro; });
   $('tpTaskPicker').hidden=ro;
-  $('tpTaskPicker').open=!id||newPlan||!!includeOrderId;
+  const includeIds=[...new Set([...(includeOrderIds||[]),...(includeOrderId?[includeOrderId]:[])])];
+  $('tpTaskPicker').open=!id||newPlan||!!includeIds.length;
   $('tpSave').hidden=ro;
   $('tripHeadEcon').hidden=ro;
   $('tpChangeReasonGroup').hidden=ro||!id||tripNewPlanId===id;
@@ -6287,7 +6509,7 @@ async function openTrip(id,{includeOrderId=null,plannedOrderIds=[],seedOrder=nul
   document.querySelector('.workflow-trip-edit').open=!id||newPlan;
   $('tpTabOverview').hidden=!id;
   tripFinance=mountCardFinance('trip',ro?null:id,$('tpEconomyPane'),()=>tripEditId);
-  setTripPane(requestedPane||(!id||newPlan||includeOrderId?'plan':'overview'),{notify:false});
+  setTripPane(requestedPane||(!id||newPlan||includeIds.length?'plan':'overview'),{notify:false});
   await switchTab('trip');
   if(tripTabs.value==='economy')void tripFinance?.load();
   await loadWorkbench(id); if(id)mountEntityActivity({root:$('tripActivity'),db:sb,entity:'trip',id,userId:()=>session?.user?.id,people:()=>profilesList,canPin:()=>canWriteTrip(t)}); if(id&&t)mountEntityResponsibility({root:$('tripResponsibilitySection'),db:sb,kind:'trip',id,record:t,people:()=>profilesList,userId:()=>session?.user?.id,role:()=>role,showHistory:false,beforeAssign:()=>settleTripDraft(id),onChange:data=>canWrite()||[data.owner_id,data.curator_id].includes(session?.user?.id)?openTrip(id):switchTab('planner','trips'),onError:e=>notify(e.message,'err')}); await serviceOrders.tripParent(t);syncTripSave();
@@ -6298,7 +6520,14 @@ async function openTrip(id,{includeOrderId=null,plannedOrderIds=[],seedOrder=nul
   }
   edit.hidden=!id||ro;
   document.querySelector('.view-trip')?.toggleAttribute('data-saved-trip',!!id&&!ro);
-  if(includeOrderId){const order=tripOrdersAll.find(o=>o.id===includeOrderId);if(!t||!canWriteTrip(t)||!['planned','assigned'].includes(t.status)||!order||['completed','cancelled','review'].includes(order.status)){notify('Задание нельзя добавить в этот план выезда.','warn');}else if(curTripOrders.has(includeOrderId)){notify('Задание уже включено в выезд.');}else{curTripOrders.add(includeOrderId);syncTripJobsFromOrders();syncRouteStops();resetTripRoute();renderRouteStops();renderTripJobs();tripPlanDirty=true;notify('Задание добавлено в план. Проверь команду и маршрут, затем сохрани выезд.');}}
+  if(includeIds.length){
+    // Several tasks can arrive at once from the map selection; each is checked on its own.
+    const blocked=!t||!canWriteTrip(t)||!['planned','assigned'].includes(t.status);
+    const fresh=blocked?[]:includeIds.filter(oid=>{const order=tripOrdersAll.find(o=>o.id===oid);return order&&!['completed','cancelled','review'].includes(order.status)&&!curTripOrders.has(oid);});
+    if(blocked||!fresh.length){if(!blocked&&includeIds.every(oid=>curTripOrders.has(oid)))notify(includeIds.length>1?'Задания уже включены в выезд.':'Задание уже включено в выезд.');else notify('Задание нельзя добавить в этот план выезда.','warn');}
+    else{fresh.forEach(oid=>curTripOrders.add(oid));syncTripJobsFromOrders();syncRouteStops();resetTripRoute();renderRouteStops();renderTripJobs();tripPlanDirty=true;
+      notify((fresh.length>1?'Задания добавлены':'Задание добавлено')+' в план. Проверь команду и маршрут, затем сохрани выезд.'+(fresh.length<includeIds.length?' Часть заданий пропущена: они уже в выезде или закрыты.':''));}
+  }
   renderTripReviewSummary();void loadCardPayment('trip',id,$('tripOverviewState'),()=>tripEditId);const pane=document.querySelector('.view-trip .pane'); if(pane) pane.scrollTop=0; }
 // Шапка страницы: чем занят выезд и сколько он приносит. Раньше это надо
 // было собирать глазами из четырёх мест модалки.
@@ -9021,14 +9250,21 @@ $('rSaveTrip').onclick=async()=>{
       const ids=new Set((members||[]).map(link=>link.job_id));
       linked=tripJobsAll.filter(job=>ids.has(job.id));
     }else{
+      // Состав нового выезда выбирают явно: раньше сюда молча попадали ВСЕ
+      // открытые заявки каждого клиента маршрута.
       const clientIds=[...new Set(stops.filter(point=>point.clientId).map(point=>point.clientId))];
       if(clientIds.length){
-        const {data,error}=await sb.from('jobs').select('id, client_id, clients(name,lat,lng), equipment(lat,lng), '+JOB_FINANCE_SELECT).is('deleted_at',null).in('client_id',clientIds).not('status','in','(done,cancelled)');
-        if(error)throw error;
-        linked=projectLegacyFinanceRows(data||[]);
+        const picked=await openAssembleDialog({clientIds,mode:'route',trigger:$('rSaveTrip')});
+        if(!picked)return;
+        selectedOrderIds=picked.orderIds;
+        if(picked.jobIds.length){
+          const {data,error}=await sb.from('jobs').select('id, client_id, clients(name,lat,lng), equipment(lat,lng), '+JOB_FINANCE_SELECT).is('deleted_at',null).in('id',picked.jobIds);
+          if(error)throw error;
+          linked=projectLegacyFinanceRows(data||[]);
+        }
       }
     }
-    if(!selectedOrderIds.length)for(const job of linked)selectedOrderIds.push(await seedTaskForRoute(job.id));
+    if(!selectedOrderIds.length&&editedId)for(const job of linked)selectedOrderIds.push(await seedTaskForRoute(job.id));
     const ov=exist.overrides||{};
     // Километраж по плательщикам — по реальным дорогам, один раз здесь.
     // Если не посчитался (ORS молчит), оставляем прежний из выезда.

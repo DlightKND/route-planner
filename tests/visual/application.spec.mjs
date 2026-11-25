@@ -198,7 +198,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
           expect(style.left,'Status/client color retains its left edge').toBe(3);
         }
       };
-      await checkCards('#workFeed .wf-row');
+      await checkCards('#workFeed .map-task');
       await shot(page,testInfo,'logist-map-work-cards');
       await active.locator('#sideTabs [data-sb=directory]').click();
       await expect(active.locator('#sideTabs [data-sb=directory]')).toHaveAttribute('aria-pressed','true');
