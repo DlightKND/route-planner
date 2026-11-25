@@ -358,7 +358,7 @@ $('profileBtn').onclick=()=>openAccountProfile({profile,user:session.user,trigge
   readOrg:async()=>{const {data,error}=await sb.rpc('account_org_read');if(error)throw error;return data;}});
 const SIGNATURE_CANCELLED=Symbol('signature-cancelled');
 const modalUI=installModalShell({
-  dirtyIds:['baseOverlay','linkOverlay','editOverlay','eqOverlay','catOverlay','stockOverlay','profOverlay','pointOverlay','reschedOverlay','fixOverlay','cfgOverlay','promptOverlay'],
+  dirtyIds:['baseOverlay','editOverlay','eqOverlay','catOverlay','stockOverlay','profOverlay','pointOverlay','reschedOverlay','fixOverlay','cfgOverlay','promptOverlay'],
   canDismiss:id=>id!=='authOverlay' && (id!=='cfgOverlay'||!!session?.user),
   dismiss:{pushOverlay:()=>closePush(),phView:()=>{$('phView').hidden=true;$('phViewImg').src='';},confirmOverlay:()=>_cdDone(false),promptOverlay:()=>_pdDone(false),signOverlay:()=>signDone(SIGNATURE_CANCELLED),pointOverlay:()=>{$('cancelBtn').click();}},
   confirmDiscard:()=>confirmDialog('Изменения в этом окне ещё не сохранены. Закрыть и отменить их?',{title:'Несохранённые изменения',okText:'Отменить изменения',cancelText:'Продолжить ввод',danger:true})
@@ -8786,6 +8786,9 @@ function showVehModal(vid){
   h+='<section class="vehicle-trip"><h4>Информация о выезде</h4>';
   if(trip){
     h+=vehRow('Дата', esc(trip.date_from||'—')+(trip.date_to&&trip.date_to!==trip.date_from?(' — '+esc(trip.date_to)):''));
+    const crew=[trip.lead_engineer,...(trip.engineer_ids||[])].filter((x,i,a)=>x&&a.indexOf(x)===i).map(id=>personShort(id)).filter(Boolean);
+    if(crew.length) h+=vehRow('Экипаж',esc(crew.join(', ')));
+    const stops=(trip.route_stops||[]).filter(st=>st&&st.type!=='base'); if(stops.length) h+=vehRow('Остановки',String(stops.length));
     const trackingStatus=tracking&&tracking.state==='finish_candidate'?'ожидает завершения'
       : tracking&&tracking.state==='armed'?'ожидает старта'
       : (ST_TRIP[trip.status]||trip.status||'—');
@@ -8794,7 +8797,7 @@ function showVehModal(vid){
       ?'Телеметрия сохраняется во временный трек до старта выезда.'
       :tracking&&tracking.state==='finish_candidate'?'Возвращение подтверждено · запись трека остановлена. Выезд ожидает проверки.':'Активный выезд найден · трек пишется в историю.')+'</div>';
   } else {
-    h+='<p class="hint">Активного выезда нет · GPS сохраняется в журнале.</p>'+(['admin','logist'].includes(role)?'<button type="button" class="btn sm ghost" id="vehJournal">Открыть GPS-журнал</button>':'');
+    h+='<p class="hint">Активного выезда нет · GPS сохраняется в журнале.</p>';
   }
   if(tracking&&tracking.state==='armed'){
     h+='<div class="vm-stale" style="margin-top:var(--sp-3)">Трекинг подготовлен с '+esc(new Date(tracking.planned_start_at).toLocaleString('ru'))+'. Ожидаем кнопку «Начать» или подтверждённый выход из депо.</div>'
@@ -8808,8 +8811,15 @@ function showVehModal(vid){
   telemetry+='<div class="veh-kv veh-coordinates"><span style="font-family:var(--mono);font-size: var(--fs-2)">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
      '<span><button class="btn sm ghost" id="vehCopy">копировать</button></span></div>';
 
-  h+='</section><details class="vehicle-details" open><summary>Данные машины и GPS</summary><div class="vehicle-telemetry">'+telemetry+'</div></details>';
+  if(['admin','logist'].includes(role)) telemetry+='<button type="button" class="btn ghost" id="vehJournal" style="margin-top:var(--sp-3)">Открыть GPS-журнал</button>';
+  h+='</section><details class="vehicle-details"><summary>Данные машины и GPS</summary><div class="vehicle-telemetry">'+telemetry+'</div></details>';
   $('vehBody').innerHTML=h;
+  // Главная кнопка — по ситуации: есть выезд — открыть его; нет — собрать
+  // новый выезд на эту машину. Показать на карте — вторая.
+  const prim=$('vehPrimary');
+  if(trip&&trip.id){ prim.hidden=false; prim.textContent='Открыть выезд'; prim.onclick=()=>{ $('vehOverlay').classList.remove('on'); openTrip(trip.id); }; }
+  else if(canWrite()){ prim.hidden=false; prim.textContent='Новый выезд'; prim.onclick=async ()=>{ $('vehOverlay').classList.remove('on'); await openTrip(null); if($('tpVeh')){ $('tpVeh').value=vid; updateVehInfo(); } }; }
+  else prim.hidden=true;
   if($('vehJournal'))$('vehJournal').onclick=()=>{$('vehOverlay').classList.remove('on');switchTab('planner','tracking');};
   const cp=$('vehCopy'); if(cp) cp.onclick=()=>{ const t=(+r.lat).toFixed(6)+', '+(+r.lng).toFixed(6);
     try{ navigator.clipboard.writeText(t); }catch(e){} showToast('Координаты: '+t); };
@@ -8883,7 +8893,7 @@ if($('vehBtn')) $('vehBtn').onclick=()=>{
 // ---------- map route planner ----------
 // Tasks of the trip whose route is being edited on the map: [{id,number,title,status,clientId,jobId,hours}].
 let plannerOrders=null, plannerOrdersInitial=[];
-let rStops=[], rLegStops=[], rStart=null, rRoute={km:0,driveH:0,geometry:null,legs:[]}, rVariants=[], rVarSel=0, bufferKm=0, isoMin=0, places=[], plannerTripId=null, plannerTripRevision=0, pendingLinkClient=null, baseMode='start', baseAfter=null, endDeclined=false, rBusy=false;
+let rStops=[], rLegStops=[], rStart=null, rRoute={km:0,driveH:0,geometry:null,legs:[]}, rVariants=[], rVarSel=0, bufferKm=0, isoMin=0, places=[], plannerTripId=null, plannerTripRevision=0, baseMode='start', baseAfter=null, endDeclined=false, rBusy=false;
 async function loadPlaces(){ places=clients.filter(c=>c.is_base); }
 let plannerRouteTrip=null,plannerRemainingRoute=null,plannerRouteDirty=false,routeEditRevision=0,rSavingPlan=false;
 function routeStopsAll(){ return (rStart?[{...rStart,type:'start',description:rStart.description||''}]:[]).concat(rStops); }
@@ -9125,12 +9135,24 @@ function renderBaseList(){ const box=$('baseList'); box.innerHTML=places.length?
   box.querySelectorAll('[data-bedit]').forEach(b=>b.onclick=async ()=>{ const p=places.find(x=>x.id==b.dataset.bedit); if(!p) return; const r=await promptDialog('Депо',[{key:'name',label:'Название',value:p.name},{key:'desc',label:'Описание',value:p.description||'',type:'textarea'}]); if(!r) return; const {error}=await sb.from('clients').update({name:((r.name||'').trim()||p.name),description:(r.desc||'').trim()}).eq('id',p.id); if(error){ notify(error.message,'err'); return; } await loadAll(); renderBaseList(); }); }
 function chooseBase(p){ const o={name:p.name,lat:p.lat,lng:p.lng,placeId:p.id,description:p.description||''}; if(baseMode==='start'){ rStart=o; } else { rStops.push(Object.assign({type:'place'},o)); } $('baseOverlay').classList.remove('on'); renderRoutePanel(); resetBuilt(); const a=baseAfter; baseAfter=null; if(typeof a==='function') a(true); }
 $('baseSkip').onclick=()=>{ if(baseMode==='end') endDeclined=true; $('baseOverlay').classList.remove('on'); const a=baseAfter; baseAfter=null; if(typeof a==='function') a(false); };
-$('baseNewAdd').onclick=async ()=>{ const q=$('baseNew').value.trim(); if(!q){ $('baseNewRes').innerHTML='<div class="hint">Укажи адрес для поиска координат.</div>'; return; } $('baseNewAdd').disabled=true; $('baseNewRes').innerHTML='<div class="hint">Ищу…</div>';
-  try{ const data=await geoSearch(q,1); if(!data.length){ $('baseNewRes').innerHTML='<div class="hint">Адрес не найден.</div>'; return; } const it=data[0];
-    const nm=$('baseNewName').value.trim()||it.display_name.split(',')[0]; const ds=$('baseNewDesc').value.trim();
-    const ins=await sb.from('clients').insert({name:nm,description:ds,lat:+it.lat,lng:+it.lon,is_base:true,color:'#27d3c4'}).select().single(); if(ins.error){ $('baseNewRes').innerHTML='<div class="err">'+esc(ins.error.message)+'</div>'; return; }
-    $('baseNew').value='';$('baseNewName').value='';$('baseNewDesc').value=''; await loadAll(); chooseBase(ins.data);
+let baseNewHits=[];
+function baseNewReset(){ baseNewHits=[]; $('baseNewPick').hidden=true; $('baseNewList').innerHTML=''; $('baseNewSave').hidden=true; }
+$('baseNew').addEventListener('input',baseNewReset);
+$('baseNew').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('baseNewAdd').click(); } });
+$('baseNewAdd').onclick=async ()=>{ const q=$('baseNew').value.trim(); baseNewReset(); if(!q){ $('baseNewRes').innerHTML='<div class="hint">Укажи адрес для поиска координат.</div>'; return; } $('baseNewAdd').disabled=true; $('baseNewRes').innerHTML='<div class="hint">Ищу…</div>';
+  try{ const data=await geoSearch(q,5); if(!data.length){ $('baseNewRes').innerHTML='<div class="hint">Адрес не найден. Уточните город или улицу.</div>'; return; }
+    $('baseNewRes').innerHTML=''; baseNewHits=data.map(it=>({name:it.display_name,lat:+it.lat,lng:+it.lon}));
+    const first=baseNewHits[0];
+    $('baseNewList').innerHTML=baseNewHits.map((h,i)=>{ const km=i?haversineKm(first,h):0; return '<label class="base-pick-row"><input type="radio" name="baseNewHit" value="'+i+'"'+(i?'':' checked')+'><span>'+esc(h.name)+(i&&km>=1?'<small>'+Math.round(km)+' км от первого</small>':'')+'</span></label>'; }).join('');
+    $('baseNewPick').hidden=false; $('baseNewSave').hidden=false;
+    if(!$('baseNewName').value.trim()) $('baseNewName').placeholder='название: '+first.name.split(',')[0];
   }catch(e){ $('baseNewRes').innerHTML='<div class="err">Ошибка: '+esc(e.message||e)+'</div>'; } finally{ $('baseNewAdd').disabled=false; } };
+$('baseNewSave').onclick=async ()=>{ const pick=document.querySelector('input[name="baseNewHit"]:checked'); const it=baseNewHits[+(pick?.value??-1)]; if(!it) return;
+  const nm=$('baseNewName').value.trim()||it.name.split(',')[0]; const ds=$('baseNewDesc').value.trim();
+  $('baseNewSave').disabled=true;
+  try{ const ins=await sb.from('clients').insert({name:nm,description:ds,lat:it.lat,lng:it.lng,address:it.name,is_base:true,color:'#27d3c4'}).select().single(); if(ins.error){ $('baseNewRes').innerHTML='<div class="err">'+esc(ins.error.message)+'</div>'; return; }
+    $('baseNew').value='';$('baseNewName').value='';$('baseNewDesc').value=''; baseNewReset(); await loadAll(); chooseBase(ins.data); }
+  finally{ $('baseNewSave').disabled=false; } };
 $('rBuild').onclick=()=>{ const stops=routeStopsAll(); if(stops.length<2){ $('rStatus').textContent='Нужно минимум 2 точки.'; return; } if(orsKeyMissing()){ orsMissing($('rStatus')); return; }
   // Одна кнопка на два пути: с включённым чипом она сперва подбирает
   // порядок, потом строит (optimizeOrder сам вызывает doBuildRoute).
@@ -9665,8 +9687,6 @@ $('rSaveTrip').onclick=async()=>{
 };
 
 
-$('linkSkip').onclick=()=>{ $('linkOverlay').classList.remove('on'); pendingLinkClient=null; };
-$('linkCreate').onclick=()=>{ $('linkOverlay').classList.remove('on'); const cid=pendingLinkClient; pendingLinkClient=null; if(cid) openJob(null,cid); };
 // ---------- economics breakdown ----------
 function econRow(k,v){ return '<div style="display:flex;justify-content:space-between;font-size: var(--fs-4);padding: var(--sp-1) 0"><span class="hint" style="margin: 0">'+esc(k)+'</span><span>'+esc(v)+'</span></div>'; }
 

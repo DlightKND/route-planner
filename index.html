@@ -2972,7 +2972,7 @@
 <div class="overlay" id="vehOverlay"><div class="modal s">
   <h3 id="vehTitle">Машина</h3>
   <div id="vehBody"></div>
-  <div class="row modal-actions" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="vehCenter">Центрировать на карте</button></div>
+  <div class="row modal-actions" style="margin-top: var(--sp-4)"><button type="button" class="btn amber grow" id="vehPrimary">Открыть выезд</button><button type="button" class="btn ghost" id="vehCenter">На карте</button></div>
 </div></div>
 
 <!-- Окно экономики выезда убрано: разбивка живёт врезкой на странице
@@ -2986,16 +2986,13 @@
 <details class="modal-group"><summary>Создать депо</summary>  <label style="margin-top: var(--sp-3)">Новое депо</label>
   <input type="text" id="baseNew" placeholder="адрес депо для поиска координат">
   <div class="row" style="margin-top: var(--sp-3)"><input type="text" id="baseNewName" class="grow" placeholder="название (необязательно)"><input type="text" id="baseNewDesc" class="grow" placeholder="описание"></div>
-  <button class="btn sm" id="baseNewAdd" style="margin-top: var(--sp-3);width:100%">Создать депо</button>
+  <button type="button" class="btn" id="baseNewAdd" style="margin-top: var(--sp-3);width:100%">Найти адрес</button>
   <div id="baseNewRes"></div>
+  <!-- Геокодер часто находит одинаковые улицы в разных городах — депо
+       выбирают из списка, а не берут первый ответ. -->
+  <fieldset id="baseNewPick" class="base-pick" hidden><legend class="hint">Выберите нужный адрес</legend><div id="baseNewList"></div></fieldset>
+  <button type="button" class="btn amber" id="baseNewSave" style="margin-top: var(--sp-3);width:100%" hidden>Сохранить депо</button>
 </details>  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="baseSkip">Не нужно</button></div>
-</div></div>
-
-<!-- link job prompt -->
-<div class="overlay" id="linkOverlay"><div class="modal s">
-  <h3>Заявка для точки</h3>
-  <div class="sub" id="linkText"></div>
-  <div class="row" style="margin-top: var(--sp-3)"><button class="btn amber grow" id="linkCreate">Создать заявку</button><button class="btn ghost" id="linkSkip">Без заявки</button></div>
 </div></div>
 
 <!-- trip editor -->

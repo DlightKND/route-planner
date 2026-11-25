@@ -159,7 +159,9 @@ test('Escape closes only the top confirmation and keeps its parent dialog open',
 
 test('vehicle summary is compact, corners clip correctly and GPS details remain usable',async({page},info)=>{
  await open(page,'vehicle');const modal=page.locator('#vehOverlay .modal');await expect(modal).toBeVisible();
- await expect(page.locator('#vehOdometer')).toBeVisible();await expect(page.locator('#vehCopy')).toBeVisible();
+ // Данные машины свёрнуты: главное — выезд и действие по ситуации.
+ await expect(page.locator('#vehPrimary')).toBeVisible();await expect(page.locator('#vehCopy')).toBeHidden();
+ await page.locator('.vehicle-details summary').click();await expect(page.locator('#vehOdometer')).toBeVisible();await expect(page.locator('#vehCopy')).toBeVisible();
  const shape=await modal.evaluate(el=>{const s=getComputedStyle(el);return {overflow:s.overflow,radii:[s.borderTopLeftRadius,s.borderTopRightRadius,s.borderBottomRightRadius,s.borderBottomLeftRadius],shadow:s.boxShadow};});
  expect(shape.overflow).toBe('hidden');expect(shape.radii).toEqual(['16px','16px','16px','16px']);expect(shape.shadow).toBe('none');
  await page.locator('.vehicle-details summary').click();await expect(page.locator('#vehCopy')).toBeHidden();
