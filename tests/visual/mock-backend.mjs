@@ -365,8 +365,8 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     tables.equipment_models.push({id:'model-svc',manufacturer:'Grundfos',kind:'насос',model:'CR 32',warranty_months:24,service_interval_hours:500});
     tables.work_catalog.push({id:'work-to',name:'Плановое ТО насоса',norm_hours:3,warranty_eligible:false,is_maintenance:true,applicable_kinds:[],unit:'ч'});
     tables.equipment.push(
-      {id:'eq-soon',client_id:agro.id,model:'Grundfos CR 32',kind:'насос',model_id:'model-svc',serial:'4471-22',installed_on:'2024-03-12',last_service:'2026-08-01',deleted_at:null},
-      {id:'eq-late',client_id:agro.id,model:'Шкаф управления ШУ-2',kind:'автоматика',model_id:'model-svc',last_service:'2026-05-14',deleted_at:null},
+      {id:'eq-soon',client_id:agro.id,model:'Grundfos CR 32',kind:'насос',model_id:'model-svc',serial:'4471-22',installed_on:'2024-03-12',last_service:'2026-08-01',lat:agro.lat+0.004,lng:agro.lng+0.006,deleted_at:null},
+      {id:'eq-late',client_id:agro.id,model:'Шкаф управления ШУ-2',kind:'автоматика',model_id:'model-svc',last_service:'2026-05-14',lat:agro.lat-0.004,lng:agro.lng+0.005,deleted_at:null},
       {id:'eq-fresh',client_id:agro.id,model:'Генератор SDMO J88',kind:'генератор',model_id:'model-svc',last_service:'2026-09-02',deleted_at:null});
     tables.equipment_readings=[
       {id:'r1',equipment_id:'eq-soon',taken_on:'2026-08-01',moto_hours:4300,kind:'reading',created_by:engineer},
