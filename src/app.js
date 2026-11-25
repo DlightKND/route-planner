@@ -778,7 +778,8 @@ function applyMobileNav(){
   const rail=document.querySelector('#appShell>.rail'); if(!rail) return;
   // Клавиатура ли ведёт фокус: Tab и стрелки — да, любое касание или щелчок — нет.
   let keyboard=false;
-  document.addEventListener('keydown',e=>{ if(e.key==='Tab'||e.key.startsWith('Arrow')){ keyboard=true; rail.classList.remove('rail-rest'); } },true);
+  // Автозаполнение Chrome шлёт keydown без key — проверяем тип.
+  document.addEventListener('keydown',e=>{ const k=typeof e.key==='string'?e.key:''; if(k==='Tab'||k.startsWith('Arrow')){ keyboard=true; rail.classList.remove('rail-rest'); } },true);
   document.addEventListener('pointerdown',()=>{ keyboard=false; },true);
   // Фокус, вернувшийся в рельс после щелчка (закрыли «Мой профиль»), рельс не раскрывает.
   rail.addEventListener('focusin',()=>{ if(!keyboard) rail.classList.add('rail-rest'); });
@@ -1582,7 +1583,7 @@ function renderWorkFeed(){
   if(canWrite()){
     const unplanned=mapTasks.filter(r=>!r.trip).length, planned=mapTasks.length-unplanned;
     h+='<div class="seg map-task-mode" role="group" aria-label="Какие задания показать">'
-      +'<button type="button" data-task-mode="unplanned" class="'+(mapTaskMode==='unplanned'?'on':'')+'" aria-pressed="'+(mapTaskMode==='unplanned')+'">Не запланировано · '+(unplanned+mapRequests.length)+'</button>'
+      +'<button type="button" data-task-mode="unplanned" class="'+(mapTaskMode==='unplanned'?'on':'')+'" aria-pressed="'+(mapTaskMode==='unplanned')+'">Ждут плана · '+(unplanned+mapRequests.length)+'</button>'
       +'<button type="button" data-task-mode="planned" class="'+(mapTaskMode==='planned'?'on':'')+'" aria-pressed="'+(mapTaskMode==='planned')+'">В выездах · '+planned+'</button></div>';
     if(mapNear) h+='<div class="map-near-chip" role="status"><span>Рядом с точкой на карте · '+mapNear.km+' км</span><button type="button" class="btn ghost" data-near-clear>Показать все</button></div>';
     if(mapTaskMode==='unplanned'){

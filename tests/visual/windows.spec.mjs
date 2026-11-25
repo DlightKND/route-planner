@@ -129,6 +129,11 @@ test('map context menu offers work actions and keeps unnamed stops out of trips'
  await expect(menu.locator('[data-cx="wp"]')).toBeDisabled();
 });
 
+test('a keydown without a key (browser autofill) does not break the app',async({page})=>{
+ await page.evaluate(()=>{const input=document.querySelector('input:not([type=hidden])')||document.body;input.dispatchEvent(new Event('keydown',{bubbles:true}));document.body.dispatchEvent(new Event('keydown',{bubbles:true}));});
+ await page.waitForTimeout(100);
+});
+
 test('destructive buttons meet text contrast in both themes',async({page})=>{
  await page.locator('#profileBtn').evaluate(el=>el.click());const button=page.locator('[data-profile-logout]');await expect(button).toBeVisible();
  const contrast=await button.evaluate(el=>{const s=getComputedStyle(el),l=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{const c=v/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};const a=l(s.color),b=l(s.backgroundColor);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05);});
