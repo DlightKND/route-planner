@@ -145,6 +145,10 @@ const plannerWorkspace=createPlannerWorkspace({host:()=>document.getElementById(
 // без объяснений. Этот обработчик ловит такие падения и показывает причину
 // прямо на странице (и в консоли), чтобы не гадать вслепую.
 window.addEventListener('error', (ev) => {
+  // «ResizeObserver loop …» — служебное предупреждение браузера: наблюдатель
+  // размеров не успел разослать все уведомления за кадр и дошлёт их в
+  // следующем. Ничего не ломается, это не ошибка запуска.
+  if (/^ResizeObserver loop/.test(String(ev.message || ''))) { ev.stopImmediatePropagation?.(); return; }
   const box = document.getElementById('bootErr') || (() => {
     const d = document.createElement('div');
     d.id = 'bootErr';
@@ -1297,16 +1301,21 @@ function markerColor(c){
 }
 // Легенда всегда на карте, а не только в меню слоёв: цвет и цифра маркера
 // должны читаться без лишнего щелчка.
-const mapLegend=L.control({position:'bottomleft'});
-mapLegend.onAdd=()=>{ const el=L.DomUtil.create('div','map-legend'); el.id='mapLegend'; el.setAttribute('aria-label','Легенда карты'); L.DomEvent.disableClickPropagation(el); return el; };
+// Легенда не висит посреди карты: в правом нижнем углу свёрнута в строку
+// «Обозначения» с цветами срочности, раскрывается по клику; выбор помнится.
+const mapLegend=L.control({position:'bottomright'});
+mapLegend.onAdd=()=>{ const el=L.DomUtil.create('div','map-legend'); el.id='mapLegend'; L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el); return el; };
 mapLegend.addTo(map);
 function renderMapLegend(){
   const el=$('mapLegend'); if(!el) return;
   const dot=(c,t,extra='')=>'<span><i style="background:'+c+extra+'"></i>'+t+'</span>';
   if(colorMode!=='urgency'||!canWrite()){ el.hidden=true; return; }
   el.hidden=false;
-  el.innerHTML='<div>'+dot(URG_COL.overdue,'просрочено')+dot(URG_COL.acute,'горит')+dot(URG_COL.calm,'спокойно')+dot(URG_COL.cold,'без срока')+'</div>'
-    +'<div class="map-legend-sub">'+(mapScope==='work'?'<span>цифра — ждёт плана</span><span><i class="ring"></i>выбрано</span><span><i class="dashed"></i>всё в выездах</span>':'<span>цифра — единицы техники</span>')+'</div>';
+  let open=false; try{ open=localStorage.getItem('map.legend')==='open'; }catch(e){}
+  el.innerHTML='<details'+(open?' open':'')+'><summary aria-label="Обозначения на карте"><span class="map-legend-dots" aria-hidden="true">'+[URG_COL.overdue,URG_COL.acute,URG_COL.calm,URG_COL.cold].map(c=>'<i style="background:'+c+'"></i>').join('')+'</span>Обозначения</summary>'
+    +'<div class="map-legend-body"><div>'+dot(URG_COL.overdue,'просрочено')+dot(URG_COL.acute,'горит')+dot(URG_COL.calm,'спокойно')+dot(URG_COL.cold,'без срока')+'</div>'
+    +'<div class="map-legend-sub">'+(mapScope==='work'?'<span>цифра — ждёт плана</span><span><i class="ring"></i>выбрано</span><span><i class="dashed"></i>всё в выездах</span><span><i class="svc"></i>у техники скоро ТО</span>':'<span>цифра — единицы техники</span>')+'</div></div></details>';
+  el.querySelector('details').addEventListener('toggle',e=>{ try{ localStorage.setItem('map.legend',e.target.open?'open':'closed'); }catch(err){} });
 }
 function renderColorLegend(){
   const el=$('profitLegend'); if(!el) return;
