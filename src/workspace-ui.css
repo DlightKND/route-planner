@@ -1500,3 +1500,29 @@ html#dlight-ui[data-ui-system] .overlay .vehicle-trip-acts>.btn.ghost.red { back
 .form-grid>div>:is(input,select,textarea) { width:100%!important;min-width:0!important;max-width:none!important;box-sizing:border-box; }
 .form-grid>.form-wide { grid-column:1/-1; }
 @media(max-width:768px){ html#dlight-ui[data-ui-system] #ctxMenu>button { min-height:48px!important; } }
+
+/* Help «?» (25.11.2026): visually a 20 px ring beside its label, the tap target stays
+   44/48 px. Negative margins keep the large target from pushing the label row apart. */
+html#dlight-ui[data-ui-system] :not(.anchored-context-panel)>.q>.qm,
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-card-head .qm,
+html#dlight-ui[data-ui-system] :is(#reschedOverlay,#fixOverlay) .qm,
+html#dlight-ui[data-ui-system] .view-trip #tpPresence>.wb-metrics .qm {
+  width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;
+  margin:-12px -12px!important;padding:0!important;border:0!important;border-radius:50%!important;
+  background:radial-gradient(circle at center,var(--panel) 0 8.5px,var(--input-line) 9px 10px,transparent 10.5px)!important;
+  color:var(--ink-dim)!important;font:600 11px/1 var(--sans)!important;vertical-align:middle;flex:none;
+}
+html#dlight-ui[data-ui-system] :not(.anchored-context-panel)>.q>.qm:hover { background:radial-gradient(circle at center,var(--panel-2) 0 8.5px,var(--ink-dim) 9px 10px,transparent 10.5px)!important;color:var(--ink)!important; }
+html#dlight-ui[data-ui-system] :not(.anchored-context-panel)>.q.on>.qm { background:radial-gradient(circle at center,var(--ink) 0 10px,transparent 10.5px)!important;color:var(--panel)!important; }
+html#dlight-ui[data-ui-system] :not(.anchored-context-panel)>.q>.qm:focus-visible { outline:2px solid var(--focus,var(--accent))!important;outline-offset:-9px!important; }
+html#dlight-ui[data-ui-system] :not(.anchored-context-panel)>.q>.qm::after { content:none!important; }
+@media (pointer:coarse),(max-width:760px){
+  html#dlight-ui[data-ui-system] :not(.anchored-context-panel)>.q>.qm,
+  html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-card-head .qm,
+  html#dlight-ui[data-ui-system] :is(#reschedOverlay,#fixOverlay) .qm { width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;margin:-14px -14px!important; }
+}
+:not(.anchored-context-panel)>.q { display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:4px;flex:none; }
+/* Version line help keeps the same small ring. */
+.verline .qc { display:inline-grid;place-items:center;width:18px;height:18px;border:1px solid var(--input-line);border-radius:50%;font:600 11px/1 var(--sans);color:var(--ink-dim); }
+/* Scrolling dialog body must not clip the focus ring of its edge fields. */
+.pane-modal>.pane-body { padding:6px 10px 6px 6px!important;margin:-6px -10px -6px -6px!important; }
