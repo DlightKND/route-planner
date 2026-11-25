@@ -240,7 +240,7 @@ export function frameMapWorkspace(root=document){
  const add=element(root,'section','map-route-section map-route-add');add.innerHTML='<h3>Добавить остановку</h3><label for="rWp">Адрес или название места</label>';
  add.append(route.querySelector('.route-address'),root.getElementById('rWpMode'),root.getElementById('rWpHint'),root.getElementById('rWpRes'));
  const footer=element(root,'footer','map-route-footer');footer.append(route.querySelector('.route-primary'),root.getElementById('rStatus'));
- scroll.append(routeHead,stops,add,root.getElementById('rVariants'),route.querySelector('.route-settings'));route.append(scroll,footer);
+ scroll.append(routeHead,stops,...[root.getElementById('rNearbySection')].filter(Boolean),add,root.getElementById('rVariants'),route.querySelector('.route-settings'));route.append(scroll,footer);
  const paint=()=>{
   const mode=tabs.querySelector('button.on')?.dataset.sb||'points';side.dataset.mapPanel=mode;side.classList.toggle('list-folded',(mode==='points'||mode==='directory')&&root.getElementById('pointsBox').classList.contains('folded'));
   routeHead.querySelector('h2').textContent=Number(root.getElementById('rCount').textContent)>0?'План маршрута':'Создание маршрута';

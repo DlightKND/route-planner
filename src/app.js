@@ -3,7 +3,7 @@ import {resolveEntityDraft} from './entity-draft-resolution.js';
 import {decisionReason,stopTitle} from './core/gps-journal.js';
 import {distanceText,googleTripLinks,intervalText} from './core/journal-display.js';
 import {calendarPeriodBounds} from './core/calendar-period.js';
-import {mapTaskRows,requestsWithoutTask,groupUnplanned,plannedRows,clientWork,selectionSummary,assembleChoices,workDays,matchesTask,routeReachKm} from './core/map-work.js';
+import {mapTaskRows,requestsWithoutTask,groupUnplanned,plannedRows,clientWork,selectionSummary,assembleChoices,workDays,matchesTask,routeReachKm,taskHours} from './core/map-work.js';
 import {summaryPreset,summaryUnit,shiftSummaryPeriod,summaryPeriodLabel} from './core/summary-period.js';
 import { openContextPanel } from './context-panels.js';
 import {installMoreNavigation} from './more-navigation.js';
@@ -515,7 +515,7 @@ let clientStats={}, profitMode=false, avoidModeOn=false, avoidLayer=L.layerGroup
 // Живые заявки для ленты на карте (см. loadClientStats).
 let jobsLite=[];
 // Map work: open onsite tasks (mapTaskRows), requests still without a task, per-client summary, selection.
-let mapTasks=[],mapRequests=[],mapWork={},mapSelected=new Set(),mapTaskMode='unplanned',mapOpenTask=null;
+let mapTasks=[],mapRequests=[],mapWork={},mapSelected=new Set(),mapTaskMode='unplanned',mapOpenTask=null,mapJobsById={};
 // Что карта показывает по умолчанию.
 //
 // 'work' — только то, с чем сейчас идёт работа: точки с живыми заявками,
@@ -1208,7 +1208,7 @@ function mapWorkSignature(){ return mapTasks.map(r=>r.id+':'+(r.trip?.id||'')+':
 async function loadMapTasks(rawJobs){
   mapTasks=[];mapRequests=[];mapWork={};
   try{
-    const jobsById={};rawJobs.forEach(j=>{jobsById[j.id]=j;});
+    const jobsById={};rawJobs.forEach(j=>{jobsById[j.id]=j;});mapJobsById=jobsById;
     const clientsById={};clients.forEach(c=>{clientsById[c.id]=c;});
     const {data,error}=await sb.from('service_orders').select('id,number,title,status,work_mode,job_id,lead_engineer,date_from,date_to,service_order_items(kind,unit,planned_qty,planned_labor_hours),trip_service_orders(trip_id,trips(id,number,date_from,date_to,status,deleted_at))').eq('work_mode','onsite').not('status','in','(review,completed,cancelled)');
     if(error)throw error;
@@ -6723,6 +6723,7 @@ function loadTripIntoPlanner(trip){
   rVariants=[];$('rVariants').innerHTML='';
   showRouteTab();
   $('rStatus').textContent=rRoute.km?rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч':'';
+  void renderNearby();
   const stops=routeStopsAll();
   if(stops.length)map.fitBounds(stops.map(point=>[point.lat,point.lng]),{...fitPadL(fitPad(60)),maxZoom:16});
   return !!(stops.length||rRoute.geometry);
@@ -7827,7 +7828,7 @@ async function clearMapAll(){
       {okText:'Убрать всё',cancelText:'Отмена'})) return;
   tripLayer.clearLayers();mapTripPlan=null;
   stayBindMap=null;factClear();
-  if(hasDraft && $('rClear')){plannerTripId=null;plannerRouteTrip=null;$('rClear').click();plannerRouteDirty=false;}
+  if(hasDraft && $('rClear')){plannerTripId=null;plannerRouteTrip=null;plannerOrders=null;$('rClear').click();plannerRouteDirty=false;}
   renderMapPanel();
   showToast('Карта очищена');
 }
@@ -7877,7 +7878,7 @@ async function showTripOnMap(tid,{focus=null,editing=false}={}){
   if(!valid()||!document.querySelector('.view-map.active'))return;
   let shown;
   if(edit&&plannerTripId===tid&&plannerRouteDirty){tripLayer.clearLayers();showRouteTab();shown=true;}
-  else shown=edit?loadTripIntoPlanner(trip):drawTripPlan(trip);
+  else{ if(edit){ await loadPlannerOrders(tid); if(!valid())return; } shown=edit?loadTripIntoPlanner(trip):drawTripPlan(trip); }
   if(!edit){
     routeLayer.clearLayers();
     sideTab('points');
@@ -8632,18 +8633,28 @@ if($('vehBtn')) $('vehBtn').onclick=()=>{
 };
 
 // ---------- map route planner ----------
+// Tasks of the trip whose route is being edited on the map: [{id,number,title,status,clientId,jobId,hours}].
+let plannerOrders=null, plannerOrdersInitial=[];
 let rStops=[], rLegStops=[], rStart=null, rRoute={km:0,driveH:0,geometry:null,legs:[]}, rVariants=[], rVarSel=0, bufferKm=0, isoMin=0, places=[], plannerTripId=null, plannerTripRevision=0, pendingLinkClient=null, baseMode='start', baseAfter=null, endDeclined=false, rBusy=false;
 async function loadPlaces(){ places=clients.filter(c=>c.is_base); }
 let plannerRouteTrip=null,plannerRemainingRoute=null,plannerRouteDirty=false,routeEditRevision=0,rSavingPlan=false;
 function routeStopsAll(){ return (rStart?[{...rStart,type:'start',description:rStart.description||''}]:[]).concat(rStops); }
 function routeHasClient(cid){ return rStops.some(s=>s.clientId===cid); }
-function resetBuilt(){ routeEditRevision++;plannerRouteDirty=true;plannerRemainingRoute=null;rRoute={km:0,driveH:0,geometry:null,legs:[]}; rVariants=[]; $('rVariants').innerHTML=''; $('rStatus').textContent='маршрут не построен'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; endDeclined=false; drawStops(); }
+function resetBuilt(){ routeEditRevision++;plannerRouteDirty=true;plannerRemainingRoute=null;rRoute={km:0,driveH:0,geometry:null,legs:[]}; rVariants=[]; $('rVariants').innerHTML=''; $('rStatus').textContent='маршрут не построен'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; if($('rNearbySection')){ $('rNearbySection').hidden=true; $('rNearby').innerHTML=''; } endDeclined=false; drawStops(); }
 function pushClientStop(c){ rStops.push({type:'client',name:c.name,lat:c.lat,lng:c.lng,clientId:c.id}); }
 window.addBaseStop=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); rStops.push({type:'place',name:c.name,lat:c.lat,lng:c.lng,placeId:c.id,description:c.description||''}); showRouteTab(); renderRoutePanel(); resetBuilt(); };
-window.addClientToRoute=function(cid){ const c=clients.find(x=>x.id==cid); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); pushClientStop(c); showRouteTab(); renderRoutePanel(); resetBuilt(); maybePromptJob(cid); };
+window.addClientToRoute=function(cid){ const c=clients.find(x=>x.id==cid); if(!c||!canWrite()) return; map.closePopup(); switchTab('map'); pushClientStop(c); showRouteTab(); renderRoutePanel(); resetBuilt(); offerClientTasks(c); };
+// В маршрут выезда добавили клиента — его задания без выезда предлагаем
+// взять в выезд. Раньше вместо этого всплывал вопрос «создать заявку?».
+async function offerClientTasks(c){
+  if(!plannerTripId||!plannerOrders) return;
+  const cand=mapTasks.filter(r=>r.clientId===c.id&&!r.trip&&!plannerOrders.some(o=>o.id===r.id)); if(!cand.length) return;
+  const trip=plannerRouteTrip, label=trip?.number!=null?(' №'+trip.number):'';
+  if(!await confirmDialog('У «'+c.name+'» есть '+(cand.length>1?'задания':'задание')+' без выезда: '+cand.map(r=>'№'+r.number+(r.hours?(' · '+hoursText(r.hours)):'')).join(', ')+'. Добавить в выезд'+label+'?',{title:'Добавить работу клиента в выезд?',okText:cand.length>1?'Добавить задания':'Добавить задание',cancelText:'Только остановку'})) return;
+  cand.forEach(r=>addPlannerOrder(r.id)); renderRoutePanel();
+}
 window.addEquipToRoute=function(cid,eid){ const c=clients.find(x=>x.id==cid); const e=(eqByClient[cid]||[]).find(x=>x.id==eid); if(!c||!e||!canWrite()) return; map.closePopup(); switchTab('map');
-  const lat=(e.lat!=null)?e.lat:c.lat, lng=(e.lng!=null)?e.lng:c.lng; rStops.push({type:'equip',name:c.name+' · '+(e.model||''),lat,lng,clientId:c.id,equipId:e.id}); showRouteTab(); renderRoutePanel(); resetBuilt(); maybePromptJob(c.id); };
-async function maybePromptJob(cid){ try{ const {data}=await sb.from('jobs').select('id').is('deleted_at',null).eq('client_id',cid).not('status','in','(done,cancelled)'); if(data&&data.length) return; }catch(e){ return; } pendingLinkClient=cid; const c=clients.find(x=>x.id==cid); $('linkText').textContent='У клиента «'+(c?c.name:'')+'» нет открытых заявок. Создать заявку как основание выезда?'; $('linkOverlay').classList.add('on'); }
+  const lat=(e.lat!=null)?e.lat:c.lat, lng=(e.lng!=null)?e.lng:c.lng; rStops.push({type:'equip',name:c.name+' · '+(e.model||''),lat,lng,clientId:c.id,equipId:e.id}); showRouteTab(); renderRoutePanel(); resetBuilt(); offerClientTasks(c); };
 function ringColor(){ return theme.mode==='light'?'rgba(0,0,0,0.6)':'rgba(255,255,255,0.85)'; }
 function drawRouteLine(layer,geometry){ if(!geometry||!geometry.coordinates) return; const ll=geometry.coordinates.map(c=>[c[1],c[0]]); L.polyline(ll,{color:ringColor(),weight:5,opacity:1,lineJoin:'round',lineCap:'round'}).addTo(layer); }
 // Главная кнопка — одна, и та, что уместна сейчас.
@@ -8686,6 +8697,56 @@ function drawStops(){ routeLayer.clearLayers(); const stops=routeStopsAll();
 // выбранной карточки» — оно писалось для справочника на восемьдесят строк,
 // а в маршруте их четыре, выделения нет вовсе, и порядок оказался
 // неизменяемым: кнопки были в разметке, но добраться до них было нельзя.
+// Работа у остановки. При правке выезда остановка показывает свои задания;
+// остановка без задания — предупреждение: в графике у неё будет только дорога.
+// В новом маршруте — что у клиента ждёт плана (состав выберут при сохранении).
+function plannerOrderOfRow(row){ return {id:row.id,number:row.number,title:row.title,status:row.status,clientId:row.clientId,jobId:row.jobId,hours:row.hours}; }
+// Остановка из карточки выезда хранит заявку (job_id), из карты — клиента.
+function stopClientId(s){ return s?.clientId||mapJobsById[s?.job_id]?.client_id||null; }
+function stopWorkHTML(s){
+  const cid=stopClientId(s);
+  if(!cid||!canWrite()) return '';
+  const open=mapTasks.filter(r=>r.clientId===cid&&!r.trip);
+  if(plannerTripId&&plannerOrders){
+    const here=plannerOrders.filter(o=>o.clientId===cid);
+    if(here.length) return '<div class="route-pt-work">'+here.map(o=>'<span>№'+esc(o.number)+' · '+esc(o.title)+(o.hours?(' · '+hoursText(o.hours)):'')+'</span>').join('')+'</div>';
+    const cand=open.filter(r=>!plannerOrders.some(o=>o.id===r.id));
+    return '<div class="route-pt-work warn"><span>Остановка без задания — в графике будет только дорога.</span>'
+      +cand.map(r=>'<button type="button" class="btn sm" data-stop-add-task="'+esc(r.id)+'">Добавить №'+esc(r.number)+'</button>').join('')+'</div>';
+  }
+  if(open.length) return '<div class="route-pt-work"><span>Ждут плана: '+esc(open.map(r=>'№'+r.number).join(', '))+'</span></div>';
+  return '<div class="route-pt-work muted"><span>Нет заданий без выезда.</span><button type="button" class="btn sm ghost" data-stop-new-job="'+esc(cid)+'">Создать заявку</button></div>';
+}
+function addPlannerOrder(id){
+  if(!plannerOrders) return;
+  const row=mapTasks.find(r=>r.id===id); if(!row||plannerOrders.some(o=>o.id===id)) return;
+  plannerOrders.push(plannerOrderOfRow(row)); routeEditRevision++; plannerRouteDirty=true; updateRouteActions();
+}
+// Убирая остановку выезда, нельзя молча оставить её задания в выезде без
+// дороги к ним: спрашиваем и возвращаем их в незапланированные.
+async function releaseStopTasks(idx){
+  const s=rStops[idx], cid=stopClientId(s);
+  if(!cid||!plannerTripId||!plannerOrders) return true;
+  if(rStops.some((x,i)=>i!==idx&&stopClientId(x)===cid)) return true;
+  const here=plannerOrders.filter(o=>o.clientId===cid); if(!here.length) return true;
+  const locked=here.filter(o=>['review','completed'].includes(o.status));
+  if(locked.length){ notify('Остановку не убрать: '+locked.map(o=>'№'+o.number).join(', ')+' уже на проверке или закрыты.','warn'); return false; }
+  const list=here.map(o=>'№'+o.number).join(', ');
+  if(!await confirmDialog('Убрать «'+(s.name||'точку')+'» из маршрута? У остановки '+(here.length>1?'задания ':'задание ')+list+' — '+(here.length>1?'они вернутся':'оно вернётся')+' в незапланированные.',{title:'Убрать остановку?',okText:here.length>1?'Убрать и вернуть задания':'Убрать и вернуть задание',cancelText:'Оставить'})) return false;
+  plannerOrders=plannerOrders.filter(o=>o.clientId!==cid); routeEditRevision++; plannerRouteDirty=true;
+  return true;
+}
+async function loadPlannerOrders(tid){
+  plannerOrders=null; plannerOrdersInitial=[];
+  if(!canWrite()) return;
+  const {data,error}=await sb.from('trip_service_orders').select('order_id,ordinal,service_orders(id,number,title,status,job_id,service_order_items(kind,unit,planned_qty,planned_labor_hours))').eq('trip_id',tid).order('ordinal');
+  if(error){ notify('Задания выезда не загрузились: '+error.message,'warn'); return; }
+  plannerOrders=(data||[]).map(link=>{ const o=link.service_orders||{id:link.order_id}; const row=mapTasks.find(r=>r.id===o.id); if(row) return plannerOrderOfRow(row);
+    const job=mapJobsById[o.job_id]; return {id:o.id,number:o.number,title:o.title||'',status:o.status,clientId:job?.client_id||null,jobId:o.job_id,hours:taskHours(o.service_order_items)}; });
+  plannerOrdersInitial=plannerOrders.map(o=>o.id);
+  // Старый выезд без связей с заданиями живёт заявками: его состав здесь не трогаем.
+  if(!plannerOrders.length){ plannerOrders=null; plannerOrdersInitial=[]; }
+}
 function routePtCard(tag,s,idx,num,movable,role){
   const d=document.createElement('div');
   d.className='pt route-pt'+(role?(' role-'+role):'');
@@ -8700,7 +8761,9 @@ function routePtCard(tag,s,idx,num,movable,role){
   d.innerHTML='<span class="rp-num">'+num+'</span>'
     +'<div class="nm">'+esc(s.name||'точка')+' <span class="pill">'+esc(tag)+'</span></div>'
     +(s.description?'<div class="ds">'+esc(s.description)+'</div>':'')
-    +'<div class="meta">'+(+s.lat).toFixed(4)+', '+(+s.lng).toFixed(4)+'</div>'
+    // Координаты — только у безымянной точки: у клиента и депо это шум.
+    +(s.type==='wp'&&/^точка \d+$/.test(s.name||'')?'<div class="meta">'+(+s.lat).toFixed(4)+', '+(+s.lng).toFixed(4)+'</div>':'')
+    +stopWorkHTML(s)
     +'<div class="acts">'+acts+'</div>';
   return d;
 }
@@ -8723,7 +8786,9 @@ function renderRoutePanel(){
     box.appendChild(routePtCard(tag,s,i,n,true,i===finIdx?'finish':null)); });
   box.querySelectorAll('[data-rup]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); rMove(+b.dataset.rup,-1); });
   box.querySelectorAll('[data-rdn]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); rMove(+b.dataset.rdn,1); });
-  box.querySelectorAll('[data-rrm]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); rStops.splice(+b.dataset.rrm,1); renderRoutePanel(); resetBuilt(); });
+  box.querySelectorAll('[data-rrm]').forEach(b=>b.onclick=async e=>{ e.stopPropagation(); const idx=+b.dataset.rrm; if(!await releaseStopTasks(idx)) return; rStops.splice(idx,1); renderRoutePanel(); resetBuilt(); });
+  box.querySelectorAll('[data-stop-add-task]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); addPlannerOrder(b.dataset.stopAddTask); renderRoutePanel(); });
+  box.querySelectorAll('[data-stop-new-job]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); newJobForClient(b.dataset.stopNewJob); });
   box.querySelectorAll('[data-brm]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); rStart=null; renderRoutePanel(); resetBuilt(); });
   box.querySelectorAll('[data-ep]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openBasePicker(b.dataset.ep,()=>{}); });
   wireRouteDrag(box);
@@ -9190,7 +9255,7 @@ async function doBuildRoute(){ if(rBusy) return; const stops=dedupeStops(routeSt
     if(skipped.length) $('rStatus').innerHTML+='<div class="hint" style="color:var(--red);margin-top: var(--sp-2)">Объезды не применены: '+esc(skipped.join(' · '))+'</div>';
     else $('rStatus').innerHTML+='<span class="hint" style="margin: 0"> · по участкам</span>';
   }catch(e){ $('rStatus').innerHTML='<span class="err">Ошибка: '+esc(e.message||e)+'</span>'; } finally{ rBusy=false; updateRouteActions(); } }
-function applyRVariant(){ const f=rVariants[rVarSel]; if(!f) return; routeEditRevision++;plannerRouteDirty=true; const sum=(f.properties&&f.properties.summary)||{}; rRoute={km:(+sum.distance||0)/1000,driveH:(+sum.duration||0)/3600,geometry:f.geometry,legs:pairLegs(legsOf(f),rLegStops)}; $('rStatus').innerHTML='<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'+((appSettings.avoid_zones||[]).length?('<span class="hint" style="margin: 0"> · объезды: '+appSettings.avoid_zones.length+'</span>'):''); drawStops(); rBuildBuffer(); }
+function applyRVariant(){ const f=rVariants[rVarSel]; if(!f) return; routeEditRevision++;plannerRouteDirty=true; const sum=(f.properties&&f.properties.summary)||{}; rRoute={km:(+sum.distance||0)/1000,driveH:(+sum.duration||0)/3600,geometry:f.geometry,legs:pairLegs(legsOf(f),rLegStops)}; $('rStatus').innerHTML='<span class="ok">'+rRoute.km.toFixed(1)+' км · '+rRoute.driveH.toFixed(1)+' ч</span>'+((appSettings.avoid_zones||[]).length?('<span class="hint" style="margin: 0"> · объезды: '+appSettings.avoid_zones.length+'</span>'):''); drawStops(); rBuildBuffer();  renderNearby(); }
 function renderRVariants(){ const box=$('rVariants'); if(rVariants.length<2){ box.innerHTML=''; return; } box.innerHTML='';
   rVariants.forEach((f,i)=>{ const sum=(f.properties&&f.properties.summary)||{}; const b=document.createElement('button'); b.className='btn sm'+(i===rVarSel?' amber':''); b.style.cssText='margin: 0 var(--sp-3) var(--sp-3) 0'; b.textContent='№'+(i+1)+' · '+((+sum.distance||0)/1000).toFixed(1)+'км · '+Math.round((+sum.duration||0)/60)+'мин'; b.onclick=()=>{ rVarSel=i; applyRVariant(); renderRVariants(); }; box.appendChild(b); }); }
 $('corDist').onclick=()=>{ $('corDist').classList.add('on'); $('corTime').classList.remove('on'); $('corDistBox').style.display=''; $('corTimeBox').style.display='none'; bufferLayer.clearLayers(); $('rCorridor').innerHTML=''; rBuildBuffer(); };
@@ -9224,6 +9289,49 @@ function applyCorridor(polys){ bufferLayer.clearLayers(); $('rCorridor').innerHT
   box.querySelectorAll('[data-radd]').forEach(b=>b.onclick=()=>addClientToRoute(b.dataset.radd));
   box.querySelectorAll('[data-readd]').forEach(b=>b.onclick=()=>{ const a=b.dataset.readd.split('|'); addEquipToRoute(a[0],a[1]); });
   const aa=$('rAddAllC'); if(aa) aa.onclick=()=>{ inClients.forEach(c=>pushClientStop(c)); renderRoutePanel(); resetBuilt(); }; }
+// Попутные: работа в N км от построенного маршрута. Сверху — задания без
+// выезда (по срочности), затем заявки без задания, затем клиенты, у которых
+// подходит ТО. Клиентов без работы не показываем: они не повод заезжать.
+async function renderNearby(){
+  const sec=$('rNearbySection'),box=$('rNearby'); if(!sec||!box) return;
+  const geom=rRoute&&rRoute.geometry;
+  if(!geom||!canWrite()){ sec.hidden=true; box.innerHTML=''; return; }
+  sec.hidden=false;
+  const km=+$('rNearKm').value||15, rev=routeEditRevision;
+  try{ await ensureTurf(); }catch(e){ box.innerHTML='<p class="hint">Не удалось загрузить расчёт расстояний.</p>'; return; }
+  if(rev!==routeEditRevision||rRoute.geometry!==geom) return;
+  const line=turf.feature(geom), inRoute=new Set(routeStopsAll().map(stopClientId).filter(Boolean)), taken=new Set((plannerOrders||[]).map(o=>o.id));
+  const rows=[];
+  clients.forEach(c=>{
+    if(c.is_base||inRoute.has(c.id)||c.lat==null||c.lng==null) return;
+    let d=Infinity; try{ d=turf.pointToLineDistance(turf.point([c.lng,c.lat]),line,{units:'kilometers'}); }catch(e){ return; }
+    if(!(d<=km)) return;
+    const w=mapWork[c.id]||{tasks:[],requests:[]};
+    const open=w.tasks.filter(r=>!r.trip&&!taken.has(r.id));
+    const due=(eqByClient[c.id]||[]).filter(e=>eqAlert(e).service).length;
+    if(!open.length&&!w.requests.length&&!due) return;
+    const rank=open.length?Math.min(...open.map(r=>urgencyRank(r.urgency.level))):9;
+    rows.push({c,d,open,requests:w.requests,due,rank});
+  });
+  rows.sort((a,b)=>a.rank-b.rank||(b.open.length?1:0)-(a.open.length?1:0)||a.d-b.d);
+  bufferLayer.clearLayers();
+  try{ L.geoJSON(turf.buffer(line,km,{units:'kilometers'}),{interactive:false,style:{color:theme.accent,weight:1,fillColor:theme.accent,fillOpacity:.07,dashArray:'4 6'}}).addTo(bufferLayer); }catch(e){}
+  if(!rows.length){ box.innerHTML='<p class="hint">В '+km+' км от маршрута нет работы.</p>'; return; }
+  box.innerHTML=rows.slice(0,30).map(({c,d,open,requests,due})=>{
+    const what=open.length?open.slice(0,2).map(r=>'№'+r.number+' · '+(r.urgency.level==='cold'?'без срока':urgBadge(r.urgency))+(r.hours?(' · '+hoursText(r.hours)):'')).join('; ')+(open.length>2?(' · ещё '+(open.length-2)):'')
+      :requests.length?(requestLabel(requests[0],requests[0].id)+' без задания'):('подходит ТО: '+due+' '+plural(due,'единица','единицы','единиц'));
+    const act=open.length?'<button type="button" class="btn sm" data-near-add="'+esc(c.id)+'">'+(plannerOrders?'+ в выезд':'+ в маршрут')+'</button>'
+      :requests.length?'<button type="button" class="btn sm" data-near-seed="'+esc(requests[0].id)+'">Создать задание</button>'
+      :'<button type="button" class="btn sm ghost" data-near-job="'+esc(c.id)+'">Создать заявку</button>';
+    return '<div class="map-nearby-row'+(open.length?' urg-'+open[0].urgency.level:'')+'"><div><strong>'+esc(c.name)+'</strong><span>'+esc(what)+'</span><small>≈ '+(Math.round(d*10)/10).toLocaleString('ru-RU')+' км от маршрута</small></div>'+act+'</div>';
+  }).join('');
+  box.querySelectorAll('[data-near-add]').forEach(b=>b.onclick=()=>{ const c=clients.find(x=>x.id===b.dataset.nearAdd); if(!c) return;
+    pushClientStop(c); if(plannerOrders) mapTasks.filter(r=>r.clientId===c.id&&!r.trip).forEach(r=>addPlannerOrder(r.id));
+    renderRoutePanel(); resetBuilt(); showToast('«'+c.name+'» добавлен в маршрут. Перестрой маршрут.'); });
+  box.querySelectorAll('[data-near-seed]').forEach(b=>b.onclick=()=>seedRequestTask(b.dataset.nearSeed,b).then(()=>renderNearby()));
+  box.querySelectorAll('[data-near-job]').forEach(b=>b.onclick=()=>newJobForClient(b.dataset.nearJob));
+}
+if($('rNearKm')) $('rNearKm').onchange=()=>renderNearby();
 async function seedTaskForRoute(jobId){const {data,error}=await sb.rpc('service_order_seed_task',{p_job:jobId});if(error)throw error;return data;}
 $('rSaveTrip').onclick=async()=>{
   if(rSavingPlan||rBusy)return;
@@ -9236,19 +9344,30 @@ $('rSaveTrip').onclick=async()=>{
     if(editedId){
       if(tripNewPlanId===editedId)planReason='Первоначальное заполнение нового выезда';
       else{
-        const answer=await promptDialog('Изменение маршрута',[{key:'reason',label:'Причина изменения',type:'textarea',required:true}],{okText:'Продолжить'});
+        // Состав выезда меняется вместе с остановками: причина подставляется
+        // списком изменений, его можно дополнить.
+        const now=new Set((plannerOrders||[]).map(o=>o.id)),was=new Set(plannerOrdersInitial);
+        const num=id=>'№'+((plannerOrders||[]).find(o=>o.id===id)?.number??mapTasks.find(r=>r.id===id)?.number??'');
+        const added=[...now].filter(id=>!was.has(id)).map(num),removed=[...was].filter(id=>!now.has(id)).map(num);
+        const diff=plannerOrders?[added.length?'Добавлены задания '+added.join(', ')+'.':'',removed.length?'Убраны задания '+removed.join(', ')+'.':''].filter(Boolean).join(' '):'';
+        const answer=await promptDialog('Изменение маршрута',[{key:'reason',label:'Причина изменения',type:'textarea',required:true,value:diff}],{okText:'Продолжить'});
         if(!answer?.reason?.trim())return;
         planReason=answer.reason.trim();
       }
-      const {data:members,error}=await sb.from('trip_jobs').select('job_id').eq('trip_id',editedId);
-      if(error)throw error;
-      const {data:taskLinks,error:linkError}=await sb.from('trip_service_orders').select('order_id').eq('trip_id',editedId).order('ordinal');
-      if(linkError)throw linkError;
-      selectedOrderIds=(taskLinks||[]).map(link=>link.order_id);
       await loadTripJobs();
-      // Changes to the route do not determine which jobs belong to an existing trip.
-      const ids=new Set((members||[]).map(link=>link.job_id));
-      linked=tripJobsAll.filter(job=>ids.has(job.id));
+      if(plannerOrders){
+        selectedOrderIds=plannerOrders.map(o=>o.id);
+        const ids=new Set(plannerOrders.map(o=>o.jobId).filter(Boolean));
+        linked=tripJobsAll.filter(job=>ids.has(job.id));
+      }else{
+        const {data:members,error}=await sb.from('trip_jobs').select('job_id').eq('trip_id',editedId);
+        if(error)throw error;
+        const {data:taskLinks,error:linkError}=await sb.from('trip_service_orders').select('order_id').eq('trip_id',editedId).order('ordinal');
+        if(linkError)throw linkError;
+        selectedOrderIds=(taskLinks||[]).map(link=>link.order_id);
+        const ids=new Set((members||[]).map(link=>link.job_id));
+        linked=tripJobsAll.filter(job=>ids.has(job.id));
+      }
     }else{
       // Состав нового выезда выбирают явно: раньше сюда молча попадали ВСЕ
       // открытые заявки каждого клиента маршрута.
@@ -9288,6 +9407,7 @@ $('rSaveTrip').onclick=async()=>{
     if(error)throw error;
     if(revision===routeEditRevision&&editedId===plannerTripId){
       plannerTripId=tid;plannerRouteDirty=false;
+      await loadPlannerOrders(tid);void loadClientStats().then(render);
       await renderTrips();await openTrip(tid);
       plannerRouteTrip=getTrip(tid);plannerTripRevision=plannerRouteTrip?.workbench_revision??0;
     }
