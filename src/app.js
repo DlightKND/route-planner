@@ -120,7 +120,7 @@ const journalTrips=createJournalTrips({db:()=>sb,userId:()=>session?.user?.id,ro
   return nextRevision;
  }
 });
-const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,showRecordMap:(id,meta)=>showRecordOnMap(id,{...meta,back:location.hash}),showTripMap:id=>showTripOnMap(id,{back:location.hash}),tripPoints:id=>loadTripPositions(id),db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,
+const unassignedTracks=createUnassignedTracks({tripReviews:journalTrips,showRecordMap:(id,meta)=>showRecordOnMap(id,{...meta,back:location.hash}),showTripMap:id=>showTripOnMap(id,{back:location.hash}),tripPoints:id=>tripPreviewPoints(id),db:()=>sb,userId:()=>session?.user?.id,role:()=>role,vehicles:()=>vehicles,people:()=>profilesList,
  onSource:(id,pane)=>routeSet('journal/record/'+id+(pane==='stops'?'':'/'+pane)),onExit:()=>plannerSub('trips'),onList:()=>routeSet('journal'),onRecord:(id,state)=>routeSet(journalRecordRoute(id,state)),period:()=>dashRanges.journal,leaflet:()=>L,makeTrackBase:()=>makeBase(baseKey())||makeBase('map-'+mapMode),
  ensureRefs:async()=>{await ensureRefs();await loadVehicles();},currency:()=>appSettings.currency||'грн',trackMaxSpeed:()=>appSettings.track_max_kmh,prompt:promptDialog,confirm:confirmDialog,notify,openTrip,applySupplement:applyGpsSupplement,
  reload:async()=>{await serviceOrders.attachJobs(document.createElement("div"));await renderFeedAgain();}});
@@ -8451,6 +8451,18 @@ function loadFactTrack(tid,trip,stored=undefined,raw=undefined){
   readStored:()=>stored===undefined?readFactTrack(tid):null,
   readPositions:()=>raw??loadTripPositions(tid),measure:raw=>measureTrip(raw,trackOpts(),tripEnds(trip),null),
   measureTail:raw=>measureTrip(raw,trackOpts(),{},null)});
+}
+// Точки для мини-карты в журнале: тот же разбор, что рисует большая карта.
+// У сохранённого разбора сырых точек может не быть — тогда берём опоры отрезков.
+async function tripPreviewPoints(tid){
+  const t=trips.find(x=>x.id==tid)||tripCache[tid]||null;
+  const resolved=await loadFactTrack(tid,t); if(!resolved) return [];
+  const raw=(resolved.raw||[]).filter(p=>p.lat!=null&&p.lng!=null); if(raw.length) return raw;
+  const m=resolved.measure||{}, out=[];
+  // Каждый отрезок — своя часть с одним временем: иначе длинные отрезки разорвутся как пропуски GPS.
+  (m.segments||[]).forEach((g,i)=>{ if(g.kind==='line'||!g.fromPt||!g.toPt) return; out.push({lat:g.fromPt.lat,lng:g.fromPt.lng,ts:g.fromTs,part:i},{lat:g.toPt.lat,lng:g.toPt.lng,ts:g.fromTs,part:i}); });
+  if(!out.length)(m.points||[]).forEach(p=>out.push({lat:p.lat,lng:p.lng,ts:p.ts}));
+  return out;
 }
 async function showTripFact(tid,opt){
   const quiet=!!(opt&&opt.quiet);
