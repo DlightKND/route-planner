@@ -284,3 +284,17 @@ test('GPS register previews a track under its row and opens it on the main map',
  await expect(page.getByRole('table',{name:'GPS-записи'})).toBeVisible();
  await clean(page);
 });
+test('GPS register previews a linked trip track from its saved review',async({page},info)=>{
+ errors.length=0;page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());
+ await page.clock.install({time:new Date('2026-10-05T17:00Z')});
+ await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,preserveRanges:true,unifiedJournalJourney:true});
+ await page.goto('/#/journal');if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();
+ await page.locator('[data-ut-mode=all]').click();
+ await page.locator('[data-ut-peek^="trip:"]').first().click();
+ await expect(page.locator('.ut-peek-row .unassigned-map .gps-track-line').first()).toBeVisible();
+ await page.locator('[data-ut-peek-map]').click();
+ await expect(page.locator('.view-map.track-view')).toBeVisible();await expect(page.locator('#tvBackLabel')).toHaveText('К журналу');
+ await page.locator('#tvBack').click();await expect.poll(()=>page.evaluate(()=>location.hash)).toBe('#/journal');
+ await clean(page);
+});

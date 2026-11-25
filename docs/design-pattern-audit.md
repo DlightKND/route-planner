@@ -33,7 +33,7 @@
 | view-segment | Сегментированный выбор представления | Описан | Есть | P1 | [src/app.js:4214](../src/app.js#L4214) | [Контракт](design-system.md#segmentedcontrol-переключатели-со-сводки) |
 | decision-radio | Radio / взаимоисключающий выбор в черновике | Описан | Есть | P1 | [src/app.js:6937](../src/app.js#L6937) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | checkbox-group | Один checkbox и множественный выбор | Описан | Есть | P1 | [src/engineer-picker.js:33](../src/engineer-picker.js#L33) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
-| boolean-switch | Немедленная настройка Вкл / Выкл | Описан | Есть | P1 | [src/app.js:8992](../src/app.js#L8992) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
+| boolean-switch | Немедленная настройка Вкл / Выкл | Описан | Есть | P1 | [src/app.js:9004](../src/app.js#L9004) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | native-select | Одиночный выбор из списка | Описан | Есть | P1 | [index.html:2569](../index.html#L2569) | [Контракт](design-system.md#select--combobox--checkbox--radio--switch--tabs) |
 | multi-select-popover | Выбор инженеров: popover с checkbox, без поиска | Частично | Есть | P1 | [src/engineer-picker.js:26](../src/engineer-picker.js#L26) | [Контракт](design-system.md#pattern-selection) |
 | search-field | Поиск списка: debounce / clear / пусто / ошибка | Пропуск | Есть | P1 | [src/notifications.js:75](../src/notifications.js#L75) | [Контракт](design-system.md#pattern-selection) |
@@ -60,7 +60,7 @@
 | action-menu | Другие действия: disclosure / menu / dialog | Описан | Есть | P1 | [src/entity-actions.js:5](../src/entity-actions.js#L5) | [Контракт](design-system.md#menu--dialog--feedback) |
 | editable-items | Повторяемые строки работ / материалов | Пропуск | Есть | P0 | [src/service-orders.js:581](../src/service-orders.js#L581) | [Контракт](design-system.md#pattern-workflows) |
 | bulk-selection | Массовый выбор и preview объединения | Пропуск | Есть | P0 | [src/unassigned-tracks.js:140](../src/unassigned-tracks.js#L140) | [Контракт](design-system.md#pattern-workflows) |
-| reorder | Перестановка маршрута / карточек / панелей | Пропуск | Есть | P0 | [src/app.js:9163](../src/app.js#L9163) | [Контракт](design-system.md#pattern-workflows) |
+| reorder | Перестановка маршрута / карточек / панелей | Пропуск | Есть | P0 | [src/app.js:9175](../src/app.js#L9175) | [Контракт](design-system.md#pattern-workflows) |
 | schedule-manipulation | Перенос / изменение / разделение графика | Пропуск | Есть | P0 | [src/schedule-interactions.js:2](../src/schedule-interactions.js#L2) | [Контракт](design-system.md#pattern-workflows) |
 | map-explorer | Карта / миникарта / маркеры / список | Частично | Есть | P1 | [src/gps-track-map.js:12](../src/gps-track-map.js#L12) | [Контракт](design-system.md#pattern-data) |
 | gps-evidence | Измерение / восстановление / принятое решение | Частично | Есть | P0 | [src/presence-review-controls.js:36](../src/presence-review-controls.js#L36) | [Контракт](design-system.md#pattern-data) |
@@ -137,4 +137,4 @@
 
 Связь type/role с ID классифицирует сигнал, а не автоматически распознаёт смысл каждого его вхождения.
 
-Хеш проверенных production-исходников: `ee1d72a57cdd6dd731b7742da75359c9467dd6b995ccaea65b972a38fb00d992`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
+Хеш проверенных production-исходников: `7af5cc0b1a3cc91a1c65559508664115284c19f11f065f08a06667f399032b09`. CSS проверен адресно в качестве источника оформления (например, journal count и FAB), не включён в этот JS/HTML-хеш.
