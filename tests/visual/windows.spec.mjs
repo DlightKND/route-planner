@@ -103,6 +103,22 @@ test('equipment starts as a list, and cancelled discard retains the edit form',a
  await page.locator('#eqFormCancel').click();await page.locator('#confirmYes').click();await expect(page.locator('#eqFormPane')).toBeHidden();await expect(page.locator('#eqAdd')).toBeVisible();
 });
 
+test('client dialog moves the point on the map and refuses deletion while tasks are active',async({page})=>{
+ await open(page,'editClient','client-a');const dialog=page.locator('#editOverlay');await expect(dialog).toBeVisible();
+ await expect(page.locator('#eLat')).toHaveCount(0);await expect(page.locator('#eCoords')).toHaveText(/\d+\.\d{5}, \d+\.\d{5}/);
+ await page.locator('#eMove').click();await expect(dialog).toBeHidden();await expect(page.locator('#moveBar')).toBeVisible();
+ await page.locator('#moveDone').click();await expect(dialog).toBeVisible();await expect(page.locator('#moveBar')).toBeHidden();
+ await page.locator('#eDelete').click();const blockers=page.locator('.delete-blockers');await expect(blockers).toBeVisible();await expect(blockers.locator('li')).not.toHaveCount(0);
+ await blockers.getByRole('button',{name:'Понятно',exact:true}).click();await expect(blockers).toHaveCount(0);
+ expect(await page.evaluate(()=>window.__visualQA.reads.includes('rpc:soft_delete_client'))).toBe(false);
+});
+
+test('equipment service date is not marked by hand; service starts as a request',async({page})=>{
+ await open(page,'openEquip','client-a');await expect(page.locator('#eqOverlay')).toBeVisible();
+ await expect(page.getByRole('button',{name:/плановое ТО/})).toHaveCount(0);
+ await expect(page.locator('.eq-card [data-mhr]')).toHaveCount(1);
+});
+
 test('destructive buttons meet text contrast in both themes',async({page})=>{
  await page.locator('#profileBtn').evaluate(el=>el.click());const button=page.locator('[data-profile-logout]');await expect(button).toBeVisible();
  const contrast=await button.evaluate(el=>{const s=getComputedStyle(el),l=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{const c=v/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};const a=l(s.color),b=l(s.backgroundColor);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05);});
