@@ -3,7 +3,7 @@ import {resolveEntityDraft} from './entity-draft-resolution.js';
 import {decisionReason,stopTitle} from './core/gps-journal.js';
 import {distanceText,googleTripLinks,intervalText} from './core/journal-display.js';
 import {calendarPeriodBounds} from './core/calendar-period.js';
-import {mapTaskRows,requestsWithoutTask,groupUnplanned,plannedRows,clientWork,selectionSummary,assembleChoices,workDays,matchesTask,routeReachKm,taskHours} from './core/map-work.js';
+import {mapTaskRows,requestsWithoutTask,groupUnplanned,plannedRows,clientWork,selectionSummary,assembleChoices,workDays,matchesTask,routeReachKm,taskHours,haversineKm} from './core/map-work.js';
 import {summaryPreset,summaryUnit,shiftSummaryPeriod,summaryPeriodLabel} from './core/summary-period.js';
 import { openContextPanel } from './context-panels.js';
 import {installMoreNavigation} from './more-navigation.js';
@@ -1321,10 +1321,12 @@ function tripShort(t){ return 'выезд '+(t.number!=null?'№'+t.number:'')+(
 // Всплывающая карточка клиента. Главное на карте — работа клиента:
 // задания с галочками выбора, задания в выездах, заявки без задания.
 // «Проехать» — действие инженера, поэтому у менеджера оно в «⋯».
+// Что нужно инженеру на месте: адрес, кого спросить, как пройти.
+function clientSiteHTML(c){ const bits=[c.address,c.contact_person,c.access_notes?('Доступ: '+c.access_notes):''].filter(Boolean); return bits.length?'<span class="client-site">'+bits.map(esc).join('<br>')+'</span>':''; }
 function clientPopupHTML(c){
   const list=eqByClient[c.id]||[],count=list.length,w=mapWork[c.id]||{tasks:[],requests:[],toPlan:0},tel=telHref(c.phone);
   const open=w.tasks.filter(row=>!row.trip),planned=w.tasks.filter(row=>row.trip);
-  let h='<div class="client-popup"><div class="client-popup-head"><strong>'+esc(c.name)+'</strong><span>'+esc([c.description,count?(count+' '+plural(count,'единица','единицы','единиц')+' техники'):'без техники'].filter(Boolean).join(' · '))+'</span></div>';
+  let h='<div class="client-popup"><div class="client-popup-head"><strong>'+esc(c.name)+'</strong><span>'+esc([c.description,count?(count+' '+plural(count,'единица','единицы','единиц')+' техники'):'без техники'].filter(Boolean).join(' · '))+'</span>'+clientSiteHTML(c)+'</div>';
   if(canWrite()&&(open.length||planned.length||w.requests.length)){
     h+='<div class="client-popup-work">';
     if(open.length){ h+='<span class="client-popup-label">Ждут плана</span>';
@@ -1408,7 +1410,9 @@ function eqService(e){ const m=e.model_id?eqModels.find(x=>x.id==e.model_id):nul
   const rs=readingsByEq[e.id]||[]; const last=rs.length?rs[rs.length-1]:null; const rr=eqRate(e); const today=todayISO();
   if(!last||rr.rate<=0){ const sh=+appSettings.shift_hours||0; const anchor=e.last_service||e.installed_on||null; if(!anchor||sh<=0) return null;
     const since=businessDays(anchor,today)*sh; return {since,interval:sih,rate:0,src:'estimate',daysLeft:null}; }
-  const lastSvc=[...rs].reverse().find(r=>r.kind==='service');
+  // Точка отсчёта — последнее ТО: старый замер с пометкой «ТО» или последний
+  // замер не позже даты ТО, которую ставит закрытая заявка с работой «ТО».
+  const lastSvc=[...rs].reverse().find(r=>r.kind==='service'||(e.last_service&&r.taken_on<=e.last_service));
   const daysSince=Math.max(0,(Date.now()-new Date(last.taken_on+'T00:00:00').getTime())/86400000);
   const nowMh=(+last.moto_hours)+rr.rate*daysSince;
   const baseMh=lastSvc?(+lastSvc.moto_hours):(+rs[0].moto_hours);
@@ -1501,8 +1505,9 @@ async function loadMyTripsToday(){
   finally{ myTripsLoading=false; }
   renderWorkFeed();
 }
+function stopClient(st){ return clients.find(x=>(st.clientId&&x.id===st.clientId)||(x.lat!=null&&st.lat!=null&&Math.abs(x.lat-st.lat)<1e-5&&Math.abs(x.lng-st.lng)<1e-5))||null; }
 function stopPhone(st){
-  const c=clients.find(x=>(st.clientId&&x.id===st.clientId)||(x.lat!=null&&st.lat!=null&&Math.abs(x.lat-st.lat)<1e-5&&Math.abs(x.lng-st.lng)<1e-5));
+  const c=stopClient(st);
   return telHref(c?.phone);
 }
 function myTripTodayHTML(){
@@ -1511,7 +1516,8 @@ function myTripTodayHTML(){
     const stops=(t.route_stops||[]).filter(st=>st.type!=='start'&&st.lat!=null);
     return '<section class="my-trip"><div class="my-trip-head"><strong>Мой выезд сегодня</strong><span>'+esc(['Выезд'+(t.number!=null?' №'+t.number:''),t.vehicle_label].filter(Boolean).join(' · '))+'</span></div>'
       +'<ol class="my-trip-stops">'+stops.map((st,i)=>{ const tel=stopPhone(st), nav=navHref(st.lat,st.lng);
-        return '<li><span class="my-trip-num">'+(i+1)+'</span><div><strong>'+esc(st.name||'Остановка')+'</strong>'
+        const site=stopClient(st);
+        return '<li><span class="my-trip-num">'+(i+1)+'</span><div><strong>'+esc(st.name||'Остановка')+'</strong>'+(site?clientSiteHTML(site):'')
           +'<div class="my-trip-acts">'+(nav?'<a class="btn'+(i===0?' amber':'')+'" href="'+esc(nav)+'" target="_blank" rel="noopener">Проехать</a>':'')+(tel?'<a class="btn" href="'+esc(tel)+'">Позвонить</a>':'')+'</div></div></li>'; }).join('')+'</ol>'
       +'<button type="button" class="btn ghost" data-my-trip="'+esc(t.id)+'">Показать выезд на карте</button></section>';
   }).join('');
@@ -1891,19 +1897,98 @@ if($('fColor')) $('fColor').addEventListener('input',paintSwatches);
 $('saveBtn').onclick=async ()=>{ const name=$('fName').value.trim(); if(!name){ $('formErr').textContent='Введи название.'; return; } if(!pendingLatLng){ $('formErr').textContent='Задай точку на карте или по адресу.'; return; }
   $('saveBtn').disabled=true; const { error }=await sb.from('clients').insert({name,description:$('fDesc').value.trim(),phone:($('fPhone').value.trim()||null),color:$('fColor').value,lat:pendingLatLng.lat,lng:pendingLatLng.lng,is_base:$('fBase').checked}); $('saveBtn').disabled=false;
   if(error){ $('formErr').textContent='Ошибка: '+error.message; return; } const wasBase=$('fBase').checked; resetForm(); $('pointOverlay').classList.remove('on'); await loadAll(); showToast(wasBase?'Депо сохранено':'Точка сохранена'); };
+// ---------- client dialog ----------
+// Окно клиента: контакты, договор, место на карте. Координаты руками не
+// вводятся — только перестановкой на карте или поиском по адресу; сдвиг
+// больше 2 км переспрашиваем. Тип «Депо» недоступен клиенту с заявками
+// или техникой (то же проверяет база).
+let editPlace=null, editOrig=null, moveMarker=null;
+const ACTIVE_JOB=j=>j&&!j.deleted_at&&!['done','cancelled'].includes(j.status);
+function clientLoad(id){ const eq=(eqByClient[id]||[]).length; const st=clientStats[id]; if(st) return {eq,open:st.open||0,any:st.jobs||0}; const reqs=(jobs||[]).filter(j=>j.client_id===id&&!j.deleted_at); return {eq,open:reqs.filter(ACTIVE_JOB).length,any:reqs.length}; }
+function countWord(n,one,few,many){ return n+' '+plural(n,one,few,many); }
+function setEditKind(kind){
+  document.querySelectorAll('#eKind [data-edit-kind]').forEach(b=>{ const on=b.dataset.editKind===kind; b.classList.toggle('on',on); b.setAttribute('aria-checked',String(on)); });
+  $('eKind').dataset.kind=kind;
+}
+function paintEditSwatches(){ const v=String($('eColor').value).toLowerCase(); document.querySelectorAll('#editOverlay [data-swatch]').forEach(b=>{ const on=b.dataset.swatch===v; b.classList.toggle('on',on); b.setAttribute('aria-checked',String(on)); }); }
+function editShiftKm(){ return editPlace&&editOrig?haversineKm(editOrig,editPlace):0; }
+function paintEditPlace(){
+  const p=editPlace||editOrig; $('eCoords').value=p?(Number(p.lat).toFixed(5)+', '+Number(p.lng).toFixed(5)):'не задано';
+  const km=editShiftKm(); const sh=$('eShift');
+  sh.hidden=!(editPlace&&km>=0.01); if(!sh.hidden) sh.textContent='Новое место: сдвиг '+(km<1?Math.round(km*1000)+' м':km.toFixed(1).replace('.',',')+' км')+' — сохранится по кнопке «Сохранить».';
+}
 window.editClient=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWrite()) return; editId=id; map.closePopup();
-  $('eName').value=c.name; $('eDesc').value=c.description||''; $('ePhone').value=c.phone||''; $('eColor').value=c.color||'#9aa1ad'; $('eBase').checked=!!c.is_base; $('eLat').value=c.lat; $('eLng').value=c.lng; $('eProfile').innerHTML='<option value="">— не задан (по умолчанию платный) —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join(''); $('eProfile').value=c.default_profile||''; $('eSigner').value=c.signer||''; $('editOverlay').classList.add('on'); };
+  editOrig=(c.lat!=null&&c.lng!=null)?{lat:+c.lat,lng:+c.lng}:null; editPlace=null;
+  $('eName').value=c.name; $('eDesc').value=c.description||''; $('ePhone').value=c.phone||''; $('eContact').value=c.contact_person||''; $('eAddress').value=c.address||''; $('eAccess').value=c.access_notes||'';
+  $('eColor').value=c.color||'#9aa1ad'; paintEditSwatches();
+  $('eProfile').innerHTML='<option value="">— не задан (по умолчанию платный) —</option>'+(appSettings.tariff_profiles||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join(''); $('eProfile').value=c.default_profile||''; $('eSigner').value=c.signer||'';
+  const load=clientLoad(id); const busy=!c.is_base&&(load.eq>0||load.any>0);
+  setEditKind(c.is_base?'base':'client');
+  const baseBtn=document.querySelector('#eKind [data-edit-kind="base"]'); baseBtn.disabled=busy;
+  $('eKindHint').textContent=busy?'Депо нельзя: у клиента '+[load.any?countWord(load.any,'заявка','заявки','заявок'):'',load.eq?'техника':''].filter(Boolean).join(' и '):'';
+  $('eSummary').textContent=c.is_base?'Депо':[countWord(load.eq,'ед. техники','ед. техники','ед. техники'),countWord(load.open,'открытая заявка','открытые заявки','открытых заявок')].join(' · ');
+  $('eGeoBox').hidden=true; $('eGeoOpen').setAttribute('aria-expanded','false'); $('eGeo').value=c.address||''; $('eGeoRes').innerHTML='';
+  paintEditPlace(); $('editOverlay').classList.add('on'); };
+document.querySelectorAll('#eKind [data-edit-kind]').forEach(b=>b.onclick=()=>{ if(!b.disabled) setEditKind(b.dataset.editKind); });
+document.querySelectorAll('#editOverlay [data-swatch]').forEach(b=>b.onclick=()=>{ $('eColor').value=b.dataset.swatch; paintEditSwatches(); });
+$('eColor').addEventListener('input',paintEditSwatches);
+$('eGeoOpen').onclick=()=>{ const box=$('eGeoBox'); box.hidden=!box.hidden; $('eGeoOpen').setAttribute('aria-expanded',String(!box.hidden)); if(!box.hidden) $('eGeo').focus(); };
+$('eGeo').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('eGeoBtn').click(); } });
+$('eGeoBtn').onclick=async ()=>{ const q=$('eGeo').value.trim(); const box=$('eGeoRes'); if(!q){ box.innerHTML=''; return; } box.innerHTML='<div class="hint">Ищу…</div>';
+  try{ const data=await geoSearch(q,5); if(!data.length){ box.innerHTML='<div class="hint">Не найдено. Уточните адрес или переставьте точку на карте.</div>'; return; } box.innerHTML='';
+    data.forEach(it=>{ const d=document.createElement('button'); d.type='button'; d.className='pt geo-result'; d.innerHTML='<div class="nm" style="font-size: var(--fs-3);font-weight:500">'+esc(it.display_name)+'</div>';
+      d.onclick=()=>{ editPlace={lat:+it.lat,lng:+it.lon}; box.innerHTML=''; $('eGeoBox').hidden=true; $('eGeoOpen').setAttribute('aria-expanded','false'); if(!$('eAddress').value.trim()) $('eAddress').value=$('eGeo').value.trim(); paintEditPlace(); }; box.appendChild(d); }); }
+  catch(e){ box.innerHTML='<div class="err">'+esc(e.message||'Ошибка геокодера.')+'</div>'; } };
+// Перестановка: окно прячется (поля остаются как есть), точку тянут, «Готово» возвращает.
+function endMove(){ if(moveMarker){ map.removeLayer(moveMarker); moveMarker=null; } $('moveBar').hidden=true; $('editOverlay').classList.add('on'); paintEditPlace(); }
+$('eMove').onclick=()=>{ const p=editPlace||editOrig||map.getCenter(); $('editOverlay').classList.remove('on'); switchTab('map');
+  moveMarker=L.marker([p.lat,p.lng],{draggable:true,autoPan:true,keyboard:true,title:'Новое место клиента',icon:L.divIcon({className:'move-pin',html:'<span></span>',iconSize:[28,28],iconAnchor:[14,14]})}).addTo(map);
+  map.setView([p.lat,p.lng],Math.max(map.getZoom(),14),{animate:false});
+  $('moveMsg').textContent='Перетащите точку клиента на новое место'; $('moveBar').hidden=false; $('moveDone').focus(); };
+$('moveDone').onclick=()=>{ if(moveMarker){ const ll=moveMarker.getLatLng(); editPlace={lat:ll.lat,lng:ll.lng}; } endMove(); };
+$('moveCancel').onclick=endMove;
 $('eCancel').onclick=()=>$('editOverlay').classList.remove('on');
-$('eSave').onclick=async ()=>{ const { error }=await sb.from('clients').update({name:$('eName').value.trim(),description:$('eDesc').value.trim(),phone:($('ePhone').value.trim()||null),color:$('eColor').value,is_base:$('eBase').checked,default_profile:($('eProfile').value||null),signer:($('eSigner').value.trim()||null),lat:parseFloat($('eLat').value),lng:parseFloat($('eLng').value)}).eq('id',editId);
-  if(error){ notify('Ошибка: '+error.message,'err'); return; } $('editOverlay').classList.remove('on'); await loadAll(); showToast('Изменения сохранены'); };
-async function delClient(id){ if(!await confirmDialog('Удалить точку вместе с её техникой и заявками? Их можно вернуть кнопкой «Отменить».',{danger:true,okText:'Удалить'})) return;
+$('eDelete').onclick=()=>{ const id=editId; $('editOverlay').classList.remove('on'); delClient(id); };
+$('eSave').onclick=async ()=>{ const name=$('eName').value.trim(); if(!name){ $('eName').reportValidity(); return; }
+  const km=editShiftKm();
+  if(editPlace&&km>2&&!await confirmDialog('Точка клиента сдвигается на '+km.toFixed(1).replace('.',',')+' км. Сохранить новое место?',{title:'Новое место клиента',okText:'Сохранить место'})) return;
+  const place=editPlace||editOrig; const base=$('eKind').dataset.kind==='base';
+  const rec={name,description:$('eDesc').value.trim(),phone:($('ePhone').value.trim()||null),contact_person:($('eContact').value.trim()||null),address:($('eAddress').value.trim()||null),access_notes:($('eAccess').value.trim()||null),color:$('eColor').value,is_base:base,default_profile:($('eProfile').value||null),signer:($('eSigner').value.trim()||null)};
+  if(place){ rec.lat=place.lat; rec.lng=place.lng; }
+  $('eSave').disabled=true; const { error }=await sb.from('clients').update(rec).eq('id',editId); $('eSave').disabled=false;
+  if(error){ notify('Ошибка: '+error.message,'err'); return; } editPlace=null; $('editOverlay').classList.remove('on'); await loadAll(); showToast('Изменения сохранены'); };
+// Удаление клиента: при активных заданиях база откажет, поэтому сначала
+// спрашиваем, какие задания мешают, и показываем их списком.
+const TASK_STATUS_RU={draft:'черновик',assigned:'назначено',in_progress:'в работе',paused:'на паузе',review:'на проверке'};
+function showDeleteBlockers({title,text,rows}){
+  const panel=document.createElement('div'); panel.className='delete-blockers';
+  panel.innerHTML='<p>'+esc(text)+'</p><ul>'+rows.map((r,i)=>'<li><span><strong>№'+esc(r.number)+'</strong> · '+esc(r.title||'Задание')+'<small>'+esc([TASK_STATUS_RU[r.status]||r.status,r.trip_from?('в выезде '+shortDate(r.trip_from)):'не запланировано'].join(' · '))+'</small></span><button type="button" class="btn" data-blocker="'+i+'">Открыть</button></li>').join('')+'</ul>'
+    +'<div class="row modal-actions"><button type="button" class="btn amber grow" data-blocker-ok>Понятно</button></div>';
+  const dialog=openEntityPanel({title,panel,trigger:document.activeElement,dispose:true});
+  panel.querySelector('[data-blocker-ok]').onclick=()=>dialog?.close();
+  panel.querySelectorAll('[data-blocker]').forEach(b=>b.onclick=()=>{ dialog?.close(); serviceOrders.open(rows[+b.dataset.blocker].id); });
+}
+async function delClient(id){ const c=clients.find(x=>x.id==id); if(!c) return;
+  const {data:blockers,error:bErr}=await sb.rpc('client_active_tasks',{p_id:id});
+  if(bErr){ notify('Не удалось проверить задания клиента: '+bErr.message,'err'); return; }
+  if(blockers&&blockers.length){ showDeleteBlockers({title:'Удалить клиента нельзя',text:'У «'+c.name+'» '+countWord(blockers.length,'активное задание','активных задания','активных заданий')+'. Отмените или завершите их — после этого клиента можно удалить.',rows:blockers}); return; }
+  const load=clientLoad(id);
+  const what=[load.eq?countWord(load.eq,'ед. техники','ед. техники','ед. техники'):'',load.any?countWord(load.any,'заявка','заявки','заявок')+(load.open?'':' (все закрыты)'):''].filter(Boolean).join(' и ');
+  if(!await confirmDialog((what?'Вместе с ним уйдут '+what+'. ':'')+'Завершённые задания и акты останутся в журнале. Сразу после удаления его можно отменить.',{title:'Удалить «'+c.name+'»?',danger:true,okText:'Удалить клиента'})) return;
   const { data, error }=await sb.rpc('soft_delete_client',{p_id:id}); if(error){ notify('Ошибка: '+error.message,'err'); return; }
   await loadAll();
-  undoToast('Точка удалена (с техникой и заявками)', async ()=>{ const {error:e2}=await sb.rpc('restore_deleted',{p_ts:data}); if(e2){ notify(e2.message,'err'); return; } await loadAll(); showToast('Восстановлено'); }); }
+  undoToast('Клиент удалён'+(what?' · '+what:''), async ()=>{ const {error:e2}=await sb.rpc('restore_deleted',{p_ts:data}); if(e2){ notify(e2.message,'err'); return; } await loadAll(); showToast('Восстановлено'); }); }
 
 // ---------- equipment ----------
-window.openEquip=function(clientId){ eqClientId=clientId; eqEditId=null; const c=clients.find(x=>x.id==clientId); map.closePopup();
-  $('eqTitle').textContent='Техника · '+(c?c.name:''); populateEqModelSelect(); clearEqForm(); renderEqList(); $('eqOverlay').classList.add('on'); };
+// Окно «Техника»: состояние ТО видно плашкой; дата ТО ставится только
+// закрытием заявки с работой «ТО» (register_equipment_visit) — кнопки,
+// которая писала её напрямую, больше нет. Правка и удаление — в «⋯».
+function eqPaneMode(form){ $('eqFormPane').hidden=!form; $('eqList').hidden=form; $('eqSummary').hidden=form; $('eqListActions').hidden=form; $('eqFormActions').hidden=!form||!canWrite(); }
+let eqClientJobs=[];
+async function loadEqClientJobs(cid){ const {data,error}=await sb.from('jobs').select('id,number,status,equipment_id,scheduled_date,created_at,client_id,deleted_at').eq('client_id',cid).is('deleted_at',null).not('equipment_id','is',null);
+  if(error){ console.warn('equipment jobs',error); return; } if(cid===eqClientId){ eqClientJobs=data||[]; if($('eqOverlay').classList.contains('on')&&!$('eqList').hidden) renderEqList(); } }
+window.openEquip=function(clientId){ eqClientId=clientId; eqEditId=null; eqClientJobs=[]; map.closePopup();
+  $('eqTitle').textContent='Техника'; $('eqAdd').hidden=!canWrite(); populateEqModelSelect(); clearEqForm(); renderEqList(); $('eqOverlay').classList.add('on'); loadEqClientJobs(clientId); };
 $('eqClose').onclick=()=>$('eqOverlay').classList.remove('on');
 function fmtDate(d){ return d?d:''; }
 function warrantyBadge(e){ if(!e.factory_warranty_until) return ''; const today=todayISO();
@@ -1913,52 +1998,85 @@ function mhLine(e){ const rs=readingsByEq[e.id]||[]; const sv=eqService(e);
   const bits=[]; const last=rs.length?rs[rs.length-1]:null;
   if(last) bits.push('счётчик '+Math.round(+last.moto_hours)+' мч ('+last.taken_on+')');
   if(sv&&sv.rate>0){ bits.push('темп '+sv.rate.toFixed(1)+' мч/сут'+(sv.src==='client'?' (по клиенту)':''));
-    if(sv.daysLeft!=null){ const late=sv.daysLeft<=0; bits.push('<span style="color:'+(late?'var(--red)':(sv.daysLeft<=14?'var(--accent-ink)':'inherit'))+'">'+(late?('ТО просрочено на ~'+Math.abs(sv.daysLeft)+' дн'):('до ТО ~'+sv.daysLeft+' дн'))+'</span>'); } }
+    // Срок ТО — плашкой в шапке карточки (eqStatus); здесь только счётчик и темп.
+  }
   else if(sv) bits.push('темп не измерен (нужно 2 замера) — грубая оценка');
   else if(rs.length<2) bits.push('нужен ещё замер для темпа');
   return '<div class="m">'+bits.join(' · ')+'</div>'; }
-async function addReading(eqId,kind){ const e=(eqByClient[eqClientId]||[]).find(x=>x.id===eqId); if(!e) return;
+// Состояние ТО одной строкой: просрочено / скоро / в порядке.
+function eqStatus(e){ const sv=eqService(e); if(!sv) return null;
+  if(sv.rate>0&&sv.daysLeft!=null){ if(sv.daysLeft<=0) return {tone:'bad',text:'ТО просрочено'+(sv.daysLeft<0?' на '+Math.abs(sv.daysLeft)+' дн':'')};
+    if(sv.daysLeft<=14) return {tone:'warn',text:'ТО через '+sv.daysLeft+' дн'}; return {tone:'good',text:'в порядке · ТО через '+sv.daysLeft+' дн'}; }
+  if(sv.since>=sv.interval) return {tone:'bad',text:'ТО просрочено (оценка)'};
+  return {tone:'good',text:'ТО: ~'+Math.round(sv.since)+' из '+Math.round(sv.interval)+' мч'}; }
+function eqOpenJobs(e){ return eqClientJobs.filter(j=>j.equipment_id===e.id&&ACTIVE_JOB(j)); }
+function eqHistory(e){ const who=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?personLabel(p):''; };
+  const ev=(readingsByEq[e.id]||[]).map(r=>({d:r.taken_on,t:(r.kind==='service'?'ТО · ':'Замер ')+Math.round(+r.moto_hours)+' мч',w:who(r.created_by)}));
+  eqClientJobs.filter(j=>j.equipment_id===e.id&&j.status==='done').forEach(j=>ev.push({d:j.scheduled_date||String(j.created_at||'').slice(0,10),t:'Визит · '+requestLabel(j,j.id),job:j.id}));
+  if(e.last_service&&!ev.some(x=>x.d===e.last_service&&/^ТО/.test(x.t))) ev.push({d:e.last_service,t:'ТО'});
+  return ev.filter(x=>x.d).sort((a,b)=>b.d.localeCompare(a.d)).slice(0,5); }
+async function addReading(eqId){ const e=(eqByClient[eqClientId]||[]).find(x=>x.id===eqId); if(!e) return;
   const rs=readingsByEq[eqId]||[]; const last=rs.length?rs[rs.length-1]:null;
-  const r=await promptDialog(kind==='service'?'Плановое ТО — показания счётчика':'Замер моточасов',[
+  const r=await promptDialog('Замер моточасов',[
     {key:'mh',type:'number',inputmode:'decimal',min:0,label:'Моточасы по счётчику'+(last?(' (прошлый замер: '+Math.round(+last.moto_hours)+' мч от '+last.taken_on+')'):''),value:''},
     {key:'d',type:'date',label:'Дата',value:todayISO()}],{okText:'Записать показание'});
   if(!r) return; const mh=parseFloat(String(r.mh).replace(',','.')); if(isNaN(mh)||mh<0){ notify('Введи моточасы числом.','err'); return; }
   if(last&&mh<(+last.moto_hours)&&!(await confirmDialog('Показание '+Math.round(mh)+' мч меньше прошлого ('+Math.round(+last.moto_hours)+' мч). Счётчик меняли или это опечатка?',{okText:'Всё верно'}))) return;
-  const rec={equipment_id:eqId,taken_on:(r.d||todayISO()),moto_hours:mh,kind:kind};
+  const rec={equipment_id:eqId,taken_on:(r.d||todayISO()),moto_hours:mh,kind:'reading'};
   const {error}=await sb.from('equipment_readings').upsert(rec,{onConflict:'equipment_id,taken_on'});
   if(error){ notify('Ошибка: '+error.message,'err'); return; }
-  if(kind==='service'){ await sb.from('equipment').update({last_service:rec.taken_on,last_visit:rec.taken_on}).eq('id',eqId); }
-  await loadReadings(); await reloadEquip(); const sv=eqService(e);
-  showToast(kind==='service'?('ТО отмечено'+(sv&&sv.daysLeft!=null?(' · следующее через ~'+sv.daysLeft+' дн'):'')):'Замер записан'); }
-function renderEqList(){ const box=$('eqList'); const list=eqByClient[eqClientId]||[];
+  await reloadEquip(); showToast('Замер записан'); }
+// Заявка на ТО: новая заявка с этой техникой и работой «ТО» из каталога.
+// Задание из неё создаётся обычным путём — в ленте «Задания» или в заявке.
+async function newMaintenanceJob(cid,eid){ if(!canWriteJob()) return; $('eqOverlay').classList.remove('on'); map.closePopup();
+  await openJob(null,cid,eid); const e=(eqByClient[cid]||[]).find(x=>x.id===eid);
+  const fits=w=>!e||(w.model_ids?.length?w.model_ids.includes(e.model_id):(!w.applicable_kinds?.length||w.applicable_kinds.includes(e.kind)));
+  const w=catalog.find(w=>w.is_maintenance&&fits(w))||catalog.find(w=>w.is_maintenance);
+  if(w&&$('jbWorkPick')&&!$('jbWorkPick').disabled){ $('jbWorkPick').value=w.id; await $('jbWorkAdd').onclick(); showToast('Заявка на ТО: работа «'+w.name+'» добавлена'); }
+  else notify('В каталоге нет работы с пометкой «ТО / сервис» — добавьте работу вручную.','warn'); }
+window.newMaintenanceJob=newMaintenanceJob;
+function renderEqList(){ const box=$('eqList'); const list=eqByClient[eqClientId]||[]; const c=clients.find(x=>x.id===eqClientId);
+  $('eqSummary').textContent=(c?c.name+' · ':'')+countWord(list.length,'единица','единицы','единиц');
   box.innerHTML=list.length?'':'<div class="hint">Техники пока нет.</div>';
-  list.forEach(e=>{ const d=document.createElement('div'); d.className='eqitem';
-    d.innerHTML='<div class="t">'+esc(e.model)+' '+warrantyBadge(e)+'</div><div class="m">'+[e.kind,e.serial?'S/N '+esc(e.serial):'',e.installed_on?'уст. '+esc(e.installed_on):''].filter(Boolean).join(' · ')+'</div>'+
-      (e.notes?'<div class="m">'+esc(e.notes)+'</div>':'')+
-      mhLine(e)+
-      '<div class="acts" style="margin-top: var(--sp-3);display:flex;gap: var(--sp-3);flex-wrap:wrap"><button class="btn sm" data-mhr="'+e.id+'">+ замер</button><button class="btn sm amber" data-mhs="'+e.id+'">✔ плановое ТО</button>'+
-      (canWrite()?'<button class="btn sm" data-eqedit="'+e.id+'">Редактировать</button><button class="btn sm ghost" data-eqdel="'+e.id+'" title="Удалить">×</button>':'')+'</div>';
+  list.forEach(e=>{ const d=document.createElement('article'); d.className='eqitem eq-card'; const st=eqStatus(e); const open=eqOpenJobs(e); const hist=eqHistory(e);
+    const work=open.length?'<button type="button" class="btn eq-job-link" data-eqjob="'+esc(open[0].id)+'"><span class="dot" aria-hidden="true"></span>'+esc(requestLabel(open[0],open[0].id))+(open.length>1?' и ещё '+(open.length-1):'')+'</button>'
+      :(canWriteJob()?'<button type="button" class="btn'+(st&&st.tone!=='good'?' amber':'')+'" data-eqto="'+e.id+'">Заявка на ТО</button>':'');
+    d.innerHTML='<div class="eq-card-head"><h4>'+esc(e.model)+(e.kind?' <span class="eq-kind">· '+esc(e.kind)+'</span>':'')+'</h4>'+(canWrite()?'<details class="eq-more"><summary class="btn" aria-label="Ещё действия: '+esc(e.model)+'"><span aria-hidden="true">⋯</span></summary><div class="eq-menu"><button type="button" class="btn ghost" data-eqedit="'+e.id+'">Редактировать</button><button type="button" class="btn ghost red" data-eqdel="'+e.id+'">Удалить технику</button></div></details>':'')+(st?'<span class="eq-state '+st.tone+'">'+esc(st.text)+'</span>':'')+'</div>'
+      +'<div class="m">'+[e.serial?'S/N '+esc(e.serial):'',e.installed_on?'уст. '+esc(e.installed_on):'',warrantyBadge(e)].filter(Boolean).join(' · ')+'</div>'
+      +(e.notes?'<div class="m">'+esc(e.notes)+'</div>':'')+mhLine(e)
+      +'<div class="eq-card-acts"><button type="button" class="btn" data-mhr="'+e.id+'">+ замер</button>'+work+'</div>'
+      +(hist.length?'<details class="eq-history"><summary>История</summary><ol>'+hist.map(h=>'<li><span class="d">'+esc(shortDate(h.d))+'</span><span class="t">'+(h.job?'<button type="button" class="link" data-eqjob="'+esc(h.job)+'">'+esc(h.t)+'</button>':esc(h.t))+'</span><span class="w">'+esc(h.w||'')+'</span></li>').join('')+'</ol></details>':'');
     box.appendChild(d); });
-  box.querySelectorAll('[data-mhr]').forEach(b=>b.onclick=()=>addReading(b.dataset.mhr,'reading'));
-  box.querySelectorAll('[data-mhs]').forEach(b=>b.onclick=()=>addReading(b.dataset.mhs,'service'));
+  box.querySelectorAll('[data-mhr]').forEach(b=>b.onclick=()=>addReading(b.dataset.mhr));
+  box.querySelectorAll('[data-eqto]').forEach(b=>b.onclick=()=>newMaintenanceJob(eqClientId,b.dataset.eqto));
+  box.querySelectorAll('[data-eqjob]').forEach(b=>b.onclick=()=>{ $('eqOverlay').classList.remove('on'); openJob(b.dataset.eqjob); });
   box.querySelectorAll('[data-eqedit]').forEach(b=>b.onclick=()=>startEqEdit(b.dataset.eqedit));
   box.querySelectorAll('[data-eqdel]').forEach(b=>b.onclick=()=>delEq(b.dataset.eqdel)); }
-function clearEqForm(){ $('eqFormPane').hidden=true;$('eqList').hidden=false;$('eqAdd').hidden=false;eqEditId=null; $('eqModel').value='';$('eqKind').value='';$('eqSerial').value='';$('eqInstalled').value='';$('eqWarranty').value='';$('eqNotes').value='';$('eqLat').value='';$('eqLng').value='';$('eqGeo').value='';$('eqGeoRes').innerHTML='';$('eqErr').textContent=''; if($('eqModelId')) $('eqModelId').value=''; $('eqFormTitle').textContent='Добавить технику'; $('eqFormCancel').style.display='none'; }
+function clearEqForm(){ eqPaneMode(false); eqEditId=null; $('eqModel').value='';$('eqKind').value='';$('eqSerial').value='';$('eqInstalled').value='';$('eqWarranty').value='';$('eqNotes').value='';$('eqLat').value='';$('eqLng').value='';$('eqGeo').value='';$('eqGeoRes').innerHTML='';$('eqErr').textContent=''; if($('eqModelId')) $('eqModelId').value=''; $('eqFormTitle').textContent='Добавить технику'; }
 function startEqEdit(id){ const e=(eqByClient[eqClientId]||[]).find(x=>x.id==id); if(!e) return; eqEditId=id;
   $('eqModel').value=e.model||'';$('eqKind').value=e.kind||'';$('eqSerial').value=e.serial||'';$('eqInstalled').value=e.installed_on||'';$('eqWarranty').value=e.factory_warranty_until||'';$('eqNotes').value=e.notes||'';$('eqLat').value=e.lat!=null?e.lat:'';$('eqLng').value=e.lng!=null?e.lng:'';$('eqGeo').value='';$('eqGeoRes').innerHTML=''; if($('eqModelId')) $('eqModelId').value=e.model_id||'';
-  $('eqFormTitle').textContent='Правка техники'; $('eqFormPane').hidden=false;$('eqList').hidden=true;$('eqAdd').hidden=true;$('eqFormCancel').style.display='';modalUI.markClean('eqOverlay'); }
-$('eqAdd').onclick=()=>{clearEqForm();$('eqFormPane').hidden=false;$('eqList').hidden=true;$('eqAdd').hidden=true;$('eqFormCancel').style.display='';modalUI.markClean('eqOverlay');$('eqModelId').focus({preventScroll:true});};
-$('eqFormCancel').onclick=()=>{clearEqForm();modalUI.markClean('eqOverlay');}; if($('eqModelId')) $('eqModelId').onchange=applyEqModel;
+  $('eqFormTitle').textContent='Правка: '+(e.model||'техника'); eqPaneMode(true); modalUI.markClean('eqOverlay'); $('eqModel').focus({preventScroll:true}); }
+$('eqAdd').onclick=()=>{ clearEqForm(); eqPaneMode(true); modalUI.markClean('eqOverlay'); $('eqModelId').focus({preventScroll:true}); };
+$('eqFormCancel').onclick=()=>{ clearEqForm(); modalUI.markClean('eqOverlay'); }; if($('eqModelId')) $('eqModelId').onchange=applyEqModel;
 $('eqGeoBtn').onclick=async ()=>{ const q=$('eqGeo').value.trim(); const box=$('eqGeoRes'); if(!q){ box.innerHTML=''; return; } box.innerHTML='<div class="hint">Ищу…</div>';
   try{ const data=await geoSearch(q,5); if(!data.length){ box.innerHTML='<div class="hint">Не найдено.</div>'; return; } box.innerHTML='';
     data.forEach(it=>{ const d=document.createElement('button');d.type='button'; d.className='pt geo-result'; d.innerHTML='<div class="nm" style="font-size: var(--fs-3);font-weight:500">'+esc(it.display_name)+'</div>';
       d.onclick=()=>{ $('eqLat').value=(+it.lat).toFixed(6); $('eqLng').value=(+it.lon).toFixed(6); box.innerHTML='<div class="hint ok">Координаты заданы.</div>'; }; box.appendChild(d); }); }catch(e){ box.innerHTML='<div class="err">'+esc(e.message||'Ошибка геокодера.')+'</div>'; } };
 $('eqSave').onclick=async ()=>{ const model=$('eqModel').value.trim(); if(!model){ $('eqErr').textContent='Введи модель.'; return; }
-  const rec={client_id:eqClientId,model,kind:$('eqKind').value.trim(),serial:$('eqSerial').value.trim(),installed_on:$('eqInstalled').value||null,factory_warranty_until:$('eqWarranty').value||null,notes:$('eqNotes').value.trim(),model_id:$('eqModelId').value||null,lat:parseFloat($('eqLat').value)||null,lng:parseFloat($('eqLng').value)||null};
+  const num=v=>{ const t=String(v||'').trim().replace(',','.'); return t===''?null:Number(t); }; const lat=num($('eqLat').value), lng=num($('eqLng').value);
+  if((lat==null)!==(lng==null)||(lat!=null&&(!isFinite(lat)||!isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180))){ $('eqErr').textContent='Координаты: укажите широту и долготу числами — или оставьте обе пустыми.'; return; }
+  const rec={client_id:eqClientId,model,kind:$('eqKind').value.trim(),serial:$('eqSerial').value.trim(),installed_on:$('eqInstalled').value||null,factory_warranty_until:$('eqWarranty').value||null,notes:$('eqNotes').value.trim(),model_id:$('eqModelId').value||null,lat,lng};
   $('eqSave').disabled=true; let error; if(eqEditId){ ({error}=await sb.from('equipment').update(rec).eq('id',eqEditId)); } else { ({error}=await sb.from('equipment').insert(rec)); } $('eqSave').disabled=false;
-  if(error){ $('eqErr').textContent='Ошибка: '+error.message; return; } await reloadEquip(); clearEqForm(); };
-async function delEq(id){ if(!await confirmDialog('Удалить технику?',{danger:true,okText:'Удалить'})) return; const { error }=await sb.from('equipment').update({deleted_at:new Date().toISOString()}).eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } await reloadEquip();
-  undoToast('Техника удалена', async ()=>{ const {error:e2}=await sb.from('equipment').update({deleted_at:null}).eq('id',id); if(e2){ notify(e2.message,'err'); return; } await reloadEquip(); showToast('Восстановлено'); }); }
+  if(error){ $('eqErr').textContent='Ошибка: '+error.message; return; } await reloadEquip(); clearEqForm(); showToast('Техника сохранена'); };
+// Удаление техники — серверной функцией: при открытых заявках она откажет
+// и назовёт их. Отмена — тем же штампом, что у клиента.
+async function delEq(id){ const e=Object.values(eqByClient).flat().find(x=>x.id===id); if(!e) return;
+  const open=eqOpenJobs(e);
+  if(open.length){ notify('Удалить нельзя: на технику открыты '+open.map(j=>requestLabel(j,j.id)).join(', ')+'. Закройте или отмените их.','err'); return; }
+  if(!await confirmDialog('«'+(e.model||'Техника')+'» пропадёт из списка клиента. Закрытые заявки и замеры останутся. Сразу после удаления его можно отменить.',{title:'Удалить технику?',danger:true,okText:'Удалить технику'})) return;
+  const { data, error }=await sb.rpc('soft_delete_equipment',{p_id:id}); if(error){ notify('Ошибка: '+error.message,'err'); return; }
+  await reloadEquip();
+  undoToast('Техника удалена', async ()=>{ const {error:e2}=await sb.rpc('restore_deleted',{p_ts:data}); if(e2){ notify(e2.message,'err'); return; } await reloadEquip(); showToast('Восстановлено'); }); }
 async function reloadEquip(){ const { data }=await sb.from('equipment').select('*').is('deleted_at',null).order('created_at'); eqByClient={}; (data||[]).forEach(e=>{ (eqByClient[e.client_id]=eqByClient[e.client_id]||[]).push(e); }); await loadReadings(); renderEqList(); render(); }
 
 let eqModelsError=null;

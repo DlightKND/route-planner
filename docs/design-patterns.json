@@ -1301,6 +1301,14 @@
         "charts-tables"
       ],
       "note": "feedback",
+      "radio": [
+        "view-segment",
+        "color-picker"
+      ],
+      "radiogroup": [
+        "view-segment",
+        "color-picker"
+      ],
       "region": [
         "map-explorer",
         "record-card"

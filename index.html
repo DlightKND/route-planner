@@ -3106,23 +3106,52 @@
   <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="trashClose">Закрыть</button></div>
 </div></div>
 
-<div class="overlay" id="editOverlay"><div class="modal">
-  <h3>Редактирование точки</h3>
-  <label>Название</label><input type="text" id="eName">
-  <label>Телефон на месте <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Кого набирать по приезде. Виден инженеру в шапке заявки и в попапе точки на карте — оттуда набирается одним нажатием.</span></span></label><input type="tel" id="ePhone" inputmode="tel" autocomplete="tel" placeholder="+380 …">
-  <label>Описание</label><textarea id="eDesc"></textarea>
-<details class="modal-group"><summary>Тариф, подписант и положение на карте</summary>  <div class="row" style="align-items:flex-end"><div class="grow"><label>Цвет</label><input type="color" id="eColor"></div><label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;padding-bottom: var(--sp-3);white-space:nowrap"><input type="checkbox" id="eBase" style="width:auto">депо</label></div>
-  <label style="margin-top: var(--sp-3)">Профиль тарифа по умолчанию (для платных работ этого клиента)</label><select id="eProfile"></select>
-  <label style="margin-top: var(--sp-3)">Подписант заказчика</label><input type="text" id="eSigner" placeholder="Директор Петров П.П.">
-  <div class="row"><div class="grow"><label>Широта</label><input type="text" inputmode="decimal" id="eLat"></div><div class="grow"><label>Долгота</label><input type="text" inputmode="decimal" id="eLng"></div></div>
-</details>  <div class="row" style="margin-top: var(--sp-4)"><button class="btn amber grow" id="eSave">Сохранить</button><button class="btn ghost" id="eCancel">Отмена</button></div>
+<div class="overlay" id="editOverlay"><div class="modal pane-modal client-modal">
+  <h3>Клиент</h3>
+  <div class="pane-body">
+  <p class="hint client-summary" id="eSummary"></p>
+  <!-- Тип точки — тот же выбор, что при создании. Клиента с заявками или
+       техникой в депо не превратить: это проверяет и база. -->
+  <div class="client-kind"><div class="seg point-type" id="eKind" role="radiogroup" aria-label="Тип точки"><button type="button" role="radio" data-edit-kind="client">Клиент</button><button type="button" role="radio" data-edit-kind="base">Депо</button></div><span class="hint" id="eKindHint"></span></div>
+  <section class="modal-section" aria-labelledby="eContactsH"><h4 id="eContactsH">Контакты</h4>
+    <label for="eName">Название</label><input type="text" id="eName" required>
+    <div class="form-grid">
+      <div><label for="eContact">Контактное лицо</label><input type="text" id="eContact" placeholder="Петренко Олег, главный механик"></div>
+      <div><label for="ePhone">Телефон на месте</label><input type="tel" id="ePhone" inputmode="tel" autocomplete="tel" placeholder="+380 …"></div>
+      <div><label for="eAddress">Адрес</label><input type="text" id="eAddress" placeholder="Город, улица, дом"></div>
+      <div><label for="eAccess">Доступ на объект</label><input type="text" id="eAccess" placeholder="Пропуск, часы работы"></div>
+    </div>
+    <p class="hint">Телефон и доступ инженер видит в карточке остановки и в попапе точки.</p>
+    <label for="eDesc">Описание</label><textarea id="eDesc"></textarea>
+  </section>
+  <section class="modal-section" aria-labelledby="eContractH"><h4 id="eContractH">Договор</h4>
+    <div class="form-grid">
+      <div><label for="eProfile">Тариф по умолчанию</label><select id="eProfile"></select></div>
+      <div><label for="eSigner">Подписант актов</label><input type="text" id="eSigner" placeholder="Директор Петров П.П."></div>
+    </div>
+  </section>
+  <section class="modal-section" aria-labelledby="eMapH"><h4 id="eMapH">На карте</h4>
+    <p class="client-coords">Координаты <output id="eCoords"></output></p>
+    <p class="hint" id="eShift" hidden></p>
+    <div class="row client-place-actions"><button type="button" class="btn" id="eMove">Переставить на карте</button><button type="button" class="btn" id="eGeoOpen" aria-expanded="false" aria-controls="eGeoBox">Найти по адресу</button></div>
+    <div id="eGeoBox" hidden><div class="row"><input type="text" id="eGeo" class="grow" aria-label="Адрес для поиска"><button type="button" class="btn" id="eGeoBtn">Найти</button></div><div id="eGeoRes"></div></div>
+    <div class="client-color-row"><label>Цвет на карте</label><div class="point-swatches" role="radiogroup" aria-label="Цвет на карте"><button type="button" role="radio" data-swatch="#9aa1ad" style="--sw:#9aa1ad" aria-label="Серый"></button><button type="button" role="radio" data-swatch="#3e9bdc" style="--sw:#3e9bdc" aria-label="Синий"></button><button type="button" role="radio" data-swatch="#8e6bd8" style="--sw:#8e6bd8" aria-label="Фиолетовый"></button><button type="button" role="radio" data-swatch="#d86ba8" style="--sw:#d86ba8" aria-label="Розовый"></button><button type="button" role="radio" data-swatch="#e08a3c" style="--sw:#e08a3c" aria-label="Оранжевый"></button><label class="point-swatch-own" title="Свой цвет"><span class="sr-only">Свой цвет</span><input type="color" id="eColor" value="#9aa1ad"></label></div></div>
+  </section>
+  </div>
+  <div class="row modal-actions client-actions"><button type="button" class="btn ghost red" id="eDelete">Удалить клиента</button><span class="grow"></span><button class="btn ghost" id="eCancel">Отмена</button><button class="btn amber" id="eSave">Сохранить</button></div>
 </div></div>
 
+<!-- Перестановка точки клиента на карте: окно клиента прячется, точку
+     тянут мышью или пальцем, «Готово» возвращает в окно. -->
+<div class="map-move-bar" id="moveBar" role="region" aria-label="Перестановка точки" hidden><span id="moveMsg">Перетащите точку клиента на новое место</span><button type="button" class="btn ghost" id="moveCancel">Отмена</button><button type="button" class="btn amber" id="moveDone">Готово</button></div>
+
 <!-- equipment of a client -->
-<div class="overlay" id="eqOverlay"><div class="modal">
-  <h3 id="eqTitle">Техника клиента</h3>
+<div class="overlay" id="eqOverlay"><div class="modal pane-modal eq-modal">
+  <h3 id="eqTitle">Техника</h3>
+  <div class="pane-body">
+  <p class="hint eq-summary" id="eqSummary"></p>
   <div id="eqList"></div>
-  <button type="button" class="btn amber" id="eqAdd">Добавить технику</button><div class="card" id="eqFormPane" hidden style="margin-top: var(--sp-3);padding: var(--sp-4)"><h3 id="eqFormTitle" >Добавить технику</h3>
+  <div id="eqFormPane" hidden><h4 id="eqFormTitle" class="eq-form-title">Добавить технику</h4>
     <label>Модель из каталога</label><select id="eqModelId"></select>
     <label style="margin-top: var(--sp-3)">Название модели</label><input type="text" id="eqModel" placeholder="Если модели нет в каталоге">
     <div class="row"><div class="grow"><label>Тип/бренд</label><input type="text" id="eqKind" placeholder="для навыков инженера"></div><div class="grow"><label>Серийник</label><input type="text" id="eqSerial"></div></div>
@@ -3133,10 +3162,12 @@
     <div id="eqGeoRes"></div>
     <div class="row"><div class="grow"><label>Широта</label><input type="text" inputmode="decimal" id="eqLat"></div><div class="grow"><label>Долгота</label><input type="text" inputmode="decimal" id="eqLng"></div></div>
 
-</details>    <div class="row" style="margin-top: var(--sp-3)"><button class="btn amber grow" id="eqSave">Сохранить технику</button><button class="btn ghost" id="eqFormCancel" style="display:none">Отмена правки</button></div>
+</details>
     <div class="err" id="eqErr"></div>
   </div>
-  <div class="row" style="margin-top: var(--sp-4)"><button class="btn ghost grow" id="eqClose">Закрыть</button></div>
+  </div>
+  <div class="row modal-actions eq-actions" id="eqListActions"><button type="button" class="btn" id="eqAdd">+ Добавить технику</button><span class="grow"></span><button type="button" class="btn ghost" id="eqClose">Закрыть</button></div>
+  <div class="row modal-actions eq-actions" id="eqFormActions" hidden><button type="button" class="btn ghost" id="eqFormCancel">Отмена</button><span class="grow"></span><button type="button" class="btn amber" id="eqSave">Сохранить технику</button></div>
 </div></div>
 
 <!-- catalog work edit -->

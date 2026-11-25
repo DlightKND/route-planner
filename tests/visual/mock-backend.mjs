@@ -361,6 +361,22 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     mk('c',163,farm,'Замена гидроцилиндра','2026-10-08',3);
     ride.route_geometry={type:'LineString',coordinates:[[36.2,49.98],[36.23,49.99],[36.35,50.05]]};
     settings.avoid_zones=[{id:'az-a',lat:50.02,lng:36.3,r:300,by:'Демо',at:'2026-10-01',until:'2026-10-30'},{id:'az-b',lat:49.95,lng:36.1,r:150,until:'2026-09-30'}];
+    // Equipment for the map dialogs: one unit close to its service, one overdue, one fresh.
+    tables.equipment_models.push({id:'model-svc',manufacturer:'Grundfos',kind:'насос',model:'CR 32',warranty_months:24,service_interval_hours:500});
+    tables.work_catalog.push({id:'work-to',name:'Плановое ТО насоса',norm_hours:3,warranty_eligible:false,is_maintenance:true,applicable_kinds:[],unit:'ч'});
+    tables.equipment.push(
+      {id:'eq-soon',client_id:agro.id,model:'Grundfos CR 32',kind:'насос',model_id:'model-svc',serial:'4471-22',installed_on:'2024-03-12',last_service:'2026-08-01',deleted_at:null},
+      {id:'eq-late',client_id:agro.id,model:'Шкаф управления ШУ-2',kind:'автоматика',model_id:'model-svc',last_service:'2026-05-14',deleted_at:null},
+      {id:'eq-fresh',client_id:agro.id,model:'Генератор SDMO J88',kind:'генератор',model_id:'model-svc',last_service:'2026-09-02',deleted_at:null});
+    tables.equipment_readings=[
+      {id:'r1',equipment_id:'eq-soon',taken_on:'2026-08-01',moto_hours:4300,kind:'reading',created_by:engineer},
+      {id:'r2',equipment_id:'eq-soon',taken_on:'2026-09-20',moto_hours:4700,kind:'reading',created_by:engineer},
+      {id:'r3',equipment_id:'eq-late',taken_on:'2026-05-14',moto_hours:1500,kind:'reading',created_by:engineer},
+      {id:'r4',equipment_id:'eq-late',taken_on:'2026-09-01',moto_hours:2104,kind:'reading',created_by:engineer},
+      {id:'r5',equipment_id:'eq-fresh',taken_on:'2026-09-02',moto_hours:1000,kind:'reading',created_by:engineer},
+      {id:'r6',equipment_id:'eq-fresh',taken_on:'2026-09-28',moto_hours:1080,kind:'reading',created_by:engineer}];
+    tables.jobs.push({...request,id:'map-job-eq',number:214,client_id:agro.id,clients:agro,equipment:{model:'Шкаф управления ШУ-2'},equipment_id:'eq-late',title:'Диагностика шкафа',status:'open',due_date:'2026-10-12',created_at:'2026-09-26T07:00:00Z',job_works:[],service_orders:[]});
+    tables.jobs.push({...request,id:'map-job-done',number:190,client_id:agro.id,clients:agro,equipment:{model:'Генератор SDMO J88'},equipment_id:'eq-fresh',title:'ТО генератора',status:'done',scheduled_date:'2026-09-02',due_date:'2026-09-02',created_at:'2026-08-26T07:00:00Z',job_works:[],service_orders:[]});
     tables.jobs.push({...request,id:'map-job-d',number:212,client_id:farm.id,clients:farm,equipment:null,equipment_id:null,title:'Плановое ТО',status:'open',due_date:'2026-10-20',created_at:'2026-09-25T07:00:00Z',job_works:[],service_orders:[]});
   }
   if(designTripChoices){tables.trips.push({...ride,id:'30000000-0000-4000-8000-000000000010',vehicle_label:'Выезд с ответственным инженером',engineer_ids:[engineer],trip_service_orders:[]},{...ride,id:'30000000-0000-4000-8000-000000000011',vehicle_label:'Выезд с другой командой',engineer_ids:[other],trip_service_orders:[]});}
@@ -1073,6 +1089,10 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
         return {data:ride.workbench_revision,error:null};
       }
       const reads = {
+        client_active_tasks:(tables.service_orders||[]).filter(o=>['draft','assigned','in_progress','paused','review'].includes(o.status)&&(tables.jobs.find(j=>j.id===o.job_id)?.client_id===args.p_id)).map(o=>({id:o.id,number:o.number,title:o.title,status:o.status,trip_from:(o.trip_service_orders||[])[0]?.trips?.date_from||null})),
+        soft_delete_client:'2026-10-01T09:00:00Z',
+        soft_delete_equipment:'2026-10-01T09:00:00Z',
+        restore_deleted:null,
         gps_existing_trip_options:sourceStopJourney?[{id:trip,date_from:'2026-10-04',date_to:'2026-10-06',
           status:ride.status,link_mode:supplementalJourney?'supplement':'import'}]:[],
         unassigned_track_points:(tables.vehicle_telemetry_archive||[]).map(p=>({...p,part:1})),
