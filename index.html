@@ -2420,6 +2420,14 @@
         <div class="hint" id="rWpHint" style="display:none">Кликни по карте, чтобы добавить промежуточную точку.</div>
         <div id="rWpRes"></div>
 
+        <!-- Попутные: работа рядом с построенным маршрутом — задания без выезда,
+             заявки без задания и техника, которой подходит ТО. Раньше это был
+             «Коридор» в настройках со списком всех клиентов подряд. -->
+        <section class="map-route-section map-nearby" id="rNearbySection" hidden>
+          <div class="map-nearby-head"><h3>Попутные</h3><label class="sr-only" for="rNearKm">Расстояние от маршрута</label>
+            <select id="rNearKm"><option value="5">до 5 км</option><option value="10">до 10 км</option><option value="15" selected>до 15 км</option><option value="25">до 25 км</option><option value="50">до 50 км</option></select></div>
+          <div id="rNearby"></div>
+        </section>
         <div class="row route-primary" style="margin-top:var(--gap-block)"><button class="btn amber grow" id="rBuild">Построить</button><button class="btn grow" id="rSaveTrip">Сохранить выезд</button></div>
         <button type="button" class="btn ghost" id="rRebuildRemaining" hidden>Рассчитать оставшийся маршрут</button>
         <div class="hint" id="rStatus" role="status"></div>

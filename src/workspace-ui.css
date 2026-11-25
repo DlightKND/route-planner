@@ -1289,3 +1289,24 @@ html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{con
 .map-legend .map-legend-sub { color:var(--ink-dim); }
 @media(min-width:761px){.view-map:has(.map-workspace) .leaflet-bottom.leaflet-left { margin-left:calc(472px + var(--rail-w)); }}
 @media(max-width:760px){ .map-legend { display:none!important; } }
+
+/* Map stage 2: route stops carry their tasks, and nearby work replaces the corridor setting. */
+.map-workspace #rStops .route-pt .route-pt-work { display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:8px;font:13px/1.45 var(--sans);color:var(--ink); }
+.map-workspace #rStops .route-pt .route-pt-work.warn { padding:8px 10px;border-radius:8px;background:color-mix(in srgb,var(--warning) 14%,var(--panel));color:var(--ink); }
+.map-workspace #rStops .route-pt .route-pt-work.muted { color:var(--ink-dim); }
+.map-workspace #rStops .route-pt .route-pt-work .btn { min-height:36px;margin:0; }
+#chipCor,#corBody { display:none!important; }
+.map-nearby[hidden] { display:none; }
+.map-nearby-head { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px; }
+.map-nearby-head h3 { margin:0;font:500 15px/1.4 var(--sans); }
+.map-nearby-head select { width:auto;min-height:36px;padding:4px 8px; }
+.map-nearby-row { display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:8px;border:1px solid var(--line);border-left-width:3px;border-radius:10px;background:var(--panel); }
+.map-nearby-row.urg-overdue { border-left-color:#dc2626; }
+.map-nearby-row.urg-acute { border-left-color:#f59e0b; }
+.map-nearby-row.urg-calm { border-left-color:#16a34a; }
+.map-nearby-row.urg-cold { border-left-color:#0ea5e9; }
+.map-nearby-row>div { flex:1;min-width:0;display:flex;flex-direction:column;gap:2px; }
+.map-nearby-row strong { font:500 14px/1.4 var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.map-nearby-row span { font-size:13px; }
+.map-nearby-row small { font-size:12px;color:var(--ink-dim); }
+.map-nearby-row .btn { flex:none;margin:0; }
