@@ -59,7 +59,8 @@
 
 @media (max-width:760px) {
   .view-customer #customerCall { display:none!important; }
-  .view-customer .crumbs>span { display:none; }
+  .view-customer .crumbs>span,.view-customer .workflow-edit>span { display:none; }
+  html#dlight-ui[data-ui-system] .view-customer #customerEdit { width:48px!important;min-width:48px!important;padding:10px!important; }
   .customer-columns,.customer-form { grid-template-columns:1fr; }
   .customer-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .customer-bars { gap:3px;height:136px; }

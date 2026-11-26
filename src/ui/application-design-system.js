@@ -103,8 +103,33 @@ export function installApplicationDesignSystem(root=document) {
     });
     root.querySelectorAll('label').forEach(el=>{if(el.querySelector(':scope>input[type=checkbox],:scope>input[type=radio]'))assign(el,'ui',el.matches('.wb-task-share-row,[data-task-allocation-row]')?'layout':'option');});
   };
+  // Action rows (dialog/card footers): every command gets the width of the longest label. On a phone the
+  // commands share the row in equal parts when all labels fit, otherwise they stack one per line.
+  const ACTION_ROWS='.modal-actions,.entity-dialog-foot,.entity-dialog-footer,.entity-editor-footer>.row';
+  const actionRows=new WeakSet();
+  const layoutActions=row=>{
+    if(!row.isConnected)return;
+    const buttons=[...row.children].filter(el=>el.matches('[data-ui=button]')&&el.getClientRects().length);
+    if(buttons.length<2){if(row.dataset.uiActions){delete row.dataset.uiActions;row.style.removeProperty('--ui-action-w');}return;}
+    const view=root.defaultView,px=v=>parseFloat(v)||0;
+    const need=Math.ceil(Math.max(...buttons.map(el=>{const range=root.createRange();range.selectNodeContents(el);const cs=view.getComputedStyle(el);return range.getBoundingClientRect().width+px(cs.paddingLeft)+px(cs.paddingRight)+px(cs.borderLeftWidth)+px(cs.borderRightWidth);})));
+    const cs=view.getComputedStyle(row),gap=px(cs.columnGap),icons=[...row.children].filter(el=>el.matches('[data-ui=icon]')&&el.getClientRects().length);
+    const room=row.clientWidth-px(cs.paddingLeft)-px(cs.paddingRight)-icons.reduce((sum,el)=>sum+el.getBoundingClientRect().width+gap,0);
+    // Hysteresis: a stacked row returns to one line only with clear room to spare, otherwise a scrollbar
+    // that comes and goes with the row's height would flip the layout back and forth.
+    const spare=room-(need*buttons.length+gap*(buttons.length-1)),mode=spare>=(row.dataset.uiActions==='stack'?32:-.5)?'row':'stack',width=need+'px';
+    if(row.dataset.uiActions!==mode)row.dataset.uiActions=mode;
+    if(Math.abs((parseFloat(row.style.getPropertyValue('--ui-action-w'))||0)-need)>2)row.style.setProperty('--ui-action-w',width);
+  };
+  // Measured only when a row is sized (ResizeObserver: shown, opened, resized) or its own commands change,
+  // never on every mutation of the page, so busy screens do not pay a layout per change.
+  const view=root.defaultView,resize=view.ResizeObserver?new view.ResizeObserver(entries=>entries.forEach(entry=>layoutActions(entry.target))):null;
+  const dirty=new Set();let frame=0;
+  const relayout=()=>{frame=0;const rows=[...dirty];dirty.clear();rows.forEach(layoutActions);};
+  const changes=view.MutationObserver?new view.MutationObserver(records=>{records.forEach(record=>{const row=record.target.nodeType===1&&record.target.matches(ACTION_ROWS)?record.target:record.target.parentElement?.closest(ACTION_ROWS);if(row)dirty.add(row);});if(dirty.size&&!frame)frame=view.requestAnimationFrame(relayout);}):null;
+  const scanActions=()=>root.querySelectorAll(ACTION_ROWS).forEach(row=>{if(actionRows.has(row)||row.closest('.ds-kit'))return;actionRows.add(row);resize?.observe(row);changes?.observe(row,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['hidden','class','disabled']});});
   let queued=false,disposed=false;
-  const schedule=()=>{if(queued||disposed)return;queued=true;root.defaultView.queueMicrotask(()=>{queued=false;if(!disposed)scan();});};
+  const schedule=()=>{if(queued||disposed)return;queued=true;root.defaultView.queueMicrotask(()=>{queued=false;if(!disposed){scan();scanActions();}});};
   const observer=new root.defaultView.MutationObserver(schedule);
   observer.observe(root.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','role','disabled','aria-busy']});
   root.addEventListener('click',schedule);
@@ -127,6 +152,6 @@ export function installApplicationDesignSystem(root=document) {
     if(delta)strip.scrollTo({left:strip.scrollLeft+delta,top:0,behavior:'instant'});
   };
   root.addEventListener('focusin',revealTab);
-  scan();
-  return {refresh:scan,destroy(){disposed=true;observer.disconnect();root.removeEventListener('click',schedule);root.removeEventListener('change',schedule);root.removeEventListener('input',schedule);root.removeEventListener('keydown',keydown);root.removeEventListener('focusin',revealTab);}};
+  scan();scanActions();
+  return {refresh(){scan();scanActions();},destroy(){disposed=true;observer.disconnect();resize?.disconnect();changes?.disconnect();if(frame)view.cancelAnimationFrame(frame);root.removeEventListener('click',schedule);root.removeEventListener('change',schedule);root.removeEventListener('input',schedule);root.removeEventListener('keydown',keydown);root.removeEventListener('focusin',revealTab);}};
 }
