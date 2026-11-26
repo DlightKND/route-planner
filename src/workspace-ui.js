@@ -183,9 +183,9 @@ export function installWorkspaceStructure(root=document){
   catalogHead.closest('.workspace-masthead').classList.add('workspace-section-rail');
   const row=element(root,'div','workspace-heading-row'),actions=element(root,'div','catalog-page-actions');
   row.append(catalogHead.firstElementChild,actions);catalogHead.append(row);
-  for(const id of ['catAdd','emShowAdd','stockAdd'])actions.append(root.getElementById(id));
+  for(const id of ['custAdd','pointMapAdd','catAdd','emShowAdd','stockAdd']){const button=root.getElementById(id);if(button)actions.append(button);}
   const tabs=[...catalog.querySelectorAll('.subtabs')];if(tabs.length){tabs[0].classList.add('catalog-main-nav','workspace-page-tabs');catalogHead.append(tabs[0]);tabs.slice(1).forEach(tab=>tab.remove());}
-  setCatalogWorkspace('works',root);
+  setCatalogWorkspace('customers',root);
  }
  const fleet=root.querySelector('[data-sec-panel="fleet"]');
  if(fleet){
@@ -253,8 +253,8 @@ export function frameMapWorkspace(root=document){
 }
 
 export function setCatalogWorkspace(name,root=document){
- const description=root.querySelector('.view-catalog .design-description');if(description)description.textContent=({works:'Нормы времени, применимость и стоимость работ.',models:'Модели оборудования, гарантия и сервисные интервалы.',materials:'Материалы, единицы измерения и актуальные цены.'})[name]||'';
- for(const [section,id,label] of [['works','catAdd','Добавить работу'],['models','emShowAdd','Добавить модель'],['materials','stockAdd','Добавить материал']]){
+ const description=root.querySelector('.view-catalog .design-description');if(description)description.textContent=({customers:'Организации, их точки и техника на точках.',points:'Места на карте: адрес, контакт, клиент и техника.',equipment:'Техника клиентов и её сервисная история.',works:'Нормы времени, применимость и стоимость работ.',models:'Модели оборудования, гарантия и сервисные интервалы.',materials:'Материалы, единицы измерения и актуальные цены.'})[name]||'';
+ for(const [section,id,label] of [['customers','custAdd','Добавить клиента'],['points','pointMapAdd','Поставить точку на карте'],['works','catAdd','Добавить работу'],['models','emShowAdd','Добавить модель'],['materials','stockAdd','Добавить материал']]){
   const button=root.getElementById(id);if(button?.closest('.catalog-page-actions')){button.hidden=name!==section;button.textContent=label;}
  }
 }

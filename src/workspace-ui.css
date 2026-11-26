@@ -1644,3 +1644,43 @@ html#dlight-ui[data-ui-system] .tv-head-actions .tv-all:disabled:not(#_) { opaci
   .tv-swatch { width:32px; }
   .view-map.track-view .leaflet-top.leaflet-left { margin-top:68px!important; }
 }
+
+/* Справочник: клиенты, точки, техника (26.11.2026). */
+.ref-sub { display:block;margin-top:2px;font-size:12px;color:var(--ink-dim);white-space:normal; }
+.cust-modal,.eq-card-modal { width:min(720px,calc(100vw - 24px)); }
+.cust-links { display:grid;gap:16px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line); }
+.cust-links h4,.eq-card-modal h4 { margin:0 0 8px;font:600 15px/1.3 var(--sans); }
+.ref-list { list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:var(--r-md,12px);overflow:hidden; }
+.ref-list>li { display:flex;align-items:center;gap:8px;padding:4px 8px 4px 0;border-bottom:1px solid var(--line); }
+.ref-list>li:last-child { border-bottom:0; }
+.ref-link { all:unset;box-sizing:border-box;flex:1;min-width:0;display:grid;gap:2px;padding:8px 12px;min-height:44px;cursor:pointer;border-radius:var(--r-sm,8px); }
+.ref-link:hover { background:var(--panel-2); }
+.ref-link:focus-visible { outline:2px solid var(--focus);outline-offset:-2px; }
+.ref-link>b { font:500 14px/1.35 var(--sans);color:var(--ink); }
+.ref-link>small { font-size:12px;color:var(--ink-dim); }
+.ref-link.inline { display:inline;padding:0;min-height:0;text-decoration:underline;text-underline-offset:2px;color:var(--ink); }
+.cust-attach { margin-top:8px;gap:8px; }
+.eq-card-facts { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 16px;margin:0 0 18px; }
+.eq-card-facts>div { min-width:0; }
+.eq-card-facts dt { font-size:12px;color:var(--ink-dim); }
+.eq-card-facts dd { margin:2px 0 0;font:500 14px/1.35 var(--sans);overflow-wrap:anywhere; }
+.eq-history { list-style:none;margin:0;padding:0; }
+.eq-history-item { display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--line); }
+.eq-history-item:first-child { border-top:0; }
+.eq-history-item>time { font:500 13px/20px var(--mono);color:var(--ink-dim); }
+.eq-history-item p { margin:4px 0 0;font-size:13px; }
+.eq-history-status { margin-left:6px;font-size:12px;color:var(--ink-dim); }
+.eq-history-group { margin-top:8px; }
+.eq-history-group>span { font-size:12px;color:var(--ink-dim); }
+.eq-history-group ul { margin:2px 0 0;padding-left:18px;font-size:14px; }
+.eq-history-group small { color:var(--ink-dim); }
+@media (max-width:760px){
+  .eq-card-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .eq-history-item { grid-template-columns:1fr;gap:4px; }
+}
+@media (max-width:760px){
+  .cust-modal .modal-actions { flex-wrap:wrap; }
+  .cust-modal .modal-actions>.grow { display:none; }
+  .cust-modal .modal-actions>#custCancel,.cust-modal .modal-actions>#custSave { flex:1 1 0; }
+  .cust-modal .modal-actions>#custDelete { order:3;flex:1 0 100%; }
+}

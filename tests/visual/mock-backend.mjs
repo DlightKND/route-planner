@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false, remainderJourney = false, mapWork = false } = {}) {
+export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false, remainderJourney = false, mapWork = false, directoryJourney = false } = {}) {
   if(managerJourney){financeJourney=true;entityAudit=true;}
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
@@ -39,6 +39,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     lng: 36.23,
     phone: "+00000000000",
     address: "Демонстрационный адрес",
+    customer_id: "customer-a",
     deleted_at: null,
   };
   const equipment = {
@@ -227,6 +228,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     profiles: people,
     settings: [settings],
     settings_public: [settings],
+    customers: [{id:'customer-a',name:'Коммунальное предприятие',legal_name:'КП «Водоканал»',tax_id:'12345678',phone:'+00000000000',email:'',contact_person:'Дежурный диспетчер',notes:'',deleted_at:null}],
     clients: [client],
     equipment: [equipment],
     work_catalog: [work],
@@ -347,7 +349,8 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     // Map planning: two more clients with tasks waiting for a plan and one request without a task.
     const farm={id:'client-b',name:'ФГ «Колос»',lat:50.08,lng:36.4,phone:'+00000000001',deleted_at:null};
     const agro={id:'client-c',name:'ТОВ «Агро-Схід»',lat:49.9,lng:36.05,phone:'+00000000002',deleted_at:null};
-    tables.clients.push(farm,agro);
+    tables.clients.push(farm,agro);farm.customer_id='customer-b';agro.customer_id='customer-c';
+    tables.customers.push({id:'customer-b',name:'ФГ «Колос»',legal_name:'',tax_id:'',phone:'+00000000001',email:'',contact_person:'',notes:'',deleted_at:null},{id:'customer-c',name:'ТОВ «Агро-Схід»',legal_name:'',tax_id:'',phone:'+00000000002',email:'',contact_person:'',notes:'',deleted_at:null});
     const mk=(id,number,clientRow,title,due,hours,extra={})=>{
       const jobRow={...request,id:'map-job-'+id,number:200+number,client_id:clientRow.id,clients:clientRow,equipment:null,equipment_id:null,title,status:'open',due_date:due,created_at:'2026-09-25T07:00:00Z',job_works:[],service_orders:[]};
       const itemRow={...item,id:'map-item-'+id,order_id:'map-task-'+id,job_id:jobRow.id,planned_qty:hours,unit:'ч'};
@@ -388,6 +391,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     reads: [],
     queryErrors: [],
     blockedWrites: [],
+    directoryWrites: [],
     scheduleWrites: [],
     financeWrites: [],
     entityWrites: [],
@@ -726,6 +730,16 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
             },
           };
         };
+      // Справочник: клиенты пишутся целиком, у точки — только привязка к клиенту.
+      if(directoryJourney&&(table==='customers'||table==='clients')){
+        const write=(method,values)=>{const ok=(v)=>({data:v,error:null});
+          const chain={filters:[],eq(k,v){this.filters.push([k,v]);return this;},select(){return this;},single(){this.one=true;return this;},
+            then(a,z){let out;
+              if(method==='insert'){if(table!=='customers'){out={data:null,error:{message:'Visual QA: blocked clients.insert'}};}else{const row={id:'customer-'+crypto.randomUUID().slice(0,8),legal_name:'',tax_id:'',phone:'',email:'',contact_person:'',notes:'',deleted_at:null,...structuredClone(values)};tables.customers.push(row);audit.directoryWrites.push({table,method,values:structuredClone(values)});out=ok(this.one?row:[row]);}}
+              else{if(table==='clients'&&Object.keys(values).some(k=>k!=='customer_id'))out={data:null,error:{message:'Visual QA: blocked clients.update'}};else{const rows=tables[table].filter(r=>this.filters.every(([k,v])=>r[k]===v));rows.forEach(r=>Object.assign(r,structuredClone(values)));audit.directoryWrites.push({table,method,values:structuredClone(values),filters:this.filters});out=ok(this.one?rows[0]||null:rows);}}
+              return Promise.resolve(out).then(a,z);}};return chain;};
+        b.insert=values=>write('insert',values);b.update=values=>write('update',values);
+      }
       if(canonicalPlanner&&table==='staff_day')b.upsert=async row=>{
         if(staffDayDelay)await new Promise(resolve=>setTimeout(resolve,staffDayDelay));if(staffDayFailures>0){staffDayFailures--;return {data:null,error:{message:'Тест: связь прервана при сохранении'}};}
         const allowed=['admin','logist'].includes(role)&&[engineer,other].includes(row.engineer)&&/^\d{4}-\d{2}-\d{2}$/.test(row.date),valid=allowed&&Number.isFinite(row.start_h)&&Number.isFinite(row.end_h)&&row.start_h>=0&&(row.end_h>row.start_h||row.start_h===0&&row.end_h===0&&row.tol_h===0)&&row.end_h+row.tol_h<=24;
@@ -758,6 +772,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(directoryJourney&&name==='soft_delete_customer'){const busy=tables.clients.filter(c=>c.customer_id===args.p_id&&!c.deleted_at).length;if(busy)return {data:null,error:{message:'У клиента есть точки ('+busy+')'}};const row=tables.customers.find(c=>c.id===args.p_id);if(!row)return {data:null,error:{message:'Клиент не найден'}};row.deleted_at='2026-10-05T07:00:00Z';audit.directoryWrites.push({table:'customers',method:'soft_delete',id:args.p_id});return {data:row.deleted_at,error:null};}
       if(name==='entity_finance_read'){
         if(!scopedFinanceJourney)return {data:null,error:{code:'PGRST202',message:'RPC unavailable'}};
         return {data:role==='engineer'?null:structuredClone(scopedFinance(args.p_scope,args.p_id)),error:null};

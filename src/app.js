@@ -70,6 +70,7 @@ import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 import { saveCanonicalRequest, saveRequestAndWorks } from './core/request-save.js';
 import { attachStockPicker } from './stock-picker.js';
+import { createReferenceDirectory } from './reference-directory.js';
 import { flushQueueItems, assertReplayableJobSnapshot } from './core/offline-queue.js';
 import { pendingJobState, queuedJobDraftIssue } from './core/offline-job.js';
 import {createPlannerWorkspace} from './planner-workspace.js';
@@ -363,7 +364,7 @@ $('profileBtn').onclick=()=>openAccountProfile({profile,user:session.user,trigge
   readOrg:async()=>{const {data,error}=await sb.rpc('account_org_read');if(error)throw error;return data;}});
 const SIGNATURE_CANCELLED=Symbol('signature-cancelled');
 const modalUI=installModalShell({
-  dirtyIds:['baseOverlay','editOverlay','eqOverlay','catOverlay','stockOverlay','profOverlay','pointOverlay','reschedOverlay','fixOverlay','cfgOverlay','promptOverlay'],
+  dirtyIds:['baseOverlay','editOverlay','custOverlay','eqOverlay','catOverlay','stockOverlay','profOverlay','pointOverlay','reschedOverlay','fixOverlay','cfgOverlay','promptOverlay'],
   canDismiss:id=>id!=='authOverlay' && (id!=='cfgOverlay'||!!session?.user),
   dismiss:{pushOverlay:()=>closePush(),phView:()=>{$('phView').hidden=true;$('phViewImg').src='';},confirmOverlay:()=>_cdDone(false),promptOverlay:()=>_pdDone(false),signOverlay:()=>signDone(SIGNATURE_CANCELLED),pointOverlay:()=>{$('cancelBtn').click();}},
   confirmDiscard:()=>confirmDialog('Изменения в этом окне ещё не сохранены. Закрыть и отменить их?',{title:'Несохранённые изменения',okText:'Отменить изменения',cancelText:'Продолжить ввод',danger:true})
@@ -547,7 +548,7 @@ function updatePointSaveState(){
 
 function updatePointCoords(){ const el=$('pointCoords'); if(!el) return; if(pendingLatLng){ el.innerHTML='Координаты <output>'+(+pendingLatLng.lat).toFixed(5)+', '+(+pendingLatLng.lng).toFixed(5)+'</output>'; } else { el.textContent='Место не задано — укажите на карте или найдите по адресу.'; } updatePointSaveState(); }
 if($('fName')) $('fName').oninput=updatePointSaveState;
-function openPointModal(){ updatePointCoords(); updatePointSaveState(); $('pointOverlay').classList.add('on'); setTimeout(()=>{ try{ $('fName').focus(); }catch(e){} },40); }
+function openPointModal(){ updatePointCoords(); updatePointSaveState(); refDir.customerOptions($('fCustomer'),{offerNew:true}).then(()=>modalUI.markClean('pointOverlay')); $('pointOverlay').classList.add('on'); setTimeout(()=>{ try{ $('fName').focus(); }catch(e){} },40); }
 map.on('click',e=>{ if(avoidModeOn){ addAvoidZone(e.latlng); return; } if(addModeOn){ pendingLatLng=e.latlng; toggleAdd(false); flashPending(); openPointModal(); return; } if(wpModeOn){ rStops.push({type:'wp',name:'точка '+(rStops.length+1),lat:e.latlng.lat,lng:e.latlng.lng}); renderRoutePanel(); resetBuilt(); } });
 function flashPending(){ if(pendingMarker) map.removeLayer(pendingMarker); if(!pendingLatLng) return; pendingMarker=L.circleMarker(pendingLatLng,{radius:9,color:ringColor(),fillColor:theme.accent,fillOpacity:.6,weight:2.5}).addTo(map); }
 function hlMarker(id,on){ const m=markerById[id]; if(!m||!m.getElement) return; const el=m.getElement(); if(!el) return; const b=el.querySelector('.cbub'); if(b) b.classList.toggle('hl',on); }
@@ -1033,8 +1034,20 @@ document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
   el.onclick=()=>switchTab(el.dataset.tab, el.dataset.sub||null);
 });
 
-let catCur='works';
-function catSub(name){ catCur=name; setCatalogWorkspace(name); if($('catalogTitle'))$('catalogTitle').textContent=({works:'Работы',models:'Техника',materials:'Материалы и цены'})[name]||'Справочник'; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; $('catMaterials').style.display=name==='materials'?'':'none'; if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else renderStockCatalog(); }
+// Справочник клиентов, точек и техники — отдельным модулем; отсюда ему
+// отдаются данные карты и переходы в окна, которые живут здесь.
+const refDir=createReferenceDirectory({db:()=>sb,esc,$,renderCatalogTable,
+  points:()=>clients, eqByPoint:()=>eqByClient, models:()=>eqModels,
+  canWrite:()=>canWrite(), notify, showToast, undoToast, confirmDialog, plural, listLoadError,
+  markClean:id=>modalUI.markClean(id),
+  openPoint:id=>window.editClient(id), openPointEquipment:id=>window.openEquip(id),
+  editEquipment:(pointId,eqId)=>{ window.openEquip(pointId); startEqEdit(eqId); },
+  showPoint:async id=>{ if(await switchTab('map')) flyToClient(id,true); },
+  openJob:id=>openJob(id), goMap:()=>switchTab('map')});
+let catCur='customers';
+const CAT_SECTIONS={customers:['catCustomers','Клиенты'],points:['catPoints','Точки'],equipment:['catEquipment','Техника'],models:['catModels','Модели техники'],works:['catWorks','Работы'],materials:['catMaterials','Материалы и цены']};
+function catSub(name){ if(!CAT_SECTIONS[name]) name='customers'; catCur=name; setCatalogWorkspace(name); if($('catalogTitle'))$('catalogTitle').textContent=CAT_SECTIONS[name][1]; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); for(const [key,[id]] of Object.entries(CAT_SECTIONS)) if($(id)) $(id).style.display=key===name?'':'none';
+  if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else if(name==='materials') renderStockCatalog(); else if(name==='customers') refDir.renderCustomers(); else if(name==='points') refDir.renderPoints(); else refDir.renderEquipment(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
 let plannerCur='jobs';
 let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
@@ -1986,7 +1999,9 @@ document.querySelectorAll('#pointType [data-point-type]').forEach(b=>b.onclick=(
 document.querySelectorAll('#pointOverlay [data-swatch]').forEach(b=>b.onclick=()=>{ $('fColor').value=b.dataset.swatch; paintSwatches(); });
 if($('fColor')) $('fColor').addEventListener('input',paintSwatches);
 $('saveBtn').onclick=async ()=>{ const name=$('fName').value.trim(); if(!name){ $('formErr').textContent='Введи название.'; return; } if(!pendingLatLng){ $('formErr').textContent='Задай точку на карте или по адресу.'; return; }
-  $('saveBtn').disabled=true; const base=$('fBase').checked; const { error }=await sb.from('clients').insert({name,description:$('fDesc').value.trim(),phone:base?null:($('fPhone').value.trim()||null),contact_person:base?null:($('fContact').value.trim()||null),address:($('fAddress').value.trim()||null),access_notes:base?null:($('fAccess').value.trim()||null),color:$('fColor').value,lat:pendingLatLng.lat,lng:pendingLatLng.lng,is_base:$('fBase').checked}); $('saveBtn').disabled=false;
+  $('saveBtn').disabled=true; const base=$('fBase').checked; let customerId=null;
+  if(!base){ try{ customerId=await refDir.resolveCustomer($('fCustomer').value,name); }catch(e){ $('saveBtn').disabled=false; $('formErr').textContent='Клиент не создан: '+e.message; return; } }
+  const { error }=await sb.from('clients').insert({name,customer_id:customerId,description:$('fDesc').value.trim(),phone:base?null:($('fPhone').value.trim()||null),contact_person:base?null:($('fContact').value.trim()||null),address:($('fAddress').value.trim()||null),access_notes:base?null:($('fAccess').value.trim()||null),color:$('fColor').value,lat:pendingLatLng.lat,lng:pendingLatLng.lng,is_base:$('fBase').checked}); $('saveBtn').disabled=false;
   if(error){ $('formErr').textContent='Ошибка: '+error.message; return; } const wasBase=$('fBase').checked, at={...pendingLatLng}, thenJob=afterPointSave==='job'&&!wasBase; afterPointSave=null; resetForm(); $('pointOverlay').classList.remove('on'); await loadAll(); showToast(wasBase?'Депо сохранено':'Точка сохранена');
   // «Новая заявка здесь» из меню карты: клиента только что создали — сразу заявка.
   if(thenJob){ const c=clients.find(x=>x.name===name&&Math.abs(x.lat-at.lat)<1e-7&&Math.abs(x.lng-at.lng)<1e-7); if(c) newJobForClient(c.id); } };
@@ -2021,6 +2036,7 @@ window.editClient=function(id){ const c=clients.find(x=>x.id==id); if(!c||!canWr
   $('eKindHint').textContent=busy?'Депо нельзя: у клиента '+[load.any?countWord(load.any,'заявка','заявки','заявок'):'',load.eq?'техника':''].filter(Boolean).join(' и '):'';
   $('eSummary').textContent=c.is_base?'Депо':[countWord(load.eq,'ед. техники','ед. техники','ед. техники'),countWord(load.open,'открытая заявка','открытые заявки','открытых заявок')].join(' · ');
   $('eGeoBox').hidden=true; $('eGeoOpen').setAttribute('aria-expanded','false'); $('eGeo').value=c.address||''; $('eGeoRes').innerHTML='';
+  refDir.customerOptions($('eCustomer'),{selected:c.customer_id||''}).then(()=>modalUI.markClean('editOverlay'));
   paintEditPlace(); $('editOverlay').classList.add('on'); };
 document.querySelectorAll('#eKind [data-edit-kind]').forEach(b=>b.onclick=()=>{ if(!b.disabled) setEditKind(b.dataset.editKind); });
 document.querySelectorAll('#editOverlay [data-swatch]').forEach(b=>b.onclick=()=>{ $('eColor').value=b.dataset.swatch; paintEditSwatches(); });
@@ -2047,6 +2063,7 @@ $('eSave').onclick=async ()=>{ const name=$('eName').value.trim(); if(!name){ $(
   if(editPlace&&km>2&&!await confirmDialog('Точка клиента сдвигается на '+km.toFixed(1).replace('.',',')+' км. Сохранить новое место?',{title:'Новое место клиента',okText:'Сохранить место'})) return;
   const place=editPlace||editOrig; const base=$('eKind').dataset.kind==='base';
   const rec={name,description:$('eDesc').value.trim(),phone:($('ePhone').value.trim()||null),contact_person:($('eContact').value.trim()||null),address:($('eAddress').value.trim()||null),access_notes:($('eAccess').value.trim()||null),color:$('eColor').value,is_base:base,default_profile:($('eProfile').value||null),signer:($('eSigner').value.trim()||null)};
+  if(!$('eCustomer').disabled){ try{ rec.customer_id=base?null:await refDir.resolveCustomer($('eCustomer').value,name); }catch(e){ notify('Клиент не создан: '+e.message,'err'); return; } }
   if(place){ rec.lat=place.lat; rec.lng=place.lng; }
   $('eSave').disabled=true; const { error }=await sb.from('clients').update(rec).eq('id',editId); $('eSave').disabled=false;
   if(error){ notify('Ошибка: '+error.message,'err'); return; } editPlace=null; $('editOverlay').classList.remove('on'); await loadAll(); showToast('Изменения сохранены'); };
