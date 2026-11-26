@@ -2791,7 +2791,7 @@
       <datalist id="emManuList"></datalist><datalist id="emKindList"></datalist>
       <div class="card" id="emForm" style="margin-top: var(--sp-3);padding: var(--sp-4);display:none"><h3 id="emFormTitle" style="font-family:var(--mono);font-size: var(--fs-2);color:var(--accent-ink)">Добавить модель</h3>
         <div class="row"><div class="grow"><label>Производитель</label><input type="text" id="emManu" list="emManuList" placeholder="Bosch"></div><div class="grow"><label>Тип техники</label><input type="text" id="emKind" list="emKindList" placeholder="холодильник"></div><div class="grow"><label>Модель</label><input type="text" id="emModel" placeholder="KGN39…"></div></div>
-        <div class="row"><div class="grow"><label>Гарантия, мес</label><input type="number" id="emWarr"></div><div class="grow"><label>Сервисный интервал, моточасов</label><input type="number" id="emInt"></div></div>
+        <div class="row"><div class="grow"><label>Гарантия, мес</label><input type="number" id="emWarr"></div><div class="grow"><label>Базовый интервал ТО, мч (если плана ТО нет)</label><input type="number" id="emInt"></div></div>
         <label>Заметки</label><input type="text" id="emNotes">
         <div class="row" style="margin-top: var(--sp-3)"><button class="btn amber grow" id="emSave">Сохранить модель</button><button class="btn ghost" id="emCancel">Отмена</button></div>
         <div class="err" id="emErr"></div>
@@ -3220,7 +3220,7 @@
     <dl class="eq-card-facts" id="eqCardFacts"></dl>
     <section aria-labelledby="eqCardHistoryTitle"><h4 id="eqCardHistoryTitle">Сервисная история</h4><div id="eqCardHistory"></div></section>
   </div>
-  <div class="row modal-actions"><button type="button" class="btn" id="eqCardEdit">Изменить технику</button><span class="grow"></span><button type="button" class="btn ghost" id="eqCardClose">Закрыть</button></div>
+  <div class="row modal-actions"><button type="button" class="btn" id="eqCardEdit">Изменить</button><button type="button" class="btn" id="eqCardService">Отметить ТО</button><button type="button" class="btn" id="eqCardJob">Заявка на ТО</button><span class="grow"></span><button type="button" class="btn ghost" id="eqCardClose">Закрыть</button></div>
 </div></div>
 
 <!-- catalog work edit -->

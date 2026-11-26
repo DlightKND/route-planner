@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { serviceForecast, addBusinessDays, serviceState } from '../src/core/equipment-service.js';
+import { serviceForecast, addBusinessDays, serviceState, planLevels, levelAt } from '../src/core/equipment-service.js';
 import { customerSummary, serviceLabel } from '../src/customer-page.js';
 
 describe('serviceForecast', () => {
@@ -11,12 +11,20 @@ describe('serviceForecast', () => {
     expect(f.state).toBe('soon');
     expect(f.days).toBe(16);
   });
-  it('uses the reading rate and marks overdue', () => {
-    const readings = [{ taken_on: '2026-08-01', moto_hours: 4300 }, { taken_on: '2026-09-20', moto_hours: 4700 }];
-    const f = serviceForecast({ last_service: '2026-01-01' }, { model: { service_interval_hours: 500 }, readings, today: '2026-10-05' });
-    expect(f.src).toBe('unit');
-    expect(f.since).toBeGreaterThan(500);
-    expect(f.state).toBe('overdue');
+  const levels = [{ id: 'to3', name: 'ТО-3', interval_hours: 1000, interval_months: 24 }, { id: 'to1', name: 'ТО-1', interval_hours: 250 }, { id: 'to2', name: 'ТО-2', interval_hours: 500, interval_months: 12 }];
+  it('counts the next mark from the recorded service and picks the level that divides it', () => {
+    const readings = [{ taken_on: '2026-08-01', moto_hours: 980, kind: 'service' }, { taken_on: '2026-09-20', moto_hours: 1200, kind: 'reading' }];
+    const f = serviceForecast({ last_service: '2026-08-01' }, { model: {}, levels, readings, today: '2026-10-05' });
+    expect(f.baseHours).toBe(1000); expect(f.dueHours).toBe(1250); expect(f.level.name).toBe('ТО-1');
+    expect(f.src).toBe('unit'); expect(Math.round(f.nowMh)).toBe(1266); expect(f.state).toBe('overdue');
+    const next = serviceForecast({}, { model: {}, levels, readings: [{ taken_on: '2026-09-01', moto_hours: 1255, kind: 'service' }, { taken_on: '2026-10-01', moto_hours: 1300 }], today: '2026-10-05' });
+    expect(next.dueHours).toBe(1500); expect(next.level.name).toBe('ТО-2');
+    expect(levelAt(planLevels({}, levels), 2000).name).toBe('ТО-3');
+  });
+  it('takes the calendar term when it comes first', () => {
+    const readings = [{ taken_on: '2025-09-01', moto_hours: 1000, kind: 'service' }, { taken_on: '2025-09-02', moto_hours: 1000.5 }, { taken_on: '2025-09-03', moto_hours: 1001 }];
+    const f = serviceForecast({}, { model: {}, levels, readings, today: '2026-10-05' });
+    expect(f.byCalendar).toBe(true); expect(f.dueDate).toBe('2026-09-01'); expect(f.state).toBe('overdue');
   });
   it('returns null without an interval and labels states', () => {
     expect(serviceForecast({}, { model: {} })).toBeNull();

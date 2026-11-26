@@ -447,7 +447,7 @@ export function createServiceOrders(ctx){
     },
     onWrite:payload=>{
      if(current?.id!==o.id||ctx.userId()!==user||dirty||!panel.isConnected)throw Error('Карточка или сеанс изменились. Обновите задание');
-     return rpc('service_order_trip_result_write',payload);
+     return rpc('service_order_trip_result_write',payload).then(result=>{if(['submitted','accepted'].includes(payload.p_action))void ctx.afterOrderResult?.(o);return result;});
     },
     onPlanWrite:async payload=>{
      if(current?.id!==o.id||ctx.userId()!==user||dirty||reportDirty||!panel.isConnected)throw Error('Сохраните изменения задания или обновите карточку');
