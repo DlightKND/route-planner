@@ -252,17 +252,20 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         expect(bounds[1].width,'The route gets the primary workspace column').toBeGreaterThan(bounds[0].width);
         expect(bounds[1].width/bounds[0].width,'Balanced route and state widths').toBeLessThan(1.5);
       }
-      if(await active.locator('#tripEditData').isVisible())await active.locator('#tripEditData').click();
+      const modal=await active.locator('#tripEditData').isVisible();
+      if(modal)await active.locator('#tripEditData').click();
       else{await active.locator('#tpTabPlan').click();await active.locator('.workflow-trip-edit>summary').click();}
-      await reveal(active.locator('#tpFrom'));
+      const fields=modal?page.getByRole('dialog',{name:'Изменить выезд'}):active;
+      await reveal(fields.locator('#tpFrom'));
       if(role==='engineer'){
         await expect(active.locator('#tpSave')).toBeHidden();
-        await expect(active.locator('#tpChangeReasonGroup')).toBeHidden();
+        await expect(fields.locator('#tpChangeReasonGroup')).toBeHidden();
       }else{
         await expect(active.locator('#tpSave')).toBeHidden();
-        await expect(active.locator('#tpFrom')).toBeEnabled();
-        await expect(active.locator('#tpChangeReasonGroup')).toBeVisible();
+        await expect(fields.locator('#tpFrom')).toBeEnabled();
+        await expect(fields.locator('#tpChangeReasonGroup')).toBeVisible();
       }
+      if(modal){await fields.getByRole('button',{name:'Закрыть'}).click();await expect(fields).toHaveCount(0);}
       await active.locator('#tpTabOverview').click();
     }
     if(testInfo.project.use.viewport.width<=390&&scene.name.startsWith('dispatcher')){

@@ -64,13 +64,14 @@ test('engineer choices survive opening and repeated opening, and dismiss on exte
 });
 
 test('trip navigation waits for discard and keeps the draft after cancellation',async({page})=>{
- await open(page,'openTrip',trip);await page.locator('#tripEditData').click();const field=page.locator('#tpFrom');const original=await field.inputValue();await field.fill('2026-10-09');
+ // A new trip is planned on the page; saved trips are edited in a modal.
+ await open(page,'openTrip',null);await page.locator('#tpTabPlan').click();const editor=page.locator('.workflow-trip-edit');if(!await editor.evaluate(el=>el.open))await editor.locator('summary').click();const field=page.locator('#tpFrom');const original=await field.inputValue();await field.fill('2026-10-09');
  // Two fast route requests must share one pending discard decision.
  await page.evaluate(()=>{window.__windowTests.switchTab('dash');window.__windowTests.switchTab('dash');});
  await expect(page.locator('#confirmOverlay')).toBeVisible();await page.locator('#confirmNo').click();
  await expect(page.locator('.view-trip')).toHaveClass(/active/);await expect(field).toHaveValue('2026-10-09');await expect(page.locator('#confirmOverlay')).toBeHidden();
  await page.evaluate(()=>{window.__windowTests.switchTab('dash');});await page.locator('#confirmYes').click();await expect(page.locator('.view-dash')).toHaveClass(/active/);
- await open(page,'openTrip',trip);await expect(field).toHaveValue(original);
+ await open(page,'openTrip',null);await expect(field).toHaveValue(original);
 });
 
 test('timeline primary action stays readable and help does not compete with trip actions',async({page})=>{

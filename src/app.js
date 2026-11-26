@@ -1393,6 +1393,29 @@ function tripShort(t){ return 'выезд '+(t.number!=null?'№'+t.number:'')+(
 // Клиент (организация) точки — только если его название не повторяет точку.
 function pointCustomer(c){ const cu=c&&c.customer_id?refDir.customers().find(x=>x.id===c.customer_id):null; return cu&&cu.name.trim().toLowerCase()!==String(c.name||'').trim().toLowerCase()?cu:null; }
 function clientSiteHTML(c){ const bits=[c.address,c.contact_person,c.access_notes?('Доступ: '+c.access_notes):''].filter(Boolean); return bits.length?'<span class="client-site">'+bits.map(esc).join('<br>')+'</span>':''; }
+const popupIco=d=>'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
+const POPUP_ICONS={eq:popupIco('<rect x="3" y="7" width="18" height="12" rx="2"/><path d="M8 7V5h8v2"/>'),nav:popupIco('<path d="M3 11l18-8-8 18-2-8z"/>'),req:popupIco('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 8v6M9 11h6"/>'),edit:popupIco('<path d="M4 20h4L19 9l-4-4L4 16z"/>'),tel:popupIco('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>'),route:popupIco('<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h6a4 4 0 0 0 0-8h-4a4 4 0 0 1 0-8h6"/>')};
+// Карточка депо в формате карточки клиента.
+function depotPopupHTML(c){
+  const tel=telHref(c.phone),I=POPUP_ICONS;
+  const tool=(attrs,icon,label)=>'<button type="button" class="btn ghost cp-tool" '+attrs+'>'+icon+'<span>'+label+'</span></button>';
+  const link=(href,icon,label,ext)=>'<a href="'+esc(href)+'" class="btn ghost cp-tool"'+(ext?' target="_blank" rel="noopener"':'')+'>'+icon+'<span>'+label+'</span></a>';
+  let h='<div class="client-popup depot-popup"><div class="client-popup-head"><strong>'+esc(c.name)+'</strong><span>'+esc(['Депо',c.description].filter(Boolean).join(' · '))+'</span>'
+    +((c.address||c.phone)?'<span class="client-site">'+[c.address,c.phone?('тел. '+c.phone):''].filter(Boolean).map(esc).join('<br>')+'</span>':'')+'</div>';
+  h+='<div class="client-popup-actions"><div class="client-popup-primary">';
+  const tools=[];
+  if(canWrite()){
+    h+='<button type="button" onclick="addBaseStop(\''+c.id+'\')" class="btn amber">В маршрут</button>';
+    h+=tel?'<a href="'+esc(tel)+'" class="btn">Позвонить</a>':'<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn">Проехать</a>';
+    if(tel) tools.push(link(navHref(c.lat,c.lng),I.nav,'Проехать',true));
+    tools.push(tool('onclick="editClient(\''+c.id+'\')" aria-label="Редактировать депо"',I.edit,'Изменить'));
+  } else {
+    if(tel) h+='<a href="'+esc(tel)+'" class="btn amber">Позвонить</a>';
+    h+='<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn'+(tel?'':' amber')+'">Проехать</a>';
+  }
+  h+='</div>'+(tools.length?'<div class="client-popup-tools">'+tools.join('')+'</div>':'')+'</div></div>';
+  return h;
+}
 function clientPopupHTML(c){
   const list=eqByClient[c.id]||[],count=list.length,w=mapWork[c.id]||{tasks:[],requests:[],toPlan:0},tel=telHref(c.phone);
   const open=w.tasks.filter(row=>!row.trip),planned=w.tasks.filter(row=>row.trip);
@@ -1411,8 +1434,7 @@ function clientPopupHTML(c){
   if(canWrite()&&s){ const cur=appSettings.currency||'грн'; h+='<details class="map-popup-stats"><summary>Показатели клиента</summary><span style="display:block;margin-top: var(--sp-2);font-size: var(--fs-2);color:var(--ink-dim);line-height:1.6">выручка <b style="color:var(--ink)">'+Math.round(s.rev)+' '+esc(cur)+'</b> · прибыль <b style="color:'+(s.profit>=0?'var(--green)':'var(--red)')+'">'+Math.round(s.profit)+'</b><br>гарантия '+s.warrShare+'% · заявок '+s.jobs+(s.done?(' · закрыто '+s.done):'')+'</span></details>'; }
   // Действия: сверху две главные кнопки по ситуации, под ними — все прочие
   // сразу видны, без скрытого «Другие действия».
-  const ico=d=>'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
-  const I={eq:ico('<rect x="3" y="7" width="18" height="12" rx="2"/><path d="M8 7V5h8v2"/>'),nav:ico('<path d="M3 11l18-8-8 18-2-8z"/>'),req:ico('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 8v6M9 11h6"/>'),edit:ico('<path d="M4 20h4L19 9l-4-4L4 16z"/>'),tel:ico('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>'),route:ico('<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h6a4 4 0 0 0 0-8h-4a4 4 0 0 1 0-8h6"/>')};
+  const I=POPUP_ICONS;
   const tool=(attrs,icon,label)=>'<button type="button" class="btn ghost cp-tool" '+attrs+'>'+icon+'<span>'+label+'</span></button>';
   const link=(href,icon,label,ext)=>'<a href="'+esc(href)+'" class="btn ghost cp-tool"'+(ext?' target="_blank" rel="noopener"':'')+'>'+icon+'<span>'+label+'</span></a>';
   const eqLabel='Техника'+(count?' · '+count:'');
@@ -1454,16 +1476,9 @@ function renderMarkers(){ let reopen=null; Object.entries(markerById).forEach(([
     if(c.is_base){
       const icon=L.divIcon({className:'',html:'<div class="cbub" style="background:'+col+';width:30px;height:30px;border:2.5px solid '+ringColor()+'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></div>',iconSize:[30,30],iconAnchor:[15,15]});
       const m=L.marker([c.lat,c.lng],{icon});
-      let html='<strong style="font-size: var(--fs-4)">'+esc(c.name)+'</strong> <span style="color:var(--ink-dim)">· депо</span>'; if(c.description) html+='<br>'+esc(c.description);
-      if(c.phone) html+='<br><span style="color:var(--ink-dim)">тел. '+esc(c.phone)+'</span>';
-      html+='<br><span style="display:inline-flex;gap: var(--sp-3);margin-top: var(--sp-3);flex-wrap:wrap">'
-        +(telHref(c.phone)?('<a href="'+esc(telHref(c.phone))+'" class="btn amber">Позвонить</a>'):'')
-        +'<a href="'+esc(navHref(c.lat,c.lng))+'" target="_blank" rel="noopener" class="btn">Проехать</a></span>';
+      // Депо — та же карточка, что у клиента: шапка, главные кнопки, инструменты.
       // Депо добавляется в маршрут той же кнопкой, что и всё остальное.
-      // Двух — «старт» и «финиш» — не нужно: и то и другое это точка
-      // в списке маршрута, а её место в нём меняется перетаскиванием.
-      if(canWrite()){ html+='<br><span style="display:inline-flex;gap: var(--gap-row);margin-top: var(--gap-row)"><button onclick="addBaseStop(\''+c.id+'\')" class="btn amber">в маршрут</button><button onclick="editClient(\''+c.id+'\')" class="btn">Редактировать</button></span>'; }
-      m.bindPopup(html); markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); return;
+      m.bindPopup(()=>{ const box=document.createElement('div'); box.innerHTML=depotPopupHTML(c); return box.firstElementChild; },{maxWidth:360,minWidth:280,className:'client-popup-wrap',autoPanPaddingTopLeft:L.point(72,72),autoPanPaddingBottomRight:L.point(24,24)}); markerById[c.id]=m; m.on('mouseover',()=>hlCard(c.id,true)).on('mouseout',()=>hlCard(c.id,false)); markers.addLayer(m); return;
     }
     const m=L.marker([c.lat,c.lng],{icon:clientIcon(c,col)});
     // Содержимое — один узел на время открытия: Leaflet перечитывает
@@ -4383,7 +4398,7 @@ async function fetchJobFull(id){
 function prepareEntityPages(){
  const job=document.querySelector('.view-job'),trip=document.querySelector('.view-trip');
  const auxiliary=document.createElement('div');auxiliary.hidden=true;auxiliary.id='jobAuxiliary';job.querySelector('.pane').append(auxiliary);
- const deadline=$('jbDue').closest('.card');deadline.id='jobDeadlineFields';auxiliary.append(deadline,$('jobResponsibilitySection'),$('jbFixCard'),job.querySelector('.job-photos'));
+ const deadline=$('jbDue').closest('.card');deadline.id='jobDeadlineFields';auxiliary.append($('jobResponsibilitySection'),$('jbFixCard'),job.querySelector('.job-photos'));
  $('jobLegacyPanels').remove();
  for(const [view,prefix] of [[job,'job'],[trip,'trip']]){
   const actions=document.createElement('div');actions.className='entity-header-actions';actions.innerHTML=`<button type="button" class="btn amber" id="${prefix}RecordResult" hidden>Отчитаться о работах</button><button type="button" class="btn" id="${prefix}More">⋯</button>`;view.querySelector('.trip-head').append(actions);
@@ -4438,7 +4453,7 @@ function configureEntityActions(kind,record){
   mountEntityActions({trigger,items:()=>[
    {label:'Отчитаться о работах',hidden:!id,onSelect:()=>recordEntityResult(kind,id)},
    {label:'Назначить инженеров',hidden:!canWriteJob(),onSelect:()=>openRequestEditor($('requestContextFields'),'Назначить инженеров',trigger,'jbEng')},
-   {label:'Изменить срок и заметку',onSelect:()=>openRequestEditor($('jobDeadlineFields'),'Срок заявки и заметка',trigger)},
+   {label:'Изменить срок и заметку',onSelect:()=>openRequestEditor($('requestContextFields'),'Изменить заявку',trigger,'jbDue')},
    {label:'Проложить маршрут к объекту',hidden:!jobNavUrl(),onSelect:()=>window.open(jobNavUrl(),'_blank','noopener')},
    {label:'График работ',hidden:!id,onSelect:()=>switchTab('schedule')},
    {label:'Передать ответственность',hidden:!id,onSelect:()=>panel('Ответственность',$('jobResponsibilitySection'))},
@@ -4461,7 +4476,7 @@ function configureEntityActions(kind,record){
    {label:'Журнал GPS',hidden:!id,onSelect:()=>openJournalTrip(id)}
   ]});
   let datesAction=$('tripDatesAction');if(!datesAction){datesAction=document.createElement('button');datesAction.id='tripDatesAction';datesAction.type='button';datesAction.className='btn sm ghost';$('tpFrom').closest('.row').before(datesAction);}
-  datesAction.hidden=!id||!['planned','assigned'].includes(record?.status);datesAction.textContent=canWriteTrip(record)?'Изменить даты':'Запросить перенос';datesAction.onclick=()=>openReschedModal(id);
+  datesAction.hidden=!id||!['planned','assigned'].includes(record?.status)||canWriteTrip(record);datesAction.textContent=canWriteTrip(record)?'Изменить даты':'Запросить перенос';datesAction.onclick=()=>openReschedModal(id);
   const action=['planned','assigned'].includes(record?.status)?'start':record?.status==='in_progress'?'finish':record?.status==='finished'&&canWriteTrip(record)?'confirm':null;
   const state=$('tripOverviewState'),reportWork={label:'Отчитаться о работах',onClick:()=>recordEntityResult('trip',id)};
   setOverviewSecondary(state,null);
@@ -6413,11 +6428,30 @@ const tripTabs=createEntityTabs(document.querySelector('.view-trip'),{
   }
 });
 function setTripPane(name,{notify=true}={}){tripTabs.select(({history:'overview',presence:'overview',tasks:'plan','plan-fact':'economy'})[name]||name,{notify});}
+// Сохранённый выезд правится модалкой, как задание и заявка; новый — на странице.
+function tripSavedEditable(){ return !!tripEditId&&tripNewPlanId!==tripEditId&&canWriteTrip(); }
 function openTripPlanFields(){
- setTripPane('plan');
- const editor=document.querySelector('.workflow-trip-edit');
- editor.open=true;
- editor.scrollIntoView?.({block:'nearest'});
+ const card=document.querySelector('.view-trip .wb-plan-card');
+ if(card?.closest('dialog'))return;
+ if(!tripSavedEditable()){
+  setTripPane('plan');
+  const editor=document.querySelector('.workflow-trip-edit');
+  editor.open=true;
+  editor.scrollIntoView?.({block:'nearest'});
+  return;
+ }
+ const id=tripEditId,uid=session?.user?.id,trigger=$('tripEditData');
+ const dialog=openEntityPanel({title:'Изменить выезд',panel:card,trigger,
+  confirmDiscard:()=>confirmDialog('Отменить введённые изменения?',{okText:'Отменить изменения',cancelText:'Продолжить ввод'}),
+  onSave:async()=>{
+   if(tripEditId!==id||session?.user?.id!==uid)throw Error('Карточка или сеанс изменились. Откройте выезд заново.');
+   if(!$('tpChangeReason').value.trim()){$('tpChangeReason').focus();throw Error('Укажи причину изменения плана.');}
+   $('tripErr').textContent='';await $('tpSave').onclick();
+   if($('tripErr').textContent)throw Error($('tripErr').textContent.replace(/^Ошибка: /,''));
+   return true;
+  }});
+ dialog?.classList.add('trip-plan-dialog');
+ return dialog;
 }
 function syncTripSave(){if($('tpSave'))$('tpSave').hidden=!canWriteTrip()||!!tripEditId&&tripNewPlanId!==tripEditId&&!tripPlanDirty&&!tripPresenceDirty;}
 document.querySelector('.view-trip').addEventListener('input',e=>{if(e.target.closest('.scoped-finance'))return;if(e.target.closest('#tpPlanPane,#tpEconomyPane'))tripPlanDirty=true;if(e.target.closest('[data-presence-id]'))tripPresenceDirty=true;syncTripSave();});
@@ -6839,6 +6873,7 @@ async function openTrip(id,{includeOrderId=null,includeOrderIds=[],plannedOrderI
     $('tripMore').before(edit);edit.onclick=openTripPlanFields;
   }
   edit.hidden=!id||ro;
+  const planEditor=document.querySelector('.workflow-trip-edit');if(planEditor)planEditor.hidden=tripSavedEditable();
   document.querySelector('.view-trip')?.toggleAttribute('data-saved-trip',!!id&&!ro);
   if(includeIds.length){
     // Several tasks can arrive at once from the map selection; each is checked on its own.
@@ -7068,7 +7103,11 @@ function seedTripFromOrders(){
 }
 $('tpSave').onclick=async ()=>{ if(canWriteTrip()&&!tripGpsSource)seedTripFromOrders(); const jobIds=[...curTripJobs]; const stops=routeAll(); const veh=vehicles.find(x=>x.id==$('tpVeh').value);
   if(!canWriteTrip())return;
-  if(tripEditId&&tripNewPlanId!==tripEditId&&!$('tpChangeReason').value.trim()){ $('tripErr').textContent='Укажи причину изменения плана.';openTripPlanFields();$('tpChangeReason').focus({preventScroll:true});$('tpChangeReason').scrollIntoView({block:'center',behavior:'auto'});return; }
+  if(tripEditId&&tripNewPlanId!==tripEditId&&!$('tpChangeReason').value.trim()){
+    // Параметры сохранённого выезда — в модалке; для правки состава и маршрута спрашиваем только причину.
+    const r=await promptDialog('Причина изменения плана',[{key:'reason',label:'Что изменилось и почему',value:'',required:true}],{okText:'Сохранить план'});
+    if(!r||!String(r.reason||'').trim()){ $('tripErr').textContent='Укажи причину изменения плана.'; return; }
+    $('tpChangeReason').value=String(r.reason).trim(); }
   const ov={revenue:(tripOverrides.revenue!==''?(+tripOverrides.revenue||0):null),cost:(tripOverrides.cost!==''?(+tripOverrides.cost||0):null),road:(tripOverrides.road||{})};
   // Километраж по плательщикам — по реальным дорогам. Считаем и здесь:
   // выезд можно сохранить из карточки, минуя планировщик.
@@ -7475,7 +7514,7 @@ async function openReschedModal(tid){
   if(canWriteTrip(t)){
     if(tripEditId!==tid||!document.querySelector('.view-trip.active'))await openTrip(tid);
     if(tripEditId!==tid||!document.querySelector('.view-trip.active'))return;
-    openTripPlanFields();let hint=$('tripDateEditHint');if(!hint){hint=document.createElement('p');hint.id='tripDateEditHint';hint.className='hint';hint.setAttribute('role','status');$('tpFrom').closest('.row').before(hint);}hint.textContent='Измените даты, укажите причину и нажмите «Сохранить план». Периоды заданий и SLA заявки проверяются отдельно.';$('tpFrom').scrollIntoView?.({block:'center'});$('tpFrom').focus({preventScroll:true});return;
+    const planDialog=openTripPlanFields();let hint=$('tripDateEditHint');if(!hint){hint=document.createElement('p');hint.id='tripDateEditHint';hint.className='hint';hint.setAttribute('role','status');$('tpFrom').closest('.row').before(hint);}hint.textContent='Измените даты, укажите причину и нажмите «'+(planDialog?'Сохранить изменения':'Сохранить план')+'». Периоды заданий и SLA заявки проверяются отдельно.';planDialog?.addEventListener('close',()=>hint.remove(),{once:true});$('tpFrom').scrollIntoView?.({block:'center'});$('tpFrom').focus({preventScroll:true});return;
   }
   rsTripId=tid;
   const span=(t.date_from&&t.date_to)?((new Date(t.date_to)-new Date(t.date_from))/86400000+1):1;
@@ -8191,7 +8230,10 @@ function mapPanelRows(){
 
 function renderMapPanel(){
   const rows=mapPanelRows();
-  if(!rows.length){ hideMapPanel(); return; }
+  // Старая плавающая панель «Параметры трека» осталась только для привязки
+  // стоянок: трек и план смотрят в нижней панели просмотра трека, а длина
+  // черновика маршрута и так видна во вкладке «Маршрут».
+  if(!rows.length||(!trackView&&!stayBindMap)){ hideMapPanel(); return; }
   if(!factLegendEl)mountMapPanel();
   const bb=factLast?factBounds(factLast):null;
   factLegendEl.querySelector('[data-track-total]').textContent=factLast?Math.round(factLast.km)+' км':'';
