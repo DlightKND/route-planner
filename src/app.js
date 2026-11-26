@@ -782,6 +782,9 @@ function applyMobileNav(){
 // не дотянуться, не выведя курсор за рельс. На сенсорном экране снимаем фокус.
 (function railRest(){
   const rail=document.querySelector('#appShell>.rail'); if(!rail) return;
+  // До первого настоящего входа курсора (или Tab) рельс свёрнут: курсор, оставшийся
+  // над рельсом при загрузке, не должен раскрывать его поверх открывшейся страницы.
+  rail.classList.add('rail-rest');
   // Клавиатура ли ведёт фокус: Tab и стрелки — да, любое касание или щелчок — нет.
   let keyboard=false;
   // Автозаполнение Chrome шлёт keydown без key — проверяем тип.

@@ -1541,7 +1541,11 @@ html#dlight-ui[data-ui-system]:not(#_) :is(
 html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar { align-items:flex-end!important;margin-bottom:0!important; }
 html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar>.entity-tabs { align-self:end!important;margin-bottom:-1px!important;order:9; }
 html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar { row-gap:0!important; }
-html#dlight-ui[data-ui-system] :is(.side-tabs2,.view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs)>button { margin-bottom:-1px!important; }
+html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs>button { margin-bottom:-1px!important; }
+/* The map side tabs scroll sideways (overflow hidden on Y), so a negative margin would
+   add a pixel of vertical overflow. Their divider is an inset shadow instead: the
+   tab marker paints over it and the strip keeps its exact height. */
+html#dlight-ui[data-ui-system] .map-workspace #sideTabs { border-bottom:0!important;box-shadow:inset 0 -1px 0 var(--line)!important; }
 
 /* Track view on the main map (25.11.2026): opened from a trip or a GPS record. The map
    keeps only zoom; the top bar returns or closes, the bottom dock holds the timeline,
