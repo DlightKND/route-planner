@@ -796,10 +796,11 @@ function applyMobileNav(){
   // Клавиатура ли ведёт фокус: Tab и стрелки — да, любое касание или щелчок — нет.
   let keyboard=false;
   // Автозаполнение Chrome шлёт keydown без key — проверяем тип.
-  document.addEventListener('keydown',e=>{ const k=typeof e.key==='string'?e.key:''; if(k==='Tab'||k.startsWith('Arrow')){ keyboard=true; rail.classList.remove('rail-rest'); } },true);
+  document.addEventListener('keydown',e=>{ const k=typeof e.key==='string'?e.key:''; if(k==='Tab'||k.startsWith('Arrow')){ keyboard=true; if(rail.contains(document.activeElement)) rail.classList.remove('rail-rest'); } },true);
   document.addEventListener('pointerdown',()=>{ keyboard=false; },true);
   // Фокус, вернувшийся в рельс после щелчка (закрыли «Мой профиль»), рельс не раскрывает.
-  rail.addEventListener('focusin',()=>{ if(!keyboard) rail.classList.add('rail-rest'); });
+  // Клавиша вне рельса (стрелки в слайдере, Tab по форме) его не раскрывает: только фокус, пришедший в рельс с клавиатуры.
+  rail.addEventListener('focusin',()=>{ if(keyboard) rail.classList.remove('rail-rest'); else rail.classList.add('rail-rest'); });
   rail.addEventListener('click',e=>{
     if(e.detail===0) return;
     // На телефоне рельс — нижнее меню, он не раскрывается; фокус там нужен
