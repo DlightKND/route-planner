@@ -13,7 +13,7 @@ async function open(page,info,route){
   await page.evaluate(()=>document.getElementById('todayOverlay')?.classList.remove('on'));
   return errors;
 }
-const ROW_LIKE='.crumb,.catalog-record-link,.action-row,.pw-link-row,.map-task-body,:is(h1,h2,h3,h4,h5)>button';
+const ROW_LIKE='.crumb,.catalog-record-link,.related-record-link,.action-row,.pw-link-row,.map-task-body,:is(h1,h2,h3,h4,h5)>button';
 const measure=(page,selector)=>page.locator(selector).evaluate((row,ROW_LIKE)=>[...row.children].filter(el=>el.matches('[data-ui=button]')&&el.getClientRects().length).map(el=>{const r=el.getBoundingClientRect(),cs=getComputedStyle(el);return {text:el.textContent.trim(),w:Math.round(r.width),h:Math.round(r.height),top:Math.round(r.top),min:parseFloat(cs.minHeight),clipped:el.scrollWidth>el.clientWidth+1};}),ROW_LIKE);
 const wrapped=page=>page.evaluate(ROW_LIKE=>[...document.querySelectorAll('[data-ui=button],[data-ui=menu],[data-ui=chip]')].filter(el=>el.getClientRects().length&&!el.matches(ROW_LIKE)).map(el=>({text:el.textContent.trim().replace(/\s+/g,' '),h:el.getBoundingClientRect().height,min:parseFloat(getComputedStyle(el).minHeight)})).filter(x=>x.h>x.min+1.5),ROW_LIKE);
 function expectStandard(buttons){

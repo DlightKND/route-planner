@@ -2306,6 +2306,7 @@ function renderEqModels(){ const box=$('emList'); if(!box) return; if(!stockCata
     {key:'kind',label:'Тип техники',value:m=>m.kind||null},
     {key:'model',label:'Модель',value:m=>m.model,render:m=>'<button type="button" class="catalog-record-link" data-emedit="'+esc(m.id)+'">'+esc(m.model)+'</button>'},
     {key:'warranty',label:'Гарантия, мес',type:'number',value:m=>m.warranty_months},
+    {key:'service',label:'ТО, моточасы',type:'number',value:m=>maintLevels[m.id]?.length?Math.min(...maintLevels[m.id].map(l=>l.interval_hours)):m.service_interval_hours},
     {key:'plan',label:'План ТО',value:m=>planSummary(maintLevels[m.id],m)||null,render:m=>{ const t=planSummary(maintLevels[m.id],m); return '<button type="button" class="catalog-record-link mp-open" data-emplan="'+esc(m.id)+'">'+(t?esc(t):'<span class="hint">задать план</span>')+'</button>'; }}
   ],actions:[{attribute:'data-emedit',label:'Редактировать',run:editEqModel},{attribute:'data-emplan',label:'План ТО',run:id=>planEditor.open(eqModels.find(m=>m.id===id),document.activeElement)},{attribute:'data-emdel',label:'Удалить модель',danger:true,run:delEqModel}]}); }
 // План ТО модели: уровни заменяются целиком — удалённые удаляются, остальные пишутся по id.

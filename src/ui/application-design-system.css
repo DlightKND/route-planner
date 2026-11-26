@@ -45,7 +45,7 @@ html#dlight-ui[data-ui-system] [data-ui=button]{min-width:auto}
    the same edge without that. */
 html#dlight-ui[data-ui-system] .btn[data-ui=button]{overflow:clip}
 /* Record rows built on <button> (a title and a subtitle) and links to records (crumbs, titles) are not commands: their text wraps. */
-html#dlight-ui[data-ui-system] :is(.catalog-table .catalog-record-link,.action-row,.pw-link-row,.map-task-body,.crumb[data-ui=button],:is(h1,h2,h3,h4,h5)>[data-ui=button]){white-space:normal}
+html#dlight-ui[data-ui-system] :is(.catalog-table .catalog-record-link,.related-record-link,.action-row,.pw-link-row,.map-task-body,.crumb[data-ui=button],:is(h1,h2,h3,h4,h5)>[data-ui=button]){white-space:normal;overflow-wrap:anywhere!important}
 /* Action rows of dialogs and cards (layout measured in application-design-system.js): every command is
    as wide as the longest label of the row. On a phone the commands share the row in equal parts when
    all labels fit ([data-ui-actions=row]) or stand one per line ([data-ui-actions=stack]) — never a

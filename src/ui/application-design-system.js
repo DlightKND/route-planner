@@ -105,7 +105,7 @@ export function installApplicationDesignSystem(root=document) {
   };
   // Action rows (dialog/card footers): every command gets the width of the longest label. On a phone the
   // commands share the row in equal parts when all labels fit, otherwise they stack one per line.
-  const ACTION_ROWS='.modal-actions,.entity-dialog-foot,.entity-dialog-footer,.entity-editor-footer>.row';
+  const ACTION_ROWS='.modal-actions,.entity-dialog-foot,.entity-dialog-footer,.entity-editor-footer>.row,.wb-route-actions';
   const actionRows=new WeakSet();
   const layoutActions=row=>{
     if(!row.isConnected)return;
