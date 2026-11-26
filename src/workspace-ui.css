@@ -151,9 +151,8 @@ html:root { --workspace-width:none; }
 .workspace-page .settings-nav .son.on { background:var(--panel);border-color:var(--line);box-shadow:none; }
 .workspace-page .settings-body>[data-sec-panel] { padding:24px; }
 .workspace-page .settings-body h3:not(:first-child) { margin:28px 0 16px;padding-top:24px;border-top:1px solid var(--line); }
-.workspace-page #catList,.workspace-page #emList,.workspace-page #stockList { border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel); }
-.workspace-page :is(#catList,#emList,#stockList)>* { margin:0;border-radius:0;box-shadow:none; }
-.workspace-page :is(#catList,#emList,#stockList)>*+* { border-top:1px solid var(--line); }
+/* Every Справочник table is the same: the count line above, the table card from catalog-table.css. */
+.view-catalog :is(#custList,#pointList,#eqRefList,#catList,#emList,#stockList) { display:block;margin-top:20px; }
 .workspace-page .catalog-page-actions { display:flex;gap:8px; }
 .workspace-page .catalog-main-nav { display:flex;gap:28px;margin:0;border-bottom:0; }
 .workspace-page .catalog-main-nav .subtab { padding-inline:0; }
@@ -1540,7 +1539,11 @@ html#dlight-ui[data-ui-system]:not(#_) :is(
 ) { border-bottom-color:var(--focus)!important;border-bottom-width:2px!important;border-bottom-style:solid!important; }
 /* Tabs stand on the masthead line, not centred next to taller toolbar buttons. */
 html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar { align-items:flex-end!important;margin-bottom:0!important; }
-html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar>.entity-tabs { align-self:end!important;margin-bottom:-1px!important;order:9; }
+html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar>.entity-tabs { align-self:end!important;margin-bottom:-1px!important; }
+/* Tabs stay on the left; the save button on the right keeps air above the line. On a phone the
+   toolbar is one column: the button goes first so the tabs still stand on the line. */
+html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar>:is(.entity-savebar,.order-savebar) { padding-bottom:12px!important; }
+@media (max-width:760px){ html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar>.entity-tabs { order:9; } }
 html#dlight-ui[data-ui-system] .workspace-masthead .entity-toolbar { row-gap:0!important; }
 html#dlight-ui[data-ui-system] .view .journal-trip-head>.journal-trip-tabs.workflow-gps-tabs>button { margin-bottom:-1px!important; }
 /* The map side tabs scroll sideways (overflow hidden on Y), so a negative margin would

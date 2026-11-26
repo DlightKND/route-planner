@@ -131,7 +131,6 @@ button,input,select,textarea { font-family:var(--sans); }
 .view .stock-row { border:1px solid var(--line);padding:16px;border-radius:12px;background:var(--panel); }
 .view .stock-title small,.view .stock-cell small { font-size:12px; }
 .view-catalog .pane { max-width:1440px;width:100%;margin:auto; }
-.view-catalog :is(#catList,#emList,#stockList) { margin-top:20px; }
 .view-catalog .emtree-manu { border-radius:12px;margin-top:16px; }
 .view-catalog .emtree-h { padding:16px;font:500 15px/1.5 var(--sans); }
 .view-catalog .emrow { padding:14px 12px;border-bottom:1px solid var(--line); }
