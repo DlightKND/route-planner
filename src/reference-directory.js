@@ -10,6 +10,7 @@ const ORDER_STATUS={draft:'черновик',assigned:'назначено',in_pr
 const num=v=>{const n=Number(v);return Number.isFinite(n)?String(Math.round(n*100)/100).replace('.',','):'—';};
 const dateText=v=>{if(!v)return '';const d=new Date(String(v).length<=10?v+'T12:00:00':v);return Number.isNaN(d.getTime())?String(v):d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});};
 const dayKey=v=>String(v||'').slice(0,10);
+const serviceText=f=>!f?'—':f.days<0?'просрочено '+(-f.days)+' дн':f.days===0?'сегодня':dateText(f.dueDate)+(f.state==='soon'?' · через '+f.days+' дн':'')+(f.src==='estimate'?' (оценка по сменам)':'');
 
 export function createReferenceDirectory(ctx){
  const {esc,$,renderCatalogTable}=ctx;
@@ -34,115 +35,79 @@ export function createReferenceDirectory(ctx){
  async function ensureCustomers(){if(!customersLoaded)await loadCustomers();return customers;}
 
  // ---------- Клиенты ----------
+ // Список клиентов — вход в страницу клиента. Точки и техника живут на ней,
+ // а здесь видно главное: сколько точек и техники, открытые заявки, ТО.
+ let quick='';
+ const NONE='none';
+ function customerRows(){
+  const all=points(),q=($('custSearch')?.value||'').trim().toLowerCase();
+  const row=(c,pts)=>{const eqs=eqOf(pts.map(p=>p.id)),plans=eqs.map(e=>ctx.forecast(e)).filter(Boolean);
+   const visits=eqs.map(e=>e.last_visit).filter(Boolean).sort();
+   const open=pts.reduce((n,p)=>n+((ctx.stats(p.id)?.open)||0),0);
+   const hit=q&&![c.name,c.legal_name,c.tax_id,c.phone,c.contact_person].some(v=>String(v||'').toLowerCase().includes(q))?(eqs.find(e=>[e.model,e.serial,e.kind].some(v=>String(v||'').toLowerCase().includes(q)))||null):null;
+   const pointHit=q&&!hit&&![c.name,c.legal_name,c.tax_id,c.phone,c.contact_person].some(v=>String(v||'').toLowerCase().includes(q))?(pts.find(p=>[p.name,p.address].some(v=>String(v||'').toLowerCase().includes(q)))||null):null;
+   return {...c,points:pts.length,equipment:eqs.length,open,overdue:plans.filter(f=>f.state==='overdue').length,soon:plans.filter(f=>f.state==='soon').length,visit:visits.at(-1)||null,
+    match:hit?'найдено в технике: '+eqLabel(hit):pointHit?'найдено в точках: '+pointHit.name:null,
+    hidden:!!q&&!hit&&!pointHit&&![c.name,c.legal_name,c.tax_id,c.phone,c.contact_person].some(v=>String(v||'').toLowerCase().includes(q))};};
+  const rows=customers.map(c=>row(c,pointsOf(c.id)));
+  const loose=all.filter(p=>!p.customer_id||!customers.some(c=>c.id===p.customer_id));
+  if(loose.length)rows.push(row({id:NONE,name:'Точки без клиента',legal_name:'',none:true},loose));
+  return rows.filter(r=>!r.hidden);
+ }
  async function renderCustomers(){
   const box=$('custList');if(!box)return;
   try{await ensureCustomers();}catch(e){ctx.listLoadError(box,e,renderCustomers);return;}
-  const q=($('custSearch')?.value||'').trim().toLowerCase();
-  const rows=customers.map(c=>{const pts=pointsOf(c.id);return {...c,points:pts.length,equipment:eqOf(pts.map(p=>p.id)).length};})
-   .filter(c=>!q||[c.name,c.legal_name,c.tax_id,c.phone,c.contact_person].some(v=>String(v||'').toLowerCase().includes(q)));
+  const all=customerRows(),counts={open:all.filter(r=>r.open>0).length,overdue:all.filter(r=>r.overdue>0).length};
+  const chips=$('custQuick');
+  if(chips){chips.innerHTML=[['open','С открытыми заявками'],['overdue','ТО просрочено']].map(([k,l])=>'<button type="button" class="btn chip" data-cust-quick="'+k+'" aria-pressed="'+(quick===k)+'">'+l+' · '+counts[k]+'</button>').join('');
+   chips.querySelectorAll('[data-cust-quick]').forEach(b=>b.onclick=()=>{quick=quick===b.dataset.custQuick?'':b.dataset.custQuick;renderCustomers();});}
+  const rows=all.filter(r=>!quick||(quick==='open'?r.open>0:r.overdue>0));
+  const service=r=>r.overdue?'<span class="customer-service" data-state="overdue">просрочено у '+r.overdue+'</span>':r.soon?'<span class="customer-service" data-state="soon">скоро у '+r.soon+'</span>':'<span class="hint">—</span>';
   renderCatalogTable(box,{label:'Клиенты',scope:'customers',rows,rowClass:'emrow',rowLabel:c=>c.name,
    empty:customers.length?'По запросу ничего не найдено.':'Клиентов пока нет. Добавьте первого клиента.',columns:[
-    {key:'name',label:'Клиент',value:c=>c.name,render:c=>'<button type="button" class="catalog-record-link" data-cust-open="'+esc(c.id)+'">'+esc(c.name)+'</button>'+(c.legal_name&&c.legal_name!==c.name?'<small class="ref-sub">'+esc(c.legal_name)+'</small>':'')},
-    {key:'contact',label:'Контакт',value:c=>[c.contact_person,c.phone].filter(Boolean).join(' · ')||null},
+    {key:'name',label:'Клиент',value:c=>c.name,render:c=>'<button type="button" class="catalog-record-link" data-cust-open="'+esc(c.id)+'">'+esc(c.name)+'</button>'+(c.match?'<small class="ref-sub ref-match">'+esc(c.match)+'</small>':c.none?'<small class="ref-sub">ещё не привязаны к клиенту</small>':(c.legal_name&&c.legal_name!==c.name)||c.tax_id?'<small class="ref-sub">'+esc([c.legal_name!==c.name?c.legal_name:'',c.tax_id?'ЕДРПОУ '+c.tax_id:''].filter(Boolean).join(' · '))+'</small>':'')},
     {key:'points',label:'Точки',type:'number',value:c=>c.points},
-    {key:'equipment',label:'Техника',type:'number',value:c=>c.equipment}
-   ],actions:[{attribute:'data-cust-open',label:'Открыть',run:openCustomer},...(ctx.canWrite()?[{attribute:'data-cust-del',label:'Удалить клиента',danger:true,run:deleteCustomer}]:[])]});
+    {key:'equipment',label:'Техника',type:'number',value:c=>c.equipment},
+    {key:'open',label:'Заявки',type:'number',value:c=>c.open,render:c=>c.open?esc(c.open+' '+ctx.plural(c.open,'открыта','открыты','открыто')):'<span class="hint">нет</span>'},
+    {key:'overdue',label:'ТО',type:'number',value:c=>c.overdue,render:service},
+    {key:'visit',label:'Последний визит',type:'date',value:c=>c.visit,render:c=>c.visit?esc(dateText(c.visit)):'<span class="hint">не было</span>'}
+   ],actions:[{attribute:'data-cust-open',label:'Открыть',run:openCustomer},...(ctx.canWrite()?[{attribute:'data-cust-del',label:'Удалить клиента',danger:true,run:id=>id!==NONE&&deleteCustomer(id)}]:[])]});
+  box.querySelectorAll('[data-cust-del="'+NONE+'"]').forEach(b=>b.hidden=true);
  }
 
- function fillCustomer(c){
-  for(const [id,key] of [['custName','name'],['custLegal','legal_name'],['custTax','tax_id'],['custPhone','phone'],['custEmail','email'],['custContact','contact_person'],['custNotes','notes']])$(id).value=c?.[key]||'';
+ // Новый клиент заводится в окне; дальше — его страница.
+ function fillCustomer(){
+  for(const id of ['custName','custLegal','custTax','custPhone','custEmail','custContact','custNotes'])$(id).value='';
   $('custErr').textContent='';
  }
- function paintCustomerLinks(){
-  const id=customerEditId,pts=id?pointsOf(id):[],eqs=eqOf(pts.map(p=>p.id)),may=ctx.canWrite();
-  $('custLinks').hidden=!id;
-  $('custPoints').innerHTML=pts.length?'<ul class="ref-list">'+pts.map(p=>{const n=eqOf([p.id]).length;return '<li><button type="button" class="ref-link" data-cust-point="'+esc(p.id)+'"><b>'+esc(p.name)+'</b><small>'+esc([p.address,n?n+' ед. техники':'техники нет'].filter(Boolean).join(' · '))+'</small></button>'
-   +(may?'<button type="button" class="btn ghost" data-cust-unlink="'+esc(p.id)+'" aria-label="Отвязать точку '+esc(p.name)+'">Отвязать</button>':'')+'</li>';}).join('')+'</ul>'
-   :'<p class="hint">Точек нет. Привяжите существующую или поставьте новую на карте.</p>';
-  $('custEquipment').innerHTML=eqs.length?'<ul class="ref-list">'+eqs.map(e=>'<li><button type="button" class="ref-link" data-cust-eq="'+esc(e.id)+'"><b>'+esc(eqLabel(e))+'</b><small>'+esc([pointName(e.client_id),e.last_service?'ТО '+dateText(e.last_service):''].filter(Boolean).join(' · '))+'</small></button></li>').join('')+'</ul>'
-   :'<p class="hint">Техники на точках клиента нет.</p>';
-  const free=points().filter(p=>p.customer_id!==id).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
-  $('custAttach').hidden=!may;
-  $('custAttachPoint').innerHTML='<option value="">— выбрать точку —</option>'+free.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+(p.customer_id?' · сейчас: '+esc(customerOf(p)?.name||'другой клиент'):' · без клиента')+'</option>').join('');
-  $('custPoints').querySelectorAll('[data-cust-point]').forEach(b=>b.onclick=()=>{closeCustomer();ctx.openPoint(b.dataset.custPoint);});
-  $('custPoints').querySelectorAll('[data-cust-unlink]').forEach(b=>b.onclick=()=>linkPoint(b.dataset.custUnlink,null));
-  $('custEquipment').querySelectorAll('[data-cust-eq]').forEach(b=>b.onclick=()=>{closeCustomer();openEquipmentCard(b.dataset.custEq);});
- }
  async function openCustomer(id){
+  if(id)return ctx.openCustomerPage(id);
+  if(!ctx.canWrite())return;
   try{await ensureCustomers();}catch(e){ctx.notify('Клиенты недоступны: '+e.message,'err');return;}
-  const c=id?customers.find(x=>x.id===id):null;if(id&&!c)return;
-  customerEditId=c?.id||null;fillCustomer(c);
-  $('custTitle').textContent=c?c.name:'Новый клиент';
-  const may=ctx.canWrite();
-  $('custForm').querySelectorAll('input,textarea').forEach(el=>el.disabled=!may);
-  $('custSave').hidden=!may;$('custDelete').hidden=!may||!c;
-  paintCustomerLinks();
-  $('custOverlay').classList.add('on');ctx.markClean?.('custOverlay');
-  if(!c)$('custName').focus();
+  fillCustomer();$('custTitle').textContent='Новый клиент';
+  $('custOverlay').classList.add('on');ctx.markClean?.('custOverlay');$('custName').focus();
  }
  function closeCustomer(){$('custOverlay').classList.remove('on');}
  async function saveCustomer(){
   const rec={name:$('custName').value.trim(),legal_name:$('custLegal').value.trim(),tax_id:$('custTax').value.trim(),phone:$('custPhone').value.trim(),email:$('custEmail').value.trim(),contact_person:$('custContact').value.trim(),notes:$('custNotes').value.trim()};
   if(!rec.name){$('custErr').textContent='Укажите название клиента.';$('custName').focus();return;}
-  if(customers.some(c=>c.id!==customerEditId&&c.name.trim().toLowerCase()===rec.name.toLowerCase())){$('custErr').textContent='Клиент с таким названием уже есть.';return;}
+  if(customers.some(c=>c.name.trim().toLowerCase()===rec.name.toLowerCase())){$('custErr').textContent='Клиент с таким названием уже есть.';return;}
   $('custSave').disabled=true;
-  const res=customerEditId?await sb.from('customers').update(rec).eq('id',customerEditId).select('*').single():await sb.from('customers').insert(rec).select('*').single();
+  const res=await sb.from('customers').insert(rec).select('*').single();
   $('custSave').disabled=false;
   if(res.error){$('custErr').textContent='Ошибка: '+res.error.message;return;}
-  const created=!customerEditId;customerEditId=res.data?.id||customerEditId;
-  await loadCustomers();await renderCustomers();ctx.showToast(created?'Клиент добавлен':'Клиент сохранён');
-  if(created){$('custTitle').textContent=rec.name;$('custDelete').hidden=false;paintCustomerLinks();ctx.markClean?.('custOverlay');}else closeCustomer();
+  await loadCustomers();ctx.markClean?.('custOverlay');closeCustomer();ctx.showToast('Клиент добавлен');
+  if(res.data?.id)await ctx.openCustomerPage(res.data.id);else renderCustomers();
  }
  async function deleteCustomer(id){
-  const c=customers.find(x=>x.id===id);if(!c)return;
+  const c=customers.find(x=>x.id===id);if(!c)return false;
   const n=pointsOf(id).length;
-  if(n){ctx.notify('Удалить нельзя: у клиента '+n+' '+ctx.plural(n,'точка','точки','точек')+'. Перенесите их другому клиенту или отвяжите.','err');return;}
-  if(!await ctx.confirmDialog('«'+c.name+'» пропадёт из справочника. Сразу после удаления его можно вернуть.',{title:'Удалить клиента?',danger:true,okText:'Удалить клиента'}))return;
-  const {error}=await sb.rpc('soft_delete_customer',{p_id:id});if(error){ctx.notify('Ошибка: '+error.message,'err');return;}
-  closeCustomer();await loadCustomers();renderCustomers();
+  if(n){ctx.notify('Удалить нельзя: у клиента '+n+' '+ctx.plural(n,'точка','точки','точек')+'. Перенесите их другому клиенту или отвяжите.','err');return false;}
+  if(!await ctx.confirmDialog('«'+c.name+'» пропадёт из справочника. Сразу после удаления его можно вернуть.',{title:'Удалить клиента?',danger:true,okText:'Удалить клиента'}))return false;
+  const {error}=await sb.rpc('soft_delete_customer',{p_id:id});if(error){ctx.notify('Ошибка: '+error.message,'err');return false;}
+  await loadCustomers();renderCustomers();
   ctx.undoToast('Клиент удалён',async()=>{const {error:e2}=await sb.from('customers').update({deleted_at:null}).eq('id',id);if(e2){ctx.notify(e2.message,'err');return;}await loadCustomers();renderCustomers();ctx.showToast('Восстановлено');});
- }
- async function linkPoint(pointId,customerId){
-  if(!pointId)return;
-  const {error}=await sb.from('clients').update({customer_id:customerId}).eq('id',pointId);
-  if(error){ctx.notify('Ошибка: '+error.message,'err');return;}
-  const p=(ctx.points()||[]).find(x=>x.id===pointId);if(p)p.customer_id=customerId;
-  paintCustomerLinks();renderCustomers();renderPoints();ctx.showToast(customerId?'Точка привязана':'Точка отвязана');
- }
-
- // ---------- Точки ----------
- async function renderPoints(){
-  const box=$('pointList');if(!box)return;
-  try{await ensureCustomers();}catch{/* без клиентов список точек всё равно полезен */}
-  const q=($('pointSearch')?.value||'').trim().toLowerCase();
-  const rows=points().map(p=>({...p,customer:customerOf(p)?.name||null,equipment:eqOf([p.id]).length}))
-   .filter(p=>!q||[p.name,p.address,p.customer,p.contact_person,p.phone].some(v=>String(v||'').toLowerCase().includes(q)));
-  renderCatalogTable(box,{label:'Точки',scope:'points',rows,rowClass:'emrow',rowLabel:p=>p.name,
-   empty:points().length?'По запросу ничего не найдено.':'Точек пока нет. Точки ставятся на карте.',columns:[
-    {key:'name',label:'Точка',value:p=>p.name,render:p=>'<button type="button" class="catalog-record-link" data-point-open="'+esc(p.id)+'">'+esc(p.name)+'</button>'+(p.address?'<small class="ref-sub">'+esc(p.address)+'</small>':'')},
-    {key:'customer',label:'Клиент',value:p=>p.customer,render:p=>p.customer_id&&p.customer?'<button type="button" class="catalog-record-link" data-point-customer="'+esc(p.customer_id)+'">'+esc(p.customer)+'</button>':'<span class="hint">без клиента</span>'},
-    {key:'contact',label:'Контакт',value:p=>[p.contact_person,p.phone].filter(Boolean).join(' · ')||null},
-    {key:'equipment',label:'Техника',type:'number',value:p=>p.equipment}
-   ],actions:[{attribute:'data-point-open',label:'Открыть точку',run:id=>ctx.openPoint(id)},{attribute:'data-point-eq',label:'Техника точки',run:id=>ctx.openPointEquipment(id)},{attribute:'data-point-map',label:'Показать на карте',run:id=>ctx.showPoint(id)}]});
-  box.querySelectorAll('[data-point-customer]').forEach(b=>b.onclick=()=>openCustomer(b.dataset.pointCustomer));
- }
-
- // ---------- Техника ----------
- async function renderEquipment(){
-  const box=$('eqRefList');if(!box)return;
-  try{await ensureCustomers();}catch{/* клиент в строке просто не подпишется */}
-  const q=($('eqRefSearch')?.value||'').trim().toLowerCase();
-  const rows=equipment().map(e=>{const p=(ctx.points()||[]).find(x=>x.id===e.client_id);return {...e,point:p?.name||null,customer:customerOf(p)?.name||null,warranty:warrantyUntil(e)};})
-   .filter(e=>!q||[e.model,e.serial,e.kind,e.point,e.customer].some(v=>String(v||'').toLowerCase().includes(q)));
-  renderCatalogTable(box,{label:'Техника клиентов',scope:'equipment',rows,rowClass:'emrow',rowLabel:e=>eqLabel(e),
-   empty:equipment().length?'По запросу ничего не найдено.':'Техники пока нет. Технику добавляют в карточке точки.',columns:[
-    {key:'model',label:'Техника',value:e=>e.model||null,render:e=>'<button type="button" class="catalog-record-link" data-eqref-open="'+esc(e.id)+'">'+esc(e.model||'Техника')+'</button>'+(e.serial?'<small class="ref-sub">№ '+esc(e.serial)+'</small>':'')},
-    {key:'kind',label:'Тип',value:e=>e.kind||null},
-    {key:'point',label:'Точка',value:e=>e.point},
-    {key:'customer',label:'Клиент',value:e=>e.customer},
-    {key:'service',label:'Последнее ТО',type:'date',value:e=>e.last_service||null,render:e=>e.last_service?esc(dateText(e.last_service)):'<span class="hint">не было</span>'},
-    {key:'warranty',label:'Гарантия до',type:'date',value:e=>e.warranty||null,render:e=>e.warranty?esc(dateText(e.warranty)):'—'}
-   ],actions:[{attribute:'data-eqref-open',label:'Сервисная история',run:openEquipmentCard}]});
+  return true;
  }
 
  async function openEquipmentCard(id){
@@ -155,7 +120,7 @@ export function createReferenceDirectory(ctx){
    ['Точка',p?'<button type="button" class="ref-link inline" data-eqcard-point="'+esc(p.id)+'">'+esc(p.name)+'</button>':'—',true],
    ['Клиент',c?'<button type="button" class="ref-link inline" data-eqcard-customer="'+esc(c.id)+'">'+esc(c.name)+'</button>':'без клиента',!!c],
    ['Установлена',dateText(e.installed_on)||'—'],['Гарантия до',dateText(w)||'—'],
-   ['Последнее ТО',dateText(e.last_service)||'не было'],['Последний визит',dateText(e.last_visit)||'—'],
+   ['Следующее ТО',serviceText(ctx.forecast(e))],['Последнее ТО',dateText(e.last_service)||'не было'],['Последний визит',dateText(e.last_visit)||'—'],
    ['Интервал ТО',model?.service_interval_hours?num(model.service_interval_hours)+' моточасов':'—']
   ].map(([k,v,html])=>'<div><dt>'+esc(k)+'</dt><dd>'+(html?v:esc(v))+'</dd></div>').join('');
   $('eqCardFacts').querySelector('[data-eqcard-point]')?.addEventListener('click',()=>{closeEquipmentCard();ctx.openPoint(p.id);});
@@ -237,15 +202,10 @@ export function createReferenceDirectory(ctx){
  // ---------- wiring ----------
  $('custAdd')&&($('custAdd').onclick=()=>openCustomer(null));
  $('custSave').onclick=saveCustomer;
- $('custDelete').onclick=()=>customerEditId&&deleteCustomer(customerEditId);
  $('custCancel').onclick=closeCustomer;
- $('custAttachBtn').onclick=()=>{const v=$('custAttachPoint').value;if(v&&customerEditId)linkPoint(v,customerEditId);};
  $('custSearch')&&($('custSearch').oninput=renderCustomers);
- $('pointSearch')&&($('pointSearch').oninput=renderPoints);
- $('eqRefSearch')&&($('eqRefSearch').oninput=renderEquipment);
  $('eqCardClose').onclick=closeEquipmentCard;
  $('eqCardEdit').onclick=()=>{const e=equipment().find(x=>x.id===eqCardId);if(!e)return;closeEquipmentCard();ctx.editEquipment(e.client_id,e.id);};
- $('pointMapAdd')&&($('pointMapAdd').onclick=()=>ctx.goMap());
 
- return {loadCustomers,renderCustomers,renderPoints,renderEquipment,openCustomer,openEquipmentCard,customerOptions,resolveCustomer,customers:()=>customers,historyEntries};
+ return {loadCustomers,ensureCustomers,renderCustomers,openCustomer,deleteCustomer,openEquipmentCard,customerOptions,resolveCustomer,warrantyUntil,customers:()=>customers,historyEntries};
 }

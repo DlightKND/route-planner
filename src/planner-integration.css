@@ -569,3 +569,15 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .section-t
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-recalc .hint{margin:4px 0 10px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-recalc-actions{display:flex;flex-wrap:wrap;gap:8px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-recalc-actions>.btn{flex:1 1 140px;width:auto!important}
+/* План ТО в «Рабочем обзоре» (26.11.2026). */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-chip:not(#_){min-height:32px!important;padding:4px 10px!important;border:1px solid var(--line)!important;border-radius:999px!important;background:transparent!important;color:var(--ink-dim)!important;font:500 12.5px/18px var(--sans)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-chip[aria-pressed=true]:not(#_){background:var(--panel-2)!important;border-color:var(--ink-dim)!important;color:var(--ink)!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-row .row-text{display:grid;gap:2px;min-width:0}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-row .row-text strong{font:600 14px/20px var(--sans);overflow-wrap:anywhere}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-row .row-text small{color:var(--ink-dim);font:400 12.5px/18px var(--sans)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-serial{font-weight:400}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-days{font:600 13px/18px var(--sans);font-variant-numeric:tabular-nums;white-space:nowrap}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-days[data-state=overdue]{color:var(--red)}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-action:not(#_){grid-column:1/-1;justify-self:start;min-height:36px!important;padding:6px 12px!important;font:500 13px/18px var(--sans)!important}

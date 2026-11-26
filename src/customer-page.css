@@ -1,0 +1,67 @@
+/* Страница клиента (26.11.2026): шапка и вкладки — как у заявки и задания,
+   ниже — сводка, точки, техника с ТО, заявки и реквизиты. */
+.view-customer .tab-count { display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:10px;background:var(--panel-2);color:var(--ink-dim);font-size:12px;line-height:20px;text-align:center;font-variant-numeric:tabular-nums; }
+.view-customer .customer-main { display:block; }
+.view-customer .entity-tab-panel[hidden] { display:none!important; }
+.view-customer .entity-tab-panel { display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0; }
+
+.customer-overview-head { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
+.customer-overview-head h3 { margin:0;font-size:16px;line-height:24px;font-weight:600; }
+.customer-period { display:inline-flex;gap:4px;flex-wrap:wrap; }
+.customer-period button[aria-pressed=true] { background:var(--panel-2);color:var(--ink);border-color:var(--ink-dim); }
+
+.customer-stats { display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px; }
+.customer-stat { display:grid;gap:4px;align-content:start;min-width:0;padding:16px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel); }
+.customer-stat>span { color:var(--ink-dim);font-size:13px;line-height:18px; }
+.customer-stat>b { font-size:28px;line-height:34px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere; }
+.customer-stat>small { color:var(--ink-dim);font-size:12.5px;line-height:18px; }
+
+.customer-card { min-width:0;margin:0!important; }
+.customer-card>h3 { margin:0 0 12px;font-size:15px;line-height:22px;font-weight:600; }
+.customer-columns { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px; }
+.customer-rank { list-style:none;margin:0;padding:0;display:grid; }
+.customer-rank>li { display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);min-width:0; }
+.customer-rank>li:first-child { border-top:0; }
+.customer-rank>li>span { min-width:0;overflow-wrap:anywhere; }
+.customer-rank>li>b { flex:none;font-weight:600;font-variant-numeric:tabular-nums; }
+.customer-rank>li>.ref-link { width:100%; }
+
+.customer-bars { display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:8px;align-items:end;height:168px; }
+.customer-bar { display:grid;grid-template-rows:18px 1fr 18px;align-items:end;justify-items:center;height:100%;min-width:0; }
+.customer-bar>i { display:block;width:100%;max-width:40px;border-radius:4px 4px 0 0;background:var(--ink-dim);opacity:.55;align-self:end; }
+.customer-bar.is-current>i { background:var(--accent);opacity:1; }
+.customer-bar>span { font-size:12px;line-height:18px;color:var(--ink-dim);font-variant-numeric:tabular-nums; }
+.customer-bar-value { color:var(--ink)!important; }
+
+.customer-pane-head { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.customer-pane-head .grow { flex:1 1 auto; }
+.customer-attach { flex:0 1 420px;min-width:0; }
+.customer-attach select { width:100%; }
+
+.customer-service { display:inline-block;padding:2px 8px;border-radius:999px;font-size:12.5px;line-height:18px;white-space:nowrap; }
+.customer-service[data-state=overdue] { background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red); }
+.customer-service[data-state=soon] { background:color-mix(in srgb,var(--accent) 28%,transparent);color:var(--ink); }
+.customer-service[data-state=unknown] { color:var(--ink-dim);padding-inline:0; }
+
+.customer-details { margin:0!important; }
+.customer-details>h3 { margin:0 0 16px;font-size:15px;line-height:22px;font-weight:600; }
+.customer-form { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px; }
+.customer-field { display:grid;gap:6px;min-width:0; }
+.customer-field>span { color:var(--ink-dim);font-size:13px;line-height:18px; }
+.customer-form .is-wide { grid-column:1/-1; }
+.customer-form-actions { display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap; }
+.customer-form-actions .hint { margin-right:auto; }
+.customer-form .err:empty { display:none; }
+
+.customer-quick { display:inline-flex;gap:6px;flex-wrap:wrap; }
+.customer-quick button[aria-pressed=true] { background:var(--panel-2);color:var(--ink);border-color:var(--ink-dim); }
+.ref-match { color:var(--ink)!important; }
+
+@media (max-width:760px) {
+  .view-customer #customerCall { display:none!important; }
+  .view-customer .crumbs>span { display:none; }
+  .customer-columns,.customer-form { grid-template-columns:1fr; }
+  .customer-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .customer-bars { gap:3px;height:136px; }
+  .customer-bar>span { font-size:10.5px; }
+}
