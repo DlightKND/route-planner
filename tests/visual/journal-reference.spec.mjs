@@ -39,3 +39,8 @@ test('a short desktop viewport leaves three complete stops in the overview list'
  await last.scrollIntoViewIfNeeded();
  await expect(last).toBeInViewport();
 });
+test.afterEach(async({page},info)=>{
+ if(info.status===info.expectedStatus)return;
+ const d=await page.evaluate(()=>{const r=document.querySelector('#nav.rail'),b=r?.getBoundingClientRect(),c=document.querySelector('[data-ut-mode=all]')?.getBoundingClientRect();return {rail:b&&[b.x,b.y,b.width,b.height].map(Math.round),cls:r?.className,pos:r&&getComputedStyle(r).position,hover:r?.matches(':hover'),fw:r?.matches(':focus-within'),fv:r?.matches(':has(:focus-visible)'),active:document.activeElement?.outerHTML.slice(0,120),chip:c&&[c.x,c.y,c.width,c.height].map(Math.round),vw:innerWidth,sw:document.documentElement.scrollWidth,hoverMedia:matchMedia('(hover:hover)').matches,pointer:matchMedia('(pointer:fine)').matches,shell:document.querySelector('#appShell')?.className};}).catch(e=>String(e));
+ console.log('DIAG '+info.project.name+' '+JSON.stringify(d));
+});
