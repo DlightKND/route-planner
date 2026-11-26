@@ -15,7 +15,7 @@ const scenes = [
   {name:'task',route:'order/'+fixtureIDs.order,view:'order',ready:'#orderOverviewState h2'},
   {name:'task-active',route:'order/'+fixtureIDs.activeOrder,view:'order',ready:'#orderRecordResult'},
   {name:'trip',route:'trip/'+fixtureIDs.trip,view:'trip',ready:'#tripOverviewState h2'},
-  {name:'catalog',route:'catalog',view:'catalog',ready:'#catList .emrow'},
+  {name:'catalog',route:'catalog',view:'catalog',catalog:'works',ready:'#catList .emrow'},
   {name:'catalog-models',route:'catalog',view:'catalog',catalog:'models',ready:'#emList .emrow'},
   {name:'catalog-materials',route:'catalog',view:'catalog',catalog:'materials',ready:'#stockList .stock-row'},
   {name:'map',route:'map',view:'map',ready:'.leaflet-container'},
@@ -482,8 +482,8 @@ for(const role of ['admin','logist','engineer'])test(`${role} account profile an
   await integrity(page,active,audit,testInfo);
 });
 test('retained trip track remains visible without raw GPS',async({page,context},testInfo)=>{
-  const {active,audit}=await openScene(page,context,testInfo,'logist',{route:'trip/30000000-0000-4000-8000-000000000002/map',view:'map',ready:'.mleg'});
-  await expect(active.locator('.mleg')).toContainText('128');
+  const {active,audit}=await openScene(page,context,testInfo,'logist',{route:'trip/30000000-0000-4000-8000-000000000002/map',view:'map',ready:'#trackViewDock .tv-bar'});
+  await active.locator('#tvToggle').click();await expect(active.locator('#trackViewDock .tv-layers')).toContainText('128');
   const reads=await page.evaluate(()=>window.__visualQA.reads);
   expect(reads).toContain('trip_tracks');expect(reads).not.toContain('vehicle_positions');
   expect(audit.errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);

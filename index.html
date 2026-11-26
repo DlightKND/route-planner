@@ -2764,8 +2764,25 @@
            в «Диспетчере». Раньше он был отдельной строкой над заголовком:
            два яруса вместо одного и своя черта во всю ширину, которой
            больше нигде нет. -->
+      <div id="catCustomers" style="display:none">
+        <div class="pane-head">
+          <div class="searchbox"><input type="search" id="custSearch" aria-label="Поиск клиента" placeholder="название, ИНН, телефон или контакт…"></div>
+          <button class="btn sm amber" id="custAdd">Добавить клиента</button></div>
+        <div id="custList"></div>
+      </div>
+      <div id="catPoints" style="display:none">
+        <div class="pane-head">
+          <div class="searchbox"><input type="search" id="pointSearch" aria-label="Поиск точки" placeholder="точка, адрес или клиент…"></div>
+          <button class="btn sm" id="pointMapAdd" type="button">Поставить точку на карте</button></div>
+        <div id="pointList"></div>
+      </div>
+      <div id="catEquipment" style="display:none">
+        <div class="pane-head">
+          <div class="searchbox"><input type="search" id="eqRefSearch" aria-label="Поиск техники" placeholder="модель, серийный номер, точка или клиент…"></div></div>
+        <div id="eqRefList"></div>
+      </div>
       <div id="catWorks">
-      <div class="subtabs"><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="models">Техника</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
+      <div class="subtabs"><button type="button" class="subtab" data-csub="customers">Клиенты</button><button type="button" class="subtab" data-csub="points">Точки</button><button type="button" class="subtab" data-csub="equipment">Техника</button><button type="button" class="subtab" data-csub="models">Модели</button><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
       <div class="pane-head">
         <div class="searchbox"><input type="search" id="catSearch" aria-label="Поиск работы" placeholder="поиск работы…"></div>
         <select id="catFilter" aria-label="Тип работ" style="width:160px"><option value="">все</option><option value="warranty">гарантийные</option><option value="paid">только платные</option><option value="maint">ТО / сервис</option></select>
@@ -2773,7 +2790,7 @@
       <div id="catList"></div>
       </div>
       <div id="catModels" style="display:none">
-      <div class="subtabs"><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="models">Техника</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
+      <div class="subtabs"><button type="button" class="subtab" data-csub="customers">Клиенты</button><button type="button" class="subtab" data-csub="points">Точки</button><button type="button" class="subtab" data-csub="equipment">Техника</button><button type="button" class="subtab" data-csub="models">Модели</button><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
       <div class="pane-head">
         <div class="searchbox"><input type="search" id="emSearch" aria-label="Поиск модели техники" placeholder="поиск модели…"></div>
         <button class="btn sm amber" id="emShowAdd">+ Модель</button></div>
@@ -2789,7 +2806,7 @@
       </div>
       </div>
       <div id="catMaterials" style="display:none">
-        <div class="subtabs"><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="models">Техника</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
+        <div class="subtabs"><button type="button" class="subtab" data-csub="customers">Клиенты</button><button type="button" class="subtab" data-csub="points">Точки</button><button type="button" class="subtab" data-csub="equipment">Техника</button><button type="button" class="subtab" data-csub="models">Модели</button><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
         <div class="pane-head">
           <div class="searchbox"><input type="search" id="stockSearch" aria-label="Поиск материала по названию или артикулу" placeholder="поиск по названию или артикулу…"></div>
           <label class="stock-state"><input type="checkbox" id="stockShowInactive" style="width:auto">показать архив</label>
@@ -3096,6 +3113,7 @@
   <section class="modal-section" aria-labelledby="fContactsH"><h4 id="fContactsH">Контакты</h4>
     <label for="fName">Название</label><input type="text" id="fName" placeholder="Напр. ТОВ «Назва»">
     <div class="form-grid point-client-only">
+      <div class="form-wide"><label for="fCustomer">Клиент (организация)</label><select id="fCustomer"></select></div>
       <div><label for="fContact">Контактное лицо</label><input type="text" id="fContact" placeholder="Имя, должность"></div>
       <div><label for="fPhone">Телефон на месте</label><input type="tel" id="fPhone" inputmode="tel" autocomplete="tel" placeholder="+380 …"></div>
       <div><label for="fAddress">Адрес</label><input type="text" id="fAddress" placeholder="Город, улица, дом"></div>
@@ -3134,6 +3152,7 @@
   <section class="modal-section" aria-labelledby="eContactsH"><h4 id="eContactsH">Контакты</h4>
     <label for="eName">Название</label><input type="text" id="eName" required>
     <div class="form-grid">
+      <div class="form-wide edit-client-only"><label for="eCustomer">Клиент (организация)</label><select id="eCustomer"></select></div>
       <div><label for="eContact">Контактное лицо</label><input type="text" id="eContact" placeholder="Петренко Олег, главный механик"></div>
       <div><label for="ePhone">Телефон на месте</label><input type="tel" id="ePhone" inputmode="tel" autocomplete="tel" placeholder="+380 …"></div>
       <div><label for="eAddress">Адрес</label><input type="text" id="eAddress" placeholder="Город, улица, дом"></div>
@@ -3186,6 +3205,35 @@
   </div>
   <div class="row modal-actions eq-actions" id="eqListActions"><button type="button" class="btn" id="eqAdd">+ Добавить технику</button><span class="grow"></span><button type="button" class="btn ghost" id="eqClose">Закрыть</button></div>
   <div class="row modal-actions eq-actions" id="eqFormActions" hidden><button type="button" class="btn ghost" id="eqFormCancel">Отмена</button><span class="grow"></span><button type="button" class="btn amber" id="eqSave">Сохранить технику</button></div>
+</div></div>
+
+<div class="overlay" id="custOverlay"><div class="modal pane-modal cust-modal">
+  <h3 id="custTitle">Клиент</h3>
+  <div class="pane-body">
+    <div id="custForm" class="cust-form">
+      <label for="custName">Название</label><input type="text" id="custName" maxlength="300" autocomplete="organization">
+      <div class="row"><div class="grow"><label for="custLegal">Юридическое название</label><input type="text" id="custLegal" maxlength="300"></div><div class="grow"><label for="custTax">ИНН / ЕДРПОУ</label><input type="text" id="custTax" maxlength="40" inputmode="numeric"></div></div>
+      <div class="row"><div class="grow"><label for="custContact">Контактное лицо</label><input type="text" id="custContact" maxlength="200"></div><div class="grow"><label for="custPhone">Телефон</label><input type="tel" id="custPhone" maxlength="80"></div></div>
+      <label for="custEmail">Эл. почта</label><input type="email" id="custEmail" maxlength="200">
+      <label for="custNotes">Заметки</label><textarea id="custNotes" rows="2" maxlength="4000"></textarea>
+      <div class="err" id="custErr" role="alert"></div>
+    </div>
+    <div id="custLinks" class="cust-links" hidden>
+      <section aria-labelledby="custPointsTitle"><h4 id="custPointsTitle">Точки</h4><div id="custPoints"></div>
+        <div class="row cust-attach" id="custAttach"><select id="custAttachPoint" class="grow" aria-label="Точка, которую привязать к клиенту"></select><button type="button" class="btn" id="custAttachBtn">Привязать</button></div></section>
+      <section aria-labelledby="custEqTitle"><h4 id="custEqTitle">Техника на точках</h4><div id="custEquipment"></div></section>
+    </div>
+  </div>
+  <div class="row modal-actions"><button type="button" class="btn ghost" id="custDelete">Удалить клиента</button><span class="grow"></span><button type="button" class="btn ghost" id="custCancel">Закрыть</button><button type="button" class="btn amber" id="custSave">Сохранить</button></div>
+</div></div>
+
+<div class="overlay" id="eqCardOverlay"><div class="modal pane-modal eq-card-modal">
+  <h3 id="eqCardTitle">Техника</h3>
+  <div class="pane-body">
+    <dl class="eq-card-facts" id="eqCardFacts"></dl>
+    <section aria-labelledby="eqCardHistoryTitle"><h4 id="eqCardHistoryTitle">Сервисная история</h4><div id="eqCardHistory"></div></section>
+  </div>
+  <div class="row modal-actions"><button type="button" class="btn" id="eqCardEdit">Изменить технику</button><span class="grow"></span><button type="button" class="btn ghost" id="eqCardClose">Закрыть</button></div>
 </div></div>
 
 <!-- catalog work edit -->
