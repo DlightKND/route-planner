@@ -7946,7 +7946,7 @@ function closeMapPanel(){
 }
 function placeMapPanel(){
   if(!factLegendEl)return;
-  if(trackView){ const body=factLegendEl.querySelector('.mleg-body'); factLegendEl.append(body); $('tvPanelSlot').append(factLegendEl); factLegendEl.querySelector('details').open=true; return; }
+  if(trackView) return; // в просмотре трека интервал и слои — в нижней панели
   const inline=trackPanelInline(),details=factLegendEl.querySelector('details');
   const wasInline=factLegendEl.parentElement===$('trackBlock');
   const selected=document.querySelector('#sideTabs button.on')?.dataset.sb;
@@ -7968,8 +7968,8 @@ function placeMapPanel(){
 // трека), снизу — лента времени с интервалом и слоями трека.
 let trackView=null;
 function backLabelFor(hash){ const h=hash||''; return /^#\/journal\/(record|trip)\//.test(h)?'К записи':/^#\/(journal|planner\/tracking)/.test(h)?'К журналу':/^#\/trip\//.test(h)?'К выезду':/^#\/map/.test(h)?'К карте':'Назад'; }
-function enterTrackView({title,sub,back,backLabel}){
-  trackView={back:back||'#/map'};
+function enterTrackView({title,sub,back,backLabel,kindTitle}){
+  trackView={back:back||'#/map',kindTitle:kindTitle||'Трек'}; tvExpanded=false;
   document.querySelector('.view-map')?.classList.add('track-view');
   $('tvTitle').textContent=title||'Трек'; $('tvSub').textContent=sub||'';
   $('tvBackLabel').textContent=backLabel||'Вернуться';
@@ -7988,31 +7988,120 @@ function exitTrackView({clear=true,go=null}={}){
 }
 $('tvClose').onclick=()=>{ exitTrackView(); routeSet('map'); };
 $('tvBack').onclick=()=>{ const back=trackView?.back||'#/map'; exitTrackView({go:back}); };
-// Лента времени: движение, стоянки, восстановленное и участки без GPS по
-// всему треку; выбранный интервал подсвечен. Клик по участку — карта на него.
-function renderTrackTimeline(){
-  const box=$('tvTimeline'); if(!box||!trackView) return;
-  const m=factLast; if(!m||!(m.segments||[]).length){ box.innerHTML='<p class="hint">Трека нет — показан плановый маршрут.</p>'; return; }
-  const [a,b]=factBounds(m); const span=Math.max(1,b-a); const pct=t=>Math.max(0,Math.min(100,(t-a)/span*100));
+// Нижняя панель просмотра трека (макет 26.11.2026). Свёрнута: заголовок с
+// периодом, легенда и лента времени с ползунками интервала по краям.
+// «Слои и период» раскрывает точный интервал (дата и время) и слои карты.
+// Клик по участку ленты — карта на этот участок.
+let tvExpanded=false, tvDrag=null;
+const TV_LABEL={move:'Движение по GPS',stay:'Остановка',road:'Достроено по дорогам',gap:'Нет GPS'};
+function tvStamp(t,withDate=true){ const d=new Date(t); return (withDate?d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}).replace('.','')+', ':'')+pad2(d.getHours())+':'+pad2(d.getMinutes()); }
+function tvPeriodText(a,b){ return tfOneDay([a,b])?tvStamp(a)+' — '+tvStamp(b,false):tvStamp(a)+' — '+tvStamp(b); }
+function tvBlocks(m){
   // Скорость участка — по его времени: у сохранённого разбора длительности в отрезке может не быть.
   const kmhOf=g=>{ const dur=(+new Date(g.toTs||g.fromTs))-(+new Date(g.fromTs)); return dur>0?(g.km||0)/(dur/3600000):segKmh(g); };
   const kindOf=g=>g.kind==='road'?'road':g.kind==='line'?'gap':(kmhOf(g)<3?'stay':'move');
   const blocks=[];
-  (m.segments||[]).forEach((g,i)=>{ const k=kindOf(g), f=+new Date(g.fromTs), t=+new Date(g.toTs||g.fromTs); const last=blocks[blocks.length-1];
+  (m.segments||[]).forEach(g=>{ const k=kindOf(g), f=+new Date(g.fromTs), t=+new Date(g.toTs||g.fromTs); const last=blocks[blocks.length-1];
     if(last&&last.k===k&&f-last.t<=60000){ last.t=t; last.km+=g.km||0; last.to=g.toPt; } else blocks.push({k,f,t,km:g.km||0,from:g.fromPt,to:g.toPt}); });
-  const label={move:'Движение по GPS',stay:'Остановка',road:'Восстановлено по дорогам',gap:'Нет GPS'};
-  const from=factFrom==null?a:factFrom, to=factTo==null?b:factTo;
-  const step=[1,2,3,6,12,24,48].map(h=>h*3600000).find(s=>span/s<=8)||span/6;
-  const ticks=[]; let t0=new Date(a); t0.setMinutes(0,0,0); for(let t=+t0+step;t<b;t+=step) ticks.push(t);
-  const oneDay=new Date(a).toDateString()===new Date(b).toDateString();
-  const tickText=t=>{ const d=new Date(t); const hm=pad2(d.getHours())+':'+pad2(d.getMinutes()); return oneDay||d.getHours()?hm:d.getDate()+'.'+pad2(d.getMonth()+1); };
-  box.innerHTML='<div class="tv-legend" aria-hidden="true">'+['move','stay','road','gap'].map(k=>'<span><i class="tv-'+k+'"></i>'+label[k]+'</span>').join('')+'</div>'
-    +'<div class="tv-bar" role="group" aria-label="Участки трека по времени">'
-    +blocks.map((x,i)=>'<button type="button" class="tv-block tv-'+x.k+'" data-tv="'+i+'" style="left:'+pct(x.f)+'%;width:'+Math.max(.3,pct(x.t)-pct(x.f))+'%" title="'+esc(label[x.k]+' · '+atTime(x.f)+'–'+atTime(x.t)+(x.km>=0.1?' · '+x.km.toFixed(1)+' км':''))+'" aria-label="'+esc(label[x.k]+' '+atTime(x.f)+'–'+atTime(x.t))+'"></button>').join('')
-    +((factFrom!=null||factTo!=null)?'<span class="tv-window" style="left:'+pct(from)+'%;width:'+(pct(to)-pct(from))+'%"></span>':'')+'</div>'
-    +'<div class="tv-ticks" aria-hidden="true"><span style="left:0">'+atTime(a)+'</span>'+ticks.map(t=>'<span style="left:'+pct(t)+'%">'+tickText(t)+'</span>').join('')+'<span style="left:100%">'+atTime(b)+'</span></div>';
+  return blocks;
+}
+function tvTicks(a,b){
+  const span=Math.max(1,b-a);
+  if(!tfOneDay([a,b])){
+    // Многодневный трек — подписи дней в полночь, первый день — от начала.
+    const out=[{t:a,text:new Date(a).toLocaleDateString('ru-RU',{day:'numeric',month:'short'}).replace('.','')}];
+    const d=new Date(a); d.setHours(24,0,0,0);
+    const every=Math.max(1,Math.ceil(span/86400000/8));
+    for(let i=0;+d<b;d.setDate(d.getDate()+1),i++) if((i+1)%every===0&&(+d-a)/span>0.06) out.push({t:+d,text:d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}).replace('.','')});
+    return out;
+  }
+  const step=[1,2,3,6,12].map(h=>h*3600000).find(s=>span/s<=8)||span/6;
+  const out=[{t:a,text:atTime(a)}]; const t0=new Date(a); t0.setMinutes(0,0,0);
+  for(let t=+t0+step;t<b-step*0.4;t+=step) out.push({t,text:atTime(t)});
+  out.push({t:b,text:atTime(b)}); return out;
+}
+function tvLayerRows(){
+  const swatch={plan:'<i class="tv-swatch is-plan"></i>',track:'<i class="tv-swatch is-track"></i>',road:'<i class="tv-swatch is-road"></i>',line:'<i class="tv-swatch is-line"></i>',live:'<i class="tv-swatch is-live"></i>',drop:'<i class="tv-swatch is-drop"></i>',stay:'<i class="tv-swatch is-stay"></i>'};
+  const kmText=km=>(Math.round(km*10)/10).toLocaleString('ru-RU')+' км';
+  return mapPanelRows().map(r=>{
+    const value=r.key==='plan'?(r.sub||''):r.key==='track'?kmText(r.km)+' по GPS':r.km!=null?kmText(r.km):r.val!=null?String(r.val):'';
+    return '<label class="tv-layer"><input type="checkbox" data-tvl="'+r.key+'"'+(factVis[r.key]?' checked':'')+'>'+(swatch[r.key]||'<i class="tv-swatch"></i>')
+      +'<span class="tv-layer-name">'+esc(r.name)+'</span><span class="tv-layer-value">'+esc(value)+'</span>'
+      +(r.key==='track'?'<i class="tv-speed" title="Скорость движения: 0 — '+SPEED_MAX+'+ км/ч" style="background:linear-gradient(90deg,'+SPEED_RAMP.join(',')+')"></i>':'<span></span>')+'</label>';
+  }).join('');
+}
+function renderTrackTimeline(){
+  const box=$('tvTimeline'); if(!box||!trackView) return;
+  const m=factLast; $('tvPanelSlot').innerHTML=''; const keepScroll=box.querySelector('.tv-layer-list')?.scrollTop||0;
+  if(!m||!(m.segments||[]).length){ box.innerHTML='<p class="hint">Трека нет — показан плановый маршрут.</p>'; return; }
+  const [a,b]=factBounds(m), span=Math.max(1,b-a), pct=t=>Math.max(0,Math.min(100,(t-a)/span*100));
+  const from=factFrom==null?a:factFrom, to=factTo==null?b:factTo, narrowed=factFrom!=null||factTo!=null;
+  const blocks=tvBlocks(m), one=tfOneDay([a,b]);
+  const dateVal=t=>tfValue(t,false).slice(0,10), timeVal=t=>tfValue(t,true);
+  const handle=(id,t,label)=>'<button type="button" class="tv-handle" id="'+id+'" role="slider" aria-label="'+label+'" aria-valuemin="'+a+'" aria-valuemax="'+b+'" aria-valuenow="'+t+'" aria-valuetext="'+esc(tvStamp(t))+'" style="left:'+pct(t)+'%"><span aria-hidden="true"></span></button>';
+  box.innerHTML='<header class="tv-head"><h2 class="tv-title">'+esc(trackView.kindTitle||'Трек')+'</h2><span class="tv-period" id="tvPeriod">'+esc(tvPeriodText(from,to))+'</span>'
+      +'<span class="tv-head-actions"><button type="button" class="btn ghost tv-all" id="tvAll"'+(narrowed?'':' disabled')+'>Весь период</button>'
+      +'<button type="button" class="btn tv-toggle" id="tvToggle" aria-expanded="'+tvExpanded+'" aria-controls="tvMore">Слои и период<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="'+(tvExpanded?'M12 5v14M6 13l6 6 6-6':'M12 19V5M6 11l6-6 6 6')+'"/></svg></button></span></header>'
+    +'<div class="tv-legend" aria-hidden="true">'+['move','stay','road','gap'].map(k=>'<span><i class="tv-'+k+'"></i>'+TV_LABEL[k]+'</span>').join('')+'</div>'
+    +'<div class="tv-track"><div class="tv-bar" role="group" aria-label="Участки трека по времени">'
+      +blocks.map((x,i)=>'<button type="button" class="tv-block tv-'+x.k+'" data-tv="'+i+'" style="left:'+pct(x.f)+'%;width:'+Math.max(.3,pct(x.t)-pct(x.f))+'%" title="'+esc(TV_LABEL[x.k]+' · '+tvStamp(x.f)+'–'+atTime(x.t)+(x.km>=0.1?' · '+x.km.toFixed(1)+' км':''))+'" aria-label="'+esc(TV_LABEL[x.k]+' '+tvStamp(x.f)+'–'+atTime(x.t))+'"></button>').join('')
+      +'<span class="tv-dim is-before" style="width:'+pct(from)+'%"></span><span class="tv-dim is-after" style="left:'+pct(to)+'%"></span>'
+      +(narrowed?'<span class="tv-window" style="left:'+pct(from)+'%;width:'+(pct(to)-pct(from))+'%"></span>':'')
+      +handle('tvHandleFrom',from,'Начало интервала')+handle('tvHandleTo',to,'Конец интервала')+'</div>'
+    +'<div class="tv-ticks" aria-hidden="true">'+tvTicks(a,b).map((x,i,all)=>'<span class="'+(i===0?'is-first':i===all.length-1&&one?'is-last':'')+'" style="left:'+pct(x.t)+'%">'+esc(x.text)+'</span>').join('')+'</div></div>'
+    +'<div class="tv-more" id="tvMore"'+(tvExpanded?'':' hidden')+'>'
+      +'<section class="tv-interval" aria-labelledby="tvIntervalTitle"><h3 id="tvIntervalTitle">Точный интервал</h3>'
+        +[['From','Начало',from],['To','Конец',to]].map(([id,label,t])=>'<div class="tv-time-row"><span>'+label+'</span>'
+          +'<input type="date" id="tv'+id+'Date" aria-label="Дата: '+label.toLowerCase()+'" value="'+dateVal(t)+'" min="'+dateVal(a)+'" max="'+dateVal(b)+'">'
+          +'<input type="time" id="tv'+id+'" aria-label="Время: '+label.toLowerCase()+'" value="'+timeVal(t)+'"></div>').join('')
+        +'<p class="tv-duration">Период: <b id="tvDuration">'+trackPeriodText(to-from)+'</b></p></section>'
+      +'<section class="tv-layers" aria-labelledby="tvLayersTitle"><h3 id="tvLayersTitle">Слои карты</h3><div class="tv-layer-list" tabindex="0" role="group" aria-labelledby="tvLayersTitle">'+tvLayerRows()+'</div></section>'
+    +'</div>';
   box.querySelectorAll('[data-tv]').forEach(btn=>btn.onclick=()=>{ const x=blocks[+btn.dataset.tv]; if(!x.from||!x.to) return;
     const bnds=L.latLngBounds([[x.from.lat,x.from.lng],[x.to.lat,x.to.lng]]); map.fitBounds(bnds.pad(0.4),{maxZoom:16,...fitPadL(fitPad(60))}); });
+  $('tvToggle').onclick=()=>{ tvExpanded=!tvExpanded; renderTrackTimeline(); $('tvToggle')?.focus({preventScroll:true}); };
+  $('tvAll').onclick=()=>{ factFrom=null; factTo=null; drawFact(factLast); $('tvToggle')?.focus({preventScroll:true}); };
+  // Точный интервал: перепутанные местами границы — опечатка, а не пустая карта.
+  const apply=()=>{ let f=tfParse($('tvFromDate').value+'T'+$('tvFrom').value,false), t=tfParse($('tvToDate').value+'T'+$('tvTo').value,false);
+    if(f==null) f=a; if(t==null) t=b; if(f>t){ const q=f; f=t; t=q; }
+    tvSetWindow(f,t,a,b); };
+  ['tvFromDate','tvFrom','tvToDate','tvTo'].forEach(id=>{ const el=$(id); if(el) el.onchange=apply; });
+  box.querySelectorAll('[data-tvl]').forEach(cb=>cb.onchange=()=>{ factVis[cb.dataset.tvl]=cb.checked; factApplyVis(); });
+  const list=box.querySelector('.tv-layer-list'); if(list) list.scrollTop=keepScroll;
+  tvWireHandles(a,b);
+}
+function tvSetWindow(f,t,a,b){
+  f=Math.max(a,Math.min(b,f)); t=Math.max(a,Math.min(b,t));
+  const full=f<=a+30000&&t>=b-30000;
+  factFrom=full?null:f; factTo=full?null:t;
+  const focused=document.activeElement?.id;
+  drawFact(factLast);
+  if(focused&&$(focused)) $(focused).focus({preventScroll:true});
+}
+// Ползунки интервала: тянуть мышью или пальцем, стрелки — шаг 1/100 ленты,
+// Shift — 1/10, Home/End — к краю. Карта перерисовывается, когда ползунок отпущен.
+function tvWireHandles(a,b){
+  const bar=document.querySelector('#tvTimeline .tv-bar'); if(!bar) return;
+  const span=Math.max(1,b-a), from=()=>factFrom==null?a:factFrom, to=()=>factTo==null?b:factTo;
+  const paint=(f,t)=>{ const p=x=>(x-a)/span*100;
+    bar.querySelector('.is-before').style.width=p(f)+'%'; bar.querySelector('.is-after').style.left=p(t)+'%';
+    $('tvHandleFrom').style.left=p(f)+'%'; $('tvHandleTo').style.left=p(t)+'%';
+    $('tvHandleFrom').setAttribute('aria-valuetext',tvStamp(f)); $('tvHandleTo').setAttribute('aria-valuetext',tvStamp(t));
+    const per=$('tvPeriod'); if(per) per.textContent=tvPeriodText(f,t); };
+  for(const [id,end] of [['tvHandleFrom','from'],['tvHandleTo','to']]){
+    const h=$(id); if(!h) continue;
+    const at=x=>{ const r=bar.getBoundingClientRect(); return a+Math.max(0,Math.min(1,(x-r.left)/r.width))*span; };
+    h.onpointerdown=e=>{ e.preventDefault(); h.setPointerCapture?.(e.pointerId); tvDrag={end,f:from(),t:to()}; h.classList.add('is-dragging'); };
+    h.onpointermove=e=>{ if(!tvDrag||tvDrag.end!==end) return; const v=at(e.clientX), gap=span/200;
+      if(end==='from') tvDrag.f=Math.min(v,tvDrag.t-gap); else tvDrag.t=Math.max(v,tvDrag.f+gap); paint(tvDrag.f,tvDrag.t); };
+    const done=()=>{ if(!tvDrag||tvDrag.end!==end) return; const d=tvDrag; tvDrag=null; h.classList.remove('is-dragging'); tvSetWindow(d.f,d.t,a,b); };
+    h.onpointerup=done; h.onpointercancel=done;
+    h.onkeydown=e=>{ const step=span/(e.shiftKey?10:100); let f=from(),t=to();
+      const move=d=>{ if(end==='from') f=Math.min(t-span/200,f+d); else t=Math.max(f+span/200,t+d); };
+      if(e.key==='ArrowLeft'||e.key==='ArrowDown') move(-step); else if(e.key==='ArrowRight'||e.key==='ArrowUp') move(step);
+      else if(e.key==='Home'){ if(end==='from') f=a; else t=f+span/200; } else if(e.key==='End'){ if(end==='to') t=b; else f=t-span/200; } else return;
+      e.preventDefault(); tvSetWindow(f,t,a,b); };
+  }
 }
 // GPS-запись без выезда: тот же слой факта, точки — из записи.
 async function showRecordOnMap(id,{title,sub,back}={}){
@@ -8024,7 +8113,7 @@ async function showRecordOnMap(id,{title,sub,back}={}){
     const m=await measureTrip(points,trackOpts(),{},null);
     if(!paintFactMeasure(m,points,null,null,{quiet:true})) return;
     routeSet('map');
-    enterTrackView({title:title||'GPS-запись',sub,back:back||'#/journal/record/'+encodeURIComponent(id),backLabel:backLabelFor(back||'#/journal/record/')});
+    enterTrackView({kindTitle:'Трек записи',title:title||'GPS-запись',sub,back:back||'#/journal/record/'+encodeURIComponent(id),backLabel:backLabelFor(back||'#/journal/record/')});
   }catch(e){ notify('Трек записи не загрузился: '+(e.message||e),'err'); }
 }
 window.showRecordOnMap=showRecordOnMap;
@@ -8255,7 +8344,7 @@ async function showTripOnMap(tid,{focus=null,editing=false,back=null}={}){
   if(!fact&&!edit)showToast(shown?'Факта нет — показан плановый маршрут':'У выезда нет ни маршрута, ни трека');
   routeSet('trip/'+encodeURIComponent(tid)+'/map'+(edit?'/edit':''));
   if(!edit&&(fact||shown)){
-    enterTrackView({title:tripLabel(trip,tid),sub:tripPeriod(trip.date_from,trip.date_to)+(trip.vehicle_label?' · '+trip.vehicle_label:''),back:returnHash,backLabel:backLabelFor(returnHash)});
+    enterTrackView({kindTitle:'Трек выезда',title:tripLabel(trip,tid),sub:tripPeriod(trip.date_from,trip.date_to)+(trip.vehicle_label?' · '+trip.vehicle_label:''),back:returnHash,backLabel:backLabelFor(returnHash)});
   }
 }
 async function loadTripMapJobs(tid){
