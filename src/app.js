@@ -810,8 +810,11 @@ function applyMobileNav(){
   });
   // Курсор ушёл — рельс сворачивается, даже если в нём остался фокус с клавиатуры;
   // вернулся — раскрывается снова.
-  rail.addEventListener('pointerenter',()=>rail.classList.remove('rail-rest'));
-  rail.addEventListener('pointerleave',()=>rail.classList.add('rail-rest'));
+  // Раскрытие — после короткой задержки: курсор, который лишь пересекает рельс
+  // по пути к кнопке у его края, не должен накрывать её раскрытым меню.
+  let railOpenT=null;
+  rail.addEventListener('pointerenter',e=>{ if(e.pointerType==='touch') return; clearTimeout(railOpenT); railOpenT=setTimeout(()=>{ if(rail.matches(':hover')) rail.classList.remove('rail-rest'); },220); });
+  rail.addEventListener('pointerleave',()=>{ clearTimeout(railOpenT); rail.classList.add('rail-rest'); });
   // Открылась другая страница — показываем её, а не раскрытый рельс; следующий Tab раскроет его снова.
   window.addEventListener('hashchange',()=>{ if(!rail.matches(':hover')) rail.classList.add('rail-rest'); });
 })();
