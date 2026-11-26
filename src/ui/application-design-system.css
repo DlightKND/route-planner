@@ -35,6 +35,32 @@ html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=menu
 }
 html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=chip],[data-ui=segment],[data-ui=menu]){align-items:center;justify-content:center}
 :where(html#dlight-ui[data-ui-system] [data-ui=button]){display:inline-flex}
+/* One control = one line. A label never wraps, so every button in a row keeps the size of its step
+   (--ui-h / --ui-small); a row that runs out of room wraps whole buttons, not their words. */
+html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=menu],[data-ui=chip]){white-space:nowrap;overflow-wrap:normal!important;word-break:normal!important}
+/* A flex/grid parent may not squeeze a one-line label: the button stays as wide as its words
+   (never wider than its container), and the row wraps instead. */
+html#dlight-ui[data-ui-system] [data-ui=button]{min-width:auto}
+/* Legacy .btn clipped with overflow:hidden, which let a parent squeeze it below its label; clip keeps
+   the same edge without that. */
+html#dlight-ui[data-ui-system] .btn[data-ui=button]{overflow:clip}
+/* Record rows built on <button> (a title and a subtitle) and links to records (crumbs, titles) are not commands: their text wraps. */
+html#dlight-ui[data-ui-system] :is(.catalog-table .catalog-record-link,.related-record-link,.action-row,.pw-link-row,.map-task-body,.crumb[data-ui=button],:is(h1,h2,h3,h4,h5)>[data-ui=button]){white-space:normal;overflow-wrap:anywhere!important}
+/* Action rows of dialogs and cards (layout measured in application-design-system.js): every command is
+   as wide as the longest label of the row. On a phone the commands share the row in equal parts when
+   all labels fit ([data-ui-actions=row]) or stand one per line ([data-ui-actions=stack]) — never a
+   third width, never a taller button. */
+html#dlight-ui[data-ui-system] [data-ui-actions]>[data-ui=button]{min-width:min(var(--ui-action-w),100%)!important}
+html#dlight-ui[data-ui-system] .entity-editor-footer>.row[data-ui-actions]{align-self:stretch}
+@media(max-width:760px){
+  html#dlight-ui[data-ui-system] [data-ui-actions]{flex-wrap:wrap}
+  html#dlight-ui[data-ui-system] .entity-editor-footer>.row[data-ui-actions]{display:flex}
+  html#dlight-ui[data-ui-system] [data-ui-actions]>.grow:not([data-ui]){display:none}
+  html#dlight-ui[data-ui-system] [data-ui-actions=row]>[data-ui=button]{flex:1 1 0!important}
+  html#dlight-ui[data-ui-system] [data-ui-actions=stack]>[data-ui=button]{flex:1 1 100%!important}
+}
+/* The vehicles toggle sits beside the layers button and keeps its height. */
+html#dlight-ui[data-ui-system] .map-tools>#vehBtn{min-height:var(--ui-h)!important}
 html#dlight-ui[data-ui-system] [data-ui-size=s][data-ui=button]{min-height:var(--ui-small)!important;padding:var(--ui-small-py) 12px!important;font-size:var(--ui-small-font)!important;line-height:var(--ui-small-line)!important}
 html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=chip],[data-ui=segment],[data-ui=tab])::before,
 html#dlight-ui[data-ui-system] :is([data-ui=button],[data-ui=icon],[data-ui=segment],[data-ui=tab])::after{content:none!important}

@@ -10,7 +10,9 @@ const ORDER_STATUS={draft:'черновик',assigned:'назначено',in_pr
 const num=v=>{const n=Number(v);return Number.isFinite(n)?String(Math.round(n*100)/100).replace('.',','):'—';};
 const dateText=v=>{if(!v)return '';const d=new Date(String(v).length<=10?v+'T12:00:00':v);return Number.isNaN(d.getTime())?String(v):d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});};
 const dayKey=v=>String(v||'').slice(0,10);
-const serviceText=f=>!f?'—':f.days<0?'просрочено '+(-f.days)+' дн':f.days===0?'сегодня':dateText(f.dueDate)+(f.state==='soon'?' · через '+f.days+' дн':'')+(f.src==='estimate'?' (оценка по сменам)':'');
+const serviceText=f=>{if(!f)return '—';const when=f.days==null?'':f.days<0?'просрочено '+(-f.days)+' дн':f.days===0?'сегодня':dateText(f.dueDate)+(f.state==='soon'?' · через '+f.days+' дн':'');
+ const what=[f.level?.name,f.dueHours!=null?'при '+Math.round(f.dueHours)+' мч':''].filter(Boolean).join(' ');
+ return [what,when].filter(Boolean).join(' · ')+(f.byCalendar?' (по сроку)':f.src==='estimate'?' (оценка по сменам)':f.src==='shift'?' (темп по сменам)':'');};
 
 export function createReferenceDirectory(ctx){
  const {esc,$,renderCatalogTable}=ctx;
@@ -113,19 +115,19 @@ export function createReferenceDirectory(ctx){
  async function openEquipmentCard(id){
   const e=equipment().find(x=>x.id===id);if(!e)return;
   eqCardId=id;
-  const p=(ctx.points()||[]).find(x=>x.id===e.client_id),c=customerOf(p),w=warrantyUntil(e),model=(ctx.models()||[]).find(m=>m.id===e.model_id);
+  const p=(ctx.points()||[]).find(x=>x.id===e.client_id),c=customerOf(p),w=warrantyUntil(e),model=(ctx.models()||[]).find(m=>m.id===e.model_id),f=ctx.forecast(e);
   $('eqCardTitle').textContent=e.model||'Техника';
   $('eqCardFacts').innerHTML=[
    ['Серийный номер',e.serial||'—'],['Тип',e.kind||model?.kind||'—'],
    ['Точка',p?'<button type="button" class="ref-link inline" data-eqcard-point="'+esc(p.id)+'">'+esc(p.name)+'</button>':'—',true],
    ['Клиент',c?'<button type="button" class="ref-link inline" data-eqcard-customer="'+esc(c.id)+'">'+esc(c.name)+'</button>':'без клиента',!!c],
    ['Установлена',dateText(e.installed_on)||'—'],['Гарантия до',dateText(w)||'—'],
-   ['Следующее ТО',serviceText(ctx.forecast(e))],['Последнее ТО',dateText(e.last_service)||'не было'],['Последний визит',dateText(e.last_visit)||'—'],
-   ['Интервал ТО',model?.service_interval_hours?num(model.service_interval_hours)+' моточасов':'—']
+   ['Следующее ТО',serviceText(f)],['Моточасы',f?.nowMh!=null?'≈ '+num(Math.round(f.nowMh))+' мч':'замеров нет'],['Последнее ТО',dateText(e.last_service)||'не было'],['Последний визит',dateText(e.last_visit)||'—'],
+   ['План ТО',f?.plan?.length?f.plan.map(l=>l.name+' · '+num(l.interval_hours)+' мч'+(l.interval_months?' / '+l.interval_months+' мес':'')).join(', '):'не задан']
   ].map(([k,v,html])=>'<div><dt>'+esc(k)+'</dt><dd>'+(html?v:esc(v))+'</dd></div>').join('');
   $('eqCardFacts').querySelector('[data-eqcard-point]')?.addEventListener('click',()=>{closeEquipmentCard();ctx.openPoint(p.id);});
   $('eqCardFacts').querySelector('[data-eqcard-customer]')?.addEventListener('click',()=>{closeEquipmentCard();openCustomer(c.id);});
-  $('eqCardEdit').hidden=!ctx.canWrite();
+  $('eqCardEdit').hidden=!ctx.canWrite();$('eqCardJob').hidden=!ctx.canWrite()||!f;
   $('eqCardHistory').innerHTML='<p class="hint" role="status">Загружаем историю…</p>';
   $('eqCardOverlay').classList.add('on');
   await paintHistory(e);
@@ -139,7 +141,7 @@ export function createReferenceDirectory(ctx){
   const [orders,visits,readings]=await Promise.all([
    ids.length?sb.from('service_orders').select('id,number,status,date_from,date_to,job_id,service_order_items(id,kind,title,unit,planned_qty,done_qty,request_finance_void_event_id)').in('job_id',ids):{data:[]},
    ids.length?sb.from('job_visits').select('job_id,started_at,ended_at').in('job_id',ids):{data:[]},
-   sb.from('equipment_readings').select('taken_on,moto_hours,kind,note,job_id').eq('equipment_id',e.id)
+   sb.from('equipment_readings').select('taken_on,moto_hours,kind,note,job_id,maintenance_level_id').eq('equipment_id',e.id)
   ]);
   for(const r of [orders,visits,readings])if(r.error)throw r.error;
   return {jobs,orders:orders.data||[],visits:visits.data||[],readings:readings.data||[]};
@@ -157,6 +159,7 @@ export function createReferenceDirectory(ctx){
   for(const r of readings.filter(r=>!r.job_id||!jobs.some(j=>j.id===r.job_id)))entries.push({kind:'reading',when:dayKey(r.taken_on),reading:r});
   return entries.sort((a,b)=>String(b.when).localeCompare(String(a.when)));
  }
+ const readingTitle=r=>r.kind==='service'?(ctx.levelName?.(r.maintenance_level_id)||'ТО')+' · '+num(r.moto_hours)+' мч':'Замер моточасов: '+num(r.moto_hours);
  function qtyText(i){const done=Number(i.done_qty)||0,plan=Number(i.planned_qty)||0,unit=i.unit||'';return done>0?num(done)+(plan&&plan!==done?' из '+num(plan):'')+' '+unit:'план '+num(plan)+' '+unit;}
  async function paintHistory(e){
   const token=++historyToken,box=$('eqCardHistory');
@@ -165,7 +168,7 @@ export function createReferenceDirectory(ctx){
   const entries=historyEntries(data);
   if(!entries.length){box.innerHTML='<p class="hint">Заявок и замеров по этой технике пока нет.</p>';return;}
   box.innerHTML='<ol class="eq-history">'+entries.map(x=>{
-   if(x.kind==='reading')return '<li class="eq-history-item is-reading"><time datetime="'+esc(x.when)+'">'+esc(dateText(x.when))+'</time><div><b>Замер моточасов: '+esc(num(x.reading.moto_hours))+'</b>'+(x.reading.note?'<p>'+esc(x.reading.note)+'</p>':'')+'</div></li>';
+   if(x.kind==='reading')return '<li class="eq-history-item is-reading'+(x.reading.kind==='service'?' is-service':'')+'"><time datetime="'+esc(x.when)+'">'+esc(dateText(x.when))+'</time><div><b>'+esc(readingTitle(x.reading))+'</b>'+(x.reading.note?'<p>'+esc(x.reading.note)+'</p>':'')+'</div></li>';
    const j=x.job,label='Заявка'+(j.number?' №'+j.number:''),status=STATUS[j.status]||j.status||'';
    const tasks=x.orders.map(o=>'Задание'+(o.number?' №'+o.number:'')+' · '+(ORDER_STATUS[o.status]||o.status)).join(', ');
    const list=(title,rows)=>rows.length?'<div class="eq-history-group"><span>'+title+'</span><ul>'+rows.map(i=>'<li>'+esc(i.title)+' <small>'+esc(qtyText(i))+'</small></li>').join('')+'</ul></div>':'';
@@ -174,7 +177,7 @@ export function createReferenceDirectory(ctx){
     +(tasks?'<p class="hint">'+esc(tasks)+(x.visits?' · '+x.visits+' '+ctx.plural(x.visits,'визит','визита','визитов'):'')+'</p>':'')
     +(j.notes?'<p>'+esc(j.notes)+'</p>':'')
     +list('Работы',x.works)+list('Запчасти и материалы',x.parts)
-    +x.readings.map(r=>'<p class="hint">Моточасы: '+esc(num(r.moto_hours))+(r.taken_on?' · '+esc(dateText(r.taken_on)):'')+'</p>').join('')
+    +x.readings.map(r=>'<p class="hint">'+esc(readingTitle(r))+(r.taken_on?' · '+esc(dateText(r.taken_on)):'')+'</p>').join('')
     +'</div></li>';
   }).join('')+'</ol>';
   box.querySelectorAll('[data-eqhist-job]').forEach(b=>b.onclick=()=>{closeEquipmentCard();ctx.openJob(b.dataset.eqhistJob);});
@@ -206,6 +209,8 @@ export function createReferenceDirectory(ctx){
  $('custSearch')&&($('custSearch').oninput=renderCustomers);
  $('eqCardClose').onclick=closeEquipmentCard;
  $('eqCardEdit').onclick=()=>{const e=equipment().find(x=>x.id===eqCardId);if(!e)return;closeEquipmentCard();ctx.editEquipment(e.client_id,e.id);};
+ $('eqCardService').onclick=async()=>{const e=equipment().find(x=>x.id===eqCardId);if(!e)return;if(await ctx.recordService(e))openEquipmentCard(e.id);};
+ $('eqCardJob').onclick=()=>{const e=equipment().find(x=>x.id===eqCardId);if(!e)return;closeEquipmentCard();ctx.newMaintenanceJob(e.client_id,e.id);};
 
  return {loadCustomers,ensureCustomers,renderCustomers,openCustomer,deleteCustomer,openEquipmentCard,customerOptions,resolveCustomer,warrantyUntil,customers:()=>customers,historyEntries};
 }

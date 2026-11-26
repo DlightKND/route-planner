@@ -45,10 +45,12 @@ export function customerSummary({ jobs = [], orders = [], visits = [], equipment
   };
 }
 export function serviceLabel(f) {
-  if (!f) return { text: 'нет интервала', state: 'unknown' };
-  if (f.days < 0) return { text: 'просрочено ' + (-f.days) + ' дн', state: 'overdue' };
-  if (f.days === 0) return { text: 'сегодня', state: 'soon' };
-  return { text: metaDate(f.dueDate) + (f.state === 'soon' ? ' · через ' + f.days + ' дн' : ''), state: f.state };
+  if (!f) return { text: 'нет плана ТО', state: 'unknown' };
+  const level = f.level?.id ? f.level.name + ' · ' : '';
+  if (f.days == null) return { text: level + 'нет данных', state: 'unknown' };
+  if (f.days < 0) return { text: level + 'просрочено ' + (-f.days) + ' дн', state: 'overdue' };
+  if (f.days === 0) return { text: level + 'сегодня', state: 'soon' };
+  return { text: level + metaDate(f.dueDate) + (f.state === 'soon' ? ' · через ' + f.days + ' дн' : ''), state: f.state };
 }
 
 export function createCustomerPage(ctx) {
@@ -198,7 +200,7 @@ export function createCustomerPage(ctx) {
         { key: 'next', label: 'Следующее ТО', type: 'date', value: e => e.next, render: e => `<span class="customer-service" data-state="${e.nextState}">${esc(e.nextText)}</span>` },
         { key: 'service', label: 'Последнее ТО', type: 'date', value: e => e.last_service || null, render: e => e.last_service ? esc(metaDate(e.last_service)) : '<span class="hint">не было</span>' },
         { key: 'warranty', label: 'Гарантия до', type: 'date', value: e => e.warranty || null, render: e => e.warranty ? esc(metaDate(e.warranty)) : '—' }
-      ], actions: [{ attribute: 'data-ce-open', label: 'Карточка и сервисная история', run: id => ctx.openEquipmentCard(id) }, ...(ctx.canCreateJob() ? [{ attribute: 'data-ce-job', label: 'Заявка на ТО', run: id => { const e = equipment().find(x => x.id === id); if (e) ctx.newJob(e.client_id, e.id); } }] : [])] });
+      ], actions: [{ attribute: 'data-ce-open', label: 'Карточка и сервисная история', run: id => ctx.openEquipmentCard(id) }, ...(ctx.canCreateJob() ? [{ attribute: 'data-ce-job', label: 'Заявка на ТО', run: id => { const e = equipment().find(x => x.id === id); if (e) ctx.newMaintenanceJob(e.client_id, e.id); } }] : [])] });
     $('customerAddEquipment') && ($('customerAddEquipment').onclick = async () => { const id = await pickPoint('Куда добавить технику?'); if (id) ctx.openPointEquipment(id); });
   }
 

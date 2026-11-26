@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ maintenanceJourney = false, depotJourney = false, role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false, remainderJourney = false, mapWork = false, directoryJourney = false } = {}) {
+export function installMockBackend({ maintenancePlanJourney = false, maintenanceJourney = false, depotJourney = false, role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false, remainderJourney = false, mapWork = false, directoryJourney = false } = {}) {
   if(managerJourney){financeJourney=true;entityAudit=true;}
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
@@ -611,6 +611,17 @@ export function installMockBackend({ maintenanceJourney = false, depotJourney = 
     // The whole trip was planned for last week and is still not started; one stop lost its task.
     for(const g of plannerGroups){g.parts=g.parts.map(p=>({...p,date:'2026-10-02'}));g.auto_parts=structuredClone(g.parts);if(g.kind==='road')g.route_stale=true;}
   }
+  if(maintenancePlanJourney){
+    // План ТО модели: ТО-1 каждые 250 мч, ТО-2 — 500, ТО-3 — 1000 или раз в 24 месяца.
+    tables.maintenance_levels=[
+      {id:'level-1',model_id:'model-a',name:'ТО-1',interval_hours:250,interval_months:null,works:[{work_id:work.id,name:work.name}],materials:[{stock_id:'stock-a',name:'Уплотнение насоса',unit:'шт',qty:2}],notes:null},
+      {id:'level-2',model_id:'model-a',name:'ТО-2',interval_hours:500,interval_months:12,works:[],materials:[],notes:null},
+      {id:'level-3',model_id:'model-a',name:'ТО-3',interval_hours:1000,interval_months:24,works:[],materials:[],notes:null}];
+    tables.equipment=[{...equipment,model_id:'model-a',serial:'4471-22',last_service:'2026-08-01'}];
+    tables.equipment_readings=[{id:'svc-1',equipment_id:equipment.id,taken_on:'2026-08-01',moto_hours:980,kind:'service',maintenance_level_id:'level-3',job_id:null,created_by:engineer},
+      {id:'rd-1',equipment_id:equipment.id,taken_on:'2026-09-20',moto_hours:1200,kind:'reading',job_id:null,created_by:engineer}];
+    audit.maintenanceWrites=[];audit.serviceWrites=[];
+  }
   const plannerReceipts=new Map();audit.plannerWrites=[];tables.planner_layout_history=[];
   if(canonicalPlanner==='historical'){task.status='completed';ride.status='done';}
   if(canonicalPlanner){
@@ -734,6 +745,15 @@ export function installMockBackend({ maintenanceJourney = false, depotJourney = 
             },
           };
         };
+      if(maintenancePlanJourney&&table==='maintenance_levels'){
+        const chain=(method,values)=>{const filters=[];const c={eq(k,v){filters.push(r=>r[k]===v);return c;},in(k,v){filters.push(r=>v.includes(r[k]));return c;},select(){return c;},single(){return c;},
+          then(a,z){if(!['admin','logist'].includes(role))return Promise.resolve(reject('maintenance_levels.'+method)).then(a,z);
+            const list=tables.maintenance_levels;
+            if(method==='insert'){const row={id:'level-'+crypto.randomUUID().slice(0,8),...structuredClone(values)};list.push(row);}
+            else{const hit=list.filter(r=>filters.every(f=>f(r)));if(method==='delete')hit.forEach(r=>list.splice(list.indexOf(r),1));else hit.forEach(r=>Object.assign(r,structuredClone(values)));}
+            audit.maintenanceWrites.push({method,values:structuredClone(values??null)});return Promise.resolve({data:null,error:null}).then(a,z);}};return c;};
+        b.insert=values=>chain('insert',values);b.update=values=>chain('update',values);b.delete=()=>chain('delete');
+      }
       // Справочник: клиенты пишутся целиком, у точки — только привязка к клиенту.
       if(directoryJourney&&(table==='customers'||table==='clients')){
         const write=(method,values)=>{const ok=(v)=>({data:v,error:null});
@@ -776,6 +796,16 @@ export function installMockBackend({ maintenanceJourney = false, depotJourney = 
     },
     async rpc(name,args={}) {
       audit.reads.push("rpc:" + name);
+      if(maintenancePlanJourney&&name==='record_equipment_service'){
+        audit.serviceWrites.push(structuredClone(args));
+        const prev=tables.equipment_readings.filter(r=>r.equipment_id===args.p_equipment&&r.taken_on<=args.p_date).at(-1);
+        if(prev&&args.p_moto_hours<prev.moto_hours)return {data:null,error:{message:'Моточасы '+args.p_moto_hours+' меньше прошлого замера ('+prev.moto_hours+')'}};
+        tables.equipment_readings=tables.equipment_readings.filter(r=>!(r.equipment_id===args.p_equipment&&r.taken_on===args.p_date));
+        tables.equipment_readings.push({id:'svc-'+crypto.randomUUID().slice(0,8),equipment_id:args.p_equipment,taken_on:args.p_date,moto_hours:args.p_moto_hours,kind:'service',maintenance_level_id:args.p_level,job_id:args.p_job,note:args.p_note,created_by:engineer});
+        tables.equipment_readings.sort((a,b)=>a.taken_on.localeCompare(b.taken_on));
+        const eq=tables.equipment.find(e=>e.id===args.p_equipment);if(eq&&(!eq.last_service||args.p_date>eq.last_service))eq.last_service=args.p_date;
+        return {data:'svc',error:null};
+      }
       if(directoryJourney&&name==='soft_delete_customer'){const busy=tables.clients.filter(c=>c.customer_id===args.p_id&&!c.deleted_at).length;if(busy)return {data:null,error:{message:'У клиента есть точки ('+busy+')'}};const row=tables.customers.find(c=>c.id===args.p_id);if(!row)return {data:null,error:{message:'Клиент не найден'}};row.deleted_at='2026-10-05T07:00:00Z';audit.directoryWrites.push({table:'customers',method:'soft_delete',id:args.p_id});return {data:row.deleted_at,error:null};}
       if(name==='entity_finance_read'){
         if(!scopedFinanceJourney)return {data:null,error:{code:'PGRST202',message:'RPC unavailable'}};

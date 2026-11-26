@@ -31,7 +31,8 @@ import './service-orders.css';
 import { createServiceOrders } from './service-orders.js';
 import { mountEntityActivity } from './entity-activity.js';
 import {mountEntityActions,openEntityPanel,entityFieldValue} from './entity-actions.js';
-import {serviceForecast} from './core/equipment-service.js';
+import {serviceForecast,planLevels} from './core/equipment-service.js';
+import {createMaintenancePlanEditor,planSummary} from './maintenance-plan.js';
 import {createCustomerPage} from './customer-page.js';
 import { mountEntityResponsibility } from './entity-responsibility.js';
 import { loadEntityPeople } from './entity-people.js';
@@ -44,6 +45,7 @@ import './operations-design.css';
 import { installOperationsUI } from './operations-ui.js';
 import './workspace-ui.css';
 import './customer-page.css';
+import './maintenance-plan.css';
 import {renderCatalogTable} from './catalog-table.js';
 import './catalog-table.css';
 import './review-workspaces.css';
@@ -83,7 +85,7 @@ import './planner-integration.css';
 import './mockup-v65.css';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,preparePhoto:shrinkImage,
- showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),onOrderViewChange:()=>routeSet(routeForView('order')),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,openJournalTrip,cardOrigin,returnToCard,recordTripResult:(trip,job)=>recordEntityResult('trip',trip,job),canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
+ showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),afterOrderResult:o=>afterOrderResult(o),onOrderViewChange:()=>routeSet(routeForView('order')),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,openJournalTrip,cardOrigin,returnToCard,recordTripResult:(trip,job)=>recordEntityResult('trip',trip,job),canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
  tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
  confirm:(message,options)=>confirmDialog(message,options),beforeOpen:async()=>await unassignedTracks.leave()&&await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});
 serviceOrders.init();
@@ -135,7 +137,7 @@ const plannerWorkspace=createPlannerWorkspace({host:()=>document.getElementById(
  profiles:()=>profilesList,settings:()=>appSettings,ensureRefs,notify,confirm:confirmDialog,
  plannerReason:async(changes,data,reason)=>{const rows=changes.map(g=>g.kind==='road'?data.trips.find(t=>t.id===g.trip_id):data.orders.find(o=>o.id===g.order_id));if(rows.some(delegatedOwnerIntervenes)){const detail=await askInterventionReason();return detail==null?null:reason+': '+detail;}return reason;},
  maintenancePlan:()=>maintenancePlan(),
- createMaintenanceJob:async(pointId,eqId)=>{ if(!await plannerWorkspace.leave())return; await openJob(null,pointId,eqId); },
+ createMaintenanceJob:async(pointId,eqId)=>{ if(!await plannerWorkspace.leave())return; await newMaintenanceJob(pointId,eqId); },
  editTripRoute:async id=>{if(!await plannerWorkspace.leave())return;await showTripOnMap(id,{editing:true,back:'#/schedule'});},
  openEntity:async(kind,id)=>{if(!await plannerWorkspace.leave())return;if(kind==='order')return serviceOrders.open(id);if(kind==='request')return openJob(id);return openTrip(id);},
  createOrder:()=>serviceOrders.open(null),openResult:id=>serviceOrders.openResult(id),tripAction,
@@ -1062,7 +1064,8 @@ const refDir=createReferenceDirectory({db:()=>sb,esc,$,renderCatalogTable,
   editEquipment:(pointId,eqId)=>{ window.openEquip(pointId); startEqEdit(eqId); },
   showPoint:async id=>{ if(await switchTab('map')) flyToClient(id,true); },
   openJob:id=>openJob(id), goMap:()=>switchTab('map'),
-  forecast:e=>eqService(e), stats:id=>clientStats[id]||null, openCustomerPage:id=>customerPage.open(id)});
+  forecast:e=>eqService(e), stats:id=>clientStats[id]||null, openCustomerPage:id=>customerPage.open(id),
+  recordService:e=>recordServiceDialog(e), levelName:id=>Object.values(maintLevels).flat().find(l=>l.id===id)?.name||null, newMaintenanceJob:(pointId,eqId)=>newMaintenanceJob(pointId,eqId)});
 // Страница клиента: вкладки обзора, точек, техники, заявок и реквизитов.
 const customerPage=createCustomerPage({db:()=>sb,esc,$,renderCatalogTable,
   points:()=>clients, eqByPoint:()=>eqByClient, customers:()=>refDir.customers(),
@@ -1074,7 +1077,8 @@ const customerPage=createCustomerPage({db:()=>sb,esc,$,renderCatalogTable,
   show:()=>switchTab('customer'), route:path=>routeSet(path), goCatalog:async()=>{ if(await switchTab('catalog')) catSub('customers'); },
   goMap:()=>switchTab('map'), openPoint:id=>window.editClient(id), openPointEquipment:id=>window.openEquip(id),
   showPoint:async id=>{ if(await switchTab('map')) flyToClient(id,true); },
-  openEquipmentCard:id=>refDir.openEquipmentCard(id), openJob:id=>openJob(id), newJob:(pointId,eqId)=>openJob(null,pointId,eqId||null)});
+  openEquipmentCard:id=>refDir.openEquipmentCard(id), openJob:id=>openJob(id), newJob:(pointId,eqId)=>openJob(null,pointId,eqId||null),
+  newMaintenanceJob:(pointId,eqId)=>newMaintenanceJob(pointId,eqId)});
 let catCur='customers';
 const CAT_SECTIONS={customers:['catCustomers','Клиенты'],models:['catModels','Модели техники'],works:['catWorks','Работы'],materials:['catMaterials','Материалы и цены']};
 function catSub(name){ if(!CAT_SECTIONS[name]) name='customers'; catCur=name; setCatalogWorkspace(name); if($('catalogTitle'))$('catalogTitle').textContent=CAT_SECTIONS[name][1]; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); for(const [key,[id]] of Object.entries(CAT_SECTIONS)) if($(id)) $(id).style.display=key===name?'':'none';
@@ -1530,7 +1534,7 @@ async function loadReadings(){ readingsByEq={}; try{ const {data,error}=await sb
   (data||[]).forEach(r=>{ (readingsByEq[r.equipment_id]=readingsByEq[r.equipment_id]||[]).push(r); }); }catch(e){ readingsByEq={}; loadFail('показания моточасов',e); } }
 
 function eqService(e){ const m=e.model_id?eqModels.find(x=>x.id==e.model_id):null;
-  return serviceForecast(e,{model:m,readings:readingsByEq[e.id]||[],peerReadings:(eqByClient[e.client_id]||[]).filter(x=>x.id!==e.id).map(x=>readingsByEq[x.id]||[]),shiftHours:appSettings.shift_hours,today:todayISO()}); }
+  return serviceForecast(e,{model:m,levels:m?maintLevels[m.id]||[]:[],readings:readingsByEq[e.id]||[],peerReadings:(eqByClient[e.client_id]||[]).filter(x=>x.id!==e.id).map(x=>readingsByEq[x.id]||[]),shiftHours:appSettings.shift_hours,today:todayISO()}); }
 // План ТО для «Рабочего обзора»: просроченное и ближайшие 30 дней, с открытой
 // заявкой по технике, если она уже есть.
 function maintenancePlan(){
@@ -1540,7 +1544,7 @@ function maintenancePlan(){
   return clients.filter(c=>!c.is_base&&!c.deleted_at).flatMap(c=>(eqByClient[c.id]||[]).filter(e=>!e.deleted_at).map(e=>{
     const f=eqService(e); if(!f||!['overdue','soon'].includes(f.state)) return null;
     const cust=c.customer_id?customers.find(x=>x.id===c.customer_id):null;
-    return {id:e.id,model:e.model||'Техника',serial:e.serial||'',point:c.name,pointId:c.id,customer:cust?.name||'',days:f.days,state:f.state,estimate:f.src==='estimate',job:open.get(e.id)||null};
+    return {id:e.id,model:e.model||'Техника',serial:e.serial||'',point:c.name,pointId:c.id,customer:cust?.name||'',days:f.days,state:f.state,estimate:f.src==='estimate',level:f.level?.id?f.level.name:'',dueHours:f.dueHours,job:open.get(e.id)||null};
   }).filter(Boolean)).sort((a,b)=>a.days-b.days);
 }
 function eqAlert(e){ const r={contact:false,service:false,any:false,reasons:[]};
@@ -2164,13 +2168,15 @@ function mhLine(e){ const rs=readingsByEq[e.id]||[]; const sv=eqService(e);
   return '<div class="m">'+bits.join(' · ')+'</div>'; }
 // Состояние ТО одной строкой: просрочено / скоро / в порядке.
 function eqStatus(e){ const sv=eqService(e); if(!sv) return null;
-  if(sv.rate>0&&sv.daysLeft!=null){ if(sv.daysLeft<=0) return {tone:'bad',text:'ТО просрочено'+(sv.daysLeft<0?' на '+Math.abs(sv.daysLeft)+' дн':'')};
-    if(sv.daysLeft<=14) return {tone:'warn',text:'ТО через '+sv.daysLeft+' дн'}; return {tone:'good',text:'в порядке · ТО через '+sv.daysLeft+' дн'}; }
-  if(sv.since>=sv.interval) return {tone:'bad',text:'ТО просрочено (оценка)'};
-  return {tone:'good',text:'ТО: ~'+Math.round(sv.since)+' из '+Math.round(sv.interval)+' мч'}; }
+  const what=sv.level?.name&&sv.level.name!=='ТО'?sv.level.name:'ТО', at=sv.dueHours!=null&&sv.rate>0?' при '+Math.round(sv.dueHours)+' мч':'';
+  if(sv.days!=null&&(sv.rate>0||sv.byCalendar)){ if(sv.days<=0) return {tone:'bad',text:what+at+' просрочено'+(sv.days<0?' на '+Math.abs(sv.days)+' дн':'')};
+    if(sv.days<=14) return {tone:'warn',text:what+at+' через '+sv.days+' дн'}; return {tone:'good',text:'в порядке · '+what+at+' через '+sv.days+' дн'}; }
+  if(sv.since!=null&&sv.since>=sv.interval) return {tone:'bad',text:what+' просрочено (оценка)'};
+  return {tone:'good',text:what+': ~'+Math.round(sv.since||0)+' из '+Math.round(sv.interval)+' мч'}; }
 function eqOpenJobs(e){ return eqClientJobs.filter(j=>j.equipment_id===e.id&&ACTIVE_JOB(j)); }
 function eqHistory(e){ const who=id=>{ const p=(profilesList||[]).find(x=>x.id===id); return p?personLabel(p):''; };
-  const ev=(readingsByEq[e.id]||[]).map(r=>({d:r.taken_on,t:(r.kind==='service'?'ТО · ':'Замер ')+Math.round(+r.moto_hours)+' мч',w:who(r.created_by)}));
+  const lvlName=id=>Object.values(maintLevels).flat().find(l=>l.id===id)?.name||'ТО';
+  const ev=(readingsByEq[e.id]||[]).map(r=>({d:r.taken_on,t:(r.kind==='service'?lvlName(r.maintenance_level_id)+' · ':'Замер ')+Math.round(+r.moto_hours)+' мч',w:who(r.created_by)}));
   eqClientJobs.filter(j=>j.equipment_id===e.id&&j.status==='done').forEach(j=>ev.push({d:j.scheduled_date||String(j.created_at||'').slice(0,10),t:'Визит · '+requestLabel(j,j.id),job:j.id}));
   if(e.last_service&&!ev.some(x=>x.d===e.last_service&&/^ТО/.test(x.t))) ev.push({d:e.last_service,t:'ТО'});
   return ev.filter(x=>x.d).sort((a,b)=>b.d.localeCompare(a.d)).slice(0,5); }
@@ -2189,11 +2195,53 @@ async function addReading(eqId){ const e=(eqByClient[eqClientId]||[]).find(x=>x.
 // Задание из неё создаётся обычным путём — в ленте «Задания» или в заявке.
 async function newMaintenanceJob(cid,eid){ if(!canWriteJob()) return; $('eqOverlay').classList.remove('on'); map.closePopup();
   await openJob(null,cid,eid); const e=(eqByClient[cid]||[]).find(x=>x.id===eid);
+  // Есть план ТО — работы и материалы уровня, который наступает.
+  const lvl=e?eqService(e)?.level:null;
+  if(lvl&&((lvl.works||[]).length||(lvl.materials||[]).length)){
+    const added=[];
+    for(const w of lvl.works||[]){ const cw=catalog.find(x=>x.id===w.work_id); if(cw&&$('jbWorkPick')&&!$('jbWorkPick').disabled){ $('jbWorkPick').value=cw.id; await $('jbWorkAdd').onclick(); added.push(cw.name); } }
+    for(const m of lvl.materials||[]){ partAdd({name:m.name,qty:+m.qty||1,unit:m.unit||''}); }
+    if($('jbNotes')&&!$('jbNotes').value.trim()){ $('jbNotes').value=lvl.name+(e.model?' · '+e.model:''); $('jbNotes').dispatchEvent(new window.Event('input',{bubbles:true})); }
+    showToast('Заявка на '+lvl.name+': '+[added.length?added.length+' '+plural(added.length,'работа','работы','работ'):'',(lvl.materials||[]).length?(lvl.materials.length+' '+plural(lvl.materials.length,'материал','материала','материалов')):''].filter(Boolean).join(' и ')+' из плана ТО');
+    return; }
   const fits=w=>!e||(w.model_ids?.length?w.model_ids.includes(e.model_id):(!w.applicable_kinds?.length||w.applicable_kinds.includes(e.kind)));
   const w=catalog.find(w=>w.is_maintenance&&fits(w))||catalog.find(w=>w.is_maintenance);
   if(w&&$('jbWorkPick')&&!$('jbWorkPick').disabled){ $('jbWorkPick').value=w.id; await $('jbWorkAdd').onclick(); showToast('Заявка на ТО: работа «'+w.name+'» добавлена'); }
   else notify('В справочнике нет работы с пометкой «ТО / сервис» — добавьте работу вручную.','warn'); }
 window.newMaintenanceJob=newMaintenanceJob;
+// Отметить проведённое ТО: моточасы по счётчику и уровень ТО. Следующее ТО
+// система считает от этих моточасов по плану ТО модели.
+async function recordServiceDialog(e,{jobId=null,title='Отметить ТО'}={}){
+  if(!e) return false;
+  const m=e.model_id?eqModels.find(x=>x.id==e.model_id):null, plan=planLevels(m,m?maintLevels[m.id]||[]:[]).filter(l=>l.id), f=eqService(e);
+  const rs=readingsByEq[e.id]||[], last=rs.length?rs[rs.length-1]:null, today=todayISO();
+  const fields=[{key:'d',type:'date',label:'Дата ТО',value:today,max:today,required:true},
+    {key:'mh',type:'number',inputmode:'decimal',min:0,required:true,label:'Моточасы по счётчику'+(last?' (прошлый замер: '+Math.round(+last.moto_hours)+' мч, '+shortDate(last.taken_on)+')':'')}];
+  if(plan.length) fields.push({key:'level',type:'select',label:'Уровень ТО',value:f?.level?.id||plan[0].id,options:plan.map(l=>({value:l.id,label:l.name+' · каждые '+Number(l.interval_hours)+' мч'}))});
+  fields.push({key:'note',label:'Заметка (необязательно)',value:''});
+  const r=await promptDialog(title+' · '+(e.model||'техника'),fields,{okText:'Отметить ТО'}); if(!r) return false;
+  const mh=parseFloat(String(r.mh).replace(',','.')); if(!(mh>=0)){ notify('Введите моточасы числом.','err'); return false; }
+  const {error}=await sb.rpc('record_equipment_service',{p_equipment:e.id,p_date:r.d||today,p_moto_hours:mh,p_level:r.level||null,p_job:jobId,p_note:(r.note||'').trim()||null});
+  if(error){ notify('ТО не отмечено: '+error.message,'err'); return false; }
+  if(!e.last_service||(r.d||today)>e.last_service) e.last_service=r.d||today;
+  await loadReadings(); render(); customerPage.refresh();
+  const next=eqService(e);
+  showToast('ТО отмечено'+(next?.dueHours!=null?' · следующее '+(next.level?.name||'ТО')+' при '+Math.round(next.dueHours)+' мч':''));
+  return true;
+}
+window.recordServiceDialog=recordServiceDialog;
+// Отчёт по заданию с работой «ТО» принят или передан — сразу просим моточасы,
+// чтобы следующее ТО считалось от них.
+async function afterOrderResult(o){
+  try{
+    const items=(o?.service_order_items||[]).filter(i=>i.kind==='work'&&!i.request_finance_void_event_id);
+    const maint=items.some(i=>catalog.find(w=>w.id===i.work_catalog_id)?.is_maintenance||/(^|\s)ТО(\b|-|\s|$)/.test(String(i.title||'')));
+    if(!maint||!o.job_id) return;
+    const {data,error}=await sb.from('jobs').select('equipment_id').eq('id',o.job_id).maybeSingle(); if(error) throw error;
+    const e=Object.values(eqByClient).flat().find(x=>x.id===data?.equipment_id); if(!e) return;
+    await recordServiceDialog(e,{jobId:o.job_id,title:'ТО выполнено — отметьте моточасы'});
+  }catch(err){ console.warn('Отметка ТО после отчёта не открылась:',err); }
+}
 function renderEqList(){ const box=$('eqList'); const list=eqByClient[eqClientId]||[]; const c=clients.find(x=>x.id===eqClientId);
   $('eqSummary').textContent=(c?c.name+' · ':'')+countWord(list.length,'единица','единицы','единиц');
   box.innerHTML=list.length?'':'<div class="hint">Техники пока нет.</div>';
@@ -2203,10 +2251,11 @@ function renderEqList(){ const box=$('eqList'); const list=eqByClient[eqClientId
     d.innerHTML='<div class="eq-card-head"><h4>'+esc(e.model)+(e.kind?' <span class="eq-kind">· '+esc(e.kind)+'</span>':'')+'</h4>'+(canWrite()?'<details class="eq-more"><summary class="btn" aria-label="Ещё действия: '+esc(e.model)+'"><span aria-hidden="true">⋯</span></summary><div class="eq-menu"><button type="button" class="btn ghost" data-eqedit="'+e.id+'">Редактировать</button><button type="button" class="btn ghost red" data-eqdel="'+e.id+'">Удалить технику</button></div></details>':'')+(st?'<span class="eq-state '+st.tone+'">'+esc(st.text)+'</span>':'')+'</div>'
       +'<div class="m">'+[e.serial?'S/N '+esc(e.serial):'',e.installed_on?'уст. '+esc(e.installed_on):'',warrantyBadge(e)].filter(Boolean).join(' · ')+'</div>'
       +(e.notes?'<div class="m">'+esc(e.notes)+'</div>':'')+mhLine(e)
-      +'<div class="eq-card-acts"><button type="button" class="btn" data-mhr="'+e.id+'">+ замер</button>'+work+'</div>'
+      +'<div class="eq-card-acts"><button type="button" class="btn" data-mhr="'+e.id+'">+ замер</button><button type="button" class="btn" data-eqsvc="'+e.id+'">Отметить ТО</button>'+work+'</div>'
       +(hist.length?'<details class="eq-history"><summary>История</summary><ol>'+hist.map(h=>'<li><span class="d">'+esc(shortDate(h.d))+'</span><span class="t">'+(h.job?'<button type="button" class="link" data-eqjob="'+esc(h.job)+'">'+esc(h.t)+'</button>':esc(h.t))+'</span><span class="w">'+esc(h.w||'')+'</span></li>').join('')+'</ol></details>':'');
     box.appendChild(d); });
   box.querySelectorAll('[data-mhr]').forEach(b=>b.onclick=()=>addReading(b.dataset.mhr));
+  box.querySelectorAll('[data-eqsvc]').forEach(b=>b.onclick=async()=>{ const e=list.find(x=>x.id===b.dataset.eqsvc); if(e&&await recordServiceDialog(e)) renderEqList(); });
   box.querySelectorAll('[data-eqto]').forEach(b=>b.onclick=()=>newMaintenanceJob(eqClientId,b.dataset.eqto));
   box.querySelectorAll('[data-eqjob]').forEach(b=>b.onclick=()=>{ $('eqOverlay').classList.remove('on'); openJob(b.dataset.eqjob); });
   box.querySelectorAll('[data-eqedit]').forEach(b=>b.onclick=()=>startEqEdit(b.dataset.eqedit));
@@ -2239,10 +2288,14 @@ async function delEq(id){ const e=Object.values(eqByClient).flat().find(x=>x.id=
 async function reloadEquip(){ const { data }=await sb.from('equipment').select('*').is('deleted_at',null).order('created_at'); eqByClient={}; (data||[]).forEach(e=>{ (eqByClient[e.client_id]=eqByClient[e.client_id]||[]).push(e); }); await loadReadings(); renderEqList(); render(); }
 
 let eqModelsError=null;
-async function loadEqModels(){try{const {data,error}=await sb.from('equipment_models').select('*').order('manufacturer');if(error)throw error;eqModels=data||[];eqModelsError=null;populateEqModelSelect();}catch(e){eqModelsError=e;loadFail('модели техники',e);}}
+async function loadEqModels(){try{const {data,error}=await sb.from('equipment_models').select('*').order('manufacturer');if(error)throw error;eqModels=data||[];eqModelsError=null;populateEqModelSelect();}catch(e){eqModelsError=e;loadFail('модели техники',e);}
+  await loadMaintLevels();}
+// План ТО моделей: уровни по моточасам с работами и материалами.
+let maintLevels={};
+async function loadMaintLevels(){ try{ const {data,error}=await sb.from('maintenance_levels').select('*').order('interval_hours'); if(error) throw error; maintLevels={}; (data||[]).forEach(l=>{ (maintLevels[l.model_id]=maintLevels[l.model_id]||[]).push(l); }); }catch(e){ maintLevels={}; console.warn('План ТО не загрузился:',e); } }
 function emLabel(m){ return ((m.manufacturer?m.manufacturer+' ':'')+m.model).trim(); }
 function populateEqModelSelect(){ const sel=$('eqModelId'); if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="">— без модели из справочника —</option>'+eqModels.map(m=>'<option value="'+m.id+'">'+esc(emLabel(m))+'</option>').join(''); sel.value=cur; }
-function renderEqModels(){ const box=$('emList'); if(!box) return;if(eqModelsError){listLoadError(box,eqModelsError,async()=>{await loadEqModels();renderEqModels();});return;} const q=$('emSearch')?$('emSearch').value.trim().toLowerCase():'';
+function renderEqModels(){ const box=$('emList'); if(!box) return; if(!stockCatalog.length) void loadStockCatalog(); if(!catalog.length) void loadCatalog();if(eqModelsError){listLoadError(box,eqModelsError,async()=>{await loadEqModels();renderEqModels();});return;} const q=$('emSearch')?$('emSearch').value.trim().toLowerCase():'';
   const manus=[...new Set(eqModels.map(m=>m.manufacturer).filter(Boolean))].sort();
   const kinds=[...new Set(eqModels.map(m=>m.kind).filter(Boolean))].sort();
   if($('emManuList')) $('emManuList').innerHTML=manus.map(x=>'<option value="'+esc(x)+'">').join('');
@@ -2253,8 +2306,19 @@ function renderEqModels(){ const box=$('emList'); if(!box) return;if(eqModelsErr
     {key:'kind',label:'Тип техники',value:m=>m.kind||null},
     {key:'model',label:'Модель',value:m=>m.model,render:m=>'<button type="button" class="catalog-record-link" data-emedit="'+esc(m.id)+'">'+esc(m.model)+'</button>'},
     {key:'warranty',label:'Гарантия, мес',type:'number',value:m=>m.warranty_months},
-    {key:'service',label:'ТО, моточасы',type:'number',value:m=>m.service_interval_hours}
-  ],actions:[{attribute:'data-emedit',label:'Редактировать',run:editEqModel},{attribute:'data-emdel',label:'Удалить модель',danger:true,run:delEqModel}]}); }
+    {key:'service',label:'ТО, моточасы',type:'number',value:m=>maintLevels[m.id]?.length?Math.min(...maintLevels[m.id].map(l=>l.interval_hours)):m.service_interval_hours},
+    {key:'plan',label:'План ТО',value:m=>planSummary(maintLevels[m.id],m)||null,render:m=>{ const t=planSummary(maintLevels[m.id],m); return '<button type="button" class="catalog-record-link mp-open" data-emplan="'+esc(m.id)+'">'+(t?esc(t):'<span class="hint">задать план</span>')+'</button>'; }}
+  ],actions:[{attribute:'data-emedit',label:'Редактировать',run:editEqModel},{attribute:'data-emplan',label:'План ТО',run:id=>planEditor.open(eqModels.find(m=>m.id===id),document.activeElement)},{attribute:'data-emdel',label:'Удалить модель',danger:true,run:delEqModel}]}); }
+// План ТО модели: уровни заменяются целиком — удалённые удаляются, остальные пишутся по id.
+const planEditor=createMaintenancePlanEditor({esc,works:()=>catalog,stock:()=>stockCatalog,levels:id=>maintLevels[id]||[],label:emLabel,confirm:confirmDialog,
+  save:async(modelId,levels)=>{
+    const before=maintLevels[modelId]||[],keep=new Set(levels.map(l=>l.id).filter(Boolean)),gone=before.filter(l=>!keep.has(l.id)).map(l=>l.id);
+    if(gone.length){ const {error}=await sb.from('maintenance_levels').delete().in('id',gone); if(error) throw error; }
+    for(const l of levels){ const rec={model_id:modelId,name:l.name,interval_hours:l.interval_hours,interval_months:l.interval_months,works:l.works,materials:l.materials,notes:l.notes,updated_at:new Date().toISOString()};
+      const {error}=l.id?await sb.from('maintenance_levels').update(rec).eq('id',l.id):await sb.from('maintenance_levels').insert(rec); if(error) throw error; }
+    await loadMaintLevels();
+  },
+  saved:()=>{ renderEqModels(); render(); customerPage.refresh(); showToast('План ТО сохранён'); }});
 
 function emReset(){ emEditId=null; $('emManu').value='';$('emKind').value='';$('emModel').value='';$('emWarr').value='';$('emInt').value='';$('emNotes').value='';$('emErr').textContent=''; $('emFormTitle').textContent='Добавить модель'; }
 $('emShowAdd').onclick=()=>{ emReset(); $('emForm').style.display=''; $('emManu').focus(); };
