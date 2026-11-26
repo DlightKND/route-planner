@@ -57,8 +57,12 @@ test('opens a draft from its task and creates the trip only on the first save',a
   expect(writes.at(-1)).toMatchObject({name:'trip_plan_save_tasks',args:{p_trip:null,p_order_ids:[fixtureIDs.order],p_reason:'Создание выезда',p_plan:{notes:'Первое заполнение'}}});
   await page.locator('#tripEditData').click();await expect(page.locator('#tpChangeReasonGroup')).toBeVisible();
   await expect(page.locator('#tpNotes')).toHaveValue('Первое заполнение');
-  await expect(page.locator('#tpSave')).toBeHidden();await page.locator('#tpNotes').fill('Изменение после первого сохранения');await page.locator('#tpSave').click();await expect(page.locator('#tripErr')).toContainText('причину');
+  const editor=page.getByRole('dialog',{name:'Изменить выезд'});await expect(editor.locator('#tpNotes')).toBeVisible();
+  await editor.locator('#tpNotes').fill('Изменение после первого сохранения');await editor.locator('[data-entity-save]').click();await expect(editor.getByRole('alert')).toContainText('причину');
   expect(await page.evaluate(()=>window.__visualQA.financeWrites.length)).toBe(writes.length);
+  await editor.locator('#tpChangeReason').fill('Уточнили заметку');await editor.locator('[data-entity-save]').click();await expect(editor).toHaveCount(0);
+  expect(await page.evaluate(()=>window.__visualQA.financeWrites.at(-1))).toMatchObject({name:'trip_plan_save_tasks',args:{p_reason:'Уточнили заметку',p_plan:{notes:'Изменение после первого сохранения'}}});
+  await expect(page.locator('#tpNotes')).toHaveValue('Изменение после первого сохранения');
 });
 
 test('confirming a new unfinished work shows its missing field and no historical correction error',async({page},info)=>{

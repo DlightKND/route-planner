@@ -1,5 +1,5 @@
 // Synthetic company. Never reuse real sessions, credentials, or customer data.
-export function installMockBackend({ role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false, remainderJourney = false, mapWork = false, directoryJourney = false } = {}) {
+export function installMockBackend({ depotJourney = false, role = "logist", theme = "light", legacyCrewMissing = false, unassignedJourney = false, unassignedCount = 1, preserveRanges = false, scheduleJourney = false, tinySchedulePiece = false, roadSliverJourney = false, lateScheduleCut = false, signedOut = false, financeJourney = false, entityAudit = false, entityJourney = false, presenceRecoveryJourney = false, unifiedJournalJourney = false, decisionQueue = false, reviewOrder = false, designTripChoices = false, mapTrackDesign = false, summaryOrphans = false, runningSchedule = false, managerJourney = false, canonicalPlanner = false, staffDayDelay = 0, staffDayFailures = 0, catalogueJourney = false, remainderJourney = false, mapWork = false, directoryJourney = false } = {}) {
   if(managerJourney){financeJourney=true;entityAudit=true;}
   const manager = "00000000-0000-4000-8000-000000000001",
     engineer = "00000000-0000-4000-8000-000000000002",
@@ -229,7 +229,7 @@ export function installMockBackend({ role = "logist", theme = "light", legacyCre
     settings: [settings],
     settings_public: [settings],
     customers: [{id:'customer-a',name:'Коммунальное предприятие',legal_name:'КП «Водоканал»',tax_id:'12345678',phone:'+00000000000',email:'',contact_person:'Дежурный диспетчер',notes:'',deleted_at:null}],
-    clients: [client],
+    clients: [client,...(depotJourney?[{id:'depot-a',name:'Депо Харьков',is_base:true,lat:50.02,lng:36.3,phone:'+00000000001',address:'Склад, демонстрационный адрес',description:'Основная база',customer_id:null,deleted_at:null}]:[])],
     equipment: [equipment],
     work_catalog: [work],
     equipment_models: [{id:"model-a", manufacturer:"Демонстрационный производитель", kind:"насос", model:"Сервисная насосная станция с длинным названием модели", warranty_months:24, service_interval_hours:1500}],

@@ -30,8 +30,8 @@ test('V16: chooses an existing assignment from the trip menu and writes only whe
  await expect(page.locator('#tpLinkedOrders')).toContainText('102');
  expect(await writes()).toEqual([]);
  await page.locator('#tpSave').click();
- await page.locator('#tpChangeReason').fill('Дополнительные работы по заявке');
- await page.locator('#tpSave').click();
+ await page.locator('#promptOverlay [data-pf=reason]').fill('Дополнительные работы по заявке');
+ await page.locator('#promptOverlay #promptYes').click();
  await expect.poll(writes).toEqual([expect.objectContaining({args:expect.objectContaining({p_trip:trip,p_order_ids:[order,'20000000-0000-4000-8000-000000000002']})})]);
  await clean(page,errors);
 });
@@ -225,7 +225,7 @@ test('M4: cancelling handoff keeps the plan; saving precedes handoff and uses th
 });
 
 test('M5: manager changes trip dates through plan save instead of sending a request',async({page},info)=>{
- const errors=await boot(page,info,{route:'trip/'+trip});await page.locator('#tripMore').click();await page.getByRole('dialog',{name:'Другие действия'}).getByRole('button',{name:/^(Изменить даты выезда|Запросить перенос)$/}).click();await expect(page.locator('#reschedOverlay')).toBeHidden();await page.locator('#tpFrom').fill('2026-10-12');await page.locator('#tpTo').fill('2026-10-13');await page.locator('#tpChangeReason').fill('Согласовали новые даты выезда');await page.locator('#tpSave').click();await expect.poll(()=>page.evaluate(()=>window.__visualQA.financeWrites.filter(w=>w.name==='trip_plan_save_tasks').length)).toBe(1);await expect(page.locator('#tpFrom')).toHaveValue('2026-10-12');const state=await page.evaluate(()=>window.__visualQA);expect(state.reads).not.toContain('rpc:trip_reschedule_request');expect(state.managerState.order.date_from).toBe('2026-10-05');expect(state.managerState.request.due_date).toBe('2026-10-09');await shot(page,info,'trip-dates-saved');await clean(page,errors);
+ const errors=await boot(page,info,{route:'trip/'+trip});await page.locator('#tripMore').click();await page.getByRole('dialog',{name:'Другие действия'}).getByRole('button',{name:/^(Изменить даты выезда|Запросить перенос)$/}).click();await expect(page.locator('#reschedOverlay')).toBeHidden();const editor=page.getByRole('dialog',{name:'Изменить выезд'});await expect(editor).toContainText('Сохранить изменения');await editor.locator('#tpFrom').fill('2026-10-12');await editor.locator('#tpTo').fill('2026-10-13');await editor.locator('#tpChangeReason').fill('Согласовали новые даты выезда');await editor.locator('[data-entity-save]').click();await expect(editor).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>window.__visualQA.financeWrites.filter(w=>w.name==='trip_plan_save_tasks').length)).toBe(1);await expect(page.locator('#tpFrom')).toHaveValue('2026-10-12');const state=await page.evaluate(()=>window.__visualQA);expect(state.reads).not.toContain('rpc:trip_reschedule_request');expect(state.managerState.order.date_from).toBe('2026-10-05');expect(state.managerState.request.due_date).toBe('2026-10-09');await shot(page,info,'trip-dates-saved');await clean(page,errors);
 });
 
 test('M3 M5: engineer proposes a deadline and requests trip rescheduling without manager planning rights',async({page},info)=>{

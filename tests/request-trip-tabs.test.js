@@ -22,10 +22,10 @@ function setup({writable=true}={}){
 }
 it('organizes the actual request DOM without dropping or duplicating financial and operational controls',()=>{
   const {get}=setup();
-  const groups={jobOverviewPane:['jbClient','jobActivity','jobPendingDecisions'],
+  const groups={jobOverviewPane:['jbClient','jbDue','jbNotes','jobActivity','jobPendingDecisions'],
     jobTasksPane:['jobOrders'],jobTripsPane:['jobLinkedTrips'],
     jobEstimatePane:['jobHeadEcon','jbWorks','jbParts','jbPartTotals'],
-    jobAuxiliary:['jbDue','jbNotes','jobResponsibilitySection','jbFixes','jbPhotoList']};
+    jobAuxiliary:['jobResponsibilitySection','jbFixes','jbPhotoList']};
   for(const [panel,ids] of Object.entries(groups))for(const id of ids){
     expect(get(panel).contains(get(id)),`${id} in ${panel}`).toBe(true);
     expect(get(panel).ownerDocument.querySelectorAll('#'+id)).toHaveLength(1);
@@ -142,16 +142,16 @@ it('reveals the actual invalid field when saving from a different request sectio
   expect(get('jobErr').textContent).toContain('у своей работы нет названия');
 });
 
-it('reveals trip validation in its own section before any write and keeps the unsaved plan',async()=>{
+it('asks for the plan change reason before any write and keeps the unsaved plan',async()=>{
   const {get,context,win}=setup();
   const start=app.indexOf('const tripTabs=createEntityTabs'),end=app.indexOf("document.querySelector('.view-trip')?.addEventListener",start);
   vm.runInContext(app.slice(start,end),context);
   const rpc=vi.fn();Object.assign(context,{curTripJobs:new Set(),routeAll:()=>[],vehicles:[],canWriteTrip:()=>true,
-    tripPresenceDirty:false,tripPlanDirty:true,tripEditId:'trip-1',tripNewPlanId:null,tripGpsSource:null,seedTripFromOrders:()=>false,sb:{rpc},tripWorkbench:{stays:[]},readPresenceForm:()=>[]});
+    tripPresenceDirty:false,tripPlanDirty:true,tripEditId:'trip-1',tripNewPlanId:null,tripGpsSource:null,seedTripFromOrders:()=>false,sb:{rpc},tripWorkbench:{stays:[]},readPresenceForm:()=>[],promptDialog:vi.fn(async()=>null)});
   const saveStart=app.indexOf("$('tpSave').onclick=async"),saveEnd=app.indexOf('async function delTrip(',saveStart);
   vm.runInContext(app.slice(saveStart,saveEnd),context);
   get('tpNotes').value='Новый маршрут';get('tpTabEconomy').click();await get('tpSave').onclick();
-  expect(get('tpPlanPane').hidden).toBe(false);expect(win.document.activeElement).toBe(get('tpChangeReason'));
+  expect(context.promptDialog).toHaveBeenCalledTimes(1);expect(context.promptDialog.mock.calls[0][0]).toBe('Причина изменения плана');
   expect(get('tpChangeReason').closest('.wb-plan-card')).not.toBeNull();
   expect(get('tripErr').textContent).toContain('причину');expect(rpc).not.toHaveBeenCalled();
   expect(app).not.toContain('p_stays:presenceChanges');expect(get('tpNotes').value).toBe('Новый маршрут');expect(context.tripPlanDirty).toBe(true);
