@@ -8,7 +8,7 @@ export const UI_SELECTORS = {
   card: '.card,.kcard,.record-card,.notice-row,.staff-row,.stock-row,.emrow,.eqitem,.pt,.order-brief,.order-child,.trip-choice-card,.order-result-summary,.summary-quick-actions,.planwarn',
   popover: '#moreSheet,.pop,.map-pop,.gpop,.ctxmenu,.entity-actions-menu,.engineer-options,.planner-filter-panel,.dispatcher-menu,.info-hint-popover,.anchored-context-panel',
   badge: '.pill,.abadge,.design-status,.journal-recovery-badge,.journal-review-progress,.journal-result-badge,.journal-stop-state,.activity-type',
-  geometry: '.vg-block,.vg-piece,.vg-group,.vg-cut-handle,.vg-win-line,.leaflet-marker-icon,.leaflet-interactive,.journal-time-part,.pw-plan,.pw-plan-hit,.pw-fact-hit,.pw-cut-line,.pw-crew,.pw-title-row h1>button,[data-swatch],.tv-block',
+  geometry: '.vg-block,.vg-piece,.vg-group,.vg-cut-handle,.vg-win-line,.leaflet-marker-icon,.leaflet-interactive,.journal-time-part,.pw-plan,.pw-plan-hit,.pw-fact-hit,.pw-cut-line,.pw-crew,.pw-title-row h1>button,[data-swatch],.tv-block,.tv-handle',
 };
 const isIcon = el => el.matches('.vg-plan-tools,.vg-divide,.qm,.ph-close,.ph-del,.avx,.foldx-btn,.depot-toggle,.gp-close,.mleg-close,.modal-close,.entity-actions-trigger,.leaflet-control-zoom a,[data-gtools]') ||
   (!el.querySelector('input,select,textarea') && (/^[←→↗↻↺×✕✖⋯…+−–?☰⌕]$/.test(el.textContent.trim()) || (!el.textContent.trim() && !!el.querySelector('svg'))));

@@ -295,40 +295,54 @@ test('kanban: status columns stay in one adaptive row and the last column remain
 async function openTrackPanel(page,info){
  const errors=await start(page,info,'trip/30000000-0000-4000-8000-000000000002/map',{mapTrackDesign:true});
  await expect(page.locator('.view-map.track-view')).toBeVisible();
- await expect(page.locator('#trackViewDock .mleg-body')).toBeVisible();return errors;
+ await expect(page.locator('#trackViewDock .tv-bar')).toBeVisible();return errors;
 }
-test('map track: the track view docks the timeline, interval and layer cards and hides the regular map panels',async({page},info)=>{
- const errors=await openTrackPanel(page,info),panel=page.locator('#trackViewDock .mleg-body');
+test('map track: the dock shows the period and timeline, and «Слои и период» opens the exact interval and layers',async({page},info)=>{
+ const errors=await openTrackPanel(page,info),dock=page.locator('#trackViewDock');
  await expect(page.locator('#trackViewBar')).toBeVisible();await expect(page.locator('#tvBackLabel')).toHaveText('К выезду');await expect(page.locator('#tvClose')).toBeVisible();
- for(const hidden of ['.view-map .side','.view-map .map-tools','#mapTrackDock'])await expect(page.locator(hidden)).toBeHidden();
- await expect(page.locator('#tvTimeline .tv-block').first()).toBeVisible();
- await expect(panel.locator('.mleg-layer')).toHaveCount(6);
- expect(await panel.getAttribute('popover')).toBeNull();
- const dock=await page.locator('#trackViewDock').boundingBox(),view=page.viewportSize(),bottom=view.width<=760?(await page.locator('.rail').boundingBox()).y:view.height;
- expect(dock.y+dock.height).toBeLessThanOrEqual(bottom+1);expect(dock.x).toBeGreaterThanOrEqual(0);expect(dock.x+dock.width).toBeLessThanOrEqual(view.width+1);
+ for(const hidden of ['.view-map .side','.view-map .map-tools','#mapTrackDock','.mleg'])await expect(page.locator(hidden)).toBeHidden();
+ await expect(dock.locator('.tv-title')).toHaveText('Трек выезда');await expect(dock.locator('#tvPeriod')).toContainText('—');
+ await expect(dock.locator('#tvAll')).toBeDisabled();
+ await expect(dock.locator('.tv-block').first()).toBeVisible();await expect(dock.locator('.tv-handle')).toHaveCount(2);
+ await expect(dock.locator('#tvMore')).toBeHidden();
+ const toggle=dock.locator('#tvToggle');await expect(toggle).toHaveAttribute('aria-expanded','false');
+ const view=page.viewportSize(),bottom=view.width<=760?(await page.locator('.rail').boundingBox()).y:view.height;
+ let box=await dock.boundingBox();expect(box.y+box.height).toBeLessThanOrEqual(bottom+1);expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(view.width+1);
+ await capture(page,info,'map-track-collapsed',errors);
+ await toggle.click();await expect(dock.locator('#tvToggle')).toHaveAttribute('aria-expanded','true');await expect(dock.locator('#tvMore')).toBeVisible();
+ const layers=dock.locator('.tv-layer');await expect(layers).toHaveCount(6);
  const gps=page.locator('.leaflet-overlay-pane path[stroke="#16a34a"],.leaflet-overlay-pane path[stroke="#a7f3d0"]');
  const plan=page.locator('.leaflet-marker-pane .trip-plan-point');
- await expect(plan).toHaveCount(2);await panel.locator('[data-fl=plan]').uncheck();await expect(plan).toHaveCount(0);await panel.locator('[data-fl=plan]').check();await expect(plan).toHaveCount(2);
- await expect(gps).toHaveCount(2);await expect(page.locator('.leaflet-overlay-pane path[stroke="#d87619"][stroke-dasharray="7 6"]')).toHaveCount(1);await expect(page.locator('.leaflet-overlay-pane path[stroke="#8b8e96"][stroke-dasharray="7 6"]')).toHaveCount(1);await panel.locator('[data-fl=track]').uncheck();await expect(gps).toHaveCount(0);await panel.locator('[data-fl=track]').check();await expect(gps).toHaveCount(2);
- const endDate=await panel.locator('#tfBDate').inputValue();await panel.locator('#tfBDate').fill(await panel.locator('#tfADate').inputValue());await panel.locator('#tfB').fill('09:00');await panel.locator('#tfB').blur();await expect(gps).toHaveCount(1);
- await expect(page.locator('#tvTimeline .tv-window')).toHaveCount(1);
- await panel.locator('#tfAll').click();await expect(panel.locator('#tfBDate')).toHaveValue(endDate);await expect(gps).toHaveCount(2);
- await expect(panel.locator('#tfDuration')).toContainText('сут.');
- expect(await page.locator('#trackViewDock').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
- await capture(page,info,'map-track-parameters',errors);
- await panel.locator('[data-fl=stay]').scrollIntoViewIfNeeded();await expect(panel.locator('[data-fl=stay]')).toBeInViewport();await capture(page,info,'map-track-layers',errors);
+ await expect(plan).toHaveCount(2);await dock.locator('[data-tvl=plan]').uncheck();await expect(plan).toHaveCount(0);await dock.locator('[data-tvl=plan]').check();await expect(plan).toHaveCount(2);
+ await expect(gps).toHaveCount(2);await dock.locator('[data-tvl=track]').uncheck();await expect(gps).toHaveCount(0);await dock.locator('[data-tvl=track]').check();await expect(gps).toHaveCount(2);
+ // Exact interval: end on the first day at 09:00 leaves one GPS piece and marks the window.
+ const endDate=await dock.locator('#tvToDate').inputValue();
+ await dock.locator('#tvToDate').fill(await dock.locator('#tvFromDate').inputValue());await dock.locator('#tvTo').fill('09:00');await dock.locator('#tvTo').blur();
+ await expect(gps).toHaveCount(1);await expect(dock.locator('.tv-window')).toHaveCount(1);await expect(dock.locator('#tvAll')).toBeEnabled();
+ await expect(dock.locator('#tvMore')).toBeVisible();
+ await dock.locator('#tvAll').click();await expect(dock.locator('#tvToDate')).toHaveValue(endDate);await expect(gps).toHaveCount(2);await expect(dock.locator('.tv-window')).toHaveCount(0);
+ await expect(dock.locator('#tvDuration')).toContainText('сут.');
+ expect(await dock.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+ box=await dock.boundingBox();expect(box.y).toBeGreaterThanOrEqual(0);
+ await capture(page,info,'map-track-expanded',errors);
 });
-test('map track: resizing keeps the track view state, back returns to the trip and closing clears the map',async({page},info)=>{
- const errors=await openTrackPanel(page,info),panel=page.locator('#trackViewDock .mleg-body');
- await panel.locator('[data-fl=line]').uncheck();await panel.locator('#tfA').fill('07:00');await panel.locator('#tfA').blur();
- const width=page.viewportSize().width>960?390:1440;await page.setViewportSize({width,height:600});
- await expect(page.locator('.mleg')).toHaveCount(1);await expect(panel).toBeVisible();await expect(panel.locator('[data-fl=line]')).not.toBeChecked();await expect(panel.locator('#tfA')).toHaveValue('07:00');
- const box=await page.locator('#trackViewDock').boundingBox(),bottom=width<=760?(await page.locator('.rail').boundingBox()).y:600;expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThanOrEqual(bottom+1);
- await panel.locator('#tfA').focus();await page.keyboard.press('Escape');await expect(panel).toBeVisible();
+test('map track: interval handles move by keyboard, back returns to the trip and closing clears the map',async({page},info)=>{
+ const errors=await openTrackPanel(page,info),dock=page.locator('#trackViewDock');
+ const gps=page.locator('.leaflet-overlay-pane path[stroke="#16a34a"],.leaflet-overlay-pane path[stroke="#a7f3d0"]');
+ const to=dock.locator('#tvHandleTo');await to.focus();
+ for(let i=0;i<6;i++)await page.keyboard.press('Shift+ArrowLeft');
+ await expect(dock.locator('.tv-window')).toHaveCount(1);await expect(dock.locator('#tvHandleTo')).toBeFocused();
+ const valueNow=Number(await dock.locator('#tvHandleTo').getAttribute('aria-valuenow')),max=Number(await dock.locator('#tvHandleTo').getAttribute('aria-valuemax'));
+ expect(valueNow).toBeLessThan(max);
+ await page.keyboard.press('End');await expect(dock.locator('.tv-window')).toHaveCount(0);await expect(gps).toHaveCount(2);
+ // Dragging the start handle narrows the window as well.
+ const bar=await dock.locator('.tv-bar').boundingBox(),from=await dock.locator('#tvHandleFrom').boundingBox();
+ await page.mouse.move(from.x+from.width/2,from.y+from.height/2);await page.mouse.down();await page.mouse.move(bar.x+bar.width*0.5,from.y+from.height/2,{steps:4});await page.mouse.up();
+ await expect(dock.locator('.tv-window')).toHaveCount(1);
  await page.locator('#tvBack').click();await expect(page.locator('.view-map.track-view')).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>location.hash)).toBe('#/trip/30000000-0000-4000-8000-000000000002');
  await page.evaluate(()=>{location.hash='#/trip/30000000-0000-4000-8000-000000000002/map';});
  await expect(page.locator('.view-map.track-view')).toBeVisible();
- await page.locator('#tvClose').click();await expect(page.locator('.view-map.track-view')).toHaveCount(0);await expect(page.locator('.mleg')).toHaveCount(0);await expect(page.locator('[data-sb=track]')).toBeHidden();
+ await page.locator('#tvClose').click();await expect(page.locator('.view-map.track-view')).toHaveCount(0);await expect(page.locator('.mleg')).toHaveCount(0);
  await expect(page.locator('.leaflet-marker-pane .trip-plan-point')).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>location.hash)).toBe('#/map');
  await expect(page.locator('.view-map .side')).toBeVisible();
  await capture(page,info,'map-track-cleared',errors);
