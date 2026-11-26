@@ -104,3 +104,8 @@ test('picks a request part from the materials catalog by name or SKU and sends t
   await again.locator('[data-pn]').fill('Масло другое');await expect(page.locator('#jbParts .pt-linked')).toHaveCount(0);
   expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
+test('a planned trip offers route editing on its overview and opens the map editor',async({page},info)=>{
+  await open(page,info,'trip/'+fixtureIDs.trip);
+  const edit=page.locator('#tpEditRoute');await expect(edit).toBeVisible();await expect(edit).toHaveText('Редактировать маршрут');
+  await edit.click();await expect(page).toHaveURL(/#\/trip\/[^/]+\/map\/edit$/);
+});

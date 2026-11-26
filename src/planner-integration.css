@@ -566,3 +566,6 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .pw-more>s
 /* The statistics team switch shows one chevron; a generic summary marker drew a second glyph under it. */
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-details>summary::after,html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-details>summary::before{content:none!important;display:none!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-context .section-title .badge.soft{background:var(--panel-2)!important;color:var(--ink-dim)!important;border-color:transparent!important;box-shadow:none!important}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-recalc .hint{margin:4px 0 10px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-recalc-actions{display:flex;flex-wrap:wrap;gap:8px}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-recalc-actions>.btn{flex:1 1 140px;width:auto!important}

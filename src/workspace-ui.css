@@ -1522,6 +1522,11 @@ html#dlight-ui[data-ui-system] :not(.anchored-context-panel)>.q>.qm::after { con
   html#dlight-ui[data-ui-system] :is(#reschedOverlay,#fixOverlay) .qm { width:48px!important;height:48px!important;min-width:48px!important;min-height:48px!important;margin:-14px -14px!important; }
 }
 :not(.anchored-context-panel)>.q { display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:4px;flex:none; }
+/* The DS gives .q a 44 px min box; beside a field label that made the label 44 px tall and
+   pushed its field ~26 px below the neighbouring field («лесенка»). The ring keeps its 44 px
+   tap target through negative margins, the label keeps one text line. */
+html#dlight-ui[data-ui-system] :not(.anchored-context-panel)>.q { min-width:0!important;min-height:0!important; }
+html#dlight-ui[data-ui-system] label>.q { height:1lh!important;vertical-align:top!important; }
 /* Version line help keeps the same small ring. */
 .verline .qc { display:inline-grid;place-items:center;width:18px;height:18px;border:1px solid var(--input-line);border-radius:50%;font:600 11px/1 var(--sans);color:var(--ink-dim); }
 /* Scrolling dialog body must not clip the focus ring of its edge fields. */
@@ -1688,3 +1693,10 @@ html#dlight-ui[data-ui-system] .tv-head-actions .tv-all:disabled:not(#_) { opaci
   .cust-modal .modal-actions>#custCancel,.cust-modal .modal-actions>#custSave { flex:1 1 0; }
   .cust-modal .modal-actions>#custDelete { order:3;flex:1 0 100%; }
 }
+
+/* «Изменить заявку»: «О заявке» и «Сроки» — два раздела одного окна, между ними полный отступ и разделитель. */
+html#dlight-ui[data-ui-system] .entity-panel-dialog .job-ref>.card+.card:not(#_) { margin-top:var(--sp-5)!important;padding-top:var(--sp-5)!important;border-top:1px solid var(--line)!important; }
+/* Маршрут выезда: «Просмотреть», «Google Maps» и «Редактировать маршрут» — один ровный ряд, без висящей третьей кнопки. */
+html#dlight-ui[data-ui-system] .view-trip .wb-route-actions:not([hidden]):not(#_) { display:grid!important;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px; }
+html#dlight-ui[data-ui-system] .view-trip .wb-route-actions>.btn:not(#_) { width:100%!important;min-width:0; }
+@media(max-width:760px){ html#dlight-ui[data-ui-system] .view-trip .wb-route-actions:not([hidden]):not(#_) { grid-template-columns:1fr; } }
