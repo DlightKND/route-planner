@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-import {installMockBackend} from './mock-backend.mjs';
+import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 
 async function open(page,info,section){
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -88,5 +88,18 @@ test('the point dialog on the map shows and changes the customer',async({page},i
   const dialog=page.locator('#editOverlay');await expect(dialog).toBeVisible();
   await expect(dialog.locator('#eCustomer')).toHaveValue('customer-c');
   await expect(dialog.locator('#eCustomer option')).toHaveCount(4);
+  expect(errors).toEqual([]);
+});
+
+test('the request shows the customer of its point, and the point list names it',async({page},info)=>{
+  const errors=await open(page,info);
+  await page.goto('/#/job/'+fixtureIDs.job);
+  const facts=page.locator('#requestContext .request-context-data');
+  await expect(facts).toContainText('Клиент');await expect(facts.locator('div').first()).toHaveText(/Клиент\s*Коммунальное предприятие$/);
+  await expect(facts.locator('div').nth(1)).toContainText('Точка');
+  await page.locator('#requestEditContext').click();
+  await expect(page.locator('#jbCustomer')).toHaveText('Клиент: Коммунальное предприятие');
+  // Same name as the point — the option does not repeat it.
+  await expect(page.locator('#jbClient option[value="client-c"]')).toHaveText('ТОВ «Агро-Схід»');
   expect(errors).toEqual([]);
 });

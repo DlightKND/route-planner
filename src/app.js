@@ -1223,6 +1223,7 @@ async function loadAll(){ $('dataStatus').textContent='Загрузка…';
   snapSet('refs',{clients,eqByClient});
   $('dataStatus').innerHTML='<span class="ok">На карте: '+clients.length+'</span>';
   await loadReadings(); await loadClientStats();
+  refDir.loadCustomers().then(()=>{ if(jobEditId&&document.querySelector('.view-job.active')) jobHead(); else paintJobCustomer(); }).catch(()=>{});
   render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),fitPadL(fitPad(40))); else fitUkraine(); }
 async function refreshStats(){ if(!canWrite()) return; await loadClientStats(); renderMarkers(); }
 async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
@@ -1389,11 +1390,14 @@ function tripShort(t){ return 'выезд '+(t.number!=null?'№'+t.number:'')+(
 // задания с галочками выбора, задания в выездах, заявки без задания.
 // «Проехать» — действие инженера, поэтому у менеджера оно в «⋯».
 // Что нужно инженеру на месте: адрес, кого спросить, как пройти.
+// Клиент (организация) точки — только если его название не повторяет точку.
+function pointCustomer(c){ const cu=c&&c.customer_id?refDir.customers().find(x=>x.id===c.customer_id):null; return cu&&cu.name.trim().toLowerCase()!==String(c.name||'').trim().toLowerCase()?cu:null; }
 function clientSiteHTML(c){ const bits=[c.address,c.contact_person,c.access_notes?('Доступ: '+c.access_notes):''].filter(Boolean); return bits.length?'<span class="client-site">'+bits.map(esc).join('<br>')+'</span>':''; }
 function clientPopupHTML(c){
   const list=eqByClient[c.id]||[],count=list.length,w=mapWork[c.id]||{tasks:[],requests:[],toPlan:0},tel=telHref(c.phone);
   const open=w.tasks.filter(row=>!row.trip),planned=w.tasks.filter(row=>row.trip);
-  let h='<div class="client-popup"><div class="client-popup-head"><strong>'+esc(c.name)+'</strong><span>'+esc([c.description,count?(count+' '+plural(count,'единица','единицы','единиц')+' техники'):'без техники'].filter(Boolean).join(' · '))+'</span>'+clientSiteHTML(c)+'</div>';
+  const cust=pointCustomer(c);
+  let h='<div class="client-popup"><div class="client-popup-head"><strong>'+esc(c.name)+'</strong>'+(cust?'<span class="client-popup-customer">Клиент: '+esc(cust.name)+'</span>':'')+'<span>'+esc([c.description,count?(count+' '+plural(count,'единица','единицы','единиц')+' техники'):'без техники'].filter(Boolean).join(' · '))+'</span>'+clientSiteHTML(c)+'</div>';
   if(canWrite()&&(open.length||planned.length||w.requests.length)){
     h+='<div class="client-popup-work">';
     if(open.length){ h+='<span class="client-popup-label">Ждут плана</span>';
@@ -4341,6 +4345,8 @@ async function jobSetStatus(id,st){ const j=jobs.find(x=>x.id==id);
   if(st==='done') await jobClosed(id,{equipmentId:j&&j.equipment_id,works:(j&&j.job_works)||[]}); showToast('Статус: '+(ST[st]||st)); renderJobs(); }
 function populateEquip(){ const list=eqByClient[$('jbClient').value]||[]; $('jbEquip').innerHTML='<option value="">— без привязки —</option>'+list.map(e=>'<option value="'+e.id+'">'+esc(e.model+(e.serial?' · '+e.serial:''))+'</option>').join(''); }
 $('jbClient').onchange=()=>{ populateEquip(); jobHead(); };
+// Под выбором точки — её клиент; у точки без клиента подсказки нет.
+function paintJobCustomer(){ const el=$('jbCustomer'); if(!el) return; const c=clients.find(x=>x.id==$('jbClient').value), cu=c&&c.customer_id?refDir.customers().find(x=>x.id===c.customer_id):null; el.hidden=!cu; el.textContent=cu?'Клиент: '+cu.name+(cu.phone&&cu.phone!==c.phone?' · '+cu.phone:''):''; }
 ['jbEquip','jbStatus','jbEng','jbDue'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',jobHead); });
 // Сменили исполнителя или статус — меняются и права на действия внутри
 // страницы: отметка приезда и правка запчастей смотрят на то же самое.
@@ -4572,7 +4578,7 @@ async function openJob(id,presetClient,presetEquip,{pane:requestedPane,returning
     else appSettings.tariff_profiles=finance.data?.tariff_profiles||[];
   }
   jobFinanceTaskStatus=(j?.service_orders||[]).find(o=>o.seed_request_id===id)?.status||null;
-  $('jbClient').innerHTML=clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  $('jbClient').innerHTML=clients.map(c=>{ const cu=pointCustomer(c); return '<option value="'+c.id+'">'+esc(c.name)+(cu?' · '+esc(cu.name):'')+'</option>'; }).join('');
   $('jbEng').innerHTML=profilesList.filter(p=>p.role==='engineer'&&p.active!==false).map(p=>'<option value="'+p.id+'">'+esc(personLabel(p))+'</option>').join('');
   $('jbWorkPick').innerHTML='<option value="">— выбрать работу —</option>'+catalog.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join('');
   $('jobTitle').textContent=id?requestLabel(jobs.find(x=>x.id===id),id):'Новая заявка';
@@ -4692,7 +4698,8 @@ function setJobMode(task){
 function buildJobRead(){
   const read=$('jobRefRead'); if(!read) return;
   const rows=[
-      ['Клиент',selText('jbClient')],
+      ['Точка',clients.find(c=>c.id==$('jbClient').value)?.name||'—'],
+      ['Клиент',(()=>{ const c=clients.find(x=>x.id==$('jbClient').value); return (c&&c.customer_id&&refDir.customers().find(x=>x.id===c.customer_id)?.name)||'без клиента'; })()],
       ['Техника',($('jbEquip')&&$('jbEquip').selectedIndex>0)?selText('jbEquip'):'без привязки'],
       ['Статус',selText('jbStatus')],
       ['Инженер',selectedEngineerIds('jbEng').length?engineerNames(selectedEngineerIds('jbEng')).join(', '):'не назначены'],
@@ -4758,7 +4765,7 @@ if($('jobPrimary')) $('jobPrimary').onclick=async ()=>{
 };
 // Шапка страницы заявки: кто, что за техника, сколько это стоит и когда срок.
 function jobHead(){
-  const cl=clients.find(c=>c.id==$('jbClient').value);
+  const cl=clients.find(c=>c.id==$('jbClient').value); paintJobCustomer();
   const eqName=(()=>{ const sel=$('jbEquip'); return (sel&&sel.selectedIndex>0)?sel.options[sel.selectedIndex].text:''; })();
   const nm=cl?cl.name:'Новая заявка';
   const subject=$('jbNotes').value.trim().split('\n')[0]||curWorks[0]?.title||curWorks[0]?.name||nm;
@@ -4795,7 +4802,8 @@ function jobHead(){
   if($('jbDateHint')) $('jbDateHint').textContent=$('jbDate').value?'Прежняя дата визита: '+dateHuman($('jbDate').value):'';
   if($('jbDueHint')) $('jbDueHint').textContent=$('jbDue').value?dateHuman($('jbDue').value):'';
   if(document.querySelector('.view-job.job-task')) buildJobRead();
-  presentRequestWorkspace({saved:!!jobEditId,editable:canWriteJob(),client:cl?.name||'Не указан',equipment:eqName,status:selText('jbStatus'),notes:$('jbNotes').value.trim(),phone:cl?.phone,contact:cl?.signer,confirmDiscard:()=>leaveJobEditor(),editContext:(trigger,field)=>openRequestEditor($('requestContextFields'),'Изменить заявку',trigger,field)});
+  const cust=cl&&cl.customer_id?refDir.customers().find(x=>x.id===cl.customer_id):null;
+  presentRequestWorkspace({saved:!!jobEditId,editable:canWriteJob(),client:cl?.name||'Не указана',customer:cust?.name||'',equipment:eqName,status:selText('jbStatus'),notes:$('jbNotes').value.trim(),phone:cl?.phone||cust?.phone,contact:cl?.signer||cl?.contact_person||cust?.contact_person,confirmDiscard:()=>leaveJobEditor(),editContext:(trigger,field)=>openRequestEditor($('requestContextFields'),'Изменить заявку',trigger,field)});
 }
 if($('jbDepot')) $('jbDepot').onchange=()=>{
   if($('jbDepot').checked && !depotList().length){
