@@ -16,7 +16,7 @@ class CatalogTable{
   this.host.innerHTML=`<div class="catalog-table-status"><span role="status" aria-live="polite">Показано ${visible.length} из ${rows.length}</span><button type="button" class="btn ghost" data-catalog-reset ${!count&&!this.sort?'hidden':''}>Сбросить фильтры${count?' · '+count:''}</button></div><div class="catalog-table-scroll" tabindex="0" role="region" aria-label="${escape(label)}"><table class="catalog-table"><caption class="sr-only">${escape(label)}</caption><thead><tr>${columns.map(c=>{const active=catalogFilterActive(this.filters[c.key]),sorted=this.sort?.key===c.key;return `<th scope="col" ${sorted?`aria-sort="${this.sort.direction==='asc'?'ascending':'descending'}"`:''} class="${c.type==='number'?'catalog-numeric':''}"><button type="button" data-column="${escape(c.key)}" aria-haspopup="dialog" aria-expanded="false" aria-label="Фильтр столбца: ${escape(c.label)}${active?' · применён':''}"><span>${escape(c.label)}</span><span class="catalog-column-icon ${active?'is-filtered':''}">${sorted?`<span aria-hidden="true">${this.sort.direction==='asc'?'↑':'↓'}</span>`:''}${icon(active?'filter':'down')}</span></button></th>`;}).join('')}<th scope="col"><span class="sr-only">Действия</span></th></tr></thead><tbody>${visible.map(row=>`<tr class="catalog-record ${rowClass}" data-catalog-id="${escape(row.id)}">${columns.map(c=>`<td class="${c.type==='number'?'catalog-numeric':''}" data-label="${escape(c.label)}">${c.render?c.render(row):escape(c.value(row)??'—')}</td>`).join('')}<td class="catalog-record-actions">${this.actions(row)}</td></tr>`).join('')||`<tr><td colspan="${columns.length+1}" class="catalog-empty">${escape(empty)} ${count||this.sort?'<button type="button" class="btn ghost" data-catalog-reset>Сбросить фильтры</button>':''}</td></tr>`}</tbody></table></div>`;
   for(const action of this.options.actions||[])this.host.querySelectorAll('['+action.attribute+']').forEach(button=>button.onclick=()=>action.run(button.getAttribute(action.attribute)));
   this.host.querySelectorAll('[data-column]').forEach(button=>button.onclick=()=>this.open(button.dataset.column,button));
-  this.host.querySelectorAll('.catalog-row-actions').forEach(menu=>{menu.addEventListener('toggle',()=>{if(!menu.open)return;for(const other of document.querySelectorAll('.catalog-row-actions[open]'))if(other!==menu)other.open=false;const panel=menu.querySelector('div'),r=menu.querySelector('summary').getBoundingClientRect();panel.style.left=Math.max(12,Math.min(r.right-210,window.innerWidth-222))+'px';panel.style.top=Math.max(12,Math.min(r.bottom+4,window.innerHeight-panel.offsetHeight-12))+'px';});});
+  this.host.querySelectorAll('.catalog-row-actions').forEach(menu=>{menu.addEventListener('toggle',()=>{if(!menu.open)return;for(const other of document.querySelectorAll('.catalog-row-actions[open]'))if(other!==menu)other.open=false;placeRowMenu(menu);});});
   this.host.querySelectorAll('[data-catalog-reset]').forEach(button=>button.onclick=()=>{this.filters={};this.sort=null;this.paint();});
  }
  actions(row){const {actions=[],rowLabel}=this.options;return actions.length?`<details class="catalog-row-actions"><summary aria-label="Действия · ${escape(rowLabel(row))}">${icon('more')}</summary><div>${actions.map(a=>`<button type="button" class="btn ghost ${a.danger?'catalog-danger':''}" ${a.attribute}="${escape(row.id)}">${escape(a.label)}</button>`).join('')}</div></details>`:'';}
@@ -68,8 +68,17 @@ class CatalogTable{
 }
 export {escape as escapeCatalog};
 
+// The row menu is fixed to the viewport: under its trigger, or above it when the bottom navigation is in the way.
+function placeRowMenu(menu){
+ const panel=menu.querySelector('div'),r=menu.querySelector('summary').getBoundingClientRect(),w=panel.offsetWidth;
+ panel.style.left=Math.max(12,Math.min(r.right-w,window.innerWidth-w-12))+'px';
+ const rail=document.querySelector('#nav')?.getBoundingClientRect(),floor=rail&&rail.height&&rail.top>window.innerHeight/2?rail.top:window.innerHeight,h=panel.offsetHeight;
+ panel.style.top=Math.max(12,r.bottom+4+h<=floor-12?r.bottom+4:Math.min(r.top-h-4,floor-h-12))+'px';
+}
 if(typeof document!=='undefined'){
  document.addEventListener('pointerdown',event=>document.querySelectorAll('.catalog-row-actions[open]').forEach(menu=>{if(!menu.contains(event.target))menu.open=false;}));
  document.addEventListener('keydown',event=>{if(event.key==='Escape')document.querySelectorAll('.catalog-row-actions[open]').forEach(menu=>{menu.open=false;menu.querySelector('summary').focus();});});
- document.addEventListener('scroll',event=>document.querySelectorAll('.catalog-row-actions[open]').forEach(menu=>{if(!menu.contains(event.target))menu.open=false;}),true);
+ // A scroll (including the one that brings the row into view on open) keeps the menu with its row;
+ // it closes only when the row has left the screen.
+ document.addEventListener('scroll',event=>document.querySelectorAll('.catalog-row-actions[open]').forEach(menu=>{if(menu.contains(event.target))return;const r=menu.querySelector('summary').getBoundingClientRect();if(r.bottom<0||r.top>window.innerHeight||!r.width)menu.open=false;else placeRowMenu(menu);}),true);
 }

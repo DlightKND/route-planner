@@ -21,7 +21,7 @@ button,input,select,textarea { font-family:var(--sans); }
 .design-page-head { margin-bottom:24px; }
 .design-page-head h2 { margin:0;font:600 26px/1.25 var(--sans);letter-spacing:-.025em; }
 .view:not(.view-map)>.pane { padding:24px 32px calc(32px + var(--rail-h)); }
-.view:is(.view-job,.view-order,.view-trip)>.pane { max-width:1440px;width:100%;margin-inline:auto; }
+.view:is(.view-job,.view-order,.view-trip,.view-customer)>.pane { max-width:1440px;width:100%;margin-inline:auto; }
 .view .card { background:var(--panel);padding:var(--pad-card);border:1px solid var(--line);border-radius:var(--r-md); }
 .view .card h3 { font-size:17px;line-height:1.4;margin-top:0; }
 .view :is(.hint,.meta) { line-height:1.55; }
@@ -57,12 +57,12 @@ button,input,select,textarea { font-family:var(--sans); }
 .design-status[data-state=review],.design-status[data-state=paused] { background:var(--warning-bg);border-color:transparent;color:var(--warning); }
 .design-status[data-state=completed] { background:var(--success-bg);border-color:transparent;color:var(--green); }
 .design-status[data-state=cancelled] { background:var(--danger-bg);border-color:transparent;color:var(--red); }
-:is(.view-job,.view-order,.view-trip) .trip-head { align-items:flex-start;gap:24px;margin-bottom:24px; }
-:is(.view-job,.view-order,.view-trip) .trip-head h2 { font-size:26px;line-height:1.25;letter-spacing:-.025em;max-width:36ch; }
-:is(.view-job,.view-order,.view-trip) .entity-head-meta { gap:8px 16px;margin-top:12px; }
-:is(.view-job,.view-order,.view-trip) .entity-tabs { gap:12px;margin-bottom:0; }
-:is(.view-job,.view-order,.view-trip) .entity-toolbar { margin-bottom:24px; }
-:is(.view-job,.view-order,.view-trip) :is(.entity-meta,.th-sub) { font-size:13px;line-height:1.6; }
+:is(.view-job,.view-order,.view-trip,.view-customer) .trip-head { align-items:flex-start;gap:24px;margin-bottom:24px; }
+:is(.view-job,.view-order,.view-trip,.view-customer) .trip-head h2 { font-size:26px;line-height:1.25;letter-spacing:-.025em;max-width:36ch; }
+:is(.view-job,.view-order,.view-trip,.view-customer) .entity-head-meta { gap:8px 16px;margin-top:12px; }
+:is(.view-job,.view-order,.view-trip,.view-customer) .entity-tabs { gap:12px;margin-bottom:0; }
+:is(.view-job,.view-order,.view-trip,.view-customer) .entity-toolbar { margin-bottom:24px; }
+:is(.view-job,.view-order,.view-trip,.view-customer) :is(.entity-meta,.th-sub) { font-size:13px;line-height:1.6; }
 .view-order .entity-header-actions { flex-wrap:wrap;justify-content:flex-end; }
 .view-order .order-grid { grid-template-columns:minmax(260px,.9fr) minmax(0,1.7fr);gap:24px; }
 .view-order .order-grid:has(#orderOrganization[hidden]) { grid-template-columns:minmax(0,1fr); }
@@ -273,7 +273,7 @@ dialog.overlay .modal-actions { padding-top:16px;margin-top:24px!important;borde
   .view-planner .dispatcher-actions>.planner-filter-menu>summary { padding:8px 10px; }
   .view-planner .dispatcher-period { grid-column:1;grid-row:1; }
   .design-page-head { margin-bottom:20px; }
-  .design-page-head h2,:is(.view-job,.view-order,.view-trip) .trip-head h2 { font-size:22px; }
+  .design-page-head h2,:is(.view-job,.view-order,.view-trip,.view-customer) .trip-head h2 { font-size:22px; }
   .view-order #orderBrief,.view-order .order-result-summary { padding:16px; }
   .view-order .order-result-summary { margin-top:16px; }
   .view-order .entity-header-actions { justify-content:stretch; }

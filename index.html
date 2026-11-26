@@ -2758,6 +2758,7 @@
   </div></div>
 
   <div class="view view-order"><div class="pane scrollp" id="orderEditor"></div></div>
+  <div class="view view-customer"><div class="pane scrollp" id="customerPage"></div></div>
   <div class="view view-catalog">
     <div class="pane scrollp">
       <header class="design-page-head"><h2 id="catalogTitle">Работы</h2><p class="design-description">Работы, техника и цены для подготовки новых заявок и заданий.</p></header>
@@ -2767,23 +2768,13 @@
            больше нигде нет. -->
       <div id="catCustomers" style="display:none">
         <div class="pane-head">
-          <div class="searchbox"><input type="search" id="custSearch" aria-label="Поиск клиента" placeholder="название, ИНН, телефон или контакт…"></div>
+          <div class="searchbox"><input type="search" id="custSearch" aria-label="Поиск клиента" placeholder="клиент, ЕДРПОУ, точка, техника или серийный номер…"></div>
+          <div class="customer-quick" id="custQuick" role="group" aria-label="Быстрые фильтры клиентов"></div>
           <button class="btn sm amber" id="custAdd">Добавить клиента</button></div>
         <div id="custList"></div>
       </div>
-      <div id="catPoints" style="display:none">
-        <div class="pane-head">
-          <div class="searchbox"><input type="search" id="pointSearch" aria-label="Поиск точки" placeholder="точка, адрес или клиент…"></div>
-          <button class="btn sm" id="pointMapAdd" type="button">Поставить точку на карте</button></div>
-        <div id="pointList"></div>
-      </div>
-      <div id="catEquipment" style="display:none">
-        <div class="pane-head">
-          <div class="searchbox"><input type="search" id="eqRefSearch" aria-label="Поиск техники" placeholder="модель, серийный номер, точка или клиент…"></div></div>
-        <div id="eqRefList"></div>
-      </div>
       <div id="catWorks">
-      <div class="subtabs"><button type="button" class="subtab" data-csub="customers">Клиенты</button><button type="button" class="subtab" data-csub="points">Точки</button><button type="button" class="subtab" data-csub="equipment">Техника</button><button type="button" class="subtab" data-csub="models">Модели</button><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
+      <div class="subtabs"><button type="button" class="subtab" data-csub="customers">Клиенты</button><button type="button" class="subtab" data-csub="models">Модели</button><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
       <div class="pane-head">
         <div class="searchbox"><input type="search" id="catSearch" aria-label="Поиск работы" placeholder="поиск работы…"></div>
         <select id="catFilter" aria-label="Тип работ" style="width:160px"><option value="">все</option><option value="warranty">гарантийные</option><option value="paid">только платные</option><option value="maint">ТО / сервис</option></select>
@@ -2791,7 +2782,7 @@
       <div id="catList"></div>
       </div>
       <div id="catModels" style="display:none">
-      <div class="subtabs"><button type="button" class="subtab" data-csub="customers">Клиенты</button><button type="button" class="subtab" data-csub="points">Точки</button><button type="button" class="subtab" data-csub="equipment">Техника</button><button type="button" class="subtab" data-csub="models">Модели</button><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
+      <div class="subtabs"><button type="button" class="subtab" data-csub="customers">Клиенты</button><button type="button" class="subtab" data-csub="models">Модели</button><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
       <div class="pane-head">
         <div class="searchbox"><input type="search" id="emSearch" aria-label="Поиск модели техники" placeholder="поиск модели…"></div>
         <button class="btn sm amber" id="emShowAdd">+ Модель</button></div>
@@ -2807,7 +2798,7 @@
       </div>
       </div>
       <div id="catMaterials" style="display:none">
-        <div class="subtabs"><button type="button" class="subtab" data-csub="customers">Клиенты</button><button type="button" class="subtab" data-csub="points">Точки</button><button type="button" class="subtab" data-csub="equipment">Техника</button><button type="button" class="subtab" data-csub="models">Модели</button><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
+        <div class="subtabs"><button type="button" class="subtab" data-csub="customers">Клиенты</button><button type="button" class="subtab" data-csub="models">Модели</button><button type="button" class="subtab" data-csub="works">Работы</button><button type="button" class="subtab" data-csub="materials">Материалы и цены</button></div>
         <div class="pane-head">
           <div class="searchbox"><input type="search" id="stockSearch" aria-label="Поиск материала по названию или артикулу" placeholder="поиск по названию или артикулу…"></div>
           <label class="stock-state"><input type="checkbox" id="stockShowInactive" style="width:auto">показать архив</label>
@@ -3219,13 +3210,8 @@
       <label for="custNotes">Заметки</label><textarea id="custNotes" rows="2" maxlength="4000"></textarea>
       <div class="err" id="custErr" role="alert"></div>
     </div>
-    <div id="custLinks" class="cust-links" hidden>
-      <section aria-labelledby="custPointsTitle"><h4 id="custPointsTitle">Точки</h4><div id="custPoints"></div>
-        <div class="row cust-attach" id="custAttach"><select id="custAttachPoint" class="grow" aria-label="Точка, которую привязать к клиенту"></select><button type="button" class="btn" id="custAttachBtn">Привязать</button></div></section>
-      <section aria-labelledby="custEqTitle"><h4 id="custEqTitle">Техника на точках</h4><div id="custEquipment"></div></section>
-    </div>
   </div>
-  <div class="row modal-actions"><button type="button" class="btn ghost" id="custDelete">Удалить клиента</button><span class="grow"></span><button type="button" class="btn ghost" id="custCancel">Закрыть</button><button type="button" class="btn amber" id="custSave">Сохранить</button></div>
+  <div class="row modal-actions"><span class="grow"></span><button type="button" class="btn ghost" id="custCancel">Закрыть</button><button type="button" class="btn amber" id="custSave">Добавить клиента</button></div>
 </div></div>
 
 <div class="overlay" id="eqCardOverlay"><div class="modal pane-modal eq-card-modal">

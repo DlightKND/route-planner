@@ -31,6 +31,8 @@ import './service-orders.css';
 import { createServiceOrders } from './service-orders.js';
 import { mountEntityActivity } from './entity-activity.js';
 import {mountEntityActions,openEntityPanel,entityFieldValue} from './entity-actions.js';
+import {serviceForecast} from './core/equipment-service.js';
+import {createCustomerPage} from './customer-page.js';
 import { mountEntityResponsibility } from './entity-responsibility.js';
 import { loadEntityPeople } from './entity-people.js';
 import { configureTripPlanStatus } from './trip-plan-status.js';
@@ -41,6 +43,7 @@ import './entity-pages.css';
 import './operations-design.css';
 import { installOperationsUI } from './operations-ui.js';
 import './workspace-ui.css';
+import './customer-page.css';
 import {renderCatalogTable} from './catalog-table.js';
 import './catalog-table.css';
 import './review-workspaces.css';
@@ -131,6 +134,8 @@ const plannerWorkspace=createPlannerWorkspace({host:()=>document.getElementById(
  actor:()=>({...profile,id:session?.user?.id,role}),project:()=>sb?.supabaseUrl||SB_URL_BUILTIN,
  profiles:()=>profilesList,settings:()=>appSettings,ensureRefs,notify,confirm:confirmDialog,
  plannerReason:async(changes,data,reason)=>{const rows=changes.map(g=>g.kind==='road'?data.trips.find(t=>t.id===g.trip_id):data.orders.find(o=>o.id===g.order_id));if(rows.some(delegatedOwnerIntervenes)){const detail=await askInterventionReason();return detail==null?null:reason+': '+detail;}return reason;},
+ maintenancePlan:()=>maintenancePlan(),
+ createMaintenanceJob:async(pointId,eqId)=>{ if(!await plannerWorkspace.leave())return; await openJob(null,pointId,eqId); },
  editTripRoute:async id=>{if(!await plannerWorkspace.leave())return;await showTripOnMap(id,{editing:true,back:'#/schedule'});},
  openEntity:async(kind,id)=>{if(!await plannerWorkspace.leave())return;if(kind==='order')return serviceOrders.open(id);if(kind==='request')return openJob(id);return openTrip(id);},
  createOrder:()=>serviceOrders.open(null),openResult:id=>serviceOrders.openResult(id),tripAction,
@@ -728,7 +733,7 @@ function wireSheetDrag(){
   if(sheetIsSheet()) sheetSnapTo(1);
 }
 wireSheetDrag();
-function tabAllowed(name){ if(name==='catalog'||name==='dash') return canWrite(); if(name==='settings'||name==='schedule') return !!role; return true; }
+function tabAllowed(name){ if(name==='catalog'||name==='dash'||name==='customer') return canWrite(); if(name==='settings'||name==='schedule') return !!role; return true; }
 // Пункт «Мой день» нужен инженеру; менеджеру он дублирует сводку.
 function navAllowed(el){
   if(!tabAllowed(el.dataset.tab)) return false;
@@ -791,10 +796,11 @@ function applyMobileNav(){
   // Клавиатура ли ведёт фокус: Tab и стрелки — да, любое касание или щелчок — нет.
   let keyboard=false;
   // Автозаполнение Chrome шлёт keydown без key — проверяем тип.
-  document.addEventListener('keydown',e=>{ const k=typeof e.key==='string'?e.key:''; if(k==='Tab'||k.startsWith('Arrow')){ keyboard=true; rail.classList.remove('rail-rest'); } },true);
+  document.addEventListener('keydown',e=>{ const k=typeof e.key==='string'?e.key:''; if(k==='Tab'||k.startsWith('Arrow')){ keyboard=true; if(rail.contains(document.activeElement)) rail.classList.remove('rail-rest'); } },true);
   document.addEventListener('pointerdown',()=>{ keyboard=false; },true);
   // Фокус, вернувшийся в рельс после щелчка (закрыли «Мой профиль»), рельс не раскрывает.
-  rail.addEventListener('focusin',()=>{ if(!keyboard) rail.classList.add('rail-rest'); });
+  // Клавиша вне рельса (стрелки в слайдере, Tab по форме) его не раскрывает: только фокус, пришедший в рельс с клавиатуры.
+  rail.addEventListener('focusin',()=>{ if(keyboard) rail.classList.remove('rail-rest'); else rail.classList.add('rail-rest'); });
   rail.addEventListener('click',e=>{
     if(e.detail===0) return;
     // На телефоне рельс — нижнее меню, он не раскрывается; фокус там нужен
@@ -805,8 +811,14 @@ function applyMobileNav(){
   });
   // Курсор ушёл — рельс сворачивается, даже если в нём остался фокус с клавиатуры;
   // вернулся — раскрывается снова.
-  rail.addEventListener('pointerenter',()=>rail.classList.remove('rail-rest'));
-  rail.addEventListener('pointerleave',()=>rail.classList.add('rail-rest'));
+  // Раскрытие — после короткой задержки: курсор, который лишь пересекает рельс
+  // по пути к кнопке у его края, не должен накрывать её раскрытым меню.
+  let railOpenT=null;
+  // Только настоящее движение мыши над рельсом: когда закрывается окно или
+  // меняется раскладка, браузер сам «наводит» курсор на рельс без движения —
+  // такой рельс не должен раскрываться и накрывать страницу.
+  rail.addEventListener('pointermove',e=>{ if(e.pointerType==='touch'||!(e.movementX||e.movementY)||!rail.classList.contains('rail-rest')||railOpenT) return; railOpenT=setTimeout(()=>{ railOpenT=null; if(rail.matches(':hover')) rail.classList.remove('rail-rest'); },220); });
+  rail.addEventListener('pointerleave',()=>{ clearTimeout(railOpenT); railOpenT=null; rail.classList.add('rail-rest'); });
   // Открылась другая страница — показываем её, а не раскрытый рельс; следующий Tab раскроет его снова.
   window.addEventListener('hashchange',()=>{ if(!rail.matches(':hover')) rail.classList.add('rail-rest'); });
 })();
@@ -914,6 +926,7 @@ function routeForView(name,sub){
     return 'order/'+encodeURIComponent(id)+(pane&&pane!=='overview'?'/'+pane:'')+(pane==='scope'?'/'+encodeURIComponent(trip||'all'):'');
   }
   if(name==='job'&&jobEditId)return 'job/'+encodeURIComponent(jobEditId)+(requestTabs.value==='overview'?'':'/'+requestTabs.value);
+  if(name==='customer'&&customerPage.currentId())return customerPage.path();
   if(name==='trip'&&tripEditId)return 'trip/'+encodeURIComponent(tripEditId)+(tripTabs.value==='overview'?'':'/'+tripTabs.value);
   if(name==='planner'){const section=sub==='disp'?dispCur:(sub||(plannerCur==='trips'&&dispCur==='tracking'?'tracking':plannerCur));return section==='tracking'?'journal':'planner/'+section;}
   return name;
@@ -936,11 +949,13 @@ async function applyRoute(){
     if(p[0]==='job'&&p[1]===jobEditId&&active?.matches('.view-job')){configureRequestTabs(true,p[2]);return;}
     if(p[0]==='trip'&&p[1]===tripEditId&&p[2]!=='map'&&active?.matches('.view-trip')){setTripPane(p[2]||'overview');return;}
     if(p[0]==='order'&&p[1]===serviceOrders.currentId()&&active?.matches('.view-order')){serviceOrders.selectPane(p[2],p[3]);return;}
+    if(p[0]==='customer'&&p[1]===customerPage.currentId()&&active?.matches('.view-customer')){customerPage.selectPane(p[2]);return;}
     if(!await leaveSettingsEditor()||!await leaveJobEditor())return;
     if(!p.length){ const name='schedule', sub=null;
       await switchTab(name,sub); history.replaceState(null,'',routeUrl(routeForView(name,sub))); return; }
     if(p[0]==='journal'){await switchTab('planner','tracking');if(p[1]==='trip'&&p[2])await unassignedTracks.openRecord(p[2],{stopId:['stop','route'].includes(p[3])&&p[4]!=='section'?p[4]:null,roadId:p[3]==='route'&&p[4]==='section'?p[5]:null,pane:['route','documents'].includes(p[3])?p[3]:'stops'});else if(p[1]==='record'&&p[2])await unassignedTracks.openSource(p[2],{pane:['route','documents'].includes(p[3])?p[3]:'stops'});else await unassignedTracks.showList();return;}
     if(p[0]==='order'&&p[1]){await serviceOrders.open(p[1],null,{pane:p[2],trip:p[3]});return;}
+    if(p[0]==='customer'&&p[1]){ if(!canWrite()){ notify('Страница клиента доступна диспетчеру.','warn'); await switchTab('schedule'); return; } await customerPage.open(p[1],{pane:p[2]}); return; }
     if(p[0]==='job'&&p[1]){
       const j=await fetchJobFull(p[1]);
       if(!j){ notify('Заявка по ссылке не найдена.','warn'); switchTab('planner','jobs'); return; }
@@ -1003,6 +1018,7 @@ async function switchTab(name, sub,{writeRoute=true}={}){ if(!tabAllowed(name)) 
     if(!jobLeavePending){jobLeavePending=true;leaveJobEditor().then(ok=>{jobLeavePending=false;if(ok)switchTab(name,sub);}).catch(e=>{jobLeavePending=false;notify(e.message||String(e),'err');});}return;
   }
   if(name!=='order'&&serviceOrders.isDirty()&&!await serviceOrders.leave())return;
+  if(name!=='customer'&&customerPage.isDirty()&&!await customerPage.leave())return;
   if(name!=='trip'&&document.querySelector('.view-trip.active')&&(tripPlanDirty||tripPresenceDirty)&&!await leaveTripEditor())return;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
   document.querySelectorAll('.nav-i[data-tab]').forEach(t=>{
@@ -1015,6 +1031,7 @@ async function switchTab(name, sub,{writeRoute=true}={}){ if(!tabAllowed(name)) 
   // У страницы выезда нет своего пункта в рельсе: она — вложенный экран
   // «Выездов», и подсветка должна остаться на них, иначе непонятно, где ты.
   if(name==='trip'||name==='job'||name==='order') document.querySelectorAll('.nav-i[data-sub="disp"]').forEach(t=>t.classList.add('active'));
+  if(name==='customer') document.querySelectorAll('.nav-i[data-tab="catalog"]').forEach(t=>t.classList.add('active'));
   // Высота шторки считается от высоты вкладки, а вкладка получает высоту
   // только когда становится активной: пересчитываем при каждом заходе.
   if(name==='map'){ if(sheetIsSheet()) sheetSnapTo(sheetSnap); setTimeout(()=>map.invalidateSize(),60);
@@ -1044,11 +1061,24 @@ const refDir=createReferenceDirectory({db:()=>sb,esc,$,renderCatalogTable,
   openPoint:id=>window.editClient(id), openPointEquipment:id=>window.openEquip(id),
   editEquipment:(pointId,eqId)=>{ window.openEquip(pointId); startEqEdit(eqId); },
   showPoint:async id=>{ if(await switchTab('map')) flyToClient(id,true); },
-  openJob:id=>openJob(id), goMap:()=>switchTab('map')});
+  openJob:id=>openJob(id), goMap:()=>switchTab('map'),
+  forecast:e=>eqService(e), stats:id=>clientStats[id]||null, openCustomerPage:id=>customerPage.open(id)});
+// Страница клиента: вкладки обзора, точек, техники, заявок и реквизитов.
+const customerPage=createCustomerPage({db:()=>sb,esc,$,renderCatalogTable,
+  points:()=>clients, eqByPoint:()=>eqByClient, customers:()=>refDir.customers(),
+  ensureCustomers:()=>refDir.ensureCustomers(), reloadCustomers:async()=>{await refDir.loadCustomers();refDir.renderCustomers();},
+  deleteCustomer:id=>refDir.deleteCustomer(id),
+  forecast:e=>eqService(e), warrantyUntil:e=>refDir.warrantyUntil(e), stats:id=>clientStats[id]||null,
+  canWrite:()=>canWrite(), canCreateJob:()=>canWriteJob(), currency:()=>appSettings.currency||'грн', telHref,
+  notify, showToast, confirmDialog, plural, prompt:promptDialog,
+  show:()=>switchTab('customer'), route:path=>routeSet(path), goCatalog:async()=>{ if(await switchTab('catalog')) catSub('customers'); },
+  goMap:()=>switchTab('map'), openPoint:id=>window.editClient(id), openPointEquipment:id=>window.openEquip(id),
+  showPoint:async id=>{ if(await switchTab('map')) flyToClient(id,true); },
+  openEquipmentCard:id=>refDir.openEquipmentCard(id), openJob:id=>openJob(id), newJob:(pointId,eqId)=>openJob(null,pointId,eqId||null)});
 let catCur='customers';
-const CAT_SECTIONS={customers:['catCustomers','Клиенты'],points:['catPoints','Точки'],equipment:['catEquipment','Техника'],models:['catModels','Модели техники'],works:['catWorks','Работы'],materials:['catMaterials','Материалы и цены']};
+const CAT_SECTIONS={customers:['catCustomers','Клиенты'],models:['catModels','Модели техники'],works:['catWorks','Работы'],materials:['catMaterials','Материалы и цены']};
 function catSub(name){ if(!CAT_SECTIONS[name]) name='customers'; catCur=name; setCatalogWorkspace(name); if($('catalogTitle'))$('catalogTitle').textContent=CAT_SECTIONS[name][1]; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); for(const [key,[id]] of Object.entries(CAT_SECTIONS)) if($(id)) $(id).style.display=key===name?'':'none';
-  if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else if(name==='materials') renderStockCatalog(); else if(name==='customers') refDir.renderCustomers(); else if(name==='points') refDir.renderPoints(); else refDir.renderEquipment(); }
+  if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else if(name==='materials') renderStockCatalog(); else refDir.renderCustomers(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
 let plannerCur='jobs';
 let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
@@ -1224,7 +1254,7 @@ async function loadAll(){ $('dataStatus').textContent='Загрузка…';
   snapSet('refs',{clients,eqByClient});
   $('dataStatus').innerHTML='<span class="ok">На карте: '+clients.length+'</span>';
   await loadReadings(); await loadClientStats();
-  refDir.loadCustomers().then(()=>{ if(jobEditId&&document.querySelector('.view-job.active')) jobHead(); else paintJobCustomer(); }).catch(()=>{});
+  refDir.loadCustomers().then(()=>{ if(jobEditId&&document.querySelector('.view-job.active')) jobHead(); else paintJobCustomer(); customerPage.refresh(); }).catch(()=>{});
   render(); if(clients.length) map.fitBounds(clients.map(c=>[c.lat,c.lng]),fitPadL(fitPad(40))); else fitUkraine(); }
 async function refreshStats(){ if(!canWrite()) return; await loadClientStats(); renderMarkers(); }
 async function loadClientStats(){ clientStats={}; if(!canWrite()) return;
@@ -1499,21 +1529,20 @@ async function loadReadings(){ readingsByEq={}; try{ const {data,error}=await sb
   if(error) throw error;
   (data||[]).forEach(r=>{ (readingsByEq[r.equipment_id]=readingsByEq[r.equipment_id]||[]).push(r); }); }catch(e){ readingsByEq={}; loadFail('показания моточасов',e); } }
 
-function eqRate(e){ const own=rateFrom(readingsByEq[e.id]); if(own>0) return {rate:own,src:'unit'};
-  let sum=0,n=0; (eqByClient[e.client_id]||[]).forEach(x=>{ const r=rateFrom(readingsByEq[x.id]); if(r>0){ sum+=r; n++; } });
-  if(n) return {rate:sum/n,src:'client'}; return {rate:0,src:'none'}; }
-function eqService(e){ const m=e.model_id?eqModels.find(x=>x.id==e.model_id):null; const sih=m?(+m.service_interval_hours||0):0; if(sih<=0) return null;
-  const rs=readingsByEq[e.id]||[]; const last=rs.length?rs[rs.length-1]:null; const rr=eqRate(e); const today=todayISO();
-  if(!last||rr.rate<=0){ const sh=+appSettings.shift_hours||0; const anchor=e.last_service||e.installed_on||null; if(!anchor||sh<=0) return null;
-    const since=businessDays(anchor,today)*sh; return {since,interval:sih,rate:0,src:'estimate',daysLeft:null}; }
-  // Точка отсчёта — последнее ТО: старый замер с пометкой «ТО» или последний
-  // замер не позже даты ТО, которую ставит закрытая заявка с работой «ТО».
-  const lastSvc=[...rs].reverse().find(r=>r.kind==='service'||(e.last_service&&r.taken_on<=e.last_service));
-  const daysSince=Math.max(0,(Date.now()-new Date(last.taken_on+'T00:00:00').getTime())/86400000);
-  const nowMh=(+last.moto_hours)+rr.rate*daysSince;
-  const baseMh=lastSvc?(+lastSvc.moto_hours):(+rs[0].moto_hours);
-  const since=Math.max(0,nowMh-baseMh); const daysLeft=Math.round((sih-since)/rr.rate);
-  return {since,interval:sih,rate:rr.rate,src:rr.src,daysLeft,nowMh}; }
+function eqService(e){ const m=e.model_id?eqModels.find(x=>x.id==e.model_id):null;
+  return serviceForecast(e,{model:m,readings:readingsByEq[e.id]||[],peerReadings:(eqByClient[e.client_id]||[]).filter(x=>x.id!==e.id).map(x=>readingsByEq[x.id]||[]),shiftHours:appSettings.shift_hours,today:todayISO()}); }
+// План ТО для «Рабочего обзора»: просроченное и ближайшие 30 дней, с открытой
+// заявкой по технике, если она уже есть.
+function maintenancePlan(){
+  if(!canWrite()) return [];
+  const open=new Map(); (jobsLite||[]).forEach(j=>{ if(j.equipment_id&&!open.has(j.equipment_id)) open.set(j.equipment_id,j); });
+  const customers=refDir.customers();
+  return clients.filter(c=>!c.is_base&&!c.deleted_at).flatMap(c=>(eqByClient[c.id]||[]).filter(e=>!e.deleted_at).map(e=>{
+    const f=eqService(e); if(!f||!['overdue','soon'].includes(f.state)) return null;
+    const cust=c.customer_id?customers.find(x=>x.id===c.customer_id):null;
+    return {id:e.id,model:e.model||'Техника',serial:e.serial||'',point:c.name,pointId:c.id,customer:cust?.name||'',days:f.days,state:f.state,estimate:f.src==='estimate',job:open.get(e.id)||null};
+  }).filter(Boolean)).sort((a,b)=>a.days-b.days);
+}
 function eqAlert(e){ const r={contact:false,service:false,any:false,reasons:[]};
   const cp=+appSettings.contact_period_days||0; if(cp>0){ const ref=e.last_visit||e.installed_on||null; if(ref){ const days=Math.floor((Date.now()-new Date(ref).getTime())/86400000); if(days>cp){ r.contact=true; r.reasons.push('Контакт '+days+' дн назад (норма '+cp+')'); } } }
   const sv=eqService(e);

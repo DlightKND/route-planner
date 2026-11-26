@@ -152,7 +152,7 @@ html:root { --workspace-width:none; }
 .workspace-page .settings-body>[data-sec-panel] { padding:24px; }
 .workspace-page .settings-body h3:not(:first-child) { margin:28px 0 16px;padding-top:24px;border-top:1px solid var(--line); }
 /* Every Справочник table is the same: the count line above, the table card from catalog-table.css. */
-.view-catalog :is(#custList,#pointList,#eqRefList,#catList,#emList,#stockList) { display:block;margin-top:20px; }
+.view-catalog :is(#custList,#catList,#emList,#stockList) { display:block;margin-top:20px; }
 .workspace-page .catalog-page-actions { display:flex;gap:8px; }
 .workspace-page .catalog-main-nav { display:flex;gap:28px;margin:0;border-bottom:0; }
 .workspace-page .catalog-main-nav .subtab { padding-inline:0; }
@@ -1691,7 +1691,6 @@ html#dlight-ui[data-ui-system] .tv-head-actions .tv-all:disabled:not(#_) { opaci
   .cust-modal .modal-actions { flex-wrap:wrap; }
   .cust-modal .modal-actions>.grow { display:none; }
   .cust-modal .modal-actions>#custCancel,.cust-modal .modal-actions>#custSave { flex:1 1 0; }
-  .cust-modal .modal-actions>#custDelete { order:3;flex:1 0 100%; }
 }
 
 /* «Изменить заявку»: «О заявке» и «Сроки» — два раздела одного окна, между ними полный отступ и разделитель. */

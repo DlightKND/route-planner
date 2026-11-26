@@ -51,3 +51,14 @@ test('planner overview offers the map route editor when a trip route lost its ta
  const row=page.locator('.pw-context .pw-recalc [data-pw=trip-route]');await expect(row).toContainText('маршрут устарел');
  await row.click();await expect(page).toHaveURL(/#\/trip\/[^/]+\/map\/edit$/);
 });
+test('planner overview lists the maintenance plan and starts a service request from it',async({page},info)=>{
+ await boot(page,info,{maintenanceJourney:true});const overview=tool(page,'Открыть рабочий обзор');
+ if(await overview.getAttribute('aria-expanded')!=='true')await overview.click();
+ const plan=page.locator('.pw-context .pw-maintenance');await expect(plan).toContainText('План ТО');
+ await expect(plan.locator('.pw-tp-row')).toHaveCount(2);
+ await expect(plan.locator('.pw-tp-row').first()).toContainText('Заявка №101 уже открыта');
+ await plan.getByRole('button',{name:/^Просрочено · 1$/}).click();await expect(plan.locator('.pw-tp-row')).toHaveCount(1);
+ await plan.getByRole('button',{name:/^30 дней · 1$/}).click();await expect(plan.locator('.pw-tp-row')).toHaveCount(1);
+ await plan.getByRole('button',{name:'Создать заявку на ТО'}).click();
+ await expect(page.locator('.view-job.active')).toBeVisible();await expect(page.locator('#jbEquip')).toHaveValue('equipment-b');
+});

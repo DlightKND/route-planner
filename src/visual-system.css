@@ -353,7 +353,7 @@ body { font-size:var(--fs-body); }
 :is(.view,.modal,.presence-editor) :is(input:not([type]),input,select,textarea):focus { border-color:var(--focus);background:var(--panel); }
 .view :is(.th-sub,.th-econ .te-k,.savestate,.crumbs,.crumb,.emtree-kh,.kcol-h) { font-family:var(--sans);letter-spacing:normal;text-transform:none; }
 .view :is(.th-sub,.savestate) { font-size:var(--fs-caption);line-height:1.5; }
-:is(.view-job,.view-order,.view-trip) .hint { line-height:1.5; }
+:is(.view-job,.view-order,.view-trip,.view-customer) .hint { line-height:1.5; }
 .view .trip-head h2 { line-height:1.3; }
 .view .trip-head { margin-bottom:var(--sp-5); }
 .view .card { margin-bottom:var(--gap-card); }
