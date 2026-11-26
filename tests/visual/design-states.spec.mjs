@@ -347,3 +347,14 @@ test('map track: interval handles move by keyboard, back returns to the trip and
  await expect(page.locator('.view-map .side')).toBeVisible();
  await capture(page,info,'map-track-cleared',errors);
 });
+
+test('depot popup uses the client card layout with route, call and edit actions',async({page},info)=>{
+ const errors=await start(page,info,'map',{depotJourney:true});
+ const depot=page.locator('.leaflet-marker-icon').filter({has:page.locator('svg path[d="M3 11l9-8 9 8"]')}).first();
+ await depot.evaluate(el=>el.click());
+ const popup=page.locator('.leaflet-popup .depot-popup');await expect(popup).toBeVisible();
+ await expect(popup.locator('.client-popup-head')).toContainText('Депо Харьков');
+ await expect(popup.locator('.client-popup-primary')).toContainText('В маршрут');
+ await expect(popup.locator('.client-popup-tools')).toContainText('Изменить');
+ expect(errors).toEqual([]);
+});
