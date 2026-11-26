@@ -88,7 +88,7 @@ test('picks a request part from the materials catalog by name or SKU and sends t
   const row=page.locator('#jbParts .pt-row').nth(before);
   await expect(row.locator('[data-pn]')).toHaveValue('Масло HLP 46');await expect(row.locator('[data-ps]')).toHaveValue('HLP46');
   await expect(row.locator('[data-pu]')).toHaveValue('л');await expect(row.locator('[data-pp]')).toHaveValue('140');await expect(row.locator('[data-pc]')).toHaveValue('95');
-  await expect(row.locator('.pt-linked')).toHaveText('из каталога');await expect(row.locator('[data-pq]')).toBeFocused();
+  await expect(row.locator('.pt-linked')).toHaveText('из справочника');await expect(row.locator('[data-pq]')).toBeFocused();
   await row.locator('[data-pq]').fill('3');
   await page.locator('#jobSave').click();
   await expect.poll(()=>page.evaluate(()=>window.__visualQA.financeWrites.length)).toBeGreaterThan(0);

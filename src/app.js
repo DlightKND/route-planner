@@ -1034,7 +1034,7 @@ document.querySelectorAll('.nav-i[data-tab]').forEach(el=>{
 });
 
 let catCur='works';
-function catSub(name){ catCur=name; setCatalogWorkspace(name); if($('catalogTitle'))$('catalogTitle').textContent=({works:'Работы',models:'Техника',materials:'Материалы и цены'})[name]||'Каталог'; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; $('catMaterials').style.display=name==='materials'?'':'none'; if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else renderStockCatalog(); }
+function catSub(name){ catCur=name; setCatalogWorkspace(name); if($('catalogTitle'))$('catalogTitle').textContent=({works:'Работы',models:'Техника',materials:'Материалы и цены'})[name]||'Справочник'; document.querySelectorAll('.view-catalog .subtab').forEach(t=>{t.classList.toggle('active',t.dataset.csub===name);t.setAttribute('aria-pressed',String(t.dataset.csub===name));}); $('catWorks').style.display=name==='works'?'':'none'; $('catModels').style.display=name==='models'?'':'none'; $('catMaterials').style.display=name==='materials'?'':'none'; if(name==='works') renderCatalog(); else if(name==='models') renderEqModels(); else renderStockCatalog(); }
 document.querySelectorAll('.view-catalog .subtab').forEach(t=>t.onclick=()=>catSub(t.dataset.csub));
 let plannerCur='jobs';
 let dispCur='jobs';        // последний открытый подраздел «Диспетчера»
@@ -2126,7 +2126,7 @@ async function newMaintenanceJob(cid,eid){ if(!canWriteJob()) return; $('eqOverl
   const fits=w=>!e||(w.model_ids?.length?w.model_ids.includes(e.model_id):(!w.applicable_kinds?.length||w.applicable_kinds.includes(e.kind)));
   const w=catalog.find(w=>w.is_maintenance&&fits(w))||catalog.find(w=>w.is_maintenance);
   if(w&&$('jbWorkPick')&&!$('jbWorkPick').disabled){ $('jbWorkPick').value=w.id; await $('jbWorkAdd').onclick(); showToast('Заявка на ТО: работа «'+w.name+'» добавлена'); }
-  else notify('В каталоге нет работы с пометкой «ТО / сервис» — добавьте работу вручную.','warn'); }
+  else notify('В справочнике нет работы с пометкой «ТО / сервис» — добавьте работу вручную.','warn'); }
 window.newMaintenanceJob=newMaintenanceJob;
 function renderEqList(){ const box=$('eqList'); const list=eqByClient[eqClientId]||[]; const c=clients.find(x=>x.id===eqClientId);
   $('eqSummary').textContent=(c?c.name+' · ':'')+countWord(list.length,'единица','единицы','единиц');
@@ -2175,7 +2175,7 @@ async function reloadEquip(){ const { data }=await sb.from('equipment').select('
 let eqModelsError=null;
 async function loadEqModels(){try{const {data,error}=await sb.from('equipment_models').select('*').order('manufacturer');if(error)throw error;eqModels=data||[];eqModelsError=null;populateEqModelSelect();}catch(e){eqModelsError=e;loadFail('модели техники',e);}}
 function emLabel(m){ return ((m.manufacturer?m.manufacturer+' ':'')+m.model).trim(); }
-function populateEqModelSelect(){ const sel=$('eqModelId'); if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="">— без модели из каталога —</option>'+eqModels.map(m=>'<option value="'+m.id+'">'+esc(emLabel(m))+'</option>').join(''); sel.value=cur; }
+function populateEqModelSelect(){ const sel=$('eqModelId'); if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="">— без модели из справочника —</option>'+eqModels.map(m=>'<option value="'+m.id+'">'+esc(emLabel(m))+'</option>').join(''); sel.value=cur; }
 function renderEqModels(){ const box=$('emList'); if(!box) return;if(eqModelsError){listLoadError(box,eqModelsError,async()=>{await loadEqModels();renderEqModels();});return;} const q=$('emSearch')?$('emSearch').value.trim().toLowerCase():'';
   const manus=[...new Set(eqModels.map(m=>m.manufacturer).filter(Boolean))].sort();
   const kinds=[...new Set(eqModels.map(m=>m.kind).filter(Boolean))].sort();
@@ -2197,7 +2197,7 @@ $('emSave').onclick=async ()=>{ const model=$('emModel').value.trim(); if(!model
   if(error){ $('emErr').textContent=error.message; return; } emReset(); $('emForm').style.display='none'; await loadEqModels(); renderEqModels(); showToast('Модель сохранена'); };
 $('emCancel').onclick=()=>{ emReset(); $('emForm').style.display='none'; }; if($('emSearch')) $('emSearch').oninput=renderEqModels;
 function editEqModel(id){ const m=eqModels.find(x=>x.id==id); if(!m) return; emEditId=id; $('emManu').value=m.manufacturer||'';$('emKind').value=m.kind||'';$('emModel').value=m.model||'';$('emWarr').value=m.warranty_months||'';$('emInt').value=m.service_interval_hours||'';$('emNotes').value=m.notes||''; $('emFormTitle').textContent='Правка модели'; $('emForm').style.display=''; }
-async function delEqModel(id){ if(!await confirmDialog('Удалить модель из каталога?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('equipment_models').delete().eq('id',id); if(error){ notify(error.message,'err'); return; } await loadEqModels(); renderEqModels(); }
+async function delEqModel(id){ if(!await confirmDialog('Удалить модель из справочника?',{danger:true,okText:'Удалить'})) return; const {error}=await sb.from('equipment_models').delete().eq('id',id); if(error){ notify(error.message,'err'); return; } await loadEqModels(); renderEqModels(); }
 function applyEqModel(){ const m=eqModels.find(x=>x.id==$('eqModelId').value); if(!m) return; if(!$('eqModel').value.trim()) $('eqModel').value=emLabel(m); const inst=$('eqInstalled').value; if(inst && (+m.warranty_months>0) && !$('eqWarranty').value){ const d=new Date(inst); d.setMonth(d.getMonth()+(+m.warranty_months)); if(!isNaN(d)) $('eqWarranty').value=d.toISOString().slice(0,10); } }
 // ---------- catalog ----------
 function parseMaterials(txt){ return txt.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ const [name,qty,unit]=l.split(';').map(s=>(s||'').trim()); return {name:name||'',qty:parseFloat(qty)||0,unit:unit||''}; }); }
@@ -2210,7 +2210,7 @@ $('catSearch').oninput=renderCatalog; if($('catFilter')) $('catFilter').onchange
 let cwScope='all', cwModelSel=new Set();
 function workModelNames(w){ return ((w&&w.model_ids)||[]).map(id=>{ const m=eqModels.find(x=>x.id===id); return m?emLabel(m):null; }).filter(Boolean); }
 function setCwScope(s){ cwScope=s; document.querySelectorAll('#cwScope [data-cs]').forEach(b=>b.classList.toggle('on',b.dataset.cs===s)); $('cwKindsBox').style.display=(s==='kinds')?'':'none'; $('cwModelsBox').style.display=(s==='models')?'':'none'; if(s==='models') renderCwModelsTree(); }
-function renderCwModelsTree(){ const box=$('cwModelsTree'); if(!box) return; if(!eqModels.length){ box.innerHTML='<div class="hint">Сначала заведи модели в каталоге моделей.</div>'; return; }
+function renderCwModelsTree(){ const box=$('cwModelsTree'); if(!box) return; if(!eqModels.length){ box.innerHTML='<div class="hint">Сначала заведи модели в справочнике техники.</div>'; return; }
   const tree={}; eqModels.forEach(m=>{ const mn=m.manufacturer||'Без производителя'; const kn=m.kind||'Без типа'; tree[mn]=tree[mn]||{}; tree[mn][kn]=tree[mn][kn]||[]; tree[mn][kn].push(m); });
   let h=''; Object.keys(tree).sort().forEach(mn=>{ h+='<div style="font-weight:600;font-size: var(--fs-3);margin-top: var(--sp-3)">'+esc(mn)+'</div>'; Object.keys(tree[mn]).sort().forEach(kn=>{ h+='<div style="font-family:var(--mono);font-size: var(--fs-1);letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);margin: var(--sp-2) 0 var(--sp-1) var(--sp-3)">'+esc(kn)+'</div>'; tree[mn][kn].forEach(m=>{ h+='<label style="display:flex;align-items:center;gap: var(--sp-3);cursor:pointer;font-size: var(--fs-3);padding: var(--sp-1) 0 var(--sp-1) var(--sp-5)"><input type="checkbox" data-cwm="'+m.id+'" '+(cwModelSel.has(m.id)?'checked':'')+' style="width:auto">'+esc(m.model)+'</label>'; }); }); });
   box.innerHTML=h; box.querySelectorAll('[data-cwm]').forEach(c=>c.onchange=()=>{ if(c.checked) cwModelSel.add(c.dataset.cwm); else cwModelSel.delete(c.dataset.cwm); }); }
@@ -2222,7 +2222,7 @@ async function renderCatalog(){
   const applicability=w=>w.model_ids?.length?(workModelNames(w).length?workModelNames(w):['Модель недоступна']):w.applicable_kinds?.length?w.applicable_kinds:['Все модели'];
   const price=w=>Number(w.price)||Number(w.norm_hours||0)*Number(appSettings.tariffs?.hour||0);
   const rows=catalog.filter(w=>(!q||(w.name+' '+applicability(w).join(' ')).toLowerCase().includes(q))&&(!fil||fil==='warranty'&&w.warranty_eligible||fil==='paid'&&!w.warranty_eligible||fil==='maint'&&w.is_maintenance));
-  renderCatalogTable(box,{label:'Нормированные работы',scope:role,rows,rowClass:'emrow',rowLabel:w=>w.name,empty:catalog.length?'По запросу ничего не найдено.':'Каталог пуст. Добавьте нормированную работу.',columns:[
+  renderCatalogTable(box,{label:'Нормированные работы',scope:role,rows,rowClass:'emrow',rowLabel:w=>w.name,empty:catalog.length?'По запросу ничего не найдено.':'Справочник работ пуст. Добавьте нормированную работу.',columns:[
     {key:'name',label:'Работа',value:w=>w.name,render:w=>'<button type="button" class="catalog-record-link" data-cwedit="'+esc(w.id)+'">'+esc(w.name)+'</button>'},
     {key:'hours',label:'Норма, ч',type:'number',value:w=>w.norm_hours},
     {key:'applicability',label:'Применимость',value:applicability,render:w=>esc(applicability(w).join(', '))},
@@ -2243,7 +2243,7 @@ $('cwSave').onclick=async ()=>{ const name=$('cwName').value.trim(); if(!name){ 
     applicable_kinds:(cwScope==='kinds'?$('cwKinds').value.split(',').map(s=>s.trim()).filter(Boolean):[]),model_ids:(cwScope==='models'?[...cwModelSel]:[]),materials:parseMaterials($('cwMaterials').value),procedure:$('cwProc').value.trim(),manuals:parseManuals($('cwManuals').value)};
   $('cwSave').disabled=true; let error; if(cwEditId){ ({error}=await sb.from('work_catalog').update(rec).eq('id',cwEditId)); } else { ({error}=await sb.from('work_catalog').insert(rec)); } $('cwSave').disabled=false;
   if(error){ $('cwErr').textContent='Ошибка: '+error.message; return; } $('catOverlay').classList.remove('on'); catalog=[]; await renderCatalog(); };
-async function delCw(id){ if(!await confirmDialog('Удалить работу из каталога?',{danger:true,okText:'Удалить'})) return; const { error }=await sb.from('work_catalog').delete().eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } catalog=[]; await renderCatalog(); }
+async function delCw(id){ if(!await confirmDialog('Удалить работу из справочника?',{danger:true,okText:'Удалить'})) return; const { error }=await sb.from('work_catalog').delete().eq('id',id); if(error){ notify('Ошибка: '+error.message,'err'); return; } catalog=[]; await renderCatalog(); }
 
 // ---------- material catalog (no on-hand quantities until physical inventory) ----------
 let stockCatalog=[],stockEditId=null;
@@ -5662,8 +5662,8 @@ function renderJobParts(){
         +'<span class="pt-sum">'+partRev(p).toFixed(0)+' / '+partCost(p).toFixed(0)+'</span></span>')
       : '';
     d.innerHTML='<div class="pt-top">'
-        +'<span class="pt-name"><input type="text" value="'+esc(p.name||'')+'" data-pn="'+i+'" placeholder="наименование или артикул из каталога" aria-label="Запчасть: название или поиск по каталогу">'
-          +(p.stock_catalog_id?'<span class="pt-linked" title="Позиция из каталога материалов">из каталога</span>':'')+'</span>'
+        +'<span class="pt-name"><input type="text" value="'+esc(p.name||'')+'" data-pn="'+i+'" placeholder="наименование или артикул из справочника" aria-label="Запчасть: название или поиск по справочнику">'
+          +(p.stock_catalog_id?'<span class="pt-linked" title="Позиция из справочника материалов">из справочника</span>':'')+'</span>'
         +'<input type="text" value="'+esc(p.sku||'')+'" data-ps="'+i+'" placeholder="артикул">'
         +(p.voided?'<span class="hint">аннулирована</span>':p.legacy_task_item_id||p.approved_at?'<span class="hint" title="Для удаления подтверждённой строки требуется аудированная коррекция">'+(p.legacy_task_item_id?'историческая':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost pt-rm" data-prm="'+i+'" title="Убрать">×</button>')
         +(canWriteJob()&&(p.legacy_task_item_id||p.canonical_task_item_id)&&!p.voided?'<button class="btn sm ghost" data-pvoid="'+i+'">Аннулировать</button>':'')

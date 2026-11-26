@@ -27,7 +27,7 @@ export function attachStockPicker(input,{items,onPick,money=false,currency='',es
   if(!input||input.dataset.stockPicker)return;
   input.dataset.stockPicker='1';
   const id='stockPick'+(++seq),list=document.createElement('ul');
-  list.id=id;list.className='stock-pick';list.setAttribute('role','listbox');list.setAttribute('aria-label','Позиции каталога');list.hidden=true;
+  list.id=id;list.className='stock-pick';list.setAttribute('role','listbox');list.setAttribute('aria-label','Позиции справочника');list.hidden=true;
   input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-expanded','false');input.setAttribute('aria-controls',id);
   input.setAttribute('autocomplete','off');
   const host=input.parentElement;host.classList.add('stock-pick-host');host.appendChild(list);
@@ -38,8 +38,8 @@ export function attachStockPicker(input,{items,onPick,money=false,currency='',es
   const open=()=>{
     const all=items()||[];
     shown=stockMatches(all,input.value);
-    if(!all.length){list.innerHTML='<li class="stock-pick-empty">Каталог материалов пуст или недоступен</li>';}
-    else if(!shown.length){list.innerHTML='<li class="stock-pick-empty">В каталоге не нашлось — строка останется ручной</li>';}
+    if(!all.length){list.innerHTML='<li class="stock-pick-empty">Справочник материалов пуст или недоступен</li>';}
+    else if(!shown.length){list.innerHTML='<li class="stock-pick-empty">В справочнике не нашлось — строка останется ручной</li>';}
     else list.innerHTML=shown.map((it,i)=>'<li role="option" id="'+id+'-'+i+'" aria-selected="false" data-pick="'+i+'">'
       +'<span class="stock-pick-name">'+esc(it.name)+'</span>'
       +'<span class="stock-pick-meta">'+[it.sku?esc(it.sku):'',esc(it.unit||'шт'),money&&it.price!=null?esc(Number(it.price).toLocaleString('ru-RU'))+(currency?' '+esc(currency):''):''].filter(Boolean).join(' · ')+'</span></li>').join('');
