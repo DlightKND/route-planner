@@ -1247,6 +1247,7 @@ html#dlight-ui[data-ui-system] .view-settings .settings-body>.card>h3::after{con
 .client-popup-head { display:flex;flex-direction:column;gap:2px; }
 .client-popup-head strong { font:600 15px/1.35 var(--sans); }
 .client-popup-head span { font-size:12px;color:var(--ink-dim); }
+.client-popup-head .client-popup-customer { font-size:13px;color:var(--ink); }
 .client-popup-work { display:flex;flex-direction:column;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line); }
 .client-popup-label { font-size:11px;color:var(--ink-dim);margin-top:2px; }
 .client-popup-task { display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.35; }

@@ -278,7 +278,7 @@ export function frameNotifications(host){
  inner.append(head);masthead.append(inner);while(host.firstChild)main.append(host.firstChild);host.append(masthead,main);host.closest('.view')?.classList.add('workspace-inbox');
 }
 
-export function presentRequestWorkspace({saved,editable,client,equipment,status,notes,phone,contact,confirmDiscard,editContext},root=document){
+export function presentRequestWorkspace({saved,editable,client,customer,equipment,status,notes,phone,contact,confirmDiscard,editContext},root=document){
  const context=root.getElementById('requestContext'),form=root.getElementById('requestContextFields');if(!context||!form)return;
  const view=context.closest('.view');view.classList.toggle('request-saved',saved);context.hidden=!saved;form.hidden=saved&&!form.closest('dialog[open]');
  const title=root.getElementById('jobTitle');let stage=view.querySelector('.request-workspace-stage');if(!stage&&title){stage=element(root,'span','design-status workflow-stage request-workspace-stage');title.after(stage);}if(stage){stage.textContent=status?status[0].toUpperCase()+status.slice(1):'';stage.hidden=!saved;}
@@ -291,7 +291,7 @@ export function presentRequestWorkspace({saved,editable,client,equipment,status,
   if(!edit.isConnected)context.prepend(edit);
  }
  context.querySelector('.request-description').textContent=notes||'Описание не указано.';
- const rows=[['Клиент',client],['Техника',equipment||'Без привязки'],['Контакт',contact||'Не указан'],['Телефон',phone||'Не указан']];
+ const rows=[['Клиент',customer||'Без клиента'],['Точка',client],['Техника',equipment||'Без привязки'],['Контакт',contact||'Не указан'],['Телефон',phone||'Не указан']];
  const tel=phone?String(phone).replace(/[^\d+]/g,''):'';
  context.querySelector('dl').innerHTML=rows.map(([label,value])=>`<div><dt>${label}</dt><dd>${label==='Телефон'&&tel?`<a class="link" href="tel:${escape(tel)}">${escape(value)}</a>`:escape(value)}</dd></div>`).join('');
  const edit=root.getElementById('requestEditContext');edit.hidden=!saved||!editable;edit.onclick=()=>editContext?editContext(edit):openEntityPanel({title:'Изменить заявку',panel:form,trigger:edit,confirmDiscard});
