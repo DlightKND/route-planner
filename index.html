@@ -2291,7 +2291,7 @@
          прыгать туда-обратно и занимали два места в нижней панели, где их
          всего пять. Теперь это один раздел с переключателем внутри. -->
     <button class="nav-i" data-tab="planner" data-sub="disp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6v3H9z"/><path d="M9 5.5H7a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-2"/><path d="M9.5 12h5M9.5 16h3"/></svg><span>Диспетчер</span></button>
-    <button class="nav-i" data-tab="catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><circle cx="10" cy="18" r="1.5" fill="currentColor"/></svg><span>Каталог</span></button>
+    <button class="nav-i" data-tab="catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><circle cx="10" cy="18" r="1.5" fill="currentColor"/></svg><span>Справочник</span></button>
   </div>
   <div class="rail-foot">
     <!-- Шестерёнка одним контуром: прежняя «звёздочка» из отдельных чёрточек
@@ -2585,7 +2585,7 @@
         <!-- Отметка присутствия — рядом с часами, а не отдельной карточкой:
              это одно и то же действие, разнесённое во времени. -->
         <div class="visit-row" id="jbVisit"></div>
-        <div class="row"><select id="jbWorkPick" class="grow"></select><button class="btn sm" id="jbWorkAdd">+ из каталога</button><button class="btn sm" id="jbCustomAdd">+ своя</button></div>
+        <div class="row"><select id="jbWorkPick" class="grow"></select><button class="btn sm" id="jbWorkAdd">+ из справочника</button><button class="btn sm" id="jbCustomAdd">+ своя</button></div>
         <div id="jbWorks" style="margin-top: var(--sp-3)"></div>
         <div class="wapp" id="jbWorksApp" style="display:none">
           <span class="pt-wait" id="jbWorksState">ждёт подтверждения</span>
@@ -3170,8 +3170,8 @@
   <p class="hint eq-summary" id="eqSummary"></p>
   <div id="eqList"></div>
   <div id="eqFormPane" hidden><h4 id="eqFormTitle" class="eq-form-title">Добавить технику</h4>
-    <label>Модель из каталога</label><select id="eqModelId"></select>
-    <label style="margin-top: var(--sp-3)">Название модели</label><input type="text" id="eqModel" placeholder="Если модели нет в каталоге">
+    <label>Модель из справочника</label><select id="eqModelId"></select>
+    <label style="margin-top: var(--sp-3)">Название модели</label><input type="text" id="eqModel" placeholder="Если модели нет в справочнике">
     <div class="row"><div class="grow"><label>Тип/бренд</label><input type="text" id="eqKind" placeholder="для навыков инженера"></div><div class="grow"><label>Серийник</label><input type="text" id="eqSerial"></div></div>
 <details class="modal-group"><summary>Установка, гарантия и заметки</summary>    <div class="row"><div class="grow"><label>Дата установки</label><input type="date" id="eqInstalled"></div><div class="grow"><label>Гарантия до</label><input type="date" id="eqWarranty"></div></div>
     <label>Заметки</label><input type="text" id="eqNotes">
