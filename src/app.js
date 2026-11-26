@@ -131,6 +131,7 @@ const plannerWorkspace=createPlannerWorkspace({host:()=>document.getElementById(
  actor:()=>({...profile,id:session?.user?.id,role}),project:()=>sb?.supabaseUrl||SB_URL_BUILTIN,
  profiles:()=>profilesList,settings:()=>appSettings,ensureRefs,notify,confirm:confirmDialog,
  plannerReason:async(changes,data,reason)=>{const rows=changes.map(g=>g.kind==='road'?data.trips.find(t=>t.id===g.trip_id):data.orders.find(o=>o.id===g.order_id));if(rows.some(delegatedOwnerIntervenes)){const detail=await askInterventionReason();return detail==null?null:reason+': '+detail;}return reason;},
+ editTripRoute:async id=>{if(!await plannerWorkspace.leave())return;await showTripOnMap(id,{editing:true,back:'#/schedule'});},
  openEntity:async(kind,id)=>{if(!await plannerWorkspace.leave())return;if(kind==='order')return serviceOrders.open(id);if(kind==='request')return openJob(id);return openTrip(id);},
  createOrder:()=>serviceOrders.open(null),openResult:id=>serviceOrders.openResult(id),tripAction,
  openJournal:async(id,stopId)=>{if(!await plannerWorkspace.leave())return;await switchTab('planner','tracking');await unassignedTracks.openRecord(id,{stopId,pane:'stops'});},
@@ -6651,7 +6652,9 @@ function renderRouteStops(points=routeAll(),{recorded=false,trip=null}={}){
   $('tpRouteStatus').hidden=!hasPoints;
   const km=recorded?trip?.fact_km:tripRoute.km||null;
   $('tpRouteStatus').textContent=(recorded?'Маршрут по GPS':'Плановая схема')+(km!=null?' · '+distanceText(km):'');
-  $('tpViewMap').parentElement.hidden=!hasPoints||!trip?.id;
+  const routeEditable=!!trip?.id&&canWriteTrip(trip)&&['planned','assigned','in_progress'].includes(trip.status);
+  $('tpViewMap').hidden=$('tpGoogleMap').hidden=!hasPoints;$('tpEditRoute').hidden=!routeEditable;
+  $('tpViewMap').parentElement.hidden=!trip?.id||(!hasPoints&&!routeEditable);
   box.innerHTML=points.map((point,index)=>'<tr><td><button type="button" class="workflow-route-point" data-route-point="'+index+'" aria-pressed="false"><span>'+(index+1)+'</span>'+esc(point.name||'Точка маршрута')+'</button></td>'
     +(recorded?'<td class="mono">'+esc(intervalText(point.from,point.to))+'</td>':'')+'</tr>').join('');
   box.querySelectorAll('[data-route-point]').forEach(button=>button.onclick=()=>selectTripRoutePoint(Number(button.dataset.routePoint)));
@@ -7063,6 +7066,7 @@ function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; con
   box.querySelectorAll('[data-rgov]').forEach(inp=>inp.onchange=()=>{ const k=inp.dataset.rgov; if(inp.value==='') delete tripOverrides.road[k]; else tripOverrides.road[k]=inp.value; tripEcon(); }); }
 $('tpViewMap').onclick=()=>{if(tripEditId)void showTripOnMap(tripEditId);};
 $('tpMapExpand').onclick=()=>$('tpViewMap').click();
+$('tpEditRoute').onclick=async()=>{const id=tripEditId;if(id&&await leaveTripEditor())void showTripOnMap(id,{editing:true});};
 $('tpGoogleMap').onclick=()=>tripGmaps(tripEditId,tripRoutePoints,$('tpGoogleMap'));
 $('tpStayMap').onclick=()=>{if(tripEditId)void openJournalTrip(tripEditId);};
 function loadTripIntoPlanner(trip){

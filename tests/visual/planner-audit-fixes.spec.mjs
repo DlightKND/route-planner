@@ -1,9 +1,9 @@
 import {test,expect} from '@playwright/test';
 import {installMockBackend} from './mock-backend.mjs';
-async function boot(page,info,options={}){
+async function boot(page,info,{plans=6,...options}={}){
  await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());
  await page.clock.install({time:new Date('2026-10-05T10:00Z')});await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,canonicalPlanner:true,...options});
- await page.goto('/#/schedule');if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.pw-plan')).toHaveCount(6);
+ await page.goto('/#/schedule');if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.pw-plan')).toHaveCount(plans);
  return page.locator('.pw-root').evaluate(e=>e.classList.contains('pw-mobile'));
 }
 const tool=(page,name)=>page.getByRole('button',{name,exact:true}).filter({visible:true}).first();
@@ -33,4 +33,21 @@ test('planner audit: busy day form locks every control and recovers a failed sav
  expect(await panel.locator('button,input,select,textarea').evaluateAll(els=>els.every(e=>e.disabled))).toBe(true);await expect(panel.locator('.pw-form-status')).toContainText('Сохраняются рабочие часы');
  await page.clock.runFor(2100);await expect(panel).toHaveAttribute('aria-busy','false');await expect(panel.locator('.pw-form-error')).toContainText('связь прервана');await expect(panel.locator('[name=start]')).toHaveValue('09:00');await expect(panel.locator('[type=submit]')).toBeEnabled();
  await panel.locator('[type=submit]').click();await page.clock.runFor(2100);await expect(panel).toHaveCount(0);expect(await page.evaluate(()=>window.__visualQA.staffDayWrites)).toHaveLength(1);
+});
+
+test('planner overview recalculates stale manual moves and links a stale trip route to the map editor',async({page},info)=>{
+ await boot(page,info,{canonicalPlanner:'stale'});const overview=tool(page,'Открыть рабочий обзор');
+ if(await overview.getAttribute('aria-expanded')!=='true')await overview.click();
+ const recalc=page.locator('.pw-context .pw-recalc');await expect(recalc).toContainText('Ручные переносы разошлись');
+ await recalc.getByRole('button',{name:'Пересчитать график'}).click();await page.locator('#confirmYes').click();
+ await expect.poll(()=>page.evaluate(()=>window.__visualQA.plannerWrites.length)).toBe(1);
+ const write=await page.evaluate(()=>window.__visualQA.plannerWrites[0]);
+ expect(write.p_reason).toContain('Пересчёт графика');expect(write.p_changes).toHaveLength(3);expect(write.p_changes.every(c=>c.manual===false)).toBe(true);
+ await expect(page.locator('.pw-context .pw-recalc')).toContainText('совпадают');
+});
+test('planner overview offers the map route editor when a trip route lost its task',async({page},info)=>{
+ await boot(page,info,{canonicalPlanner:'resources',plans:8});const overview=tool(page,'Открыть рабочий обзор');
+ if(await overview.getAttribute('aria-expanded')!=='true')await overview.click();
+ const row=page.locator('.pw-context .pw-recalc [data-pw=trip-route]');await expect(row).toContainText('маршрут устарел');
+ await row.click();await expect(page).toHaveURL(/#\/trip\/[^/]+\/map\/edit$/);
 });

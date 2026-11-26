@@ -603,6 +603,10 @@ export function installMockBackend({ depotJourney = false, role = "logist", them
     for(const g of plannerGroups)if(g.kind==='road')g.route_stale=true;
     plannerGroups.push({...structuredClone(work),source_key:'work:'+order+':base',trip_id:null,parts:[{id:'busy',date:'2026-10-05',start:11,end:13,offset:0}],auto_parts:[{id:'busy',date:'2026-10-05',start:11,end:13,offset:0}]});
   }
+  if(canonicalPlanner==='stale'){
+    // Manual moves that no longer match the trip: the task left one stop and the route was rebuilt.
+    for(const g of plannerGroups){g.manual=true;g.stale=true;g.parts=g.parts.map(p=>({...p,start:p.start+1,end:p.end+1}));}
+  }
   if(canonicalPlanner==='progress'){
     // The whole trip was planned for last week and is still not started; one stop lost its task.
     for(const g of plannerGroups){g.parts=g.parts.map(p=>({...p,date:'2026-10-02'}));g.auto_parts=structuredClone(g.parts);if(g.kind==='road')g.route_stale=true;}
@@ -884,7 +888,7 @@ export function installMockBackend({ depotJourney = false, role = "logist", them
         if(role==='engineer')return {data:null,error:{message:'Нет права изменять это задание'}};
         const layouts=[];
         for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);if(!g||g.revision!==c.expected_revision)return {data:null,error:{message:'Размещение изменено другим пользователем'}};}
-        for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);Object.assign(g,{parts:structuredClone(c.manual===false?(c.reset_trip?g.trip_auto_parts||g.auto_parts:g.auto_parts):c.parts),manual:c.manual,clock_reset:c.clock_reset??g.clock_reset,revision:g.revision+1});layouts.push(structuredClone(g));tables.planner_layout_history.push({source_key:g.source_key,reason:args.p_reason,actor_id:session.user.id,created_at:stamp});}
+        for(const c of args.p_changes){const g=plannerGroups.find(g=>g.source_key===c.source_key);Object.assign(g,{parts:structuredClone(c.manual===false?(c.reset_trip?g.trip_auto_parts||g.auto_parts:g.auto_parts):c.parts),manual:c.manual,stale:c.manual===false?false:g.stale,clock_reset:c.clock_reset??g.clock_reset,revision:g.revision+1});layouts.push(structuredClone(g));tables.planner_layout_history.push({source_key:g.source_key,reason:args.p_reason,actor_id:session.user.id,created_at:stamp});}
         audit.plannerWrites.push(structuredClone(args));const receipt={layouts,restore_windows:[]};plannerReceipts.set(args.p_operation,receipt);return {data:structuredClone(receipt),error:null};
       }
       if(presenceRecoveryJourney&&name==='trip_track_rebuild_save'){
