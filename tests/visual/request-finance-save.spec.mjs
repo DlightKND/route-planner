@@ -1,9 +1,9 @@
 import {test,expect} from '@playwright/test';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 
-async function open(page,info,route){
+async function open(page,info,route,extra={}){
   await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());
-  await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,financeJourney:true});
+  await page.addInitScript(installMockBackend,{role:'logist',theme:info.project.metadata.theme,financeJourney:true,...extra});
   await page.goto('/#/'+route);
   await expect(page.locator('#todayLater')).toBeVisible();await page.locator('#todayLater').click();
   await expect(page.locator('.view.active')).toBeVisible();
@@ -72,4 +72,31 @@ test('confirming a new unfinished work shows its missing field and no historical
   expect(state.financeWrites.at(-1).args.p_works).toHaveLength(1);
   expect(state.financeWrites.at(-1).args.p_works[0]).toMatchObject({title:'Новая работа',hours:2});
   expect(state.blockedWrites).toEqual([]);
+});
+test('picks a request part from the materials catalog by name or SKU and sends the link with the save',async({page},info)=>{
+  await open(page,info,'job/'+fixtureIDs.job,{catalogueJourney:true});await estimate(page);
+  const before=await page.locator('#jbParts .pt-row').count();
+  await page.locator('#jbPartNew').click();
+  const name=page.locator('[data-pn="'+before+'"]');
+  await expect(name).toBeFocused();await expect(name).toHaveAttribute('aria-expanded','true');
+  await name.fill('hlp');
+  const option=page.locator('.stock-pick [role=option]');
+  await expect(option).toHaveCount(1);await expect(option.first()).toContainText('Масло HLP 46');
+  // Archived positions are never offered.
+  await name.fill('HF-180');await expect(option).toHaveCount(0);await expect(page.locator('.stock-pick:not([hidden])')).toContainText('строка останется ручной');
+  await name.fill('масло');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+  const row=page.locator('#jbParts .pt-row').nth(before);
+  await expect(row.locator('[data-pn]')).toHaveValue('Масло HLP 46');await expect(row.locator('[data-ps]')).toHaveValue('HLP46');
+  await expect(row.locator('[data-pu]')).toHaveValue('л');await expect(row.locator('[data-pp]')).toHaveValue('140');await expect(row.locator('[data-pc]')).toHaveValue('95');
+  await expect(row.locator('.pt-linked')).toHaveText('из каталога');await expect(row.locator('[data-pq]')).toBeFocused();
+  await row.locator('[data-pq]').fill('3');
+  await page.locator('#jobSave').click();
+  await expect.poll(()=>page.evaluate(()=>window.__visualQA.financeWrites.length)).toBeGreaterThan(0);
+  const writes=await page.evaluate(()=>window.__visualQA.financeWrites),last=writes.at(-1).args.p_parts.find(p=>p.name==='Масло HLP 46');
+  expect(last).toMatchObject({stock_catalog_id:'stock-b',sku:'HLP46',unit:'л',qty:3,price:140,cost:95});
+  // Rewriting the name by hand turns the row back into a manual one.
+  const again=page.locator('#jbParts .pt-row').filter({has:page.locator('.pt-linked')});
+  await expect(again).toHaveCount(1);
+  await again.locator('[data-pn]').fill('Масло другое');await expect(page.locator('#jbParts .pt-linked')).toHaveCount(0);
+  expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });

@@ -1286,6 +1286,7 @@
     "roles": {
       "alert": "feedback",
       "button": "action-button",
+      "combobox": "search-result-picker",
       "dialog": [
         "modal-editor",
         "context-panel",
@@ -1300,7 +1301,9 @@
         "map-explorer",
         "charts-tables"
       ],
+      "listbox": "search-result-picker",
       "note": "feedback",
+      "option": "search-result-picker",
       "radio": [
         "view-segment",
         "color-picker"

@@ -69,6 +69,7 @@ import { canEditRequestFinanceRow, mergePendingRequestFinance } from './core/req
 import { calculateTripCostAllocation } from './core/trip-cost-allocation.js';
 import { requestRouteProxy } from './core/route-proxy.js';
 import { saveCanonicalRequest, saveRequestAndWorks } from './core/request-save.js';
+import { attachStockPicker } from './stock-picker.js';
 import { flushQueueItems, assertReplayableJobSnapshot } from './core/offline-queue.js';
 import { pendingJobState, queuedJobDraftIssue } from './core/offline-job.js';
 import {createPlannerWorkspace} from './planner-workspace.js';
@@ -5578,6 +5579,8 @@ async function loadJobParts(){
   const pending=pendingJobState(await qAll(),jobEditId,jobParts);
   if(pending.hasPendingParts){jobParts=pending.parts;jobPartsComplete=jobPartsComplete||!!pending.payload?.parts_complete;}
   renderJobParts();
+  // Каталог для подбора: без связи заявка работает и без него — подбор просто пуст.
+  if(!stockCatalog.length) loadStockCatalog().catch(()=>{});
 }
 // Подсказки из каталога: у типовой работы уже перечислено, что она съедает.
 // Список этот годами лежал мёртвым — единственным его читателем был акт,
@@ -5659,7 +5662,8 @@ function renderJobParts(){
         +'<span class="pt-sum">'+partRev(p).toFixed(0)+' / '+partCost(p).toFixed(0)+'</span></span>')
       : '';
     d.innerHTML='<div class="pt-top">'
-        +'<input type="text" value="'+esc(p.name||'')+'" data-pn="'+i+'" placeholder="наименование">'
+        +'<span class="pt-name"><input type="text" value="'+esc(p.name||'')+'" data-pn="'+i+'" placeholder="наименование или артикул из каталога" aria-label="Запчасть: название или поиск по каталогу">'
+          +(p.stock_catalog_id?'<span class="pt-linked" title="Позиция из каталога материалов">из каталога</span>':'')+'</span>'
         +'<input type="text" value="'+esc(p.sku||'')+'" data-ps="'+i+'" placeholder="артикул">'
         +(p.voided?'<span class="hint">аннулирована</span>':p.legacy_task_item_id||p.approved_at?'<span class="hint" title="Для удаления подтверждённой строки требуется аудированная коррекция">'+(p.legacy_task_item_id?'историческая':'подтверждена · защищена')+'</span>':'<button class="btn sm ghost pt-rm" data-prm="'+i+'" title="Убрать">×</button>')
         +(canWriteJob()&&(p.legacy_task_item_id||p.canonical_task_item_id)&&!p.voided?'<button class="btn sm ghost" data-pvoid="'+i+'">Аннулировать</button>':'')
@@ -5691,7 +5695,9 @@ function renderJobParts(){
     box.appendChild(d);
   });
   const bind=(attr,f,ev)=>box.querySelectorAll('['+attr+']').forEach(el=>el[ev||'oninput']=()=>{ f(jobParts[el.dataset[attr.replace('data-','')]],el); });
-  bind('data-pn',(p,el)=>{ p.name=el.value; partTouch(p); partPaint(); },'oninput');
+  bind('data-pn',(p,el)=>{ p.name=el.value; if(p.stock_catalog_id&&partCatalogName(p)!==el.value.trim()){ p.stock_catalog_id=null; el.closest('.pt-name')?.querySelector('.pt-linked')?.remove(); } partTouch(p); partPaint(); },'oninput');
+  box.querySelectorAll('[data-pn]').forEach(el=>{ const p=jobParts[el.dataset.pn]; if(!canEditPart(p)) return;
+    attachStockPicker(el,{items:()=>stockCatalog,money:money,currency:appSettings.currency||'',esc,onPick:item=>partPick(p,item)}); });
   bind('data-ps',(p,el)=>{ p.sku=el.value; partTouch(p); },'oninput');
   bind('data-pq',(p,el)=>{ p.qty=parseFloat(el.value)||0; partTouch(p); partPaint(); },'oninput');
   bind('data-pu',(p,el)=>{ p.unit=el.value; partTouch(p); },'onchange');
@@ -5705,6 +5711,17 @@ function renderJobParts(){
   box.querySelectorAll('[data-pno]').forEach(b=>b.onclick=()=>partApprove(jobParts[b.dataset.pno],false));
   box.querySelectorAll('[data-pfix]').forEach(b=>b.onclick=()=>openFixModal('part',jobParts[b.dataset.pfix]));
   partTotals(); partSuggest();
+}
+// Позиция из каталога: название, артикул и единица — её, деньги — её же
+// (диспетчер потом может поправить цену в строке). Связь держится, пока
+// название не переписали руками.
+function partCatalogName(p){ return String(stockCatalog.find(c=>c.id===p.stock_catalog_id)?.name||p.name||'').trim(); }
+function partPick(p,item){
+  if(!p||!canEditPart(p)) return;
+  p.stock_catalog_id=item.id; p.name=item.name; p.sku=item.sku||''; p.unit=item.unit||'шт';
+  if(canWriteJob()){ p.price=+item.price||0; p.cost=+item.cost||0; }
+  partTouch(p); renderJobParts();
+  const i=jobParts.indexOf(p),qty=$('jbParts')?.querySelector('[data-pq="'+i+'"]'); if(qty){ qty.focus(); qty.select?.(); }
 }
 // Пересчёт чисел БЕЗ пересборки полей: перерисовка на каждую цифру
 // выбрасывала бы курсор из поля, в котором человек ещё печатает.
@@ -5734,9 +5751,12 @@ function partTotals(){
 }
 function partAdd(seed){
   if(!canEditParts()){ notify('Состав материалов нельзя менять после начала выполнения задания','warn'); return; }
+  // Подсказка из типовой работы, если такая позиция есть в каталоге, сразу с ним связана.
+  const hit=seed&&seed.name?stockCatalog.find(c=>c.active!==false&&String(c.name).trim().toLowerCase()===String(seed.name).trim().toLowerCase()):null;
   jobParts.push({id:'local-'+Date.now()+'-'+jobParts.length, job_id:jobEditId,
-    name:(seed&&seed.name)||'', sku:'', qty:(seed&&seed.qty)||1, unit:(seed&&seed.unit)||'шт',
-    price:0, cost:0, billable:true, created_by:session.user.id});
+    name:(hit&&hit.name)||(seed&&seed.name)||'', sku:(hit&&hit.sku)||'', qty:(seed&&seed.qty)||1, unit:(hit&&hit.unit)||(seed&&seed.unit)||'шт',
+    price:hit&&canWriteJob()?+hit.price||0:0, cost:hit&&canWriteJob()?+hit.cost||0:0, billable:true, created_by:session.user.id,
+    stock_catalog_id:hit?hit.id:null});
   renderJobParts();
   if(seed) partTouch(jobParts[jobParts.length-1]);
   else { const inp=$('jbParts').querySelector('.pt-row:last-child [data-pn]'); if(inp) inp.focus(); }
@@ -5754,7 +5774,7 @@ function partTouch(p){
 // увидел бы прежний список запчастей вместо своего.
 async function snapPartsPatch(jobId){
   const s=await snapGet('mine'); if(!s||!s.val||!s.val.byTrip) return;
-  const rows=jobParts.filter(partReady).map(x=>({id:x.id,local_only:!!x.local_only,name:x.name,sku:x.sku,qty:x.qty,
+  const rows=jobParts.filter(partReady).map(x=>({id:x.id,local_only:!!x.local_only,name:x.name,sku:x.sku,stock_catalog_id:x.stock_catalog_id||null,qty:x.qty,
     unit:x.unit,price:x.price,cost:x.cost,billable:x.billable}));
   let touched=false;
   Object.values(s.val.byTrip).forEach(arr=>(arr||[]).forEach(j=>{
@@ -6155,6 +6175,7 @@ function jobPartRow(p,index){
   // response was lost reuses its original key instead of inserting a twin.
   if(String(p.id||'').startsWith('local-')){p.id=partStableId();p.local_only=true;}
   return {index,id:p.canonical_task_item_id||p.id,client_new:!!p.local_only,local_only:!!p.local_only,name:String(p.name||'').trim(),sku:String(p.sku||'').trim(),
+    stock_catalog_id:p.stock_catalog_id||null,
     qty:partQty(p),unit:p.unit||'шт',billable:p.billable!==false,
     ...(canWriteJob()?{price:+p.price||0,cost:+p.cost||0}:{})};
 }
