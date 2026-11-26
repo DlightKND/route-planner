@@ -814,8 +814,11 @@ function applyMobileNav(){
   // Раскрытие — после короткой задержки: курсор, который лишь пересекает рельс
   // по пути к кнопке у его края, не должен накрывать её раскрытым меню.
   let railOpenT=null;
-  rail.addEventListener('pointerenter',e=>{ if(e.pointerType==='touch') return; clearTimeout(railOpenT); railOpenT=setTimeout(()=>{ if(rail.matches(':hover')) rail.classList.remove('rail-rest'); },220); });
-  rail.addEventListener('pointerleave',()=>{ clearTimeout(railOpenT); rail.classList.add('rail-rest'); });
+  // Только настоящее движение мыши над рельсом: когда закрывается окно или
+  // меняется раскладка, браузер сам «наводит» курсор на рельс без движения —
+  // такой рельс не должен раскрываться и накрывать страницу.
+  rail.addEventListener('pointermove',e=>{ if(e.pointerType==='touch'||!(e.movementX||e.movementY)||!rail.classList.contains('rail-rest')||railOpenT) return; railOpenT=setTimeout(()=>{ railOpenT=null; if(rail.matches(':hover')) rail.classList.remove('rail-rest'); },220); });
+  rail.addEventListener('pointerleave',()=>{ clearTimeout(railOpenT); railOpenT=null; rail.classList.add('rail-rest'); });
   // Открылась другая страница — показываем её, а не раскрытый рельс; следующий Tab раскроет его снова.
   window.addEventListener('hashchange',()=>{ if(!rail.matches(':hover')) rail.classList.add('rail-rest'); });
 })();
