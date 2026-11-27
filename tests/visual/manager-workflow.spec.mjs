@@ -399,7 +399,7 @@ test('M10: the engineer resumes a trip draft, reviews it and sends it to the cur
  const expand=panel.locator('[data-visit-expand]').first();
  const materials=panel.locator('.order-trip-materials');
  const used=materials.locator('[data-visit-field=qty]').first();
- await expect(panel.locator('[data-visit-select]')).toHaveValue(trip);
+ await expect(panel.locator('[data-visit-current]')).toHaveAttribute('data-visit-current',trip);
  await expect(panel.locator('[data-visit-review]')).toBeInViewport();
  const workTable=panel.getByRole('table',{name:'Работы задания',exact:true});
  await expect(workTable.locator('thead th')).toHaveText(['Работа','План, н-ч','Факт, чел·ч','Комментарий','Детали работы']);
@@ -428,7 +428,7 @@ test('M10: the engineer resumes a trip draft, reviews it and sends it to the cur
  await materials.locator('summary').click();
  await used.fill('1');
  await page.reload();
- await expect(panel.locator('[data-visit-select]')).toHaveValue(trip);
+ await expect(panel.locator('[data-visit-current]')).toHaveAttribute('data-visit-current',trip);
  await expand.click();
  await expect(line.locator('[data-visit-field=qty]')).toHaveValue('3');
  await expect(line.locator('[data-visit-field=note]')).toHaveValue('Осталась проверка');
@@ -641,7 +641,7 @@ test('M14: a work photo survives reload and stays available from its accepted ve
 for(const stage of ['in_progress','paused'])test('M11: the curator saves the work norm and records a manual result without a trip · '+stage,async({page},info)=>{
  const errors=await boot(page,info,{stage,route:'order/'+order+'/scope',standaloneWorkPlan:true});
  const panel=page.locator('#orderTripResults');
- await expect(panel.locator('[data-visit-select]')).toHaveCount(0);
+ await expect(panel.locator('[data-visit-current]')).toHaveCount(0);
  await panel.locator('[data-visit-expand]').first().click();
  const group=panel.locator('[data-work-plan]').first();
  await group.getByRole('textbox',{name:'План, н-ч'}).fill('7,5');
@@ -686,10 +686,39 @@ test('M10: the curator accepts a trip report and corrects it with version histor
  expect(corrected).toMatchObject({p_action:'accepted',p_expected_event:accepted.p_operation,p_order_revision:1,
   p_result:{correction:'Уточнили по акту'}});
  expect(corrected.p_result.items[0]).toMatchObject({qty:4,hours:2});
- await panel.locator('[data-visit-select]').selectOption('');
- await expect(panel.getByRole('table',{name:'Работы задания',exact:true}).locator('tfoot .order-trip-number').last()).toHaveText('2');
- await panel.locator('[data-visit-expand]').first().click();
- await panel.locator('[data-trip-receipt]').first().click();
- await expect(panel.locator('[data-visit-select]')).toHaveValue(trip);
+ // One trip: the table stays on it and offers no switch to all trips (mockup v65).
+ await expect(panel.locator('[data-visit-current]')).toHaveAttribute('data-visit-current',trip);
+ await expect(panel.locator('[data-visit-all]')).toHaveCount(0);
+ await clean(page,errors);
+});
+
+test('M18: the works tab adds a work to an editable task and edits the task terms in place',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'assigned',route:'order/'+order+'/scope',paymentJourney:true});
+ const panel=page.locator('#orderTripResults');
+ const terms=panel.locator('[data-work-scope-terms]');
+ await expect(terms).toContainText('Вне гарантии');
+ await terms.getByRole('button',{name:'Изменить условия'}).click();
+ const editor=page.getByRole('dialog',{name:'Условия оплаты'});await expect(editor).toBeVisible();
+ await editor.getByRole('button',{name:'Закрыть'}).click();await expect(editor).toHaveCount(0);
+ await panel.getByRole('button',{name:'Добавить работу'}).click();
+ const form=page.getByRole('dialog',{name:/Добавить работу к заданию/});
+ await form.locator('[data-entity-save]').click();await expect(form).toBeVisible();
+ expect(await form.getByLabel('Название').evaluate(el=>el.validity.valueMissing)).toBe(true);
+ await form.getByLabel('Название').fill('Замена фильтра');await form.getByLabel('Количество').fill('2');await form.getByLabel('Единица').fill('шт');
+ await form.locator('[data-entity-save]').click();await expect(form).toHaveCount(0);
+ const write=await page.evaluate(()=>window.__visualQA.managerWrites.at(-1));
+ expect(write.name).toBe('service_order_save_one');
+ expect(write.args.p_items.at(-1)).toMatchObject({title:'Замена фильтра',unit:'шт',planned_qty:2,kind:'work'});
+ expect(write.args.p_items.length).toBeGreaterThan(1);
+ await clean(page,errors);
+});
+
+test('M19: a running task keeps the add-work action hidden and edits only period and team',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope'});
+ await expect(page.locator('#orderTripResults [data-work-add]')).toHaveCount(0);
+ await page.locator('#orderEditData').click();
+ const editor=page.getByRole('dialog',{name:'Изменить задание'});await expect(editor).toBeVisible();
+ await expect(editor.locator('#orderPlanTitle')).toHaveCount(0);await expect(editor.locator('#orderPlanFrom')).toBeVisible();
+ await page.keyboard.press('Escape');await expect(editor).toHaveCount(0);
  await clean(page,errors);
 });

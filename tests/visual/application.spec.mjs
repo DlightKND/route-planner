@@ -362,7 +362,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       if(scene.name==='task-active'){
         await active.locator('#orderTab-overview').click();
         const trigger=active.locator('#orderRecordResult');await reveal(trigger);await trigger.click();
-        const result=page.getByRole('dialog',{name:'Зафиксировать результат',exact:true});
+        const result=page.getByRole('dialog',{name:'Отчёт о работах без выезда',exact:true});
         await expect(result).toBeVisible();await expect(result.locator('[data-result-qty]').first()).toBeEnabled();
         await expect(result.locator('#orderResultSave')).toBeVisible();
         const bounds=await result.boundingBox(),viewport=testInfo.project.use.viewport;

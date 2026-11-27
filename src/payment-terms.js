@@ -128,6 +128,18 @@ export function bindInlinePayment(element,view,save,onSaved){
  const reset=element.querySelector('[data-payment-reset]');if(reset)reset.onclick=()=>submit({});
 }
 
+// One line of the card's terms above its works table (mockup v65): warranty, payer and where they come from.
+export function paymentScopeSummaryHTML(model){
+ const view=paymentView(model);if(!view)return '';
+ const note=view.exception?`Свои условия · ${view.origin||'заданы здесь'}`:view.origin;
+ return `<div class="payment-scope-summary"><div><strong>${esc(label(view,'warranty',view.effective.warranty))}</strong><span>${esc(label(view,'payer',view.effective.payer))}</span>${note?`<span class="hint${view.exception?' payment-term-exception':''}">${esc(note)}</span>`:''}</div>${view.editable?'<button type="button" class="btn" data-payment-scope-edit>Изменить условия</button>':''}</div>`;
+}
+// The card's terms editor as a dialog, from any trigger.
+export function editPaymentTerms({doc,model,save,trigger,onSaved}){
+ const view=paymentView(model);if(!view?.editable)return null;
+ const panel=doc.createElement('section');panel.hidden=true;panel.className='payment-card-editor';panel.innerHTML=controls(view);doc.body.append(panel);
+ return openEntityPanel({title:'Условия оплаты',panel,trigger,dispose:true,saveLabel:'Сохранить условия',saveHint:'',onSave:()=>save(view,readControls(panel)),onSaved});
+}
 export function mountPaymentCard({root,model,save,onOpen,onChange}){
  if(!root)return;
  const view=paymentView(model);root.hidden=!view;
@@ -141,8 +153,6 @@ export function mountPaymentCard({root,model,save,onOpen,onChange}){
  root.querySelectorAll('[data-payment-exception]').forEach(button=>{button.onclick=()=>onOpen?.(exceptions[Number(button.dataset.paymentException)]);});
  const edit=root.querySelector('[data-payment-card-edit]');
  if(edit)edit.onclick=()=>{
-  const panel=root.ownerDocument.createElement('section');panel.hidden=true;panel.className='payment-card-editor';panel.innerHTML=controls(view);root.append(panel);
-  openEntityPanel({title:'Условия оплаты',panel,trigger:edit,dispose:true,saveLabel:'Сохранить условия',saveHint:'',
-   onSave:()=>save(view,readControls(panel)),onSaved:()=>{mountPaymentCard({root,model,save,onOpen,onChange});onChange?.();}});
+  editPaymentTerms({doc:root.ownerDocument,model,save,trigger:edit,onSaved:()=>{mountPaymentCard({root,model,save,onOpen,onChange});onChange?.();}});
  };
 }

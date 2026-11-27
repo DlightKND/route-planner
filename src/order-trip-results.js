@@ -2,7 +2,7 @@ import {planningPeriod} from './core/planning-dates.js';
 import {journalIcon} from './journal-icons.js';
 import {openEntityPanel} from './entity-actions.js';
 import {orderPhotoDrafts,orderResultPhotoPath} from './order-photo-drafts.js';
-import {bindInlinePayment,inlinePaymentHTML,paymentView,workPaymentCue} from './payment-terms.js';
+import {bindInlinePayment,inlinePaymentHTML,paymentScopeSummaryHTML,paymentView,workPaymentCue} from './payment-terms.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:6});
@@ -35,7 +35,7 @@ export function proposedTripHours(items,accepted,budget,catalog){
  return hours;
 }
 
-export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onSelectTrip,onWrite,onPlanWrite,onPartWrite,onReturnReason,onGPS,onTrip,onReload,preparePhoto,uploadPhoto,downloadPhoto,savePayment,onPaymentChange}){
+export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onSelectTrip,onWrite,onPlanWrite,onPartWrite,onReturnReason,onGPS,onTrip,onTrips,onAddWork,onEditTerms,onReload,preparePhoto,uploadPhoto,downloadPhoto,savePayment,onPaymentChange}){
  let paymentModel=null;
  const trips=data?.trips||[],works=items.filter(item=>item.kind!=='material'),material=items.filter(item=>item.kind==='material');
  const workIds=new Set(works.map(item=>item.id));
@@ -88,6 +88,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   expanded.clear();partsOpen.clear();
   editing=false;review=false;operation=null;restore();render();onSelectTrip?.();
  }
+ function pending(){return trips.find(t=>t.linked&&['finished','done'].includes(t.status)&&!t.presence?.confirmed&&!t.presence?.no_work);}
  function distributed(){return fields?.rows.reduce((sum,row)=>sum+(nonnegative(row.hours)||0),0)||0;}
  function updateMetrics(){
   const total=root.querySelector('[data-trip-distributed]');if(total)total.textContent=fmt(distributed())+' чел·ч';
@@ -128,7 +129,9 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
  }
  function workTable(rows,hours,actions='',live=false){
   const plan=works.reduce((sum,item)=>sum+plannedHours(item,entries),0);
-  return `<section class="order-trip-work-card"><header class="order-trip-result-head"><h3>Работы задания</h3>${actions}</header>
+  const add=onAddWork?buttons('Добавить работу','data-work-add'):'';
+  return `<section class="order-trip-work-card"><header class="order-trip-result-head"><h3>Работы задания</h3>${actions}${add}</header>
+   <div class="order-trip-scope-terms" data-work-scope-terms hidden></div>
    ${rows?`<table class="order-trip-work-table" aria-label="Работы задания">
     <colgroup><col class="order-trip-work-name"><col class="order-trip-value"><col class="order-trip-value"><col><col class="order-trip-command"></colgroup>
     <thead><tr><th scope="col">Работа</th><th scope="col" class="order-trip-number">План, н-ч</th><th scope="col" class="order-trip-number">Факт, чел·ч</th><th scope="col">Комментарий</th><th scope="col"><span class="sr-only">Детали работы</span></th></tr></thead>
@@ -421,10 +424,10 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
  function render(){
   const trip=selected,accepted=trip&&lastVersion(trip),readOnly=trip&&(!trip.linked||trip.status==='cancelled'||trip.presence?.no_work||!mayReport||
    !!accepted&&!editing||trip.state==='submitted'&&!manager);
-  const picker='<select class="order-trip-picker" data-visit-select aria-label="Результат по выезду"><option value="">Все выезды</option>'+trips.map(t=>
-   '<option value="'+esc(t.id)+'" '+(t===trip?'selected':'')+'>'+esc(tripLabel(t))+'</option>').join('')+'</select>';
-  const tripControl=trip?buttons('Открыть выезд','data-visit-trip','ghost'):'';
-  const selection=data?picker+tripControl:'';
+  // Mockup v65: the current trip is named in the header; the summary of all trips links to the trips tab.
+  const selection=!data||!trips.length?'':trip?`<span class="hint order-trip-current" data-visit-current="${esc(trip.id)}">${esc(tripLabel(trip))}</span>`+
+   (trips.length>1?buttons('Все выезды','data-visit-all'):'')+buttons('Открыть выезд','data-visit-trip','ghost'):
+   '<span class="hint order-trip-current">По всем выездам</span>'+(onTrips?buttons('Открыть выезды','data-visit-trips'):'');
   const confirmed=trips.filter(t=>t.presence?.confirmed&&t.linked&&t.status!=='cancelled');
   const available=trip?(trip.presence?.confirmed?Number(trip.presence.available):null):
    (confirmed.length?confirmed.reduce((sum,t)=>sum+Number(t.presence.available),0):null);
@@ -434,7 +437,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   const context=`<div class="order-trip-context"><dl class="order-trip-metrics">
    <div><dt>На распределении</dt><dd>${metric(available)}</dd></div>
    <div><dt>Распределено</dt><dd ${trip&&!readOnly?'data-trip-distributed':''}>${metric(distributedHours)}</dd></div></dl>
-   ${trip?.presence?.no_work?'<p class="hint">По GPS-записи подтверждено отсутствие работ.</p>':trip&&!trip.presence?.confirmed?buttons('Сверить данные GPS','data-visit-gps'):''}</div>`;
+   ${trip?.presence?.no_work?'<p class="hint">По GPS-записи подтверждено отсутствие работ.</p>':trip&&!trip.presence?.confirmed?buttons('Сверить данные GPS','data-visit-gps'):
+    !trip&&manager&&pending()?buttons('Сверить данные GPS','data-visit-gps'):''}</div>`;
   let content='';
   const proposal=trip&&!readOnly?proposedTripHours(items,accepted,available,entries):null;
   if(!trip){
@@ -475,6 +479,12 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   bind(proposal);
  }
  function paintWorkPayment(onlyWork){
+  const terms=root.querySelector('[data-work-scope-terms]');
+  if(terms&&!onlyWork){
+   terms.innerHTML=paymentScopeSummaryHTML(paymentModel);terms.hidden=!terms.innerHTML;
+   const edit=terms.querySelector('[data-payment-scope-edit]');
+   if(edit){if(onEditTerms)edit.onclick=()=>onEditTerms(edit);else edit.remove();}
+  }
   root.querySelectorAll('[data-work-row]').forEach(row=>{
    const work=row.dataset.workRow;
    if(onlyWork&&work!==onlyWork)return;
@@ -493,8 +503,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
  }
  function bind(proposal){
   const get=selector=>root.querySelector(selector);
-  const picker=get('[data-visit-select]');
-  if(picker)picker.onchange=e=>switchTrip(e.target.value);
+  const all=get('[data-visit-all]');
+  if(all)all.onclick=()=>{switchTrip('');get('[data-visit-trips]')?.focus();};
   root.querySelectorAll('[data-trip-receipt]').forEach(button=>{button.onclick=()=>switchTrip(button.dataset.tripReceipt);});
   root.querySelectorAll('[data-visit-expand]').forEach(button=>{button.onclick=()=>setExpanded(button,button.getAttribute('aria-expanded')!=='true');});
   root.querySelectorAll('[data-photo-work]').forEach(group=>{
@@ -539,7 +549,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
    });
   });
   const wire=(selector,fn)=>{const button=get(selector);if(button)button.onclick=fn;};
-  wire('[data-visit-trip]',()=>onTrip(selected.id));wire('[data-visit-gps]',()=>onGPS(selected.id));
+  wire('[data-visit-trip]',()=>onTrip(selected.id));wire('[data-visit-gps]',()=>onGPS((selected||pending()).id));
+  wire('[data-visit-trips]',()=>onTrips?.());wire('[data-work-add]',()=>onAddWork?.(get('[data-work-add]')));
   wire('[data-visit-edit]',()=>{editing=true;persist();render();});
   wire('[data-visit-back]',()=>{review=false;render();get('[data-visit-review]').focus();});
   wire('[data-visit-review]',()=>{
