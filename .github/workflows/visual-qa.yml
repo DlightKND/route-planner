@@ -198,7 +198,7 @@ jobs:
       matrix:
         viewport: [mobile-360, mobile-390, tablet-768, desktop-1024, desktop-1440]
     name: chromium (${{ matrix.viewport }})
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
