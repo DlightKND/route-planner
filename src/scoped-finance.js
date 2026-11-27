@@ -127,7 +127,8 @@ export function mountEntityFinance(root,{db,scope,id,current,onTrip,onGPS,onOrde
   const version=++request;
   try{
    const result=await readFinance(db(),scope,id);
-   if(!current()||version!==request||!result)return;
+   if(!current()||version!==request)return;
+   if(!result){if(!model){root.hidden=false;root.innerHTML='<p class="hint scoped-finance-unavailable">Расчёт план/факта пока недоступен.</p>';}return;}
    const initial=!model;
    model=result;root.hidden=false;root.dataset.financeReady='';render();
    if(initial)onReady?.();

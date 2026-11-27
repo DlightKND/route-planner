@@ -24,7 +24,8 @@ it('organizes the actual request DOM without dropping or duplicating financial a
   const {get}=setup();
   const groups={jobOverviewPane:['jbClient','jbDue','jbNotes','jobActivity','jobPendingDecisions'],
     jobTasksPane:['jobOrders'],jobTripsPane:['jobLinkedTrips'],
-    jobEstimatePane:['jobHeadEcon','jbWorks','jbParts','jbPartTotals'],
+    jobEstimatePane:['jobTaskCosts'],
+    jobEstimateArchive:['jobHeadEcon','jbWorks','jbParts','jbPartTotals'],
     jobAuxiliary:['jobResponsibilitySection','jbFixes','jbPhotoList']};
   for(const [panel,ids] of Object.entries(groups))for(const id of ids){
     expect(get(panel).contains(get(id)),`${id} in ${panel}`).toBe(true);
@@ -33,7 +34,8 @@ it('organizes the actual request DOM without dropping or duplicating financial a
   expect(get('jobSave').closest('[data-request-pane]')).toBeNull();
   expect(get('jobErr').closest('.entity-toolbar')).not.toBeNull();
   expect(get('jobExecutionPane')).toBeNull();expect(get('jobTabExecution')).toBeNull();
-  expect(get('jobAuxiliary').hidden).toBe(true);
+  expect(get('jobAuxiliary').hidden).toBe(true);expect(get('jobEstimateArchive').hidden).toBe(true);
+  expect(get('jobEstimatePane').textContent).not.toContain('Смета заявки');
 });
 it('switches request sections while preserving unsaved values, permission flags and autosave state',()=>{
   const {get,root,context}=setup();vm.runInContext('configureRequestTabs(true)',context);
@@ -76,11 +78,11 @@ it('opens the canonical journal from the trip review CTA without changing trip f
     tripOrdersAll:[],curTripOrders:new Set(),ST_TRIP:{assigned:'назначен'},tripCostReviewState:'не проверены',
     plural:()=>'',esc:String,canWriteTrip:()=>false,tripPlanDirty:true,tripPresenceDirty:true});
   vm.runInContext(renderer,context);vm.runInContext('renderTripReviewSummary()',context);
-  const notes=get('tpNotes');notes.value='Изменённый план';get('tpOvCost').value='725';get('tpOvCost').disabled=true;
+  const notes=get('tpNotes');notes.value='Изменённый план';get('tpFrom').value='2026-10-01';get('tpFrom').disabled=true;
   const changes=vi.fn();get('tpPresence').closest('.view-trip').addEventListener('change',changes);context.openJournalTrip=vi.fn();
   get('tpReviewPresence').click();expect(context.openJournalTrip).toHaveBeenCalledWith('t1');expect(get('tpTabPresence')).toBeNull();expect(get('tpPresencePane')).toBeNull();
   get('tpTabEconomy').click();get('tpTabPlan').click();
-  expect(notes.value).toBe('Изменённый план');expect(get('tpOvCost').value).toBe('725');expect(get('tpOvCost').disabled).toBe(true);
+  expect(notes.value).toBe('Изменённый план');expect(get('tpFrom').value).toBe('2026-10-01');expect(get('tpFrom').disabled).toBe(true);
   expect(context.tripPlanDirty).toBe(true);expect(context.tripPresenceDirty).toBe(true);expect(changes).not.toHaveBeenCalled();
   expect(get('tpFactBox').closest('[data-trip-pane]').dataset.tripPane).toBe('economy');
 });

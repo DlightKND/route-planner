@@ -121,7 +121,8 @@ test('M16: road shares, payment terms and an edited tariff survive a split and r
  await expect(detail).toContainText('6,25 из 10 км распределено');
  await shot(page,info,'journal-road-payment');
  await navigate(page,'trip','/trip/'+trip+'/economy');
- const accounting=page.locator('#tpJournalRoadAccounting');
+ await page.locator('#tpReviewCosts').click();
+ const costs=page.getByRole('dialog',{name:'Распределить расходы'}),accounting=costs.locator('#tpJournalRoadAccounting');
  await expect(accounting).toBeVisible();
  const charge=accounting.locator('tbody tr').first();
  await expect(charge.locator('td').nth(1)).toHaveText('—');
@@ -129,6 +130,7 @@ test('M16: road shares, payment terms and an edited tariff survive a split and r
  await dialog(page).locator('[data-rate=revenue]').fill('25');
  await dialog(page).locator('[data-entity-save]').click();
  await expect(charge.locator('td').nth(1)).toContainText('156,25');
+ await costs.getByRole('button',{name:'Закрыть'}).click();await expect(costs).toHaveCount(0);
  await page.locator('#tpTabOverview').click();
  const linked=page.locator('#payment-trip-card');
  await linked.locator('details summary').click();
@@ -564,9 +566,6 @@ test('M13: the curator adds an extra part to a draft and corrects the accepted c
  await expect(panel.locator('.order-trip-review')).toContainText('Кольцо · 2');
  await panel.locator('[data-visit-commit]').click();
  await expect(panel).toContainText('Принято');
- await page.getByRole('tab',{name:'План/факт'}).click();
- await expect(page.locator('#orderPlanFactRows')).toContainText('25,5 ₴');
- await page.getByRole('tab',{name:'Работы'}).click();
  await panel.getByRole('button',{name:'Исправить результат'}).click();
  await expand.click();
  await parts.locator(':scope > summary').click();
@@ -575,8 +574,6 @@ test('M13: the curator adds an extra part to a draft and corrects the accepted c
  await panel.locator('[data-visit-review]').click();
  await panel.locator('[data-visit-commit]').click();
  await expect(panel).toContainText('Принято');
- await page.getByRole('tab',{name:'План/факт'}).click();
- await expect(page.locator('#orderPlanFactRows')).toContainText('12,75 ₴');
  const writes=await page.evaluate(()=>window.__visualQA.visitWrites);
  expect(writes.map(write=>write.p_result.extra_parts[0].qty)).toEqual([2,1]);
  expect(writes[0].p_result.extra_parts[0]).toMatchObject({title:'Кольцо',unit:'шт.',unit_cost:12.75});
@@ -672,11 +669,6 @@ test('M10: the curator accepts a trip report and corrects it with version histor
  await panel.locator('[data-visit-review]').click();
  await panel.locator('[data-visit-commit]').click();
  await expect(panel).toContainText('Версии результата · 1');
- await page.getByRole('tab',{name:'План/факт'}).click();
- const plan=page.locator('#orderPlanFactRows tbody tr').first();
- await expect(plan.locator('td').last()).toHaveText('2');
- await expect(plan.locator('td').nth(2)).toHaveText('3 ч');
- await page.getByRole('tab',{name:'Работы'}).click();
  await panel.locator('[data-visit-edit]').click();
  await panel.locator('[data-visit-expand]').first().click();
  await line.locator('[data-visit-field=qty]').fill('4');

@@ -127,9 +127,9 @@ test('design state: GPS resolution separates the operation, parameters and saved
  await overlay.locator('[data-gps-choice=create]').click();await expect(overlay.locator('[data-pf=reason]')).toHaveValue('Основание создания выезда');
  await overlay.locator('#promptNo').click();if(await page.locator('#confirmOverlay').isVisible())await page.locator('#confirmYes').click();await expect(overlay).toBeHidden();expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);
 });
-test('design state: request estimate keeps the agreed scope separate from execution',async({page},info)=>{
+test('design state: request plan/fact has no separate estimate',async({page},info)=>{
  const errors=await start(page,info,'job/'+fixtureIDs.job,{financeJourney:true});await page.locator('#jobTabEstimate').click();
- await expect(page.locator('.request-estimate-base')).toBeVisible();await expect(page.locator('#jbWorks')).toBeVisible();await expect(page.locator('#jbParts').locator('..')).toBeVisible();
+ await expect(page.locator('#jobEstimatePane')).toBeVisible();await expect(page.locator('#jobEstimatePane')).not.toContainText('Смета заявки');await expect(page.locator('#jbWorks')).toBeHidden();await expect(page.locator('#jbParts')).toBeHidden();
  await capture(page,info,'request-estimate',errors);await page.locator('#jobTabTasks').click();await expect(page.locator('#jobOrders')).toBeVisible();
 });
 test('design state: new assignment keeps editable organization and scope together',async({page},info)=>{

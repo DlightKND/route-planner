@@ -85,7 +85,7 @@ import './planner-integration.css';
 import './mockup-v65.css';
 
 const serviceOrders=createServiceOrders({db:()=>sb,canWrite,role:()=>role,profiles:()=>profilesList,userId:()=>session?.user?.id,ensureRefs,isPhone,wireDrag:wireKanbanDrag,notify,preparePhoto:shrinkImage,
- showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),afterOrderResult:o=>afterOrderResult(o),onOrderViewChange:()=>routeSet(routeForView('order')),openJob,openJobEstimate:id=>openJob(id,null,null,{pane:'estimate'}),openTrip,openJournalTrip,cardOrigin,returnToCard,recordTripResult:(trip,job)=>recordEntityResult('trip',trip,job),canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
+ showBoard:()=>switchTab('planner','orders'),showOrder:()=>switchTab('order'),afterOrderResult:o=>afterOrderResult(o),onOrderViewChange:()=>routeSet(routeForView('order')),openJob,openTrip,openJournalTrip,cardOrigin,returnToCard,recordTripResult:(trip,job)=>recordEntityResult('trip',trip,job),canManageTrip:canWriteTrip,tripStatus:s=>ST_TRIP[s]||s,
  tripCostSummary:async orderId=>{const {data,error}=await sb.rpc('service_order_trip_cost_summary',{p_order:orderId});if(error)throw error;return data||[];},
  confirm:(message,options)=>confirmDialog(message,options),beforeOpen:async()=>await unassignedTracks.leave()&&await leaveSettingsEditor()&&await leaveTripEditor()&&await leaveJobEditor(),confirmLeave:async()=>{const ok=await confirmDialog('Выйти без сохранения изменений задания?',{title:'Несохранённое задание',okText:'Отменить изменения',cancelText:'Продолжить работу',danger:true});if(!ok)restoreCardRoute();return ok;},reason:async title=>(await promptDialog(title,[{key:'reason',label:'Причина',type:'textarea',required:!title.includes('можно оставить пустым')}],{okText:'Продолжить'}))?.reason??null});
 serviceOrders.init();
@@ -4632,10 +4632,10 @@ async function loadCardPayment(scope,id,anchor,currentId){
     }).catch(()=>{});
   }catch(error){if(current()){host.hidden=false;host.textContent=error.message||'Условия оплаты недоступны';}}
 }
-// Cost allocation stays a collapsible card under the plan/fact; actions open and focus it.
-function openTripCostReview(){
-  const detail=$('tpCostReview');if(!detail)return;detail.dataset.requested='';detail.open=true;
-  detail.querySelector('summary')?.focus({preventScroll:true});detail.scrollIntoView?.({block:'start'});
+// Cost allocation opens as a dialog over the plan/fact (mockup v65).
+function openTripCostReview(trigger=document.activeElement){
+  const panel=$('tpCostReview');if(!panel||panel.closest('dialog'))return;
+  return openEntityPanel({title:'Распределить расходы',panel,trigger});
 }
 function mountCardFinance(scope,id,pane,currentId){
   const hostId=scope+'ScopedFinance';$(hostId)?.remove();
@@ -4643,15 +4643,10 @@ function mountCardFinance(scope,id,pane,currentId){
   if(pane&&tripReview.length)pane.prepend(...tripReview.filter(Boolean));
   if(!id||!pane)return null;
   const host=document.createElement('section'),user=session?.user?.id;
-  const allocation=scope==='trip'?$('tpCostReview'):null;
-  if(allocation){allocation.open=true;delete allocation.dataset.requested;}
   host.id=hostId;host.className='scoped-finance';pane.prepend(host);
   return mountEntityFinance(host,{db:()=>sb,scope,id,
     current:()=>host.isConnected&&id===currentId()&&user===session?.user?.id,
     onReady:()=>{
-      const detail=scope==='trip'?$('tpContractEconomy'):$('jobBaseEstimate');
-      if(detail&&!detail.contains(document.activeElement))detail.open=false;
-      if(allocation&&!allocation.hasAttribute('data-requested')&&!allocation.contains(document.activeElement))allocation.open=false;
       if(tripReview.length)$('tripTechnicalDetails')?.append(...tripReview.filter(Boolean));
     },
     onAllocate:async row=>{
@@ -6659,7 +6654,7 @@ function renderTripReviewSummary(){
  if(state)setOverviewState($('tripOverviewState'),...state);
  const states=[['Выезд',ST_TRIP[t.status]||t.status,t.status==='done'?'confirmed':'neutral','plan','tpReviewPlan','Открыть план'],['Присутствие',presence,pending?'pending':approved?'confirmed':'neutral','presence','tpReviewPresence','Открыть присутствие'],['Распределение затрат',tripCostReviewState,tripCostReviewState==='подтверждены'?'confirmed':'pending','economy','tpReviewCosts',canWriteTrip()?'Сверить затраты':'Открыть затраты'],['Выполнение заданий',tasks.length?'Принято '+accepted+' из '+tasks.length+' заданий':'Задания не добавлены',tasks.length&&accepted===tasks.length?'confirmed':'neutral','plan','tpReviewTasks','Открыть задания']];
  box.innerHTML='<h3 class="trip-review-heading">Проверка выезда</h3><div class="trip-review-grid">'+states.map(([label,value,state,pane,id,action])=>'<button type="button" class="trip-review-item" id="'+id+'" data-review-state="'+state+'" data-review-pane="'+pane+'"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong><small>'+esc(action)+' →</small></button>').join('')+'</div>';
- box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{button.closest('dialog[open]')?.close();if(button.id==='tpReviewPresence'){openJournalTrip(t.id);return;}setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewCosts'){openTripCostReview();}if(button.id==='tpReviewTasks')$('tpLinkedOrders')?.scrollIntoView({block:'start'});});
+ box.querySelectorAll('[data-review-pane]').forEach(button=>button.onclick=()=>{button.closest('dialog[open]')?.close();if(button.id==='tpReviewPresence'){openJournalTrip(t.id);return;}setTripPane(button.dataset.reviewPane);if(button.id==='tpReviewCosts'){openTripCostReview($('tripMore'));}if(button.id==='tpReviewTasks')$('tpLinkedOrders')?.scrollIntoView({block:'start'});});
 }
 function listLoadError(box,error,retry){box.className='';box.innerHTML='<p class="err" role="alert">Не удалось загрузить данные: '+esc(error.message)+'</p><button type="button" class="btn sm" data-list-retry>Повторить загрузку</button>';box.querySelector('[data-list-retry]').onclick=retry;}
 async function loadWorkbench(id){
@@ -6942,12 +6937,11 @@ async function openTrip(id,{includeOrderId=null,includeOrderIds=[],plannedOrderI
   const includeIds=[...new Set([...(includeOrderIds||[]),...(includeOrderId?[includeOrderId]:[])])];
   $('tpTaskPicker').open=!id||newPlan||!!includeIds.length;
   $('tpSave').hidden=ro;
-  $('tripHeadEcon').hidden=ro;
   $('tpChangeReasonGroup').hidden=ro||!id||tripNewPlanId===id;
   configureTripPlanStatus($('tpStatus'),t,!ro);
   if(gpsSource){$('tpVeh').disabled=true;$('tpStatus').disabled=true;}
   const es=(t&&(t.plan_econ_snapshot||t.econ_snapshot))||{}; tripRoute={km:es.km||0,driveH:es.driveH||0,geometry:(t&&t.route_geometry)||null,legs:es.legs||[]};
-  const ovs=(t&&t.overrides)||{}; tripOverrides={revenue:(ovs.revenue!=null?String(ovs.revenue):''),cost:(ovs.cost!=null?String(ovs.cost):''),road:(ovs.road||{})}; $('tpOvRev').value=tripOverrides.revenue; $('tpOvCost').value=tripOverrides.cost;
+  const ovs=(t&&t.overrides)||{}; tripOverrides={revenue:(ovs.revenue!=null?String(ovs.revenue):''),cost:(ovs.cost!=null?String(ovs.cost):''),road:(ovs.road||{})};
   const saved=(t&&t.route_stops)?t.route_stops:[]; const st=saved.find(x=>x.type==='start'); tripStart=st?{...st}:null;
   tripRouteKeys=new Set(saved.filter(s=>s.lat!=null&&s.lng!=null).map(s=>(+s.lat).toFixed(5)+','+(+s.lng).toFixed(5))); if($('tpJobsRoute')) $('tpJobsRoute').checked=true;
   tripRouteStops=saved.filter(x=>x.type!=='start').map(x=>({...x,type:x.type||'job'})); syncRouteStops(); renderRouteStops();
@@ -7023,11 +7017,6 @@ function tripHead(){
   const tripDue=[...curTripOrders].map(oid=>tripOrdersAll.find(o=>o.id===oid)).map(o=>o?.jobs?.due_date||jobs.find(j=>j.id===o?.job_id)?.due_date).filter(Boolean).sort()[0];
   $('tripSub').innerHTML='<p class="workflow-subject">'+esc(vehicle)+'</p>'+metadataList([tripDue&&['SLA · выполнить до',metaDate(tripDue)],['Плановые даты',metaPeriod($('tpFrom').value,$('tpTo').value)],['Команда',crewLabel(engs),engs.join(', ')]]);
   $('tripOverviewDescription').textContent=$('tpNotes').value.trim()||'Описание не указано.';
-  $('tripHeadEcon').hidden=!canWriteTrip();
-  const pc=e.profit>=0?'var(--ink)':'var(--red)';
-  $('tripHeadEcon').innerHTML='<div class="te-k">Прибыль · предварительно</div>'
-    +'<div class="te-v" style="color:'+pc+'">'+Math.round(e.profit).toLocaleString('ru-RU')+' '+e.cur+'</div>'
-    +'<div class="te-s">маржа '+e.margin.toFixed(0)+'% · выручка '+Math.round(e.rev).toLocaleString('ru-RU')+'</div>';
   if($('tpJobsCnt')) $('tpJobsCnt').textContent=curTripOrders.size+' заданий · '+e.jobCount+' заявок';
   renderTpFactKm();
 }
@@ -7143,20 +7132,7 @@ function savedTripT(t){ return t?.started_at&&t.tariffs_snapshot&&Object.keys(t.
 // Поэтому раздваиваем только себестоимость, прибыль и маржу.
 function econSnapshot(jobs,km,driveH,T,ov,ctx,jobCount){return economicSnapshot(jobs,km,driveH,T,ov,ctx,jobCount,appSettings.tariff_profiles,window.turf);}
 function tripCalc(){ const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const cur=tripEditId?trips.find(x=>x.id==tripEditId):null; return econCompute(jobs,tripRoute.km,tripRoute.driveH,savedTripT(cur),tripOverrides,{roadKm:(cur&&cur.road_km_by_payer)||null,start:tripStart,dateFrom:$('tpFrom').value,dateTo:$('tpTo').value,factKm:cur?cur.fact_km:null,factWorkH:tripEditId?factHByTrip[tripEditId]:null},appSettings.tariff_profiles,window.turf); }
-function tripEcon(){ const e=tripCalc();
-  $('tpEcon').innerHTML='Работа '+e.workH.toFixed(1)+' ч · в пути '+e.driveH.toFixed(1)+' ч · '
-    +e.km.toFixed(0)+' км · дней '+e.days+' · гарантийная доля '+e.share+'%';
-  // Разбивка лежит на странице, а не в окне поверх окна: цифры в шапке
-  // и строки, из которых они сложились, должны быть видны одновременно.
-  if($('tpEconBody')) $('tpEconBody').innerHTML=econHTML(e,'tpEconMap');
-  renderTpRoadGroups(); tripHead(); }
-function renderTpRoadGroups(){ const box=$('tpRoadGroups'); if(!box) return; const jobs=tripJobsAll.filter(j=>curTripJobs.has(j.id)); const rb=(tripStart&&(appSettings.tariff_profiles||[]).length)?roadByPayer(tripStart,jobs):null;
-  if(!rb||!rb.groups.length){ box.innerHTML=''; return; }
-  if(!tripOverrides.road) tripOverrides.road={}; const rd=tripOverrides.road;
-  let h='<div class="meta" style="margin-top: var(--sp-3)">Дорога по плательщикам (оверрайд выручки, пусто = авто):</div>';
-  rb.groups.forEach(g=>{ h+='<div class="row" style="align-items:center;margin-top: var(--sp-2)"><span class="grow" style="font-size: var(--fs-3)">'+esc(g.name)+' · '+g.km.toFixed(0)+' км × '+g.rate+' = '+g.rev.toFixed(0)+'</span><input type="number" data-rgov="'+esc(g.payer)+'" value="'+(rd[g.payer]!=null?rd[g.payer]:'')+'" placeholder="'+g.rev.toFixed(0)+'" style="max-width:110px"></div>'; });
-  box.innerHTML=h;
-  box.querySelectorAll('[data-rgov]').forEach(inp=>inp.onchange=()=>{ const k=inp.dataset.rgov; if(inp.value==='') delete tripOverrides.road[k]; else tripOverrides.road[k]=inp.value; tripEcon(); }); }
+function tripEcon(){ tripHead(); }
 $('tpViewMap').onclick=()=>{if(tripEditId)void showTripOnMap(tripEditId);};
 $('tpMapExpand').onclick=()=>$('tpViewMap').click();
 $('tpEditRoute').onclick=async()=>{const id=tripEditId;if(id&&await leaveTripEditor())void showTripOnMap(id,{editing:true});};
@@ -7182,7 +7158,6 @@ function loadTripIntoPlanner(trip){
 }
 $('tripCancel').onclick=async()=>{if((tripPlanDirty||tripPresenceDirty)&&!await confirmDialog('Выйти без сохранения изменений карточки?',{okText:'Выйти'}))return;tripPlanDirty=false;tripPresenceDirty=false;await returnToCard(tripBack);};
 ['tpFrom','tpTo','tpEng','tpStatus'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('change',tripEcon); });
-$('tpOvRev').oninput=()=>{ tripOverrides.revenue=$('tpOvRev').value; tripEcon(); }; $('tpOvCost').oninput=()=>{ tripOverrides.cost=$('tpOvCost').value; tripEcon(); };
 // A trip formed from tasks takes its plan dates and crew from them when those fields are empty,
 // so the schedule can place it and its tasks never drop out of the planner.
 function seedTripFromOrders(){
@@ -10092,98 +10067,6 @@ function econRow(k,v){ return '<div style="display:flex;justify-content:space-be
 // не вызывался вовсе — он нужен только внутри economics.js, где и живёт.
 
 
-// Разбивка экономики одной строкой HTML: её показывают и окном (из списка
-// выездов), и врезкой на странице выезда. mapId разводит две мини-карты,
-// чтобы они не подрались за один id.
-function econHTML(d, mapId){
-  const cur=d.cur||'';
-  const money0=n=>Math.round(+n||0).toLocaleString('ru-RU');
-  const row=(k,v,cls)=>'<div class="erow'+(cls?' '+cls:'')+'"><span class="ek">'+k+'</span><span class="ev">'+v+'</span></div>';
-  const head=t=>'<div class="ehead">'+t+'</div>';
-  let h='';
-
-  // ── Заявки: только работы. Транспорт на заявки не раскладывается —
-  //    он уже распределён по плательщикам ниже.
-  h+=head('Заявки · работы и запчасти');
-  if(d.perJob&&d.perJob.length){
-    d.perJob.forEach(p=>{
-      const hasFact=(p.factHours!=null);
-      const costTxt=hasFact
-        ? money0(p.costFact)+' <span class="edim">(факт '+p.factHours.toFixed(1)+' ч)</span>'
-        : money0(p.costPlan)+' <span class="edim">(план '+p.hours.toFixed(1)+' ч)</span>';
-      const pc=p.profit>=0?'var(--green)':'var(--red)';
-      h+='<div class="ejob">'
-        +'<div class="ejob-t"><b>'+esc(p.name)+'</b>'
-        +(p.warrantyHours>0?' <span class="ewarr">гар. '+p.warrantyHours.toFixed(1)+' ч</span>':'')+'</div>'
-        +row('Выручка'+(p.partsRevenue?' <span class="edim">работы '+money0(p.workRevenue)+' + запчасти '+money0(p.partsRevenue)+'</span>':''),
-             money0(p.revenue)+' '+cur)
-        +row('Себестоимость труда', costTxt+' '+cur)
-        // Закупка стоит отдельной строкой и только когда она есть: пустая
-        // строка «запчасти 0» на каждой заявке была бы шумом.
-        +(p.partsCost?row('Закупка запчастей <span class="edim">'+p.partsCount+' поз.</span>', money0(p.partsCost)+' '+cur):'')
-        +row('Прибыль', '<b style="color:'+pc+'">'+money0(p.profit)+' '+cur+'</b>')
-        +'</div>';
-    });
-  } else h+='<div class="ehint">Заявок нет — выручка по работам 0.</div>';
-
-  // ── Транспорт: по плательщикам (или плоско)
-  h+=head('Транспорт'+(d.factKm!=null?' · факт '+Math.round(d.factKm)+' км':''));
-  if(d.roadGroups&&d.roadGroups.length){
-    let sumKm=0;
-    d.roadGroups.forEach(g=>{
-      sumKm+=+g.km||0;
-      h+=row(esc(g.name)+' <span class="edim">'+g.count+' точ. · '+g.km.toFixed(0)+' км × '+g.rate+'</span>',
-             money0(g.rev)+' '+cur+(g.ov?' <span class="edim">(вручную)</span>':''));
-    });
-    // Сумма километров по плательщикам БОЛЬШЕ длины маршрута — и это верно.
-    // У каждого плательщика свой круг «Депо → его точки → Депо», круги
-    // накладываются друг на друга, поэтому в сумме дают больше, чем один
-    // общий проезд. Без этой строки цифры выглядят как ошибка вдвое:
-    // 3994 км по плательщикам при маршруте в 1734.
-    if(d.roadGroups.length>1&&d.km>0&&sumKm>d.km*1.05){
-      h+='<div class="ehint">Сумма '+Math.round(sumKm)+' км больше маршрута ('
-        +Math.round(d.km)+' км) не по ошибке: у каждого плательщика свой круг '
-        +'«Депо → его точки → Депо», и круги накладываются.</div>';
-    }
-  } else {
-    h+=row('Дорога <span class="edim">'+d.km.toFixed(0)+' км</span>', money0(d.rTravel)+' '+cur);
-  }
-  h+=row('Командировочные <span class="edim">'+d.days+' дн / '+d.nights+' ноч</span>', money0(d.rPerDiem)+' '+cur);
-
-  // ── Итоги
-  h+=head('Итого');
-  h+=row('Выручка'+(d.rParts?' <span class="edim">в т.ч. запчасти '+money0(d.rParts)+'</span>':''),
-         '<b>'+money0(d.rev)+' '+cur+'</b>'+(d.revOv?' <span class="edim">(вручную)</span>':''));
-  // При ручной сумме разбивка выше перестаёт объяснять итог, но продолжает
-  // стоять над ним. Показываем расчётное значение и разницу, иначе читатель
-  // складывает строки, не сходится и не понимает почему.
-  if(d.revOv&&d.revComputed!=null){
-    const dl=d.rev-d.revComputed;
-    h+='<div class="ehint">По расчёту вышло '+money0(d.revComputed)+' '+cur
-      +' — строки выше складываются в него. Ручная сумма отличается на '
-      +(dl>=0?'+':'')+money0(dl)+' '+cur+'.</div>';
-  }
-  const kmTxt=(d.factKm!=null)?('факт '+Math.round(d.costKm)+' км, план '+Math.round(d.km)+' км'):(Math.round(d.km)+' км');
-  const laborTxt=(d.factWorkH!=null)?('факт '+d.factWorkH.toFixed(1)+' ч, норма '+d.workH.toFixed(1)):(d.workH.toFixed(1)+' ч');
-  h+=row('Затраты <span class="edim">труд '+laborTxt+' · '+kmTxt
-         +(d.cParts?' · запчасти '+money0(d.cParts):'')+'</span>',
-         '<b>'+money0(d.cost)+' '+cur+'</b>'+(d.costOv?' <span class="edim">(вручную)</span>':''));
-  if(d.costOv&&d.costComputed!=null){
-    const dl=d.cost-d.costComputed;
-    h+='<div class="ehint">По расчёту вышло '+money0(d.costComputed)+' '+cur
-      +'. Ручная сумма отличается на '+(dl>=0?'+':'')+money0(dl)+' '+cur+'.</div>';
-  }
-  const pc=d.profit>=0?'var(--green)':'var(--red)';
-  h+='<div class="etotal"><span>Прибыль</span><span style="color:'+pc+'"><b>'+money0(d.profit)+' '+cur+'</b> · '+d.margin.toFixed(0)+'%</span></div>';
-  if(d.wh>0) h+='<div class="ehint">Гарантийные часы '+d.wh.toFixed(1)+' ч · доля '+d.share+'%</div>';
-
-  // ── Мини-карта план/факт (рисуется после вставки html)
-  h+='<div id="'+mapId+'Wrap" style="display:none"><div class="ehead">Маршрут</div>'
-    +'<div id="'+mapId+'" class="emap"></div>'
-    +'<div class="eleg"><span><i class="edash"></i>план</span><span><i class="esolid"></i>факт</span></div></div>';
-
-  return h;
-}
 
 
 // Обзор маршрута использует те же сохранённые GPS-данные, что и основная карта.

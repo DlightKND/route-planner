@@ -200,7 +200,7 @@ body { font-size:var(--fs-body); }
 .view #orderEditor>.row { align-items:flex-start; }
 .view #orderEditor>.row>.acts { display:flex;flex-wrap:wrap;gap:var(--sp-3); }
 .view .trip-head .acts { display:flex;flex-wrap:wrap;gap:var(--sp-3); }
-.view :is(#tpSave,#tripHeadEcon,#tpChangeReasonGroup)[hidden] { display:none!important; }
+.view :is(#tpSave,#tpChangeReasonGroup)[hidden] { display:none!important; }
 .view .order-jumps { flex-wrap:nowrap;overflow-x:auto;max-width:100%;padding-bottom:var(--sp-2); }
 .view .order-jumps a { display:inline-flex;align-items:center;flex:none;min-height:var(--control-h);font-size:var(--fs-body);text-decoration:none;white-space:nowrap;border-bottom:1px solid var(--line); }
 .view .order-jumps a:hover { border-color:var(--ink); }
@@ -393,7 +393,7 @@ body { font-size:var(--fs-body); }
 .view .job-ref-read dl { grid-template-columns:auto minmax(0,1fr); }
 .view .job-ref-read dt,.view .job-foot-h { font-family:var(--sans);text-transform:none;letter-spacing:normal;font-size:var(--fs-caption); }
 .view .job-ref-read dd { min-width:0;overflow-wrap:anywhere; }
-.view :is(.request-estimate-summary,.trip-economy-summary) { text-align:left;padding:var(--sp-4) var(--pad-card);margin-bottom:var(--gap-card);border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel); }
+.view .request-estimate-summary { text-align:left;padding:var(--sp-4) var(--pad-card);margin-bottom:var(--gap-card);border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel); }
 .view #tpPresencePane>.card>.wb-section { border-top:0;margin-top:0;padding-top:0; }
 .view #tpPresenceTitle { font-family:var(--sans);font-size:var(--fs-6);font-weight:600;line-height:1.4; }
 .view :is([data-wb],[data-pb]).amber { background:var(--panel-2);color:var(--ink);border-color:var(--ink-dim);box-shadow:inset 0 -2px var(--focus); }

@@ -102,12 +102,14 @@ export function installWorkspaceStructure(root=document){
  frameMapWorkspace(root);
  const job=root.querySelector('.view-job'),trip=root.querySelector('.view-trip');
  if(job){
-  const estimate=root.getElementById('jobEstimatePane'),base=element(root,'details','request-estimate-base workflow-finance-tool'),heading=element(root,'header','workspace-section-head');
+  const estimate=root.getElementById('jobEstimatePane'),heading=element(root,'header','workspace-section-head');
   heading.innerHTML='<h2>План/факт заявки</h2>';
-  base.id='jobBaseEstimate';base.open=true;
-  base.innerHTML='<summary>Смета заявки</summary><p class="hint" id="jobEstimateLock" hidden></p>';const lines=element(root,'div','request-estimate-lines');for(const card of [...estimate.querySelectorAll(':scope>.card')])lines.append(card);base.append(lines,root.getElementById('jobHeadEcon'));
+  // The request estimate is gone from the page (mockup v65): works live in tasks, prices in tariffs.
+  // Its old editor stays detached until the request code stops writing to it.
+  const archive=element(root,'div','request-estimate-archive');archive.id='jobEstimateArchive';archive.hidden=true;
+  archive.append(root.getElementById('jobHeadEcon'),...estimate.querySelectorAll(':scope>.card'));
   const cost=element(root,'section','workflow-request-cost');cost.id='jobTaskCosts';
-  estimate.append(heading,cost,base);
+  estimate.append(heading,cost);estimate.after(archive);
   const context=element(root,'section','card request-context');context.id='requestContext';context.hidden=true;
   const overview=root.getElementById('jobOverviewPane');
   overview.append(context);
@@ -144,12 +146,9 @@ export function installWorkspaceStructure(root=document){
   if(view?.ResizeObserver){const watch=new view.ResizeObserver(fitOverview);watch.observe(overview);const head=trip.querySelector('.workspace-masthead');if(head)watch.observe(head);}
   view?.addEventListener('resize',fitOverview);
   const toolbar=trip.querySelector('.trip-toolbar');
-  const economy=root.getElementById('tpEconomyPane'),legacy=element(root,'details','workflow-finance-tool');
-  legacy.id='tpContractEconomy';legacy.open=true;legacy.innerHTML='<summary>Договорная смета и ручные суммы</summary>';
-  const oldEconomy=root.getElementById('tpEconBody').closest('.card'),oldSummary=root.getElementById('tripHeadEcon');
-  economy.append(legacy);legacy.append(oldSummary,oldEconomy);
-  const allocation=element(root,'details','workflow-finance-tool');allocation.id='tpCostReview';
-  allocation.innerHTML='<summary>Распределение затрат по заданиям</summary>';
+  const economy=root.getElementById('tpEconomyPane');
+  // Cost allocation opens as a dialog from «Распределить расходы» (mockup v65).
+  const allocation=element(root,'section','trip-cost-review');allocation.id='tpCostReview';allocation.hidden=true;
   allocation.append(root.getElementById('tpTripAllocation'));economy.append(allocation);
   economy.prepend(root.getElementById('tpReviewSummary'));
   root.getElementById('tpPlanPane').prepend(root.getElementById('tpLinkedOrders'));

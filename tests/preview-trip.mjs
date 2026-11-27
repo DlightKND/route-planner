@@ -26,7 +26,6 @@ await page.evaluate(({data,jobs,profiles,presence,history,removed,allocation})=>
   const $=id=>document.getElementById(id);
   $('tripTitle').textContent='Выезд · Объект А, Объект В';$('tripCrumb').textContent='21 сентября';
   $('tripSub').textContent='Сервисный автомобиль · 2 инженера · в работе';
-  $('tripHeadEcon').innerHTML='<div class="te-k">Исходный план</div><div class="te-v">240 км</div><div class="te-s">11 нормочасов</div>';
   $('tpReviewState').textContent='В работе · версия 4 · одна стоянка требует проверки';
   $('tpPresence').innerHTML=presence;$('tpHistoryLog').innerHTML=history;$('tpRemovedJobs').innerHTML=removed;
   $('tpFrom').value='2026-09-21';$('tpTo').value='2026-09-21';$('tpVeh').innerHTML='<option>Сервисный автомобиль</option>';
@@ -36,8 +35,6 @@ await page.evaluate(({data,jobs,profiles,presence,history,removed,allocation})=>
   $('tpRouteStops').innerHTML=['Депо','Объект А','Объект В','Депо'].map(name=>'<tr><td>'+name+'</td></tr>').join('');
   $('tpRouteStatus').hidden=false;$('tpRouteStatus').textContent='Маршрут по GPS · 120 км';$('tpFactBox').innerHTML='<b>Пройдено: 120 км</b><p class="hint">Накопленный трек сохранён</p>';
   $('tpRemainingInfo').textContent='Осталось 85 км · расчёт от текущего положения';
-  $('tpEcon').textContent='Норматив: 11 нормочасов · проверенное присутствие: 5 чел.-ч · ещё 1 стоянка требует проверки';
-  $('tpEconBody').innerHTML='<p>Доход — по согласованным нормочасам и дороге.</p><p>Затраты труда — по человеко-часам присутствия.</p><p class="hint">В этой демонстрации денежные суммы не рассчитаны.</p>';
   $('tpTripAllocation').innerHTML=allocation;
 },{data,jobs,profiles,presence:presenceHTML(data,jobs,profiles,{orders}),history:historyHTML(data),removed:removedHTML(data,jobs),allocation});
 const tabs=`document.querySelectorAll('[data-trip-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-trip-pane]').forEach(p=>p.hidden=p.dataset.tripPane!==b.dataset.tripTab);document.querySelectorAll('[data-trip-tab]').forEach(t=>t.setAttribute('aria-selected',String(t===b)));});document.querySelectorAll('button:not([data-trip-tab])').forEach(b=>{b.disabled=true;b.title='Предпросмотр: действие не подключено';});`;
