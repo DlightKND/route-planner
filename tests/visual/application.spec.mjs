@@ -378,12 +378,13 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       }
       await active.getByRole('tab',{name:'Работы',exact:true}).click();
       await checkedPane(page,active,active.locator('#orderPane-scope'),audit,testInfo);
-      await reveal(active.locator('#orderResultSummary > h3'));
+      await expect(active.locator('#orderResultSummary')).toHaveCount(0);
       await shot(page,testInfo,`${role}-${scene.name}-composition`);
       if(role==='logist'&&scene.name==='task'){
-        await active.locator('.workspace-organization-editor>summary').click();
-        const picker=active.locator('#orderCrew + .engineer-picker');
-        await reveal(picker);await picker.click();
+        await expect(active.locator('#orderPane-scope #orderOrganization')).toHaveCount(0);
+        await active.locator('#orderEditData').click();
+        const picker=page.getByRole('dialog',{name:'Изменить задание'}).locator('#orderPlanCrew + .engineer-picker');
+        await picker.click();
         const options=page.locator('.engineer-options');
         await expect(options).toBeVisible();
         await expect(options.locator('input').first()).toBeFocused();
@@ -393,6 +394,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         await expect(page.locator(':focus')).toBeInViewport({ratio:1});
         await page.keyboard.press('Escape');
         await expect(options).toHaveCount(0);await expect(picker).toBeFocused();
+        await page.keyboard.press('Escape');await expect(page.getByRole('dialog',{name:'Изменить задание'})).toHaveCount(0);
       }
     }
     if(scene.name==='dashboard-graph'){
