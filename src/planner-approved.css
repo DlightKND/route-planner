@@ -415,7 +415,7 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile)[data-role
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app:not(.mobile)[data-role=engineer] .canvas-actions{right:calc(16px + var(--engineer-side,0px))}
 
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .statistics{background:var(--bg)!important;padding:20px!important;min-width:0!important;scroll-behavior:smooth;scrollbar-width:thin}
-html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-screen{max-width:1600px;margin:0 auto;container-type:inline-size}
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-screen{max-width:none;margin:0;container-type:inline-size}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-topline{display:flex;align-items:center;justify-content:space-between;gap:16px!important;margin-bottom:14px}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-topline h2{font-size:24px!important}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .stat-note{color:var(--dim)!important;font-size:12px!important;line-height:1.5!important;margin:12px 0}

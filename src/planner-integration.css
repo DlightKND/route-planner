@@ -581,3 +581,5 @@ html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-serial{font-wei
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-days{font:600 13px/18px var(--sans);font-variant-numeric:tabular-nums;white-space:nowrap}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-days[data-state=overdue]{color:var(--red)}
 html#dlight-ui[data-ui-system] #canonicalPlannerHost .app .pw-tp-action:not(#_){grid-column:1/-1;justify-self:start;min-height:36px!important;padding:6px 12px!important;font:500 13px/18px var(--sans)!important}
+/* Quick actions stay at the bottom of the open work overview: no scrolling down to reach them. */
+html#dlight-ui[data-ui-system] #canonicalPlannerHost .pw-context-body>.pw-quick{position:sticky;bottom:calc(-1 * var(--pw-quick-pad,16px));z-index:2;margin:16px calc(-1 * var(--pw-quick-pad,16px)) calc(-1 * var(--pw-quick-pad,16px));padding:12px var(--pw-quick-pad,16px) var(--pw-quick-pad,16px)!important;border-top:1px solid var(--line);background:var(--panel)}

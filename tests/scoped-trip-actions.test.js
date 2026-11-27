@@ -1,3 +1,4 @@
+import {wireKanbanDrag} from '../src/kanban-drag.js';
 import {readFileSync} from 'node:fs';
 import {Window} from 'happy-dom';
 import {it,expect,vi} from 'vitest';
@@ -39,7 +40,7 @@ it('enables kanban drag only for authorized cards and rejects a forged drop id',
   try{
     const box=win.document.createElement('div');
     box.innerHTML='<article class="kcard" data-kid="own"></article><article class="kcard" data-kid="foreign"></article><section class="kcol" data-kst="planned"></section>';
-    const wire=new Function(section('function wireKanbanDrag(','async function dropJob(')+';return wireKanbanDrag;')();
+    const wire=wireKanbanDrag;
     const drop=vi.fn(),allowed=vi.fn(id=>id==='own');wire(box,drop,allowed);
     expect(box.querySelector('[data-kid="own"]').getAttribute('draggable')).toBe('true');
     expect(box.querySelector('[data-kid="foreign"]').hasAttribute('draggable')).toBe(false);
@@ -48,5 +49,22 @@ it('enables kanban drag only for authorized cards and rejects a forged drop id',
       box.querySelector('.kcol').dispatchEvent(event);await Promise.resolve();
     }
     expect(drop.mock.calls).toEqual([['own','planned']]);
+  }finally{await win.happyDOM.close();}
+});
+it('offers every status at the bottom of the screen while a card is dragged',async()=>{
+  const win=new Window();
+  try{
+    const doc=win.document,box=doc.createElement('div');doc.body.append(box);
+    box.innerHTML='<section class="kcol" data-kst="open"><div class="kcol-h"><span>Открыта</span></div><article class="kcard" data-kid="a"></article></section>';
+    const drop=vi.fn();wireKanbanDrag(box,drop,()=>true,[['open','Открыта'],['done','Закрыта'],['cancelled','Отменена']]);
+    const start=new win.Event('dragstart',{bubbles:true});start.dataTransfer={setData(){},effectAllowed:''};
+    box.querySelector('.kcard').dispatchEvent(start);
+    const bar=doc.getElementById('kanbanDropBar');
+    expect(bar.hidden).toBe(false);
+    expect([...bar.querySelectorAll('[data-drop-status]')].map(el=>el.textContent)).toEqual(['Открыта','Закрыта','Отменена']);
+    expect(bar.querySelector('[data-drop-status=open]').getAttribute('aria-current')).toBe('true');
+    const event=new win.Event('drop',{bubbles:true,cancelable:true});event.dataTransfer={getData:()=>'a'};
+    bar.querySelector('[data-drop-status=cancelled]').dispatchEvent(event);await Promise.resolve();
+    expect(drop.mock.calls).toEqual([['a','cancelled']]);expect(bar.hidden).toBe(true);
   }finally{await win.happyDOM.close();}
 });

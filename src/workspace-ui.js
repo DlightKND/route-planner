@@ -1,3 +1,4 @@
+import {wireBoardCompact} from './kanban-drag.js';
 import {journalIcon} from './journal-icons.js';
 import {metaDate,metaPeriod,crewLabel,metadataList,requestLabel} from './workflow-meta.js';
 import {openEntityPanel} from './entity-actions.js';
@@ -172,6 +173,7 @@ export function installWorkspaceStructure(root=document){
   const list=root.getElementById(prefix+'List');
   const update=()=>{board.querySelector('h2').textContent=list.classList.contains('klist')?'Список':'Канбан';board.querySelector('[data-board-count]').textContent='Записей: '+list.querySelectorAll('.kcard').length;};
   const Observer=root.defaultView?.MutationObserver;if(Observer)new Observer(update).observe(list,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});update();
+  wireBoardCompact(section,list);
  }
  for(const selector of ['.view-catalog','.view-settings']){
   const view=root.querySelector(selector);if(view)framePane(view,[view.querySelector('.design-page-head')]);
