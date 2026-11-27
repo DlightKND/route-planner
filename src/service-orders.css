@@ -95,7 +95,10 @@ button.subtab{background:transparent;border-top:0;border-left:0;border-right:0;}
 .order-trip-work-card>.order-trip-result-head { padding:12px 16px; border-bottom:1px solid var(--line); }
 .order-trip-result-head h3 { flex:1 1 160px; margin:0; }
 html#dlight-ui[data-ui-system] .order-trip-result-head h3 { font-size:18px!important; }
-.order-trip-picker { width:min(100%,280px); }
+.order-trip-current { white-space:nowrap; }
+.order-trip-scope-terms .payment-scope-summary { display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:12px 16px;border-bottom:1px solid var(--line); }
+.order-trip-scope-terms .payment-scope-summary>div { display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px; }
+.order-trip-scope-terms[hidden] { display:none; }
 .order-trip-results p { margin:0; }
 .order-trip-context {
  display:flex;
@@ -269,7 +272,6 @@ html#dlight-ui[data-ui-system] .order-extra-part-dialog .entity-dialog-foot { pa
  html#dlight-ui[data-ui-system] .order-extra-part-dialog .entity-dialog-body { padding-inline:16px; }
  html#dlight-ui[data-ui-system] .order-extra-part-dialog .entity-dialog-foot { padding:12px 16px max(12px,env(safe-area-inset-bottom)); }
  .order-extra-part-dialog .entity-dialog-foot .row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
- .order-trip-picker { width:100%; }
  .order-trip-metrics { flex-basis:100%; }
  .order-trip-metrics dd { font-size:16px; }
  .order-trip-work-card>.order-trip-result-head>h3 { flex-basis:100%; }
