@@ -297,10 +297,6 @@ export function presentRequestWorkspace({saved,editable,client,customer,equipmen
  const edit=root.getElementById('requestEditContext');edit.hidden=!saved||!editable;edit.onclick=()=>editContext?editContext(edit):openEntityPanel({title:'Изменить заявку',panel:form,trigger:edit,confirmDiscard});
 }
 
-export function positionOrderResult(root=document){
- const scope=root.getElementById('orderPane-scope'),summary=root.getElementById('orderResultSummary');if(!scope||!summary)return;
- scope.prepend(summary);const h=summary.querySelector('h3');if(h)h.textContent='Работы и материалы';
-}
 
 export function frameOrderWorkspace({record,editable,people},root=document){
  const editor=root.getElementById('orderEditor');if(!editor||editor.querySelector(':scope>.workspace-masthead'))return;
@@ -340,12 +336,6 @@ export function frameOrderWorkspace({record,editable,people},root=document){
   const primary=controls.querySelector('#orderRecordResult,[data-order-next]');
   if(primary){
    primary.classList.add('workflow-overview-action');
-   if(primary.id==='orderRecordResult'){
-    const recordButton=element(doc,'button','btn amber workflow-work-result');
-    recordButton.type='button';recordButton.textContent=primary.textContent;
-    recordButton.onclick=()=>primary.click();
-    root.getElementById('orderPane-scope').prepend(recordButton);
-   }
   }
   const state=addOverviewState(overview,'order',primary);
   const stage=editor.querySelector('.workflow-stage').textContent;
@@ -365,13 +355,8 @@ export function frameOrderWorkspace({record,editable,people},root=document){
   const organization=root.getElementById('orderOrganization');organization.hidden=true;root.getElementById('orderAuxiliary').append(organization);
   editor.setAttribute('data-saved-task','');
   const composition=root.getElementById('orderComposition'),details=element(doc,'details','workspace-composition-editor');details.innerHTML=`<summary>${editable?'Плановые данные и изменение состава':'Плановые данные задания'}</summary>`;composition.before(details);details.append(composition);
-  if(editable){
-   const fields=element(doc,'details','workspace-organization-editor');
-   fields.innerHTML='<summary>Организация задания</summary>';
-   organization.hidden=false;fields.append(organization);details.before(fields);
-  }
+  // Name, place, period, team and instructions are edited from «Изменить» (mockup v65), not inline under the works.
   const emptyGrid=editor.querySelector('.order-grid');if(emptyGrid&&!emptyGrid.children.length)emptyGrid.remove();
-  positionOrderResult(root);
  }
  const travel=root.getElementById('orderTravel');if(travel){
   const actions=travel.querySelector('.order-line-adds'),target=travel.querySelector('.related-header-actions');

@@ -428,7 +428,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   const confirmed=trips.filter(t=>t.presence?.confirmed&&t.linked&&t.status!=='cancelled');
   const available=trip?(trip.presence?.confirmed?Number(trip.presence.available):null):
    (confirmed.length?confirmed.reduce((sum,t)=>sum+Number(t.presence.available),0):null);
-  const metric=value=>value==null?'—':fmt(value)+' чел·ч';
+  const metric=value=>(value==null?'—':fmt(value))+' чел·ч';
   const recorded=trips.flatMap(t=>lastVersion(t)?.items||[]);
   const distributedHours=trip?(readOnly?trip.latest?.hours:distributed()):recorded.length?recorded.reduce((sum,row)=>sum+Number(row.hours||0),0):null;
   const context=`<div class="order-trip-context"><dl class="order-trip-metrics">

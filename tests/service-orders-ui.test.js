@@ -1,5 +1,12 @@
 import {Window} from 'happy-dom';
 
+// Stage actions live in the header (the primary one) and in ⋯; the saved-result block is gone (mockup v65).
+function stageAction(label){
+ const header=[...doc.querySelectorAll('#orderEditor [data-order-next]')].find(b=>b.textContent===label);if(header)return {el:header,disabled:header.disabled,close(){}};
+ doc.querySelector('#orderMore').click();const item=[...doc.querySelectorAll('.entity-menu-item')].find(b=>b.textContent===label);
+ return {el:item,disabled:item?.disabled,close(){doc.querySelector('.entity-actions-menu')?.close();}};
+}
+
 it('requires preparation of an open request before task execution and keeps the source link available',async()=>{
  order.status='assigned';order.jobs.status='open';order.date_from='2026-10-04';order.date_to='2026-10-05';
  await ui.open('order1');const button=doc.querySelector('[data-order-next="in_progress"]');
@@ -120,7 +127,7 @@ it('guards expense links and disables stage actions while the task result is uns
  ctx.tripCostSummary=vi.fn(async()=>[{trip_id:'trip1',distance_cost:120}]);ctx.confirmLeave=vi.fn(()=>false);
  await ui.open('order1');await new Promise(r=>setTimeout(r,0));
  doc.querySelector('[data-result-qty]').value='1';doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));
- const review=doc.querySelector('[data-order-next=review]');expect(review.textContent).toBe('Передать на проверку');expect(review.disabled).toBe(true);
+ const review=stageAction('Передать на проверку');expect(review.el).toBeTruthy();expect(review.disabled).toBe(true);review.close();
  doc.querySelector('#orderTripCostAllocation [data-order-trip]').click();
  expect(ctx.confirmLeave).toHaveBeenCalledOnce();expect(ctx.openTrip).not.toHaveBeenCalled();expect(ui.isDirty()).toBe(true);
 });
@@ -301,30 +308,28 @@ it('filters individual task statuses in kanban and list without changing data',a
  await doc.querySelector('[data-os="completed"]').onclick();expect(doc.getElementById('orderClosed').checked).toBe(false);expect(order.status).toBe('in_progress');expect(rpcCalls).toEqual([]);
 });
 
-it('shows saved quantities and a separate review handoff without recording another result',async()=>{
+it('hands a saved result over for review from the task actions without recording another result',async()=>{
  order.service_order_items[0].done_qty=1;await ui.open('order1');
- const summary=doc.getElementById('orderResultSummary');
- expect(summary.textContent).toContain('Результат сохранён · ещё не передан на проверку');
- expect(summary.querySelector('[data-remaining]').textContent).toContain('1 шт');
+ expect(doc.getElementById('orderResultSummary')).toBeNull();
  expect(doc.getElementById('orderSaveState').hidden).toBe(false);expect(doc.getElementById('orderSaveState').closest('.entity-head-meta')).not.toBeNull();
- await doc.querySelector('[data-order-next=review]').onclick();
+ const review=stageAction('Передать на проверку');await review.el.onclick?.()??review.el.click();await new Promise(r=>setTimeout(r,0));review.close();
  expect(rpcCalls.some(x=>x.fn==='service_order_transition'&&x.args.p_status==='review')).toBe(true);
  expect(rpcCalls.some(x=>x.fn==='service_order_record_result')).toBe(false);
 });
 
 it('puts unresolved remainder and its supported transfer next to the curator decision',async()=>{
  order.status='review';order.service_order_items[0].done_qty=1;await ui.open('order1');
- expect(doc.querySelector('[data-order-next=completed]').disabled).toBe(true);
- expect(doc.getElementById('orderResultSummary').querySelector('[data-summary-carry]')).not.toBeNull();
+ expect(stageAction('Завершить').disabled??doc.querySelector('[data-order-next=completed]').disabled).toBe(true);doc.querySelector('.entity-actions-menu')?.close();
+ const carry=stageAction('Закрыть с остатком');expect(carry.el).toBeTruthy();expect(carry.disabled).toBe(false);carry.close();
  doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));
- expect(doc.querySelector('[data-summary-carry]').disabled).toBe(true);
+ const unsaved=stageAction('Закрыть с остатком');expect(unsaved.disabled).toBe(true);unsaved.close();
  expect(rpcCalls).toHaveLength(0);
 });
 
 it('opens a read-only curator decision with real blockers before any transition',async()=>{
  order.status='review';order.service_order_items[0].done_qty=1;
- order.trip_service_orders=[{trips:{id:'active-trip',status:'in_progress',vehicle_label:'Сервисный автомобиль'}}];
- await ui.open('order1');doc.querySelector('[data-open-result-review]').click();
+ order.trip_service_orders=[{trips:{id:'active-trip',status:'in_progress',vehicle_label:'Сервисный автомобиль'}}];Object.assign(order.service_order_items[0],{kind:'work',planned_labor_hours:null});
+ await ui.open('order1');doc.querySelector('#orderTripResults [data-open-result-review]').click();
  const dialog=doc.querySelector('.entity-review-dialog');expect(dialog.open).toBe(true);
  expect(dialog.textContent).toContain('Выезд не завершён');expect(dialog.textContent).toContain('Остаток 1 шт');
  expect(dialog.querySelector('[data-review-accept]').disabled).toBe(true);expect(rpcCalls).toEqual([]);
@@ -335,7 +340,7 @@ function planningWrites(){const original=ctx.db().rpc;ctx.db().rpc=async(fn,args
 it.each(['draft','assigned','in_progress','paused','review'])('edits the manager period explicitly in %s and retains it after reopening',async status=>{planningWrites();order.status=status;order.date_from='2026-10-01';order.date_to='2026-10-06';order.jobs.due_date='2026-10-08';await ui.open(order.id);doc.querySelector('#orderEditData').click();await vi.waitFor(()=>expect(doc.querySelector('#orderPlanTo')).not.toBeNull());doc.querySelector('#orderPlanTo').value='2026-10-09';doc.querySelector('#orderPlanTo').dispatchEvent(new win.Event('input',{bubbles:true}));expect(doc.querySelector('.order-organization-editor .planning-warnings').textContent).toContain('SLA');doc.querySelector('#orderPlanReason').value='Согласовано новое окончание';await doc.querySelector('[data-entity-save]').onclick();expect(rpcCalls.find(c=>c.fn==='service_order_organization_save').args).toMatchObject({p_expected:2,p_date_to:'2026-10-09',p_reason:'Согласовано новое окончание'});expect(doc.querySelector('.workflow-head-facts').textContent).toContain('09.10.2026');expect(doc.querySelector('.order-planning-summary')).toBeNull();expect(order.jobs.due_date).toBe('2026-10-08');});
 it('keeps engineers on the proposal route and gives completed tasks an explained readonly plan',async()=>{ctx.canWrite=()=>false;order.date_to='2026-10-06';await ui.open(order.id);expect(doc.querySelector('[data-order-edit-dates]')).toBeNull();expect(doc.querySelector('[data-order-edit-crew]')).toBeNull();expect(doc.querySelector('#orderEditData').hidden).toBe(true);doc.querySelector('#orderMore').click();expect([...doc.querySelectorAll('.entity-menu-item')].map(b=>b.textContent)).toContain('Предложить срок');doc.querySelector('.entity-actions-menu').close();ctx.canWrite=()=>true;order.status='completed';await ui.open(order.id);expect(doc.querySelector('[data-order-edit-dates]')).toBeNull();expect(doc.querySelector('.workflow-planning-warnings').textContent).toContain('закрытого задания');});
 it('cancels responsibility before any write, or saves the plan first and hands off with the refreshed revision',async()=>{planningWrites();order.status='assigned';order.date_from='2026-10-01';order.date_to='2026-10-06';await ui.open(order.id);doc.querySelector('#orderTo').value='2026-10-09';doc.querySelector('#orderTo').dispatchEvent(new win.Event('input',{bubbles:true}));const form=doc.querySelector('#orderResponsibility form');form.elements.reason.value='Передача следующему куратору';let submit=form.onsubmit({preventDefault(){}});await vi.waitFor(()=>expect(doc.querySelector('[data-draft-choice=cancel]')).not.toBeNull());doc.querySelector('[data-draft-choice=cancel]').click();await submit;expect(rpcCalls.filter(c=>c.fn==='entity_responsibility_assign')).toHaveLength(0);expect(ui.isDirty()).toBe(true);submit=form.onsubmit({preventDefault(){}});await vi.waitFor(()=>expect(doc.querySelector('[data-draft-choice=save]')).not.toBeNull());doc.querySelector('[data-draft-choice=save]').click();await submit;const writes=rpcCalls.filter(c=>['service_order_save_one','entity_responsibility_assign'].includes(c.fn));expect(writes.map(c=>c.fn)).toEqual(['service_order_save_one','entity_responsibility_assign']);expect(writes[1].args.p_expected).toBe(3);expect(order.date_to).toBe('2026-10-09');expect(ui.isDirty()).toBe(false);});
-it('uses contextual resume and review-return labels and exposes active task actions',async()=>{order.status='paused';await ui.open(order.id);expect(doc.querySelector('[data-order-next=in_progress]').textContent).toBe('Возобновить');order.status='review';await ui.open(order.id);expect(doc.querySelector('[data-order-next=in_progress]').textContent).toBe('Вернуть в работу');order.status='in_progress';await ui.open(order.id);doc.querySelector('#orderMore').click();const labels=[...doc.querySelectorAll('.entity-menu-item')].map(b=>b.textContent);expect(labels).toContain('Приостановить');expect(labels.includes('Передать на проверку')||!!doc.querySelector('#orderEditor [data-order-next=review]')).toBe(true);doc.querySelector('.entity-actions-menu').close();});
+it('uses contextual resume and review-return labels and exposes active task actions',async()=>{order.status='paused';await ui.open(order.id);const resume=stageAction('Возобновить');expect(resume.el).toBeTruthy();resume.close();order.status='review';await ui.open(order.id);const back=stageAction('Вернуть в работу');expect(back.el).toBeTruthy();back.close();order.status='in_progress';await ui.open(order.id);doc.querySelector('#orderMore').click();const labels=[...doc.querySelectorAll('.entity-menu-item')].map(b=>b.textContent);expect(labels).toContain('Приостановить');expect(labels.includes('Передать на проверку')||!!doc.querySelector('#orderEditor [data-order-next=review]')).toBe(true);doc.querySelector('.entity-actions-menu').close();});
 
 it('stops handoff if the saved plan cannot be reloaded instead of assigning with a stale revision',async()=>{planningWrites();order.status='assigned';order.date_from='2026-10-01';order.date_to='2026-10-06';await ui.open(order.id);let saved=false;const db=ctx.db(),from=db.from,rpc=db.rpc;db.from=table=>{const q=from(table);if(table==='service_orders'&&saved)q.single=async()=>({data:null,error:{message:'Сеть недоступна'}});return q;};db.rpc=async(fn,args)=>{const r=await rpc(fn,args);if(fn==='service_order_save_one')saved=true;return r;};doc.querySelector('#orderTo').value='2026-10-09';doc.querySelector('#orderTo').dispatchEvent(new win.Event('input',{bubbles:true}));const form=doc.querySelector('#orderResponsibility form');form.elements.reason.value='Передача следующему куратору';const submit=form.onsubmit({preventDefault(){}});await vi.waitFor(()=>expect(doc.querySelector('[data-draft-choice=save]')).not.toBeNull());doc.querySelector('[data-draft-choice=save]').click();await submit;expect(rpcCalls.filter(c=>c.fn==='service_order_save_one')).toHaveLength(1);expect(rpcCalls.filter(c=>c.fn==='entity_responsibility_assign')).toHaveLength(0);expect(doc.getElementById('orderError').textContent).toContain('План задания сохранён');expect(order.date_to).toBe('2026-10-09');});
 
@@ -357,7 +362,7 @@ it('closes partially performed work and leaves the remainder with the request',a
  await doc.getElementById('orderCarry').onclick();
  expect(rpcCalls).toEqual([{fn:'service_order_close_with_remainder',args:{p_order:'order1',p_expected:2,p_reason:'Принята выполненная часть'}}]);
  expect(ui.currentId()).toBe('order1');
- expect(doc.getElementById('orderResultSummary').textContent).toContain('Задание закрыто с остатком');
+ expect(doc.querySelector('#orderEditor .workflow-stage').textContent).toBe('Закрыто с остатком');
 });
 
 it('saves the chosen request remainder as an exact quantity with a retry identifier',async()=>{
