@@ -340,8 +340,10 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
     if(['task','task-active'].includes(scene.name)){
       const expectedDefault='overview';
       await expect(active.locator(`[data-entity-panel="${expectedDefault}"]`)).toBeVisible();
-      await expect(active.getByRole('tab')).toHaveCount(4);
-      for(const [key,label] of [['travel','Выезды'],['plan-fact','План/факт'],['scope','Работы'],['overview','Обзор']]){
+      // Plan/fact is finance: only the task curator sees it.
+      const finance=role!=='engineer';
+      await expect(active.getByRole('tab')).toHaveCount(finance?4:3);
+      for(const [key,label] of [['travel','Выезды'],...(finance?[['plan-fact','План/факт']]:[]),['scope','Работы'],['overview','Обзор']]){
         await active.getByRole('tab',{name:label,exact:true}).click();
         await expect(active.locator(`[data-entity-panel="${key}"]`)).toBeVisible();
         await expect(active.locator('[data-entity-panel]:not([hidden])')).toHaveCount(1);
@@ -350,7 +352,7 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
         if(await heading.count())await reveal(heading);
         await shot(page,testInfo,`${role}-${scene.name}-${key}`);
       }
-      const lastTab=active.getByRole('tab',{name:'План/факт',exact:true});await lastTab.focus();await page.keyboard.press('Home');
+      const lastTab=active.getByRole('tab',{name:finance?'План/факт':'Выезды',exact:true});await lastTab.focus();await page.keyboard.press('Home');
       await expect(active.getByRole('tab',{name:'Обзор',exact:true})).toBeFocused();
       await checkedPane(page,active,active.locator('#orderPane-overview'),audit,testInfo);
       await page.keyboard.press('ArrowRight');await expect(active.getByRole('tab',{name:'Работы',exact:true})).toBeFocused();
@@ -424,10 +426,12 @@ for(const role of ['logist','engineer','admin'])for(const source of scenes.filte
       await active.locator('#tpTabEconomy').click();
       await reveal(active.locator('#tpReviewCosts'));
       await active.locator('#tpReviewCosts').click();
-      await expect(active.locator('#tpEconomyPane')).toBeVisible();
-      await checkedPane(page,active,active.locator('#tpTripAllocation'),audit,testInfo);
-      await visibleTarget(active.locator('#tpTripAllocation h3').first());
+      const allocation=page.getByRole('dialog',{name:'Распределить расходы'});
+      await expect(allocation.locator('#tpTripAllocation')).toBeVisible();
+      await visibleTarget(allocation.locator('#tpTripAllocation h3').first());
       await shot(page,testInfo,`${role}-trip-economics`);
+      await page.keyboard.press('Escape');await expect(allocation).toHaveCount(0);
+      await expect(active.locator('#tpCostReview')).toBeHidden();
       await active.locator('#tpTabOverview').click();
       await checkedPane(page,active,active.locator('#tpOverviewPane'),audit,testInfo);
       await reveal(active.locator('#tripActivity .comment-form'));

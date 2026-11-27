@@ -123,13 +123,12 @@ it('does not open a task or load its data when the trip leave guard is declined'
  await ui.open(null,job);expect(ctx.beforeOpen).toHaveBeenCalledOnce();
  expect(ctx.ensureRefs).not.toHaveBeenCalled();expect(doc.querySelector('.workflow-subject').textContent).toBe('Ремонт');
 });
-it('guards expense links and disables stage actions while the task result is unsaved',async()=>{
- ctx.tripCostSummary=vi.fn(async()=>[{trip_id:'trip1',distance_cost:120}]);ctx.confirmLeave=vi.fn(()=>false);
+it('disables stage actions while the task result is unsaved',async()=>{
+ ctx.confirmLeave=vi.fn(()=>false);
  await ui.open('order1');await new Promise(r=>setTimeout(r,0));
  doc.querySelector('[data-result-qty]').value='1';doc.querySelector('[data-result-qty]').dispatchEvent(new win.Event('input',{bubbles:true}));
  const review=stageAction('Передать на проверку');expect(review.el).toBeTruthy();expect(review.disabled).toBe(true);review.close();
- doc.querySelector('#orderTripCostAllocation [data-order-trip]').click();
- expect(ctx.confirmLeave).toHaveBeenCalledOnce();expect(ctx.openTrip).not.toHaveBeenCalled();expect(ui.isDirty()).toBe(true);
+ expect(ui.isDirty()).toBe(true);
 });
 it('keeps unavailable plan controls disabled after a failed save',async()=>{
  await ui.open(null);expect(doc.getElementById('orderItemAdd').disabled).toBe(true);
@@ -167,7 +166,11 @@ it('shows saved work revenue and cost snapshots beside priced task rows',async()
 it('does not request manager-only tariff settings while an engineer opens a task',async()=>{ctx.canWrite=()=>false;await ui.open('order1');expect(settingsCalls).toBe(0);expect(ctx.notify.mock.calls.some(([message])=>String(message).includes('Справочник работ временно недоступен'))).toBe(false);expect(doc.querySelector('[data-result-qty]')?.disabled).toBe(false);});
 it('defaults new work rows to hourly units required by the tariff model',async()=>{await ui.open(null,job);doc.getElementById('orderItemAdd').click();expect(doc.querySelector('[data-i-unit]').value).toBe('ч');});
 it('saves catalog work, warranty reason and selected tariff profile into the canonical task row',async()=>{works=[{id:'work1',name:'Проверка насоса',norm_hours:2,warranty_eligible:true}];taskProfiles=[{id:'standard',name:'Обычный',work_paid:{rate:1000},work_warr:{rate:250}}];await ui.open(null,job);doc.getElementById('orderTitle').value='Проверка';doc.getElementById('orderItemAdd').click();const row=doc.querySelector('[data-order-item="0"]');const catalog=row.querySelector('[data-i-work]');catalog.value='work1';catalog.dispatchEvent(new win.Event('change',{bubbles:true}));let billable=doc.querySelector('[data-i-billable]');billable.checked=false;billable.dispatchEvent(new win.Event('change',{bubbles:true}));const profile=doc.querySelector('[data-i-profile]');profile.value='standard';profile.dispatchEvent(new win.Event('change',{bubbles:true}));await doc.getElementById('orderSave').onclick();expect(rpcCalls[0].args.p_items).toEqual([{id:null,job_id:job,kind:'work',stock_catalog_id:null,work_catalog_id:'work1',billable:false,billable_reason:'Гарантийный ремонт',tariff_profile:'standard',title:'Проверка насоса',unit:'ч',planned_qty:2}]);});
-it('shows only confirmed trip expense shares on the task',async()=>{ctx.tripCostSummary=vi.fn(async()=>[{trip_id:'trip1',date_from:'2026-09-23',vehicle_label:'Авто 1',distance_km:12,distance_cost:120,labor_hours:2,labor_cost:80}]);await ui.open('order1');await new Promise(resolve=>setTimeout(resolve,0));expect(ctx.tripCostSummary).toHaveBeenCalledWith('order1');expect(doc.getElementById('orderTripCostAllocation').textContent).toContain('200');expect(doc.getElementById('orderTripCostAllocation').textContent).toContain('12');});
+it('keeps the task plan/fact for curators and drops the old quantity and expense blocks',async()=>{
+ await ui.open('order1');expect(doc.getElementById('orderTab-plan-fact')).toBeTruthy();
+ expect(doc.getElementById('orderLegacyFinance')).toBeNull();expect(doc.getElementById('orderPlanFact')).toBeNull();expect(doc.getElementById('orderTripCostAllocation')).toBeNull();
+ ctx.canWrite=()=>false;await ui.open('order1');expect(doc.getElementById('orderTab-plan-fact')).toBeNull();expect(doc.getElementById('orderPane-plan-fact')).toBeNull();
+});
 it('rolls confirmed task trip costs up to the originating request',async()=>{doc.body.insertAdjacentHTML('beforeend','<section id="jobOrders"></section><div id="jobLinkedTrips"></div><div id="jobTaskCosts"></div>');ctx.tripCostSummary=vi.fn(async()=>[{trip_id:'trip1',distance_km:12,distance_cost:120,labor_hours:2,labor_cost:80}]);await ui.requestPanel(job);await new Promise(resolve=>setTimeout(resolve,0));expect(doc.getElementById('jobTaskCosts').textContent).toContain('Выездные затраты заданий');expect(doc.getElementById('jobTaskCosts').textContent).toContain('200');expect(ctx.tripCostSummary).toHaveBeenCalledWith('order1');});
 it('explains a closed historical request with an unconfirmed task on the board and in the task',async()=>{order.status='draft';order.created_by=null;order.jobs.status='done';ctx.isPhone=()=>true;await ui.board();expect(selectCalls[0]).toContain('created_by');expect(selectCalls[0]).toContain('status,clients(name)');expect(doc.querySelector('.order-history-note')).toBeNull();expect(doc.getElementById('orderHistoricalNote').textContent).toContain('1');doc.getElementById('orderHistorical').checked=true;await doc.getElementById('orderHistorical').onchange({target:doc.getElementById('orderHistorical')});expect(doc.querySelector('.order-history-note').textContent).toContain('подтверждённый результат работ не переносился');await ui.open('order1');expect(doc.querySelector('#orderEditor [role="note"]').textContent).toContain('Заявка закрыта в старой системе');});
 it('does not mark a newly created draft as historical even when its request is closed',async()=>{order.status='draft';order.created_by=person;order.jobs.status='done';await ui.board();expect(doc.querySelector('.order-history-note')).toBeNull();await ui.open('order1');expect(doc.querySelector('#orderEditor [role="note"]')).toBeNull();});
@@ -198,7 +201,7 @@ it('opens shared scope for assigned and active engineers and keeps result permis
 });
 it('switches mounted panels without writes, leave checks or loss of unsaved result values',async()=>{
  ctx.canWrite=()=>false;ctx.confirmLeave=vi.fn(()=>false);await ui.open('order1');const qty=doc.querySelector('[data-result-qty]');qty.value='1.5';qty.dispatchEvent(new win.Event('input',{bubbles:true}));
- doc.getElementById('orderTab-scope').click();doc.getElementById('orderTab-travel').click();doc.getElementById('orderTab-plan-fact').click();doc.getElementById('orderTab-plan-fact').click();
+ doc.getElementById('orderTab-scope').click();doc.getElementById('orderTab-travel').click();doc.getElementById('orderTab-overview').click();doc.getElementById('orderTab-travel').click();
  expect(doc.querySelector('[data-result-qty]')).toBe(qty);expect(qty.value).toBe('1.5');expect(ui.isDirty()).toBe(true);expect(ctx.confirmLeave).not.toHaveBeenCalled();expect(rpcCalls).toHaveLength(0);
 });
 it('saves mounted result values while another panel is selected and retains that tab after save',async()=>{
@@ -221,8 +224,8 @@ it('uses one mounted scope for creating a task and gives an unchanged assigned t
  ctx.confirmLeave=()=>true;await ui.open(null,job);expect(doc.querySelectorAll('[data-entity-tab]')).toHaveLength(1);expect(doc.getElementById('orderSave').classList.contains('amber')).toBe(true);
 });
 
-it('opens the request estimate through its explicit helper and leaves the source link on overview',async()=>{
- ctx.openJobEstimate=vi.fn();await ui.open('order1');await doc.querySelector('[data-job-estimate]').onclick();expect(ctx.openJobEstimate).toHaveBeenCalledWith(job);expect(ctx.openJob).not.toHaveBeenCalled();await doc.getElementById('orderRequest').onclick();expect(ctx.openJob).toHaveBeenCalledWith(job);
+it('opens the request itself, not its old estimate, from the task',async()=>{
+ await ui.open('order1');expect(doc.querySelector('[data-job-estimate]')).toBeNull();await doc.querySelector('[data-job-link]').onclick();expect(ctx.openJob).toHaveBeenCalledWith(job);await doc.getElementById('orderRequest').onclick();expect(ctx.openJob).toHaveBeenCalledTimes(2);
 });
 it('collects edited plan values from a mounted hidden scope',async()=>{
  order.status='assigned';order.seed_request_id=null;await ui.open('order1');doc.getElementById('orderTitle').value='Новая задача';doc.getElementById('orderTitle').dispatchEvent(new win.Event('input',{bubbles:true}));doc.querySelector('[data-i-qty]').value='3';doc.getElementById('orderTab-plan-fact').click();ctx.confirmLeave=()=>true;

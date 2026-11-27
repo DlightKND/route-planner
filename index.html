@@ -2730,21 +2730,8 @@
     </div>
     </div>
     <div class="entity-tab-panel" id="tpEconomyPane" data-entity-panel="economy" role="tabpanel" aria-labelledby="tpTabEconomy" data-trip-pane="economy" hidden>
-      <div class="th-econ trip-economy-summary" id="tripHeadEcon"></div><section class="card trip-wide"><h3 id="tpPresenceTitle">GPS-журнал и присутствие</h3><div id="tpPresence"></div><div id="tpFactBox"></div></section>
+      <section class="card trip-wide"><h3 id="tpPresenceTitle">GPS-журнал и присутствие</h3><div id="tpPresence"></div><div id="tpFactBox"></div></section>
 
-      <!-- Ручные суммы стоят рядом с разбивкой, на которую влияют: раньше
-           это были разные половины окна, и связь приходилось держать в уме. -->
-      <div class="card trip-wide"><h3>Экономика <span class="q"><button class="qm" type="button" aria-label="О расчёте экономики" aria-expanded="false">?</button><span class="qbody">Расчёт по текущему плану и доступному факту. Окончательное подтверждение экономики требует полной проверки выезда.</span></span></h3>
-        <div class="hint" id="tpEcon" style="margin-bottom: var(--sp-4)"></div>
-        <div class="econ-split">
-          <div>
-            <span class="fg-t">Суммы вручную <span class="q"><button class="qm" type="button" aria-label="Пояснение">?</button><span class="qbody">Пусто — сумма считается из тарифов и себестоимости. Заполнено — берётся фиксированная сумма.</span></span></span>
-            <div class="row" style="margin-top: var(--sp-3)"><div class="grow"><label>Выручка, ₴</label><input type="number" id="tpOvRev" placeholder="авто"></div><div class="grow"><label>Затраты, ₴</label><input type="number" id="tpOvCost" placeholder="авто"></div></div>
-            <div id="tpRoadGroups"></div>
-          </div>
-          <div id="tpEconBody"></div>
-        </div>
-      </div>
       <section class="card trip-wide trip-allocation-review" id="tpTripAllocation" aria-live="polite">
         <p class="hint">Сначала загрузите подтверждённый выезд.</p>
       </section>
