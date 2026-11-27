@@ -9,8 +9,13 @@ const sum = (rows, get) => {
 };
 const ratio = (a, b, scale = 1) => a != null && b > 0 ? a / b * scale : null;
 const hourUnits = new Set(['ч','час','часа','часов','год','година','години','годин','h','hr','hour','hours']);
-const validItem = i => i.kind === 'work' && !i.request_finance_void_event_id && !i.legacy_snapshot?.request_finance_voided_at && hourUnits.has(String(i.unit || '').trim().toLowerCase());
-const planQty = i => Math.max(0, (+i.planned_qty || 0) - (+i.transferred_qty || 0));
+// Work hours follow the planned labour hours when they are set, as the schedule does;
+// otherwise the quantity counts as hours only for an hour unit.
+const laborHours = i => i.planned_labor_hours != null && i.planned_labor_hours !== '' && Number.isFinite(+i.planned_labor_hours);
+const validItem = i => i.kind === 'work' && !i.request_finance_void_event_id && !i.legacy_snapshot?.request_finance_voided_at && (laborHours(i) || hourUnits.has(String(i.unit || '').trim().toLowerCase()));
+const hoursFor = (i, qty) => !laborHours(i) ? qty : qty == null ? null : (+i.planned_qty > 0 ? +i.planned_labor_hours * qty / +i.planned_qty : +i.planned_labor_hours);
+const planQty = i => hoursFor(i, Math.max(0, (+i.planned_qty || 0) - (+i.transferred_qty || 0)));
+const doneHours = i => hoursFor(i, i.done_qty == null ? null : +i.done_qty);
 const inPeriod = (d, period) => d && d >= period.from && d <= period.to;
 
 export function statisticsPlanBlocks(trips=[],orders=[],period) {
@@ -88,9 +93,9 @@ export function dashboardMetrics({trips = [], orders = [], links = [], tracks = 
   const items = tasks.flatMap(o => o.service_order_items || []).filter(validItem);
   const doneItems = accepted.flatMap(o => o.service_order_items || []).filter(validItem);
   const fieldItems = accepted.filter(o => fieldDone.has(o.id) && !outside.has(o.id)).flatMap(o => o.service_order_items || []).filter(validItem);
-  const doneNorm = sum(doneItems, i => i.done_qty);
-  const fieldNorm = sum(fieldItems, i => i.done_qty);
-  const warranty = sum(doneItems, i => i.billable === false ? i.done_qty : 0);
+  const doneNorm = sum(doneItems, doneHours);
+  const fieldNorm = sum(fieldItems, doneHours);
+  const warranty = sum(doneItems, i => i.billable === false ? doneHours(i) : 0);
   const kmDone = completed.filter(t => number(t.fact_km) != null);
   const motion = tracks.filter(t => completedIds.has(t.trip_id)).map(t => trackMotion(t.segments || t.data?.segments));
   const motionKm = motion.reduce((n, m) => n + m.km, 0), motionHours = motion.reduce((n, m) => n + m.hours, 0);

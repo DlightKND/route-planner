@@ -61,6 +61,7 @@ import {readExtraPartCosts} from './planner-store.js';
 import {mountPaymentCard,readPaymentModel,savePaymentModel} from './payment-terms.js';
 import {mountRoadAccounting} from './journal-road-accounting.js';
 import {mountEntityFinance} from './scoped-finance.js';
+import {wireKanbanDrag as wireKanban} from './kanban-drag.js';
 import './scoped-finance.css';
 import './workflow-related-table.css';
 import './payment-terms.css';
@@ -2579,7 +2580,7 @@ async function renderJobs(){ await ensureRefs(); renderJobChips();
     const cards=items.map(j=>jobCard(j)).join('')
       ||'<div class="kempty">'+esc(EMPTY[s]||'Пусто')+'</div>';
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
-  wireJobCards(box); wireKanbanDrag(box,dropJob,id=>{const j=jobs.find(j=>j.id===id);return !!j&&canWriteJob(j);}); await serviceOrders.attachJobs(box); }
+  wireJobCards(box); wireKanbanDrag(box,dropJob,id=>{const j=jobs.find(j=>j.id===id);return !!j&&canWriteJob(j);},JOB_STATUS_ORDER.map(s=>[s,ST[s]])); await serviceOrders.attachJobs(box); }
 $('jobSearch').oninput=renderJobs; if($('jobEngFilter')) $('jobEngFilter').onchange=renderJobs; if($('mineDone')) $('mineDone').onchange=renderMine; $('jobAdd').onclick=()=>{ if(canWrite()) openJob(null); };
 
 // ── Корзина заявок и выездов ───────────────────────────────────────────
@@ -6783,16 +6784,7 @@ function slimGeometry(g){
   }catch(e){ return g; }
 }
 function routeAll(){ return (tripStart?[{...tripStart,type:'start'}]:[]).concat(tripRouteStops); }
-function wireKanbanDrag(box,onDrop,mayDrag=()=>canWrite()){
-  box.querySelectorAll('.kcard').forEach(card=>{ if(!mayDrag(card.dataset.kid)){card.removeAttribute('draggable');return;} card.setAttribute('draggable','true');
-    card.addEventListener('dragstart',e=>{ card.classList.add('dragging'); try{ e.dataTransfer.setData('text/plain',card.dataset.kid); e.dataTransfer.effectAllowed='move'; }catch(err){} });
-    card.addEventListener('dragend',()=>{ card.classList.remove('dragging'); box.querySelectorAll('.kcol').forEach(c=>c.classList.remove('over')); }); });
-  box.querySelectorAll('.kcol').forEach(col=>{
-    col.addEventListener('dragover',e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(err){} col.classList.add('over'); });
-    col.addEventListener('dragleave',()=>col.classList.remove('over'));
-    col.addEventListener('drop',async e=>{ e.preventDefault(); col.classList.remove('over');
-      let id=''; try{ id=e.dataTransfer.getData('text/plain'); }catch(err){}
-      const st=col.dataset.kst; if(id&&st&&mayDrag(id)) await onDrop(id,st); }); }); }
+function wireKanbanDrag(box,onDrop,mayDrag=()=>canWrite(),targets=null){wireKanban(box,onDrop,mayDrag,targets);}
 async function dropJob(id,st){ const j=jobs.find(x=>x.id==id); if(!j||j.status===st) return; const old=j.status;
   try{if(!await changeEntityStatus('job',j,st)){renderJobs();return;}}catch(e){notify(e.message,'err');renderJobs();return;}
   if(st==='done') await jobClosed(id,{equipmentId:j.equipment_id,works:j.job_works||[]});
@@ -6888,7 +6880,7 @@ async function renderTrips(){ await ensureRefs(); renderTripChips();
     const cards=items.map(t=>tripCard(t)).join('')
       ||'<div class="kempty">'+esc(TEMPTY[s]||'Пусто')+'</div>';
     return '<div class="kcol" data-kst="'+s+'"><div class="kcol-h"><span>'+esc(ST_TRIP[s])+'</span><span class="cnt">'+items.length+'</span></div><div class="kcol-b">'+cards+'</div></div>'; }).join('');
-  wireTripCards(box); wireKanbanDrag(box,dropTrip,id=>canWriteTrip(getTrip(id)||tripCache[id]||null)); }
+  wireTripCards(box); wireKanbanDrag(box,dropTrip,id=>canWriteTrip(getTrip(id)||tripCache[id]||null),TRIP_STATUS_ORDER.map(s=>[s,ST_TRIP[s]])); }
 $('jobLayout').onchange=e=>{jobLayout=e.target.value;renderJobs();};$('tripLayout').onchange=e=>{tripLayout=e.target.value;renderTrips();};
 $('tripSearch').oninput=renderTrips; $('tripAdd').onclick=()=>{ if(canWrite()) openTrip(null); };
 if($('tripEngFilter')) $('tripEngFilter').onchange=renderTrips;

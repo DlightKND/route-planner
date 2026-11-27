@@ -692,9 +692,15 @@ html[data-theme=light] .mleg-symbol { width:24px;border-radius:0;background:tran
  #trackBlock .mleg-body { flex:1;max-height:none;border:0;border-radius:0; }
  #trackBlock .mleg-details>summary { display:none; }
  #trackBlock .mleg-scroll { padding-bottom:20px; }
- .map-workspace #sideTabs { overflow-x:auto;scrollbar-width:thin; }
- .map-workspace #sideTabs button { flex:1 0 auto; }
 }
+/* The panel tabs share its width and never scroll sideways; a long label is cut instead. */
+html#dlight-ui[data-ui-system] .map-workspace #sideTabs { overflow:hidden; }
+html#dlight-ui[data-ui-system] .map-workspace #sideTabs { gap:4px; }
+html#dlight-ui[data-ui-system] .map-workspace #sideTabs>button { flex:1 1 0!important;min-width:0!important;justify-content:center;gap:4px;padding-inline:4px!important; }
+@media(max-width:480px){html#dlight-ui[data-ui-system] .map-workspace #sideTabs>button { font-size:13px!important; }}
+.map-workspace #sideTabs>button[hidden] { display:none; }
+.map-workspace #sideTabs .tab-label { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.map-workspace #sideTabs .cnt { flex:none; }
 @media(max-width:760px){
  .map-workspace #sideTabs { gap:12px;padding:0 12px; }
  .map-workspace #sideTabs button { font-size:12px;gap:4px; }
@@ -1691,3 +1697,32 @@ html#dlight-ui[data-ui-system] .entity-panel-dialog .job-ref>.card+.card:not(#_)
 html#dlight-ui[data-ui-system] .view-trip .wb-route-actions:not([hidden]):not(#_) { display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(var(--ui-action-w,150px),100%),1fr));gap:8px; }
 html#dlight-ui[data-ui-system] .view-trip .wb-route-actions>.btn:not(#_) { width:100%!important;min-width:0; }
 @media(max-width:760px){ html#dlight-ui[data-ui-system] .view-trip .wb-route-actions:not([hidden]):not(#_) { grid-template-columns:1fr; } }
+
+/* Dispatcher boards (desktop): the board scrolls on its own under a header that shrinks to the
+   tabs, column headings stay on top, and every column runs to the bottom of the board, so a card
+   can be dropped into any status without scrolling back up. */
+@media(min-width:761px){
+ .view.view-planner>.pane.scrollp:has(>:is(#plJobs,#plOrders,#plTrips):not([style*="none"])) { display:flex;flex-direction:column;overflow:hidden;min-height:0; }
+ .view-planner :is(#plJobs,#plOrders,#plTrips):not([style*="none"]) { display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;padding-bottom:0; }
+ .view-planner :is(#plJobs,#plOrders,#plTrips)>.stickyhead { flex:none; }
+ .view-planner :is(#plJobs,#plOrders,#plTrips)>.workspace-board-heading { flex:none; }
+ .view-planner #tripBoard:not([style*="none"]) { display:flex;flex-direction:column;flex:1;min-height:0;min-width:0; }
+ .view-planner :is(#jobList,#orderList,#tripList) { flex:1;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain;padding-bottom:24px; }
+ .view-planner :is(#jobList,#orderList,#tripList).kanban { align-items:stretch;align-content:stretch;padding-bottom:24px; }
+ .view-planner .kanban .kcol-h { position:sticky;top:0;z-index:2;margin:-16px -16px 0;padding:16px;background:var(--panel-2);border-radius:12px 12px 0 0; }
+ .view-planner .is-compact .workspace-dispatcher-head { display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:8px;margin-bottom:12px; }
+ .view-planner .is-compact .workspace-dispatcher-head>.subtabs { order:1; }
+ .view-planner .is-compact .workspace-heading-row,.view-planner .is-compact .workspace-heading-row>:is(#jobAdd,#orderAdd,#tripAdd) { order:2;flex:none;margin-left:auto; }
+ .view-planner .is-compact .workspace-heading-row>div:first-child,
+ .view-planner .is-compact :is(.workspace-filterbar,.chips),
+ .view-planner .is-compact>.workspace-board-heading { display:none!important; }
+ .view-planner .is-compact .workspace-dispatcher-head .subtabs { margin:0; }
+ .view-planner .is-compact .workspace-dispatcher-head .subtab { padding:8px 0; }
+}
+/* While a card is dragged, every status is a drop target at the bottom of the screen. */
+.kanban-drop-bar { position:fixed;left:var(--rail-w,64px);right:0;bottom:0;z-index:60;display:flex;gap:2px;padding:0;background:var(--line);box-shadow:0 -8px 24px #0002; }
+.kanban-drop-bar[hidden] { display:none; }
+.kanban-drop-target { flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;min-height:64px;padding:8px 12px;background:var(--panel);color:var(--ink);font:500 14px/1.3 var(--sans);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:background .12s; }
+.kanban-drop-target[aria-current] { color:var(--ink-dim);background:var(--panel-2); }
+.kanban-drop-target.over { background:var(--accent);color:var(--on-accent,#1b1b1b); }
+@media(max-width:760px){ .kanban-drop-bar { left:0; } }

@@ -184,6 +184,8 @@ test('layout: desktop rail stays left and page bottoms remain reachable in short
   await page.goto('/#/planner/'+route);await expect(page.locator('#'+list+' .kcard').first()).toBeVisible();
   await expect(page.locator('.workspace-heading-row .design-eyebrow')).toHaveCount(0);
   const pane=page.locator('.view-planner>.pane');await pane.evaluate(el=>el.scrollTop=el.scrollHeight);
+  // On desktop the board scrolls under the dispatcher header.
+  await page.locator('#'+list).evaluate(el=>el.scrollTop=el.scrollHeight);
   const bounds=await pane.boundingBox(),limit=mobile?(await page.locator('.rail').boundingBox()).y:600;
   expect(bounds.y+bounds.height).toBeLessThanOrEqual(601);
   const bottom=await page.locator('#'+list+' .kcard:visible').evaluateAll(nodes=>Math.max(...nodes.map(el=>el.getBoundingClientRect().bottom)));
