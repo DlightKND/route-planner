@@ -338,7 +338,7 @@ test('M9: trip overview reads the route and the main map saves changes to the sa
  const points=page.locator('#tpRouteStops [data-route-point]');
  await expect(points).toHaveCount(3);
  await expect(page.getByRole('heading',{name:'Маршрут выезда'})).toBeVisible();
- await expect(page.locator('#tpRoutePointTime')).toBeHidden();
+ await expect(page.locator('#tpRoutePointTime')).toBeVisible();
  await points.nth(1).click();await expect(points.nth(1)).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('#tpRouteStops [data-up],#tpRouteStops [data-wprm]')).toHaveCount(0);
  await shot(page,info,'trip-route-overview');
