@@ -34,8 +34,8 @@ export async function loadNotificationDecisions(db,uid) {
   const waiting=new Set(queue.map(row=>row.order_id));
   const items=ownOrders.filter(o=>!waiting.has(o.id)).map(o=>({entity_kind:'order',entity_id:o.id,title:`Задание №${o.number} · ${o.title}`,kind:'Проверка результата',body:'Исполнитель передал результат на проверку. Откройте задание, чтобы проверить объём и остаток.',action:'Проверить результат'}));
   for(const result of queue.slice(0,100))items.push({entity_kind:'order',entity_id:result.order_id,trip_id:result.trip_id,
-    title:`Задание №${result.number} · ${result.title}`,kind:'Приёмка работ по выезду',
-    body:`${result.vehicle_label||'Выезд'} · ${result.date_from||'Без даты'}`,action:'Проверить результат выезда'});
+    title:`Задание №${result.number} · ${result.title}`,kind:result.standalone?'Приёмка работ без поездки':'Приёмка работ по выезду',
+    body:`${result.vehicle_label||'Выезд'} · ${result.date_from||'Без даты'}`,action:result.standalone?'Проверить результат':'Проверить результат выезда'});
   for(const t of ownTrips){const pending=(stays.data||[]).filter(s=>s.trip_id===t.id&&s.status==='detected'&&s.stay_to).length;if(pending)items.push({entity_kind:'trip',entity_id:t.id,title:t.vehicle_label||'Выезд',kind:'Проверка присутствия',body:`Дата выезда: ${t.date_from||'не указана'}. Записей GPS без решения: ${pending}.`,action:'Проверить присутствие'});}
   return {items,truncated:(orders.data||[]).length>100||(trips.data||[]).length>100||queue.length>100||(stays.data||[]).length>=1000};
 }

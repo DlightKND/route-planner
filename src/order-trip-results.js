@@ -35,7 +35,7 @@ export function proposedTripHours(items,accepted,budget,catalog){
  return hours;
 }
 
-export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onSelectTrip,onWrite,onPlanWrite,onPartWrite,onReturnReason,onGPS,onTrip,onTrips,onAddWork,onEditTerms,onReload,preparePhoto,uploadPhoto,downloadPhoto,savePayment,onPaymentChange}){
+export function mountOrderTripResults({root,order,items,catalog,data,manualResult,user,manager,mayReport,requestedTrip,onSelectTrip,onWrite,onPlanWrite,onPartWrite,onReturnReason,onGPS,onTrip,onTrips,onAddWork,onEditTerms,onStandalone,onDeleteSession,onReload,preparePhoto,uploadPhoto,downloadPhoto,savePayment,onPaymentChange}){
  let paymentModel=null;
  const trips=data?.trips||[],works=items.filter(item=>item.kind!=='material'),material=items.filter(item=>item.kind==='material');
  const workIds=new Set(works.map(item=>item.id));
@@ -425,9 +425,13 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   const trip=selected,accepted=trip&&lastVersion(trip),readOnly=trip&&(!trip.linked||trip.status==='cancelled'||trip.presence?.no_work||!mayReport||
    !!accepted&&!editing||trip.state==='submitted'&&!manager);
   // Mockup v65: the current trip is named in the header; the summary of all trips links to the trips tab.
+  // Work without a trip (a session) reports like a trip but has no trip to open.
+  const onlySessions=trips.length>0&&trips.every(t=>t.standalone);
+  const standaloneAction=onStandalone&&mayReport&&(!trips.length||onlySessions)?buttons('Отчитаться о работах без выезда','data-visit-standalone'):'';
+  const removable=trip?.standalone&&!trip.state&&onDeleteSession&&(manager||trip.created_by===user);
   const selection=!data||!trips.length?'':trip?`<span class="hint order-trip-current" data-visit-current="${esc(trip.id)}">${esc(tripLabel(trip))}</span>`+
-   (trips.length>1?buttons('Все выезды','data-visit-all'):'')+buttons('Открыть выезд','data-visit-trip','ghost'):
-   '<span class="hint order-trip-current">По всем выездам</span>'+(onTrips?buttons('Открыть выезды','data-visit-trips'):'');
+   (trips.length>1?buttons(onlySessions?'Все работы':'Все выезды','data-visit-all'):'')+(trip.standalone?(removable?buttons('Удалить запись','data-visit-session-delete','ghost'):''):buttons('Открыть выезд','data-visit-trip','ghost')):
+   '<span class="hint order-trip-current">'+(onlySessions?'По всем работам без поездки':'По всем выездам')+'</span>'+(onTrips&&!onlySessions?buttons('Открыть выезды','data-visit-trips'):'')+standaloneAction;
   const confirmed=trips.filter(t=>t.presence?.confirmed&&t.linked&&t.status!=='cancelled');
   const available=trip?(trip.presence?.confirmed?Number(trip.presence.available):null):
    (confirmed.length?confirmed.reduce((sum,t)=>sum+Number(t.presence.available),0):null);
@@ -444,7 +448,8 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   if(!trip){
    content=cumulative(selection)+materialTable(cumulativeMaterials);
   }else{
-   const tripContext=trip.state?`<p class="hint">${esc(stateLabel(trip))}${accepted?' · версия '+trip.versions.length:''}</p>`:'';
+   const tripContext=(trip.standalone?`<p class="hint order-trip-basis">Основание ручного учёта · ${esc(trip.basis||'')} · ${fmt(trip.hours)} чел·ч</p>`:'')+
+    (trip.state?`<p class="hint">${esc(stateLabel(trip))}${accepted?' · версия '+trip.versions.length:''}</p>`:'');
    if(readOnly){
     content=tripContext;
     const revise=accepted&&manager&&mayReport&&trip.linked&&trip.status!=='cancelled'?buttons('Исправить результат','data-visit-edit'):'';
@@ -474,6 +479,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   }
   root.innerHTML=context+'<p data-trip-result-error role="alert" tabindex="-1" hidden></p>'+content;
   if(!data&&manualResult)root.querySelector('.order-trip-result-head').append(manualResult);
+  if(!data&&!manualResult&&standaloneAction)root.querySelector('.order-trip-result-head').insertAdjacentHTML('beforeend',standaloneAction);
   updateMetrics();
   paintWorkPayment();
   bind(proposal);
@@ -550,7 +556,9 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   });
   const wire=(selector,fn)=>{const button=get(selector);if(button)button.onclick=fn;};
   wire('[data-visit-trip]',()=>onTrip(selected.id));wire('[data-visit-gps]',()=>onGPS((selected||pending()).id));
-  wire('[data-visit-trips]',()=>onTrips?.());wire('[data-work-add]',()=>onAddWork?.(get('[data-work-add]')));
+  wire('[data-visit-trips]',()=>onTrips?.());
+  wire('[data-visit-standalone]',()=>onStandalone?.(get('[data-visit-standalone]')));
+  wire('[data-visit-session-delete]',()=>onDeleteSession?.(selected.id,get('[data-visit-session-delete]')));wire('[data-work-add]',()=>onAddWork?.(get('[data-work-add]')));
   wire('[data-visit-edit]',()=>{editing=true;persist();render();});
   wire('[data-visit-back]',()=>{review=false;render();get('[data-visit-review]').focus();});
   wire('[data-visit-review]',()=>{
