@@ -375,7 +375,7 @@ export function mountOrderTripResults({root,order,items,catalog,data,manualResul
   target.focus();
  }
  function formError(){
-  if(!selected.presence?.confirmed||!['finished','done'].includes(selected.status))return ['Сначала завершите выезд и подтвердите рабочие посещения в GPS-журнале'];
+  if(!selected.presence?.confirmed||!['finished','done'].includes(selected.status))return ['Сначала завершите выезд и подтвердите рабочие посещения в журнале GPS'];
   if(fields.presenceRevision!==selected.revision)return ['Данные GPS изменились. Обновите предложенные часы'];
   if(!fields.rows.length)return ['В задании нет работ или материалов для отчёта'];
   for(const row of fields.rows){

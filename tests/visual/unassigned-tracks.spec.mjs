@@ -18,12 +18,12 @@ async function open(page,info,role='admin',unassignedCount=1,unassignedJourney=t
 async function clean(page){expect(errors).toEqual([]);expect(await page.evaluate(()=>window.__visualQA.blockedWrites)).toEqual([]);}
 test('GPS register and GPS preview remain usable at each width',async({page},info)=>{
  await open(page,info);
- await expect(page.getByRole('table',{name:'GPS-записи'})).toBeVisible();
+ await expect(page.getByRole('table',{name:'Записи GPS'})).toBeVisible();
  await expect(page.locator('.gps-journal-detail')).toBeHidden();
  const openButton=page.locator('[data-ut-details]').first(),button=await openButton.boundingBox();
  expect(button.x).toBeGreaterThanOrEqual(0);expect(button.x+button.width).toBeLessThanOrEqual(page.viewportSize().width);expect(button.height).toBeGreaterThanOrEqual(36);
  await openButton.click();
- await expect(page.getByRole('table',{name:'GPS-записи'})).toBeHidden();
+ await expect(page.getByRole('table',{name:'Записи GPS'})).toBeHidden();
  // The record overview keeps a compact route map beside the stops; the full view opens on the main map.
  const mini=page.locator('.gps-journal-detail .orphan-map .journal-route-map');
  await expect(mini).toBeVisible();
@@ -121,7 +121,7 @@ test('links extra GPS evidence to a completed trip as a separate journal record'
  await prompt.locator('[data-pf=reason]').fill('Сверка истории поездки');
  await page.locator('#promptYes').click();
  await expect(page.locator('.gps-supplement-note')).toBeVisible();
- await page.getByRole('button',{name:'К GPS-журналу выезда'}).click();
+ await page.getByRole('button',{name:'К журналу GPS выезда'}).click();
  await expect(page.locator('.journal-trip-head')).toBeVisible();
  await page.locator('[data-journal-pane=documents]').click();
  const supplement=page.locator('.journal-trip-documents').getByRole('link',{name:/Запись №/});
@@ -206,7 +206,7 @@ test('GPS journal is a dispatcher section, uses the full register and scrolls to
  await expect(page.locator('#plTrips')).toBeVisible();await expect(page.locator('#plTrips .subtab[data-sub=tracking]')).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('#plTrips .subtab[data-sub=tracking]')).toBeVisible();
  await expect(page.locator('#tripBoard')).toBeHidden();await expect(page.locator('[data-ut-card]')).toHaveCount(14);
- await expect(page.getByRole('table',{name:'GPS-записи'})).toBeVisible();
+ await expect(page.getByRole('table',{name:'Записи GPS'})).toBeVisible();
  await expect(page.locator('.gps-journal-detail')).toBeHidden();
  const scroll=page.locator('.gps-journal-sidebar');
  expect(await scroll.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
@@ -255,7 +255,7 @@ test('journal period filters on the server, navigates months and persists after 
  await pick('2026-10-05','2026-10-05');await expect(page.locator('[data-ut-card]')).toHaveCount(1);await expect(page.locator('.unassigned-merge')).toHaveCount(0);await expect(page.locator('[data-ut-card] [data-label="Период"]')).toContainText('5 окт');
  await page.reload();if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(dates).toContainText('05.10 — 05.10.2026');await expect(page.locator('[data-ut-card]')).toHaveCount(1);
  await page.locator('.journal-filters>summary').click();await page.locator('[data-ut-mode=archive]').click();await expect(page.locator('[data-ut-card]')).toHaveCount(0);await expect(dates).toContainText('05.10 — 05.10.2026');
- await page.locator('[data-ut-mode=pending]').click();await expect(page.locator('[data-ut-card]')).toHaveCount(1);await pick('2026-10-01','2026-10-31');await expect(page.locator('[data-ut-card]')).toHaveCount(3);
+ await page.locator('.journal-filters>summary').click();await page.locator('[data-ut-mode=pending]').click();await expect(page.locator('[data-ut-card]')).toHaveCount(1);await pick('2026-10-01','2026-10-31');await expect(page.locator('[data-ut-card]')).toHaveCount(3);
  await page.locator('#tripJournalPeriod [data-summary-shift="-1"]').click();await expect(dates).toContainText('01.09 — 30.09.2026');await expect(page.locator('[data-ut-card]')).toHaveCount(0);
  await page.locator('#tripJournalPeriod [data-summary-shift="1"]').click();await expect(dates).toContainText('01.10 — 31.10.2026');await expect(page.locator('[data-ut-card]')).toHaveCount(3);
  expect(await page.locator('.view-planner .pane').evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);await page.screenshot({path:'test-results/journal-period/'+info.project.name+'.png'});await clean(page);
@@ -281,7 +281,7 @@ test('GPS register previews a track under its row and opens it on the main map',
  await expect(page.locator('.view-map.track-view .side')).toBeHidden();
  await page.locator('#tvBack').click();
  await expect(page.locator('.view-map.track-view')).toHaveCount(0);
- await expect(page.getByRole('table',{name:'GPS-записи'})).toBeVisible();
+ await expect(page.getByRole('table',{name:'Записи GPS'})).toBeVisible();
  await clean(page);
 });
 test('GPS register previews a linked trip track from its saved review',async({page},info)=>{

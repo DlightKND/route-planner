@@ -160,7 +160,7 @@ export function installWorkspaceStructure(root=document){
  for(const [id,title,description,prefix] of [
   ['plJobs','Заявки','Потребности клиентов и задания на исполнение','job'],
   ['plOrders','Задания','Назначение, выполнение и проверка заданий','order'],
-  ['plTrips','Выезды','Планы поездок, маршруты и GPS-журнал','trip']
+  ['plTrips','Выезды','Планы поездок, маршруты и журнал GPS','trip']
  ]){
   const section=root.getElementById(id);if(!section)continue;
   const sticky=section.querySelector('.stickyhead'),header=element(root,'header','workspace-dispatcher-head workspace-section-rail'),line=element(root,'div','workspace-heading-row');
@@ -268,7 +268,7 @@ export function setSettingsWorkspace(name,root=document){
 
 export function presentDispatcherSection(journal,root=document){
  const section=root.getElementById('plTrips'),title=section?.querySelector('.workspace-heading-row h1'),description=section?.querySelector('.workspace-subtitle');
- if(title)title.textContent=journal?'GPS-журнал':'Выезды';if(description)description.textContent=journal?'Поездки, проверка трека и оформление факта':'Планы поездок, маршруты и GPS-журнал';
+ if(title)title.textContent=journal?'Журнал GPS':'Выезды';if(description)description.textContent=journal?'Поездки, проверка трека и оформление факта':'Планы поездок, маршруты и журнал GPS';
  const board=section?.querySelector('.workspace-board-heading');if(board)board.hidden=journal;
 }
 
