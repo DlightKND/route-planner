@@ -79,3 +79,4 @@ html#dlight-ui[data-ui-system] .related-work-preview>summary{min-height:64px!imp
  .related-work-preview>div{padding:8px}
  html#dlight-ui[data-ui-system] .view .related-record-table .related-parts-table :is(th,td){padding:8px}
 }
+.related-crew{display:flex;flex-direction:column;gap:2px}

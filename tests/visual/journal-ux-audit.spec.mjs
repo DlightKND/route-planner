@@ -15,7 +15,7 @@ async function clean(page,errors){expect(errors).toEqual([]);expect(await page.e
 
 test('audit 03: standalone GPS register keeps the list visible and retains filters and merge selection',async({page},info)=>{
  const errors=await start(page,info,{queue:true});await expect(page.locator('[data-ut-card]')).toHaveCount(14);
- await expect(page.getByRole('table',{name:'GPS-записи'})).toBeVisible();
+ await expect(page.getByRole('table',{name:'Записи GPS'})).toBeVisible();
  await expect(page.locator('.gps-journal-detail')).toBeHidden();
  await expect(page.getByRole('searchbox',{name:'Поиск GPS-записей'})).toBeVisible();
  await capture(page,info,'01-compact-queue');await page.locator('.journal-filters>summary').click();await expect(page.locator('[data-ut-vehicle]')).toBeVisible();await page.locator('.journal-filters>summary').click();await page.locator('.journal-actions>summary').click();await page.locator('[data-ut-choose]').click();await expect(page.locator('[data-ut-select]').first()).toBeVisible();await clean(page,errors);

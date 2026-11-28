@@ -1096,7 +1096,7 @@ async function plannerSub(name){ if(dispCur==='tracking'&&name!=='tracking'&&!aw
   if($('plMine')) $('plMine').style.display=name==='mine'?'':'none'; $('plJobs').style.display=name==='jobs'?'':'none'; $('plTrips').style.display=plannerCur==='trips'?'':'none';$('tripBoard').style.display=journal?'none':'';$('tripBoardToolbar').style.display=journal?'none':''; $('plOrders').style.display=name==='orders'?'':'none'; $('plUnassigned').style.display=name==='tracking'?'':'none';
   presentDispatcherSection(journal);document.querySelectorAll('[data-trip-journal-only]').forEach(el=>el.style.display=journal?'':'none');if(journal)renderJournalPeriod();
   document.querySelectorAll('[data-trip-board-only]').forEach(el=>el.style.display=journal||(el.id==='tripAdd'&&!canWrite())?'none':'');
-  document.querySelectorAll('[data-trip-section]').forEach(b=>{if(b.classList.contains('subtab'))return;if(b.dataset.tripSection==='tracking'){b.textContent=journal?'← Выезды':'GPS-журнал';b.setAttribute('aria-label',journal?'Вернуться к выездам':'Открыть GPS-журнал');}const on=journal?b.dataset.tripSection==='tracking':b.dataset.tripSection==='board';b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});
+  document.querySelectorAll('[data-trip-section]').forEach(b=>{if(b.classList.contains('subtab'))return;if(b.dataset.tripSection==='tracking'){b.textContent=journal?'← Выезды':'Журнал GPS';b.setAttribute('aria-label',journal?'Вернуться к выездам':'Открыть журнал GPS');}const on=journal?b.dataset.tripSection==='tracking':b.dataset.tripSection==='board';b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});
   document.querySelector('.view-planner').classList.toggle('journal-open',journal);
   // На узком экране лента вкладок прокручивается вбок: выбранная («Журнал» — последняя) не должна торчать обрезанной.
   requestAnimationFrame(()=>document.querySelectorAll('.view-planner .workspace-page-tabs').forEach(strip=>{const on=strip.querySelector('.subtab.active');if(on&&strip.offsetParent&&strip.scrollWidth>strip.clientWidth)strip.scrollLeft=Math.max(0,Math.min(on.offsetLeft-strip.offsetLeft-16,strip.scrollWidth-strip.clientWidth));}));
@@ -4007,7 +4007,7 @@ function renderPeriodSelector(bar,kind,{compact=false}={}){
  const todayControl=bar.querySelector('[data-summary-today]');if(todayControl)todayControl.onclick=()=>{const current=dashRanges[kind];apply(personal||unit==='custom'?{from:todayISO(),to:isoOf(utcOf(todayISO())+utcOf(current.to)-utcOf(current.from))}:summaryPreset(todayISO(),unit));};
  if(focusKey)bar.querySelector('['+focusKey+'="'+focusValue+'"]')?.focus({preventScroll:true});
  bar.querySelector('[data-summary-dates]').onclick=async()=>{
-  const picked=await promptDialog(personal?'Период личного графика':kind==='journal'?'Период GPS-журнала':'Период сводки',[{key:'from',label:'Начало периода',type:'date',value:dashRanges[kind].from,required:true},{key:'to',label:'Конец периода',type:'date',value:dashRanges[kind].to,required:true}],{okText:'Применить период'});
+  const picked=await promptDialog(personal?'Период личного графика':kind==='journal'?'Период журнала GPS':'Период сводки',[{key:'from',label:'Начало периода',type:'date',value:dashRanges[kind].from,required:true},{key:'to',label:'Конец периода',type:'date',value:dashRanges[kind].to,required:true}],{okText:'Применить период'});
   if(!picked)return;if(picked.from>picked.to)[picked.from,picked.to]=[picked.to,picked.from];
   try{calendarPeriodBounds(picked);await apply(picked);bar.querySelector('[data-summary-dates]').focus({preventScroll:true});}catch(e){notify(e.message,'warn');}
  };
@@ -4018,12 +4018,12 @@ function summaryActionsHTML(warning=''){
  return '<div class="summary-action-row'+(warning?' has-warning':'')+'"><section class="summary-quick-actions" aria-label="Быстрые действия"><h3>Быстрые действия</h3><div class="summary-quick-buttons"><button type="button" class="btn amber" data-summary-create="order"><span aria-hidden="true">＋</span>Создать и назначить задание</button><button type="button" class="btn" data-summary-create="trip"><span aria-hidden="true">↗</span>Сформировать новый выезд</button></div><p class="hint">Назначьте работу команде или соберите маршрут выезда.</p></section>'+warning+'</div>';
 }
 function wireSummaryActions(box){box.querySelectorAll('[data-summary-create]').forEach(b=>b.onclick=()=>{if(!canWrite())return;if(b.dataset.summaryCreate==='order')serviceOrders.open(null);else openTrip(null);});}
-function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<div class="rangebar" role="group" aria-label="'+(kind==='journal'?'Период GPS-журнала':kind==='gt'?'Период графика':kind==='load'?'Период загрузки':'Период финансов и работ')+'" data-rk="'+kind+'">'
+function rangeBar(kind){const r=dashRanges[kind],meta=RANGE_META[kind];return '<div class="rangebar" role="group" aria-label="'+(kind==='journal'?'Период журнала GPS':kind==='gt'?'Период графика':kind==='load'?'Период загрузки':'Период финансов и работ')+'" data-rk="'+kind+'">'
   +'<input type="date" aria-label="Начало периода" data-rf value="'+esc(r.from)+'"><span class="rdash">—</span><input type="date" aria-label="Конец периода" data-rt value="'+esc(r.to)+'">'
   +(kind==='rev'||kind==='journal'?'<span class="rquick"><button data-rmonth="-1" aria-label="Предыдущий месяц">←</button><button data-rmonth="0">Этот месяц</button><button data-rmonth="1" aria-label="Следующий месяц">→</button></span>':'<span class="rquick"><button data-rshift="-1" aria-label="Период назад">←</button><button data-rnow>сегодня</button><button data-rshift="1" aria-label="Период вперёд">→</button>'
   +meta.lengths.map(x=>'<button data-rlen="'+x[0]+'">'+x[1]+'</button>').join('')+'</span>')+'</div>';}
 async function setRange(kind,from,to){if(!from||!to)return;if(kind==='journal'&&!await unassignedTracks.leave())return;if(from>to){const x=from;from=to;to=x;}dashRanges[kind]={from,to};saveRange(kind);if(kind==='journal'){renderJournalPeriod();unassignedTracks.refresh();}else if(kind==='gt'){Object.keys(gtOpen).forEach(k=>delete gtOpen[k]);renderFeedAgain();}else renderDashboard();}
-function renderJournalPeriod(){const box=$('tripJournalPeriod');box.className='summary-period summary-period-compact';box.setAttribute('role','group');box.setAttribute('aria-label','Период GPS-журнала');renderPeriodSelector(box,'journal',{compact:true});box.title='Поездки, пересекающие выбранный период · время Киева';}
+function renderJournalPeriod(){const box=$('tripJournalPeriod');box.className='summary-period summary-period-compact';box.setAttribute('role','group');box.setAttribute('aria-label','Период журнала GPS');renderPeriodSelector(box,'journal',{compact:true});box.title='Поездки, пересекающие выбранный период · время Киева';}
 function wireRangeBar(box){box.querySelectorAll('.rangebar').forEach(bar=>{const kind=bar.dataset.rk,read=()=>[bar.querySelector('[data-rf]').value,bar.querySelector('[data-rt]').value];
   bar.querySelectorAll('input').forEach(i=>i.onchange=()=>setRange(kind,...read()));
   bar.querySelectorAll('[data-rshift]').forEach(b=>b.onclick=()=>{const r=dashRanges[kind],n=Math.round((utcOf(r.to)-utcOf(r.from))/DAY_MS)+1,d=(+b.dataset.rshift)*n;setRange(kind,isoOf(utcOf(r.from)+d*DAY_MS),isoOf(utcOf(r.to)+d*DAY_MS));});
@@ -6677,7 +6677,7 @@ async function loadWorkbench(id){
     void drawTripMap(data.trip,data.stays);
     tripWorkbench={...data,jobIds:data.job_ids,stays:(data.stays||[]).map(s=>({...s,task_allocations:allocationByStay.get(s.id)||[]}))};
     const index=trips.findIndex(t=>t.id===id);if(index>=0)trips[index]=data.trip;
-    $('tpPresence').innerHTML='<p>Проверено '+tripWorkbench.stays.filter(s=>['approved','rejected'].includes(s.status)).length+' из '+tripWorkbench.stays.length+' остановок. Присутствие проверяется в GPS-журнале.</p><button type="button" class="btn" data-trip-journal>Открыть поездку в GPS-журнале</button>';
+    $('tpPresence').innerHTML='<p>Проверено '+tripWorkbench.stays.filter(s=>['approved','rejected'].includes(s.status)).length+' из '+tripWorkbench.stays.length+' остановок. Присутствие проверяется в журнале GPS.</p><button type="button" class="btn" data-trip-journal>Открыть поездку в GPS-журнале</button>';
     $('tpPresence').querySelector('[data-trip-journal]').onclick=()=>openJournalTrip(id);renderTripReviewSummary();
     $('tpRemovedJobs').innerHTML=removedHTML(tripWorkbench,tripJobsAll);
     $('tpHistoryLog').textContent=''; // History has one renderer in the activity feed.
@@ -6736,7 +6736,8 @@ function renderRouteStops(points=routeAll(),{recorded=false,trip=null}={}){
   $('tpMapCaption').hidden=true;
   const box=$('tpRouteStops'),hasPoints=points.length>0;
   $('tpRoutePoints').hidden=!hasPoints;
-  $('tpRoutePointTime').hidden=!recorded;
+  const planned=!recorded&&!!trip?.id&&!!trip.date_from&&hasPoints;
+  $('tpRoutePointTime').hidden=!recorded&&!planned;
   $('tpRouteEmpty').hidden=hasPoints;
   $('tpRouteStatus').hidden=!hasPoints;
   const km=recorded?trip?.fact_km:tripRoute.km||null;
@@ -6745,8 +6746,37 @@ function renderRouteStops(points=routeAll(),{recorded=false,trip=null}={}){
   $('tpViewMap').hidden=$('tpGoogleMap').hidden=!hasPoints;$('tpEditRoute').hidden=!routeEditable;
   $('tpViewMap').parentElement.hidden=!trip?.id||(!hasPoints&&!routeEditable);
   box.innerHTML=points.map((point,index)=>'<tr><td><button type="button" class="workflow-route-point" data-route-point="'+index+'" aria-pressed="false"><span>'+(index+1)+'</span>'+esc(point.name||'Точка маршрута')+'</button></td>'
-    +(recorded?'<td class="mono">'+esc(intervalText(point.from,point.to))+'</td>':'')+'</tr>').join('');
+    +(recorded?'<td class="mono">'+esc(intervalText(point.from,point.to))+'</td>':planned?'<td class="mono" data-route-window="'+index+'">…</td>':'')+'</tr>').join('');
   box.querySelectorAll('[data-route-point]').forEach(button=>button.onclick=()=>selectTripRoutePoint(Number(button.dataset.routePoint)));
+  if(planned)paintPlannedStopWindows(trip,points);
+}
+// Mockup v65: before GPS, a route point shows its planned visit window from the schedule.
+// A point's window spans the schedule bars of the trip's tasks at that point.
+let plannedWindowsRequest=0;
+async function paintPlannedStopWindows(trip,points){
+  const request=++plannedWindowsRequest,cells=()=>[...document.querySelectorAll('#tpRouteStops [data-route-window]')];
+  let groups=[];
+  try{const {data,error}=await sb.rpc('planner_snapshot',{p_from:trip.date_from,p_to:trip.date_to||trip.date_from});if(error)throw error;groups=data?.groups||[];}
+  catch{if(request===plannedWindowsRequest)cells().forEach(cell=>cell.textContent='—');return;}
+  if(request!==plannedWindowsRequest||tripEditId!==trip.id)return;
+  const jobAt=new Map();
+  tripJobsAll.filter(j=>curTripJobs.has(j.id)).forEach(j=>{const eq=j.equipment,lat=eq?.lat??j.clients?.lat,lng=eq?.lng??j.clients?.lng;if(lat!=null&&lng!=null)jobAt.set(j.id,keyOf({lat,lng}));});
+  const keyByOrder=new Map(tripOrdersAll.filter(o=>curTripOrders.has(o.id)).map(o=>[o.id,jobAt.get(o.job_id)]));
+  const parts=new Map();
+  for(const group of groups){
+    if(group.kind!=='work'||group.trip_id!==trip.id||!keyByOrder.get(group.order_id))continue;
+    const key=keyByOrder.get(group.order_id);
+    parts.set(key,[...(parts.get(key)||[]),...(group.parts||[])]);
+  }
+  const clock=hours=>{const minutes=Math.round(Number(hours)*60);return String(Math.floor(minutes/60)%24).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0');};
+  const day=date=>String(date||'').slice(8,10)+'.'+String(date||'').slice(5,7);
+  for(const cell of cells()){
+    const point=points[Number(cell.dataset.routeWindow)],list=point?(parts.get(keyOf(point))||[]):[];
+    if(!list.length){cell.textContent='—';continue;}
+    const sorted=[...list].sort((a,b)=>String(a.date).localeCompare(String(b.date))||a.start-b.start);
+    const first=sorted[0],last=sorted.reduce((best,part)=>String(part.date)>String(best.date)||part.date===best.date&&part.end>best.end?part:best,sorted[0]);
+    cell.textContent=first.date===last.date?day(first.date)+' · '+clock(first.start)+'–'+clock(last.end):day(first.date)+' '+clock(first.start)+' — '+day(last.date)+' '+clock(last.end);
+  }
 }
 function selectTripRoutePoint(index,{fromMap=false}={}){
   const point=tripRoutePoints[index];if(!point)return;
@@ -9170,7 +9200,7 @@ function showVehModal(vid){
   telemetry+='<div class="veh-kv veh-coordinates"><span style="font-family:var(--mono);font-size: var(--fs-2)">'+(+r.lat).toFixed(5)+', '+(+r.lng).toFixed(5)+'</span>'+
      '<span><button class="btn sm ghost" id="vehCopy">копировать</button></span></div>';
 
-  if(['admin','logist'].includes(role)) telemetry+='<button type="button" class="btn ghost" id="vehJournal" style="margin-top:var(--sp-3)">Открыть GPS-журнал</button>';
+  if(['admin','logist'].includes(role)) telemetry+='<button type="button" class="btn ghost" id="vehJournal" style="margin-top:var(--sp-3)">Открыть журнал GPS</button>';
   h+='</section><details class="vehicle-details"><summary>Данные машины и GPS</summary><div class="vehicle-telemetry">'+telemetry+'</div></details>';
   $('vehBody').innerHTML=h;
   // Главная кнопка — по ситуации: есть выезд — открыть его; нет — собрать

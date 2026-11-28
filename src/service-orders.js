@@ -117,9 +117,11 @@ export function createServiceOrders(ctx){
     const tripContext=trip?'<small data-related-trip-context="'+esc(task.id)+'">Загружаем присутствие и результат…</small>':'';
     return {id:task.id,label:'задание №'+task.number,search:[task.number,task.title,...crew].join(' '),works,
      cells:[`${taskButton(task,origin)}<small>№${esc(task.number)} · работ ${works}</small>`,
-      esc(crew.join(', ')||'Команда не назначена'),`<span class="order-child-period">${esc(planningPeriod(task.date_from,task.date_to))}</span>${task.jobs?.due_date?`<small>SLA ${esc(planningDate(task.jobs.due_date))}</small>`:''}`,
+      crew.length?`<span class="related-crew">${crew.map(person=>`<span>${esc(person)}</span>`).join('')}</span>`:esc('Команда не назначена'),`<span class="order-child-period">${esc(planningPeriod(task.date_from,task.date_to))}</span>${task.jobs?.due_date?`<small>SLA ${esc(planningDate(task.jobs.due_date))}</small>`:''}`,
       `<span class="related-status">${esc(ORDER_STATUS[task.status]||task.status)}</span>${historicalClosedDraft(task)?`<small aria-label="${esc(historicalClosedNote)}">${esc(historicalClosedNote)}</small>`:''}${tripContext}`],
-     actions:reportAllowed(task)?`<button type="button" class="btn" data-related-order-result="${esc(task.id)}">Отчитаться о работах</button>`:'',
+     // Mockup v65: a completed task offers its result; an open one, the report.
+     actions:task.status==='completed'?`<button type="button" class="btn" data-related-order-view="${esc(task.id)}">Посмотреть результат</button>`:
+      reportAllowed(task)?`<button type="button" class="btn" data-related-order-result="${esc(task.id)}">Отчитаться о работах</button>`:'',
      detail:`<div data-related-work-details="${esc(task.id)}">${relatedWorkPreview(work,{tripScoped:!!trip,open:taskButton(task,origin,'Открыть работы','data-related-order-works')})}</div>`};
    })});
  }
@@ -150,6 +152,7 @@ export function createServiceOrders(ctx){
   };
   root.querySelectorAll('[data-related-work-details]').forEach(bindWorks);
   root.querySelectorAll('[data-related-order-result]').forEach(button=>button.onclick=()=>openResult(button.dataset.relatedOrderResult,origin,trip));
+  root.querySelectorAll('[data-related-order-view]').forEach(button=>button.onclick=()=>open(button.dataset.relatedOrderView,origin,{pane:'plan-fact',trip}));
   const loadDetails=async control=>{
    const detail=control.closest('tr').nextElementSibling.querySelector('[data-related-work-details]');
    const task=tasks.find(row=>row.id===detail?.dataset.relatedWorkDetails);
