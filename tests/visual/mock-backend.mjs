@@ -576,6 +576,19 @@ export function installMockBackend({ maintenancePlanJourney = false, maintenance
       audit.workPartWrites=[];
     }
   }
+  // Work without a trip: sessions report through the same result versions as trips.
+  const sessionJourney=managerJourney?.sessionJourney;
+  const sessions=[];
+  if(sessionJourney){
+    task.trip_service_orders=[];
+    tables.trip_service_orders=tables.trip_service_orders.filter(link=>link.order_id!==task.id);
+    visitWork.planned_labor_hours=null;
+    audit.sessionWrites=[];audit.visitWrites=[];
+    if(sessionJourney==='submitted')sessions.push({id:'50000000-0000-4000-8000-000000000001',date_from:'2026-10-05',date_to:'2026-10-05',
+      label:'Работа без поездки',status:'finished',revision:1,linked:true,standalone:true,basis:'Работали в мастерской',hours:2,created_by:engineer,
+      presence:{confirmed:true,no_work:false,base:2,used:0,available:2},state:'submitted',latest:structuredClone(visitPayload),submitted_revision:1,
+      event:'00000000-0000-4000-8000-000000000092',versions:[]});
+  }
   const uploadedWorkPhotos=new Map();
   if(visitJourney==='photos'){audit.workPhotoUploads=[];audit.workPhotoDownloads=[];audit.workPhotoAttempts=[];}
   if(standaloneWorkPlan){
@@ -860,6 +873,43 @@ export function installMockBackend({ maintenancePlanJourney = false, maintenance
         paymentTerms.set(termsKey(scope,id,subject),structuredClone(terms));
         audit.paymentWrites.push(structuredClone(args));
         return {data:structuredClone(terms),error:null};
+      }
+      if(name==='service_order_trip_results'&&sessionJourney){
+        const accepted=sessions.flatMap(session=>session.versions.at(-1)?.result?.items||[]);
+        return {data:{has_links:false,has_receipts:sessions.some(session=>session.event),trips:structuredClone(args.p_order===order?sessions:[]),
+          accepted_hours:Object.fromEntries(accepted.map(row=>[row.id,row.hours])),sessions_supported:true},error:null};
+      }
+      if(name==='service_order_work_session_create'&&sessionJourney){
+        if(args.p_order!==order||!(args.p_hours>0)||String(args.p_basis||'').trim().length<5)return reject(name);
+        if(!sessions.some(session=>session.id===args.p_operation))sessions.push({id:args.p_operation,date_from:args.p_date,date_to:args.p_date,
+          label:'Работа без поездки',status:'finished',revision:1,linked:true,standalone:true,basis:args.p_basis,hours:args.p_hours,created_by:session.user.id,
+          presence:{confirmed:true,no_work:false,base:args.p_hours,used:0,available:args.p_hours},state:null,event:null,latest:null,versions:[]});
+        audit.sessionWrites.push({name,args:structuredClone(args)});
+        return {data:args.p_operation,error:null};
+      }
+      if(name==='service_order_work_session_delete'&&sessionJourney){
+        const index=sessions.findIndex(row=>row.id===args.p_session&&!row.event);
+        if(args.p_order!==order||index<0)return reject(name);
+        sessions.splice(index,1);audit.sessionWrites.push({name,args:structuredClone(args)});
+        return {data:null,error:null};
+      }
+      if(name==='service_order_trip_result_write'&&sessionJourney){
+        const target=sessions.find(row=>row.id===args.p_trip);
+        if(!target||args.p_order!==order||args.p_expected_event!==target.event||args.p_order_revision!==task.revision||args.p_trip_revision!==target.revision)return reject(name);
+        if(args.p_action==='accepted'&&role==='engineer')return reject(name);
+        const latest={...structuredClone(args.p_result),hours:args.p_result.items.reduce((sum,row)=>sum+row.hours,0),standalone:true,basis:target.basis};
+        for(const entry of latest.items){
+          const item=task.service_order_items.find(row=>row.id===entry.id);
+          Object.assign(entry,{kind:item.kind,title:item.title,unit:item.unit,planned_qty:item.planned_qty});
+        }
+        if(args.p_action==='accepted'){
+          for(const row of task.service_order_items)row.done_qty=latest.items.find(entry=>entry.id===row.id).qty;
+          task.revision++;
+          target.versions.push({event:args.p_operation,result:latest,at:stamp,actor:manager});
+        }
+        Object.assign(target,{latest,event:args.p_operation,state:args.p_action,submitted_revision:target.revision});
+        audit.visitWrites.push(structuredClone(args));
+        return {data:{revision:task.revision,event:target.event},error:null};
       }
       if(name==='service_order_trip_results'){
         const linked=!!visitJourney&&args.p_order===order;

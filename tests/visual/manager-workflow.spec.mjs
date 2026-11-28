@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {installMockBackend,fixtureIDs} from './mock-backend.mjs';
 const job=fixtureIDs.job,order=fixtureIDs.order,trip=fixtureIDs.trip,other='00000000-0000-4000-8000-000000000003';
-async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false,paymentJourney=false,roadJourney=false,scopedFinanceJourney=false,tripOrderPicker=false}={}){
- const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,unifiedJournalJourney:roadJourney,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan,paymentJourney,roadJourney,scopedFinanceJourney,tripOrderPicker}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
+async function boot(page,info,{role='logist',stage='assigned',route='job/'+job,failAssignment=false,routeBuilder=false,tripResultJourney=false,standaloneWorkPlan=false,paymentJourney=false,roadJourney=false,scopedFinanceJourney=false,tripOrderPicker=false,sessionJourney=false}={}){
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>new URL(r.request().url()).origin==='http://127.0.0.1:4173'?r.continue():r.abort());await page.clock.install({time:new Date('2026-10-05T17:00Z')});await page.addInitScript(installMockBackend,{role,theme:info.project.metadata.theme,preserveRanges:true,unifiedJournalJourney:roadJourney,managerJourney:{stage,failAssignment,routeBuilder,tripResultJourney,standaloneWorkPlan,paymentJourney,roadJourney,scopedFinanceJourney,tripOrderPicker,sessionJourney}});await page.goto('/#/'+route);if(await page.locator('#todayLater').isVisible())await page.locator('#todayLater').click();await expect(page.locator('.view.active')).toBeVisible();return errors;
 }
 async function navigate(page,view,hash){await page.evaluate(hash=>{location.hash=hash;},hash);await expect(page.locator('.view-'+view)).toHaveClass(/active/);}
 async function reopenRequest(page){await navigate(page,'planner','/planner/jobs');await navigate(page,'job','/job/'+job);}
@@ -720,5 +720,52 @@ test('M19: a running task keeps the add-work action hidden and edits only period
  const editor=page.getByRole('dialog',{name:'Изменить задание'});await expect(editor).toBeVisible();
  await expect(editor.locator('#orderPlanTitle')).toHaveCount(0);await expect(editor.locator('#orderPlanFrom')).toBeVisible();
  await page.keyboard.press('Escape');await expect(editor).toHaveCount(0);
+ await clean(page,errors);
+});
+
+test('M20: work without a trip records actual hours, then reports and is accepted per work like a trip',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope',sessionJourney:true});
+ const panel=page.locator('#orderTripResults');
+ await expect(panel.locator('[data-visit-current]')).toHaveCount(0);
+ await panel.getByRole('button',{name:'Отчитаться о работах без выезда'}).click();
+ const form=page.getByRole('dialog',{name:/Работа без поездки/});await expect(form).toBeVisible();
+ await form.locator('[data-entity-save]').click();await expect(form).toBeVisible();
+ expect(await form.getByLabel('Фактический труд, чел·ч').evaluate(el=>el.validity.valueMissing)).toBe(true);
+ await form.getByLabel('Фактический труд, чел·ч').fill('2');
+ await form.getByLabel('Основание ручного учёта').fill('Работали в мастерской');
+ await form.locator('[data-entity-save]').click();await expect(form).toHaveCount(0);
+ const created=await page.evaluate(()=>window.__visualQA.sessionWrites);
+ expect(created).toMatchObject([{name:'service_order_work_session_create',args:{p_order:order,p_hours:2,p_basis:'Работали в мастерской'}}]);
+ const session=created[0].args.p_operation;
+ await expect(panel.locator('[data-visit-current]')).toHaveAttribute('data-visit-current',session);
+ await expect(panel.locator('.order-trip-basis')).toContainText('Работали в мастерской');
+ await expect(panel.getByRole('button',{name:'Открыть выезд'})).toHaveCount(0);
+ await expect(panel.getByRole('button',{name:'Удалить запись'})).toBeVisible();
+ await panel.getByRole('button',{name:'Распределить по нормам'}).click();
+ await panel.locator('[data-visit-expand]').first().click();
+ await panel.locator('textarea[data-visit-field="note"]:visible').first().fill('Осталась проверка');
+ await panel.getByRole('button',{name:'Проверить результат →'}).click();
+ await panel.getByRole('button',{name:'Принять результат'}).click();
+ await expect(panel.locator('[data-visit-current]')).toHaveAttribute('data-visit-current',session);
+ const writes=await page.evaluate(()=>window.__visualQA.visitWrites);
+ expect(writes.at(-1)).toMatchObject({p_order:order,p_trip:session,p_action:'accepted',p_trip_revision:1});
+ expect(writes.at(-1).p_result.items.reduce((sum,row)=>sum+row.hours,0)).toBe(2);
+ await expect(panel.getByRole('button',{name:'Удалить запись'})).toHaveCount(0);
+ await shot(page,info,'work-without-trip-accepted');
+ await clean(page,errors);
+});
+
+test('M21: an unused record of work without a trip can be removed',async({page},info)=>{
+ const errors=await boot(page,info,{stage:'in_progress',route:'order/'+order+'/scope',sessionJourney:true});
+ const panel=page.locator('#orderTripResults');
+ await panel.getByRole('button',{name:'Отчитаться о работах без выезда'}).click();
+ const form=page.getByRole('dialog',{name:/Работа без поездки/});
+ await form.getByLabel('Фактический труд, чел·ч').fill('1,5');await form.getByLabel('Основание ручного учёта').fill('Удалённая диагностика');
+ await form.locator('[data-entity-save]').click();await expect(form).toHaveCount(0);
+ await panel.getByRole('button',{name:'Удалить запись'}).click();
+ await expect(page.locator('#confirmOverlay')).toBeVisible();await page.locator('#confirmYes').click();
+ await expect(panel.locator('[data-visit-current]')).toHaveCount(0);
+ const writes=await page.evaluate(()=>window.__visualQA.sessionWrites.map(w=>w.name));
+ expect(writes).toEqual(['service_order_work_session_create','service_order_work_session_delete']);
  await clean(page,errors);
 });

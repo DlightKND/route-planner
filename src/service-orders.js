@@ -60,7 +60,7 @@ export function createServiceOrders(ctx){
  const $=id=>document.getElementById(id);let orders=[],current=null,items=[],selectedJob=null,allJobs=[],stockCatalog=[],workCatalog=[],tariffProfiles=[],stockLoaded=false,stockError='',dirty=false,scope=null,query='',crewFilter='',showClosed=false,showHistorical=false,viewMode='kanban',loaded=false;
  const visibleStates=Object.fromEntries(Object.keys(ORDER_STATUS).map(s=>[s,!['completed','cancelled'].includes(s)]));
  let remainderGeneration=0,remainderLoading=false,remainderRows=[],remainderAttempt=null;
- let visitResults=null,visitError='',visitPanel=null;
+ let visitResults=null,visitError='',visitPanel=null,sessionsSupported=false;
  let entityTabs=null,tabEntity=null,tabValue=null,resultDialog=null,reportDirty=false,resultAttempt=null,resultExpected=null,loadedUser=null;
  let backCard=null;
  const actualDate=()=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Kyiv',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}`;};
@@ -306,9 +306,12 @@ export function createServiceOrders(ctx){
  if(!returning&&source?.name!=='order')backCard=source?.id&&['job','trip'].includes(source.name)?source:null;
  try{const jr=await api().from('jobs').select('id,notes,at_depot,due_date,clients(name)').is('deleted_at',null).order('created_at',{ascending:false});if(jr.error)throw jr.error;allJobs=jr.data||[];try{await loadStock();}catch(e){stockError=e.message;}try{await loadWorkCatalog();}catch(e){ctx.notify('Справочник работ временно недоступен: '+e.message,'warn');}
  if(id){const {data,error}=await api().from('service_orders').select('*,jobs!service_orders_job_id_fkey(status,due_date,clients(name),equipment(model)),service_order_items(*),trip_service_orders(trip_id,trips(id,date_from,date_to,status,vehicle_label,engineer_ids,deleted_at))').eq('id',id).single();if(error)throw error;current=data;}else current={id:null,status:'draft',title:'',job_id:scope||null,work_mode:allJobs.find(j=>j.id===scope)?.at_depot?'depot':'onsite',engineer_ids:[],service_order_items:[],trip_service_orders:[]};
- visitResults=null;visitError='';visitPanel=null;
- if(id&&current.work_mode==='onsite'){
-  try{const result=await rpc('service_order_trip_results',{p_order:id});if(result?.has_links||result?.has_receipts)visitResults=result;}
+ visitResults=null;visitError='';visitPanel=null;sessionsSupported=false;
+ if(id){
+  // Trips report only for on-site tasks; work without a trip (a session) can report for any task.
+  try{const result=await rpc('service_order_trip_results',{p_order:id});sessionsSupported=!!result?.sessions_supported;
+   const sessions=(result?.trips||[]).some(trip=>trip.standalone);
+   if(current.work_mode==='onsite'&&(result?.has_links||result?.has_receipts)||sessions)visitResults=result;}
   catch(error){if(!['PGRST202','42883'].includes(error.code))visitError=error.message||'Не удалось загрузить результаты выездов';}
  }
  if(id&&manager(current)&&!ctx.canWrite()){
@@ -422,8 +425,10 @@ export function createServiceOrders(ctx){
     manualResult=document.createElement('button');
     manualResult.type='button';manualResult.className='btn amber workflow-work-result';
     if(o.status==='review'&&manager(o)){manualResult.dataset.openResultReview='';manualResult.textContent='Проверить результат';manualResult.onclick=()=>openReview(o);}
-    else{manualResult.textContent='Отчитаться о работах без выезда';manualResult.onclick=()=>openResult(o.id);}
+    else manualResult.textContent='Отчитаться о работах без выезда';
    }
+   // The button outlives renders: bind it to the current task and its result model every time.
+   if(manualResult&&!manualResult.hasAttribute('data-open-result-review'))manualResult.onclick=()=>sessionsSupported?openStandalone(o,manualResult):openResult(o.id);
    const user=loadedUser;
    visitPanel=mountOrderTripResults({root:panel,order:o,items:items.filter(item=>!isFinanceVoided(item)),catalog:workCatalog,
     data:visitResults,manualResult,user,manager:manager(o),mayReport:['in_progress','paused','review'].includes(o.status)&&(manager(o)||o.engineer_ids?.includes(user)),requestedTrip,onSelectTrip:()=>ctx.onOrderViewChange?.(),
@@ -431,6 +436,8 @@ export function createServiceOrders(ctx){
     onTrips:()=>entityTabs?.select('travel'),
     onEditTerms:trigger=>{if(paymentModel)editPaymentTerms({doc:document,model:paymentModel,save:savePayment,trigger,onSaved:()=>{if(!paymentCurrent())return;paintPayment();visitPanel?.setPaymentModel(paymentModel);}});},
     onAddWork:manager(o)&&planEditable(o)?trigger=>addWork(o,trigger):null,
+    onStandalone:sessionsSupported?trigger=>openStandalone(o,trigger):null,
+    onDeleteSession:sessionsSupported?(session,trigger)=>deleteSession(o,session,trigger):null,
     preparePhoto:ctx.preparePhoto,
     uploadPhoto:async(path,blob)=>{
      if(current!==o||ctx.userId()!==user||!panel.isConnected)throw Error('Откройте актуальный отчёт');
@@ -616,6 +623,37 @@ export function createServiceOrders(ctx){
   box.innerHTML=`${hasWorks?`<div><span>Работы · план</span><b>${num(w.planRevenue)} ₴ · себестоимость ${num(w.planCost)} ₴</b></div><div><span>Работы · факт</span><b>${num(w.factRevenue)} ₴ · себестоимость ${num(w.factCost)} ₴</b></div>${w.unpriced?`<small class="hint">Без финансового снимка: ${w.unpriced} ${w.unpriced===1?'работа':'работы'} — суммы не включены.</small>`:''}`:''}${hasMaterials?`<div><span>Материалы · план</span><b>${num(m.planRevenue)} ₴ · себестоимость ${num(m.planCost)} ₴</b></div><div><span>Использовано · факт</span><b>${num(m.factRevenue)} ₴ · себестоимость ${num(m.factCost+extraPartCost)} ₴</b></div>`:''}`;
  }
  async function perform(fn){const box=$('orderDeadlinePanel')?.closest('dialog')?$('orderDeadlineError'):$('orderError');box.textContent='';let validationError=null;const buttons=[...$('orderEditor').querySelectorAll('button'),...($('orderDeadlinePanel')?.closest('dialog')?.querySelectorAll('button')||[])].map(b=>({button:b,disabled:b.disabled}));buttons.forEach(({button})=>button.disabled=true);try{await fn();return true;}catch(e){validationError=e;box.textContent=e.message||String(e);box.scrollIntoView?.({block:'center'});return false;}finally{buttons.forEach(({button,disabled})=>{if(button.isConnected)button.disabled=disabled;});if(validationError?.orderPane)entityTabs?.select(validationError.orderPane);if(validationError?.orderField){const field=$(validationError.orderField);for(let parent=field?.parentElement;parent;parent=parent.parentElement){if(parent.tagName==='DETAILS')parent.open=true;}field?.focus();}}}
+ // Work without a trip (mockup v65): actual labour and its basis first, then the per-work report
+ // in the works table, exactly as for a trip.
+ async function openStandalone(o,trigger){
+  if(current!==o||!['in_progress','paused','review'].includes(o.status)||!(manager(o)||o.engineer_ids?.includes(ctx.userId())))return;
+  if(!await settleDraft())return;
+  const uid=ctx.userId(),operation=crypto.randomUUID(),today=new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Kyiv'});
+  const panel=document.createElement('section');panel.hidden=true;panel.className='order-standalone-work';
+  panel.innerHTML='<p class="hint">Для работы в мастерской или удалённо. Часы распределите по работам в таблице, как в отчёте по выезду.</p>'
+   +'<div class="row">'+field('Дата работы','<input id="orderStandaloneDate" type="date" required max="'+today+'" value="'+today+'">')
+   +field('Фактический труд, чел·ч','<input id="orderStandaloneHours" type="text" inputmode="decimal" required placeholder="Например, 8">')+'</div>'
+   +field('Основание ручного учёта','<textarea id="orderStandaloneBasis" required minlength="5" maxlength="1000" placeholder="Например: работали в мастерской, акт №12"></textarea>');
+  document.body.append(panel);
+  const hours=panel.querySelector('#orderStandaloneHours'),basis=panel.querySelector('#orderStandaloneBasis'),date=panel.querySelector('#orderStandaloneDate');
+  let created=null;
+  openEntityPanel({title:'Работа без поездки · задание №'+o.number,panel,trigger,dispose:true,saveLabel:'Перейти к отчёту',saveHint:'',confirmDiscard:()=>ctx.confirmLeave(),onSave:async()=>{
+   if(current!==o||ctx.userId()!==uid)throw Error('Карточка или сеанс изменились. Откройте задание заново.');
+   const amount=Number(hours.value.trim().replace(',','.'));
+   if(!Number.isFinite(amount)||amount<=0||Math.round(amount*100)!==amount*100)throw Error('Укажите фактический труд, чел·ч');
+   if(basis.value.trim().length<5)throw Error('Укажите основание ручного учёта');
+   created=await rpc('service_order_work_session_create',{p_order:o.id,p_hours:amount,p_basis:basis.value.trim(),p_date:date.value,p_operation:operation});
+   return true;
+  },onSaved:async()=>{if(created&&await open(o.id,scope,{pane:'scope',trip:created}))ctx.notify('Распределите часы по работам');}});
+  hours.focus({preventScroll:true});
+ }
+ async function deleteSession(o,session,trigger){
+  if(current!==o)return;
+  if(!await ctx.confirm?.('Отчёта по ней ещё нет, запись можно удалить.',{title:'Удалить работу без поездки?',okText:'Удалить',cancelText:'Оставить'}))return;
+  try{await rpc('service_order_work_session_delete',{p_order:o.id,p_session:session});}
+  catch(error){ctx.notify(error.message||'Не удалось удалить запись');trigger?.focus();return;}
+  if(await open(o.id,scope,{pane:'scope'}))ctx.notify('Запись удалена');
+ }
  // The server changes the plan (name, place, works) only in a draft, assigned or paused task.
  function planEditable(o){return ['draft','assigned','paused'].includes(o?.status);}
  async function addWork(o,trigger){
